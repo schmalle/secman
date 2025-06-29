@@ -1,0 +1,38 @@
+{
+  "folders": [
+    {
+      "name": "Frontend",
+      "path": "./src/frontend"
+    },
+    {
+      "name": "Backend", 
+      "path": "./src/backend"
+    },
+        {
+      "name": "Secman", 
+      "path": "./"
+    }
+  ],
+  "settings": {
+    "sqltools.connections": [
+      {
+        "mysqlOptions": {
+          "authProtocol": "default",
+          "enableSsl": "Disabled"
+        },
+        "previewLimit": 50,
+        "server": "localhost",
+        "port": 3306,
+        "driver": "MariaDB",
+        "name": "Secman",
+        "database": "secman",
+        "username": "secman"
+      }
+    ]
+  },
+  "extensions": {
+    "recommendations": [
+      "astro-build.astro-vscode"
+    ]
+  }
+}

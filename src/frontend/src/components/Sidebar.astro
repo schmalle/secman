@@ -1,0 +1,135 @@
+---
+// src/components/Sidebar.astro
+
+// Fetch user data passed from Layout or global state if implemented
+// const user = Astro.locals.user; // Example if using middleware
+// const roles = user?.roles || [];
+
+const sidebarItems = [
+    { text: "Dashboard", href: "/", icon: "bi-house-door-fill" },
+    { text: "Requirement Management", href: "/requirements", icon: "bi-file-earmark-text-fill" },
+    { text: "Standard Management", href: "/standards", icon: "bi-list-check" },
+    { text: "Norm Management", href: "/norms", icon: "bi-bookmark-star" },
+    { text: "Asset Management", href: "/assets", icon: "bi-server" },
+    { text: "UseCase Management", href: "/usecases", icon: "bi-diagram-3" },
+    { text: "Import/Export", href: "/import-export", icon: "bi-arrow-down-up" },
+    { text: "About", href: "/about", icon: "bi-info-circle-fill" },
+    { text: "Admin", href: "/admin", icon: "bi-gear-fill" },
+];
+
+const riskManagementItems = [
+    { text: "Risk Management Overview", href: "/risks", icon: "bi-exclamation-triangle-fill" },
+    { text: "Risk Assessment", href: "/riskassessment", icon: "bi-clipboard-data" },
+    { text: "Reports", href: "/reports", icon: "bi-bar-chart-fill" },
+];
+
+
+// Filter items based on role if needed
+// const visibleItems = sidebarItems.filter(item => {
+//     if (item.href === '/user-management' || item.href === '/admin') {
+//         return roles.includes('ADMIN');
+//     }
+//     return true; // Show other items
+// });
+
+---
+
+<aside class="d-flex flex-column flex-shrink-0 p-3 bg-light vh-100 position-sticky top-0" style="width: 280px;">
+    <div class="px-3 py-2">
+        <a href="/" class="d-flex align-items-center pb-3 mb-3 link-dark text-decoration-none border-bottom">
+            {/* <svg class="bi me-2" width="30" height="24"><use xlink:href="#bootstrap"></use></svg> */}
+            <img src="/SecManLogo.png" alt="SecMan" height="65" />
+        </a>
+        <ul class="list-unstyled ps-0">
+            {sidebarItems.map(item => (
+                <li class="mb-1">
+                    <a
+                        href={item.href}
+                        class:list={[
+                            "nav-link",
+                            {"active": Astro.url.pathname === item.href || (item.href !== '/' && Astro.url.pathname.startsWith(item.href))},
+                            {"link-dark": Astro.url.pathname !== item.href && !(item.href !== '/' && Astro.url.pathname.startsWith(item.href))}
+                        ]}
+                        aria-current={Astro.url.pathname === item.href ? "page" : undefined}
+                    >
+                        <i class={`bi ${item.icon} me-2`}></i>
+                        {item.text}
+                    </a>
+                </li>
+            ))}
+            
+            {/* Risk Management Section */}
+            <li class="mb-1">
+                <button 
+                    class="btn btn-toggle d-inline-flex align-items-center rounded border-0 collapsed nav-link link-dark w-100 text-start" 
+                    data-bs-toggle="collapse" 
+                    data-bs-target="#risk-management-collapse" 
+                    aria-expanded="false"
+                >
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    Risk Management
+                </button>
+                <div class="collapse" id="risk-management-collapse">
+                    <ul class="btn-toggle-nav list-unstyled fw-normal pb-1 small">
+                        {riskManagementItems.map(item => (
+                            <li>
+                                <a
+                                    href={item.href}
+                                    class:list={[
+                                        "nav-link d-inline-flex text-decoration-none rounded ps-4",
+                                        {"active": Astro.url.pathname === item.href || (item.href !== '/' && Astro.url.pathname.startsWith(item.href))},
+                                        {"link-dark": Astro.url.pathname !== item.href && !(item.href !== '/' && Astro.url.pathname.startsWith(item.href))}
+                                    ]}
+                                    aria-current={Astro.url.pathname === item.href ? "page" : undefined}
+                                >
+                                    <i class={`bi ${item.icon} me-2`}></i>
+                                    {item.text}
+                                </a>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            </li>
+        </ul>
+    </div>
+    <hr>
+    {/* Logout Button */}
+    <div class="dropdown">
+         <button class="btn btn-outline-danger w-100" id="logoutButtonSidebar">
+             <i class="bi bi-box-arrow-right me-2"></i> Logout
+         </button>
+    </div>
+</aside>
+
+<script>
+    const logoutButtonSidebar = document.getElementById('logoutButtonSidebar');
+    if (logoutButtonSidebar) {
+        logoutButtonSidebar.addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/auth/logout', { 
+                    method: 'POST',
+                    headers: {
+                        // Add any necessary headers, e.g., CSRF token if re-enabled
+                    }
+                });
+                if (response.ok) {
+                    // Clear potential client-side user state
+                    if (window.currentUser) {
+                        window.currentUser = null;
+                    }
+                    // Dispatch an event to notify other components that user logged out
+                    window.dispatchEvent(new CustomEvent('userLoggedOut'));
+                    // Redirect to login page
+                    window.location.href = '/login';
+                } else {
+                    const errorData = await response.json().catch(() => ({ message: 'Logout failed. Please try again.' }));
+                    console.error('Logout failed:', response.status, errorData);
+                    alert(errorData.message || 'Logout failed. Please try again.');
+                }
+            } catch (error) {
+                console.error('Logout request failed:', error);
+                alert('An error occurred during logout.');
+            }
+        });
+    }
+</script>

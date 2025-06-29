@@ -1,0 +1,21 @@
+---
+import TopBar from './TopBar.tsx'; // Import the new TopBar component
+---
+<header class="p-3 mb-3 border-bottom bg-white sticky-top"> {/* Added sticky-top */}
+    <div class="container-fluid"> {/* Changed to container-fluid for full width */}
+        <div class="d-flex flex-wrap align-items-center justify-content-center justify-content-lg-start">
+            <a href="/" class="d-flex align-items-center mb-2 mb-lg-0 text-dark text-decoration-none me-lg-3"> {/* Added margin */}
+                 <i class="bi bi-shield-lock-fill me-2 fs-4"></i> {/* Example Icon */}
+                <img src="/SecManLogo.png" alt="SecMan" height="65" />
+            </a>
+
+            {/* Removed placeholder nav links */}
+            
+            {/* Spacer to push TopBar to the right */}
+            <div class="flex-grow-1"></div> {/* Use flex-grow-1 for better spacing */}
+
+            {/* Replace the old text-end div with the TopBar component */}
+            <TopBar client:load />
+        </div>
+    </div>
+</header>

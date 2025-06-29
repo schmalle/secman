@@ -1,0 +1,35 @@
+{
+  "name": "whole-wind",
+  "type": "module",
+  "version": "0.0.1",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro",
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:headed": "playwright test --headed",
+    "test:checkin": "playwright test --config=playwright.checkin.config.ts",
+    "test:e2e": "playwright test comprehensive-e2e.spec.ts",
+    "test:all": "npm run test:checkin && npm run test:e2e"
+  },
+  "dependencies": {
+    "@astrojs/node": "^9.2.2",
+    "@astrojs/react": "^4.3.0",
+    "@popperjs/core": "^2.11.8",
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2",
+    "astro": "^5.10.1",
+    "axios": "^1.9.0",
+    "bootstrap": "^5.3.5",
+    "bootstrap-icons": "^1.11.3",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-markdown": "^10.1.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.52.0",
+    "@types/node": "^22.10.0"
+  }
+}

@@ -1,0 +1,34 @@
+testdata/*statements.01.2025.xlsx
+testdata/*statements.07.2025.xlsx
+
+# Ignore all node_modules folders at any depth
+node_modules/
+**/node_modules/
+src/frontend/dist/
+/src/frontend/playwright-report
+/src/frontend/test-results
+/src/frontend/checkin-test-results
+/src/frontend/checkin-test-results.json
+/tests/test-results
+/tests/playwright-report
+/tests/*.log
+*.log
+
+# macOS-specific files
+.DS_Store
+**/.DS_Store
+
+pictures/*.png
+*.pid
+**/*.pid
+*/*/package-lock.json
+/src/frontend/package-lock.json
+
+src/frontend/package-lock.json
+src/frontend/package-lock.json
+test-results/.last-run.json
+src/frontend/package-lock.json
+/.claude
+src/frontend/package-lock.json
+src/backend/test/controllers/MCPControllerTest.java.bak
+src/frontend/package-lock.json

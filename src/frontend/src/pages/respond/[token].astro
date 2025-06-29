@@ -1,0 +1,14 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import ResponseInterface from '../../components/ResponseInterface';
+
+const { token } = Astro.params;
+
+if (!token) {
+  return Astro.redirect('/');
+}
+---
+
+<Layout title="Risk Assessment Response">
+    <ResponseInterface token={token} client:load />
+</Layout>

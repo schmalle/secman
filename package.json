@@ -1,0 +1,23 @@
+{
+  "name": "secman-screenshots",
+  "version": "1.0.0",
+  "description": "Screenshot capture for Secman pre-commit hooks",
+  "main": "scripts/take-screenshots.js",
+  "scripts": {
+    "install-hooks": "./scripts/install-hooks.sh",
+    "take-screenshots": "node scripts/take-screenshots.js",
+    "test-screenshots": "node scripts/take-screenshots.js",
+    "setup": "npm install && npx playwright install chromium"
+  },
+  "dependencies": {
+    "playwright": "^1.52.0"
+  },
+  "keywords": [
+    "screenshot",
+    "ui",
+    "testing",
+    "git-hooks"
+  ],
+  "author": "Secman Development Team",
+  "license": "MIT"
+}

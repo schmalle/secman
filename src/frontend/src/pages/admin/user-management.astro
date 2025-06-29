@@ -1,0 +1,11 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import UserManagement from '../../components/UserManagement';
+---
+
+<Layout title="Admin - User Management">
+    <UserManagement client:load />
+    <div class="mt-4">
+      <a href="/admin" class="btn btn-secondary">Back to Admin</a>
+    </div>
+</Layout>

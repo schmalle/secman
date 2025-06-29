@@ -1,0 +1,40 @@
+---
+// src/layouts/BaseLayout.astro
+interface Props {
+	title: string;
+}
+const { title } = Astro.props;
+
+// Generate a CSRF token for frontend use
+const csrfToken = "placeholder-token"; // This would actually come from the server in a real implementation
+---
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="description" content="Secman Application" />
+		<meta name="viewport" content="width=device-width" />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<meta name="generator" content={Astro.generator} />
+		<meta name="csrf-token" content={csrfToken} />
+		<title>{title}</title>
+        <!-- Bootstrap CSS -->
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+
+	</head>
+	<body>
+		<slot />
+        <!-- Bootstrap JS Bundle -->
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+        
+        <!-- Initialize CSRF protection -->
+        <script>
+            // This script sets up axios to include CSRF tokens in all requests
+            import { setupCSRFProtection } from '../utils/csrf';
+            document.addEventListener('DOMContentLoaded', () => {
+                setupCSRFProtection();
+            });
+        </script>
+	</body>
+</html>

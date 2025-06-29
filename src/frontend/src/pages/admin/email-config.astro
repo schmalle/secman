@@ -1,0 +1,475 @@
+---
+import Layout from '../../layouts/Layout.astro';
+---
+
+<Layout title="Email Configuration Management">
+      <div class="container-fluid p-4" id="email-config-content">
+        <div class="row">
+          <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+              <h2>Email Configuration Management</h2>
+              <button class="btn btn-primary" onclick="toggleForm()">
+                <span id="toggle-btn-text">Add New Configuration</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Form Section -->
+        <div class="row mb-4" id="config-form" style="display: none;">
+          <div class="col-12">
+            <div class="card">
+              <div class="card-body">
+                <h5 class="card-title" id="form-title">Add New Email Configuration</h5>
+                <form id="email-config-form">
+                  <div class="row">
+                    <div class="col-md-6">
+                      <div class="mb-3">
+                        <label for="smtpHost" class="form-label">SMTP Host *</label>
+                        <input type="text" class="form-control" id="smtpHost" name="smtpHost" required placeholder="smtp.gmail.com">
+                      </div>
+                    </div>
+                    <div class="col-md-6">
+                      <div class="mb-3">
+                        <label for="smtpPort" class="form-label">SMTP Port *</label>
+                        <input type="number" class="form-control" id="smtpPort" name="smtpPort" value="587" required>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="row">
+                    <div class="col-md-6">
+                      <div class="mb-3">
+                        <label for="smtpUsername" class="form-label">SMTP Username</label>
+                        <input type="text" class="form-control" id="smtpUsername" name="smtpUsername" placeholder="your-email@gmail.com">
+                      </div>
+                    </div>
+                    <div class="col-md-6">
+                      <div class="mb-3">
+                        <label for="smtpPassword" class="form-label">SMTP Password</label>
+                        <input type="password" class="form-control" id="smtpPassword" name="smtpPassword">
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="row">
+                    <div class="col-md-6">
+                      <div class="mb-3">
+                        <label for="fromEmail" class="form-label">From Email *</label>
+                        <input type="email" class="form-control" id="fromEmail" name="fromEmail" required placeholder="noreply@yourcompany.com">
+                      </div>
+                    </div>
+                    <div class="col-md-6">
+                      <div class="mb-3">
+                        <label for="fromName" class="form-label">From Name *</label>
+                        <input type="text" class="form-control" id="fromName" name="fromName" value="SecMan Risk Assessment" required>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="row">
+                    <div class="col-md-4">
+                      <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="smtpTls" name="smtpTls" checked>
+                        <label class="form-check-label" for="smtpTls">Enable TLS</label>
+                      </div>
+                    </div>
+                    <div class="col-md-4">
+                      <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="smtpSsl" name="smtpSsl">
+                        <label class="form-check-label" for="smtpSsl">Enable SSL</label>
+                      </div>
+                    </div>
+                    <div class="col-md-4">
+                      <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="isActive" name="isActive" checked>
+                        <label class="form-check-label" for="isActive">Set as Active Configuration</label>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="d-flex justify-content-end">
+                    <button type="submit" class="btn btn-success me-2">Save</button>
+                    <button type="button" onclick="resetForm()" class="btn btn-secondary">Cancel</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Configurations List -->
+        <div class="row">
+          <div class="col-12">
+            <div class="card">
+              <div class="card-body">
+                <h5 class="card-title">Email Configurations</h5>
+                <div id="loading" class="text-center">
+                  <div class="spinner-border" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                  </div>
+                </div>
+                <div id="config-list" style="display: none;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Alert Messages -->
+        <div id="alert-container"></div>
+      </div>
+    
+    <script>
+      let currentUser = null;
+      let configs = [];
+      let editingConfig = null;
+
+      // Wait for user to be loaded by Layout component
+      function waitForUser() {
+        if (window.currentUser) {
+          currentUser = window.currentUser;
+          loadConfigurations();
+        } else {
+          // Wait for userLoaded event
+          window.addEventListener('userLoaded', () => {
+            if (window.currentUser) {
+              currentUser = window.currentUser;
+              loadConfigurations();
+            }
+          });
+        }
+      }
+
+      // Start when DOM is ready
+      document.addEventListener('DOMContentLoaded', waitForUser);
+      
+      // Also try immediately in case DOM is already loaded
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', waitForUser);
+      } else {
+        waitForUser();
+      }
+
+      function loadConfigurations() {
+        console.log('Loading configurations...');
+        fetch('/api/email-config')
+          .then(response => {
+            console.log('API response status:', response.status);
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            return response.json();
+          })
+          .then(data => {
+            console.log('Loaded configurations:', data);
+            configs = data;
+            renderConfigurations();
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('config-list').style.display = 'block';
+          })
+          .catch(err => {
+            console.error('Failed to load configurations:', err);
+            showAlert('Failed to load configurations: ' + err.message, 'danger');
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('config-list').style.display = 'block';
+            document.getElementById('config-list').innerHTML = '<p class="text-danger">Failed to load configurations. Please check your authentication and try again.</p>';
+          });
+      }
+
+      function renderConfigurations() {
+        const container = document.getElementById('config-list');
+        
+        if (configs.length === 0) {
+          container.innerHTML = '<p class="text-muted">No email configurations found. Click "Add New Configuration" to create one.</p>';
+          return;
+        }
+
+        let html = `
+          <div class="table-responsive">
+            <table class="table table-striped table-hover">
+              <thead>
+                <tr>
+                  <th>Status</th>
+                  <th>SMTP Host</th>
+                  <th>Port</th>
+                  <th>From Email</th>
+                  <th>From Name</th>
+                  <th>Security</th>
+                  <th>Updated</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+        `;
+
+        configs.forEach(config => {
+          const isActive = config.isActive;
+          const securityBadges = [];
+          if (config.smtpTls) securityBadges.push('<span class="badge bg-info me-1">TLS</span>');
+          if (config.smtpSsl) securityBadges.push('<span class="badge bg-info me-1">SSL</span>');
+          if (config.smtpUsername) securityBadges.push('<span class="badge bg-success">Auth</span>');
+
+          // Ensure we have a valid numeric ID
+          const configId = config.id || config.Id;
+          if (!configId) {
+            console.error('Config missing ID:', config);
+            return; // Skip this config if no valid ID
+          }
+          console.log('Rendering config with ID:', configId, 'Config:', config);
+
+          html += `
+            <tr>
+              <td>
+                <span class="badge ${isActive ? 'bg-success' : 'bg-secondary'}">
+                  ${isActive ? 'Active' : 'Inactive'}
+                </span>
+              </td>
+              <td>${config.smtpHost || ''}</td>
+              <td>${config.smtpPort || ''}</td>
+              <td>${config.fromEmail || ''}</td>
+              <td>${config.fromName || ''}</td>
+              <td>${securityBadges.join('')}</td>
+              <td>${config.updatedAt ? new Date(config.updatedAt).toLocaleDateString() : '-'}</td>
+              <td>
+                <div class="btn-group-vertical btn-group-sm" role="group">
+                  <button type="button" class="btn btn-outline-primary mb-1 edit-btn" data-config-id="${configId}">Edit</button>
+                  <button type="button" class="btn btn-outline-info mb-1 test-btn" data-config-id="${configId}">Test</button>
+                  <button type="button" class="btn btn-outline-danger delete-btn" data-config-id="${configId}">Delete</button>
+                </div>
+              </td>
+            </tr>
+          `;
+        });
+
+        html += '</tbody></table></div>';
+        container.innerHTML = html;
+        
+        // Add event delegation for action buttons
+        addButtonEventListeners();
+      }
+
+      function addButtonEventListeners() {
+        const container = document.getElementById('config-list');
+        
+        // Remove existing listeners first
+        container.removeEventListener('click', handleButtonClick);
+        
+        // Add event delegation
+        container.addEventListener('click', handleButtonClick);
+      }
+
+      function handleButtonClick(event) {
+        const target = event.target;
+        const configId = parseInt(target.getAttribute('data-config-id'));
+        
+        if (!configId) return;
+        
+        if (target.classList.contains('edit-btn')) {
+          editConfig(configId);
+        } else if (target.classList.contains('test-btn')) {
+          testConfig(configId);
+        } else if (target.classList.contains('delete-btn')) {
+          deleteConfig(configId);
+        }
+      }
+
+      function toggleForm() {
+        const form = document.getElementById('config-form');
+        const btn = document.getElementById('toggle-btn-text');
+        
+        if (form.style.display === 'none') {
+          form.style.display = 'block';
+          btn.textContent = 'Cancel';
+        } else {
+          resetForm();
+        }
+      }
+
+      function resetForm() {
+        document.getElementById('email-config-form').reset();
+        document.getElementById('config-form').style.display = 'none';
+        document.getElementById('toggle-btn-text').textContent = 'Add New Configuration';
+        document.getElementById('form-title').textContent = 'Add New Email Configuration';
+        document.getElementById('smtpPort').value = '587';
+        document.getElementById('fromName').value = 'SecMan Risk Assessment';
+        document.getElementById('smtpTls').checked = true;
+        document.getElementById('isActive').checked = true;
+        editingConfig = null;
+      }
+
+      function editConfig(id) {
+        console.log('editConfig called with id:', id, 'type:', typeof id);
+        
+        // Ensure id is a number
+        const numericId = typeof id === 'number' ? id : parseInt(id);
+        if (isNaN(numericId)) {
+          console.error('Invalid ID provided:', id);
+          showAlert('Invalid configuration ID', 'danger');
+          return;
+        }
+        
+        const config = configs.find(c => c.id === numericId);
+        if (!config) {
+          console.error('Configuration not found for id:', numericId, 'Available configs:', configs.map(c => c.id));
+          showAlert('Configuration not found', 'danger');
+          return;
+        }
+
+        console.log('Found config:', config);
+        editingConfig = config;
+        
+        try {
+          // Fill form with config data
+          document.getElementById('smtpHost').value = config.smtpHost || '';
+          document.getElementById('smtpPort').value = config.smtpPort || 587;
+          document.getElementById('smtpUsername').value = config.smtpUsername || '';
+          document.getElementById('smtpPassword').value = ''; // Don't show password
+          document.getElementById('smtpPassword').placeholder = config.smtpPassword && config.smtpPassword !== '***HIDDEN***' ? '***HIDDEN***' : '';
+          document.getElementById('fromEmail').value = config.fromEmail || '';
+          document.getElementById('fromName').value = config.fromName || '';
+          document.getElementById('smtpTls').checked = Boolean(config.smtpTls);
+          document.getElementById('smtpSsl').checked = Boolean(config.smtpSsl);
+          document.getElementById('isActive').checked = Boolean(config.isActive);
+          
+          document.getElementById('form-title').textContent = 'Edit Email Configuration';
+          document.getElementById('toggle-btn-text').textContent = 'Cancel';
+          document.getElementById('config-form').style.display = 'block';
+          
+          console.log('Form should now be visible with data:', {
+            smtpHost: config.smtpHost,
+            smtpPort: config.smtpPort,
+            fromEmail: config.fromEmail,
+            fromName: config.fromName
+          });
+        } catch (error) {
+          console.error('Error in editConfig:', error);
+          showAlert('Error editing configuration: ' + error.message, 'danger');
+        }
+      }
+
+      function testConfig(id) {
+        // Ensure id is a number
+        const numericId = typeof id === 'number' ? id : parseInt(id);
+        if (isNaN(numericId)) {
+          console.error('Invalid ID provided for test:', id);
+          showAlert('Invalid configuration ID', 'danger');
+          return;
+        }
+
+        const testEmail = prompt('Enter email address to send test email to:');
+        if (!testEmail) return;
+
+        fetch(`/api/email-config/${numericId}/test`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ testEmail })
+        })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+          return response.json();
+        })
+        .then(data => {
+          showAlert('Test email sent successfully!', 'success');
+        })
+        .catch(err => {
+          console.error('Test email failed:', err);
+          showAlert('Failed to send test email: ' + err.message, 'danger');
+        });
+      }
+
+      function deleteConfig(id) {
+        // Ensure id is a number
+        const numericId = typeof id === 'number' ? id : parseInt(id);
+        if (isNaN(numericId)) {
+          console.error('Invalid ID provided for delete:', id);
+          showAlert('Invalid configuration ID', 'danger');
+          return;
+        }
+
+        if (!confirm('Are you sure you want to delete this email configuration?')) return;
+
+        fetch(`/api/email-config/${numericId}`, { method: 'DELETE' })
+          .then(response => {
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            return response.json();
+          })
+          .then(data => {
+            showAlert('Configuration deleted successfully', 'success');
+            loadConfigurations();
+          })
+          .catch(err => {
+            console.error('Delete failed:', err);
+            showAlert('Failed to delete configuration: ' + err.message, 'danger');
+          });
+      }
+
+      // Form submission
+      document.getElementById('email-config-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(e.target);
+        const data = {
+          smtpHost: formData.get('smtpHost'),
+          smtpPort: parseInt(formData.get('smtpPort')),
+          smtpUsername: formData.get('smtpUsername'),
+          smtpPassword: formData.get('smtpPassword'),
+          smtpTls: formData.has('smtpTls'),
+          smtpSsl: formData.has('smtpSsl'),
+          fromEmail: formData.get('fromEmail'),
+          fromName: formData.get('fromName'),
+          isActive: formData.has('isActive')
+        };
+
+        // Don't send empty password for edits
+        if (editingConfig && !data.smtpPassword) {
+          data.smtpPassword = '***HIDDEN***';
+        }
+
+        const url = editingConfig ? `/api/email-config/${editingConfig.id}` : '/api/email-config';
+        const method = editingConfig ? 'PUT' : 'POST';
+
+        fetch(url, {
+          method: method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+          return response.json();
+        })
+        .then(data => {
+          showAlert(editingConfig ? 'Configuration updated successfully' : 'Configuration created successfully', 'success');
+          resetForm();
+          loadConfigurations();
+        })
+        .catch(err => {
+          console.error('Save failed:', err);
+          showAlert('Failed to save configuration: ' + err.message, 'danger');
+        });
+      });
+
+      function showAlert(message, type) {
+        const container = document.getElementById('alert-container');
+        const alertHtml = `
+          <div class="alert alert-${type} alert-dismissible fade show mt-3" role="alert">
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+          </div>
+        `;
+        container.innerHTML = alertHtml;
+        
+        // Auto-dismiss success alerts
+        if (type === 'success') {
+          setTimeout(() => {
+            container.innerHTML = '';
+          }, 3000);
+        }
+      }
+    </script>
+</Layout>

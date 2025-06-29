@@ -1,0 +1,29 @@
+---
+interface Props {
+    tier: string;
+    price: string;
+    features: string[];
+    buttonText: string;
+    buttonVariant: 'primary' | 'secondary';
+    isFeatured?: boolean; // Optional prop for featured card styling
+}
+
+const { tier, price, features, buttonText, buttonVariant, isFeatured } = Astro.props;
+
+const cardClass = `card mb-4 rounded-3 shadow-sm ${isFeatured ? 'border-primary' : ''}`;
+const headerClass = `card-header py-3 ${isFeatured ? 'text-bg-primary border-primary' : ''}`;
+const buttonClass = `w-100 btn btn-lg ${buttonVariant === 'primary' ? 'btn-primary' : 'btn-outline-primary'}`;
+---
+
+<div class={cardClass}>
+    <div class={headerClass}>
+        <h4 class="my-0 fw-normal">{tier}</h4>
+    </div>
+    <div class="card-body">
+        <h1 class="card-title pricing-card-title">{price}<small class="text-muted fw-light">/mo</small></h1>
+        <ul class="list-unstyled mt-3 mb-4">
+            {features.map(feature => <li>{feature}</li>)}
+        </ul>
+        <button type="button" class={buttonClass}>{buttonText}</button>
+    </div>
+</div>

@@ -1,0 +1,19 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Risk Assessment Management">
+    <div id="risk-assessment-root"></div>
+</Layout>
+
+<script>
+    import('../components/RiskAssessmentManagement.tsx').then(module => {
+        const RiskAssessmentManagement = module.default;
+        import('react').then(React => {
+            import('react-dom/client').then(ReactDOM => {
+                const root = ReactDOM.createRoot(document.getElementById('risk-assessment-root'));
+                root.render(React.createElement(RiskAssessmentManagement));
+            });
+        });
+    });
+</script>

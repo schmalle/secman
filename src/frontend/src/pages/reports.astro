@@ -1,0 +1,19 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Reports">
+    <div id="reports-root"></div>
+</Layout>
+
+<script>
+    import('../components/Reports.tsx').then(module => {
+        const Reports = module.default;
+        import('react').then(React => {
+            import('react-dom/client').then(ReactDOM => {
+                const root = ReactDOM.createRoot(document.getElementById('reports-root'));
+                root.render(React.createElement(Reports));
+            });
+        });
+    });
+</script>

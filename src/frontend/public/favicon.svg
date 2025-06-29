@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 300" width="800" height="300">
+  <!-- Shield outline -->
+  <path d="M50 80 L50 180 Q50 220 90 240 L140 260 Q150 265 160 260 L210 240 Q250 220 250 180 L250 80 Q250 60 230 60 L70 60 Q50 60 50 80 Z" 
+        fill="none" 
+        stroke="#1e3a5f" 
+        stroke-width="12" 
+        stroke-linejoin="round"/>
+  
+  <!-- Shield fill -->
+  <path d="M62 80 L62 175 Q62 210 95 227 L140 245 Q150 250 160 245 L205 227 Q238 210 238 175 L238 80 Q238 72 230 72 L70 72 Q62 72 62 80 Z" 
+        fill="white"/>
+  
+  <!-- Checkmark -->
+  <path d="M110 150 L135 175 L190 120" 
+        fill="none" 
+        stroke="#1e3a5f" 
+        stroke-width="16" 
+        stroke-linecap="round" 
+        stroke-linejoin="round"/>
+  
+  <!-- SECMAN text -->
+  <g fill="#1e3a5f" font-family="Arial, sans-serif" font-weight="bold" font-size="72">
+    <text x="280" y="165" dominant-baseline="middle">SECMAN</text>
+  </g>
+</svg>
