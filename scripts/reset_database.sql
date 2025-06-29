@@ -24,6 +24,16 @@ DROP TABLE IF EXISTS requirement_standard;
 DROP TABLE IF EXISTS standard_usecase;
 DROP TABLE IF EXISTS risk_assessment_usecase;
 DROP TABLE IF EXISTS response;
+DROP TABLE IF EXISTS risk_assessment_requirement_files;
+
+-- Drop authentication and security tables
+DROP TABLE IF EXISTS auth_audit_log;
+DROP TABLE IF EXISTS user_external_identities;
+DROP TABLE IF EXISTS oauth_states;
+DROP TABLE IF EXISTS identity_providers;
+
+-- Drop file management tables
+DROP TABLE IF EXISTS requirement_files;
 
 -- Drop history tables
 DROP TABLE IF EXISTS usecases_history;
