@@ -305,23 +305,23 @@ class ScreenshotTaker {
 async function main() {
   const screenshotTaker = new ScreenshotTaker();
   
-  //try {
-  //  await screenshotTaker.init();
-   // await screenshotTaker.checkServices();
-  //  
-   // const results = await screenshotTaker.takeAllScreenshots();
-  //  
-  //  await screenshotTaker.generateReport(results);
-  //  
-  //  console.log('\n🎉 Screenshot capture completed!');
-  //  console.log(`📁 Screenshots saved to: ${CONFIG.screenshots.outputDir}`);
-  //  
-  //} catch (error) {
-  //  console.error('\n💥 Screenshot capture failed:', error.message);
-  //  process.exit(1);
-  //} finally {
-  //  await screenshotTaker.cleanup();
-  //}
+  try {
+    await screenshotTaker.init();
+    await screenshotTaker.checkServices();
+    
+    const results = await screenshotTaker.takeAllScreenshots();
+    
+    await screenshotTaker.generateReport(results);
+    
+    console.log('\n🎉 Screenshot capture completed!');
+    console.log(`📁 Screenshots saved to: ${CONFIG.screenshots.outputDir}`);
+    
+  } catch (error) {
+    console.error('\n💥 Screenshot capture failed:', error.message);
+    process.exit(1);
+  } finally {
+    await screenshotTaker.cleanup();
+  }
 }
 
 // Run if called directly
