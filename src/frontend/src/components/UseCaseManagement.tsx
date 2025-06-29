@@ -200,7 +200,6 @@ const UseCaseManagement: React.FC = () => {
                 <table className="table table-striped table-hover">
                   <thead>
                     <tr>
-                      <th>ID</th>
                       <th>Name</th>
                       <th>Created At</th>
                       <th>Updated At</th>
@@ -210,7 +209,6 @@ const UseCaseManagement: React.FC = () => {
                   <tbody>
                     {useCases.map((useCase) => (
                       <tr key={useCase.id}>
-                        <td>{useCase.id}</td>
                         <td>{useCase.name}</td>
                         <td>{new Date(useCase.createdAt).toLocaleDateString()}</td>
                         <td>{new Date(useCase.updatedAt).toLocaleDateString()}</td>
