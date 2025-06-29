@@ -1,4 +1,6 @@
-Here’s a general, descriptive README template tailored for a tool like secman—a requirement and risk assessment management tool. You can copy this and fill in specific details as needed:
+
+DRAFT DRAFT DRAFT DRAFT
+
 
 ---
 
@@ -30,11 +32,11 @@ secman is an open-source tool designed to help teams and organizations efficient
 
 ### Prerequisites
 
-- Java (version X.X or higher)
-- Node.js (version X.X or higher)
+- Java (tested with version 21)
+- Node.js (tested with version 24)
 - sbt (Scala Build Tool)
 - Python (for optional scripts)
-- [Any other dependencies]
+
 
 ### Installation
 
