@@ -4,11 +4,67 @@
  * Pre-commit screenshot script for Secman
  * Takes screenshots of main UI pages and stores them in /pictures
  * Requires both backend and frontend to be running
+ * 
+ * Usage:
+ *   node take-screenshots.js [--username <username>] [--password <password>]
+ *   
+ * If no credentials are provided, defaults to adminuser/password
  */
 
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
+
+// Parse command line arguments
+function parseArguments() {
+  const args = process.argv.slice(2);
+  const parsed = {
+    username: 'adminuser',
+    password: 'password'
+  };
+
+  for (let i = 0; i < args.length; i++) {
+    switch (args[i]) {
+      case '--username':
+      case '-u':
+        if (i + 1 < args.length) {
+          parsed.username = args[i + 1];
+          i++;
+        }
+        break;
+      case '--password':
+      case '-p':
+        if (i + 1 < args.length) {
+          parsed.password = args[i + 1];
+          i++;
+        }
+        break;
+      case '--help':
+      case '-h':
+        console.log(`
+Screenshot Script for Secman
+
+Usage: node take-screenshots.js [options]
+
+Options:
+  -u, --username <username>    Username for authentication (default: adminuser)
+  -p, --password <password>    Password for authentication (default: password)
+  -h, --help                   Show this help message
+
+Examples:
+  node take-screenshots.js
+  node take-screenshots.js --username myuser --password mypass
+  node take-screenshots.js -u admin -p secret
+        `);
+        process.exit(0);
+        break;
+    }
+  }
+
+  return parsed;
+}
+
+const cliArgs = parseArguments();
 
 // Configuration
 const CONFIG = {
@@ -21,8 +77,8 @@ const CONFIG = {
   },
   timeout: 60000,
   credentials: {
-    username: 'adminuser',
-    password: 'password'
+    username: cliArgs.username,
+    password: cliArgs.password
   }
 };
 
@@ -304,6 +360,8 @@ class ScreenshotTaker {
 
 async function main() {
   const screenshotTaker = new ScreenshotTaker();
+  
+  console.log(`🚀 Starting screenshot capture with user: ${CONFIG.credentials.username}`);
   
   try {
     await screenshotTaker.init();
