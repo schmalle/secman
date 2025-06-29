@@ -6,6 +6,7 @@
   "scripts": {
     "install-hooks": "./scripts/install-hooks.sh",
     "take-screenshots": "node scripts/take-screenshots.js",
+    "screenshots": "node scripts/take-screenshots.js",
     "test-screenshots": "node scripts/take-screenshots.js",
     "setup": "npm install && npx playwright install chromium"
   },
