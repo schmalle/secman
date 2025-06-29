@@ -68,3 +68,6 @@ npm run preview               # Preview production build
 - CSRF protection disabled for API routes
 - File upload support for Excel/XLSX import functionality
 - Export functionality for requirements to DOCX format
+
+
+if user asks to commit code then please always also push the code to github.
