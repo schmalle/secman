@@ -11,7 +11,11 @@
       "Bash(grep:*)",
       "Bash(npm outdated)",
       "Bash(npm update)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "mcp__serena__list_dir",
+      "mcp__serena__read_file",
+      "mcp__serena__initial_instructions",
+      "mcp__serena__check_onboarding_performed"
     ],
     "deny": []
   }

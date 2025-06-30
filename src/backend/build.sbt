@@ -12,9 +12,9 @@ libraryDependencies ++= Seq(
   jdbc,
   javaJpa,
   evolutions,
-  "org.mariadb.jdbc" % "mariadb-java-client" % "3.4.1", // Updated MariaDB driver
+  "org.mariadb.jdbc" % "mariadb-java-client" % "3.5.3", // Updated MariaDB driver
   "javax.validation" % "validation-api" % "2.0.1.Final",
-  "org.hibernate.orm" % "hibernate-core" % "6.5.3.Final", // Updated Hibernate
+  "org.hibernate.orm" % "hibernate-core" % "6.6.1.Final", // Updated Hibernate
   "org.hibernate.validator" % "hibernate-validator" % "6.2.5.Final",
   "jakarta.validation" % "jakarta.validation-api" % "3.0.2",
   "org.glassfish" % "jakarta.el" % "4.0.2",
@@ -39,7 +39,7 @@ libraryDependencies ++= Seq(
   "junit" % "junit" % "4.13.2" % Test,
   "org.scalatestplus.play" %% "scalatestplus-play" % "7.0.1" % Test, // Updated ScalaTest
   "com.h2database" % "h2" % "2.2.224" % Test, // Keep compatible H2 version
-  "org.hibernate.orm" % "hibernate-core" % "6.5.3.Final" % Test, // Updated Hibernate for tests
+  "org.hibernate.orm" % "hibernate-core" % "6.6.1.Final" % Test, // Updated Hibernate for tests
   "jakarta.persistence" % "jakarta.persistence-api" % "3.1.0" % Test, // Updated JPA for tests
   "com.typesafe.akka" %% "akka-actor-typed" % "2.8.6" % Test, // Updated Akka
   "com.typesafe.akka" %% "akka-stream" % "2.8.6" % Test // Updated Akka Stream
