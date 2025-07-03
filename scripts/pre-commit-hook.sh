@@ -205,7 +205,7 @@ main() {
     print_status "Starting pre-commit hook execution..."
     
     # Trap to ensure cleanup on exit
-    # trap cleanup_services EXIT
+    # x^trap cleanup_services EXIT
     
     # Check dependencies
     #check_dependencies
