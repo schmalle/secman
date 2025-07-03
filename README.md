@@ -84,6 +84,32 @@ secman is an open-source tool designed to help teams and organizations efficient
 
 ---
 
+## Testing
+
+secman includes comprehensive test suites for different components:
+
+### Backend Testing
+```sh
+# Run all backend tests
+cd src/backend
+sbt test
+
+# Run specific service tests
+sbt "testOnly services.EmailServiceTest"
+
+# Run tests with command line parameters
+sbt "testOnly services.EmailServiceTest" \
+  -Dtest.email.recipient=test@example.com \
+  -Dtest.email.subject="Test Subject"
+```
+
+### Test Documentation
+- **[Email Testing Guide](docs/EMAIL_TESTING_GUIDE.md)** - Comprehensive testing for email functionality
+- **[Translation Testing Guide](docs/TRANSLATION_TESTING_GUIDE.md)** - Testing translation features
+- **[End-to-End Testing Plan](docs/END_TO_END_TEST_PLAN.md)** - Overall testing strategy
+
+---
+
 ## Contributing
 
 We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
