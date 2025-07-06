@@ -1,5 +1,4 @@
-testdata/*statements.01.2025.xlsx
-testdata/*statements.07.2025.xlsx
+
 
 # Ignore all node_modules folders at any depth
 node_modules/
@@ -24,12 +23,8 @@ pictures/*.png
 */*/package-lock.json
 /src/frontend/package-lock.json
 
-src/frontend/package-lock.json
-src/frontend/package-lock.json
+
 test-results/.last-run.json
-src/frontend/package-lock.json
 /.claude
-src/frontend/package-lock.json
-src/backend/test/controllers/MCPControllerTest.java.bak
-src/frontend/package-lock.json
+src/backend/test/controllers/*.bak
 /.serena/cache
