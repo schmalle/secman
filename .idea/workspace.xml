@@ -4,10 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="94ada8b3-9f4e-473c-9fea-3bc9651b5bdd" name="Changes" comment="">
+    <list default="true" id="94ada8b3-9f4e-473c-9fea-3bc9651b5bdd" name="Changes" comment="added source of testdata">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backend/MCP_README.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/MCP_README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/testdata/Readme.MD" beforeDir="false" afterPath="$PROJECT_DIR$/testdata/Readme.MD" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -84,10 +83,23 @@
       <option name="presentableId" value="Default" />
       <updated>1751825637182</updated>
     </task>
+    <task id="LOCAL-00001" summary="added source of testdata">
+      <option name="closed" value="true" />
+      <created>1751832380000</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1751832380000</updated>
+    </task>
+    <option name="localTasksCounter" value="2" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="added source of testdata" />
+    <option name="LAST_COMMIT_MESSAGE" value="added source of testdata" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />

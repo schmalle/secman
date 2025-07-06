@@ -2,19 +2,17 @@ DRAFT DRAFT DRAFT DRAFT
 
 ---
 
-
-
 ![landing.png](docs/landing.png)
 
-
-
-**A requirement, risk assessment management tool**
+**A requirement management, risk assessment management tool**
 
 ---
 
-## Overview
+## Overview / background
 
-secman is an open-source tool designed to help teams and organizations efficiently manage requirements and perform risk assessments throughout the software development lifecycle. Built with a focus on flexibility and scalability, secman supports various workflows to track, assess, and mitigate risks linked to technical and business requirements.
+secman was initially started as a security requirement formatter tool. The goal was to generate a beautiful looking MS word document out of a well formatted MS Excel sheet (it was just a helper tool for a repeating task).
+
+Then the idea was born to extend this tooling for some other use cases like risk management or context specific document rendering.
 
 ---
 
@@ -24,11 +22,9 @@ secman is an open-source tool designed to help teams and organizations efficient
 - **Risk Assessment:** Identify, evaluate, and document risks associated with requirements or processes.
 - **User Roles:** Assign and manage different user roles (normaluser, adminuser) with appropriate permissions.
 - **Automated Analysis:** Integrated tools and scripts for dependency analysis and risk reporting.
-- **Customizable Workflows:** Adapt the tool’s workflow to fit your organization’s needs.
-- **Reporting:** Generate reports for requirements coverage, risk status, and mitigation actions.
-- **Integration:** Support for popular CI/CD tools and third-party integrations (e.g., sbt, GitHub Actions).
-
----
+- MCP server
+- E-Mail notification
+- Automatic translation of requirements
 
 ## Getting Started
 
@@ -36,39 +32,39 @@ secman is an open-source tool designed to help teams and organizations efficient
 
 - Java (tested with version 21)
 - Node.js (tested with version 24)
+- MariaDB
 - sbt (Scala Build Tool)
 - Python (for optional scripts)
+- OpenRouter Key (optionally)
 
 ### Installation
 
 1. **Clone the repository:**
 
-   ```sh
+   ```
    git clone https://github.com/schmalle/secman.git
    cd secman
    ```
-2. **Install dependencies:**
+2. **Create database**
 
-   - [Instructions for Java dependencies]
-   - [Instructions for Node.js/TypeScript dependencies]
-   - [Instructions for sbt]
-3. **Build the project:**
+```cd
+cd scritps
+./install.sh
+```
 
-   ```sh
-   sbt compile
-   ```
-4. **Run dependency analysis:**
+1.
+2. **Build the project (backend):**
 
    ```sh
-   sbt dependencyCheckAnalyze
+   sbt run dev
    ```
-5. **Start the application:**
+
+   Please note: The play framework ensures that all tables are existing, which are neeeded.
+4. **Build the project (frontend):**
 
    ```sh
-   [your start command here]
+   npm run dev
    ```
-
----
 
 ## Usage
 
@@ -116,22 +112,19 @@ sbt "testOnly services.EmailServiceTest" \
 
 ## Contributing
 
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+We welcome contributions at a later stage. For the moment any idea / potential topic would be great.
 
 ---
 
 ## License
 
-[Specify license type, e.g., MIT License. Link to LICENSE file.]
+A-GPL 3.0 license
 
 ---
 
 ## Contact
 
-- **Maintainer:** [Your name or organization]
-- **Issues:** [GitHub Issues link]
-- **Email:** [Optional contact email]
-
----
-
-Feel free to adapt this template further based on the specific features and structure of your project!
+- **Maintainer:** Markus "flake" Schmall
+- Mastodon: flakedev@infosec.exchange
+- Telegram: flakedev
+- **Email:** markus@mschmall.de
