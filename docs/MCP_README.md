@@ -9,14 +9,16 @@ The Secman MCP server allows AI assistants like Claude to interact with the Secm
 ## Features
 
 ### Resources (Read-only Data)
+
 - **Requirements**: Access to all security requirements
-- **Standards**: Compliance standards and frameworks  
+- **Standards**: Compliance standards and frameworks
 - **Assets**: Asset inventory and classifications
 - **Risks**: Risk definitions and descriptions
 - **Risk Assessments**: Risk assessment data for assets
 - **Users**: User management (admin only)
 
 ### Tools (Executable Operations)
+
 - **search_requirements**: Search requirements by text or criteria
 - **create_requirement**: Create new requirements (admin only)
 - **search_assets**: Search assets by name or description
@@ -24,6 +26,7 @@ The Secman MCP server allows AI assistants like Claude to interact with the Secm
 - **generate_compliance_report**: Generate compliance reports for standards
 
 ### Prompts (Workflow Templates)
+
 - **create_requirement_with_compliance**: Guide for creating requirements with compliance mapping
 - **assess_asset_risk**: Workflow for conducting risk assessments
 - **generate_compliance_report**: Template for generating compliance reports
@@ -44,11 +47,13 @@ The Secman MCP server allows AI assistants like Claude to interact with the Secm
 ### Transport Support
 
 #### STDIO Transport (Claude Desktop)
+
 - Used for direct integration with Claude Desktop app
 - Communicates via standard input/output
 - Ideal for local development and personal use
 
-#### HTTP Transport (Remote Access)  
+#### HTTP Transport (Remote Access)
+
 - RESTful API endpoints for remote MCP clients
 - Supports CORS for web-based integrations
 - Suitable for production deployments
@@ -58,17 +63,20 @@ The Secman MCP server allows AI assistants like Claude to interact with the Secm
 ### 1. Claude Desktop Integration
 
 #### Install Dependencies
+
 ```bash
 cd src/backend
 sbt compile
 ```
 
 #### Generate API Key
+
 1. Log into Secman web interface
 2. Visit `/mcp/api-key` endpoint to get your API key
 3. Note the format: `username:api-key-hash`
 
 #### Configure Claude Desktop
+
 1. Edit `~/Library/Application Support/Claude/claude_desktop_config.json`
 2. Add the following configuration:
 
@@ -96,12 +104,14 @@ sbt compile
 ### 2. HTTP Transport Setup
 
 #### Start Secman Server
+
 ```bash
 cd src/backend
 sbt run
 ```
 
 #### Test MCP Endpoints
+
 ```bash
 # Check server health
 curl http://localhost:9000/mcp/health
@@ -192,16 +202,18 @@ curl -X POST http://localhost:9000/mcp \
 ## Authentication
 
 ### API Key Format
+
 API keys use the format: `username:hash`
 
 Where:
+
 - `username`: Your Secman username
 - `hash`: Generated API key hash
 
 ### Authentication Methods
 
 1. **Session-based** (HTTP transport): Use existing web session
-2. **Bearer token** (HTTP transport): Include `Authorization: Bearer api-key` header  
+2. **Bearer token** (HTTP transport): Include `Authorization: Bearer api-key` header
 3. **Environment variable** (STDIO transport): Set `SECMAN_API_KEY=api-key`
 
 ### Permission Levels
@@ -212,17 +224,20 @@ Where:
 ## Development
 
 ### Running Tests
+
 ```bash
 cd src/backend
 sbt test
 ```
 
 ### Adding New Tools
+
 1. Define tool in `ToolProvider.listTools()`
 2. Implement handler in `ToolProvider.callTool()`
 3. Add tests in `test/mcp/ToolProviderTest.java`
 
 ### Adding New Resources
+
 1. Define resource in `ResourceProvider.listResources()`
 2. Implement reader in `ResourceProvider.readResource()`
 3. Add tests in `test/mcp/ResourceProviderTest.java`
@@ -232,21 +247,25 @@ sbt test
 ### Common Issues
 
 #### "Authentication required" Error
+
 - Verify API key is correctly set in environment or headers
 - Check that API key format is `username:hash`
 - Ensure user exists and is active in Secman
 
 #### "Method not found" Error
+
 - Check that method name is spelled correctly
 - Verify user has permission to access the method
 - Review available methods with `tools/list` or `resources/list`
 
 #### STDIO Connection Issues
+
 - Verify Java classpath includes all dependencies
 - Check that working directory is correct
 - Review Claude Desktop logs for error details
 
 #### HTTP Transport Issues
+
 - Confirm Secman server is running on correct port
 - Check CORS headers for browser-based clients
 - Verify Content-Type is set to `application/json`
@@ -254,19 +273,25 @@ sbt test
 ### Debugging
 
 #### Enable Debug Logging
+
 Set log level in `logback.xml`:
+
 ```xml
 <logger name="mcp" level="DEBUG"/>
 ```
 
 #### Monitor Sessions
+
 Check active sessions via health endpoint:
+
 ```bash
 curl http://localhost:9000/mcp/health
 ```
 
 #### Test Protocol Compliance
+
 Use the MCP test suite to validate protocol compliance:
+
 ```bash
 # Example test script
 node test-mcp-client.js http://localhost:9000/mcp
@@ -275,6 +300,7 @@ node test-mcp-client.js http://localhost:9000/mcp
 ## Security Considerations
 
 ### Best Practices
+
 - Use HTTPS in production for HTTP transport
 - Rotate API keys regularly
 - Monitor MCP access logs
@@ -282,6 +308,7 @@ node test-mcp-client.js http://localhost:9000/mcp
 - Validate all input parameters
 
 ### Production Deployment
+
 - Deploy behind reverse proxy (nginx, Apache)
 - Use TLS termination at proxy level
 - Implement request logging and monitoring
@@ -293,9 +320,11 @@ node test-mcp-client.js http://localhost:9000/mcp
 ### Endpoints
 
 #### STDIO Transport
+
 - No endpoints - uses standard input/output
 
 #### HTTP Transport
+
 - `POST /mcp` - Main MCP protocol endpoint
 - `GET /mcp` - Server-Sent Events endpoint
 - `OPTIONS /mcp` - CORS preflight support
@@ -308,7 +337,7 @@ node test-mcp-client.js http://localhost:9000/mcp
 Standard JSON-RPC error codes plus MCP-specific extensions:
 
 - `-32700`: Parse error
-- `-32600`: Invalid request  
+- `-32600`: Invalid request
 - `-32601`: Method not found
 - `-32602`: Invalid params
 - `-32603`: Internal error
@@ -317,19 +346,4 @@ Standard JSON-RPC error codes plus MCP-specific extensions:
 - `-32002`: Resource not found (MCP extension)
 - `-32003`: Tool error (MCP extension)
 
-## Contributing
-
-### Development Workflow
-1. Create feature branch
-2. Implement changes with tests
-3. Verify MCP protocol compliance
-4. Update documentation
-5. Submit pull request
-
-### Code Style
-- Follow existing Java conventions
-- Add comprehensive Javadoc comments
-- Include unit tests for all new functionality
-- Maintain backward compatibility
-
-For questions or support, please refer to the main Secman documentation or open an issue in the project repository.
+##
