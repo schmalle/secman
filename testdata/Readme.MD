@@ -1,1 +1,1 @@
-Testdata taken from Deutsche Telekom Privay & securiy assessment External hosting requirement
+Testdata taken from Deutsche Telekom Privay & securiy assessment External hosting requirement, see https://www.telekom.com/en/company/data-privacy-and-security/news/privacy-and-security-assessment-process-358312
