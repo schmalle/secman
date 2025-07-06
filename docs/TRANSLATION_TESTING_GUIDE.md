@@ -353,6 +353,28 @@ export SECMAN_TEST_LANGUAGE="de"
 ./test-translation.sh all 2>&1 | grep -E "(duration|seconds|timing)"
 ```
 
+## Related Testing Documentation
+
+### Other Testing Guides
+
+- **[Email Testing Guide](EMAIL_TESTING_GUIDE.md)** - Comprehensive testing for email functionality including SMTP configuration and email sending
+- **[End-to-End Testing Plan](END_TO_END_TEST_PLAN.md)** - Overall testing strategy for the application
+- **[Testing Credentials](TESTING_CREDENTIALS.md)** - Test user accounts and credentials
+
+### Integration Testing
+
+The translation feature integrates with the email system for document delivery. For testing email functionality used in translation workflows:
+
+```bash
+# Test translation with email notification
+./test-translation.sh translate --email-test recipient@example.com
+
+# Test translated document delivery via email
+./test-translation.sh all --notify-email --test-email test@example.com
+```
+
+Refer to the [Email Testing Guide](EMAIL_TESTING_GUIDE.md) for detailed email testing procedures that complement translation testing.
+
 ## Security Considerations
 
 ### API Key Management
