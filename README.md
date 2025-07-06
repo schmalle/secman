@@ -1,10 +1,12 @@
-
 DRAFT DRAFT DRAFT DRAFT
-
 
 ---
 
-# secman
+
+
+![landing.png](docs/landing.png)
+
+
 
 **A requirement, risk assessment management tool**
 
@@ -37,31 +39,31 @@ secman is an open-source tool designed to help teams and organizations efficient
 - sbt (Scala Build Tool)
 - Python (for optional scripts)
 
-
 ### Installation
 
 1. **Clone the repository:**
+
    ```sh
    git clone https://github.com/schmalle/secman.git
    cd secman
    ```
-
 2. **Install dependencies:**
+
    - [Instructions for Java dependencies]
    - [Instructions for Node.js/TypeScript dependencies]
    - [Instructions for sbt]
-
 3. **Build the project:**
+
    ```sh
    sbt compile
    ```
-
 4. **Run dependency analysis:**
+
    ```sh
    sbt dependencyCheckAnalyze
    ```
-
 5. **Start the application:**
+
    ```sh
    [your start command here]
    ```
@@ -89,6 +91,7 @@ secman is an open-source tool designed to help teams and organizations efficient
 secman includes comprehensive test suites for different components:
 
 ### Backend Testing
+
 ```sh
 # Run all backend tests
 cd src/backend
@@ -104,6 +107,7 @@ sbt "testOnly services.EmailServiceTest" \
 ```
 
 ### Test Documentation
+
 - **[Email Testing Guide](docs/EMAIL_TESTING_GUIDE.md)** - Comprehensive testing for email functionality
 - **[Translation Testing Guide](docs/TRANSLATION_TESTING_GUIDE.md)** - Testing translation features
 - **[End-to-End Testing Plan](docs/END_TO_END_TEST_PLAN.md)** - Overall testing strategy
