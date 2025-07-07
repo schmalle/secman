@@ -112,6 +112,7 @@ public class PopulateTestData {
             populateAssets();
             populateStandards();
             populateUseCases();
+            linkStandardToUseCase();
             populateNorms();
             populateRequirements();
             populateRisks();
@@ -386,28 +387,16 @@ public class PopulateTestData {
         
         LocalDateTime now = LocalDateTime.now();
         
-        String[][] standards = {
-            {"ISO 27001", "Information security management systems — Requirements"},
-            {"NIST Cybersecurity Framework", "Framework for improving critical infrastructure cybersecurity"},
-            {"SOC 2", "System and Organization Controls 2 - Trust Services Criteria"},
-            {"GDPR", "General Data Protection Regulation - EU privacy regulation"},
-            {"PCI DSS", "Payment Card Industry Data Security Standard"},
-            {"HIPAA", "Health Insurance Portability and Accountability Act"},
-            {"SOX", "Sarbanes-Oxley Act - Financial reporting compliance"},
-            {"COBIT", "Control Objectives for Information and Related Technologies"}
-        };
-        
-        for (String[] standard : standards) {
-            stmt.setString(1, standard[0]);
-            stmt.setString(2, standard[1]);
-            stmt.setTimestamp(3, Timestamp.valueOf(now));
-            stmt.setTimestamp(4, Timestamp.valueOf(now));
-            stmt.executeUpdate();
-        }
+        // Single standard for external hosting
+        stmt.setString(1, "External hosting");
+        stmt.setString(2, "Security requirements and controls for external hosting services and SAAS platforms");
+        stmt.setTimestamp(3, Timestamp.valueOf(now));
+        stmt.setTimestamp(4, Timestamp.valueOf(now));
+        stmt.executeUpdate();
         
         stmt.close();
         connection.commit();
-        System.out.println("✓ Created " + standards.length + " standards");
+        System.out.println("✓ Created 1 standard");
     }
     
     private void populateUseCases() throws SQLException {
@@ -418,29 +407,59 @@ public class PopulateTestData {
         
         LocalDateTime now = LocalDateTime.now();
         
-        String[] useCases = {
-            "Data Breach Prevention",
-            "Access Control Management",
-            "Incident Response",
-            "Vulnerability Management",
-            "Business Continuity",
-            "Third-Party Risk Management",
-            "Privacy Protection",
-            "Secure Software Development",
-            "Network Security Monitoring",
-            "Employee Security Training"
-        };
-        
-        for (String useCase : useCases) {
-            stmt.setString(1, useCase);
-            stmt.setTimestamp(2, Timestamp.valueOf(now));
-            stmt.setTimestamp(3, Timestamp.valueOf(now));
-            stmt.executeUpdate();
-        }
+        // Single use case for SAAS
+        stmt.setString(1, "SAAS");
+        stmt.setTimestamp(2, Timestamp.valueOf(now));
+        stmt.setTimestamp(3, Timestamp.valueOf(now));
+        stmt.executeUpdate();
         
         stmt.close();
         connection.commit();
-        System.out.println("✓ Created " + useCases.length + " use cases");
+        System.out.println("✓ Created 1 use case");
+    }
+    
+    private void linkStandardToUseCase() throws SQLException {
+        System.out.println("Linking standard to use case...");
+        
+        // Get the standard ID for "External hosting"
+        PreparedStatement standardStmt = connection.prepareStatement("SELECT id FROM standard WHERE name = ?");
+        standardStmt.setString(1, "External hosting");
+        ResultSet standardRs = standardStmt.executeQuery();
+        
+        if (!standardRs.next()) {
+            standardRs.close();
+            standardStmt.close();
+            throw new SQLException("Standard 'External hosting' not found");
+        }
+        long standardId = standardRs.getLong(1);
+        standardRs.close();
+        standardStmt.close();
+        
+        // Get the use case ID for "SAAS"
+        PreparedStatement useCaseStmt = connection.prepareStatement("SELECT id FROM usecase WHERE name = ?");
+        useCaseStmt.setString(1, "SAAS");
+        ResultSet useCaseRs = useCaseStmt.executeQuery();
+        
+        if (!useCaseRs.next()) {
+            useCaseRs.close();
+            useCaseStmt.close();
+            throw new SQLException("Use case 'SAAS' not found");
+        }
+        long useCaseId = useCaseRs.getLong(1);
+        useCaseRs.close();
+        useCaseStmt.close();
+        
+        // Link them in the junction table
+        PreparedStatement linkStmt = connection.prepareStatement(
+            "INSERT INTO standard_usecase (standard_id, usecase_id) VALUES (?, ?)"
+        );
+        linkStmt.setLong(1, standardId);
+        linkStmt.setLong(2, useCaseId);
+        linkStmt.executeUpdate();
+        linkStmt.close();
+        
+        connection.commit();
+        System.out.println("✓ Linked 'External hosting' standard to 'SAAS' use case");
     }
     
     private void populateNorms() throws SQLException {
@@ -451,27 +470,17 @@ public class PopulateTestData {
         
         LocalDateTime now = LocalDateTime.now();
         
-        String[][] norms = {
-            {"ISO27001-A.8.1", "2022", "2022"},
-            {"ISO27001-A.9.1", "2022", "2022"},
-            {"ISO27001-A.12.1", "2022", "2022"},
-            {"NIST-ID.AM", "1.1", "2018"},
-            {"NIST-PR.AC", "1.1", "2018"},
-            {"PCI-DSS-1", "4.0", "2022"}
-        };
-        
-        for (String[] norm : norms) {
-            stmt.setString(1, norm[0]);
-            stmt.setString(2, norm[1]);
-            stmt.setInt(3, Integer.parseInt(norm[2]));
-            stmt.setTimestamp(4, Timestamp.valueOf(now));
-            stmt.setTimestamp(5, Timestamp.valueOf(now));
-            stmt.executeUpdate();
-        }
+        // Single ISO27001 norm with 2022 data
+        stmt.setString(1, "ISO27001");
+        stmt.setString(2, "2022");
+        stmt.setInt(3, 2022);
+        stmt.setTimestamp(4, Timestamp.valueOf(now));
+        stmt.setTimestamp(5, Timestamp.valueOf(now));
+        stmt.executeUpdate();
         
         stmt.close();
         connection.commit();
-        System.out.println("✓ Created " + norms.length + " norms");
+        System.out.println("✓ Created 1 norm");
     }
     
     private void populateRequirements() throws SQLException {
@@ -484,53 +493,33 @@ public class PopulateTestData {
         
         String[][] requirements = {
             {
-                "Asset Inventory Management",
-                "All IT assets must be catalogued in a centralized inventory system with accurate metadata including owner, location, and criticality level.",
+                "SAAS Data Protection",
+                "All customer data processed by SAAS applications must be encrypted both in transit and at rest using industry-standard encryption methods.",
                 "en",
-                "Each server, workstation, and network device is recorded in the CMDB with attributes like IP address, operating system, and business owner.",
-                "Proper asset management is fundamental to security as you cannot protect what you don't know exists.",
-                "Data Breach Prevention",
-                "ISO27001-A.8.1",
-                "Asset Management"
+                "Customer data is encrypted using AES-256 for data at rest and TLS 1.3 for data in transit between client and server.",
+                "Data protection is critical for SAAS providers to maintain customer trust and comply with privacy regulations.",
+                "SAAS",
+                "ISO27001",
+                "Information Security"
             },
             {
-                "Multi-Factor Authentication",
-                "All users accessing critical systems must authenticate using at least two different authentication factors.",
+                "External Hosting Security",
+                "All externally hosted services must implement multi-factor authentication and regular security assessments to ensure data protection.",
                 "en",
-                "Users must provide both a password and a time-based one-time password (TOTP) when accessing the customer database.",
-                "MFA significantly reduces the risk of unauthorized access even if passwords are compromised.",
-                "Access Control Management",
-                "ISO27001-A.9.1",
+                "SAAS platforms require MFA for all administrative access and undergo quarterly penetration testing by certified security firms.",
+                "External hosting introduces additional risks that must be mitigated through comprehensive security controls.",
+                "SAAS",
+                "ISO27001",
                 "Access Control"
             },
             {
-                "Incident Response Plan",
-                "A comprehensive incident response plan must be documented, tested annually, and accessible to all response team members.",
+                "SAAS Availability Requirements",
+                "SAAS platforms must maintain 99.9% uptime with documented disaster recovery procedures and regular backup testing.",
                 "en",
-                "The plan includes contact lists, escalation procedures, communication templates, and step-by-step response workflows.",
-                "Rapid and coordinated incident response minimizes the impact of security events on business operations.",
-                "Incident Response",
-                "ISO27001-A.12.1",
-                "Incident Management"
-            },
-            {
-                "Regular Vulnerability Scanning",
-                "All internet-facing systems must undergo automated vulnerability scanning at least weekly, with critical vulnerabilities remediated within 72 hours.",
-                "en",
-                "Web applications and servers are scanned using tools like Nessus or OpenVAS, with scan results automatically triaged based on CVSS scores.",
-                "Proactive vulnerability identification prevents exploitation by threat actors.",
-                "Vulnerability Management",
-                "NIST-ID.AM",
-                "Risk Assessment"
-            },
-            {
-                "Data Backup and Recovery",
-                "Critical business data must be backed up daily with monthly recovery testing to ensure data availability in case of system failure.",
-                "en",
-                "Database backups are stored in geographically separate locations with automated restore testing performed monthly.",
-                "Reliable backups ensure business continuity and minimize data loss during disasters or cyber attacks.",
-                "Business Continuity",
-                "ISO27001-A.12.1",
+                "Service level agreements specify maximum 43 minutes of downtime per month with automated failover to secondary data centers.",
+                "High availability is essential for SAAS services as customers depend on continuous access to their data and applications.",
+                "SAAS",
+                "ISO27001",
                 "Business Continuity"
             }
         };

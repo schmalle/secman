@@ -5,11 +5,12 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="94ada8b3-9f4e-473c-9fea-3bc9651b5bdd" name="Changes" comment="added source of testdata">
-      <change beforePath="$PROJECT_DIR$/.claude/settings.local.json" beforeDir="false" afterPath="$PROJECT_DIR$/.claude/settings.local.json" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/scripts/PopulateTestData.kt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/scripts/populate-testdata-kotlin.sh" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/E2E_TESTING_SUMMARY.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/EMAIL_TESTING_GUIDE.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/EMAIL_TESTING_GUIDE.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/early_demo_tasks.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/early_demo_tasks.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/PopulateTestData.class" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/PopulateTestData.java" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/PopulateTestData.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/TESTDATA_README.md" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/TESTDATA_README.md" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

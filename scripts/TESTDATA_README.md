@@ -35,7 +35,7 @@ This directory contains a script to populate meaningful test data into an empty 
 
 ## What Data Is Created
 
-The script populates the following entities with realistic test data:
+The script populates the following entities with focused SAAS and external hosting test data:
 
 ### Users (6 total)
 - **Admin User**: Username and password as specified (default: testadmin/testpass)
@@ -49,33 +49,22 @@ The script populates the following entities with realistic test data:
 - External services and applications
 - Each with realistic IP addresses, owners, and descriptions
 
-### Standards (8 total)
-- ISO 27001, NIST Cybersecurity Framework
-- SOC 2, GDPR, PCI DSS, HIPAA
-- SOX, COBIT
-- Complete with descriptions
+### Standards (1 total)
+- **External hosting**: Security requirements and controls for external hosting services and SAAS platforms
+- Linked to the SAAS use case
 
-### Use Cases (10 total)
-- Data Breach Prevention
-- Access Control Management  
-- Incident Response
-- Vulnerability Management
-- Business Continuity
-- And more security scenarios
+### Use Cases (1 total)
+- **SAAS**: Software as a Service security requirements
+- Linked to the External hosting standard
 
-### Norms (6 total)
-- ISO 27001 controls (A.8.1, A.9.1, A.12.1)
-- NIST Framework functions
-- PCI DSS requirements
-- With detailed descriptions
+### Norms (1 total)
+- **ISO27001**: Information security management standard with 2022 version data
 
-### Requirements (5 total)
-- Asset Inventory Management
-- Multi-Factor Authentication
-- Incident Response Plan
-- Regular Vulnerability Scanning
-- Data Backup and Recovery
-- Each with examples, motivations, and norm mappings
+### Requirements (3 total)
+- **SAAS Data Protection**: Encryption requirements for customer data
+- **External Hosting Security**: MFA and assessment requirements
+- **SAAS Availability Requirements**: Uptime and disaster recovery requirements  
+- All requirements reference the ISO27001 norm and SAAS use case
 
 ### Risks (5 total)
 - SQL injection vulnerabilities
