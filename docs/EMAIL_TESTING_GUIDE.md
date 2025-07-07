@@ -7,6 +7,7 @@ This guide provides comprehensive instructions for testing the Secman email func
 ## Email Service Architecture
 
 The email system consists of:
+
 - **EmailService**: Core service for sending emails
 - **EmailConfig**: Configuration entity for SMTP settings
 - **EmailConfigController**: REST API for managing email configurations
@@ -16,9 +17,11 @@ The email system consists of:
 ### 1. Unit Tests
 
 #### EmailService Tests
+
 Located in `src/backend/test/services/EmailServiceTest.java`
 
 **Test Coverage:**
+
 - Basic email sending functionality
 - HTML email processing
 - Configuration validation
@@ -27,6 +30,7 @@ Located in `src/backend/test/services/EmailServiceTest.java`
 - Concurrent request handling
 
 #### Running Unit Tests
+
 ```bash
 # Run all email service tests
 cd src/backend
@@ -42,6 +46,7 @@ sbt "testOnly services.EmailServiceTest" -v
 ### 2. Integration Tests
 
 #### Email Configuration API Tests
+
 Test the REST endpoints for email configuration management:
 
 ```bash
@@ -75,6 +80,7 @@ curl -X POST http://localhost:9000/api/email-configs/1/test \
 ### 3. Command Line Testing
 
 #### Environment Variables
+
 Set up email testing environment variables:
 
 ```bash
@@ -97,6 +103,7 @@ export SECMAN_EMAIL_LOG_LEVEL="DEBUG"
 ```
 
 #### Command Line Options
+
 Run email tests with command line parameters:
 
 ```bash
@@ -121,6 +128,7 @@ sbt "testOnly services.EmailServiceTest" \
 ## Test Configuration
 
 ### Test Database Setup
+
 The email tests use H2 in-memory database configuration:
 
 ```conf
@@ -135,6 +143,7 @@ jpa.default = "testPersistenceUnit"
 ```
 
 ### Mock Email Configuration
+
 Tests use mocked EmailConfig objects:
 
 ```java
@@ -150,6 +159,7 @@ testConfig.setIsActive(true);
 ## Test Scenarios
 
 ### 1. Basic Email Sending
+
 ```java
 @Test
 public void testSendEmailWithValidConfiguration() {
@@ -159,34 +169,36 @@ public void testSendEmailWithValidConfiguration() {
         "Test plain text content",
         "<p>Test HTML content</p>"
     );
-    
+  
     assertNotNull("Email service should return a CompletionStage", result);
 }
 ```
 
 ### 2. HTML Email Processing
+
 ```java
 @Test
 public void testSendHtmlEmailWithValidInput() {
     Html htmlContent = Html.apply("<h1>Test HTML Email</h1><p>Content</p>");
-    
+  
     CompletionStage<Boolean> result = emailService.sendHtmlEmail(
         "recipient@example.com",
         "Test HTML Subject",
         htmlContent
     );
-    
+  
     assertNotNull("HTML email service should return a CompletionStage", result);
 }
 ```
 
 ### 3. Configuration Validation
+
 ```java
 @Test
 public void testEmailConfigurationValidation() {
     assertTrue("Configuration with credentials should have authentication", 
                testEmailConfig.hasAuthentication());
-    
+  
     EmailConfig noAuthConfig = new EmailConfig();
     assertFalse("Configuration without credentials should not have authentication", 
                 noAuthConfig.hasAuthentication());
@@ -194,32 +206,34 @@ public void testEmailConfigurationValidation() {
 ```
 
 ### 4. Error Handling
+
 ```java
 @Test
 public void testEmailServiceErrorHandling() {
     when(mockJpaApi.withTransaction(any()))
         .thenThrow(new RuntimeException("Database connection failed"));
-    
+  
     CompletionStage<Boolean> result = emailService.sendEmail(
         "recipient@example.com", "Error Test", "Content", "<p>Content</p>"
     );
-    
+  
     assertNotNull("Should handle database errors gracefully", result);
 }
 ```
 
 ### 5. Command Line Parameter Testing
+
 ```java
 @Test
 public void testEmailServiceWithCommandLineParameters() {
     String testRecipient = System.getProperty("test.email.recipient", "test@example.com");
     String testSubject = System.getProperty("test.email.subject", "Command Line Test Email");
     String testContent = System.getProperty("test.email.content", "Test content from command line");
-    
+  
     CompletionStage<Boolean> result = emailService.sendEmail(
         testRecipient, testSubject, testContent, "<p>" + testContent + "</p>"
     );
-    
+  
     assertNotNull("Should handle command line parameters", result);
 }
 ```
@@ -227,6 +241,7 @@ public void testEmailServiceWithCommandLineParameters() {
 ## Advanced Testing
 
 ### Performance Testing
+
 Test concurrent email sending:
 
 ```java
@@ -235,17 +250,18 @@ public void testEmailServicePerformanceConsiderations() {
     CompletionStage<Boolean> result1 = emailService.sendEmail(
         "recipient1@example.com", "Concurrent Test 1", "Content 1", "<p>Content 1</p>"
     );
-    
+  
     CompletionStage<Boolean> result2 = emailService.sendEmail(
         "recipient2@example.com", "Concurrent Test 2", "Content 2", "<p>Content 2</p>"
     );
-    
+  
     // Verify concurrent handling
     verify(mockJpaApi, times(2)).withTransaction(any());
 }
 ```
 
 ### Integration with Test Environment
+
 Use the test environment setup scripts:
 
 ```bash
@@ -262,6 +278,7 @@ sbt "testOnly services.EmailServiceTest" \
 ## Test Data Management
 
 ### Test Email Configurations
+
 Create test configurations for different scenarios:
 
 ```java
@@ -282,6 +299,7 @@ plainConfig.setSmtpSsl(false);
 ```
 
 ### Test Content Templates
+
 Use consistent test content:
 
 ```java
@@ -293,6 +311,7 @@ Html testHtml = Html.apply(testHtmlContent);
 ## Debugging and Troubleshooting
 
 ### Enable Debug Logging
+
 Add to `application-test.conf`:
 
 ```conf
@@ -303,6 +322,7 @@ logger.com.sun.mail = DEBUG
 ```
 
 ### Test Debugging
+
 Run tests with debugging:
 
 ```bash
@@ -319,43 +339,23 @@ sbt "testOnly services.EmailServiceTest" \
 ### Common Issues and Solutions
 
 1. **Mock Configuration Issues**
+
    - Ensure all mock objects are properly initialized
    - Verify mock behavior setup matches actual service calls
    - Check that CompletionStage handling is correct
-
 2. **Database Transaction Issues**
+
    - Verify JPA transaction mocking
    - Check EntityManager mock setup
    - Ensure query mocking matches actual queries
-
 3. **Email Content Issues**
+
    - Test with various HTML content types
    - Verify character encoding handling
    - Check multipart message construction
 
-## Best Practices
-
-1. **Test Independence**: Each test should be independent and not rely on other tests
-2. **Mock Usage**: Use mocks for external dependencies (database, SMTP servers)
-3. **Error Coverage**: Test both success and failure scenarios
-4. **Parameter Validation**: Test with various parameter combinations
-5. **Performance**: Consider concurrent access patterns in tests
-6. **Documentation**: Keep tests well-documented and maintainable
-
-## Continuous Integration
-
-### CI/CD Pipeline Integration
-Add email tests to your CI pipeline:
-
-```yaml
-# .github/workflows/test.yml
-- name: Run Email Service Tests
-  run: |
-    cd src/backend
-    sbt "testOnly services.EmailServiceTest"
-```
-
 ### Test Reports
+
 Generate test reports:
 
 ```bash
