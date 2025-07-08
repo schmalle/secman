@@ -10,7 +10,7 @@ DB_NAME="secman"
 DB_USER="secman"
 DB_PASS="CHANGEME"
 
-echo "=== Secman Database Install Script ==="
+echo "=== Secman database Install Script ==="
 echo "This script will create:"
 echo "  Database: $DB_NAME"
 echo "  User: $DB_USER"

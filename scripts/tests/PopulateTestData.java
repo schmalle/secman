@@ -167,7 +167,7 @@ public class PopulateTestData {
             System.err.println("Possible solutions:");
             System.err.println("1. Ensure MariaDB is running: sudo systemctl start mariadb");
             System.err.println("2. Check if database exists: mysql -u " + DB_USER + " -p " + "secman");
-            System.err.println("3. Run database setup: ./install.sh");
+            System.err.println("3. Run database setup: ./installdb.sh");
             System.err.println("4. Verify credentials in src/backend/conf/application.conf");
             System.err.println("");
             System.err.println("Original error: " + e.getMessage());

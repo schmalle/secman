@@ -20,7 +20,7 @@ This directory contains a script to populate meaningful test data into an empty 
 1. Ensure MariaDB is running and the secman database exists:
    ```bash
    # If database doesn't exist yet, run:
-   ./install.sh
+   ./installdb.sh
    ```
 
 2. Run the test data population script:
@@ -154,7 +154,7 @@ mysql -u secman -p secman
 ### "Database installation failed"
 Run the database setup first:
 ```bash
-./install.sh
+./installdb.sh
 ```
 
 ## Script Architecture

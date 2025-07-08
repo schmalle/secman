@@ -1,2 +1,2 @@
 # Use default credentials (adminuser/password)
-node take-screenshots.js
+node screenshots.js

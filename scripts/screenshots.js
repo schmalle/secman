@@ -6,7 +6,7 @@
  * Requires both backend and frontend to be running
  * 
  * Usage:
- *   node take-screenshots.js [--username <username>] [--password <password>]
+ *   node screenshots.js [--username <username>] [--password <password>]
  *   
  * If no credentials are provided, defaults to adminuser/password
  */

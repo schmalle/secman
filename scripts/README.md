@@ -23,7 +23,7 @@ Wrapper script for easy execution of install.sql with error checking.
 **Usage:**
 ```bash
 cd scripts
-./install.sh
+./installdb.sh
 ```
 
 The script will:
