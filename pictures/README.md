@@ -1,6 +1,6 @@
 # Secman UI Screenshots
 
-Generated: 2025-06-29T19:28:35.432Z
+Generated: 2025-07-08T20:23:04.235Z
 
 ## Latest Screenshots
 

@@ -17,7 +17,7 @@ src/frontend/dist/
 .DS_Store
 **/.DS_Store
 
-pictures/*.png
+
 *.pid
 **/*.pid
 *.log
