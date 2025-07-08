@@ -104,11 +104,15 @@ sbt "testOnly services.EmailServiceTest" \
   -Dtest.email.subject="Test Subject"
 ```
 
+### Open taks
+
+- **[End-to-End Testing Plan](docs/END_TO_END_TEST_PLAN.md)** - Overall testing strategy
+
 ### Test Documentation
 
 - **[Email Testing Guide](docs/EMAIL_TESTING_GUIDE.md)** - Comprehensive testing for email functionality
 - **[Translation Testing Guide](docs/TRANSLATION_TESTING_GUIDE.md)** - Testing translation features
-- **[End-to-End Testing Plan](docs/END_TO_END_TEST_PLAN.md)** - Overall testing strategy
+- **[End-to-End Testing Plan](docs/tasks.md)** - Overall open testing point
 
 ---
 
@@ -129,4 +133,4 @@ A-GPL 3.0 license
 - **Maintainer:** Markus "flake" Schmall
 - Mastodon: flakedev@infosec.exchange
 - Telegram: flakedev
-- **Email:** markus@mschmall.de
+- **Email:** markus@schmall.io
