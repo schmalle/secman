@@ -8,7 +8,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 JAVA_FILE="$SCRIPT_DIR/PopulateTestData.java"
 CLASS_FILE="$SCRIPT_DIR/PopulateTestData.class"
-BACKEND_DIR="$SCRIPT_DIR/../src/backend"
+BACKEND_DIR="$SCRIPT_DIR/../../src/backend"
 
 echo "=== Secman Test Data Population Script ==="
 echo ""
@@ -38,12 +38,12 @@ download_mariadb_driver() {
     local lib_dir="$BACKEND_DIR/lib"
     local jar_file="$lib_dir/mariadb-java-client.jar"
     local download_url="https://repo1.maven.org/maven2/org/mariadb/jdbc/mariadb-java-client/3.5.4/mariadb-java-client-3.5.4.jar"
-    
+
     echo "MariaDB JDBC driver not found. Downloading..."
-    
+
     # Create lib directory if it doesn't exist
     mkdir -p "$lib_dir"
-    
+
     # Download the driver
     if command -v curl &> /dev/null; then
         if curl -L -o "$jar_file" "$download_url" --fail --silent --show-error; then
