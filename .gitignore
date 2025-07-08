@@ -20,6 +20,8 @@ src/frontend/dist/
 pictures/*.png
 *.pid
 **/*.pid
+*.log
+**/*.log
 */*/package-lock.json
 /src/frontend/package-lock.json
 
