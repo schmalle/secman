@@ -52,15 +52,17 @@ cd scritps
 ./install.sh
 ```
 
-1.
-2. **Build the project (backend):**
 
-   ```sh
-   sbt run dev
-   ```
+3. **Build the project (backend):**
 
-   Please note: The play framework ensures that all tables are existing, which are neeeded.
-4. **Build the project (frontend):**
+```sh
+sbt run dev
+```
+
+Please note: The play framework ensures that all tables are existing, which are neeeded.
+
+
+1. **Build the project (frontend):**
 
    ```sh
    npm run dev

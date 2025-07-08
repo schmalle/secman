@@ -5,12 +5,11 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="94ada8b3-9f4e-473c-9fea-3bc9651b5bdd" name="Changes" comment="added source of testdata">
-      <change afterPath="$PROJECT_DIR$/scripts/PopulateTestData.kt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/scripts/populate-testdata-kotlin.sh" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/PopulateTestData.class" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/PopulateTestData.java" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/PopulateTestData.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/TESTDATA_README.md" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/TESTDATA_README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/PopulateTestData.kt" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/kotlin/PopulateTestData.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/populate-testdata-kotlin.sh" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/kotlin/populate-testdata-kotlin.sh" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/populate-testdata.sh" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/populate-testdata.sh" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -58,7 +57,7 @@
     "project.structure.last.edited": "SDKs",
     "project.structure.proportion": "0.12135923",
     "project.structure.side.proportion": "0.409894",
-    "settings.editor.selected.configurable": "junie.allowlist"
+    "settings.editor.selected.configurable": "preferences.pluginManager"
   },
   "keyToStringList": {
     "DatabaseDriversLRU": [
@@ -68,6 +67,7 @@
 }]]></component>
   <component name="RecentsManager">
     <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/scripts/kotlin" />
       <recent name="$PROJECT_DIR$/docs" />
       <recent name="$PROJECT_DIR$/scripts" />
     </key>

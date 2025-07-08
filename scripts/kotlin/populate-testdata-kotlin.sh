@@ -42,7 +42,7 @@ fi
 download_mariadb_driver() {
     local lib_dir="$BACKEND_DIR/lib"
     local jar_file="$lib_dir/mariadb-java-client.jar"
-    local download_url="https://repo1.maven.org/maven2/org/mariadb/jdbc/mariadb-java-client/3.3.2/mariadb-java-client-3.3.2.jar"
+    local download_url="https://repo1.maven.org/maven2/org/mariadb/jdbc/mariadb-java-client/3.5.4/mariadb-java-client-3.5.4.jar"
 
     echo "MariaDB JDBC driver not found. Downloading..."
 
@@ -74,7 +74,7 @@ download_mariadb_driver() {
 
 # Find or download MariaDB JDBC driver
 MARIADB_JAR=""
-MARIADB_VERSION="3.3.2"
+MARIADB_VERSION="3.5.4"
 
 # Check common locations for the driver
 if [ -f "$BACKEND_DIR/lib/mariadb-java-client.jar" ]; then
