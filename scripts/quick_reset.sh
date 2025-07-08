@@ -7,34 +7,29 @@ echo "=== Quick Database Reset ==="
 echo "This will drop all tables in the secman database"
 echo ""
 
-# One-liner to reset the database
+# Get all table names and drop them dynamically
+TABLES=$(mysql -h localhost -u secman -pCHANGEME secman -e "SHOW TABLES;" -s | tail -n +1)
+
+if [ -z "$TABLES" ]; then
+    echo "No tables found in the secman database."
+    exit 0
+fi
+
+echo "Found tables to drop:"
+echo "$TABLES"
+echo ""
+
+# Generate DROP statements for all tables
+DROP_STATEMENTS=""
+for table in $TABLES; do
+    DROP_STATEMENTS="${DROP_STATEMENTS}DROP TABLE IF EXISTS \`$table\`;"$'\n'
+done
+
+# Execute the drop statements
 mysql -h localhost -u secman -pCHANGEME secman -e "
 SET FOREIGN_KEY_CHECKS = 0;
 
-DROP TABLE IF EXISTS assessment_content_snapshots;
-DROP TABLE IF EXISTS standard_requirement_changes;
-DROP TABLE IF EXISTS requirement_standard_versions;
-DROP TABLE IF EXISTS standard_usecase_versions;
-DROP TABLE IF EXISTS requirement_usecase_versions;
-DROP TABLE IF EXISTS requirement_norm;
-DROP TABLE IF EXISTS requirement_usecase;
-DROP TABLE IF EXISTS requirement_standard;
-DROP TABLE IF EXISTS standard_usecase;
-DROP TABLE IF EXISTS response;
-DROP TABLE IF EXISTS usecases_history;
-DROP TABLE IF EXISTS norms_history;
-DROP TABLE IF EXISTS standards_history;
-DROP TABLE IF EXISTS requirements_history;
-DROP TABLE IF EXISTS risk_assessment;
-DROP TABLE IF EXISTS risk;
-DROP TABLE IF EXISTS asset;
-DROP TABLE IF EXISTS requirement;
-DROP TABLE IF EXISTS norm;
-DROP TABLE IF EXISTS usecase;
-DROP TABLE IF EXISTS standard;
-DROP TABLE IF EXISTS releases;
-DROP TABLE IF EXISTS users;
-DROP TABLE IF EXISTS play_evolutions;
+$DROP_STATEMENTS
 
 SET FOREIGN_KEY_CHECKS = 1;
 
