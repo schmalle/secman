@@ -8,23 +8,29 @@ DRAFT DRAFT DRAFT DRAFT
 
 ---
 
+
+### ALPHA ALPHA ALPHA
+
+
 ## Overview / background
 
 secman was initially started as a security requirement formatter tool. The goal was to generate a beautiful looking MS word document out of a well formatted MS Excel sheet (it was just a helper tool for a repeating task).
 
 Then the idea was born to extend this tooling for some other use cases like risk management or context specific document rendering.
 
+The tool was also started as a test how good / well AI supported coding really works.
+
 ---
 
 ## Features
 
 - **Requirements Management:** Create, edit, prioritize, and track requirements.
-- **Risk Assessment:** Identify, evaluate, and document risks associated with requirements or processes.
+- **Export requirements** in a well formatted word file
+- (untested) **Risk Assessment:** Identify, evaluate, and document risks associated with requirements or processes.
 - **User Roles:** Assign and manage different user roles (normaluser, adminuser) with appropriate permissions.
-- **Automated Analysis:** Integrated tools and scripts for dependency analysis and risk reporting.
-- MCP server
-- E-Mail notification
-- Automatic translation of requirements
+- (untested) MCP server
+- (untested) E-Mail notification
+- (untested) Automatic translation of requirements
 
 ## Getting Started
 
@@ -48,10 +54,9 @@ Then the idea was born to extend this tooling for some other use cases like risk
 2. **Create database**
 
 ```cd
-cd scritps
+cd scripts
 ./install.sh
 ```
-
 
 3. **Build the project (backend):**
 
@@ -60,7 +65,6 @@ sbt run dev
 ```
 
 Please note: The play framework ensures that all tables are existing, which are neeeded.
-
 
 1. **Build the project (frontend):**
 
@@ -77,40 +81,19 @@ Please note: The play framework ensures that all tables are existing, which are 
 
 ---
 
-## User Roles
+## 
 
-- **normaluser:** Basic access for submitting and tracking requirements/risks.
+**normaluser:** Basic access for submitting and tracking requirements/risks.
+
+## Roles / Default users (pw password)
+
 - **adminuser:** Full administrative rights, including user management and configuration.
+- **normaluser:** Basic access for submitting and tracking requirements/risks.
 
----
+## Demo
 
-## Testing
-
-secman includes comprehensive test suites for different components:
-
-### Backend Testing
-
-```sh
-# Run all backend tests
-cd src/backend
-sbt test
-
-# Run specific service tests
-sbt "testOnly services.EmailServiceTest"
-
-# Run tests with command line parameters
-sbt "testOnly services.EmailServiceTest" \
-  -Dtest.email.recipient=test@example.com \
-  -Dtest.email.subject="Test Subject"
-```
-
-### Test Documentation
-
-- **[Email Testing Guide](docs/EMAIL_TESTING_GUIDE.md)** - Comprehensive testing for email functionality
-- **[Translation Testing Guide](docs/TRANSLATION_TESTING_GUIDE.md)** - Testing translation features
-- **[End-to-End Testing Plan](docs/END_TO_END_TEST_PLAN.md)** - Overall testing strategy
-
----
+- **Pictures:** Pictures from the live system can be found at pictures folder
+- **normaluser:** Run the populate-testdata.sh script from "scripts/tests"
 
 ## Contributing
 
