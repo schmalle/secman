@@ -78,28 +78,4 @@ The system will consist of the following core functionalities:
   - Handle empty or missing values gracefully by assigning `null` or an appropriate default.
 - Return the parsed data as a list of objects, where each object represents the data for one `Requirement`.
 
-#### Sample Output (JSON reflecting Requirement structure)
 
-```json
-[
-  {
-    "shortreq": "User Authentication",
-    "details": "System must allow users to log in using username and password.",
-    "motivation": "Ensure only authorized users can access the system.",
-    "example": "User enters credentials, system verifies against database.",
-    "language": "EN",
-    "chapter": "5.1", // Extracted, but not mapped to Requirement model
-    "norm": "ISO-27001" // Extracted, but not mapped to Requirement model
-  },
-  {
-    "shortreq": "Password Complexity",
-    "details": "Passwords must meet complexity requirements (length, characters).",
-    "motivation": "Enhance security against brute-force attacks.",
-    "example": "Password must be >= 8 chars, include upper, lower, number, symbol.",
-    "language": "EN",
-    "chapter": "5.1.1", // Extracted, but not mapped to Requirement model
-    "norm": "NIST-800-63b" // Extracted, but not mapped to Requirement model
-  }
-  // ... more requirements
-]
-```
