@@ -88,12 +88,36 @@ Please note: The play framework ensures that all tables are existing, which are 
 ## Roles / Default users (pw password)
 
 - **adminuser:** Full administrative rights, including user management and configuration.
-- **normaluser:** Basic access for submitting and tracking requirements/risks.
 
-## Demo
+---
 
-- **Pictures:** Pictures from the live system can be found at pictures folder
-- **normaluser:** Run the populate-testdata.sh script from "scripts/tests"
+## Testing
+
+secman includes comprehensive test suites for different components:
+
+### Backend Testing
+
+```sh
+# Run all backend tests
+cd src/backend
+sbt test
+
+# Run specific service tests
+sbt "testOnly services.EmailServiceTest"
+
+# Run tests with command line parameters
+sbt "testOnly services.EmailServiceTest" \
+  -Dtest.email.recipient=test@example.com \
+  -Dtest.email.subject="Test Subject"
+```
+
+### Test Documentation
+
+- **[Email Testing Guide](docs/EMAIL_TESTING_GUIDE.md)** - Comprehensive testing for email functionality
+- **[Translation Testing Guide](docs/TRANSLATION_TESTING_GUIDE.md)** - Testing translation features
+- **[End-to-End Testing Plan](docs/END_TO_END_TEST_PLAN.md)** - Overall testing strategy
+
+---
 
 ## Contributing
 
@@ -112,4 +136,4 @@ A-GPL 3.0 license
 - **Maintainer:** Markus "flake" Schmall
 - Mastodon: flakedev@infosec.exchange
 - Telegram: flakedev
-- **Email:** markus@mschmall.de
+- **Email:** markus@schmall.io
