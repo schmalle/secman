@@ -8,9 +8,7 @@ DRAFT DRAFT DRAFT DRAFT
 
 ---
 
-
 ### ALPHA ALPHA ALPHA
-
 
 ## Overview / background
 
@@ -30,7 +28,8 @@ The tool was also started as a test how good / well AI supported coding really w
 - **User Roles:** Assign and manage different user roles (normaluser, adminuser) with appropriate permissions.
 - (untested) MCP server
 - (untested) E-Mail notification
-- (untested) Automatic translation of requirements
+- (untested) Automatic translation of requirements into other languages (via Openrouter API)
+- **Asset management**
 
 ## Getting Started
 
@@ -79,45 +78,21 @@ Please note: The play framework ensures that all tables are existing, which are 
 - **Perform risk assessment:** [Brief instructions]
 - **Generate reports:** [Brief instructions]
 
----
-
-## 
-
-**normaluser:** Basic access for submitting and tracking requirements/risks.
-
-## Roles / Default users (pw password)
+## Roles / Default application users (pw password)
 
 - **adminuser:** Full administrative rights, including user management and configuration.
+- **normaluser:** Basic access for submitting and tracking requirements/risks.
 
 ---
 
-## Testing
 
-secman includes comprehensive test suites for different components:
 
-### Backend Testing
+## Database details
 
-```sh
-# Run all backend tests
-cd src/backend
-sbt test
+- **database:** secman
+- ***user***: secman/CHANGEME
 
-# Run specific service tests
-sbt "testOnly services.EmailServiceTest"
-
-# Run tests with command line parameters
-sbt "testOnly services.EmailServiceTest" \
-  -Dtest.email.recipient=test@example.com \
-  -Dtest.email.subject="Test Subject"
-```
-
-### Test Documentation
-
-- **[Email Testing Guide](docs/EMAIL_TESTING_GUIDE.md)** - Comprehensive testing for email functionality
-- **[Translation Testing Guide](docs/TRANSLATION_TESTING_GUIDE.md)** - Testing translation features
-- **[End-to-End Testing Plan](docs/END_TO_END_TEST_PLAN.md)** - Overall testing strategy
-
----
+Please also look in the backend folder */src/backend/conf/application.conf*, if you want to change the database user.
 
 ## Contributing
 
