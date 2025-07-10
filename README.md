@@ -24,11 +24,12 @@ The tool was also started as a test how good / well AI supported coding really w
 
 - **Requirements Management:** Create, edit, prioritize, and track requirements.
 - **Export requirements** in a well formatted word file
-- (untested) **Risk Assessment:** Identify, evaluate, and document risks associated with requirements or processes.
+- (untested/dummy code) **Risk Assessment:** Identify, evaluate, and document risks associated with requirements or processes.
 - **User Roles:** Assign and manage different user roles (normaluser, adminuser) with appropriate permissions.
-- (untested) MCP server
-- (untested) E-Mail notification
-- (untested) Automatic translation of requirements into other languages (via Openrouter API)
+- (untested/dummy code) MCP server
+- (untested/dummy code) E-Mail notification
+- (untested/dummy code) Automatic translation of requirements into other languages (via Openrouter API)
+- (untested/dummy code) usage of external identity providers
 - **Asset management**
 
 ## Getting Started
@@ -41,6 +42,7 @@ The tool was also started as a test how good / well AI supported coding really w
 - sbt (Scala Build Tool)
 - Python (for optional scripts)
 - OpenRouter Key (optionally)
+- sbt
 
 ### Installation
 
