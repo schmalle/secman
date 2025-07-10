@@ -55,7 +55,7 @@ The tool was also started as a test how good / well AI supported coding really w
 2. **Create database**
 
 ```cd
-cd scripts
+cd scripts/install
 ./install.sh
 ```
 
