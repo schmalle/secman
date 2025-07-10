@@ -1,20 +1,21 @@
 import { test, expect } from '@playwright/test';
+import { loginAsAdmin, getTestCredentials, navigateToPage } from './test-helpers';
 
 test.describe('Norm Management - Delete All Functionality', () => {
   
   test.beforeEach(async ({ page }) => {
-    // Navigate to login page first
-    await page.goto('/login');
+    // Login using configurable credentials
+    await loginAsAdmin(page);
     
-    // Login as admin user (adjust credentials as needed)
-    await page.fill('input[name="username"]', 'adminuser');
-    await page.fill('input[name="password"]', 'adminpassword');
-    await page.click('button[type="submit"]');
-    
-    // Wait for login to complete and navigate to norms page
-    await page.waitForURL('/');
-    await page.goto('/norms');
-    await page.waitForLoadState('networkidle');
+    // Navigate to norms page
+    try {
+      await navigateToPage(page, '/norms');
+    } catch (error) {
+      console.log(`Navigation to norms failed: ${error}`);
+      // Try direct navigation
+      await page.goto('/norms');
+      await page.waitForLoadState('networkidle', { timeout: 10000 });
+    }
   });
 
   test('should display delete all button when norms exist', async ({ page }) => {

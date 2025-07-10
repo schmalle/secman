@@ -91,6 +91,40 @@ Usage
 
 ---
 
+
+
+## Testing
+
+```
+  Option 1: Simple Test Runner
+
+  # Default credentials (adminuser/password)
+  ./scripts/simple-e2e-test.sh
+
+  # Custom credentials
+  ./scripts/simple-e2e-test.sh --username=myuser --password=mypass
+
+  Option 2: Comprehensive Test Runner
+
+  # All tests with default credentials
+  ./scripts/comprehensive-e2e-test.sh
+
+  # Custom credentials
+  ./scripts/comprehensive-e2e-test.sh --username=myuser --password=mypass
+
+  # Just smoke tests
+  ./scripts/comprehensive-e2e-test.sh --smoke-only
+
+  Option 3: Direct Playwright
+
+  cd src/frontend
+  export PLAYWRIGHT_TEST_USERNAME=adminuser
+  export PLAYWRIGHT_TEST_PASSWORD=password
+  npx playwright test
+```
+
+
+
 ## Database details
 
 - **database:** secman
