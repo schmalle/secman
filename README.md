@@ -71,7 +71,11 @@ Please note: The play framework ensures that all tables are existing, which are 
    npm run dev
    ```
 
-## Usage
+To reset the database, use the script /scripts/`./reset_database.sh `.
+
+## 
+
+Usage
 
 - **Access the UI:** [URL or command to access the user interface]
 - **Add requirements:** [Brief instructions]
@@ -84,8 +88,6 @@ Please note: The play framework ensures that all tables are existing, which are 
 - **normaluser:** Basic access for submitting and tracking requirements/risks.
 
 ---
-
-
 
 ## Database details
 
