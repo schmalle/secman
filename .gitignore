@@ -30,3 +30,4 @@ test-results/.last-run.json
 /.claude
 src/backend/test/controllers/*.bak
 /.serena/cache
+.serena/*
