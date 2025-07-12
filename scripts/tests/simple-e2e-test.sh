@@ -77,7 +77,7 @@ print_status "Password: [REDACTED]"
 echo
 
 # Change to frontend directory
-cd src/frontend
+cd ./../../src/frontend
 
 # Set environment variables for tests
 export PLAYWRIGHT_TEST_USERNAME="$TEST_USERNAME"

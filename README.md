@@ -1,6 +1,4 @@
-DRAFT DRAFT DRAFT DRAFT
-
----
+### ALPHA ALPHA ALPHA
 
 ![landing.png](docs/landing.png)
 
@@ -91,8 +89,6 @@ Usage
 
 ---
 
-
-
 ## Testing
 
 ```
@@ -122,8 +118,6 @@ Usage
   export PLAYWRIGHT_TEST_PASSWORD=password
   npx playwright test
 ```
-
-
 
 ## Database details
 
