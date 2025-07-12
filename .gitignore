@@ -31,3 +31,4 @@ test-results/.last-run.json
 src/backend/test/controllers/*.bak
 /.serena/cache
 .serena/*
+/scripts/tests/test-results/
