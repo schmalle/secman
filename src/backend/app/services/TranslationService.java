@@ -65,6 +65,19 @@ public class TranslationService {
 
     private CompletionStage<String> performTranslation(String text, String targetLanguage, TranslationConfig config) {
         try {
+            // Validate API key format
+            String apiKey = config.getApiKey();
+            if (apiKey == null || apiKey.trim().isEmpty()) {
+                logger.error("API key is null or empty");
+                return CompletableFuture.completedFuture(text);
+            }
+            
+            // Log API key format for debugging (only first/last few characters)
+            logger.info("Using API key format: {}...{} (length: {})", 
+                       apiKey.substring(0, Math.min(8, apiKey.length())),
+                       apiKey.length() > 8 ? apiKey.substring(apiKey.length() - 4) : "",
+                       apiKey.length());
+
             // Create the request payload for OpenRouter API
             ObjectNode requestBody = objectMapper.createObjectNode();
             requestBody.put("model", config.getModelName());
@@ -88,15 +101,23 @@ public class TranslationService {
 
             requestBody.set("messages", messages);
 
-            // Make the API call
+            // Log request details for debugging
+            logger.info("Making translation request to: {}", config.getBaseUrl() + "/chat/completions");
+            logger.info("Request model: {}, max_tokens: {}, temperature: {}", 
+                       config.getModelName(), config.getMaxTokens(), config.getTemperature());
+
+            // Make the API call with proper OpenRouter headers
             WSRequest request = wsClient.url(config.getBaseUrl() + "/chat/completions")
-                .addHeader("Authorization", "Bearer " + config.getApiKey())
+                .addHeader("Authorization", "Bearer " + apiKey.trim())
                 .addHeader("Content-Type", "application/json")
                 .addHeader("HTTP-Referer", "https://secman.local")
                 .addHeader("X-Title", "SecMan Translation Service")
                 .setRequestTimeout(Duration.ofSeconds(30));
 
-            return request.post(requestBody).thenApply(this::parseTranslationResponse);
+            return request.post(requestBody).thenApply(response -> {
+                logger.info("Received response with status: {}", response.getStatus());
+                return parseTranslationResponse(response);
+            });
 
         } catch (Exception e) {
             logger.error("Error creating translation request", e);
@@ -131,12 +152,53 @@ public class TranslationService {
 
     private String parseTranslationResponse(WSResponse response) {
         try {
+            String responseBody = response.getBody();
+            
             if (response.getStatus() != 200) {
-                logger.error("Translation API error: HTTP " + response.getStatus() + " - " + response.getBody());
+                // Provide detailed error information for common HTTP status codes
+                String errorDetail = "";
+                switch (response.getStatus()) {
+                    case 401:
+                        errorDetail = " - Authentication failed. Check API key validity.";
+                        break;
+                    case 403:
+                        errorDetail = " - Forbidden. API key may lack necessary permissions.";
+                        break;
+                    case 429:
+                        errorDetail = " - Rate limit exceeded. Try again later.";
+                        break;
+                    case 500:
+                        errorDetail = " - OpenRouter server error.";
+                        break;
+                    default:
+                        errorDetail = " - Unknown error.";
+                        break;
+                }
+                
+                logger.error("Translation API error: HTTP {} {} - Response: {}", 
+                           response.getStatus(), errorDetail, responseBody);
+                
+                // Try to parse error details from response body
+                try {
+                    JsonNode errorJson = objectMapper.readTree(responseBody);
+                    if (errorJson.has("error")) {
+                        JsonNode error = errorJson.get("error");
+                        String errorMessage = error.has("message") ? error.get("message").asText() : "Unknown error";
+                        String errorType = error.has("type") ? error.get("type").asText() : "unknown_error";
+                        String errorCode = error.has("code") ? error.get("code").asText() : "unknown";
+                        
+                        logger.error("OpenRouter API error details - Type: {}, Code: {}, Message: {}", 
+                                   errorType, errorCode, errorMessage);
+                    }
+                } catch (Exception parseEx) {
+                    logger.warn("Could not parse error response as JSON: {}", parseEx.getMessage());
+                }
+                
                 return ""; // Return empty string on API error
             }
 
             JsonNode responseJson = response.asJson();
+            logger.info("Translation API response received successfully");
             
             if (responseJson.has("choices") && responseJson.get("choices").isArray() && 
                 responseJson.get("choices").size() > 0) {
@@ -144,11 +206,13 @@ public class TranslationService {
                 JsonNode firstChoice = responseJson.get("choices").get(0);
                 if (firstChoice.has("message") && firstChoice.get("message").has("content")) {
                     String translatedText = firstChoice.get("message").get("content").asText();
+                    logger.info("Translation completed successfully. Text length: {} characters", 
+                               translatedText.length());
                     return translatedText.trim();
                 }
             }
 
-            logger.error("Unexpected response format from translation API: " + response.getBody());
+            logger.error("Unexpected response format from translation API: {}", responseBody);
             return ""; // Return empty string if response format is unexpected
 
         } catch (Exception e) {

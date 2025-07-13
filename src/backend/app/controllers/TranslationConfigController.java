@@ -2,6 +2,7 @@ package controllers;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import models.TranslationConfig;
 import play.db.jpa.JPAApi;
 import play.libs.Json;
@@ -13,8 +14,10 @@ import services.TranslationService;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import jakarta.persistence.TypedQuery;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import play.Logger;
 
 @Singleton
 public class TranslationConfigController extends Controller {
@@ -44,14 +47,30 @@ public class TranslationConfigController extends Controller {
             );
             List<TranslationConfig> configs = query.getResultList();
             
-            // Hide sensitive information like API keys in the list
+            // Create response with hidden API keys using Jackson
+            List<ObjectNode> responseConfigs = new ArrayList<>();
             for (TranslationConfig config : configs) {
+                ObjectNode responseConfig = objectMapper.createObjectNode();
+                responseConfig.put("id", config.getId());
+                responseConfig.put("baseUrl", config.getBaseUrl());
+                responseConfig.put("modelName", config.getModelName());
+                responseConfig.put("maxTokens", config.getMaxTokens());
+                responseConfig.put("temperature", config.getTemperature());
+                responseConfig.put("isActive", config.getIsActive());
+                responseConfig.put("createdAt", config.getCreatedAt().toString());
+                responseConfig.put("updatedAt", config.getUpdatedAt().toString());
+                
+                // Hide sensitive information like API keys in the response
                 if (config.getApiKey() != null && !config.getApiKey().isEmpty()) {
-                    config.setApiKey("***HIDDEN***");
+                    responseConfig.put("apiKey", "***HIDDEN***");
+                } else {
+                    responseConfig.put("apiKey", config.getApiKey());
                 }
+                
+                responseConfigs.add(responseConfig);
             }
             
-            return ok(Json.toJson(configs));
+            return ok(Json.toJson(responseConfigs));
         });
     }
 
@@ -68,12 +87,25 @@ public class TranslationConfigController extends Controller {
                 return notFound(Json.toJson("Translation configuration not found"));
             }
             
+            // Create response with hidden API key using Jackson
+            ObjectNode responseConfig = objectMapper.createObjectNode();
+            responseConfig.put("id", config.getId());
+            responseConfig.put("baseUrl", config.getBaseUrl());
+            responseConfig.put("modelName", config.getModelName());
+            responseConfig.put("maxTokens", config.getMaxTokens());
+            responseConfig.put("temperature", config.getTemperature());
+            responseConfig.put("isActive", config.getIsActive());
+            responseConfig.put("createdAt", config.getCreatedAt().toString());
+            responseConfig.put("updatedAt", config.getUpdatedAt().toString());
+            
             // Hide API key in single item view too
             if (config.getApiKey() != null && !config.getApiKey().isEmpty()) {
-                config.setApiKey("***HIDDEN***");
+                responseConfig.put("apiKey", "***HIDDEN***");
+            } else {
+                responseConfig.put("apiKey", config.getApiKey());
             }
             
-            return ok(Json.toJson(config));
+            return ok(responseConfig);
         });
     }
 
@@ -221,11 +253,27 @@ public class TranslationConfigController extends Controller {
             
             try {
                 TranslationConfig config = query.getSingleResult();
+                
+                // Create response with hidden API key using Jackson
+                ObjectNode responseConfig = objectMapper.createObjectNode();
+                responseConfig.put("id", config.getId());
+                responseConfig.put("baseUrl", config.getBaseUrl());
+                responseConfig.put("modelName", config.getModelName());
+                responseConfig.put("maxTokens", config.getMaxTokens());
+                responseConfig.put("temperature", config.getTemperature());
+                responseConfig.put("isActive", config.getIsActive());
+                responseConfig.put("createdAt", config.getCreatedAt().toString());
+                responseConfig.put("updatedAt", config.getUpdatedAt().toString());
+                
                 // Hide API key
                 if (config.getApiKey() != null && !config.getApiKey().isEmpty()) {
-                    config.setApiKey("***HIDDEN***");
+                    Logger.info("getActiveConfiguration: Hiding API key in response");
+                    responseConfig.put("apiKey", "***HIDDEN***");
+                } else {
+                    responseConfig.put("apiKey", config.getApiKey());
                 }
-                return ok(Json.toJson(config));
+                
+                return ok(responseConfig);
             } catch (Exception e) {
                 return notFound(Json.toJson("No active translation configuration found"));
             }
@@ -238,10 +286,10 @@ public class TranslationConfigController extends Controller {
         if (json.has("maxTokens")) config.setMaxTokens(json.get("maxTokens").asInt());
         if (json.has("temperature")) config.setTemperature(json.get("temperature").asDouble());
         
-        // Only update API key if it's not the hidden placeholder
+        // Only update API key if it's not the hidden placeholder and not empty
         if (json.has("apiKey")) {
             String apiKey = json.get("apiKey").asText();
-            if (!"***HIDDEN***".equals(apiKey)) {
+            if (!"***HIDDEN***".equals(apiKey) && !apiKey.trim().isEmpty()) {
                 config.setApiKey(apiKey);
             }
         }
