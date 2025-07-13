@@ -116,6 +116,7 @@ public class TranslationService {
 
             return request.post(requestBody).thenApply(response -> {
                 logger.info("Received response with status: {}", response.getStatus());
+                logger.info("Recieved response body content: {}", response.getBody());
                 return parseTranslationResponse(response);
             });
 
