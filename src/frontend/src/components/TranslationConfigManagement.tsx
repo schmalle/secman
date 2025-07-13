@@ -104,7 +104,8 @@ const TranslationConfigManagement: React.FC = () => {
 
   const handleEdit = (config: TranslationConfig) => {
     setEditingConfig(config);
-    setFormData({ ...config });
+    // Clear the API key field when editing so user can enter a new one
+    setFormData({ ...config, apiKey: '' });
     setShowForm(true);
   };
 
@@ -241,7 +242,7 @@ const TranslationConfigManagement: React.FC = () => {
                           value={formData.apiKey}
                           onChange={handleInputChange}
                           required
-                          placeholder={editingConfig ? "***HIDDEN***" : "sk-or-..."}
+                          placeholder={editingConfig ? "Enter new API key" : "sk-or-..."}
                         />
                         <div className="form-text">Get your API key from <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer">OpenRouter</a></div>
                       </div>

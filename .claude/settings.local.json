@@ -57,7 +57,10 @@
       "Bash(java:*)",
       "Bash(./populate-testdata.sh:*)",
       "Bash(./test-script.sh:*)",
-      "Bash(timeout:*)"
+      "Bash(timeout:*)",
+      "Bash(./test-translation.sh:*)",
+      "mcp__serena__read_memory",
+      "Bash(./fix-translation-config.sh:*)"
     ],
     "deny": []
   }
