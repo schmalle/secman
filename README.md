@@ -26,7 +26,7 @@ The tool was also started as a test how good / well AI supported coding really w
 - **User Roles:** Assign and manage different user roles (normaluser, adminuser) with appropriate permissions.
 - (untested/dummy code) MCP server
 - (untested/dummy code) E-Mail notification
-- (untested/dummy code) Automatic translation of requirements into other languages (via Openrouter API)
+- Automatic translation of requirements into other languages (via Openrouter API)
 - (untested/dummy code) usage of external identity providers
 - **Asset management**
 
