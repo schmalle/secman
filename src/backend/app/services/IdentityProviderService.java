@@ -129,7 +129,13 @@ public class IdentityProviderService {
      */
     public CompletionStage<JsonNode> getUserInfo(IdentityProvider provider, String accessToken) {
         String userInfoUrl = provider.getUserInfoUrl();
-        if (userInfoUrl == null) {
+        if (userInfoUrl == null || userInfoUrl.trim().isEmpty()) {
+            play.Logger.error("User info URL is null or empty for provider: {}", provider.getName());
+            return CompletableFuture.completedFuture(null);
+        }
+
+        if (accessToken == null || accessToken.trim().isEmpty()) {
+            play.Logger.error("Access token is null or empty for provider: {}", provider.getName());
             return CompletableFuture.completedFuture(null);
         }
 
@@ -142,19 +148,30 @@ public class IdentityProviderService {
             .thenApply(response -> {
                 if (response.getStatus() == 200) {
                     try {
-                        return Json.parse(response.getBody());
+                        String responseBody = response.getBody();
+                        if (responseBody == null || responseBody.trim().isEmpty()) {
+                            play.Logger.error("Empty response body from user info endpoint for provider: {}", provider.getName());
+                            return null;
+                        }
+                        JsonNode userInfo = Json.parse(responseBody);
+                        if (userInfo == null) {
+                            play.Logger.error("Failed to parse user info response as JSON for provider: {}", provider.getName());
+                            return null;
+                        }
+                        play.Logger.info("Successfully retrieved user info for provider: {}", provider.getName());
+                        return userInfo;
                     } catch (Exception e) {
-                        play.Logger.error("Error parsing user info response", e);
+                        play.Logger.error("Error parsing user info response for provider: {}", provider.getName(), e);
                         return null;
                     }
                 } else {
-                    play.Logger.error("User info request failed with status: {} - {}", 
-                                    response.getStatus(), response.getBody());
+                    play.Logger.error("User info request failed with status: {} - {} for provider: {}", 
+                                    response.getStatus(), response.getBody(), provider.getName());
                     return null;
                 }
             })
             .exceptionally(throwable -> {
-                play.Logger.error("Error getting user info", throwable);
+                play.Logger.error("Error getting user info for provider: {}", provider.getName(), throwable);
                 return null;
             });
     }

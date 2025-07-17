@@ -471,10 +471,10 @@ INSERT INTO users (id, username, email, password_hash, created_at, updated_at) V
 INSERT INTO user_roles (user_id, role_name) VALUES 
 (1, 'ADMIN'), (1, 'USER'), (2, 'USER');
 
-INSERT INTO identity_providers (name, type, button_text, button_color, enabled, auto_provision) VALUES
-('Google', 'OIDC', 'Sign in with Google', '#4285f4', FALSE, FALSE),
-('Microsoft', 'OIDC', 'Sign in with Microsoft', '#0078d4', FALSE, FALSE),
-('GitHub', 'OIDC', 'Sign in with GitHub', '#333333', FALSE, FALSE);
+INSERT INTO identity_providers (name, type, button_text, button_color, enabled, auto_provision, authorization_url, token_url, user_info_url, scopes, client_id, client_secret) VALUES
+('Google', 'OIDC', 'Sign in with Google', '#4285f4', FALSE, FALSE, 'https://accounts.google.com/o/oauth2/v2/auth', 'https://oauth2.googleapis.com/token', 'https://www.googleapis.com/oauth2/v2/userinfo', 'openid email profile', NULL, NULL),
+('Microsoft', 'OIDC', 'Sign in with Microsoft', '#0078d4', FALSE, FALSE, 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize', 'https://login.microsoftonline.com/common/oauth2/v2.0/token', 'https://graph.microsoft.com/v1.0/me', 'openid email profile', NULL, NULL),
+('GitHub', 'OIDC', 'Sign in with GitHub', '#333333', TRUE, TRUE, 'https://github.com/login/oauth/authorize', 'https://github.com/login/oauth/access_token', 'https://api.github.com/user', 'user:email read:user', 'Iv23li4hKhZTBwQMGVc3', 'your-github-client-secret-here');
 
 INSERT INTO email_config (smtp_host, smtp_port, from_email, from_name, is_active) 
 VALUES ('smtp.gmail.com', 587, 'noreply@yourcompany.com', 'SecMan Risk Assessment', TRUE);

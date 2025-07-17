@@ -27,7 +27,8 @@ The tool was also started as a test how good / well AI supported coding really w
 - (untested/dummy code) MCP server
 - (untested/dummy code) E-Mail notification
 - Automatic translation of requirements into other languages (via Openrouter API)
-- (untested/dummy code) usage of external identity providers
+- (untested/dummy code) usage of external identity providers besides Github
+- Login via Github
 - **Asset management**
 
 ## Getting Started

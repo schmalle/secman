@@ -29,12 +29,20 @@ public class UserProvisioningService {
     public User findOrCreateUser(IdentityProvider provider, JsonNode userInfo, Http.Request request) {
         return jpaApi.withTransaction(em -> {
             try {
-                String externalUserId = userInfo.get("sub").asText();
+                // GitHub uses "id" instead of "sub" for user identifier
+                String externalUserId = userInfo.has("sub") ? userInfo.get("sub").asText() : 
+                                       userInfo.has("id") ? userInfo.get("id").asText() : null;
+                
+                if (externalUserId == null) {
+                    play.Logger.error("No user identifier found in userInfo: {}", userInfo);
+                    return null;
+                }
                 String email = userInfo.has("email") ? userInfo.get("email").asText() : null;
 
                 // First, try to find existing external identity
                 User existingUser = findUserByExternalIdentity(em, provider, externalUserId);
                 if (existingUser != null) {
+                    play.Logger.info("Found existing user by external identity: {}", existingUser.getUsername());
                     return existingUser;
                 }
 
@@ -42,8 +50,13 @@ public class UserProvisioningService {
                 if (email != null) {
                     User userByEmail = findUserByEmail(em, email);
                     if (userByEmail != null) {
-                        // Link existing user to external identity
-                        linkUserToExternalIdentity(em, userByEmail, provider, userInfo);
+                        // Check if this external identity is already linked to prevent duplicates
+                        UserExternalIdentity existingLink = findExistingExternalIdentity(em, provider, externalUserId);
+                        if (existingLink == null) {
+                            // Link existing user to external identity
+                            linkUserToExternalIdentity(em, userByEmail, provider, userInfo);
+                        }
+                        play.Logger.info("Found existing user by email: {}", userByEmail.getUsername());
                         return userByEmail;
                     }
                 }
@@ -58,7 +71,7 @@ public class UserProvisioningService {
                 return createNewUser(em, provider, userInfo, request);
 
             } catch (Exception e) {
-                play.Logger.error("Error in user provisioning", e);
+                play.Logger.error("Error in user provisioning for provider {}: {}", provider.getName(), e.getMessage(), e);
                 return null;
             }
         });
@@ -89,10 +102,42 @@ public class UserProvisioningService {
     }
 
     /**
+     * Find existing external identity to prevent duplicates
+     */
+    private UserExternalIdentity findExistingExternalIdentity(EntityManager em, IdentityProvider provider, String externalUserId) {
+        TypedQuery<UserExternalIdentity> query = em.createQuery(
+            "SELECT uei FROM UserExternalIdentity uei WHERE uei.provider.id = :providerId AND uei.externalUserId = :externalUserId",
+            UserExternalIdentity.class);
+        query.setParameter("providerId", provider.getId());
+        query.setParameter("externalUserId", externalUserId);
+        
+        return query.getResultStream().findFirst().orElse(null);
+    }
+
+    /**
+     * Find user by username
+     */
+    private User findUserByUsername(EntityManager em, String username) {
+        TypedQuery<User> query = em.createQuery(
+            "SELECT u FROM User u WHERE u.username = :username", User.class);
+        query.setParameter("username", username);
+        
+        return query.getResultStream().findFirst().orElse(null);
+    }
+
+    /**
      * Link existing user to external identity
      */
     private void linkUserToExternalIdentity(EntityManager em, User user, IdentityProvider provider, JsonNode userInfo) {
-        String externalUserId = userInfo.get("sub").asText();
+        // GitHub uses "id" instead of "sub" for user identifier
+        String externalUserId = userInfo.has("sub") ? userInfo.get("sub").asText() : 
+                               userInfo.has("id") ? userInfo.get("id").asText() : null;
+        
+        if (externalUserId == null) {
+            play.Logger.error("No user identifier found in userInfo when linking user {} to provider {}", 
+                            user.getUsername(), provider.getName());
+            return;
+        }
         
         // Check if link already exists
         TypedQuery<UserExternalIdentity> query = em.createQuery(
@@ -103,11 +148,21 @@ public class UserProvisioningService {
         
         Optional<UserExternalIdentity> existingLink = query.getResultStream().findFirst();
         if (existingLink.isEmpty()) {
-            UserExternalIdentity externalIdentity = new UserExternalIdentity(user, provider, externalUserId);
-            updateExternalIdentityFromUserInfo(externalIdentity, userInfo);
-            em.persist(externalIdentity);
-            
-            play.Logger.info("Linked existing user {} to external provider {}", user.getUsername(), provider.getName());
+            try {
+                UserExternalIdentity externalIdentity = new UserExternalIdentity(user, provider, externalUserId);
+                updateExternalIdentityFromUserInfo(externalIdentity, userInfo);
+                em.persist(externalIdentity);
+                
+                play.Logger.info("Linked existing user {} to external provider {}", user.getUsername(), provider.getName());
+            } catch (jakarta.persistence.PersistenceException e) {
+                // Handle duplicate external identity constraint
+                if (e.getCause() instanceof java.sql.SQLIntegrityConstraintViolationException) {
+                    play.Logger.warn("External identity already exists when linking user {} to provider {}: {}", 
+                                   user.getUsername(), provider.getName(), e.getMessage());
+                } else {
+                    throw e; // Re-throw if it's not a constraint violation
+                }
+            }
         }
     }
 
@@ -124,9 +179,26 @@ public class UserProvisioningService {
             // Generate username from email or display name
             String username = generateUsername(em, email, displayName, firstName, lastName);
             
-            // Create user
+            // Double-check that email is not already taken (race condition protection)
+            if (email != null && findUserByEmail(em, email) != null) {
+                play.Logger.warn("Email {} already exists when creating user for provider {}", email, provider.getName());
+                return findUserByEmail(em, email); // Return existing user
+            }
+            
+            // Create user with validation
             User user = new User();
+            
+            // Ensure username is not null or empty
+            if (username == null || username.trim().isEmpty()) {
+                username = "user" + System.currentTimeMillis();
+                play.Logger.warn("Generated fallback username: {}", username);
+            }
             user.setUsername(username);
+            
+            // Email can be null in some cases, but log a warning
+            if (email == null || email.trim().isEmpty()) {
+                play.Logger.warn("Creating user {} without email for provider {}", username, provider.getName());
+            }
             user.setEmail(email);
 
             // Set a random password hash (user will authenticate via external provider)
@@ -136,14 +208,57 @@ public class UserProvisioningService {
             Set<User.Role> roles = mapRolesFromProvider(provider, userInfo);
             user.setRoles(roles);
 
-            em.persist(user);
-            em.flush(); // Ensure user gets an ID
+            try {
+                em.persist(user);
+                em.flush(); // Ensure user gets an ID
+            } catch (jakarta.persistence.PersistenceException e) {
+                // Handle constraint violations gracefully
+                if (e.getCause() instanceof java.sql.SQLIntegrityConstraintViolationException) {
+                    play.Logger.warn("Constraint violation when creating user for provider {}: {}", provider.getName(), e.getMessage());
+                    // Try to find existing user by email or username
+                    if (email != null) {
+                        User existingUser = findUserByEmail(em, email);
+                        if (existingUser != null) {
+                            return existingUser;
+                        }
+                    }
+                    User existingUserByUsername = findUserByUsername(em, username);
+                    if (existingUserByUsername != null) {
+                        return existingUserByUsername;
+                    }
+                }
+                throw e; // Re-throw if we can't handle it
+            }
 
             // Create external identity link
-            String externalUserId = userInfo.get("sub").asText();
-            UserExternalIdentity externalIdentity = new UserExternalIdentity(user, provider, externalUserId);
-            updateExternalIdentityFromUserInfo(externalIdentity, userInfo);
-            em.persist(externalIdentity);
+            // GitHub uses "id" instead of "sub" for user identifier
+            String externalUserId = userInfo.has("sub") ? userInfo.get("sub").asText() : 
+                                   userInfo.has("id") ? userInfo.get("id").asText() : null;
+            
+            if (externalUserId == null) {
+                play.Logger.error("No user identifier found in userInfo when creating user");
+                throw new RuntimeException("Missing user identifier from external provider");
+            }
+            
+            try {
+                UserExternalIdentity externalIdentity = new UserExternalIdentity(user, provider, externalUserId);
+                updateExternalIdentityFromUserInfo(externalIdentity, userInfo);
+                em.persist(externalIdentity);
+            } catch (jakarta.persistence.PersistenceException e) {
+                // Handle duplicate external identity constraint
+                if (e.getCause() instanceof java.sql.SQLIntegrityConstraintViolationException) {
+                    play.Logger.warn("External identity already exists for provider {} and user {}: {}", 
+                                   provider.getName(), externalUserId, e.getMessage());
+                    // Find and update the existing external identity
+                    UserExternalIdentity existingIdentity = findExistingExternalIdentity(em, provider, externalUserId);
+                    if (existingIdentity != null) {
+                        updateExternalIdentityFromUserInfo(existingIdentity, userInfo);
+                        em.merge(existingIdentity);
+                    }
+                } else {
+                    throw e; // Re-throw if it's not a constraint violation
+                }
+            }
 
             // Log user provisioning event
             AuthAuditLog auditLog = AuthAuditLog.userProvisioned(user, provider, 

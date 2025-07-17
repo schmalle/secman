@@ -62,11 +62,27 @@ public class OAuthController extends Controller {
                 codeChallenge = generateCodeChallenge(codeVerifier);
 
                 // Store OAuth state
-                OAuthState oauthState = new OAuthState(state, provider);
-                oauthState.setNonce(nonce);
-                oauthState.setCodeVerifier(codeVerifier);
-                oauthState.setRedirectUri(getRedirectUri(request));
-                em.persist(oauthState);
+                try {
+                    OAuthState oauthState = new OAuthState(state, provider);
+                    oauthState.setNonce(nonce);
+                    oauthState.setCodeVerifier(codeVerifier);
+                    oauthState.setRedirectUri(getRedirectUri(request));
+                    em.persist(oauthState);
+                } catch (jakarta.persistence.PersistenceException e) {
+                    // Handle constraint violations for OAuth state
+                    if (e.getCause() instanceof java.sql.SQLIntegrityConstraintViolationException) {
+                        play.Logger.warn("OAuth state constraint violation for provider {}: {}", provider.getName(), e.getMessage());
+                        // Generate a new state token if there's a collision
+                        state = generateSecureToken();
+                        OAuthState oauthState = new OAuthState(state, provider);
+                        oauthState.setNonce(nonce);
+                        oauthState.setCodeVerifier(codeVerifier);
+                        oauthState.setRedirectUri(getRedirectUri(request));
+                        em.persist(oauthState);
+                    } else {
+                        throw e; // Re-throw if it's not a constraint violation
+                    }
+                }
 
                 // Build authorization URL
                 StringBuilder authUrl = new StringBuilder();
@@ -164,15 +180,25 @@ public class OAuthController extends Controller {
                                         }
 
                                         // Process user login/provision
-                                        String externalUserId = userInfo.get("sub").asText();
+                                        // GitHub uses "id" instead of "sub" for user identifier
+                                        String externalUserId = userInfo.has("sub") ? userInfo.get("sub").asText() : 
+                                                               userInfo.has("id") ? userInfo.get("id").asText() : null;
                                         String email = userInfo.has("email") ? userInfo.get("email").asText() : null;
 
                                         // Find or create user
-                                        User user = userProvisioningService.findOrCreateUser(provider, userInfo, request);
-                                        if (user == null) {
+                                        User user = null;
+                                        try {
+                                            user = userProvisioningService.findOrCreateUser(provider, userInfo, request);
+                                            if (user == null) {
+                                                logAuthEvent(AuthAuditLog.EventType.LOGIN_FAILURE, null, provider, 
+                                                           externalUserId, "User provisioning failed", request);
+                                                return Results.internalServerError(Json.newObject().put("error", "User provisioning failed"));
+                                            }
+                                        } catch (Exception e) {
+                                            play.Logger.error("Error during user provisioning for provider {}: {}", provider.getName(), e.getMessage(), e);
                                             logAuthEvent(AuthAuditLog.EventType.LOGIN_FAILURE, null, provider, 
-                                                       externalUserId, "User provisioning failed", request);
-                                            return Results.internalServerError(Json.newObject().put("error", "User provisioning failed"));
+                                                       externalUserId, "User provisioning error: " + e.getMessage(), request);
+                                            return Results.internalServerError(Json.newObject().put("error", "Authentication processing failed"));
                                         }
 
                                         // Update or create external identity link
@@ -248,7 +274,13 @@ public class OAuthController extends Controller {
 
     private String getRedirectUri(Http.Request request) {
         String scheme = request.secure() ? "https" : "http";
-        return scheme + "://" + request.host() + "/oauth/callback";
+        // Use frontend host if request comes through proxy, otherwise use backend host
+        String host = request.host();
+        if (host.equals("localhost:9000") || host.equals("127.0.0.1:9000")) {
+            // If request comes directly to backend, use frontend host for callback
+            host = "localhost:4321";
+        }
+        return scheme + "://" + host + "/oauth/callback";
     }
 
     private UserExternalIdentity findOrCreateExternalIdentity(jakarta.persistence.EntityManager em, 
@@ -256,7 +288,9 @@ public class OAuthController extends Controller {
                                                             IdentityProvider provider, 
                                                             com.fasterxml.jackson.databind.JsonNode userInfo,
                                                             com.fasterxml.jackson.databind.JsonNode tokenResponse) {
-        String externalUserId = userInfo.get("sub").asText();
+        // GitHub uses "id" instead of "sub" for user identifier
+        String externalUserId = userInfo.has("sub") ? userInfo.get("sub").asText() : 
+                               userInfo.has("id") ? userInfo.get("id").asText() : null;
         
         TypedQuery<UserExternalIdentity> query = em.createQuery(
             "SELECT uei FROM UserExternalIdentity uei WHERE uei.provider.id = :providerId AND uei.externalUserId = :externalUserId",
@@ -270,8 +304,25 @@ public class OAuthController extends Controller {
         if (existingOpt.isPresent()) {
             externalIdentity = existingOpt.get();
         } else {
-            externalIdentity = new UserExternalIdentity(user, provider, externalUserId);
-            em.persist(externalIdentity);
+            try {
+                externalIdentity = new UserExternalIdentity(user, provider, externalUserId);
+                em.persist(externalIdentity);
+            } catch (jakarta.persistence.PersistenceException e) {
+                // Handle constraint violations - try to find existing identity
+                if (e.getCause() instanceof java.sql.SQLIntegrityConstraintViolationException) {
+                    play.Logger.warn("Constraint violation when creating external identity for provider {} and user {}: {}", 
+                                   provider.getName(), externalUserId, e.getMessage());
+                    // Try to find the existing external identity again
+                    Optional<UserExternalIdentity> retryOpt = query.getResultStream().findFirst();
+                    if (retryOpt.isPresent()) {
+                        externalIdentity = retryOpt.get();
+                    } else {
+                        throw new RuntimeException("Failed to create or find external identity after constraint violation", e);
+                    }
+                } else {
+                    throw e; // Re-throw if it's not a constraint violation
+                }
+            }
         }
         
         // Update user info from provider

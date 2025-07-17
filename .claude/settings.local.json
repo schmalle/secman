@@ -60,7 +60,12 @@
       "Bash(timeout:*)",
       "Bash(./test-translation.sh:*)",
       "mcp__serena__read_memory",
-      "Bash(./fix-translation-config.sh:*)"
+      "Bash(./fix-translation-config.sh:*)",
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__get-library-docs",
+      "Bash(gradle wrapper:*)",
+      "Bash(./gradlew build:*)",
+      "Bash(./gradlew:*)"
     ],
     "deny": []
   }
