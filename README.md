@@ -16,6 +16,15 @@ Then the idea was born to extend this tooling for some other use cases like risk
 
 The tool was also started as a test how good / well AI supported coding really works.
 
+## Technology Stack
+
+- **Backend**: Micronaut Framework with Kotlin
+- **Frontend**: Astro with React integration
+- **Database**: MariaDB 11.4
+- **Build System**: Gradle (Kotlin DSL)
+- **Containerization**: Docker with multi-architecture support
+- **Authentication**: JWT with OAuth2 support
+
 ---
 
 ## Features
@@ -35,13 +44,17 @@ The tool was also started as a test how good / well AI supported coding really w
 
 ### Prerequisites
 
-- Java (tested with version 21)
-- Node.js (tested with version 24)
-- MariaDB
-- sbt (Scala Build Tool)
-- Python (for optional scripts)
-- OpenRouter Key (optionally)
-- sbt
+**Option 1: Docker (Recommended)**
+- Docker and Docker Compose
+- Git
+
+**Option 2: Local Development**
+- Java 17 or higher
+- Node.js 20 or higher
+- MariaDB 11.4 or higher
+- Gradle 8.14 or higher
+- Git
+- OpenRouter Key (optional for translation features)
 
 ### Installation
 
@@ -64,24 +77,60 @@ cd scripts/install
 sbt run dev
 ```
 
-Please note: The play framework ensures that all tables are existing, which are neeeded.
+Please note: The Micronaut framework with Hibernate automatically creates database tables on startup.
 
-1. **Build the project (frontend):**
+2. **Build the project (frontend):**
 
    ```sh
    npm run dev
    ```
 
+## Docker Deployment
+
+**Development Environment:**
+```bash
+# Start all services
+./docker/scripts/dev.sh up
+
+# Start in detached mode
+./docker/scripts/dev.sh up -d
+
+# View logs
+./docker/scripts/dev.sh logs
+
+# Stop services
+./docker/scripts/dev.sh down
+```
+
+**Production Deployment:**
+```bash
+# Configure environment
+cp .env.example .env
+# Edit .env with production values
+
+# Deploy to production
+./docker/scripts/deploy.sh deploy
+
+# Check status
+./docker/scripts/deploy.sh status
+```
+
+**Multi-Architecture Build:**
+```bash
+# Build for AMD64 and ARM64
+./docker/scripts/build-multiarch.sh latest
+```
+
 To reset the database, use the script /scripts/`./reset_database.sh `.
 
-## 
+## Usage
 
-Usage
-
-- **Access the UI:** [URL or command to access the user interface]
-- **Add requirements:** [Brief instructions]
-- **Perform risk assessment:** [Brief instructions]
-- **Generate reports:** [Brief instructions]
+- **Access the Frontend:** http://localhost:4321
+- **Access the Backend API:** http://localhost:8080/api
+- **Database Access:** localhost:3306 (secman/CHANGEME)
+- **Health Checks:** 
+  - Frontend: http://localhost:4321/health
+  - Backend: http://localhost:8080/health
 
 ## Roles / Default application users (pw password)
 
@@ -92,9 +141,39 @@ Usage
 
 ## Testing
 
+**Docker-based Testing (Recommended):**
+```bash
+# Start test environment
+./docker/scripts/dev.sh up -d
+
+# Run frontend tests
+docker-compose -f docker-compose.dev.yml exec frontend npm run test
+
+# Run backend tests
+docker-compose -f docker-compose.dev.yml exec backend gradle test
+
+# Run end-to-end tests
+cd src/frontend
+npm run test:e2e
+```
+
+**Local Testing:**
+```bash
+# Backend tests (Micronaut Test)
+cd src/backendng
+gradle test
+
+# Frontend tests (Playwright)
+cd src/frontend
+npm run test
+
+# End-to-end tests
+npm run test:e2e
+```
+
+**Legacy Test Scripts:**
 ```
   Option 1: Simple Test Runner
-
   # Default credentials (adminuser/password)
   ./scripts/simple-e2e-test.sh
 
@@ -102,7 +181,6 @@ Usage
   ./scripts/simple-e2e-test.sh --username=myuser --password=mypass
 
   Option 2: Comprehensive Test Runner
-
   # All tests with default credentials
   ./scripts/comprehensive-e2e-test.sh
 
@@ -113,19 +191,36 @@ Usage
   ./scripts/comprehensive-e2e-test.sh --smoke-only
 
   Option 3: Direct Playwright
-
   cd src/frontend
   export PLAYWRIGHT_TEST_USERNAME=adminuser
   export PLAYWRIGHT_TEST_PASSWORD=password
   npx playwright test
 ```
 
-## Database details
+## Database Details
 
-- **database:** secman
-- ***user***: secman/CHANGEME
+- **Database:** secman
+- **User:** secman/CHANGEME
+- **Host:** localhost (or 'database' container in Docker)
+- **Port:** 3306
+- **Engine:** MariaDB 11.4
 
-Please also look in the backend folder */src/backend/conf/application.conf*, if you want to change the database user.
+**Configuration:**
+- Backend configuration: `src/backendng/src/main/resources/application.yml`
+- Docker environment: `.env` file
+- Database initialization: `docker/database/init/`
+
+**Management:**
+```bash
+# Docker database access
+docker-compose -f docker-compose.dev.yml exec database mysql -u secman -pCHANGEME secman
+
+# Create backup
+./docker/scripts/deploy.sh backup
+
+# Reset database (development)
+./scripts/reset_database.sh
+```
 
 ## Contributing
 
