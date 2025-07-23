@@ -7,8 +7,8 @@ This document outlines the comprehensive end-to-end testing strategy for the Sec
 ## Testing Architecture
 
 ### Backend Testing (API Layer)
-- **Framework**: Node.js with Jest and Supertest
-- **Target**: Play Framework API endpoints (port 9000)
+- **Framework**: Micronaut Test with JUnit 5 and MockK
+- **Target**: Micronaut application API endpoints (port 8080)
 - **Scope**: RESTful API endpoints, authentication, data validation
 
 ### Frontend Testing (UI Layer)  
@@ -17,8 +17,9 @@ This document outlines the comprehensive end-to-end testing strategy for the Sec
 - **Scope**: User interactions, form submissions, navigation, responsive design
 
 ### Integration Testing
-- **Database**: MariaDB with test data setup/teardown
+- **Database**: MariaDB with test data setup/teardown via Hibernate
 - **Services**: Email services, file import/export, external API calls
+- **Container Testing**: Docker-based test environment
 
 ## Test Scenarios
 
@@ -168,19 +169,17 @@ This document outlines the comprehensive end-to-end testing strategy for the Sec
 
 ### Backend Test Environment
 ```bash
-# Test database configuration
-SECMAN_DB_URL=jdbc:mariadb://localhost:3306/secman_test
-SECMAN_DB_USER=secman_test
-SECMAN_DB_PASSWORD=test_password
+# Test database configuration (Docker)
+DATASOURCES_DEFAULT_URL=jdbc:mariadb://database:3306/secman_test
+DB_USERNAME=secman_test
+DB_PASSWORD=test_password
 
 # Test email configuration
-SECMAN_SMTP_HOST=localhost
-SECMAN_SMTP_PORT=1025
-SECMAN_SMTP_USER=test
-SECMAN_SMTP_PASS=test
+SMTP_HOST=localhost
+SMTP_PORT=1025
 
 # Test translation service
-SECMAN_OPENROUTER_API_KEY=test_key
+OPENROUTER_API_KEY=test_key
 ```
 
 ### Frontend Test Environment
@@ -211,11 +210,34 @@ export default defineConfig({
 ## Test Execution Strategy
 
 ### Local Development
-1. Start backend server: `cd src/backend && sbt run`
-2. Start frontend server: `cd src/frontend && npm run dev`
-3. Run backend tests: `npm run test:api`
-4. Run frontend tests: `npm run test:ui`
-5. Run complete suite: `npm run test:e2e`
+1. **Docker-based (recommended)**:
+   ```bash
+   # Start test environment
+   cd docker/compose
+   docker compose -f docker-compose.dev.yml up -d
+   
+   # Run backend tests
+   docker compose exec backend gradle test
+   
+   # Run frontend tests
+   docker compose exec frontend npm run test
+   
+   # Run complete suite
+   ./scripts/docker-test.sh
+   ```
+
+2. **Manual setup**:
+   ```bash
+   # Start backend server
+   cd src/backendng && gradle run
+   
+   # Start frontend server
+   cd src/frontend && npm run dev
+   
+   # Run tests
+   cd src/backendng && gradle test
+   cd src/frontend && npm run test
+   ```
 
 ### Continuous Integration
 1. Automated test database setup
