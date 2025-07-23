@@ -6,7 +6,6 @@ WORKDIR /app
 
 # Copy Gradle files first for better layer caching
 COPY src/backendng/gradle/ ./gradle/
-COPY src/backendng/gradlew ./
 COPY src/backendng/gradle.properties ./
 COPY src/backendng/settings.gradle.kts ./
 COPY src/backendng/build.gradle.kts ./

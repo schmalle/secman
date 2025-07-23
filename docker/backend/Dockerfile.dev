@@ -13,7 +13,6 @@ RUN apt-get update && apt-get install -y \
 
 # Copy Gradle files for dependency caching
 COPY src/backendng/gradle/ ./gradle/
-COPY src/backendng/gradlew ./
 COPY src/backendng/gradle.properties ./
 COPY src/backendng/settings.gradle.kts ./
 COPY src/backendng/build.gradle.kts ./
