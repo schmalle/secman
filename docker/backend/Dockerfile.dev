@@ -1,0 +1,33 @@
+# Development Dockerfile for Micronaut Kotlin application
+FROM gradle:8.14.3-jdk17
+
+# Set working directory
+WORKDIR /app
+
+# Install necessary packages for development
+RUN apt-get update && apt-get install -y \
+    curl \
+    vim \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy Gradle files for dependency caching
+COPY src/backendng/gradle/ ./gradle/
+COPY src/backendng/gradlew ./
+COPY src/backendng/gradle.properties ./
+COPY src/backendng/settings.gradle.kts ./
+COPY src/backendng/build.gradle.kts ./
+
+# Download dependencies
+RUN gradle dependencies --no-daemon
+
+# Expose port
+EXPOSE 8080
+EXPOSE 5005
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
+
+# Development command with hot reload and debugging
+CMD ["gradle", "run", "--continuous", "--no-daemon", "-Dmicronaut.environments=dev"]

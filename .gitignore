@@ -33,3 +33,6 @@ src/backend/test/controllers/*.bak
 .serena/*
 /scripts/tests/test-results/
 /src/backendng/build/
+src/backendng/.gradle/
+.gradle/
+build/

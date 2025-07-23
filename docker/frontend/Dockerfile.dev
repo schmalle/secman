@@ -1,0 +1,26 @@
+# Development Dockerfile for Astro React application
+FROM node:20-alpine
+
+# Set working directory
+WORKDIR /app
+
+# Install necessary packages for development
+RUN apk add --no-cache \
+    curl \
+    git
+
+# Copy package files for dependency caching
+COPY src/frontend/package*.json ./
+
+# Install all dependencies including dev dependencies
+RUN npm ci && npm cache clean --force
+
+# Expose port
+EXPOSE 4321
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:4321/ || exit 1
+
+# Development command with hot reload
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
