@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete } from '../utils/auth';
 
 interface IdentityProvider {
   id?: number;
@@ -88,19 +89,15 @@ export default function IdentityProviderManagement() {
   const fetchProviders = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch('/api/identity-providers', {
-        credentials: 'include'
-      });
-      
+      const response = await authenticatedGet('/api/identity-providers');
       if (response.ok) {
         const data = await response.json();
         setProviders(data);
       } else {
-        const errorData = await response.json();
-        setError(errorData.error || 'Failed to load identity providers');
+        setError(`Failed to load identity providers: ${response.status}`);
       }
     } catch (err) {
-      setError('Network error while loading providers');
+      setError(err instanceof Error ? err.message : 'Failed to load identity providers');
     } finally {
       setIsLoading(false);
     }
@@ -113,32 +110,19 @@ export default function IdentityProviderManagement() {
 
     try {
       setIsLoading(true);
-      const url = selectedProvider 
-        ? `/api/identity-providers/${selectedProvider.id}`
-        : '/api/identity-providers';
       
-      const method = selectedProvider ? 'PUT' : 'POST';
-      
-      const response = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify(formData)
-      });
-
-      const data: ApiResponse = await response.json();
-
-      if (response.ok) {
-        setSuccess(selectedProvider ? 'Provider updated successfully' : 'Provider created successfully');
-        resetForm();
-        fetchProviders();
+      if (selectedProvider) {
+        await authenticatedPut(`/api/identity-providers/${selectedProvider.id}`, formData);
+        setSuccess('Provider updated successfully');
       } else {
-        setError(data.error || 'Failed to save provider');
+        await authenticatedPost('/api/identity-providers', formData);
+        setSuccess('Provider created successfully');
       }
+
+      resetForm();
+      fetchProviders();
     } catch (err) {
-      setError('Network error while saving provider');
+      setError(err instanceof Error ? err.message : 'Failed to save provider');
     } finally {
       setIsLoading(false);
     }
@@ -151,21 +135,11 @@ export default function IdentityProviderManagement() {
 
     try {
       setIsLoading(true);
-      const response = await fetch(`/api/identity-providers/${id}`, {
-        method: 'DELETE',
-        credentials: 'include'
-      });
-
-      const data: ApiResponse = await response.json();
-
-      if (response.ok) {
-        setSuccess('Provider deleted successfully');
-        fetchProviders();
-      } else {
-        setError(data.error || 'Failed to delete provider');
-      }
+      await authenticatedDelete(`/api/identity-providers/${id}`);
+      setSuccess('Provider deleted successfully');
+      fetchProviders();
     } catch (err) {
-      setError('Network error while deleting provider');
+      setError(err instanceof Error ? err.message : 'Failed to delete provider');
     } finally {
       setIsLoading(false);
     }
@@ -174,20 +148,10 @@ export default function IdentityProviderManagement() {
   const handleTest = async (id: number) => {
     try {
       setIsTestingProvider(id);
-      const response = await fetch(`/api/identity-providers/${id}/test`, {
-        method: 'POST',
-        credentials: 'include'
-      });
-
-      const data: ApiResponse = await response.json();
-
-      if (response.ok) {
-        setSuccess('Provider configuration is valid');
-      } else {
-        setError(data.error || 'Provider configuration test failed');
-      }
+      await authenticatedPost(`/api/identity-providers/${id}/test`, {});
+      setSuccess('Provider configuration is valid');
     } catch (err) {
-      setError('Network error while testing provider');
+      setError(err instanceof Error ? err.message : 'Provider configuration test failed');
     } finally {
       setIsTestingProvider(null);
     }

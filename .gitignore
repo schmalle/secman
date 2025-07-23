@@ -32,3 +32,4 @@ src/backend/test/controllers/*.bak
 /.serena/cache
 .serena/*
 /scripts/tests/test-results/
+/src/backendng/build/

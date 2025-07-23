@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { FormEvent } from 'react';
+import { authenticatedGet, authenticatedPost, authenticatedDelete } from '../utils/auth';
 
 // Define an interface for the user data expected from the backend
 interface User {
@@ -108,24 +109,23 @@ const UserManagement = () => {
     const fetchUsers = async (isMounted: boolean) => {
         try {
             console.log("Fetching users...");
-            const response = await fetch('/api/users');
-            if (!response.ok) {
-                if (response.status === 403) {
-                    throw new Error('Access Denied: You do not have permission to fetch users.');
-                } else {
-                    const errorData = await response.json().catch(() => ({}));
-                    throw new Error(errorData.error || `Failed to fetch users: ${response.status} ${response.statusText}`);
-                }
-            }
-            const data: User[] = await response.json();
-            if (isMounted) {
+            const response = await authenticatedGet('/api/users');
+            if (response.ok && isMounted) {
+                const data: User[] = await response.json();
                 setUsers(data);
                 setError(null);
+            } else if (isMounted && !response.ok) {
+                setError(`Failed to fetch users: ${response.status}`);
             }
         } catch (err: any) {
             console.error("Error fetching users:", err);
             if (isMounted) {
-                setError(err.message || "Could not load user data.");
+                // Handle authentication-specific errors
+                if (err.status === 403) {
+                    setError('Access Denied: You do not have permission to fetch users.');
+                } else {
+                    setError(err.message || "Could not load user data.");
+                }
                 setUsers([]);
             }
         }
@@ -163,22 +163,14 @@ const UserManagement = () => {
         }
 
         try {
-            const response = await fetch('/api/users', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(newUser),
-            });
-
-            const data = await response.json();
-
+            const response = await authenticatedPost('/api/users', newUser);
             if (response.ok) {
+                const data = await response.json();
                 setUsers(prevUsers => [...prevUsers, data]);
                 setShowAddUserModal(false);
                 setNewUser({ username: '', email: '', password: '', roles: ['USER'] }); // Reset form
             } else {
-                setAddUserError(data.error || 'Failed to create user.');
+                throw new Error(`Failed to create user: ${response.status}`);
             }
         } catch (err) {
             console.error('Add user request failed:', err);
@@ -195,16 +187,8 @@ const UserManagement = () => {
 
         setDeletingUserId(userId);
         try {
-            const response = await fetch(`/api/users/${userId}`, {
-                method: 'DELETE',
-            });
-
-            if (response.ok) {
-                setUsers(prevUsers => prevUsers.filter(user => user.id !== userId));
-            } else {
-                const errorData = await response.json().catch(() => ({}));
-                alert(errorData.error || 'Failed to delete user.');
-            }
+            await authenticatedDelete(`/api/users/${userId}`);
+            setUsers(prevUsers => prevUsers.filter(user => user.id !== userId));
         } catch (err) {
             console.error('Delete user request failed:', err);
             alert('An error occurred while deleting the user. Please try again.');

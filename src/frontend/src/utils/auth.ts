@@ -1,0 +1,134 @@
+// Authentication utility functions
+
+export interface User {
+    id: number;
+    username: string;
+    email: string;
+    roles: string[];
+}
+
+/**
+ * Get the stored JWT token
+ */
+export function getAuthToken(): string | null {
+    return localStorage.getItem('authToken');
+}
+
+/**
+ * Get the stored user information
+ */
+export function getUser(): User | null {
+    const userStr = localStorage.getItem('user');
+    if (!userStr) return null;
+    
+    try {
+        return JSON.parse(userStr);
+    } catch (e) {
+        console.error('Failed to parse user data:', e);
+        return null;
+    }
+}
+
+/**
+ * Check if user is currently authenticated
+ */
+export function isAuthenticated(): boolean {
+    return getAuthToken() !== null;
+}
+
+/**
+ * Check if user has a specific role
+ */
+export function hasRole(role: string): boolean {
+    const user = getUser();
+    return user?.roles.includes(role) || false;
+}
+
+/**
+ * Check if user is admin
+ */
+export function isAdmin(): boolean {
+    return hasRole('ADMIN');
+}
+
+/**
+ * Clear authentication data (logout)
+ */
+export function clearAuth(): void {
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('user');
+}
+
+/**
+ * Create authenticated fetch request headers
+ */
+export function getAuthHeaders(): Record<string, string> {
+    const token = getAuthToken();
+    const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+    };
+    
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    return headers;
+}
+
+/**
+ * Make an authenticated API request
+ */
+export async function authenticatedFetch(url: string, options: RequestInit = {}): Promise<Response> {
+    const authHeaders = getAuthHeaders();
+    
+    const response = await fetch(url, {
+        ...options,
+        headers: {
+            ...authHeaders,
+            ...options.headers,
+        },
+        credentials: 'include',
+    });
+    
+    // If we get 401, clear auth data and redirect to login
+    if (response.status === 401) {
+        clearAuth();
+        window.location.href = '/login';
+    }
+    
+    return response;
+}
+
+/**
+ * Convenience method for GET requests
+ */
+export async function authenticatedGet(url: string): Promise<Response> {
+    return authenticatedFetch(url, { method: 'GET' });
+}
+
+/**
+ * Convenience method for POST requests
+ */
+export async function authenticatedPost(url: string, data?: any): Promise<Response> {
+    return authenticatedFetch(url, {
+        method: 'POST',
+        body: data ? JSON.stringify(data) : undefined,
+    });
+}
+
+/**
+ * Convenience method for PUT requests
+ */
+export async function authenticatedPut(url: string, data?: any): Promise<Response> {
+    return authenticatedFetch(url, {
+        method: 'PUT', 
+        body: data ? JSON.stringify(data) : undefined,
+    });
+}
+
+/**
+ * Convenience method for DELETE requests
+ */
+export async function authenticatedDelete(url: string): Promise<Response> {
+    return authenticatedFetch(url, { method: 'DELETE' });
+}

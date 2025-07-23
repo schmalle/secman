@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete } from '../utils/auth';
 
 interface UseCase {
   id: number;
@@ -37,12 +38,13 @@ const StandardManagement: React.FC = () => {
 
   const fetchStandards = async () => {
     try {
-      const response = await fetch('/api/standards');
-      if (!response.ok) {
-        throw new Error('Failed to fetch standards');
+      const response = await authenticatedGet('/api/standards');
+      if (response.ok) {
+        const data = await response.json();
+        setStandards(data);
+      } else {
+        setError(`Failed to fetch standards: ${response.status}`);
       }
-      const data = await response.json();
-      setStandards(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -52,12 +54,13 @@ const StandardManagement: React.FC = () => {
 
   const fetchUseCases = async () => {
     try {
-      const response = await fetch('/api/usecases');
-      if (!response.ok) {
-        throw new Error('Failed to fetch use cases');
+      const response = await authenticatedGet('/api/usecases');
+      if (response.ok) {
+        const data = await response.json();
+        setUseCases(data);
+      } else {
+        console.error('Failed to fetch use cases:', response.status);
       }
-      const data = await response.json();
-      setUseCases(data);
     } catch (err) {
       console.error('Failed to fetch use cases:', err);
     }
@@ -76,16 +79,10 @@ const StandardManagement: React.FC = () => {
         useCaseIds: selectedUseCaseIds
       };
 
-      const response = await fetch(url, {
-        method: method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(submitData),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to save standard');
+      if (editingStandard) {
+        await authenticatedPut(`/api/standards/${editingStandard.id}`, submitData);
+      } else {
+        await authenticatedPost('/api/standards', submitData);
       }
 
       await fetchStandards();
@@ -113,13 +110,7 @@ const StandardManagement: React.FC = () => {
     }
 
     try {
-      const response = await fetch(`/api/standards/${id}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to delete standard');
-      }
+      await authenticatedDelete(`/api/standards/${id}`);
 
       await fetchStandards();
       setError(null);
@@ -159,6 +150,16 @@ const StandardManagement: React.FC = () => {
       <div className="d-flex justify-content-center">
         <div className="spinner-border" role="status">
           <span className="visually-hidden">Loading...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="container-fluid p-4">
+        <div className="alert alert-danger" role="alert">
+          {error}
         </div>
       </div>
     );
@@ -331,15 +332,6 @@ const StandardManagement: React.FC = () => {
         </div>
       </div>
 
-      {error && (
-        <div className="row mb-4">
-          <div className="col-12">
-            <div className="alert alert-danger" role="alert">
-              {error}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

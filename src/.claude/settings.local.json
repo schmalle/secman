@@ -22,7 +22,16 @@
       "mcp__serena__think_about_collected_information",
       "mcp__serena__read_memory",
       "mcp__serena__find_file",
-      "mcp__serena__activate_project"
+      "mcp__serena__activate_project",
+      "Bash(./gradlew:*)",
+      "Bash(gradle build)",
+      "Bash(gradle build:*)",
+      "Bash(gradle:*)",
+      "Bash(timeout 30 gradle run:*)",
+      "Bash(gtimeout:*)",
+      "Bash(cat:*)",
+      "Bash(./scripts/test-api-compatibility.sh:*)",
+      "Bash(/Users/flake/sources/misc/secman/scripts/validate-migration-completion.sh)"
     ],
     "deny": []
   }

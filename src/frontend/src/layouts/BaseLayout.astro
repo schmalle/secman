@@ -32,6 +32,7 @@ const csrfToken = "placeholder-token"; // This would actually come from the serv
         <script>
             // This script sets up axios to include CSRF tokens in all requests
             import { setupCSRFProtection } from '../utils/csrf';
+            
             document.addEventListener('DOMContentLoaded', () => {
                 setupCSRFProtection();
             });

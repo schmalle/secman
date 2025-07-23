@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { csrfPost } from '../utils/csrf'; // Import the CSRF-enhanced POST helper
+import { authenticatedFetch } from '../utils/auth';
 
 interface UseCase {
     id: number;
@@ -25,7 +26,7 @@ const ImportExport = () => {
         const fetchUseCases = async () => {
             setIsLoadingUseCases(true);
             try {
-                const response = await fetch('/api/usecases');
+                const response = await authenticatedFetch('/api/usecases');
                 if (response.ok) {
                     const data = await response.json();
                     setUseCases(data);
@@ -46,7 +47,7 @@ const ImportExport = () => {
     // Check if translation is configured
     const checkTranslationConfiguration = async () => {
         try {
-            const response = await fetch('/api/translation-config/active');
+            const response = await authenticatedFetch('/api/translation-config/active');
             if (response.ok) {
                 setTranslationConfigured(true);
             } else {
@@ -173,7 +174,7 @@ const ImportExport = () => {
         setExportStatus(isTranslated ? `Translating and exporting to ${selectedLanguage}...` : 'Exporting to Word...');
         
         try {
-            const response = await fetch(endpoint, {
+            const response = await authenticatedFetch(endpoint, {
                 method: 'GET',
             });
 
@@ -197,7 +198,7 @@ const ImportExport = () => {
             const contentDisposition = response.headers.get('Content-Disposition');
             let filename = 'requirements.docx';
             if (contentDisposition) {
-                const filenameMatch = contentDisposition.match(/filename=(.+)/);
+                const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
                 if (filenameMatch) {
                     filename = filenameMatch[1];
                 }
@@ -241,7 +242,7 @@ const ImportExport = () => {
         setExportStatus(statusMsg);
         
         try {
-            const response = await fetch(endpoint, {
+            const response = await authenticatedFetch(endpoint, {
                 method: 'GET',
             });
 
@@ -265,7 +266,7 @@ const ImportExport = () => {
             const contentDisposition = response.headers.get('Content-Disposition');
             let filename = 'requirements_usecase.docx';
             if (contentDisposition) {
-                const filenameMatch = contentDisposition.match(/filename=(.+)/);
+                const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
                 if (filenameMatch) {
                     filename = filenameMatch[1];
                 }
@@ -294,7 +295,7 @@ const ImportExport = () => {
         setExportStatus('Exporting to Excel...');
         
         try {
-            const response = await fetch('/api/requirements/export/xlsx', {
+            const response = await authenticatedFetch('/api/requirements/export/xlsx', {
                 method: 'GET',
             });
 
@@ -318,7 +319,7 @@ const ImportExport = () => {
             const contentDisposition = response.headers.get('Content-Disposition');
             let filename = 'requirements_export.xlsx';
             if (contentDisposition) {
-                const filenameMatch = contentDisposition.match(/filename=(.+)/);
+                const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
                 if (filenameMatch) {
                     filename = filenameMatch[1];
                 }
@@ -349,7 +350,7 @@ const ImportExport = () => {
         setExportStatus('Exporting requirements for selected use case to Excel...');
         
         try {
-            const response = await fetch(`/api/requirements/export/xlsx/usecase/${selectedUseCase}`, {
+            const response = await authenticatedFetch(`/api/requirements/export/xlsx/usecase/${selectedUseCase}`, {
                 method: 'GET',
             });
 
@@ -373,7 +374,7 @@ const ImportExport = () => {
             const contentDisposition = response.headers.get('Content-Disposition');
             let filename = 'requirements_usecase.xlsx';
             if (contentDisposition) {
-                const filenameMatch = contentDisposition.match(/filename=(.+)/);
+                const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
                 if (filenameMatch) {
                     filename = filenameMatch[1];
                 }

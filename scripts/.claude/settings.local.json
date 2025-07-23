@@ -1,7 +1,36 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(./start-kotlin-backend.sh:*)",
+      "Bash(cat:*)",
+      "Bash(java:*)",
+      "Bash(brew services:*)",
+      "Bash(./gradlew:*)",
+      "Bash(gradle:*)",
+      "Bash(timeout:*)",
+      "Bash(for i in {1..60})",
+      "Bash(do sleep:*)",
+      "Bash(if:*)",
+      "Bash(/dev/null)",
+      "Bash(then echo \"Backend is running on port 9001!\")",
+      "Bash(break)",
+      "Bash(fi)",
+      "Bash(if [ $i -eq 60 ])",
+      "Bash(then echo \"Timeout waiting for backend\")",
+      "Bash(done)",
+      "Bash(for i in {1..20})",
+      "Bash(then echo \"Backend started successfully on port 9001!\")",
+      "Bash(echo:*)",
+      "Bash(then echo \"Backend may still be starting - it can take several minutes\")",
+      "Bash(then echo \"✅ Backend started successfully on port 8080!\")",
+      "Bash(then echo \"Still starting...\")",
+      "Bash(python3:*)",
+      "Bash(kotlin generate_bcrypt:*)",
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__get-library-docs",
+      "Bash(npm start)",
+      "Bash(grep:*)"
     ],
     "deny": []
   }

@@ -54,8 +54,26 @@ const Login = () => {
             const data = await response.json();
 
             if (response.ok) {
-                // Login successful, redirect to dashboard/root
-                window.location.href = '/'; // Or '/dashboard' if you have a dedicated page
+                // Login successful - store the JWT token
+                if (data.token) {
+                    localStorage.setItem('authToken', data.token);
+                    const userData = {
+                        id: data.id,
+                        username: data.username,
+                        email: data.email,
+                        roles: data.roles
+                    };
+                    localStorage.setItem('user', JSON.stringify(userData));
+                    
+                    // Set global user state for Header component
+                    (window as any).currentUser = userData;
+                    window.dispatchEvent(new CustomEvent('userLoaded'));
+                }
+                
+                // Small delay to ensure localStorage is written before redirect
+                setTimeout(() => {
+                    window.location.href = '/'; // Or '/dashboard' if you have a dedicated page
+                }, 100);
             } else {
                 setError(data.error || 'Login failed. Please check your credentials.');
             }

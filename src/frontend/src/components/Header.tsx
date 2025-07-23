@@ -20,13 +20,18 @@ const Header = () => {
 
     const handleLogout = async () => {
         try {
+            const token = localStorage.getItem('authToken');
             const response = await fetch('/api/auth/logout', {
                 method: 'POST',
                 headers: {
-                    // Add any necessary headers, e.g., CSRF token if re-enabled
+                    'Content-Type': 'application/json',
+                    ...(token && { 'Authorization': `Bearer ${token}` }),
                 },
             });
             if (response.ok) {
+                // Clear authentication data
+                localStorage.removeItem('authToken');
+                localStorage.removeItem('user');
                 window.currentUser = null;
                 setUser(null);
                 window.dispatchEvent(new CustomEvent('userLoggedOut'));

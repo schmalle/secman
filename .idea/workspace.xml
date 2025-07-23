@@ -5,21 +5,138 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="94ada8b3-9f4e-473c-9fea-3bc9651b5bdd" name="Changes" comment="test change">
+      <change afterPath="$PROJECT_DIR$/.idea/compiler.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/gradle.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/kotlinc.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.claude/settings.local.json" beforeDir="false" afterPath="$PROJECT_DIR$/.claude/settings.local.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/.claude/settings.local.json" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/.claude/settings.local.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/tests/PopulateTestData.java" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/src/.claude/settings.local.json" beforeDir="false" afterPath="$PROJECT_DIR$/src/.claude/settings.local.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backend/app/controllers/OAuthController.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/backend/app/controllers/OAuthController.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backend/app/services/IdentityProviderService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/backend/app/services/IdentityProviderService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backend/app/services/UserProvisioningService.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/backend/app/services/UserProvisioningService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backend/conf/evolutions/default/1.sql" beforeDir="false" afterPath="$PROJECT_DIR$/src/backend/conf/evolutions/default/1.sql" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/.g8/.g8.iml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/.g8/form/app/controllers/$model__Camel$Controller.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/.g8/form/app/controllers/$model__Camel$Data.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/.g8/form/app/views/$model__camel$/form.scala.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/.g8/form/conf/routes" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/.g8/form/default.properties" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/.g8/form/test/controllers/$model__Camel$ControllerTest.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/.gitignore" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/actions/AdminOnly.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/actions/Secured.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/actions/SecurityAuthenticator.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/controllers/AssetController.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/controllers/AuthController.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/controllers/EmailConfigController.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/controllers/HomeController.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/controllers/IdentityProviderController.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/controllers/ImportController.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/controllers/MCPController.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/controllers/NormController.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/controllers/NormMappingController.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/controllers/OAuthController.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/controllers/ReleaseController.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/controllers/ReportController.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/controllers/RequirementController.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/controllers/RequirementFileController.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/controllers/ResponseController.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/controllers/RiskAssessmentController.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/controllers/RiskController.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/controllers/StandardController.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/controllers/StandardExportController.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/controllers/TranslationConfigController.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/controllers/UseCaseController.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/controllers/UserController.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/mcp/AuthenticationHandler.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/mcp/MCPException.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/mcp/MCPServer.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/mcp/MCPServerLauncher.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/mcp/MCPSession.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/mcp/PromptProvider.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/mcp/ResourceProvider.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/mcp/ToolProvider.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/mcp/ToolProvider.java.bak" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/models/AssessmentContentSnapshot.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/models/AssessmentToken.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/models/Asset.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/models/AuthAuditLog.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/models/EmailConfig.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/models/IdentityProvider.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/models/Norm.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/models/OAuthState.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/models/Release.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/models/ReleaseStatus.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/models/Requirement.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/models/RequirementFile.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/models/Response.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/models/Risk.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/models/RiskAssessment.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/models/RiskAssessmentRequirementFile.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/models/Standard.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/models/TranslationConfig.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/models/UseCase.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/models/User.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/models/UserExternalIdentity.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/models/VersionedEntity.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/services/EmailService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/services/IdentityProviderService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/services/NormMappingService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/services/NormParsingService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/services/NotificationService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/services/ReleaseService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/services/TokenService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/services/TranslationService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/services/UserProvisioningService.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/views/emails/assessment_notification.scala.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/views/emails/completion_summary.scala.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/views/index.scala.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/app/views/main.scala.html" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/build.sbt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/conf/META-INF/persistence-test.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/conf/META-INF/persistence.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/conf/application-test.conf" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/conf/application.conf" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/conf/evolutions/default/1.sql" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/conf/logback.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/conf/routes" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/lib/mariadb-java-client.jar" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/mcp-config/claude_desktop_config.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/project/build.properties" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/project/plugins.sbt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/public/images/favicon.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/public/javascripts/main.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/public/stylesheets/main.css" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/test/controllers/MCPControllerTest.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/test/mcp/MCPServerTest.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/test/mcp/ResourceProviderTest.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/test/services/EmailServiceTest.java" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backend/test/services/NormParsingServiceTest.java" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/src/frontend/astro.config.mjs" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/astro.config.mjs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/frontend/package-lock.json" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/package-lock.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/src/components/AboutContent.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/components/AboutContent.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/tests/test-helpers.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/tests/test-helpers.ts" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="ExternalProjectsData">
+    <projectState path="$PROJECT_DIR$/src/backendng">
+      <ProjectState />
+    </projectState>
+  </component>
+  <component name="ExternalProjectsManager">
+    <system id="GRADLE">
+      <state>
+        <projects_view>
+          <tree_state>
+            <expand />
+            <select />
+          </tree_state>
+        </projects_view>
+      </state>
+    </system>
   </component>
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
@@ -48,29 +165,30 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;SHELLCHECK.PATH&quot;: &quot;/Users/flake/Library/Application Support/JetBrains/IntelliJIdea2025.1/plugins/Shell Script/shellcheck&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;devel&quot;,
-    &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,
-    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
-    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
-    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
-    &quot;project.structure.last.edited&quot;: &quot;Problems&quot;,
-    &quot;project.structure.proportion&quot;: &quot;0.12135923&quot;,
-    &quot;project.structure.side.proportion&quot;: &quot;0.409894&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.pluginManager&quot;,
-    &quot;ts.external.directory.path&quot;: &quot;/Users/flake/sources/misc/secman/tests/node_modules/typescript/lib&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
+    "SHELLCHECK.PATH": "/Users/flake/Library/Application Support/JetBrains/IntelliJIdea2025.1/plugins/Shell Script/shellcheck",
+    "git-widget-placeholder": "devel",
+    "junie.onboarding.icon.badge.shown": "true",
+    "node.js.detected.package.eslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "project.structure.last.edited": "Problems",
+    "project.structure.proportion": "0.12135923",
+    "project.structure.side.proportion": "0.409894",
+    "settings.editor.selected.configurable": "preferences.pluginManager",
+    "ts.external.directory.path": "/Users/flake/Applications/IntelliJ IDEA Ultimate.app/Contents/plugins/javascript-plugin/jsLanguageServicesImpl/external"
   },
-  &quot;keyToStringList&quot;: {
-    &quot;DatabaseDriversLRU&quot;: [
-      &quot;mariadb&quot;
+  "keyToStringList": {
+    "DatabaseDriversLRU": [
+      "mariadb"
     ]
   }
-}</component>
+}]]></component>
   <component name="RecentsManager">
     <key name="MoveFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$/scripts/tests" />
@@ -79,6 +197,21 @@
       <recent name="$PROJECT_DIR$/docs" />
       <recent name="$PROJECT_DIR$/scripts" />
     </key>
+  </component>
+  <component name="RunManager">
+    <configuration name="ApplicationKt" type="MicronautRunConfigurationType" factoryName="Micronaut" nameIsGenerated="true">
+      <option name="MAIN_CLASS_NAME" value="com.secman.ApplicationKt" />
+      <module name="secman-backend-ng.main" />
+      <option name="alternativeJrePath" />
+      <option name="alternativeJrePathEnabled" value="false" />
+      <option name="mainClass" value="com.secman.ApplicationKt" />
+      <option name="passParentEnvs" value="true" />
+      <option name="programParameters" />
+      <option name="vmParameters" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
   </component>
   <component name="SharedIndexes">
     <attachedChunks>

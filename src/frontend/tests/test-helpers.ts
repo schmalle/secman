@@ -5,7 +5,7 @@ export const getTestCredentials = () => {
   return {
     username: process.env.PLAYWRIGHT_TEST_USERNAME || 'adminuser',
     password: process.env.PLAYWRIGHT_TEST_PASSWORD || 'password',
-    backendUrl: process.env.PLAYWRIGHT_BACKEND_URL || 'http://localhost:9000',
+    backendUrl: process.env.PLAYWRIGHT_BACKEND_URL || 'http://localhost:9001',
     frontendUrl: process.env.PLAYWRIGHT_FRONTEND_URL || 'http://localhost:4321'
   };
 };

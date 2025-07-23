@@ -65,7 +65,9 @@
       "mcp__context7__get-library-docs",
       "Bash(gradle wrapper:*)",
       "Bash(./gradlew build:*)",
-      "Bash(./gradlew:*)"
+      "Bash(./gradlew:*)",
+      "Bash(./scripts/start-kotlin-backend.sh:*)",
+      "Bash(./scripts/start-java-backend.sh:*)"
     ],
     "deny": []
   }

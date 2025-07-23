@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete } from '../utils/auth';
 
 interface TranslationConfig {
   id?: number;
@@ -62,12 +63,13 @@ const TranslationConfigManagement: React.FC = () => {
 
   const fetchConfigs = async () => {
     try {
-      const response = await fetch('/api/translation-config');
-      if (!response.ok) {
-        throw new Error('Failed to fetch translation configurations');
+      const response = await authenticatedGet('/api/translation-config');
+      if (response.ok) {
+        const data = await response.json();
+        setConfigs(data);
+      } else {
+        setError(`Failed to fetch translation configs: ${response.status}`);
       }
-      const data = await response.json();
-      setConfigs(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -79,19 +81,10 @@ const TranslationConfigManagement: React.FC = () => {
     e.preventDefault();
     
     try {
-      const url = editingConfig ? `/api/translation-config/${editingConfig.id}` : '/api/translation-config';
-      const method = editingConfig ? 'PUT' : 'POST';
-      
-      const response = await fetch(url, {
-        method: method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to save translation configuration');
+      if (editingConfig) {
+        await authenticatedPut(`/api/translation-config/${editingConfig.id}`, formData);
+      } else {
+        await authenticatedPost('/api/translation-config', formData);
       }
 
       await fetchConfigs();
@@ -115,14 +108,7 @@ const TranslationConfigManagement: React.FC = () => {
     }
 
     try {
-      const response = await fetch(`/api/translation-config/${id}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to delete translation configuration');
-      }
-
+      await authenticatedDelete(`/api/translation-config/${id}`);
       await fetchConfigs();
       setError(null);
     } catch (err) {
@@ -135,18 +121,7 @@ const TranslationConfigManagement: React.FC = () => {
 
     setTesting(id);
     try {
-      const response = await fetch(`/api/translation-config/${id}/test`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ testText }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to test translation configuration');
-      }
-
+      await authenticatedPost(`/api/translation-config/${id}/test`, { testText });
       setError('Translation test successful!');
       setTimeout(() => setError(null), 3000);
     } catch (err) {

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete } from '../utils/auth';
 
 interface Asset {
   id: number;
@@ -103,12 +104,13 @@ const RiskAssessmentManagement: React.FC = () => {
 
   const fetchAssessments = async () => {
     try {
-      const response = await fetch('/api/risk-assessments');
-      if (!response.ok) {
-        throw new Error('Failed to fetch risk assessments');
+      const response = await authenticatedGet('/api/risk-assessments');
+      if (response.ok) {
+        const data = await response.json();
+        setAssessments(data);
+      } else {
+        setError(`Failed to fetch assessments: ${response.status}`);
       }
-      const data = await response.json();
-      setAssessments(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -118,12 +120,13 @@ const RiskAssessmentManagement: React.FC = () => {
 
   const fetchAssets = async () => {
     try {
-      const response = await fetch('/api/assets');
-      if (!response.ok) {
-        throw new Error('Failed to fetch assets');
+      const response = await authenticatedGet('/api/assets');
+      if (response.ok) {
+        const data = await response.json();
+        setAssets(data);
+      } else {
+        console.error('Failed to fetch assets:', response.status);
       }
-      const data = await response.json();
-      setAssets(data);
     } catch (err) {
       console.error('Failed to fetch assets:', err);
     }
@@ -131,12 +134,13 @@ const RiskAssessmentManagement: React.FC = () => {
 
   const fetchUsers = async () => {
     try {
-      const response = await fetch('/api/users');
-      if (!response.ok) {
-        throw new Error('Failed to fetch users');
+      const response = await authenticatedGet('/api/users');
+      if (response.ok) {
+        const data = await response.json();
+        setUsers(data);
+      } else {
+        console.error('Failed to fetch users:', response.status);
       }
-      const data = await response.json();
-      setUsers(data);
     } catch (err) {
       console.error('Failed to fetch users:', err);
     }
@@ -144,12 +148,13 @@ const RiskAssessmentManagement: React.FC = () => {
 
   const fetchUseCases = async () => {
     try {
-      const response = await fetch('/api/usecases');
-      if (!response.ok) {
-        throw new Error('Failed to fetch use cases');
+      const response = await authenticatedGet('/api/usecases');
+      if (response.ok) {
+        const data = await response.json();
+        setUseCases(data);
+      } else {
+        console.error('Failed to fetch use cases:', response.status);
       }
-      const data = await response.json();
-      setUseCases(data);
     } catch (err) {
       console.error('Failed to fetch use cases:', err);
     }
@@ -164,25 +169,20 @@ const RiskAssessmentManagement: React.FC = () => {
     }
     
     try {
-      const url = editingAssessment ? `/api/risk-assessments/${editingAssessment.id}` : '/api/risk-assessments';
-      const method = editingAssessment ? 'PUT' : 'POST';
-      
       // Set requestor to current user for new assessments
       const dataToSubmit = {
         ...formData,
         requestorId: editingAssessment ? formData.requestorId : currentUser.id
       };
       
-      const response = await fetch(url, {
-        method: method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(dataToSubmit),
-      });
-
+      let response;
+      if (editingAssessment) {
+        response = await authenticatedPut(`/api/risk-assessments/${editingAssessment.id}`, dataToSubmit);
+      } else {
+        response = await authenticatedPost('/api/risk-assessments', dataToSubmit);
+      }
       if (!response.ok) {
-        throw new Error('Failed to save risk assessment');
+        throw new Error(`Failed to save assessment: ${response.status}`);
       }
 
       await fetchAssessments();
@@ -214,14 +214,10 @@ const RiskAssessmentManagement: React.FC = () => {
     }
 
     try {
-      const response = await fetch(`/api/risk-assessments/${id}`, {
-        method: 'DELETE',
-      });
-
+      const response = await authenticatedDelete(`/api/risk-assessments/${id}`);
       if (!response.ok) {
-        throw new Error('Failed to delete risk assessment');
+        throw new Error(`Failed to delete assessment: ${response.status}`);
       }
-
       await fetchAssessments();
       setError(null);
     } catch (err) {
@@ -240,18 +236,11 @@ const RiskAssessmentManagement: React.FC = () => {
     }
 
     try {
-      const response = await fetch(`/api/risk-assessments/${assessment.id}/notify`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          respondentEmail: assessment.respondent.email
-        }),
+      const response = await authenticatedPost(`/api/risk-assessments/${assessment.id}/notify`, {
+        respondentEmail: assessment.respondent.email
       });
-
       if (!response.ok) {
-        throw new Error('Failed to send notification');
+        throw new Error(`Failed to send notification: ${response.status}`);
       }
 
       setError(null);
@@ -267,17 +256,10 @@ const RiskAssessmentManagement: React.FC = () => {
   const handlePerformAssessment = async (assessment: RiskAssessment) => {
     try {
       // Generate or get assessment token for direct access
-      const response = await fetch(`/api/risk-assessments/${assessment.id}/token`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
+      const response = await authenticatedPost(`/api/risk-assessments/${assessment.id}/token`, {});
       if (!response.ok) {
-        throw new Error('Failed to generate assessment token');
+        throw new Error(`Failed to generate assessment token: ${response.status}`);
       }
-
       const data = await response.json();
       
       // Navigate to the questionnaire page with the token

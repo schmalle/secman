@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete } from '../utils/auth';
 
 interface Risk {
   id: number;
@@ -53,10 +54,13 @@ const RiskManagement: React.FC = () => {
 
   const fetchAssets = async () => {
     try {
-      const response = await fetch('/api/assets', { credentials: 'include' });
-      if (!response.ok) throw new Error('Failed to fetch assets');
-      const data = await response.json();
-      setAssets(data);
+      const response = await authenticatedGet('/api/assets');
+      if (response.ok) {
+        const data = await response.json();
+        setAssets(data);
+      } else {
+        console.error('Failed to fetch assets:', response.status);
+      }
     } catch (err) {
       console.error('Failed to fetch assets:', err);
     }
@@ -65,11 +69,14 @@ const RiskManagement: React.FC = () => {
   const fetchRisks = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/risks', { credentials: 'include' });
-      if (!response.ok) throw new Error('Failed to fetch risks');
-      const data = await response.json();
-      setRisks(data);
-      setError(null);
+      const response = await authenticatedGet('/api/risks');
+      if (response.ok) {
+        const data = await response.json();
+        setRisks(data);
+        setError(null);
+      } else {
+        setError(`Failed to fetch risks: ${response.status}`);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch risks');
     } finally {
@@ -86,17 +93,14 @@ const RiskManagement: React.FC = () => {
         likelihood: Number(formData.likelihood),
         impact: Number(formData.impact),
       };
-      const url = editingRisk ? `/api/risks/${editingRisk.id}` : '/api/risks';
-      const method = editingRisk ? 'PUT' : 'POST';
-      const response = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(submitData),
-      });
+      let response;
+      if (editingRisk) {
+        response = await authenticatedPut(`/api/risks/${editingRisk.id}`, submitData);
+      } else {
+        response = await authenticatedPost('/api/risks', submitData);
+      }
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to save risk');
+        throw new Error(`Failed to save risk: ${response.status}`);
       }
       resetForm();
       await fetchRisks();
@@ -124,11 +128,10 @@ const RiskManagement: React.FC = () => {
   const handleDelete = async (id: number) => {
     if (!confirm('Are you sure you want to delete this risk?')) return;
     try {
-      const response = await fetch(`/api/risks/${id}`, {
-        method: 'DELETE',
-        credentials: 'include',
-      });
-      if (!response.ok) throw new Error('Failed to delete risk');
+      const response = await authenticatedDelete(`/api/risks/${id}`);
+      if (!response.ok) {
+        throw new Error(`Failed to delete risk: ${response.status}`);
+      }
       await fetchRisks();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete risk');
