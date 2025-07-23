@@ -10,9 +10,6 @@ COPY src/backendng/gradle.properties .
 COPY src/backendng/settings.gradle.kts .
 COPY src/backendng/build.gradle.kts .
 
-# Download dependencies
-RUN gradle dependencies --no-daemon
-
 # Copy source code
 COPY src/backendng/src/ src/
 
