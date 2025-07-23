@@ -1,0 +1,85 @@
+version: '3.8'
+
+services:
+  database:
+    build:
+      context: ../database
+      dockerfile: Dockerfile
+    container_name: secman-db
+    environment:
+      - MYSQL_ROOT_PASSWORD=${DB_ROOT_PASSWORD:-root123}
+      - MYSQL_DATABASE=secman
+      - MYSQL_USER=secman
+      - MYSQL_PASSWORD=${DB_PASSWORD:-CHANGEME}
+    volumes:
+      - secman_db_data:/var/lib/mysql
+      - ../database/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "${DB_PORT:-3306}:3306"
+    networks:
+      - secman-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "secman", "-p${DB_PASSWORD:-CHANGEME}"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  backend:
+    build:
+      context: ../..
+      dockerfile: docker/backend/Dockerfile
+    container_name: secman-backend
+    environment:
+      - MICRONAUT_ENVIRONMENTS=docker
+      - DB_USERNAME=secman
+      - DB_PASSWORD=${DB_PASSWORD:-CHANGEME}
+      - JWT_SECRET=${JWT_SECRET:-pleasechangethissecrectokeyproductionforsecurityreasonsmustbe256bits}
+      - DATASOURCES_DEFAULT_URL=jdbc:mariadb://database:3306/secman
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    networks:
+      - secman-network
+    depends_on:
+      database:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  frontend:
+    build:
+      context: ../..
+      dockerfile: docker/frontend/Dockerfile
+      target: production
+    container_name: secman-frontend
+    environment:
+      - NODE_ENV=production
+      - BACKEND_URL=http://backend:8080
+    ports:
+      - "${FRONTEND_PORT:-4321}:4321"
+    networks:
+      - secman-network
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4321/health.json"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  secman_db_data:
+    driver: local
+
+networks:
+  secman-network:
+    driver: bridge

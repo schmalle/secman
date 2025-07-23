@@ -8,13 +8,24 @@
 
 ### ALPHA ALPHA ALPHA
 
-## Overview / background
+## Overview / Background
 
 secman was initially started as a security requirement formatter tool. The goal was to generate a beautiful looking MS word document out of a well formatted MS Excel sheet (it was just a helper tool for a repeating task).
 
 Then the idea was born to extend this tooling for some other use cases like risk management or context specific document rendering.
 
 The tool was also started as a test how good / well AI supported coding really works.
+
+### Technology Stack
+
+Secman has been completely migrated to a modern, containerized architecture:
+
+- **Backend**: Micronaut 4.4.3 with Kotlin 2.0.21 (previously Play Framework with Java)
+- **Frontend**: Astro with React components  
+- **Database**: MariaDB 10.11
+- **Build System**: Gradle 8.5+ (replacing sbt)
+- **Deployment**: Docker with multi-architecture support
+- **Development**: Container-first workflow with hot reload
 
 ---
 
@@ -35,13 +46,15 @@ The tool was also started as a test how good / well AI supported coding really w
 
 ### Prerequisites
 
-- Java (tested with version 21)
-- Node.js (tested with version 24)
-- MariaDB
-- sbt (Scala Build Tool)
-- Python (for optional scripts)
-- OpenRouter Key (optionally)
-- sbt
+- Docker 20.10+ with Buildx support (recommended)
+- Docker Compose 2.0+ (recommended)
+- **OR** for manual setup:
+  - Java 17+ (tested with version 17)
+  - Node.js 18+ (tested with version 18)
+  - MariaDB 10.11+
+  - Gradle 8.5+ (not sbt)
+- OpenRouter API Key (optional)
+- GitHub OAuth credentials (optional)
 
 ### Installation
 
@@ -92,40 +105,74 @@ Usage
 
 ## Testing
 
-```
-  Option 1: Simple Test Runner
+### Docker-based Testing (Recommended)
 
-  # Default credentials (adminuser/password)
-  ./scripts/simple-e2e-test.sh
+```bash
+# Start test environment
+cd docker/compose
+docker compose -f docker-compose.dev.yml up -d
 
-  # Custom credentials
-  ./scripts/simple-e2e-test.sh --username=myuser --password=mypass
+# Wait for services to be healthy
+docker compose -f docker-compose.dev.yml ps
 
-  Option 2: Comprehensive Test Runner
+# Run frontend tests
+docker compose -f docker-compose.dev.yml exec frontend npm run test
 
-  # All tests with default credentials
-  ./scripts/comprehensive-e2e-test.sh
-
-  # Custom credentials
-  ./scripts/comprehensive-e2e-test.sh --username=myuser --password=mypass
-
-  # Just smoke tests
-  ./scripts/comprehensive-e2e-test.sh --smoke-only
-
-  Option 3: Direct Playwright
-
-  cd src/frontend
-  export PLAYWRIGHT_TEST_USERNAME=adminuser
-  export PLAYWRIGHT_TEST_PASSWORD=password
-  npx playwright test
+# Run backend tests  
+docker compose -f docker-compose.dev.yml exec backend gradle test
 ```
 
-## Database details
+### Manual Testing
 
-- **database:** secman
-- ***user***: secman/CHANGEME
+```bash
+# Option 1: Simple Test Runner
+./scripts/simple-e2e-test.sh --username=adminuser --password=password
 
-Please also look in the backend folder */src/backend/conf/application.conf*, if you want to change the database user.
+# Option 2: Comprehensive Test Runner
+./scripts/comprehensive-e2e-test.sh --username=adminuser --password=password
+
+# Option 3: Direct Playwright (requires manual backend/frontend startup)
+cd src/frontend
+export PLAYWRIGHT_TEST_USERNAME=adminuser
+export PLAYWRIGHT_TEST_PASSWORD=password
+npx playwright test
+```
+
+### Backend Unit Tests (Micronaut/Kotlin)
+
+```bash
+cd src/backendng
+gradle test
+gradle integrationTest
+```
+
+## Database Details
+
+- **Database:** secman
+- **User:** secman/CHANGEME
+- **Host:** localhost (or `database` container in Docker)
+- **Port:** 3306 (production) / 3307 (development)
+
+### Configuration
+
+Database configuration is located in:
+- Docker: Environment variables in `docker/compose/.env`
+- Manual: `src/backendng/src/main/resources/application.yml`
+- Docker override: `src/backendng/src/main/resources/application-docker.yml`
+
+### Docker Database Management
+
+```bash
+# Connect to database
+docker compose exec database mysql -u secman -pCHANGEME secman
+
+# View database logs
+docker compose logs database
+
+# Reset database (destroys all data)
+docker compose down -v
+docker compose up -d
+```
 
 ## Contributing
 
