@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete } from '../utils/auth';
 
 interface Asset {
   id?: number;
@@ -31,12 +32,13 @@ const AssetManagement: React.FC = () => {
 
   const fetchAssets = async () => {
     try {
-      const response = await fetch('/api/assets');
-      if (!response.ok) {
-        throw new Error('Failed to fetch assets');
+      const response = await authenticatedGet('/api/assets');
+      if (response.ok) {
+        const data = await response.json();
+        setAssets(data);
+      } else {
+        setError(`Failed to fetch assets: ${response.status}`);
       }
-      const data = await response.json();
-      setAssets(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -48,19 +50,10 @@ const AssetManagement: React.FC = () => {
     e.preventDefault();
     
     try {
-      const url = editingAsset ? `/api/assets/${editingAsset.id}` : '/api/assets';
-      const method = editingAsset ? 'PUT' : 'POST';
-      
-      const response = await fetch(url, {
-        method: method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to save asset');
+      if (editingAsset) {
+        await authenticatedPut(`/api/assets/${editingAsset.id}`, formData);
+      } else {
+        await authenticatedPost('/api/assets', formData);
       }
 
       await fetchAssets();
@@ -83,13 +76,7 @@ const AssetManagement: React.FC = () => {
     }
 
     try {
-      const response = await fetch(`/api/assets/${id}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to delete asset');
-      }
+      await authenticatedDelete(`/api/assets/${id}`);
 
       await fetchAssets();
       setError(null);
@@ -120,6 +107,16 @@ const AssetManagement: React.FC = () => {
       <div className="d-flex justify-content-center">
         <div className="spinner-border" role="status">
           <span className="visually-hidden">Loading...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="container-fluid p-4">
+        <div className="alert alert-danger" role="alert">
+          {error}
         </div>
       </div>
     );
@@ -293,15 +290,6 @@ const AssetManagement: React.FC = () => {
         </div>
       </div>
 
-      {error && (
-        <div className="row mb-4">
-          <div className="col-12">
-            <div className="alert alert-danger" role="alert">
-              {error}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

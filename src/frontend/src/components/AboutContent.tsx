@@ -83,7 +83,7 @@ const AboutContent: React.FC = () => {
                 </div>
                 <div className="col-12 mb-2">
                   <div className="text-center p-2 border rounded bg-light">
-                    <small className="fw-bold">Backend API (Port 9000)</small>
+                    <small className="fw-bold">Backend API (Port 9001)</small>
                     <br/>
                     <small className="text-muted">Play Framework</small>
                   </div>

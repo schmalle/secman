@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { authenticatedFetch } from '../utils/auth';
 
 interface ReportSummary {
   assessmentSummary: {
@@ -75,7 +76,7 @@ const Reports: React.FC = () => {
   const fetchReportSummary = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/reports/risk-assessment-summary');
+      const response = await authenticatedFetch('/api/reports/risk-assessment-summary');
       if (!response.ok) {
         throw new Error('Failed to fetch report summary');
       }
@@ -92,7 +93,7 @@ const Reports: React.FC = () => {
   const fetchMitigationReport = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/reports/risk-mitigation-status');
+      const response = await authenticatedFetch('/api/reports/risk-mitigation-status');
       if (!response.ok) {
         throw new Error('Failed to fetch mitigation report');
       }

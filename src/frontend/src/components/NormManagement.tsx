@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete } from '../utils/auth';
 
 interface Norm {
   id: number;
@@ -34,17 +35,14 @@ const NormManagement: React.FC = () => {
   const fetchNorms = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/norms', {
-        credentials: 'include'
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch norms');
+      const response = await authenticatedGet('/api/norms');
+      if (response.ok) {
+        const data = await response.json();
+        setNorms(data);
+        setError(null);
+      } else {
+        setError(`Failed to fetch norms: ${response.status}`);
       }
-      
-      const data = await response.json();
-      setNorms(data);
-      setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch norms');
     } finally {
@@ -65,18 +63,10 @@ const NormManagement: React.FC = () => {
       const url = editingNorm ? `/api/norms/${editingNorm.id}` : '/api/norms';
       const method = editingNorm ? 'PUT' : 'POST';
       
-      const response = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify(submitData)
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to save norm');
+      if (editingNorm) {
+        await authenticatedPut(`/api/norms/${editingNorm.id}`, submitData);
+      } else {
+        await authenticatedPost('/api/norms', submitData);
       }
 
       resetForm();
@@ -109,14 +99,7 @@ const NormManagement: React.FC = () => {
     }
 
     try {
-      const response = await fetch(`/api/norms/${id}`, {
-        method: 'DELETE',
-        credentials: 'include'
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to delete norm');
-      }
+      await authenticatedDelete(`/api/norms/${id}`);
 
       await fetchNorms();
     } catch (err) {
@@ -137,17 +120,7 @@ const NormManagement: React.FC = () => {
     }
 
     try {
-      const response = await fetch('/api/norms/all', {
-        method: 'DELETE',
-        credentials: 'include'
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to delete all norms');
-      }
-
-      const result = await response.json();
+      const result = await authenticatedDelete('/api/norms/all');
       setError(null);
       
       // Show success message briefly

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { authenticatedFetch } from '../utils/auth';
 
 // Define an interface for the user data expected from the backend
 interface User {
@@ -87,7 +88,7 @@ const RequirementsAdmin = () => {
 
     const fetchRequirementsCount = async (isMounted: boolean) => {
         try {
-            const response = await fetch('/api/requirements');
+            const response = await authenticatedFetch('/api/requirements');
             if (!response.ok) {
                 if (response.status === 403) {
                     throw new Error('Access Denied: You do not have permission to fetch requirements.');
@@ -131,7 +132,7 @@ const RequirementsAdmin = () => {
         setDeleteError(null);
 
         try {
-            const response = await fetch('/api/requirements/all', {
+            const response = await authenticatedFetch('/api/requirements/all', {
                 method: 'DELETE',
             });
 

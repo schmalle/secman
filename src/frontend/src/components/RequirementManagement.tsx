@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown'; // Import ReactMarkdown
+import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete } from '../utils/auth';
 
 interface UseCase {
     id: number;
@@ -92,7 +93,7 @@ export default function RequirementManagement() {
 
     const fetchRequirements = async () => {
         try {
-            const response = await fetch('/api/requirements');
+            const response = await authenticatedGet('/api/requirements');
             const data = await response.json();
             setRequirements(data);
         } catch (error) {
@@ -102,7 +103,7 @@ export default function RequirementManagement() {
 
     const fetchAllUseCases = async () => {
         try {
-            const response = await fetch('/api/usecases'); // Assuming this endpoint exists
+            const response = await authenticatedGet('/api/usecases'); // Assuming this endpoint exists
             const data = await response.json();
             setAllUseCases(data);
         } catch (error) {
@@ -112,7 +113,7 @@ export default function RequirementManagement() {
 
     const fetchAllNorms = async () => {
         try {
-            const response = await fetch('/api/norms');
+            const response = await authenticatedGet('/api/norms');
             const data = await response.json();
             setAllNorms(data);
         } catch (error) {
@@ -170,15 +171,9 @@ export default function RequirementManagement() {
                 ? `/api/requirements/${selectedRequirement.id}` 
                 : '/api/requirements';
             
-            const method = selectedRequirement ? 'PUT' : 'POST';
-            
-            const response = await fetch(url, {
-                method,
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(requirementDataToSubmit),
-            });
+            const response = selectedRequirement 
+                ? await authenticatedPut(url, requirementDataToSubmit)
+                : await authenticatedPost(url, requirementDataToSubmit);
 
             if (response.ok) {
                 fetchRequirements();
@@ -193,9 +188,7 @@ export default function RequirementManagement() {
         if (!confirm('Are you sure you want to delete this requirement?')) return;
         
         try {
-            const response = await fetch(`/api/requirements/${id}`, {
-                method: 'DELETE',
-            });
+            const response = await authenticatedDelete(`/api/requirements/${id}`);
 
             if (response.ok) {
                 fetchRequirements();
@@ -221,9 +214,7 @@ export default function RequirementManagement() {
         setDeleteError(null);
 
         try {
-            const response = await fetch('/api/requirements/all', {
-                method: 'DELETE',
-            });
+            const response = await authenticatedDelete('/api/requirements/all');
 
             const data = await response.json();
 
@@ -257,18 +248,14 @@ export default function RequirementManagement() {
 
         try {
             // First ensure required norms exist
-            const ensureResponse = await fetch('/api/norm-mapping/ensure-norms', {
-                method: 'POST',
-            });
+            const ensureResponse = await authenticatedPost('/api/norm-mapping/ensure-norms');
 
             if (!ensureResponse.ok) {
                 throw new Error('Failed to ensure required norms exist');
             }
 
             // Then get mapping suggestions
-            const response = await fetch('/api/norm-mapping/suggest', {
-                method: 'POST',
-            });
+            const response = await authenticatedPost('/api/norm-mapping/suggest');
 
             if (response.ok) {
                 const data = await response.json();
@@ -288,13 +275,7 @@ export default function RequirementManagement() {
 
     const handleApplyMappings = async (selectedMappings: any) => {
         try {
-            const response = await fetch('/api/norm-mapping/apply', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ mappings: selectedMappings }),
-            });
+            const response = await authenticatedPost('/api/norm-mapping/apply', { mappings: selectedMappings });
 
             if (response.ok) {
                 const result = await response.json();

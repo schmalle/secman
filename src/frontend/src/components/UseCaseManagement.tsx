@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete } from '../utils/auth';
 
 interface UseCase {
   id: number;
@@ -28,17 +29,14 @@ const UseCaseManagement: React.FC = () => {
   const fetchUseCases = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/usecases', {
-        credentials: 'include'
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch use cases');
+      const response = await authenticatedGet('/api/usecases');
+      if (response.ok) {
+        const data = await response.json();
+        setUseCases(data);
+        setError(null);
+      } else {
+        setError(`Failed to fetch use cases: ${response.status}`);
       }
-      
-      const data = await response.json();
-      setUseCases(data);
-      setError(null);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch use cases';
       setError(errorMessage);
@@ -59,18 +57,10 @@ const UseCaseManagement: React.FC = () => {
       const url = editingUseCase ? `/api/usecases/${editingUseCase.id}` : '/api/usecases';
       const method = editingUseCase ? 'PUT' : 'POST';
       
-      const response = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify(submitData)
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to save use case');
+      if (editingUseCase) {
+        await authenticatedPut(`/api/usecases/${editingUseCase.id}`, submitData);
+      } else {
+        await authenticatedPost('/api/usecases', submitData);
       }
 
       resetForm(); // Includes setIsAddingUseCase(false)
@@ -96,15 +86,7 @@ const UseCaseManagement: React.FC = () => {
     }
 
     try {
-      const response = await fetch(`/api/usecases/${id}`, {
-        method: 'DELETE',
-        credentials: 'include'
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to delete use case');
-      }
+      await authenticatedDelete(`/api/usecases/${id}`);
 
       await fetchUseCases();
     } catch (err) {
@@ -122,6 +104,16 @@ const UseCaseManagement: React.FC = () => {
   };
 
   if (loading) return <div className="text-center py-4">Loading use cases...</div>;
+  
+  if (error) {
+    return (
+      <div className="container-fluid p-4">
+        <div className="alert alert-danger" role="alert">
+          {error}
+        </div>
+      </div>
+    );
+  }
   // Error display is removed from UI, errors are logged to console.
 
   return (

@@ -1,33 +1,33 @@
 // @ts-check
-import { defineConfig } from 'astro/config';
-import react from '@astrojs/react';
-import node from '@astrojs/node';
+import { defineConfig } from "astro/config";
+import react from "@astrojs/react";
+import node from "@astrojs/node";
 
 // https://astro.build/config
 export default defineConfig({
   integrations: [react()],
-  output: 'server',
+  output: "server",
   adapter: node({
-    mode: 'standalone'
+    mode: "standalone",
   }),
   server: {
     host: true,
-    port: 4321
+    port: 4321,
   },
   vite: {
     server: {
       proxy: {
-        '/api': {
-          target: 'http://localhost:9000',
+        "/api": {
+          target: "http://localhost:8080",
           changeOrigin: true,
-          secure: false
+          secure: false,
         },
-        '/oauth': {
-          target: 'http://localhost:9000',
+        "/oauth": {
+          target: "http://localhost:8080",
           changeOrigin: true,
-          secure: false
-        }
-      }
-    }
-  }
+          secure: false,
+        },
+      },
+    },
+  },
 });

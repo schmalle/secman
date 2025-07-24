@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { authenticatedFetch } from '../utils/auth';
 
 interface Asset {
   id: number;
@@ -67,7 +68,7 @@ const RiskAssessmentManagement: React.FC = () => {
 
   const fetchAssessments = async () => {
     try {
-      const response = await fetch('/api/risk-assessments');
+      const response = await authenticatedFetch('/api/risk-assessments');
       if (!response.ok) {
         throw new Error('Failed to fetch risk assessments');
       }
@@ -82,7 +83,7 @@ const RiskAssessmentManagement: React.FC = () => {
 
   const fetchAssets = async () => {
     try {
-      const response = await fetch('/api/assets');
+      const response = await authenticatedFetch('/api/assets');
       if (!response.ok) {
         throw new Error('Failed to fetch assets');
       }
@@ -95,7 +96,7 @@ const RiskAssessmentManagement: React.FC = () => {
 
   const fetchUsers = async () => {
     try {
-      const response = await fetch('/api/users');
+      const response = await authenticatedFetch('/api/users');
       if (!response.ok) {
         throw new Error('Failed to fetch users');
       }
@@ -108,7 +109,7 @@ const RiskAssessmentManagement: React.FC = () => {
 
   const fetchUseCases = async () => {
     try {
-      const response = await fetch('/api/usecases');
+      const response = await authenticatedFetch('/api/usecases');
       if (!response.ok) {
         throw new Error('Failed to fetch use cases');
       }
@@ -126,7 +127,7 @@ const RiskAssessmentManagement: React.FC = () => {
       const url = editingAssessment ? `/api/risk-assessments/${editingAssessment.id}` : '/api/risk-assessments';
       const method = editingAssessment ? 'PUT' : 'POST';
       
-      const response = await fetch(url, {
+      const response = await authenticatedFetch(url, {
         method: method,
         headers: {
           'Content-Type': 'application/json',
@@ -167,7 +168,7 @@ const RiskAssessmentManagement: React.FC = () => {
     }
 
     try {
-      const response = await fetch(`/api/risk-assessments/${id}`, {
+      const response = await authenticatedFetch(`/api/risk-assessments/${id}`, {
         method: 'DELETE',
       });
 

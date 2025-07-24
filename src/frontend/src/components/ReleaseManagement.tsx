@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { authenticatedFetch } from '../utils/auth';
 
 interface Release {
     id: number;
@@ -46,12 +47,8 @@ const ReleaseManagement = () => {
         try {
             setLoading(true);
             const [releasesResponse, statsResponse] = await Promise.all([
-                fetch('/api/releases', {
-                    credentials: 'include'
-                }),
-                fetch('/api/releases/stats', {
-                    credentials: 'include'
-                })
+                authenticatedFetch('/api/releases'),
+                authenticatedFetch('/api/releases/stats')
             ]);
 
             if (!releasesResponse.ok || !statsResponse.ok) {
@@ -96,12 +93,11 @@ const ReleaseManagement = () => {
                 return;
             }
 
-            const response = await fetch('/api/releases', {
+            const response = await authenticatedFetch('/api/releases', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                credentials: 'include',
                 body: JSON.stringify(formData)
             });
 
@@ -132,12 +128,11 @@ const ReleaseManagement = () => {
         if (!selectedRelease) return;
 
         try {
-            const response = await fetch(`/api/releases/${selectedRelease.id}`, {
+            const response = await authenticatedFetch(`/api/releases/${selectedRelease.id}`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                credentials: 'include',
                 body: JSON.stringify(formData)
             });
 
@@ -158,9 +153,8 @@ const ReleaseManagement = () => {
 
     const handlePublishRelease = async (releaseId: number) => {
         try {
-            const response = await fetch(`/api/releases/${releaseId}/publish`, {
-                method: 'POST',
-                credentials: 'include'
+            const response = await authenticatedFetch(`/api/releases/${releaseId}/publish`, {
+                method: 'POST'
             });
 
             if (!response.ok) {
@@ -177,9 +171,8 @@ const ReleaseManagement = () => {
 
     const handleArchiveRelease = async (releaseId: number) => {
         try {
-            const response = await fetch(`/api/releases/${releaseId}/archive`, {
-                method: 'POST',
-                credentials: 'include'
+            const response = await authenticatedFetch(`/api/releases/${releaseId}/archive`, {
+                method: 'POST'
             });
 
             if (!response.ok) {
@@ -200,9 +193,8 @@ const ReleaseManagement = () => {
         }
 
         try {
-            const response = await fetch(`/api/releases/${releaseId}`, {
-                method: 'DELETE',
-                credentials: 'include'
+            const response = await authenticatedFetch(`/api/releases/${releaseId}`, {
+                method: 'DELETE'
             });
 
             if (!response.ok) {

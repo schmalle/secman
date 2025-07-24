@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete } from '../utils/auth';
 
 interface EmailConfig {
   id?: number;
@@ -68,12 +69,13 @@ const EmailConfigManagement: React.FC = () => {
 
   const fetchConfigs = async () => {
     try {
-      const response = await fetch('/api/email-config');
-      if (!response.ok) {
-        throw new Error('Failed to fetch email configurations');
+      const response = await authenticatedGet('/api/email-config');
+      if (response.ok) {
+        const data = await response.json();
+        setConfigs(data);
+      } else {
+        setError(`Failed to fetch email configs: ${response.status}`);
       }
-      const data = await response.json();
-      setConfigs(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -85,19 +87,10 @@ const EmailConfigManagement: React.FC = () => {
     e.preventDefault();
     
     try {
-      const url = editingConfig ? `/api/email-config/${editingConfig.id}` : '/api/email-config';
-      const method = editingConfig ? 'PUT' : 'POST';
-      
-      const response = await fetch(url, {
-        method: method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to save email configuration');
+      if (editingConfig) {
+        await authenticatedPut(`/api/email-config/${editingConfig.id}`, formData);
+      } else {
+        await authenticatedPost('/api/email-config', formData);
       }
 
       await fetchConfigs();
@@ -120,14 +113,7 @@ const EmailConfigManagement: React.FC = () => {
     }
 
     try {
-      const response = await fetch(`/api/email-config/${id}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to delete email configuration');
-      }
-
+      await authenticatedDelete(`/api/email-config/${id}`);
       await fetchConfigs();
       setError(null);
     } catch (err) {
@@ -141,18 +127,7 @@ const EmailConfigManagement: React.FC = () => {
 
     setTesting(id);
     try {
-      const response = await fetch(`/api/email-config/${id}/test`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ testEmail }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to send test email');
-      }
-
+      await authenticatedPost(`/api/email-config/${id}/test`, { testEmail });
       setError('Test email sent successfully!');
       setTimeout(() => setError(null), 3000);
     } catch (err) {
