@@ -12,6 +12,8 @@ src/frontend/dist/
 /tests/playwright-report
 /tests/*.log
 *.log
+/src/backendng/.gradle/
+
 
 # macOS-specific files
 .DS_Store
@@ -36,3 +38,4 @@ src/backend/test/controllers/*.bak
 src/backendng/.gradle/
 .gradle/
 build/
+/src/backendng/.gradle
