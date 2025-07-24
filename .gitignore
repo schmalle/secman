@@ -13,6 +13,7 @@ src/frontend/dist/
 /tests/*.log
 *.log
 /src/backendng/.gradle/
+src/backendng/.gradle
 
 
 # macOS-specific files
