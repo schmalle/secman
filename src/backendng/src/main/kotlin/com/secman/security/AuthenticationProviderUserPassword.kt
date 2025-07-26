@@ -1,6 +1,7 @@
 package com.secman.security
 
 import com.secman.repository.UserRepository
+import io.micronaut.http.HttpRequest
 import io.micronaut.security.authentication.AuthenticationProvider
 import io.micronaut.security.authentication.AuthenticationRequest
 import io.micronaut.security.authentication.AuthenticationResponse
@@ -11,15 +12,14 @@ import reactor.core.publisher.Flux
 import reactor.core.publisher.FluxSink
 
 @Singleton
-@Suppress("DEPRECATION")
 class AuthenticationProviderUserPassword(
     private val userRepository: UserRepository
-) : AuthenticationProvider<Any> {
+) : AuthenticationProvider<HttpRequest<*>> {
 
     private val passwordEncoder = BCryptPasswordEncoder()
 
     override fun authenticate(
-        httpRequest: Any?,
+        httpRequest: HttpRequest<*>?,
         authenticationRequest: AuthenticationRequest<*, *>
     ): Publisher<AuthenticationResponse> {
         return Flux.create { emitter: FluxSink<AuthenticationResponse> ->

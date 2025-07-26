@@ -18,3 +18,5 @@ jpa:
 micronaut:
   application:
     name: secman-backend-ng-test
+  server:
+    port: -1  # Use random port for tests

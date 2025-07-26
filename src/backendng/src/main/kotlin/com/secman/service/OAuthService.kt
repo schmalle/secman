@@ -237,6 +237,7 @@ class OAuthService(
     
     private fun parseJsonResponse(response: String): Map<String, Any> {
         return try {
+            @Suppress("UNCHECKED_CAST")
             objectMapper.readValue(response, Map::class.java) as Map<String, Any>
         } catch (e: Exception) {
             logger.error("Failed to parse JSON response: {}", e.message, e)
