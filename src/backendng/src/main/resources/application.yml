@@ -3,6 +3,16 @@ micronaut:
     name: secman-backend-ng
   server:
     port: 8080
+    netty:
+      worker:
+        threads: 8
+      boss:
+        threads: 1
+      child-options:
+        so-keep-alive: true
+        tcp-no-delay: true
+      options:
+        so-reuseaddr: true
     cors:
       enabled: true
       configurations:
@@ -38,8 +48,25 @@ micronaut:
             expiration: 3600
         claims-validators:
           issuer: secman-backend-ng
+    oauth2:
+      clients:
+        github:
+          client-id: ${GITHUB_CLIENT_ID:your-github-client-id}
+          client-secret: ${GITHUB_CLIENT_SECRET:your-github-client-secret}
+          redirect-uri: http://localhost:8080/oauth/callback
+          authorization-uri: https://github.com/login/oauth/authorize
+          token-uri: https://github.com/login/oauth/access_token
+          user-info-uri: https://api.github.com/user
+          scopes:
+            - user:email
     intercept-url-map:
       - pattern: /api/auth/login
+        access:
+          - isAnonymous()
+      - pattern: /oauth/authorize/**
+        access:
+          - isAnonymous()
+      - pattern: /oauth/callback
         access:
           - isAnonymous()
       - pattern: /health
@@ -52,16 +79,37 @@ micronaut:
         access:
           - isAuthenticated()
   http:
+    client:
+      http-version: HTTP_1_1
+      connect-timeout: 30s
+      read-timeout: 30s
+      ssl:
+        insecure-trust-all-certificates: true
+      pool:
+        enabled: true
+        max-connections: 10
+        max-pending-acquires: 50
+        acquire-timeout: 30s
+      exception-on-error-status: false
     services:
       translation:
         url: https://openrouter.ai/api/v1
 
 datasources:
   default:
-    url: jdbc:mariadb://localhost:3306/secman
+    url: jdbc:mariadb://localhost:3306/secman?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&autoReconnect=true&useUnicode=true&characterEncoding=UTF-8
     driverClassName: org.mariadb.jdbc.Driver
     username: ${DB_USERNAME:secman}
     password: ${DB_PASSWORD:CHANGEME}
+    hikari:
+      connection-timeout: 20000
+      validation-timeout: 5000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      maximum-pool-size: 5
+      minimum-idle: 2
+      connection-test-query: "SELECT 1"
+      leak-detection-threshold: 60000
     
 jpa:
   default:
@@ -82,3 +130,6 @@ logger:
   levels:
     com.secman: DEBUG
     io.micronaut.security: DEBUG
+    io.micronaut.data: DEBUG
+    org.hibernate: INFO
+    com.zaxxer.hikari: DEBUG

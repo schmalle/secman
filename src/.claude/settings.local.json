@@ -31,7 +31,10 @@
       "Bash(gtimeout:*)",
       "Bash(cat:*)",
       "Bash(./scripts/test-api-compatibility.sh:*)",
-      "Bash(/Users/flake/sources/misc/secman/scripts/validate-migration-completion.sh)"
+      "Bash(/Users/flake/sources/misc/secman/scripts/validate-migration-completion.sh)",
+      "Bash(brew services:*)",
+      "Bash(mariadb:*)",
+      "Bash(open http://localhost:4321)"
     ],
     "deny": []
   }

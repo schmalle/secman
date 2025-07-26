@@ -75,8 +75,8 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter-api")
     testImplementation("org.junit.jupiter:junit-jupiter-engine")
     testImplementation("org.mockito:mockito-core")
+    testImplementation("org.mockito:mockito-junit-jupiter")
     testImplementation("io.mockk:mockk:1.13.14")
-    testImplementation("com.h2database:h2:2.2.224")
     
     // KSP
     ksp("io.micronaut:micronaut-http-validation")
