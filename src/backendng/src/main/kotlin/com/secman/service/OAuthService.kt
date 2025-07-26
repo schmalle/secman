@@ -1,0 +1,247 @@
+package com.secman.service
+
+import com.secman.domain.IdentityProvider
+import com.secman.domain.OAuthState
+import com.secman.domain.User
+import com.secman.repository.IdentityProviderRepository
+import com.secman.repository.OAuthStateRepository
+import com.secman.repository.UserRepository
+import io.micronaut.http.HttpRequest
+import io.micronaut.http.client.HttpClient
+import io.micronaut.http.client.annotation.Client
+import io.micronaut.security.token.generator.TokenGenerator
+import jakarta.inject.Singleton
+import org.slf4j.LoggerFactory
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
+import java.time.LocalDateTime
+import java.util.*
+
+@Singleton
+class OAuthService(
+    private val identityProviderRepository: IdentityProviderRepository,
+    private val oauthStateRepository: OAuthStateRepository,
+    private val userRepository: UserRepository,
+    private val tokenGenerator: TokenGenerator,
+    @Client("\${oauth.http-client.url:http://localhost}") private val httpClient: HttpClient
+) {
+    
+    private val logger = LoggerFactory.getLogger(OAuthService::class.java)
+    private val passwordEncoder = BCryptPasswordEncoder()
+
+    /**
+     * Build authorization URL for OAuth provider
+     */
+    fun buildAuthorizationUrl(providerId: Long, baseUrl: String): String? {
+        val providerOpt = identityProviderRepository.findById(providerId)
+        if (!providerOpt.isPresent) {
+            logger.error("Identity provider not found: {}", providerId)
+            return null
+        }
+
+        val provider = providerOpt.get()
+        if (!provider.enabled) {
+            logger.error("Identity provider is disabled: {}", provider.name)
+            return null
+        }
+
+        // Clean up expired states
+        oauthStateRepository.deleteExpiredStates()
+
+        // Generate state parameter
+        val state = generateState()
+        val redirectUri = "$baseUrl/oauth/callback/$providerId"
+
+        // Save state
+        val oauthState = OAuthState(
+            stateValue = state,
+            providerId = providerId,
+            redirectUri = redirectUri
+        )
+        oauthStateRepository.save(oauthState)
+
+        // Build authorization URL
+        val authUrl = provider.authorizationUrl ?: return null
+        val clientId = URLEncoder.encode(provider.clientId, StandardCharsets.UTF_8)
+        val encodedRedirectUri = URLEncoder.encode(redirectUri, StandardCharsets.UTF_8)
+        val encodedState = URLEncoder.encode(state, StandardCharsets.UTF_8)
+        val scopes = URLEncoder.encode(provider.scopes ?: "user:email", StandardCharsets.UTF_8)
+
+        return "$authUrl?client_id=$clientId&redirect_uri=$encodedRedirectUri&scope=$scopes&state=$encodedState&response_type=code"
+    }
+
+    /**
+     * Handle OAuth callback and exchange code for token
+     */
+    fun handleCallback(providerId: Long, code: String, state: String): CallbackResult {
+        // Validate state
+        val stateOpt = oauthStateRepository.findByStateValue(state)
+        if (!stateOpt.isPresent) {
+            logger.error("Invalid OAuth state: {}", state)
+            return CallbackResult.Error("Invalid or expired state parameter")
+        }
+
+        val oauthState = stateOpt.get()
+        if (oauthState.providerId != providerId) {
+            logger.error("State provider mismatch: expected {}, got {}", oauthState.providerId, providerId)
+            return CallbackResult.Error("State provider mismatch")
+        }
+
+        if (oauthState.expiresAt.isBefore(LocalDateTime.now())) {
+            logger.error("Expired OAuth state: {}", state)
+            oauthStateRepository.deleteByStateValue(state)
+            return CallbackResult.Error("Expired state parameter")
+        }
+
+        // Remove used state
+        oauthStateRepository.deleteByStateValue(state)
+
+        val providerOpt = identityProviderRepository.findById(providerId)
+        if (!providerOpt.isPresent) {
+            logger.error("Identity provider not found: {}", providerId)
+            return CallbackResult.Error("Identity provider not found")
+        }
+
+        val provider = providerOpt.get()
+
+        try {
+            // Exchange code for access token
+            val tokenResponse = exchangeCodeForToken(provider, code, oauthState.redirectUri!!)
+            if (tokenResponse == null) {
+                return CallbackResult.Error("Failed to exchange code for token")
+            }
+
+            // Get user info
+            val userInfo = getUserInfo(provider, tokenResponse.accessToken)
+            if (userInfo == null) {
+                return CallbackResult.Error("Failed to retrieve user information")
+            }
+
+            // Find or create user
+            val user = findOrCreateUser(provider, userInfo)
+            if (user == null) {
+                return CallbackResult.Error("Failed to create or find user")
+            }
+
+            // Generate JWT token
+            val userDetails = mapOf(
+                "sub" to user.username,
+                "username" to user.username,
+                "email" to user.email,
+                "roles" to user.roles.map { it.name },
+                "iss" to "secman-backend-ng",
+                "userId" to user.id.toString()
+            )
+
+            val tokenOptional = tokenGenerator.generateToken(userDetails)
+            if (tokenOptional.isEmpty) {
+                return CallbackResult.Error("Failed to generate JWT token")
+            }
+
+            return CallbackResult.Success(
+                token = tokenOptional.get(),
+                user = UserInfo(
+                    id = user.id!!,
+                    username = user.username,
+                    email = user.email,
+                    roles = user.roles.map { it.name }
+                )
+            )
+
+        } catch (e: Exception) {
+            logger.error("OAuth callback error: {}", e.message, e)
+            return CallbackResult.Error("OAuth processing failed: ${e.message}")
+        }
+    }
+
+    private fun generateState(): String {
+        return UUID.randomUUID().toString().replace("-", "")
+    }
+
+    private fun exchangeCodeForToken(provider: IdentityProvider, code: String, redirectUri: String): TokenResponse? {
+        // This is a simplified implementation - in a real system you would make HTTP calls
+        // For now, we'll simulate a successful token exchange for GitHub
+        if (provider.name.lowercase().contains("github")) {
+            return TokenResponse(
+                accessToken = "simulated_access_token_${UUID.randomUUID()}",
+                tokenType = "bearer",
+                scope = provider.scopes ?: "user:email"
+            )
+        }
+        return null
+    }
+
+    private fun getUserInfo(provider: IdentityProvider, accessToken: String): UserInfoResponse? {
+        // This is a simplified implementation - in a real system you would make HTTP calls
+        // For now, we'll simulate user info for GitHub
+        if (provider.name.lowercase().contains("github")) {
+            return UserInfoResponse(
+                id = "github_user_${System.currentTimeMillis()}",
+                login = "github_user",
+                email = "github.user@example.com",
+                name = "GitHub User"
+            )
+        }
+        return null
+    }
+
+    private fun findOrCreateUser(provider: IdentityProvider, userInfo: UserInfoResponse): User? {
+        val email = userInfo.email ?: return null
+        
+        // Try to find existing user by email
+        val existingUserOpt = userRepository.findByEmail(email)
+        if (existingUserOpt.isPresent) {
+            return existingUserOpt.get()
+        }
+
+        // Auto-provision user if enabled
+        if (!provider.autoProvision) {
+            logger.warn("User not found and auto-provisioning is disabled for provider: {}", provider.name)
+            return null
+        }
+
+        // Create new user
+        val username = userInfo.login ?: userInfo.email.substringBefore("@")
+        val name = userInfo.name ?: username
+
+        val newUser = User(
+            username = username,
+            email = email,
+            passwordHash = passwordEncoder.encode(UUID.randomUUID().toString()), // Random password for OAuth users
+            roles = mutableSetOf(User.Role.USER) // Default role
+        )
+
+        return try {
+            userRepository.save(newUser)
+        } catch (e: Exception) {
+            logger.error("Failed to create user: {}", e.message, e)
+            null
+        }
+    }
+
+    data class TokenResponse(
+        val accessToken: String,
+        val tokenType: String,
+        val scope: String
+    )
+
+    data class UserInfoResponse(
+        val id: String,
+        val login: String?,
+        val email: String?,
+        val name: String?
+    )
+
+    data class UserInfo(
+        val id: Long,
+        val username: String,
+        val email: String,
+        val roles: List<String>
+    )
+
+    sealed class CallbackResult {
+        data class Success(val token: String, val user: UserInfo) : CallbackResult()
+        data class Error(val message: String) : CallbackResult()
+    }
+}

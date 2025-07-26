@@ -38,8 +38,16 @@ micronaut:
             expiration: 3600
         claims-validators:
           issuer: secman-backend-ng
+    oauth2:
+      enabled: true
     intercept-url-map:
       - pattern: /api/auth/login
+        access:
+          - isAnonymous()
+      - pattern: /api/identity-providers/enabled
+        access:
+          - isAnonymous()
+      - pattern: /oauth/**
         access:
           - isAnonymous()
       - pattern: /health
@@ -55,6 +63,12 @@ micronaut:
     services:
       translation:
         url: https://openrouter.ai/api/v1
+    client:
+      read-timeout: 10s
+      
+oauth:
+  http-client:
+    url: https://api.github.com
 
 datasources:
   default:
