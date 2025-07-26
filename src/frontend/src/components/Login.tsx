@@ -18,6 +18,43 @@ const Login = () => {
 
     useEffect(() => {
         fetchExternalProviders();
+        
+        // Check for OAuth error in URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const oauthError = urlParams.get('error');
+        if (oauthError) {
+            let errorMessage = 'Authentication failed. Please try again.';
+            switch (oauthError) {
+                case 'access_denied':
+                    errorMessage = 'Access denied. Authorization was cancelled.';
+                    break;
+                case 'invalid_state':
+                    errorMessage = 'Invalid state parameter. Please try again.';
+                    break;
+                case 'provider_not_found':
+                    errorMessage = 'Identity provider not found or disabled.';
+                    break;
+                case 'authentication_failed':
+                    errorMessage = 'Authentication failed. Please check your credentials.';
+                    break;
+                case 'token_generation_failed':
+                    errorMessage = 'Failed to generate authentication token.';
+                    break;
+                case 'missing_parameters':
+                    errorMessage = 'Missing required parameters.';
+                    break;
+                case 'missing_data':
+                    errorMessage = 'Missing authentication data.';
+                    break;
+                case 'invalid_response':
+                    errorMessage = 'Invalid authentication response.';
+                    break;
+            }
+            setError(errorMessage);
+            
+            // Clean up URL parameters
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
     }, []);
 
     const fetchExternalProviders = async () => {
