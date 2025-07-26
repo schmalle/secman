@@ -2,17 +2,16 @@ package com.secman.service
 
 import com.secman.domain.Norm
 import com.secman.repository.NormRepository
-import io.micronaut.test.extensions.junit5.annotation.MicronautTest
-import jakarta.inject.Inject
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
 import org.mockito.Mock
 import org.mockito.Mockito.*
-import org.mockito.MockitoAnnotations
+import org.mockito.junit.jupiter.MockitoExtension
 import java.util.*
 
-@MicronautTest
+@ExtendWith(MockitoExtension::class)
 class NormParsingServiceTest {
 
     @Mock
@@ -22,7 +21,6 @@ class NormParsingServiceTest {
 
     @BeforeEach
     fun setup() {
-        MockitoAnnotations.openMocks(this)
         normParsingService = NormParsingService(normRepository)
     }
 
