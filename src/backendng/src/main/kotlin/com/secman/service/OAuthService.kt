@@ -1,5 +1,6 @@
 package com.secman.service
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.secman.domain.IdentityProvider
 import com.secman.domain.OAuthState
 import com.secman.domain.User
@@ -24,7 +25,9 @@ class OAuthService(
     private val oauthStateRepository: OAuthStateRepository,
     private val userRepository: UserRepository,
     private val tokenGenerator: TokenGenerator,
-    @Client("\${oauth.http-client.url:http://localhost}") private val httpClient: HttpClient
+    private val objectMapper: ObjectMapper,
+    @Client("\${oauth.http-client.url:https://api.github.com}") private val githubApiClient: HttpClient,
+    @Client private val genericHttpClient: HttpClient
 ) {
     
     private val logger = LoggerFactory.getLogger(OAuthService::class.java)
@@ -160,30 +163,85 @@ class OAuthService(
     }
 
     private fun exchangeCodeForToken(provider: IdentityProvider, code: String, redirectUri: String): TokenResponse? {
-        // This is a simplified implementation - in a real system you would make HTTP calls
-        // For now, we'll simulate a successful token exchange for GitHub
-        if (provider.name.lowercase().contains("github")) {
-            return TokenResponse(
-                accessToken = "simulated_access_token_${UUID.randomUUID()}",
-                tokenType = "bearer",
-                scope = provider.scopes ?: "user:email"
+        return try {
+            val tokenUrl = provider.tokenUrl ?: return null
+            
+            logger.debug("Exchanging code for token with provider: {}", provider.name)
+            
+            // For GitHub, the token endpoint expects form data
+            val formData = "client_id=${URLEncoder.encode(provider.clientId, StandardCharsets.UTF_8)}" +
+                    "&client_secret=${URLEncoder.encode(provider.clientSecret ?: "", StandardCharsets.UTF_8)}" +
+                    "&code=${URLEncoder.encode(code, StandardCharsets.UTF_8)}" +
+                    "&redirect_uri=${URLEncoder.encode(redirectUri, StandardCharsets.UTF_8)}"
+            
+            val response = genericHttpClient.toBlocking().retrieve(
+                HttpRequest.POST(tokenUrl, formData)
+                    .header("Accept", "application/json")
+                    .header("Content-Type", "application/x-www-form-urlencoded"),
+                String::class.java
             )
+            
+            // Parse JSON response
+            val responseData = parseJsonResponse(response)
+            val accessToken = responseData["access_token"] as? String ?: return null
+            val tokenType = responseData["token_type"] as? String ?: "bearer"
+            val scope = responseData["scope"] as? String ?: provider.scopes ?: ""
+            
+            TokenResponse(
+                accessToken = accessToken,
+                tokenType = tokenType,
+                scope = scope
+            )
+            
+        } catch (e: Exception) {
+            logger.error("Failed to exchange code for token: {}", e.message, e)
+            null
         }
-        return null
     }
 
     private fun getUserInfo(provider: IdentityProvider, accessToken: String): UserInfoResponse? {
-        // This is a simplified implementation - in a real system you would make HTTP calls
-        // For now, we'll simulate user info for GitHub
-        if (provider.name.lowercase().contains("github")) {
-            return UserInfoResponse(
-                id = "github_user_${System.currentTimeMillis()}",
-                login = "github_user",
-                email = "github.user@example.com",
-                name = "GitHub User"
+        return try {
+            val userInfoUrl = provider.userInfoUrl ?: return null
+            
+            logger.debug("Fetching user info from provider: {}", provider.name)
+            
+            val response = githubApiClient.toBlocking().retrieve(
+                HttpRequest.GET<Any>(userInfoUrl)
+                    .header("Authorization", "Bearer $accessToken")
+                    .header("Accept", "application/json")
+                    .header("User-Agent", "SecMan-OAuth-Client"),
+                String::class.java
             )
+            
+            // Parse JSON response
+            val userData = parseJsonResponse(response)
+            
+            // Extract user information (GitHub format)
+            val id = userData["id"]?.toString() ?: return null
+            val login = userData["login"] as? String
+            val email = userData["email"] as? String
+            val name = userData["name"] as? String
+            
+            UserInfoResponse(
+                id = id,
+                login = login,
+                email = email,
+                name = name
+            )
+            
+        } catch (e: Exception) {
+            logger.error("Failed to fetch user info: {}", e.message, e)
+            null
         }
-        return null
+    }
+    
+    private fun parseJsonResponse(response: String): Map<String, Any> {
+        return try {
+            objectMapper.readValue(response, Map::class.java) as Map<String, Any>
+        } catch (e: Exception) {
+            logger.error("Failed to parse JSON response: {}", e.message, e)
+            emptyMap()
+        }
     }
 
     private fun findOrCreateUser(provider: IdentityProvider, userInfo: UserInfoResponse): User? {
