@@ -14,7 +14,7 @@ src/frontend/dist/
 *.log
 /src/backendng/.gradle/
 src/backendng/.gradle
-
+**/**/.gradle
 
 # macOS-specific files
 .DS_Store
