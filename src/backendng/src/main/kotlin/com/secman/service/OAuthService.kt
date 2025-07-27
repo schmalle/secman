@@ -34,6 +34,13 @@ class OAuthService(
     private val passwordEncoder = BCryptPasswordEncoder()
 
     /**
+     * Find OAuth state by state value
+     */
+    fun findStateByValue(stateValue: String): Optional<OAuthState> {
+        return oauthStateRepository.findByStateValue(stateValue)
+    }
+
+    /**
      * Build authorization URL for OAuth provider
      */
     fun buildAuthorizationUrl(providerId: Long, baseUrl: String): String? {
@@ -107,6 +114,10 @@ class OAuthService(
         }
 
         val provider = providerOpt.get()
+        
+        logger.debug("Processing OAuth callback for provider: {}", provider.name)
+        logger.debug("Provider details - ID: {}, Type: {}, Enabled: {}", provider.id, provider.type, provider.enabled)
+        logger.debug("Provider URLs - Auth: {}, Token: {}, UserInfo: {}", provider.authorizationUrl, provider.tokenUrl, provider.userInfoUrl)
 
         try {
             // Exchange code for access token
@@ -167,12 +178,18 @@ class OAuthService(
             val tokenUrl = provider.tokenUrl ?: return null
             
             logger.debug("Exchanging code for token with provider: {}", provider.name)
+            logger.debug("Token URL: {}", tokenUrl)
+            logger.debug("Client ID: {}", provider.clientId)
+            logger.debug("Client Secret configured: {}", !provider.clientSecret.isNullOrEmpty())
+            logger.debug("Redirect URI: {}", redirectUri)
             
             // For GitHub, the token endpoint expects form data
             val formData = "client_id=${URLEncoder.encode(provider.clientId, StandardCharsets.UTF_8)}" +
                     "&client_secret=${URLEncoder.encode(provider.clientSecret ?: "", StandardCharsets.UTF_8)}" +
                     "&code=${URLEncoder.encode(code, StandardCharsets.UTF_8)}" +
                     "&redirect_uri=${URLEncoder.encode(redirectUri, StandardCharsets.UTF_8)}"
+            
+            logger.debug("Form data: {}", formData.replace(Regex("client_secret=[^&]*"), "client_secret=***"))
             
             val response = genericHttpClient.toBlocking().retrieve(
                 HttpRequest.POST(tokenUrl, formData)
@@ -181,8 +198,19 @@ class OAuthService(
                 String::class.java
             )
             
+            logger.debug("Token exchange response: {}", response)
+            
             // Parse JSON response
             val responseData = parseJsonResponse(response)
+            
+            // Check for error in response
+            if (responseData.containsKey("error")) {
+                val error = responseData["error"] as? String
+                val errorDescription = responseData["error_description"] as? String
+                logger.error("OAuth token exchange error: {} - {}", error, errorDescription)
+                return null
+            }
+            
             val accessToken = responseData["access_token"] as? String ?: return null
             val tokenType = responseData["token_type"] as? String ?: "bearer"
             val scope = responseData["scope"] as? String ?: provider.scopes ?: ""
