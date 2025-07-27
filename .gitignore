@@ -1,42 +1,40 @@
-
-
-# Ignore all node_modules folders at any depth
+# Dependencies
 node_modules/
-**/node_modules/
-src/frontend/dist/
-/src/frontend/playwright-report
-/src/frontend/test-results
-/src/frontend/checkin-test-results
-/src/frontend/checkin-test-results.json
-/tests/test-results
-/tests/playwright-report
-/tests/*.log
-*.log
-/src/backendng/.gradle/
-src/backendng/.gradle
-**/**/.gradle
+package-lock.json
 
-# macOS-specific files
-.DS_Store
-**/.DS_Store
-
-
-*.pid
-**/*.pid
-*.log
-**/*.log
-*/*/package-lock.json
-/src/frontend/package-lock.json
-
-
-test-results/.last-run.json
-/.claude
-src/backend/test/controllers/*.bak
-/.serena/cache
-.serena/*
-/scripts/tests/test-results/
-/src/backendng/build/
-src/backendng/.gradle/
-.gradle/
+# Build outputs
 build/
-/src/backendng/.gradle
+dist/
+out/
+
+# Gradle
+.gradle/
+**/build/
+
+# Testing
+test-results/
+playwright-report/
+checkin-test-results/
+checkin-test-results.json
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.pid
+*.bak
+
+# Project specific
+.claude/
+.serena/
