@@ -10,10 +10,10 @@ import java.util.*
 @Repository
 interface OAuthStateRepository : JpaRepository<OAuthState, Long> {
     
-    fun findByStateValue(stateValue: String): Optional<OAuthState>
+    fun findByStateToken(stateToken: String): Optional<OAuthState>
     
     @Query("DELETE FROM OAuthState o WHERE o.expiresAt < :now")
     fun deleteExpiredStates(now: LocalDateTime = LocalDateTime.now())
     
-    fun deleteByStateValue(stateValue: String)
+    fun deleteByStateToken(stateToken: String)
 }

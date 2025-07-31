@@ -31,7 +31,9 @@
       "Bash(gtimeout:*)",
       "Bash(cat:*)",
       "Bash(./scripts/test-api-compatibility.sh:*)",
-      "Bash(/Users/flake/sources/misc/secman/scripts/validate-migration-completion.sh)"
+      "Bash(/Users/flake/sources/misc/secman/scripts/validate-migration-completion.sh)",
+      "WebFetch(domain:localhost)",
+      "Bash(open http://localhost:4322/login)"
     ],
     "deny": []
   }

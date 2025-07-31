@@ -10,8 +10,8 @@ data class OAuthState(
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     var id: Long? = null,
 
-    @Column(name = "state_value", nullable = false, unique = true)
-    var stateValue: String = "",
+    @Column(name = "state_token", nullable = false, unique = true)
+    var stateToken: String = "",
 
     @Column(name = "provider_id", nullable = false)
     var providerId: Long = 0,

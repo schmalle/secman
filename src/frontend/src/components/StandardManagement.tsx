@@ -311,6 +311,7 @@ const StandardManagement: React.FC = () => {
                             {standard.createdAt ? new Date(standard.createdAt).toLocaleDateString() : '-'}
                           </td>
                           <td>
+                            <a href={`/standards/${standard.id}`} className="btn btn-sm btn-outline-info me-2">View</a>
                             <button onClick={() => handleEdit(standard)} className="btn btn-sm btn-outline-primary me-2">Edit</button>
                             <button onClick={() => standard.id && handleDelete(standard.id)} className="btn btn-sm btn-outline-danger">Delete</button>
                           </td>

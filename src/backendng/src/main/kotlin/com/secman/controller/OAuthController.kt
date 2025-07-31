@@ -1,9 +1,12 @@
 package com.secman.controller
 
 import com.secman.service.OAuthService
+import io.micronaut.context.annotation.Value
 import io.micronaut.http.HttpRequest
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.annotation.*
+import io.micronaut.scheduling.TaskExecutors
+import io.micronaut.scheduling.annotation.ExecuteOn
 import io.micronaut.security.annotation.Secured
 import io.micronaut.security.rules.SecurityRule
 import io.micronaut.serde.annotation.Serdeable
@@ -14,7 +17,8 @@ import java.time.LocalDateTime
 @Controller("/oauth")
 @Secured(SecurityRule.IS_ANONYMOUS)
 class OAuthController(
-    private val oauthService: OAuthService
+    private val oauthService: OAuthService,
+    @Value("\${app.frontend.base-url}") private val frontendBaseUrl: String
 ) {
     
     private val logger = LoggerFactory.getLogger(OAuthController::class.java)
@@ -60,6 +64,7 @@ class OAuthController(
      * Handle OAuth callback without provider ID - fallback for external OAuth providers
      */
     @Get("/callback")
+    @ExecuteOn(TaskExecutors.BLOCKING)
     fun callbackWithoutProvider(
         @QueryValue code: String?,
         @QueryValue state: String?,
@@ -69,20 +74,30 @@ class OAuthController(
             // Check for OAuth error
             if (error != null) {
                 logger.error("OAuth error: {}", error)
-                return HttpResponse.redirect<Any>(URI.create("/login?error=${java.net.URLEncoder.encode("OAuth authentication failed: $error", "UTF-8")}"))
+                val errorMessage = when (error) {
+                    "access_denied" -> "Access was denied. Please try again if you wish to log in."
+                    "unauthorized_client" -> "OAuth application is not properly configured. Please contact support."
+                    "invalid_request" -> "Invalid OAuth request. Please try logging in again."
+                    "unsupported_response_type" -> "OAuth configuration error. Please contact support."
+                    "invalid_scope" -> "Requested permissions are not available. Please contact support."
+                    "server_error" -> "OAuth provider encountered an error. Please try again later."
+                    "temporarily_unavailable" -> "OAuth service is temporarily unavailable. Please try again later."
+                    else -> "OAuth authentication failed. Please try again."
+                }
+                return HttpResponse.redirect<Any>(URI.create("$frontendBaseUrl/login?error=${java.net.URLEncoder.encode(errorMessage, "UTF-8")}"))
             }
 
             // Validate required parameters
             if (code.isNullOrBlank() || state.isNullOrBlank()) {
                 logger.error("Missing required OAuth parameters")
-                return HttpResponse.redirect<Any>(URI.create("/login?error=${java.net.URLEncoder.encode("Invalid OAuth callback parameters", "UTF-8")}"))
+                return HttpResponse.redirect<Any>(URI.create("$frontendBaseUrl/login?error=${java.net.URLEncoder.encode("Invalid OAuth callback parameters", "UTF-8")}"))
             }
 
             // Find provider ID from state
             val stateOpt = oauthService.findStateByValue(state)
             if (!stateOpt.isPresent) {
-                logger.error("Invalid OAuth state: {}", state)
-                return HttpResponse.redirect<Any>(URI.create("/login?error=${java.net.URLEncoder.encode("Invalid or expired state parameter", "UTF-8")}"))
+                logger.error("Invalid OAuth state")
+                return HttpResponse.redirect<Any>(URI.create("$frontendBaseUrl/login?error=${java.net.URLEncoder.encode("Invalid or expired state parameter", "UTF-8")}"))
             }
 
             val providerId = stateOpt.get().providerId
@@ -94,88 +109,43 @@ class OAuthController(
                 is OAuthService.CallbackResult.Success -> {
                     logger.info("OAuth login successful for user: {}", result.user.username)
                     
-                    // Create a successful login response page or redirect to frontend with token
-                    val encodedToken = java.net.URLEncoder.encode(result.token, "UTF-8")
-                    val encodedUser = java.net.URLEncoder.encode(
-                        """{"id":${result.user.id},"username":"${result.user.username}","email":"${result.user.email}","roles":${result.user.roles.joinToString(",", "[\"", "\"]") { it }}}""",
-                        "UTF-8"
-                    )
+                    // Use secure session/cookie storage instead of URL parameters
+                    val userInfoJson = """{"id":${result.user.id},"username":"${result.user.username}","email":"${result.user.email}","roles":${result.user.roles.joinToString(",", "[\"", "\"]") { it }}}"""
                     
-                    HttpResponse.redirect<Any>(URI.create("/login/success?token=$encodedToken&user=$encodedUser"))
+                    HttpResponse.redirect<Any>(URI.create("$frontendBaseUrl/login/success"))
+                        .header("Set-Cookie", "auth_token=${result.token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=3600")
+                        .header("Set-Cookie", "user_info=${java.net.URLEncoder.encode(userInfoJson, "UTF-8")}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=3600")
                 }
                 
                 is OAuthService.CallbackResult.Error -> {
                     logger.error("OAuth callback error: {}", result.message)
-                    HttpResponse.redirect<Any>(URI.create("/login?error=${java.net.URLEncoder.encode(result.message, "UTF-8")}"))
+                    HttpResponse.redirect<Any>(URI.create("$frontendBaseUrl/login?error=${java.net.URLEncoder.encode(result.message, "UTF-8")}"))
                 }
             }
         } catch (e: Exception) {
             logger.error("OAuth callback processing error: {}", e.message, e)
-            HttpResponse.redirect<Any>(URI.create("/login?error=${java.net.URLEncoder.encode("OAuth processing failed", "UTF-8")}"))
+            HttpResponse.redirect<Any>(URI.create("$frontendBaseUrl/login?error=${java.net.URLEncoder.encode("OAuth processing failed", "UTF-8")}"))
         }
     }
 
-    /**
-     * Handle OAuth callback
-     */
-    @Get("/callback/{providerId}")
-    fun callback(
-        @PathVariable providerId: Long,
-        @QueryValue code: String?,
-        @QueryValue state: String?,
-        @QueryValue error: String?
-    ): HttpResponse<*> {
-        return try {
-            // Check for OAuth error
-            if (error != null) {
-                logger.error("OAuth error for provider {}: {}", providerId, error)
-                return HttpResponse.redirect<Any>(URI.create("/login?error=${java.net.URLEncoder.encode("OAuth authentication failed: $error", "UTF-8")}"))
-            }
-
-            // Validate required parameters
-            if (code.isNullOrBlank() || state.isNullOrBlank()) {
-                logger.error("Missing required OAuth parameters for provider: {}", providerId)
-                return HttpResponse.redirect<Any>(URI.create("/login?error=${java.net.URLEncoder.encode("Invalid OAuth callback parameters", "UTF-8")}"))
-            }
-
-            // Process OAuth callback
-            val result = oauthService.handleCallback(providerId, code, state)
-            
-            when (result) {
-                is OAuthService.CallbackResult.Success -> {
-                    logger.info("OAuth login successful for user: {}", result.user.username)
-                    
-                    // Create a successful login response page or redirect to frontend with token
-                    // For now, redirect to frontend with success parameters
-                    val encodedToken = java.net.URLEncoder.encode(result.token, "UTF-8")
-                    val encodedUser = java.net.URLEncoder.encode(
-                        """{"id":${result.user.id},"username":"${result.user.username}","email":"${result.user.email}","roles":${result.user.roles.joinToString(",", "[\"", "\"]") { it }}}""",
-                        "UTF-8"
-                    )
-                    
-                    HttpResponse.redirect<Any>(URI.create("/login/success?token=$encodedToken&user=$encodedUser"))
-                }
-                
-                is OAuthService.CallbackResult.Error -> {
-                    logger.error("OAuth callback error for provider {}: {}", providerId, result.message)
-                    HttpResponse.redirect<Any>(URI.create("/login?error=${java.net.URLEncoder.encode(result.message, "UTF-8")}"))
-                }
-            }
-        } catch (e: Exception) {
-            logger.error("OAuth callback processing error for provider {}: {}", providerId, e.message, e)
-            HttpResponse.redirect<Any>(URI.create("/login?error=${java.net.URLEncoder.encode("OAuth processing failed", "UTF-8")}"))
-        }
-    }
 
     /**
      * API endpoint for OAuth callback (for AJAX requests)
      */
-    @Post("/callback/{providerId}")
+    @Post("/callback")
+    @ExecuteOn(TaskExecutors.BLOCKING)
     fun callbackApi(
-        @PathVariable providerId: Long,
         @Body callbackRequest: CallbackRequest
     ): HttpResponse<*> {
         return try {
+            // Find provider ID from state
+            val stateOpt = oauthService.findStateByValue(callbackRequest.state)
+            if (!stateOpt.isPresent) {
+                logger.error("Invalid OAuth state")
+                return HttpResponse.badRequest(ErrorResponse("Invalid or expired state parameter"))
+            }
+
+            val providerId = stateOpt.get().providerId
             val result = oauthService.handleCallback(providerId, callbackRequest.code, callbackRequest.state)
             
             when (result) {
@@ -191,15 +161,16 @@ class OAuthController(
                     )
                     
                     HttpResponse.ok(response)
+                        .header("Set-Cookie", "auth_token=${result.token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=3600")
                 }
                 
                 is OAuthService.CallbackResult.Error -> {
-                    logger.error("OAuth API callback error for provider {}: {}", providerId, result.message)
+                    logger.error("OAuth API callback error: {}", result.message)
                     HttpResponse.badRequest(ErrorResponse(result.message))
                 }
             }
         } catch (e: Exception) {
-            logger.error("OAuth API callback processing error for provider {}: {}", providerId, e.message, e)
+            logger.error("OAuth API callback processing error: {}", e.message, e)
             HttpResponse.serverError(ErrorResponse("OAuth processing failed: ${e.message}"))
         }
     }

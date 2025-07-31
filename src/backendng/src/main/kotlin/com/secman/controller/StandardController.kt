@@ -1,8 +1,10 @@
 package com.secman.controller
 
 import com.secman.domain.Standard
+import com.secman.domain.Requirement
 import com.secman.repository.StandardRepository
 import com.secman.repository.UseCaseRepository
+import com.secman.repository.RequirementRepository
 import io.micronaut.core.annotation.Nullable
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.HttpStatus
@@ -24,6 +26,7 @@ import org.slf4j.LoggerFactory
 open class StandardController(
     private val standardRepository: StandardRepository,
     private val useCaseRepository: UseCaseRepository,
+    private val requirementRepository: RequirementRepository,
     private val entityManager: EntityManager
 ) {
     
@@ -223,6 +226,41 @@ open class StandardController(
                     .body(ErrorResponse("CONFLICT", "Cannot delete standard - it may be in use"))
             }
             
+            HttpResponse.serverError<Any>()
+        }
+    }
+
+    @Get("/{id}/requirements")
+    @Transactional(readOnly = true)
+    open fun getStandardRequirements(id: Long): HttpResponse<*> {
+        return try {
+            log.debug("Fetching requirements for standard with id: {}", id)
+            
+            // First get the standard with its use cases
+            val standard = entityManager.createQuery(
+                "SELECT s FROM Standard s LEFT JOIN FETCH s.useCases WHERE s.id = :id",
+                Standard::class.java
+            ).setParameter("id", id).resultList.firstOrNull()
+            
+            if (standard == null) {
+                log.debug("Standard not found with id: {}", id)
+                return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Standard not found"))
+            }
+            
+            // Get all requirements for the use cases associated with this standard
+            val requirements = mutableListOf<Requirement>()
+            standard.useCases.forEach { useCase ->
+                val useCaseRequirements = requirementRepository.findByUsecaseId(useCase.id!!)
+                requirements.addAll(useCaseRequirements)
+            }
+            
+            // Remove duplicates (in case a requirement is associated with multiple use cases)
+            val uniqueRequirements = requirements.distinctBy { it.id }
+            
+            log.debug("Found {} requirements for standard: {}", uniqueRequirements.size, standard.name)
+            HttpResponse.ok(uniqueRequirements)
+        } catch (e: Exception) {
+            log.error("Error fetching requirements for standard with id: {}", id, e)
             HttpResponse.serverError<Any>()
         }
     }

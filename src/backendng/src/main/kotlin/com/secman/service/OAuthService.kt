@@ -11,6 +11,7 @@ import io.micronaut.http.HttpRequest
 import io.micronaut.http.client.HttpClient
 import io.micronaut.http.client.annotation.Client
 import io.micronaut.security.token.generator.TokenGenerator
+import io.micronaut.transaction.annotation.Transactional
 import jakarta.inject.Singleton
 import org.slf4j.LoggerFactory
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
@@ -20,7 +21,7 @@ import java.time.LocalDateTime
 import java.util.*
 
 @Singleton
-class OAuthService(
+open class OAuthService(
     private val identityProviderRepository: IdentityProviderRepository,
     private val oauthStateRepository: OAuthStateRepository,
     private val userRepository: UserRepository,
@@ -36,14 +37,15 @@ class OAuthService(
     /**
      * Find OAuth state by state value
      */
-    fun findStateByValue(stateValue: String): Optional<OAuthState> {
-        return oauthStateRepository.findByStateValue(stateValue)
+    fun findStateByValue(stateToken: String): Optional<OAuthState> {
+        return oauthStateRepository.findByStateToken(stateToken)
     }
 
     /**
      * Build authorization URL for OAuth provider
      */
-    fun buildAuthorizationUrl(providerId: Long, baseUrl: String): String? {
+    @Transactional
+    open fun buildAuthorizationUrl(providerId: Long, baseUrl: String): String? {
         val providerOpt = identityProviderRepository.findById(providerId)
         if (!providerOpt.isPresent) {
             logger.error("Identity provider not found: {}", providerId)
@@ -61,15 +63,22 @@ class OAuthService(
 
         // Generate state parameter
         val state = generateState()
-        val redirectUri = "$baseUrl/oauth/callback/$providerId"
+        val redirectUri = "$baseUrl/oauth/callback"
 
         // Save state
         val oauthState = OAuthState(
-            stateValue = state,
+            stateToken = state,
             providerId = providerId,
             redirectUri = redirectUri
         )
-        oauthStateRepository.save(oauthState)
+        val savedState = oauthStateRepository.save(oauthState)
+        
+        // Verify state was actually saved
+        val verificationState = oauthStateRepository.findByStateToken(state)
+        if (!verificationState.isPresent) {
+            logger.error("Failed to verify saved OAuth state")
+            return null
+        }
 
         // Build authorization URL
         val authUrl = provider.authorizationUrl ?: return null
@@ -84,11 +93,12 @@ class OAuthService(
     /**
      * Handle OAuth callback and exchange code for token
      */
-    fun handleCallback(providerId: Long, code: String, state: String): CallbackResult {
+    @Transactional
+    open fun handleCallback(providerId: Long, code: String, state: String): CallbackResult {
         // Validate state
-        val stateOpt = oauthStateRepository.findByStateValue(state)
+        val stateOpt = oauthStateRepository.findByStateToken(state)
         if (!stateOpt.isPresent) {
-            logger.error("Invalid OAuth state: {}", state)
+            logger.error("OAuth state not found in database")
             return CallbackResult.Error("Invalid or expired state parameter")
         }
 
@@ -99,13 +109,10 @@ class OAuthService(
         }
 
         if (oauthState.expiresAt.isBefore(LocalDateTime.now())) {
-            logger.error("Expired OAuth state: {}", state)
-            oauthStateRepository.deleteByStateValue(state)
+            logger.error("Expired OAuth state")
+            oauthStateRepository.deleteByStateToken(state)
             return CallbackResult.Error("Expired state parameter")
         }
-
-        // Remove used state
-        oauthStateRepository.deleteByStateValue(state)
 
         val providerOpt = identityProviderRepository.findById(providerId)
         if (!providerOpt.isPresent) {
@@ -116,26 +123,27 @@ class OAuthService(
         val provider = providerOpt.get()
         
         logger.debug("Processing OAuth callback for provider: {}", provider.name)
-        logger.debug("Provider details - ID: {}, Type: {}, Enabled: {}", provider.id, provider.type, provider.enabled)
-        logger.debug("Provider URLs - Auth: {}, Token: {}, UserInfo: {}", provider.authorizationUrl, provider.tokenUrl, provider.userInfoUrl)
 
         try {
             // Exchange code for access token
             val tokenResponse = exchangeCodeForToken(provider, code, oauthState.redirectUri!!)
             if (tokenResponse == null) {
-                return CallbackResult.Error("Failed to exchange code for token")
+                oauthStateRepository.deleteByStateToken(state)
+                return CallbackResult.Error("Unable to authenticate with ${provider.name}. Please try again.")
             }
 
             // Get user info
             val userInfo = getUserInfo(provider, tokenResponse.accessToken)
             if (userInfo == null) {
-                return CallbackResult.Error("Failed to retrieve user information")
+                oauthStateRepository.deleteByStateToken(state)
+                return CallbackResult.Error("Unable to retrieve user information from ${provider.name}. Please try again.")
             }
 
             // Find or create user
             val user = findOrCreateUser(provider, userInfo)
             if (user == null) {
-                return CallbackResult.Error("Failed to create or find user")
+                oauthStateRepository.deleteByStateToken(state)
+                return CallbackResult.Error("Unable to create user account. Please contact support if this persists.")
             }
 
             // Generate JWT token
@@ -150,9 +158,13 @@ class OAuthService(
 
             val tokenOptional = tokenGenerator.generateToken(userDetails)
             if (tokenOptional.isEmpty) {
-                return CallbackResult.Error("Failed to generate JWT token")
+                oauthStateRepository.deleteByStateToken(state)
+                return CallbackResult.Error("Unable to complete login process. Please try again.")
             }
 
+            // Clean up used state only after successful processing
+            oauthStateRepository.deleteByStateToken(state)
+            
             return CallbackResult.Success(
                 token = tokenOptional.get(),
                 user = UserInfo(
@@ -165,6 +177,8 @@ class OAuthService(
 
         } catch (e: Exception) {
             logger.error("OAuth callback error: {}", e.message, e)
+            // Clean up state on error to prevent accumulation
+            oauthStateRepository.deleteByStateToken(state)
             return CallbackResult.Error("OAuth processing failed: ${e.message}")
         }
     }
@@ -178,10 +192,6 @@ class OAuthService(
             val tokenUrl = provider.tokenUrl ?: return null
             
             logger.debug("Exchanging code for token with provider: {}", provider.name)
-            logger.debug("Token URL: {}", tokenUrl)
-            logger.debug("Client ID: {}", provider.clientId)
-            logger.debug("Client Secret configured: {}", !provider.clientSecret.isNullOrEmpty())
-            logger.debug("Redirect URI: {}", redirectUri)
             
             // For GitHub, the token endpoint expects form data
             val formData = "client_id=${URLEncoder.encode(provider.clientId, StandardCharsets.UTF_8)}" +
@@ -189,7 +199,6 @@ class OAuthService(
                     "&code=${URLEncoder.encode(code, StandardCharsets.UTF_8)}" +
                     "&redirect_uri=${URLEncoder.encode(redirectUri, StandardCharsets.UTF_8)}"
             
-            logger.debug("Form data: {}", formData.replace(Regex("client_secret=[^&]*"), "client_secret=***"))
             
             val response = genericHttpClient.toBlocking().retrieve(
                 HttpRequest.POST(tokenUrl, formData)
@@ -198,7 +207,6 @@ class OAuthService(
                 String::class.java
             )
             
-            logger.debug("Token exchange response: {}", response)
             
             // Parse JSON response
             val responseData = parseJsonResponse(response)
@@ -231,7 +239,6 @@ class OAuthService(
         return try {
             val userInfoUrl = provider.userInfoUrl ?: return null
             
-            logger.debug("Fetching user info from provider: {}", provider.name)
             
             val response = githubApiClient.toBlocking().retrieve(
                 HttpRequest.GET<Any>(userInfoUrl)
