@@ -261,7 +261,7 @@ const ReleaseManagement = () => {
                             <p className="text-muted">Manage system versions and releases</p>
                         </div>
                         <button 
-                            className="btn btn-primary"
+                            className="btn btn-outline-primary"
                             onClick={() => setShowCreateModal(true)}
                         >
                             <i className="bi bi-plus-circle me-2"></i>Create New Release
@@ -513,7 +513,7 @@ const ReleaseManagement = () => {
                                 </button>
                                 <button 
                                     type="button" 
-                                    className="btn btn-primary"
+                                    className="btn btn-success"
                                     onClick={handleCreateRelease}
                                     disabled={!formData.version || !formData.name || validateVersion(formData.version) !== null}
                                 >
@@ -597,7 +597,7 @@ const ReleaseManagement = () => {
                                 </button>
                                 <button 
                                     type="button" 
-                                    className="btn btn-primary"
+                                    className="btn btn-success"
                                     onClick={handleEditRelease}
                                     disabled={!formData.version || !formData.name}
                                 >

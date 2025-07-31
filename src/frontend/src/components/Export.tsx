@@ -380,7 +380,7 @@ const Export = () => {
                             <i className="bi bi-file-earmark-word text-primary mb-2" style={{fontSize: '2rem'}}></i>
                             <h6 className="card-title mb-2">Word - Filtered</h6>
                             <button
-                                className="btn btn-primary btn-sm w-100"
+                                className="btn btn-outline-primary btn-sm w-100"
                                 onClick={handleExportByUseCase}
                                 disabled={!selectedUseCase || isExporting}
                             >

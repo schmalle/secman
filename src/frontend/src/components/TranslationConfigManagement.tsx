@@ -183,7 +183,7 @@ const TranslationConfigManagement: React.FC = () => {
           <div className="d-flex justify-content-between align-items-center mb-4">
             <h2>Translation Configuration Management</h2>
             <button
-              className="btn btn-primary"
+              className="btn btn-outline-primary"
               onClick={() => {
                 if (showForm) {
                   resetForm();
