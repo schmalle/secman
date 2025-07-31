@@ -334,14 +334,14 @@ export default function RequirementManagement() {
                         <h2>Requirement Management</h2>
                         <div className="d-flex gap-2">
                             <button 
-                                className="btn btn-primary" 
+                                className="btn btn-outline-primary" 
                                 onClick={() => setIsAddingRequirement(!isAddingRequirement)}
                             >
                                 {isAddingRequirement ? 'Cancel' : 'Add Requirement'}
                             </button>
                             {requirements.length > 0 && (
                                 <button 
-                                    className="btn btn-info" 
+                                    className="btn btn-outline-info" 
                                     onClick={handleMissingMappings}
                                     title="AI-powered mapping to NIST 800-53, ISO 27001, and IEC 62443"
                                     disabled={isMappingInProgress || isDeleting}
@@ -358,7 +358,7 @@ export default function RequirementManagement() {
                             )}
                             {requirements.length > 0 && (
                                 <button 
-                                    className="btn btn-danger" 
+                                    className="btn btn-outline-warning" 
                                     onClick={() => setShowFirstDeleteModal(true)}
                                     title="Delete all requirements"
                                     disabled={isDeleting || isMappingInProgress}
