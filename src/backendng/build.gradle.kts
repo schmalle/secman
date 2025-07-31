@@ -60,7 +60,7 @@ dependencies {
     
     // Password encoding
     implementation("org.springframework.security:spring-security-crypto:6.4.2")
-    implementation("commons-logging:commons-logging:1.3.4")
+    implementation("commons-logging:commons-logging:1.3.5")
     
     // Document generation (Apache POI)
     implementation("org.apache.poi:poi-ooxml:5.4.0")
