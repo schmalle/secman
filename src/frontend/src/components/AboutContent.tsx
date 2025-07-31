@@ -55,7 +55,7 @@ const AboutContent: React.FC = () => {
               <div>
                 <h6 className="fw-bold">Backend</h6>
                 <ul className="list-unstyled small">
-                  <li><i className="bi bi-arrow-right me-2"></i>Play Framework (Scala)</li>
+                  <li><i className="bi bi-arrow-right me-2"></i>Micronaut Framework (Kotlin)</li>
                   <li><i className="bi bi-arrow-right me-2"></i>JPA/Hibernate ORM</li>
                   <li><i className="bi bi-arrow-right me-2"></i>MariaDB Database</li>
                   <li><i className="bi bi-arrow-right me-2"></i>RESTful API</li>
@@ -83,9 +83,9 @@ const AboutContent: React.FC = () => {
                 </div>
                 <div className="col-12 mb-2">
                   <div className="text-center p-2 border rounded bg-light">
-                    <small className="fw-bold">Backend API (Port 9001)</small>
+                    <small className="fw-bold">Backend API (Port 8080)</small>
                     <br/>
-                    <small className="text-muted">Play Framework</small>
+                    <small className="text-muted">Micronaut Framework</small>
                   </div>
                 </div>
                 <div className="col-12">
