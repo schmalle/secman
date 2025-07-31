@@ -148,7 +148,7 @@ const NormManagement: React.FC = () => {
             <h2>Norm Management</h2>
             <div className="d-flex gap-2">
               <button 
-                className="btn btn-primary" 
+                className="btn btn-outline-primary" 
                 onClick={() => setIsAddingNorm(!isAddingNorm)}
               >
                 {isAddingNorm ? 'Cancel' : 'Add Norm'}

@@ -69,7 +69,7 @@ const AdminPage = () => {
                                 User Management
                             </h5>
                             <p className="card-text">Manage user accounts, roles, and permissions.</p>
-                            <a href="/admin/user-management" className="btn btn-primary">
+                            <a href="/admin/user-management" className="btn btn-outline-primary">
                                 Manage Users
                             </a>
                         </div>
@@ -84,7 +84,7 @@ const AdminPage = () => {
                                 Email Configuration
                             </h5>
                             <p className="card-text">Configure email settings and notifications.</p>
-                            <a href="/admin/email-config" className="btn btn-primary">
+                            <a href="/admin/email-config" className="btn btn-outline-primary">
                                 Configure Email
                             </a>
                         </div>
@@ -99,7 +99,7 @@ const AdminPage = () => {
                                 Translation Configuration
                             </h5>
                             <p className="card-text">Configure OpenRouter API for document translation.</p>
-                            <a href="/admin/translation-config" className="btn btn-primary">
+                            <a href="/admin/translation-config" className="btn btn-outline-primary">
                                 Configure Translation
                             </a>
                         </div>
@@ -114,7 +114,7 @@ const AdminPage = () => {
                                 Identity Providers
                             </h5>
                             <p className="card-text">Configure external identity providers for SSO authentication.</p>
-                            <a href="/admin/identity-providers" className="btn btn-primary">
+                            <a href="/admin/identity-providers" className="btn btn-outline-primary">
                                 Manage Identity Providers
                             </a>
                         </div>
@@ -129,7 +129,7 @@ const AdminPage = () => {
                                 Requirements Management
                             </h5>
                             <p className="card-text">Manage system requirements and perform bulk operations.</p>
-                            <a href="/admin/requirements" className="btn btn-primary">
+                            <a href="/admin/requirements" className="btn btn-outline-primary">
                                 Manage Requirements
                             </a>
                         </div>

@@ -182,7 +182,7 @@ const Import = () => {
                                             {isDragOver ? 'Drop your file here' : 'Choose Excel file or drag & drop'}
                                         </h4>
                                         <p className="text-muted mb-4">Supports .xlsx and .xls files up to 10MB</p>
-                                        <button className="btn btn-primary btn-lg">
+                                        <button className="btn btn-outline-primary btn-lg">
                                             <i className="bi bi-folder2-open me-2"></i>Browse Files
                                         </button>
                                     </div>
@@ -220,7 +220,7 @@ const Import = () => {
                             {/* Upload Button */}
                             <div className="mt-5 d-grid">
                                 <button
-                                    className="btn btn-primary btn-lg py-3"
+                                    className="btn btn-success btn-lg py-3"
                                     onClick={handleUpload}
                                     disabled={!selectedFile || isUploading}
                                 >

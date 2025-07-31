@@ -226,7 +226,7 @@ const UserManagement = () => {
                 </div>
             )}
 
-            <button className="btn btn-success mb-3" onClick={() => setShowAddUserModal(true)}>
+            <button className="btn btn-outline-primary mb-3" onClick={() => setShowAddUserModal(true)}>
                  <i className="bi bi-plus-circle me-2"></i> Add User
             </button>
 
@@ -276,7 +276,7 @@ const UserManagement = () => {
                                 </div>
                                 <div className="modal-footer">
                                     <button type="button" className="btn btn-secondary" onClick={() => setShowAddUserModal(false)} disabled={isSubmittingUser}>Close</button>
-                                    <button type="submit" className="btn btn-primary" disabled={isSubmittingUser}>
+                                    <button type="submit" className="btn btn-success" disabled={isSubmittingUser}>
                                         {isSubmittingUser ? 'Adding...' : 'Add User'}
                                     </button>
                                 </div>
@@ -306,11 +306,11 @@ const UserManagement = () => {
                                 <td>{user.roles?.join(', ') || 'N/A'}</td>
                                 <td>
                                     {/* Placeholder Action Buttons */}
-                                    <button className="btn btn-sm btn-primary me-1" title="Edit">
+                                    <button className="btn btn-sm btn-outline-primary me-1" title="Edit">
                                         <i className="bi bi-pencil-fill"></i>
                                     </button>
                                     <button 
-                                        className="btn btn-sm btn-danger" 
+                                        className="btn btn-sm btn-outline-danger" 
                                         title="Delete"
                                         onClick={() => handleDeleteUser(user.id, user.username)}
                                         disabled={deletingUserId === user.id}

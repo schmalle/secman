@@ -123,7 +123,7 @@ const UseCaseManagement: React.FC = () => {
           <div className="d-flex justify-content-between align-items-center mb-4">
             <h2>Use Case Management</h2>
             <button
-              className="btn btn-primary"
+              className="btn btn-outline-primary"
               onClick={() => {
                 if (isAddingUseCase) {
                   resetForm();
@@ -207,13 +207,13 @@ const UseCaseManagement: React.FC = () => {
                         <td>
                           <button 
                             onClick={() => handleEdit(useCase)} 
-                            className="btn btn-sm btn-warning me-2"
+                            className="btn btn-sm btn-outline-primary me-2"
                           >
                             Edit
                           </button>
                           <button 
                             onClick={() => handleDelete(useCase.id)} 
-                            className="btn btn-sm btn-danger"
+                            className="btn btn-sm btn-outline-danger"
                           >
                             Delete
                           </button>

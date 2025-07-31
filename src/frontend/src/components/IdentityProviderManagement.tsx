@@ -210,7 +210,7 @@ export default function IdentityProviderManagement() {
           <div className="d-flex justify-content-between align-items-center mb-4">
             <h2>Identity Provider Management</h2>
             <button 
-              className="btn btn-primary" 
+              className="btn btn-outline-primary" 
               onClick={() => setIsAddingProvider(!isAddingProvider)}
               disabled={isLoading}
             >
@@ -459,7 +459,7 @@ export default function IdentityProviderManagement() {
                   </div>
 
                   <div className="d-flex gap-2">
-                    <button type="submit" className="btn btn-primary" disabled={isLoading}>
+                    <button type="submit" className="btn btn-success" disabled={isLoading}>
                       {isLoading ? 'Saving...' : (selectedProvider ? 'Update' : 'Create')} Provider
                     </button>
                     <button type="button" className="btn btn-secondary" onClick={resetForm}>
