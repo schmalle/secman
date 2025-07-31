@@ -30,7 +30,7 @@ dependencies {
     implementation("io.micronaut.data:micronaut-data-hibernate-jpa")
     implementation("io.micronaut.sql:micronaut-hibernate-jpa")
     implementation("io.micronaut.sql:micronaut-jdbc-hikari")
-    runtimeOnly("org.mariadb.jdbc:mariadb-java-client:3.5.3")
+    runtimeOnly("org.mariadb.jdbc:mariadb-java-client:3.5.4")
     
     // Security
     implementation("io.micronaut.security:micronaut-security-jwt")
@@ -59,12 +59,12 @@ dependencies {
     runtimeOnly("org.yaml:snakeyaml")
     
     // Password encoding
-    implementation("org.springframework.security:spring-security-crypto:6.3.5")
+    implementation("org.springframework.security:spring-security-crypto:6.4.2")
     implementation("commons-logging:commons-logging:1.3.4")
     
     // Document generation (Apache POI)
-    implementation("org.apache.poi:poi-ooxml:5.3.0")
-    implementation("org.apache.poi:poi-scratchpad:5.3.0")
+    implementation("org.apache.poi:poi-ooxml:5.4.0")
+    implementation("org.apache.poi:poi-scratchpad:5.4.0")
     
     // HTML processing for email
     implementation("org.jsoup:jsoup:1.18.3")
@@ -76,7 +76,7 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter-engine")
     testImplementation("org.mockito:mockito-core")
     testImplementation("io.mockk:mockk:1.13.14")
-    testImplementation("com.h2database:h2:2.2.224")
+    testImplementation("com.h2database:h2:2.3.232")
     
     // KSP
     ksp("io.micronaut:micronaut-http-validation")
