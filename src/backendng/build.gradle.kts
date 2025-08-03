@@ -11,7 +11,7 @@ plugins {
     id("io.micronaut.application") version "4.4.3"
     // Disabled test resources to avoid Docker dependency
     // id("io.micronaut.test-resources") version "4.4.3"
-    id("io.micronaut.aot") version "4.4.3"
+    id("io.micronaut.aot") version "4.5.4"
 }
 
 version = "0.1"
@@ -94,12 +94,12 @@ application {
 }
 
 java {
-    sourceCompatibility = JavaVersion.toVersion("17")
-    targetCompatibility = JavaVersion.toVersion("17")
+    sourceCompatibility = JavaVersion.toVersion("21")
+    targetCompatibility = JavaVersion.toVersion("21")
 }
 
 kotlin {
-    jvmToolchain(17)
+    jvmToolchain(21)
 }
 
 allOpen {
@@ -126,5 +126,5 @@ micronaut {
 }
 
 tasks.named<io.micronaut.gradle.docker.NativeImageDockerfile>("dockerfileNative") {
-    jdkVersion.set("17")
+    jdkVersion.set("21")
 }
