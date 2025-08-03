@@ -1,5 +1,6 @@
 package com.secman.controller
 
+import com.secman.config.AppConfig
 import com.secman.service.OAuthService
 import io.micronaut.context.annotation.Value
 import io.micronaut.http.HttpRequest
@@ -18,10 +19,19 @@ import java.time.LocalDateTime
 @Secured(SecurityRule.IS_ANONYMOUS)
 class OAuthController(
     private val oauthService: OAuthService,
-    @Value("\${app.frontend.base-url}") private val frontendBaseUrl: String
+    private val appConfig: AppConfig
 ) {
     
     private val logger = LoggerFactory.getLogger(OAuthController::class.java)
+    private val frontendBaseUrl: String = appConfig.frontend.baseUrl
+    
+    init {
+        logger.info("OAuthController initialized with frontendBaseUrl: {}", frontendBaseUrl)
+        // Validate that the URL is properly formatted
+        if (!frontendBaseUrl.startsWith("http://") && !frontendBaseUrl.startsWith("https://")) {
+            logger.error("Invalid frontendBaseUrl configuration: {}. Expected format: http://localhost:4321", frontendBaseUrl)
+        }
+    }
 
     @Serdeable
     data class ErrorResponse(
@@ -109,12 +119,15 @@ class OAuthController(
                 is OAuthService.CallbackResult.Success -> {
                     logger.info("OAuth login successful for user: {}", result.user.username)
                     
-                    // Use secure session/cookie storage instead of URL parameters
-                    val userInfoJson = """{"id":${result.user.id},"username":"${result.user.username}","email":"${result.user.email}","roles":${result.user.roles.joinToString(",", "[\"", "\"]") { it }}}"""
+                    // Create user info JSON
+                    val userInfoJson = """{"id":${result.user.id},"username":"${result.user.username}","email":"${result.user.email}","roles":[${result.user.roles.joinToString(",") { "\"$it\"" }}]}"""
                     
-                    HttpResponse.redirect<Any>(URI.create("$frontendBaseUrl/login/success"))
-                        .header("Set-Cookie", "auth_token=${result.token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=3600")
-                        .header("Set-Cookie", "user_info=${java.net.URLEncoder.encode(userInfoJson, "UTF-8")}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=3600")
+                    // Pass token and user data as URL parameters as expected by the frontend
+                    val encodedUser = java.net.URLEncoder.encode(userInfoJson, "UTF-8")
+                    val redirectUrl = "$frontendBaseUrl/login/success?token=${result.token}&user=$encodedUser"
+                    
+                    logger.debug("Redirecting to: {}", redirectUrl)
+                    HttpResponse.redirect<Any>(URI.create(redirectUrl))
                 }
                 
                 is OAuthService.CallbackResult.Error -> {

@@ -95,8 +95,8 @@ jackson:
 logger:
   levels:
     com.secman: DEBUG
+    io.micronaut.security: DEBUG
 
 app:
   frontend:
     base-url: ${FRONTEND_URL:http://localhost:4321}
-    io.micronaut.security: DEBUG
