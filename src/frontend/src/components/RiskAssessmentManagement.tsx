@@ -20,10 +20,28 @@ interface UseCase {
   name: string;
 }
 
+interface Demand {
+  id: number;
+  title: string;
+  description?: string;
+  demandType: 'CHANGE' | 'CREATE_NEW';
+  existingAsset?: Asset;
+  newAssetName?: string;
+  newAssetType?: string;
+  newAssetOwner?: string;
+  priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'IN_PROGRESS' | 'COMPLETED';
+  requestor?: User;
+  requestedDate: string;
+}
+
 interface RiskAssessment {
   id?: number;
+  demand?: Demand;
+  demandId: number;
+  // Legacy fields for backward compatibility
   asset?: Asset;
-  assetId: number;
+  assetId?: number;
   endDate: string;
   status: string;
   assessor?: User;
@@ -41,7 +59,7 @@ interface RiskAssessment {
 
 const RiskAssessmentManagement: React.FC = () => {
   const [assessments, setAssessments] = useState<RiskAssessment[]>([]);
-  const [assets, setAssets] = useState<Asset[]>([]);
+  const [approvedDemands, setApprovedDemands] = useState<Demand[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [useCases, setUseCases] = useState<UseCase[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,7 +68,7 @@ const RiskAssessmentManagement: React.FC = () => {
   const [editingAssessment, setEditingAssessment] = useState<RiskAssessment | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [formData, setFormData] = useState<RiskAssessment>({
-    assetId: 0,
+    demandId: 0,
     endDate: '',
     status: 'STARTED', // This will be set automatically on the backend
     assessorId: 0,
@@ -96,7 +114,7 @@ const RiskAssessmentManagement: React.FC = () => {
   useEffect(() => {
     if (currentUser) {
       fetchAssessments();
-      fetchAssets();
+      fetchApprovedDemands();
       fetchUsers();
       fetchUseCases();
     }
@@ -118,17 +136,17 @@ const RiskAssessmentManagement: React.FC = () => {
     }
   };
 
-  const fetchAssets = async () => {
+  const fetchApprovedDemands = async () => {
     try {
-      const response = await authenticatedGet('/api/assets');
+      const response = await authenticatedGet('/api/demands/approved/available');
       if (response.ok) {
         const data = await response.json();
-        setAssets(data);
+        setApprovedDemands(data);
       } else {
-        console.error('Failed to fetch assets:', response.status);
+        console.error('Failed to fetch approved demands:', response.status);
       }
     } catch (err) {
-      console.error('Failed to fetch assets:', err);
+      console.error('Failed to fetch approved demands:', err);
     }
   };
 
@@ -186,6 +204,7 @@ const RiskAssessmentManagement: React.FC = () => {
       }
 
       await fetchAssessments();
+      await fetchApprovedDemands(); // Refresh available demands
       resetForm();
       setError(null);
     } catch (err) {
@@ -196,7 +215,7 @@ const RiskAssessmentManagement: React.FC = () => {
   const handleEdit = (assessment: RiskAssessment) => {
     setEditingAssessment(assessment);
     setFormData({
-      assetId: assessment.asset?.id || assessment.assetId,
+      demandId: assessment.demand?.id || assessment.demandId,
       endDate: assessment.endDate,
       status: assessment.status,
       assessorId: assessment.assessor?.id || assessment.assessorId,
@@ -271,7 +290,7 @@ const RiskAssessmentManagement: React.FC = () => {
 
   const resetForm = () => {
     setFormData({
-      assetId: 0,
+      demandId: 0,
       endDate: getDefaultEndDate(), // Pre-fill with 14 days from now
       status: 'STARTED', // This will be set automatically on the backend
       assessorId: 0,
@@ -376,22 +395,30 @@ const RiskAssessmentManagement: React.FC = () => {
                 <h5 className="card-title">{editingAssessment ? 'Edit Risk Assessment' : 'Add New Risk Assessment'}</h5>
                 <form onSubmit={handleSubmit}>
                   <div className="mb-3">
-                    <label htmlFor="assetId" className="form-label">Asset *</label>
+                    <label htmlFor="demandId" className="form-label">Approved Demand *</label>
                     <select
                       className="form-control"
-                      id="assetId"
-                      name="assetId"
-                      value={formData.assetId}
+                      id="demandId"
+                      name="demandId"
+                      value={formData.demandId}
                       onChange={handleInputChange}
                       required
                     >
-                      <option value={0}>Select Asset</option>
-                      {assets.map((asset) => (
-                        <option key={asset.id} value={asset.id}>
-                          {asset.name} ({asset.type})
+                      <option value={0}>Select Approved Demand</option>
+                      {approvedDemands.map((demand) => (
+                        <option key={demand.id} value={demand.id}>
+                          {demand.title} - {demand.demandType === 'CHANGE' 
+                            ? `Change: ${demand.existingAsset?.name}` 
+                            : `Create: ${demand.newAssetName}`} 
+                          ({demand.priority})
                         </option>
                       ))}
                     </select>
+                    {approvedDemands.length === 0 && (
+                      <div className="form-text text-warning">
+                        No approved demands available. <a href="/demands">Manage demands</a> to create and approve them first.
+                      </div>
+                    )}
                   </div>
 
                   <div className="mb-3">
@@ -522,7 +549,8 @@ const RiskAssessmentManagement: React.FC = () => {
                   <table className="table table-striped table-hover">
                     <thead>
                       <tr>
-                        <th>Asset</th>
+                        <th>Demand/Asset</th>
+                        <th>Type</th>
                         <th>End Date</th>
                         <th>Status</th>
                         <th>Assessor</th>
@@ -538,10 +566,28 @@ const RiskAssessmentManagement: React.FC = () => {
                         <tr key={assessment.id}>
                           <td>
                             <div>
-                              <strong>{assessment.asset?.name || 'Unknown Asset'}</strong>
+                              <strong>
+                                {assessment.demand?.title || assessment.asset?.name || 'Unknown'}
+                              </strong>
                               <br />
-                              <small className="text-muted">{assessment.asset?.type}</small>
+                              <small className="text-muted">
+                                {assessment.demand?.demandType === 'CHANGE' && assessment.demand?.existingAsset
+                                  ? `Asset: ${assessment.demand.existingAsset.name}`
+                                  : assessment.demand?.demandType === 'CREATE_NEW'
+                                  ? `New: ${assessment.demand.newAssetName}`
+                                  : assessment.asset?.name || 'Legacy Asset'
+                                }
+                              </small>
                             </div>
+                          </td>
+                          <td>
+                            {assessment.demand?.demandType ? (
+                              <span className={`badge ${assessment.demand.demandType === 'CHANGE' ? 'bg-info' : 'bg-secondary'}`}>
+                                {assessment.demand.demandType === 'CHANGE' ? 'Change' : 'Create New'}
+                              </span>
+                            ) : (
+                              <span className="badge bg-warning">Legacy</span>
+                            )}
                           </td>
                           <td>{assessment.endDate}</td>
                           <td>
