@@ -25,6 +25,7 @@ import java.time.LocalDateTime
 @ExecuteOn(TaskExecutors.BLOCKING)
 open class RiskAssessmentController(
     private val riskAssessmentRepository: RiskAssessmentRepository,
+    private val demandRepository: DemandRepository,
     private val assetRepository: AssetRepository,
     private val userRepository: UserRepository,
     private val useCaseRepository: UseCaseRepository,
@@ -38,6 +39,19 @@ open class RiskAssessmentController(
 
     @Serdeable
     data class CreateRiskAssessmentRequest(
+        @NotNull val demandId: Long,
+        @NotNull val assessorId: Long,
+        @NotNull val endDate: LocalDate,
+        @Nullable val startDate: LocalDate? = null,
+        @Nullable val respondentId: Long? = null,
+        @Nullable val notes: String? = null,
+        @Nullable val useCaseIds: List<Long>? = null
+    )
+
+    // Deprecated request class for backward compatibility
+    @Serdeable
+    @Deprecated("Use CreateRiskAssessmentRequest with demandId instead")
+    data class CreateRiskAssessmentRequestLegacy(
         @NotNull val assetId: Long,
         @NotNull val assessorId: Long,
         @NotNull val endDate: LocalDate,
@@ -84,6 +98,9 @@ open class RiskAssessmentController(
             val assessments = entityManager.createQuery(
                 """
                 SELECT DISTINCT ra FROM RiskAssessment ra 
+                LEFT JOIN FETCH ra.demand 
+                LEFT JOIN FETCH ra.demand.existingAsset 
+                LEFT JOIN FETCH ra.demand.requestor 
                 LEFT JOIN FETCH ra.asset 
                 LEFT JOIN FETCH ra.assessor 
                 LEFT JOIN FETCH ra.requestor 
@@ -111,6 +128,9 @@ open class RiskAssessmentController(
             val assessment = entityManager.createQuery(
                 """
                 SELECT ra FROM RiskAssessment ra 
+                LEFT JOIN FETCH ra.demand 
+                LEFT JOIN FETCH ra.demand.existingAsset 
+                LEFT JOIN FETCH ra.demand.requestor 
                 LEFT JOIN FETCH ra.asset 
                 LEFT JOIN FETCH ra.assessor 
                 LEFT JOIN FETCH ra.requestor 
@@ -134,17 +154,47 @@ open class RiskAssessmentController(
         }
     }
 
-    @Get("/asset/{assetId}")
+    @Get("/demand/{demandId}")
     @Transactional(readOnly = true)
-    open fun getRiskAssessmentsByAsset(assetId: Long): HttpResponse<*> {
+    open fun getRiskAssessmentsByDemand(demandId: Long): HttpResponse<*> {
         return try {
-            log.debug("Fetching risk assessments for asset: {}", assetId)
+            log.debug("Fetching risk assessments for demand: {}", demandId)
             
-            val assessments = riskAssessmentRepository.findByAssetId(assetId)
+            val assessments = riskAssessmentRepository.findByDemandId(demandId)
             
             // Force loading of related entities
             assessments.forEach { assessment ->
-                assessment.asset.name // Force loading
+                assessment.demand.title // Force loading
+                assessment.demand.existingAsset?.name // Force loading
+                assessment.assessor.username // Force loading
+                assessment.requestor.username // Force loading
+                assessment.respondent?.username // Force loading
+                assessment.useCases.size // Force loading
+            }
+            
+            log.debug("Found {} risk assessments for demand {}", assessments.size, demandId)
+            HttpResponse.ok(assessments)
+        } catch (e: Exception) {
+            log.error("Error fetching risk assessments for demand: {}", demandId, e)
+            HttpResponse.serverError<Any>()
+        }
+    }
+
+    @Get("/asset/{assetId}")
+    @Transactional(readOnly = true)
+    @Deprecated("Use /demand/{demandId} endpoint instead")
+    open fun getRiskAssessmentsByAsset(assetId: Long): HttpResponse<*> {
+        return try {
+            log.debug("Fetching risk assessments for asset: {} (legacy endpoint)", assetId)
+            
+            // Updated to work with both legacy asset field and demand-based assets
+            val assessments = riskAssessmentRepository.findByExistingAssetId(assetId)
+            
+            // Force loading of related entities
+            assessments.forEach { assessment ->
+                assessment.demand?.title // Force loading
+                assessment.demand?.existingAsset?.name // Force loading
+                assessment.asset?.name // Force loading (legacy)
                 assessment.assessor.username // Force loading
                 assessment.requestor.username // Force loading
                 assessment.respondent?.username // Force loading
@@ -163,11 +213,16 @@ open class RiskAssessmentController(
     @Transactional
     open fun createRiskAssessment(@Valid @Body request: CreateRiskAssessmentRequest): HttpResponse<*> {
         return try {
-            log.debug("Creating risk assessment for asset: {}", request.assetId)
+            log.debug("Creating risk assessment for demand: {}", request.demandId)
             
-            // Validate asset exists
-            val asset = assetRepository.findById(request.assetId).orElse(null)
-                ?: return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", "Asset not found"))
+            // Validate demand exists and is approved
+            val demand = demandRepository.findById(request.demandId).orElse(null)
+                ?: return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", "Demand not found"))
+            
+            if (demand.status != DemandStatus.APPROVED) {
+                return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", 
+                    "Only approved demands can have risk assessments created"))
+            }
             
             // Validate assessor exists
             val assessor = userRepository.findById(request.assessorId).orElse(null)
@@ -187,7 +242,7 @@ open class RiskAssessmentController(
             val riskAssessment = RiskAssessment(
                 startDate = request.startDate ?: LocalDate.now(),
                 endDate = request.endDate,
-                asset = asset,
+                demand = demand,
                 assessor = assessor,
                 requestor = requestor,
                 respondent = respondent,
@@ -205,15 +260,20 @@ open class RiskAssessmentController(
             
             val savedAssessment = riskAssessmentRepository.save(riskAssessment)
             
+            // Update demand status to IN_PROGRESS
+            demand.status = DemandStatus.IN_PROGRESS
+            demandRepository.update(demand)
+            
             // Force loading of related entities for response
             entityManager.refresh(savedAssessment)
-            savedAssessment.asset.name
+            savedAssessment.demand.title
+            savedAssessment.demand.existingAsset?.name
             savedAssessment.assessor.username
             savedAssessment.requestor.username
             savedAssessment.respondent?.username
             savedAssessment.useCases.size
             
-            log.info("Created risk assessment with id: {}", savedAssessment.id)
+            log.info("Created risk assessment with id: {} for demand: {}", savedAssessment.id, demand.id)
             HttpResponse.status<RiskAssessment>(HttpStatus.CREATED).body(savedAssessment)
         } catch (e: Exception) {
             log.error("Error creating risk assessment", e)
@@ -256,7 +316,9 @@ open class RiskAssessmentController(
             
             // Force loading of related entities
             entityManager.refresh(updatedAssessment)
-            updatedAssessment.asset.name
+            updatedAssessment.demand.title
+            updatedAssessment.demand.existingAsset?.name
+            updatedAssessment.asset?.name // Legacy field
             updatedAssessment.assessor.username
             updatedAssessment.requestor.username
             updatedAssessment.respondent?.username

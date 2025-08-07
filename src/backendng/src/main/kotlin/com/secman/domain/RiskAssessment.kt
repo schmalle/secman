@@ -39,9 +39,15 @@ data class RiskAssessment(
     var releaseLockedAt: LocalDateTime? = null,
 
     @ManyToOne
-    @JoinColumn(name = "asset_id", nullable = false)
+    @JoinColumn(name = "demand_id", nullable = false)
     @NotNull
-    var asset: Asset,
+    var demand: Demand,
+
+    // Deprecated: Keep for backward compatibility during migration
+    @ManyToOne
+    @JoinColumn(name = "asset_id")
+    @Deprecated("Use demand instead. This field is kept for migration compatibility.")
+    var asset: Asset? = null,
 
     @ManyToOne
     @JoinColumn(name = "assessor_id", nullable = false)
@@ -76,6 +82,25 @@ data class RiskAssessment(
     @Column(name = "updated_at", nullable = false)
     var updatedAt: LocalDateTime? = null
 ) {
+    // New constructor for demand-based risk assessments
+    constructor(
+        startDate: LocalDate,
+        endDate: LocalDate,
+        demand: Demand,
+        assessor: User,
+        requestor: User
+    ) : this(
+        startDate = startDate,
+        endDate = endDate,
+        demand = demand,
+        assessor = assessor,
+        requestor = requestor,
+        status = "STARTED",
+        asset = null // For new assessments, asset is null as it's accessed through demand
+    )
+
+    // Deprecated constructor for backward compatibility
+    @Deprecated("Use constructor with Demand instead")
     constructor(
         startDate: LocalDate,
         endDate: LocalDate,
@@ -85,10 +110,11 @@ data class RiskAssessment(
     ) : this(
         startDate = startDate,
         endDate = endDate,
-        asset = asset,
+        demand = throw IllegalArgumentException("Cannot create RiskAssessment without Demand. Use demand-based constructor."),
         assessor = assessor,
         requestor = requestor,
-        status = "STARTED"
+        status = "STARTED",
+        asset = asset
     )
 
     @PrePersist
@@ -103,8 +129,32 @@ data class RiskAssessment(
         updatedAt = LocalDateTime.now()
     }
 
+    /**
+     * Gets the asset associated with this risk assessment, whether through demand or legacy asset field
+     */
+    fun getAssociatedAsset(): Asset? {
+        return when (demand.demandType) {
+            DemandType.CHANGE -> demand.existingAsset
+            DemandType.CREATE_NEW -> null // New assets don't exist yet
+        } ?: asset // Fallback to legacy asset field for migration compatibility
+    }
+
+    /**
+     * Gets the asset name for display purposes
+     */
+    fun getAssetName(): String {
+        return demand.getAssetName()
+    }
+
+    /**
+     * Gets the asset type for display purposes
+     */
+    fun getAssetType(): String {
+        return demand.getAssetType()
+    }
+
     override fun toString(): String {
-        return "RiskAssessment(id=$id, startDate=$startDate, endDate=$endDate, status='$status', asset=${asset.name})"
+        return "RiskAssessment(id=$id, startDate=$startDate, endDate=$endDate, status='$status', demand=${demand.title})"
     }
 
     override fun equals(other: Any?): Boolean {
