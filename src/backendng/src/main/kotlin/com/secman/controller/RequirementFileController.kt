@@ -7,6 +7,7 @@ import com.secman.repository.RequirementFileRepository
 import com.secman.repository.RiskAssessmentRequirementFileRepository
 import com.secman.repository.UserRepository
 import com.secman.service.FileService
+import com.secman.service.SecurityService
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.MediaType
 import io.micronaut.http.annotation.*
@@ -28,6 +29,7 @@ import java.time.LocalDateTime
 @ExecuteOn(TaskExecutors.BLOCKING)
 open class RequirementFileController(
     private val fileService: FileService,
+    private val securityService: SecurityService,
     private val requirementFileRepository: RequirementFileRepository,
     private val riskAssessmentRequirementFileRepository: RiskAssessmentRequirementFileRepository,
     private val userRepository: UserRepository
@@ -75,6 +77,29 @@ open class RequirementFileController(
 
             val user = userOptional.get()
             
+            // Check if user has access to this risk assessment
+            if (!securityService.userHasAccessToRiskAssessment(user, riskAssessmentId)) {
+                logger.warn("User {} attempted to upload file to risk assessment {} without access", username, riskAssessmentId)
+                return HttpResponse.status<ErrorResponse>(io.micronaut.http.HttpStatus.FORBIDDEN).body(ErrorResponse("Access denied to this risk assessment"))
+            }
+            
+            // Validate filename for security
+            val (isValidFilename, filenameError) = securityService.validateAndSanitizeFilename(file.filename)
+            if (!isValidFilename) {
+                return HttpResponse.badRequest(ErrorResponse(filenameError ?: "Invalid filename"))
+            }
+            
+            // Validate MIME type
+            val mimeType = file.contentType.map { it.toString() }.orElse("application/octet-stream")
+            if (!securityService.isAllowedMimeType(mimeType)) {
+                return HttpResponse.badRequest(ErrorResponse("File type not allowed for security reasons"))
+            }
+            
+            // Validate file extension matches MIME type
+            if (!securityService.validateFileExtensionMatchesMimeType(file.filename, mimeType)) {
+                return HttpResponse.badRequest(ErrorResponse("File extension does not match content type"))
+            }
+            
             logger.info("User {} uploading file {} for risk assessment {} and requirement {}", 
                 username, file.filename, riskAssessmentId, requirementId)
 
@@ -109,6 +134,21 @@ open class RequirementFileController(
         authentication: Authentication
     ): HttpResponse<*> {
         try {
+            val username = authentication.name
+            val userOptional = userRepository.findByUsername(username)
+            
+            if (userOptional.isEmpty) {
+                return HttpResponse.unauthorized<Any>().body(ErrorResponse("User not found"))
+            }
+            
+            val user = userOptional.get()
+            
+            // Check if user has access to this risk assessment
+            if (!securityService.userHasAccessToRiskAssessment(user, riskAssessmentId)) {
+                logger.warn("User {} attempted to list files for risk assessment {} without access", username, riskAssessmentId)
+                return HttpResponse.status<ErrorResponse>(io.micronaut.http.HttpStatus.FORBIDDEN).body(ErrorResponse("Access denied to this risk assessment"))
+            }
+            
             val files = fileService.getFilesForRequirement(riskAssessmentId, requirementId)
             
             val fileResponses = files.map { linkRecord ->
@@ -132,6 +172,26 @@ open class RequirementFileController(
         authentication: Authentication
     ): HttpResponse<*> {
         try {
+            // Validate file ID
+            if (!securityService.isValidId(fileId)) {
+                return HttpResponse.badRequest<Any>().body(ErrorResponse("Invalid file ID"))
+            }
+            
+            val username = authentication.name
+            val userOptional = userRepository.findByUsername(username)
+            
+            if (userOptional.isEmpty) {
+                return HttpResponse.unauthorized<Any>().body(ErrorResponse("User not found"))
+            }
+            
+            val user = userOptional.get()
+            
+            // Check if user has access to this file
+            if (!securityService.userHasAccessToFile(user, fileId)) {
+                logger.warn("User {} attempted to download file {} without access", username, fileId)
+                return HttpResponse.status<ErrorResponse>(io.micronaut.http.HttpStatus.FORBIDDEN).body(ErrorResponse("Access denied to this file"))
+            }
+            
             val fileContent = fileService.getFileContent(fileId)
             
             if (fileContent == null) {
@@ -162,6 +222,26 @@ open class RequirementFileController(
         authentication: Authentication
     ): HttpResponse<*> {
         try {
+            // Validate file ID
+            if (!securityService.isValidId(fileId)) {
+                return HttpResponse.badRequest<Any>().body(ErrorResponse("Invalid file ID"))
+            }
+            
+            val username = authentication.name
+            val userOptional = userRepository.findByUsername(username)
+            
+            if (userOptional.isEmpty) {
+                return HttpResponse.unauthorized<Any>().body(ErrorResponse("User not found"))
+            }
+            
+            val user = userOptional.get()
+            
+            // Check if user has access to this file
+            if (!securityService.userHasAccessToFile(user, fileId)) {
+                logger.warn("User {} attempted to get metadata for file {} without access", username, fileId)
+                return HttpResponse.status<ErrorResponse>(io.micronaut.http.HttpStatus.FORBIDDEN).body(ErrorResponse("Access denied to this file"))
+            }
+            
             val fileOptional = fileService.getFile(fileId)
             
             if (fileOptional.isEmpty) {
@@ -195,6 +275,17 @@ open class RequirementFileController(
             }
 
             val user = userOptional.get()
+            
+            // Validate file ID
+            if (!securityService.isValidId(fileId)) {
+                return HttpResponse.badRequest<Any>().body(ErrorResponse("Invalid file ID"))
+            }
+            
+            // Check if user can delete this file
+            if (!securityService.userCanDeleteFile(user, fileId)) {
+                logger.warn("User {} attempted to delete file {} without permission", username, fileId)
+                return HttpResponse.status<ErrorResponse>(io.micronaut.http.HttpStatus.FORBIDDEN).body(ErrorResponse("Permission denied to delete this file"))
+            }
             
             logger.info("User {} deleting file {}", username, fileId)
 

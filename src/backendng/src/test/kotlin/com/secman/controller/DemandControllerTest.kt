@@ -71,9 +71,14 @@ class DemandControllerTest {
             requestor = user
         )
 
+        val mockQuery = mockk<jakarta.persistence.TypedQuery<Demand>>()
+        every { mockQuery.setParameter("id", 1L) } returns mockQuery
+        every { mockQuery.singleResult } returns savedDemand
+        
         every { userRepository.findById(1L) } returns Optional.of(user)
         every { assetRepository.findById(1L) } returns Optional.of(asset)
         every { demandRepository.save(any<Demand>()) } returns savedDemand
+        every { entityManager.createQuery(any<String>(), Demand::class.java) } returns mockQuery
         every { entityManager.refresh(savedDemand) } returns Unit
 
         // When
@@ -121,8 +126,13 @@ class DemandControllerTest {
             requestor = user
         )
 
+        val mockQuery = mockk<jakarta.persistence.TypedQuery<Demand>>()
+        every { mockQuery.setParameter("id", 1L) } returns mockQuery
+        every { mockQuery.singleResult } returns savedDemand
+        
         every { userRepository.findById(1L) } returns Optional.of(user)
         every { demandRepository.save(any<Demand>()) } returns savedDemand
+        every { entityManager.createQuery(any<String>(), Demand::class.java) } returns mockQuery
         every { entityManager.refresh(savedDemand) } returns Unit
 
         // When
@@ -217,8 +227,14 @@ class DemandControllerTest {
 
         val request = DemandController.ApproveDemandRequest(approved = true)
 
+        val approvedDemand = demand.copy(status = DemandStatus.APPROVED, approvedDate = LocalDateTime.now())
+        val mockQuery = mockk<jakarta.persistence.TypedQuery<Demand>>()
+        every { mockQuery.setParameter("id", 1L) } returns mockQuery
+        every { mockQuery.singleResult } returns approvedDemand
+        
         every { demandRepository.findById(1L) } returns Optional.of(demand)
-        every { demandRepository.update(any<Demand>()) } returns demand.copy(status = DemandStatus.APPROVED)
+        every { demandRepository.update(any<Demand>()) } returns approvedDemand
+        every { entityManager.createQuery(any<String>(), Demand::class.java) } returns mockQuery
         every { entityManager.refresh(any<Demand>()) } returns Unit
 
         // When
@@ -256,11 +272,17 @@ class DemandControllerTest {
             rejectionReason = "Insufficient justification"
         )
 
-        every { demandRepository.findById(1L) } returns Optional.of(demand)
-        every { demandRepository.update(any<Demand>()) } returns demand.copy(
+        val rejectedDemand = demand.copy(
             status = DemandStatus.REJECTED,
             rejectionReason = "Insufficient justification"
         )
+        val mockQuery = mockk<jakarta.persistence.TypedQuery<Demand>>()
+        every { mockQuery.setParameter("id", 1L) } returns mockQuery
+        every { mockQuery.singleResult } returns rejectedDemand
+        
+        every { demandRepository.findById(1L) } returns Optional.of(demand)
+        every { demandRepository.update(any<Demand>()) } returns rejectedDemand
+        every { entityManager.createQuery(any<String>(), Demand::class.java) } returns mockQuery
         every { entityManager.refresh(any<Demand>()) } returns Unit
 
         // When
@@ -320,7 +342,7 @@ class DemandControllerTest {
 
         // Then
         assertEquals(HttpStatus.OK, response.status)
-        val summary = response.body as DemandController.DemandSummary
+        val summary = response.body.get() as DemandController.DemandSummary
         assertEquals(10L, summary.totalDemands)
         assertEquals(3L, summary.pendingDemands)
         assertEquals(4L, summary.approvedDemands)
@@ -364,7 +386,7 @@ class DemandControllerTest {
 
         // Then
         assertEquals(HttpStatus.OK, response.status)
-        val returnedDemands = response.body as List<Demand>
+        val returnedDemands = response.body.get() as List<Demand>
         assertEquals(2, returnedDemands.size)
         assertTrue(returnedDemands.all { it.status == DemandStatus.APPROVED })
     }

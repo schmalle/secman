@@ -41,11 +41,25 @@ open class FileService(
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             "application/vnd.ms-excel",
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/vnd.ms-powerpoint",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
             "image/jpeg",
             "image/png", 
             "image/gif",
+            "image/bmp",
+            "image/tiff",
             "text/plain",
             "text/csv"
+        )
+        
+        // Dangerous file extensions that should be blocked
+        val BLOCKED_EXTENSIONS = setOf(
+            ".exe", ".bat", ".cmd", ".com", ".scr", ".vbs", ".vbe",
+            ".js", ".jse", ".wsf", ".wsh", ".ps1", ".psm1", ".psd1",
+            ".msi", ".msp", ".msc", ".jar", ".app", ".deb", ".rpm",
+            ".dmg", ".pkg", ".run", ".sh", ".bash", ".zsh", ".fish",
+            ".html", ".htm", ".xhtml", ".svg", ".xml", ".xsl", ".xslt",
+            ".php", ".jsp", ".asp", ".aspx", ".py", ".rb", ".pl"
         )
     }
 
@@ -75,7 +89,7 @@ open class FileService(
     }
 
     /**
-     * Validate uploaded file
+     * Validate uploaded file with enhanced security checks
      */
     fun validateFile(fileUpload: CompletedFileUpload): FileValidationResult {
         // Check file size
@@ -85,13 +99,18 @@ open class FileService(
                 "File size exceeds maximum allowed size of ${MAX_FILE_SIZE / (1024 * 1024)}MB"
             )
         }
+        
+        // Minimum file size check (prevent empty files)
+        if (fileUpload.size == 0L) {
+            return FileValidationResult(false, "File cannot be empty")
+        }
 
         // Check content type
         val contentType = fileUpload.contentType.map { it.toString() }.orElse("unknown")
         if (contentType !in ALLOWED_CONTENT_TYPES) {
             return FileValidationResult(
                 false,
-                "File type '$contentType' is not allowed. Allowed types: ${ALLOWED_CONTENT_TYPES.joinToString(", ")}"
+                "File type '$contentType' is not allowed for security reasons"
             )
         }
 
@@ -104,12 +123,75 @@ open class FileService(
         if (originalFilename.length > 255) {
             return FileValidationResult(false, "Filename is too long (max 255 characters)")
         }
+        
+        // Check for dangerous extensions
+        val lowerFilename = originalFilename.lowercase()
+        for (ext in BLOCKED_EXTENSIONS) {
+            if (lowerFilename.endsWith(ext)) {
+                logger.warn("Blocked upload attempt with dangerous extension: {}", originalFilename)
+                return FileValidationResult(
+                    false,
+                    "File type not allowed for security reasons"
+                )
+            }
+        }
+        
+        // Check for path traversal attempts in filename
+        if (originalFilename.contains("..") || originalFilename.contains("/") || originalFilename.contains("\\")) {
+            logger.warn("Potential path traversal attempt in filename: {}", originalFilename)
+            return FileValidationResult(
+                false,
+                "Invalid characters in filename"
+            )
+        }
+        
+        // Check for null bytes
+        if (originalFilename.contains("\u0000")) {
+            logger.warn("Null byte detected in filename: {}", originalFilename)
+            return FileValidationResult(
+                false,
+                "Invalid filename"
+            )
+        }
+        
+        // Validate extension matches content type
+        val extension = getFileExtension(originalFilename).lowercase()
+        if (!isExtensionValidForContentType(extension, contentType)) {
+            logger.warn("File extension {} doesn't match content type {}", extension, contentType)
+            return FileValidationResult(
+                false,
+                "File extension does not match content type"
+            )
+        }
 
         return FileValidationResult(true)
     }
+    
+    /**
+     * Check if file extension is valid for the given content type
+     */
+    private fun isExtensionValidForContentType(extension: String, contentType: String): Boolean {
+        return when (contentType) {
+            "application/pdf" -> extension == ".pdf"
+            "application/msword" -> extension == ".doc"
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document" -> extension == ".docx"
+            "application/vnd.ms-excel" -> extension == ".xls"
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" -> extension == ".xlsx"
+            "application/vnd.ms-powerpoint" -> extension == ".ppt"
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation" -> extension == ".pptx"
+            "text/plain" -> extension in setOf(".txt", ".text")
+            "text/csv" -> extension == ".csv"
+            "image/jpeg" -> extension in setOf(".jpg", ".jpeg")
+            "image/png" -> extension == ".png"
+            "image/gif" -> extension == ".gif"
+            "image/bmp" -> extension == ".bmp"
+            "image/tiff" -> extension in setOf(".tif", ".tiff")
+            else -> false
+        }
+    }
 
     /**
-     * Generate unique filename
+     * Generate unique filename with security considerations
      */
     fun generateUniqueFilename(
         riskAssessmentId: Long,
@@ -117,8 +199,10 @@ open class FileService(
         originalFilename: String
     ): String {
         val timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"))
+        val uuid = UUID.randomUUID().toString().substring(0, 8)
         val extension = getFileExtension(originalFilename)
-        return "${riskAssessmentId}_${requirementId}_${timestamp}${extension}"
+        // Use UUID to prevent filename enumeration attacks
+        return "${riskAssessmentId}_${requirementId}_${timestamp}_${uuid}${extension}"
     }
 
     /**
@@ -165,11 +249,29 @@ open class FileService(
             val originalFilename = fileUpload.filename
             val uniqueFilename = generateUniqueFilename(riskAssessmentId, requirementId, originalFilename)
             
-            // Save file to disk
-            val filePath = Paths.get(UPLOAD_DIR, uniqueFilename)
+            // Save file to disk with security checks
+            val filePath = Paths.get(UPLOAD_DIR, uniqueFilename).normalize()
+            val uploadDir = Paths.get(UPLOAD_DIR).normalize().toAbsolutePath()
             val absolutePath = filePath.toAbsolutePath()
             
+            // Ensure the file will be saved within the upload directory
+            if (!absolutePath.startsWith(uploadDir)) {
+                logger.error("Path traversal attempt detected: {}", absolutePath)
+                return FileUploadResult(false, errorMessage = "Security violation: Invalid file path")
+            }
+            
+            // Set restrictive permissions on the file (owner read/write only)
             Files.copy(fileUpload.inputStream, absolutePath, StandardCopyOption.REPLACE_EXISTING)
+            try {
+                val file = absolutePath.toFile()
+                file.setReadable(false, false)
+                file.setWritable(false, false)
+                file.setExecutable(false, false)
+                file.setReadable(true, true)
+                file.setWritable(true, true)
+            } catch (e: Exception) {
+                logger.warn("Could not set file permissions: {}", e.message)
+            }
             
             logger.info("File saved to disk: {}", absolutePath)
 
@@ -220,7 +322,7 @@ open class FileService(
     }
 
     /**
-     * Get file content for download
+     * Get file content for download with path validation
      */
     fun getFileContent(fileId: Long): Pair<RequirementFile, ByteArray>? {
         val fileOptional = requirementFileRepository.findById(fileId)
@@ -229,7 +331,20 @@ open class FileService(
         }
 
         val file = fileOptional.get()
-        val path = Paths.get(file.filePath)
+        val path = Paths.get(file.filePath).normalize()
+        val uploadDir = Paths.get(UPLOAD_DIR).normalize().toAbsolutePath()
+        
+        // Validate the file path is within upload directory
+        if (!path.toAbsolutePath().startsWith(uploadDir)) {
+            logger.error("Path traversal attempt when reading file: {}", path)
+            return null
+        }
+        
+        // Check file exists and is readable
+        if (!Files.exists(path) || !Files.isReadable(path)) {
+            logger.error("File not found or not readable: {}", path)
+            return null
+        }
         
         return try {
             val content = Files.readAllBytes(path)

@@ -84,8 +84,7 @@ class DemandRiskAssessmentIntegrationTest {
             endDate = LocalDate.now().plusDays(14),
             demand = approvedDemand,
             assessor = assessor,
-            requestor = requestor,
-            status = "STARTED"
+            requestor = requestor
         )
 
         // Step 4: Update demand status to IN_PROGRESS
@@ -93,7 +92,7 @@ class DemandRiskAssessmentIntegrationTest {
 
         // Mock repository calls
         every { demandRepository.save(any<Demand>()) } returns changeDemand andThen approvedDemand andThen inProgressDemand
-        every { riskAssessmentRepository.save(any<RiskAssessment>()) } returns riskAssessment.copy(id = 1L)
+        every { riskAssessmentRepository.save(any<RiskAssessment>()) } returns riskAssessment.apply { id = 1L }
         every { demandRepository.update(any<Demand>()) } returns inProgressDemand
         every { entityManager.refresh(any()) } returns Unit
 
@@ -112,7 +111,7 @@ class DemandRiskAssessmentIntegrationTest {
         // 3. Risk assessment creation
         val savedRiskAssessment = riskAssessmentRepository.save(riskAssessment)
         assertNotNull(savedRiskAssessment.id)
-        assertEquals(approvedDemand.id, savedRiskAssessment.demand.id)
+        assertEquals(approvedDemand.id, savedRiskAssessment.demand?.id)
         assertEquals("Production Server", savedRiskAssessment.getAssetName())
         assertEquals("Database Server", savedRiskAssessment.getAssetType())
 
@@ -169,13 +168,12 @@ class DemandRiskAssessmentIntegrationTest {
             endDate = LocalDate.now().plusDays(7),
             demand = approvedDemand,
             assessor = assessor,
-            requestor = requestor,
-            status = "STARTED"
+            requestor = requestor
         )
 
         // Mock repository calls
         every { demandRepository.save(any<Demand>()) } returns createNewDemand andThen approvedDemand
-        every { riskAssessmentRepository.save(any<RiskAssessment>()) } returns riskAssessment.copy(id = 2L)
+        every { riskAssessmentRepository.save(any<RiskAssessment>()) } returns riskAssessment.apply { id = 2L }
 
         // When & Then - Verify the workflow
         // 1. CREATE_NEW demand creation
@@ -195,7 +193,7 @@ class DemandRiskAssessmentIntegrationTest {
         // 3. Risk assessment creation for new asset
         val savedRiskAssessment = riskAssessmentRepository.save(riskAssessment)
         assertNotNull(savedRiskAssessment.id)
-        assertEquals(approvedDemand.id, savedRiskAssessment.demand.id)
+        assertEquals(approvedDemand.id, savedRiskAssessment.demand?.id)
         assertEquals("Dev Server 01", savedRiskAssessment.getAssetName())
         assertEquals("Application Server", savedRiskAssessment.getAssetType())
         assertNull(savedRiskAssessment.getAssociatedAsset()) // No existing asset yet
@@ -278,17 +276,15 @@ class DemandRiskAssessmentIntegrationTest {
         )
 
         val riskAssessment = RiskAssessment(
-            id = 1L,
             startDate = LocalDate.now().minusDays(7),
             endDate = LocalDate.now(),
             demand = demand,
             assessor = assessor,
-            requestor = requestor,
-            status = "STARTED"
-        )
+            requestor = requestor
+        ).apply { id = 1L }
 
         // Step: Complete the risk assessment
-        val completedRiskAssessment = riskAssessment.copy(status = "COMPLETED")
+        val completedRiskAssessment = riskAssessment.apply { status = "COMPLETED" }
         val completedDemand = demand.copy(status = DemandStatus.COMPLETED)
 
         every { riskAssessmentRepository.save(any<RiskAssessment>()) } returns completedRiskAssessment
@@ -384,21 +380,33 @@ class DemandRiskAssessmentIntegrationTest {
             requestor = user
         )
 
-        // Create risk assessment with both demand and legacy asset field
+        // Create risk assessment with both demand and legacy asset field  
         val legacyRiskAssessment = RiskAssessment(
             id = 1L,
             startDate = LocalDate.now(),
             endDate = LocalDate.now().plusDays(14),
+            status = "STARTED",
+            notes = null,
+            isReleaseLocked = false,
+            contentSnapshotTaken = false,
+            releaseLockedAt = null,
+            assessmentBasisType = AssessmentBasisType.DEMAND,
+            assessmentBasisId = migrationDemand.id!!,
             demand = migrationDemand,
+            asset = asset, // Legacy field for backward compatibility
             assessor = user,
             requestor = user,
-            asset = asset, // Legacy field for backward compatibility
-            status = "STARTED"
+            respondent = null,
+            lockedRelease = null,
+            useCases = mutableSetOf(),
+            createdAt = null,
+            updatedAt = null
         )
 
         // When & Then - Verify backward compatibility
         // The risk assessment should work with both new demand field and legacy asset field
-        assertEquals(migrationDemand.id, legacyRiskAssessment.demand.id)
+        assertEquals(migrationDemand.id, legacyRiskAssessment.demand?.id)
+        @Suppress("DEPRECATION")
         assertEquals(asset.id, legacyRiskAssessment.asset?.id)
         
         // The getAssociatedAsset method should return the asset from demand

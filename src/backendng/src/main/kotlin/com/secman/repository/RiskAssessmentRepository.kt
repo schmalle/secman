@@ -9,21 +9,41 @@ import java.time.LocalDate
 @Repository
 interface RiskAssessmentRepository : JpaRepository<RiskAssessment, Long> {
     
-    // New demand-based queries
-    fun findByDemandId(demandId: Long): List<RiskAssessment>
+    // New unified basis-based queries
+    fun findByAssessmentBasisTypeAndAssessmentBasisId(basisType: com.secman.domain.AssessmentBasisType, basisId: Long): List<RiskAssessment>
     
-    @Query("SELECT ra FROM RiskAssessment ra WHERE ra.demand.id = :demandId AND ra.status = :status")
-    fun findByDemandIdAndStatus(demandId: Long, status: String): List<RiskAssessment>
+    @Query("SELECT ra FROM RiskAssessment ra WHERE ra.assessmentBasisType = :basisType")
+    fun findByAssessmentBasisType(basisType: com.secman.domain.AssessmentBasisType): List<RiskAssessment>
     
-    @Query("SELECT ra FROM RiskAssessment ra WHERE ra.demand.demandType = :demandType")
+    @Query("SELECT ra FROM RiskAssessment ra WHERE ra.assessmentBasisType = :basisType AND ra.status = :status")
+    fun findByAssessmentBasisTypeAndStatus(basisType: com.secman.domain.AssessmentBasisType, status: String): List<RiskAssessment>
+    
+    // Convenience methods for common queries
+    fun findByDemandId(demandId: Long): List<RiskAssessment> {
+        return findByAssessmentBasisTypeAndAssessmentBasisId(com.secman.domain.AssessmentBasisType.DEMAND, demandId)
+    }
+    
+    fun findByAssetId(assetId: Long): List<RiskAssessment> {
+        return findByAssessmentBasisTypeAndAssessmentBasisId(com.secman.domain.AssessmentBasisType.ASSET, assetId)
+    }
+    
+    @Query("SELECT ra FROM RiskAssessment ra WHERE ra.assessmentBasisType = :basisType AND ra.assessmentBasisId = :basisId AND ra.status = :status")
+    fun findByBasisAndStatus(basisType: com.secman.domain.AssessmentBasisType, basisId: Long, status: String): List<RiskAssessment>
+    
+    fun findByDemandIdAndStatus(demandId: Long, status: String): List<RiskAssessment> {
+        return findByBasisAndStatus(com.secman.domain.AssessmentBasisType.DEMAND, demandId, status)
+    }
+    
+    fun findByAssetIdAndStatus(assetId: Long, status: String): List<RiskAssessment> {
+        return findByBasisAndStatus(com.secman.domain.AssessmentBasisType.ASSET, assetId, status)
+    }
+    
+    // Legacy queries for backward compatibility with demand-based relationships
+    @Query("SELECT ra FROM RiskAssessment ra LEFT JOIN ra.demand d WHERE d.demandType = :demandType AND ra.assessmentBasisType = 'DEMAND'")
     fun findByDemandType(demandType: com.secman.domain.DemandType): List<RiskAssessment>
     
-    @Query("SELECT ra FROM RiskAssessment ra WHERE ra.demand.existingAsset.id = :assetId")
+    @Query("SELECT ra FROM RiskAssessment ra LEFT JOIN ra.demand d WHERE d.existingAsset.id = :assetId AND ra.assessmentBasisType = 'DEMAND'")
     fun findByExistingAssetId(assetId: Long): List<RiskAssessment>
-    
-    // Legacy asset-based queries (deprecated but kept for backward compatibility)
-    @Deprecated("Use findByExistingAssetId or findByDemandId instead")
-    fun findByAssetId(assetId: Long): List<RiskAssessment>
     
     fun findByAssessorId(assessorId: Long): List<RiskAssessment>
     
@@ -36,13 +56,16 @@ interface RiskAssessmentRepository : JpaRepository<RiskAssessment, Long> {
     @Query("SELECT ra FROM RiskAssessment ra WHERE ra.startDate >= :startDate AND ra.endDate <= :endDate")
     fun findByDateRange(startDate: LocalDate, endDate: LocalDate): List<RiskAssessment>
     
-    // Updated query to work with both legacy asset field and demand-based assets
+    // Query to find assessments that involve a specific asset (either directly or through demands)
     @Query("""
         SELECT ra FROM RiskAssessment ra 
-        WHERE (ra.asset.id = :assetId OR ra.demand.existingAsset.id = :assetId) 
-        AND ra.status = :status
+        LEFT JOIN ra.asset a 
+        LEFT JOIN ra.demand d 
+        LEFT JOIN d.existingAsset ea
+        WHERE (ra.assessmentBasisType = 'ASSET' AND ra.assessmentBasisId = :assetId)
+           OR (ra.assessmentBasisType = 'DEMAND' AND ea.id = :assetId)
     """)
-    fun findByAssetIdAndStatus(assetId: Long, status: String): List<RiskAssessment>
+    fun findAllByInvolvedAssetId(assetId: Long): List<RiskAssessment>
     
     @Query("SELECT ra FROM RiskAssessment ra JOIN ra.useCases u WHERE u.id = :usecaseId")
     fun findByUsecaseId(usecaseId: Long): List<RiskAssessment>

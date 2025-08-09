@@ -39,6 +39,37 @@ open class RiskAssessmentController(
 
     @Serdeable
     data class CreateRiskAssessmentRequest(
+        @NotNull val assessorId: Long,
+        @NotNull val endDate: LocalDate,
+        @Nullable val startDate: LocalDate? = null,
+        @Nullable val respondentId: Long? = null,
+        @Nullable val notes: String? = null,
+        @Nullable val useCaseIds: List<Long>? = null,
+        // New unified approach - either demandId or assetId must be provided
+        @Nullable val demandId: Long? = null,
+        @Nullable val assetId: Long? = null
+    ) {
+        fun validate(): String? {
+            return when {
+                demandId != null && assetId != null -> "Only one of demandId or assetId should be provided"
+                demandId == null && assetId == null -> "Either demandId or assetId must be provided"
+                else -> null
+            }
+        }
+        
+        fun getBasisType(): AssessmentBasisType = when {
+            demandId != null -> AssessmentBasisType.DEMAND
+            assetId != null -> AssessmentBasisType.ASSET
+            else -> throw IllegalStateException("No basis ID provided")
+        }
+        
+        fun getBasisId(): Long = demandId ?: assetId ?: throw IllegalStateException("No basis ID provided")
+    }
+
+    // Legacy request classes for backward compatibility
+    @Serdeable
+    @Deprecated("Use CreateRiskAssessmentRequest instead")
+    data class CreateRiskAssessmentRequestDemand(
         @NotNull val demandId: Long,
         @NotNull val assessorId: Long,
         @NotNull val endDate: LocalDate,
@@ -48,10 +79,9 @@ open class RiskAssessmentController(
         @Nullable val useCaseIds: List<Long>? = null
     )
 
-    // Deprecated request class for backward compatibility
     @Serdeable
-    @Deprecated("Use CreateRiskAssessmentRequest with demandId instead")
-    data class CreateRiskAssessmentRequestLegacy(
+    @Deprecated("Use CreateRiskAssessmentRequest instead")
+    data class CreateRiskAssessmentRequestAsset(
         @NotNull val assetId: Long,
         @NotNull val assessorId: Long,
         @NotNull val endDate: LocalDate,
@@ -98,10 +128,10 @@ open class RiskAssessmentController(
             val assessments = entityManager.createQuery(
                 """
                 SELECT DISTINCT ra FROM RiskAssessment ra 
-                LEFT JOIN FETCH ra.demand 
-                LEFT JOIN FETCH ra.demand.existingAsset 
-                LEFT JOIN FETCH ra.demand.requestor 
-                LEFT JOIN FETCH ra.asset 
+                LEFT JOIN FETCH ra.demand d
+                LEFT JOIN FETCH d.existingAsset 
+                LEFT JOIN FETCH d.requestor 
+                LEFT JOIN FETCH ra.asset a
                 LEFT JOIN FETCH ra.assessor 
                 LEFT JOIN FETCH ra.requestor 
                 LEFT JOIN FETCH ra.respondent 
@@ -128,10 +158,10 @@ open class RiskAssessmentController(
             val assessment = entityManager.createQuery(
                 """
                 SELECT ra FROM RiskAssessment ra 
-                LEFT JOIN FETCH ra.demand 
-                LEFT JOIN FETCH ra.demand.existingAsset 
-                LEFT JOIN FETCH ra.demand.requestor 
-                LEFT JOIN FETCH ra.asset 
+                LEFT JOIN FETCH ra.demand d
+                LEFT JOIN FETCH d.existingAsset 
+                LEFT JOIN FETCH d.requestor 
+                LEFT JOIN FETCH ra.asset a
                 LEFT JOIN FETCH ra.assessor 
                 LEFT JOIN FETCH ra.requestor 
                 LEFT JOIN FETCH ra.respondent 
@@ -164,8 +194,8 @@ open class RiskAssessmentController(
             
             // Force loading of related entities
             assessments.forEach { assessment ->
-                assessment.demand.title // Force loading
-                assessment.demand.existingAsset?.name // Force loading
+                assessment.demand?.title // Force loading
+                assessment.demand?.existingAsset?.name // Force loading
                 assessment.assessor.username // Force loading
                 assessment.requestor.username // Force loading
                 assessment.respondent?.username // Force loading
@@ -182,29 +212,69 @@ open class RiskAssessmentController(
 
     @Get("/asset/{assetId}")
     @Transactional(readOnly = true)
-    @Deprecated("Use /demand/{demandId} endpoint instead")
     open fun getRiskAssessmentsByAsset(assetId: Long): HttpResponse<*> {
         return try {
-            log.debug("Fetching risk assessments for asset: {} (legacy endpoint)", assetId)
+            log.debug("Fetching risk assessments for asset: {}", assetId)
             
-            // Updated to work with both legacy asset field and demand-based assets
-            val assessments = riskAssessmentRepository.findByExistingAssetId(assetId)
+            // Find both direct asset assessments and demand-based assessments that involve this asset
+            val directAssessments = riskAssessmentRepository.findByAssetId(assetId)
+            val demandBasedAssessments = riskAssessmentRepository.findByExistingAssetId(assetId)
+            val allAssessments = (directAssessments + demandBasedAssessments).distinctBy { it.id }
+            
+            // Force loading of related entities
+            allAssessments.forEach { assessment ->
+                when (assessment.assessmentBasisType) {
+                    AssessmentBasisType.DEMAND -> {
+                        assessment.demand?.title
+                        assessment.demand?.existingAsset?.name
+                    }
+                    AssessmentBasisType.ASSET -> {
+                        assessment.asset?.name
+                    }
+                }
+                assessment.assessor.username
+                assessment.requestor.username
+                assessment.respondent?.username
+                assessment.useCases.size
+            }
+            
+            log.debug("Found {} risk assessments for asset {}", allAssessments.size, assetId)
+            HttpResponse.ok(allAssessments)
+        } catch (e: Exception) {
+            log.error("Error fetching risk assessments for asset: {}", assetId, e)
+            HttpResponse.serverError<Any>()
+        }
+    }
+
+    @Get("/basis/{basisType}/{basisId}")
+    @Transactional(readOnly = true)
+    open fun getRiskAssessmentsByBasis(basisType: AssessmentBasisType, basisId: Long): HttpResponse<*> {
+        return try {
+            log.debug("Fetching risk assessments for basis type: {} and ID: {}", basisType, basisId)
+            
+            val assessments = riskAssessmentRepository.findByAssessmentBasisTypeAndAssessmentBasisId(basisType, basisId)
             
             // Force loading of related entities
             assessments.forEach { assessment ->
-                assessment.demand?.title // Force loading
-                assessment.demand?.existingAsset?.name // Force loading
-                assessment.asset?.name // Force loading (legacy)
-                assessment.assessor.username // Force loading
-                assessment.requestor.username // Force loading
-                assessment.respondent?.username // Force loading
-                assessment.useCases.size // Force loading
+                when (assessment.assessmentBasisType) {
+                    AssessmentBasisType.DEMAND -> {
+                        assessment.demand?.title
+                        assessment.demand?.existingAsset?.name
+                    }
+                    AssessmentBasisType.ASSET -> {
+                        assessment.asset?.name
+                    }
+                }
+                assessment.assessor.username
+                assessment.requestor.username
+                assessment.respondent?.username
+                assessment.useCases.size
             }
             
-            log.debug("Found {} risk assessments for asset {}", assessments.size, assetId)
+            log.debug("Found {} risk assessments for basis type {} with ID {}", assessments.size, basisType, basisId)
             HttpResponse.ok(assessments)
         } catch (e: Exception) {
-            log.error("Error fetching risk assessments for asset: {}", assetId, e)
+            log.error("Error fetching risk assessments for basis type: {} and ID: {}", basisType, basisId, e)
             HttpResponse.serverError<Any>()
         }
     }
@@ -213,16 +283,16 @@ open class RiskAssessmentController(
     @Transactional
     open fun createRiskAssessment(@Valid @Body request: CreateRiskAssessmentRequest): HttpResponse<*> {
         return try {
-            log.debug("Creating risk assessment for demand: {}", request.demandId)
-            
-            // Validate demand exists and is approved
-            val demand = demandRepository.findById(request.demandId).orElse(null)
-                ?: return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", "Demand not found"))
-            
-            if (demand.status != DemandStatus.APPROVED) {
-                return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", 
-                    "Only approved demands can have risk assessments created"))
+            // Validate request
+            val validationError = request.validate()
+            if (validationError != null) {
+                return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", validationError))
             }
+            
+            val basisType = request.getBasisType()
+            val basisId = request.getBasisId()
+            
+            log.debug("Creating risk assessment with basis type: {} and ID: {}", basisType, basisId)
             
             // Validate assessor exists
             val assessor = userRepository.findById(request.assessorId).orElse(null)
@@ -238,16 +308,50 @@ open class RiskAssessmentController(
                     ?: return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", "Respondent not found"))
             }
             
-            // Create risk assessment
-            val riskAssessment = RiskAssessment(
-                startDate = request.startDate ?: LocalDate.now(),
-                endDate = request.endDate,
-                demand = demand,
-                assessor = assessor,
-                requestor = requestor,
-                respondent = respondent,
-                notes = request.notes?.trim()?.takeIf { it.isNotBlank() }
-            )
+            // Create risk assessment based on basis type
+            val riskAssessment = when (basisType) {
+                AssessmentBasisType.DEMAND -> {
+                    val demand = demandRepository.findById(basisId).orElse(null)
+                        ?: return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", "Demand not found"))
+                    
+                    if (demand.status != DemandStatus.APPROVED) {
+                        return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", 
+                            "Only approved demands can have risk assessments created"))
+                    }
+                    
+                    // Create demand-based risk assessment
+                    val assessment = RiskAssessment(
+                        startDate = request.startDate ?: LocalDate.now(),
+                        endDate = request.endDate,
+                        demand = demand,
+                        assessor = assessor,
+                        requestor = requestor
+                    )
+                    
+                    // Update demand status to IN_PROGRESS
+                    demand.status = DemandStatus.IN_PROGRESS
+                    demandRepository.update(demand)
+                    
+                    assessment
+                }
+                AssessmentBasisType.ASSET -> {
+                    val asset = assetRepository.findById(basisId).orElse(null)
+                        ?: return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", "Asset not found"))
+                    
+                    // Create asset-based risk assessment
+                    RiskAssessment(
+                        startDate = request.startDate ?: LocalDate.now(),
+                        endDate = request.endDate,
+                        asset = asset,
+                        assessor = assessor,
+                        requestor = requestor
+                    )
+                }
+            }
+            
+            // Set common fields
+            riskAssessment.respondent = respondent
+            riskAssessment.notes = request.notes?.trim()?.takeIf { it.isNotBlank() }
             
             // Handle use case associations
             request.useCaseIds?.let { ids ->
@@ -260,20 +364,23 @@ open class RiskAssessmentController(
             
             val savedAssessment = riskAssessmentRepository.save(riskAssessment)
             
-            // Update demand status to IN_PROGRESS
-            demand.status = DemandStatus.IN_PROGRESS
-            demandRepository.update(demand)
-            
             // Force loading of related entities for response
             entityManager.refresh(savedAssessment)
-            savedAssessment.demand.title
-            savedAssessment.demand.existingAsset?.name
+            when (basisType) {
+                AssessmentBasisType.DEMAND -> {
+                    savedAssessment.demand?.title
+                    savedAssessment.demand?.existingAsset?.name
+                }
+                AssessmentBasisType.ASSET -> {
+                    savedAssessment.asset?.name
+                }
+            }
             savedAssessment.assessor.username
             savedAssessment.requestor.username
             savedAssessment.respondent?.username
             savedAssessment.useCases.size
             
-            log.info("Created risk assessment with id: {} for demand: {}", savedAssessment.id, demand.id)
+            log.info("Created risk assessment with id: {} for {} basis: {}", savedAssessment.id, basisType, basisId)
             HttpResponse.status<RiskAssessment>(HttpStatus.CREATED).body(savedAssessment)
         } catch (e: Exception) {
             log.error("Error creating risk assessment", e)
@@ -316,8 +423,9 @@ open class RiskAssessmentController(
             
             // Force loading of related entities
             entityManager.refresh(updatedAssessment)
-            updatedAssessment.demand.title
-            updatedAssessment.demand.existingAsset?.name
+            updatedAssessment.demand?.title
+            updatedAssessment.demand?.existingAsset?.name
+            @Suppress("DEPRECATION")
             updatedAssessment.asset?.name // Legacy field
             updatedAssessment.assessor.username
             updatedAssessment.requestor.username
@@ -444,5 +552,42 @@ open class RiskAssessmentController(
             log.error("Error sending reminder for assessment: {}", id, e)
             HttpResponse.serverError<Any>()
         }
+    }
+
+    // Legacy endpoints for backward compatibility
+    @Post("/demand-based")
+    @Transactional
+    @Deprecated("Use main POST /api/risk-assessments endpoint with demandId instead")
+    open fun createDemandBasedRiskAssessment(@Valid @Body request: CreateRiskAssessmentRequestDemand): HttpResponse<*> {
+        log.debug("Legacy demand-based risk assessment creation called")
+        @Suppress("DEPRECATION")
+        return createRiskAssessment(CreateRiskAssessmentRequest(
+            assessorId = request.assessorId,
+            endDate = request.endDate,
+            startDate = request.startDate,
+            respondentId = request.respondentId,
+            notes = request.notes,
+            useCaseIds = request.useCaseIds,
+            demandId = request.demandId,
+            assetId = null
+        ))
+    }
+
+    @Post("/asset-based")
+    @Transactional
+    @Deprecated("Use main POST /api/risk-assessments endpoint with assetId instead")
+    open fun createAssetBasedRiskAssessment(@Valid @Body request: CreateRiskAssessmentRequestAsset): HttpResponse<*> {
+        log.debug("Legacy asset-based risk assessment creation called")
+        @Suppress("DEPRECATION")
+        return createRiskAssessment(CreateRiskAssessmentRequest(
+            assessorId = request.assessorId,
+            endDate = request.endDate,
+            startDate = request.startDate,
+            respondentId = request.respondentId,
+            notes = request.notes,
+            useCaseIds = request.useCaseIds,
+            demandId = null,
+            assetId = request.assetId
+        ))
     }
 }
