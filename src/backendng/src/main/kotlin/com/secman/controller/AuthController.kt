@@ -2,6 +2,7 @@ package com.secman.controller
 
 import com.secman.domain.User
 import com.secman.repository.UserRepository
+import com.secman.service.InputValidationService
 import io.micronaut.http.HttpRequest
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.annotation.*
@@ -18,7 +19,8 @@ import java.util.*
 @Controller("/api/auth")
 class AuthController(
     private val userRepository: UserRepository,
-    private val tokenGenerator: TokenGenerator
+    private val tokenGenerator: TokenGenerator,
+    private val inputValidationService: InputValidationService
 ) {
     
     private val passwordEncoder = BCryptPasswordEncoder()
@@ -51,6 +53,24 @@ class AuthController(
     fun login(@Body loginRequest: LoginRequest): HttpResponse<*> {
         if (loginRequest.username.isBlank() || loginRequest.password.isBlank()) {
             return HttpResponse.badRequest(mapOf("error" to "Username and password are required"))
+        }
+        
+        // Validate username format
+        val usernameValidation = inputValidationService.validateName(loginRequest.username, "Username")
+        if (!usernameValidation.isValid) {
+            return HttpResponse.badRequest(mapOf("error" to usernameValidation.errorMessage))
+        }
+        
+        // Validate password length (basic check, don't reveal too much)
+        if (loginRequest.password.length > 200) {
+            return HttpResponse.badRequest(mapOf("error" to "Invalid credentials"))
+        }
+        
+        // Check for potential injection attempts
+        if (inputValidationService.containsCommandInjection(loginRequest.username) ||
+            inputValidationService.containsPathTraversal(loginRequest.username)) {
+            // Log the attempt but return generic error
+            return HttpResponse.unauthorized<Any>().body(mapOf("error" to "Invalid credentials"))
         }
 
         val userOptional = userRepository.findByUsername(loginRequest.username)

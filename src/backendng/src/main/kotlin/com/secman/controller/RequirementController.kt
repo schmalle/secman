@@ -7,6 +7,7 @@ import com.secman.repository.RequirementRepository
 import com.secman.repository.UseCaseRepository
 import com.secman.repository.NormRepository
 import com.secman.service.TranslationServiceSimple
+import com.secman.service.InputValidationService
 import io.micronaut.core.annotation.Nullable
 import io.micronaut.data.model.Pageable
 import io.micronaut.http.HttpResponse
@@ -34,7 +35,8 @@ open class RequirementController(
     private val requirementRepository: RequirementRepository,
     private val useCaseRepository: UseCaseRepository,
     private val normRepository: NormRepository,
-    private val translationService: TranslationServiceSimple
+    private val translationService: TranslationServiceSimple,
+    private val inputValidationService: InputValidationService
 ) {
 
     @Serdeable
@@ -146,17 +148,54 @@ open class RequirementController(
         if (request.shortreq.isBlank()) {
             return HttpResponse.badRequest(mapOf("error" to "Short requirement is required"))
         }
+        
+        // Validate short requirement
+        val shortreqValidation = inputValidationService.validateDescription(request.shortreq, "Short requirement")
+        if (!shortreqValidation.isValid) {
+            return HttpResponse.badRequest(mapOf("error" to shortreqValidation.errorMessage))
+        }
+        
+        // Validate details if provided
+        request.details?.let {
+            val detailsValidation = inputValidationService.validateDescription(it, "Details")
+            if (!detailsValidation.isValid) {
+                return HttpResponse.badRequest(mapOf("error" to detailsValidation.errorMessage))
+            }
+        }
+        
+        // Validate example if provided
+        request.example?.let {
+            val exampleValidation = inputValidationService.validateDescription(it, "Example")
+            if (!exampleValidation.isValid) {
+                return HttpResponse.badRequest(mapOf("error" to exampleValidation.errorMessage))
+            }
+        }
+        
+        // Validate IDs if provided
+        request.usecaseIds?.let {
+            val idsValidation = inputValidationService.validateIdList(it)
+            if (!idsValidation.isValid) {
+                return HttpResponse.badRequest(mapOf("error" to "Invalid use case IDs"))
+            }
+        }
+        
+        request.normIds?.let {
+            val idsValidation = inputValidationService.validateIdList(it)
+            if (!idsValidation.isValid) {
+                return HttpResponse.badRequest(mapOf("error" to "Invalid norm IDs"))
+            }
+        }
 
         try {
             val requirement = Requirement(
-                shortreq = request.shortreq,
-                details = request.details,
+                shortreq = inputValidationService.sanitizeForDisplay(request.shortreq),
+                details = request.details?.let { inputValidationService.sanitizeForDisplay(it) },
                 language = request.language,
-                example = request.example,
-                motivation = request.motivation,
-                usecase = request.usecase,
-                norm = request.norm,
-                chapter = request.chapter
+                example = request.example?.let { inputValidationService.sanitizeForDisplay(it) },
+                motivation = request.motivation?.let { inputValidationService.sanitizeForDisplay(it) },
+                usecase = request.usecase?.let { inputValidationService.sanitizeForDisplay(it) },
+                norm = request.norm?.let { inputValidationService.sanitizeForDisplay(it) },
+                chapter = request.chapter?.let { inputValidationService.sanitizeForDisplay(it) }
             )
 
             // Handle use case relationships
@@ -198,6 +237,41 @@ open class RequirementController(
     @Put("/{id}")
     @Transactional
     open fun update(@PathVariable id: Long, @Body request: RequirementUpdateRequest): HttpResponse<*> {
+        // Validate ID
+        val idValidation = inputValidationService.validateId(id)
+        if (!idValidation.isValid) {
+            return HttpResponse.badRequest(mapOf("error" to idValidation.errorMessage))
+        }
+        
+        // Validate fields if provided
+        request.shortreq?.let {
+            val validation = inputValidationService.validateDescription(it, "Short requirement")
+            if (!validation.isValid) {
+                return HttpResponse.badRequest(mapOf("error" to validation.errorMessage))
+            }
+        }
+        
+        request.details?.let {
+            val validation = inputValidationService.validateDescription(it, "Details")
+            if (!validation.isValid) {
+                return HttpResponse.badRequest(mapOf("error" to validation.errorMessage))
+            }
+        }
+        
+        request.usecaseIds?.let {
+            val validation = inputValidationService.validateIdList(it)
+            if (!validation.isValid) {
+                return HttpResponse.badRequest(mapOf("error" to "Invalid use case IDs"))
+            }
+        }
+        
+        request.normIds?.let {
+            val validation = inputValidationService.validateIdList(it)
+            if (!validation.isValid) {
+                return HttpResponse.badRequest(mapOf("error" to "Invalid norm IDs"))
+            }
+        }
+        
         val requirementOptional = requirementRepository.findById(id)
         
         if (requirementOptional.isEmpty) {

@@ -1,3 +1,5 @@
+@file:Suppress("DEPRECATION")
+
 package com.secman.security
 
 import com.secman.repository.UserRepository
@@ -12,6 +14,7 @@ import reactor.core.publisher.Flux
 import reactor.core.publisher.FluxSink
 
 @Singleton
+@Suppress("DEPRECATION")
 class AuthenticationProviderUserPassword(
     private val userRepository: UserRepository
 ) : AuthenticationProvider<HttpRequest<*>> {
