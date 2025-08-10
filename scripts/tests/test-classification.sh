@@ -230,12 +230,12 @@ else
     echo -e "${RED}✗ Public classification page not accessible (HTTP $PUBLIC_PAGE)${NC}"
 fi
 
-# Check rule management page (requires auth, so just check it exists)
-RULES_PAGE=$(curl -s -o /dev/null -w "%{http_code}" "$FRONTEND_URL/classification-rules")
-if [ "$RULES_PAGE" = "200" ] || [ "$RULES_PAGE" = "302" ]; then
-    echo -e "${GREEN}✓ Classification rules page exists${NC}"
+# Check admin classification rules page (requires auth and admin role)
+ADMIN_RULES_PAGE=$(curl -s -o /dev/null -w "%{http_code}" "$FRONTEND_URL/admin/classification-rules")
+if [ "$ADMIN_RULES_PAGE" = "200" ] || [ "$ADMIN_RULES_PAGE" = "302" ]; then
+    echo -e "${GREEN}✓ Admin classification rules page exists${NC}"
 else
-    echo -e "${RED}✗ Classification rules page not found (HTTP $RULES_PAGE)${NC}"
+    echo -e "${RED}✗ Admin classification rules page not found (HTTP $ADMIN_RULES_PAGE)${NC}"
 fi
 
 echo ""

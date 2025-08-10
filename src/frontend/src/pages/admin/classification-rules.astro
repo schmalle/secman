@@ -1,0 +1,18 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import ClassificationRuleManager from '../../components/ClassificationRuleManager';
+---
+
+<Layout title="Admin - Classification Rules Management">
+  <main>
+    <div class="container-fluid py-4">
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="mb-0">Classification Rules Management</h2>
+        <a href="/admin" class="btn btn-secondary">
+          <i class="bi bi-arrow-left me-2"></i>Back to Admin
+        </a>
+      </div>
+      <ClassificationRuleManager client:load />
+    </div>
+  </main>
+</Layout>

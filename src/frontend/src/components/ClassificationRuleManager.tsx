@@ -1,6 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { getAuthHeaders } from '../utils/auth';
 
+// Define an interface for the user data expected from the backend
+interface User {
+  id: number;
+  username: string;
+  email: string;
+  roles: string[];
+}
+
+// Define a type for the global variable
+declare global {
+  interface Window {
+    currentUser?: User | null;
+  }
+}
+
 interface RuleCondition {
   type: 'IF' | 'AND' | 'OR' | 'NOT' | 'COMPARISON';
   field?: string;
@@ -31,6 +46,8 @@ interface TestResult {
 }
 
 const ClassificationRuleManager: React.FC = () => {
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [rules, setRules] = useState<ClassificationRule[]>([]);
   const [selectedRule, setSelectedRule] = useState<ClassificationRule | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -60,8 +77,41 @@ const ClassificationRuleManager: React.FC = () => {
   ];
 
   useEffect(() => {
-    loadRules();
-  }, []);
+    const checkAdminRole = () => {
+      if (window.currentUser) {
+        const isUserAdmin = window.currentUser.roles?.includes('ADMIN') ?? false;
+        setIsAdmin(isUserAdmin);
+        setIsLoadingAuth(false);
+        
+        if (isUserAdmin) {
+          loadRules();
+        }
+      } else {
+        // If currentUser isn't loaded yet, wait for the event
+        const handleUserLoaded = () => {
+          const isUserAdmin = window.currentUser?.roles?.includes('ADMIN') ?? false;
+          setIsAdmin(isUserAdmin);
+          setIsLoadingAuth(false);
+          
+          if (isUserAdmin) {
+            loadRules();
+          }
+        };
+        
+        window.addEventListener('userLoaded', handleUserLoaded, { once: true });
+
+        // Set a timeout in case the event never fires
+        setTimeout(() => {
+          if (isLoadingAuth) {
+            setIsLoadingAuth(false);
+            setIsAdmin(false);
+          }
+        }, 2000);
+      }
+    };
+
+    checkAdminRole();
+  }, [isLoadingAuth]);
 
   const loadRules = async () => {
     setLoading(true);
@@ -347,6 +397,26 @@ const ClassificationRuleManager: React.FC = () => {
       </div>
     );
   };
+
+  // Loading state
+  if (isLoadingAuth) {
+    return (
+      <div className="alert alert-info">
+        <i className="spinner-border spinner-border-sm me-2"></i>
+        Checking permissions...
+      </div>
+    );
+  }
+
+  // Access denied state
+  if (!isAdmin) {
+    return (
+      <div className="alert alert-danger">
+        <i className="bi bi-exclamation-triangle-fill me-2"></i>
+        Access Denied: You do not have permission to manage classification rules.
+      </div>
+    );
+  }
 
   return (
     <div className="container-fluid">

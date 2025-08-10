@@ -78,7 +78,7 @@ test.describe('Demand Classification System', () => {
     });
   });
 
-  test.describe('Authenticated Classification Features', () => {
+  test.describe('Admin-Only Classification Features', () => {
     test.beforeEach(async ({ page }) => {
       await login(page, TEST_USERNAME, TEST_PASSWORD);
     });
@@ -87,20 +87,51 @@ test.describe('Demand Classification System', () => {
       await logout(page);
     });
 
-    test('should access classification rule manager', async ({ page }) => {
-      await page.goto('/classification-rules');
+    test('should access classification rules from admin page', async ({ page }) => {
+      // First go to admin page
+      await page.goto('/admin');
       
-      // Verify page loads
+      // Verify admin page loads
+      await expect(page.locator('h2:has-text("Admin Section")')).toBeVisible();
+      
+      // Find and click the Classification Rules card
+      await expect(page.locator('text=Classification Rules')).toBeVisible();
+      await page.click('a:has-text("Manage Classification Rules")');
+      
+      // Verify we're on the admin classification rules page
+      await expect(page.locator('h2:has-text("Classification Rules Management")')).toBeVisible();
+      await expect(page.locator('a:has-text("Back to Admin")')).toBeVisible();
+    });
+
+    test('should access classification rule manager directly', async ({ page }) => {
+      await page.goto('/admin/classification-rules');
+      
+      // Verify page loads with admin styling
       await expect(page.locator('h2')).toContainText('Classification Rules Management');
+      await expect(page.locator('a:has-text("Back to Admin")')).toBeVisible();
       await expect(page.locator('h5:has-text("Classification Rules")')).toBeVisible();
       
-      // Verify buttons are present
+      // Verify admin-only buttons are present
       await expect(page.locator('button:has-text("New Rule")')).toBeVisible();
       await expect(page.locator('button:has-text("Export")')).toBeVisible();
     });
 
+    test('should deny access for non-admin users', async ({ page }) => {
+      // Logout current admin user
+      await logout(page);
+      
+      // Login as a regular user (assuming normaluser exists and is not admin)
+      await login(page, 'normaluser', 'password');
+      
+      // Try to access admin classification rules
+      await page.goto('/admin/classification-rules');
+      
+      // Should see access denied message
+      await expect(page.locator('.alert-danger:has-text("Access Denied")')).toBeVisible();
+    });
+
     test('should create a new classification rule', async ({ page }) => {
-      await page.goto('/classification-rules');
+      await page.goto('/admin/classification-rules');
       
       // Click new rule button
       await page.click('button:has-text("New Rule")');
@@ -124,7 +155,7 @@ test.describe('Demand Classification System', () => {
     });
 
     test('should test classification with created rule', async ({ page }) => {
-      await page.goto('/classification-rules');
+      await page.goto('/admin/classification-rules');
       
       // Fill test form
       await page.fill('input[placeholder*="Title"]', 'Test Demand');
@@ -177,7 +208,7 @@ test.describe('Demand Classification System', () => {
     });
 
     test('should export and import rules', async ({ page }) => {
-      await page.goto('/classification-rules');
+      await page.goto('/admin/classification-rules');
       
       // Create download promise before clicking
       const downloadPromise = page.waitForEvent('download');
@@ -194,7 +225,7 @@ test.describe('Demand Classification System', () => {
     });
 
     test('should edit existing rule', async ({ page }) => {
-      await page.goto('/classification-rules');
+      await page.goto('/admin/classification-rules');
       
       // Click on first rule in list
       await page.click('.list-group-item:first-child');
@@ -216,7 +247,7 @@ test.describe('Demand Classification System', () => {
     });
 
     test('should update rule priorities', async ({ page }) => {
-      await page.goto('/classification-rules');
+      await page.goto('/admin/classification-rules');
       
       // Verify rules are displayed with priority badges
       const priorityBadges = page.locator('.badge.bg-primary');
@@ -256,7 +287,7 @@ test.describe('Demand Classification System', () => {
     });
 
     test('should handle rule deletion', async ({ page }) => {
-      await page.goto('/classification-rules');
+      await page.goto('/admin/classification-rules');
       
       // Create a test rule first
       await page.click('button:has-text("New Rule")');
