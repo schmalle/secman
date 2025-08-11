@@ -38,6 +38,17 @@ interface Demand {
   rejectionReason?: string;
   createdAt?: string;
   updatedAt?: string;
+  classification?: 'A' | 'B' | 'C';
+  classificationHash?: string;
+}
+
+interface ClassificationResult {
+  classification: string;
+  classificationHash: string;
+  confidenceScore: number;
+  appliedRuleName?: string;
+  evaluationLog: string[];
+  timestamp: string;
 }
 
 interface DemandSummary {
@@ -58,6 +69,9 @@ const DemandManagement: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingDemand, setEditingDemand] = useState<Demand | null>(null);
+  const [classificationResult, setClassificationResult] = useState<ClassificationResult | null>(null);
+  const [classifyOnCreate, setClassifyOnCreate] = useState(false);
+  const [showClassificationResult, setShowClassificationResult] = useState(false);
   
   // Filters
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
@@ -178,6 +192,38 @@ const DemandManagement: React.FC = () => {
     }
   };
 
+  const classifyDemand = async () => {
+    try {
+      const classificationInput = {
+        title: formData.title,
+        description: formData.description,
+        demandType: formData.demandType,
+        priority: formData.priority,
+        businessJustification: formData.businessJustification,
+        assetType: formData.demandType === 'CHANGE' 
+          ? assets.find(a => a.id === formData.existingAssetId)?.type 
+          : formData.newAssetType,
+        assetOwner: formData.demandType === 'CHANGE' 
+          ? assets.find(a => a.id === formData.existingAssetId)?.owner 
+          : formData.newAssetOwner
+      };
+
+      const response = await authenticatedPost('/api/classification/test', {
+        input: classificationInput
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setClassificationResult(result);
+        setShowClassificationResult(true);
+        return result;
+      }
+    } catch (err) {
+      console.error('Classification failed:', err);
+    }
+    return null;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -187,9 +233,17 @@ const DemandManagement: React.FC = () => {
     }
     
     try {
+      // Classify if requested
+      let classification = null;
+      if (classifyOnCreate && !editingDemand) {
+        classification = await classifyDemand();
+      }
+
       const dataToSubmit = {
         ...formData,
-        requestorId: editingDemand ? formData.requestorId : currentUser.id
+        requestorId: editingDemand ? formData.requestorId : currentUser.id,
+        classification: classification?.classification,
+        classificationHash: classification?.classificationHash
       };
       
       let response;
@@ -203,10 +257,22 @@ const DemandManagement: React.FC = () => {
         throw new Error(`Failed to save demand: ${response.status}`);
       }
 
+      // If demand was created and classified, also save the classification result
+      if (classification && !editingDemand) {
+        const demandResponse = await response.json();
+        if (demandResponse.id) {
+          await authenticatedPost('/api/classification/classify-demand', {
+            demandId: demandResponse.id
+          });
+        }
+      }
+
       await fetchDemands();
       await fetchSummary();
       resetForm();
       setError(null);
+      setClassificationResult(null);
+      setShowClassificationResult(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     }
@@ -611,6 +677,50 @@ const DemandManagement: React.FC = () => {
                       placeholder="Explain the business need and expected benefits"
                     />
                   </div>
+
+                  {!editingDemand && (
+                    <div className="mb-3">
+                      <div className="form-check">
+                        <input
+                          className="form-check-input"
+                          type="checkbox"
+                          id="classifyOnCreate"
+                          checked={classifyOnCreate}
+                          onChange={(e) => setClassifyOnCreate(e.target.checked)}
+                        />
+                        <label className="form-check-label" htmlFor="classifyOnCreate">
+                          Classify demand for security requirements
+                        </label>
+                      </div>
+                      {classifyOnCreate && (
+                        <button 
+                          type="button" 
+                          className="btn btn-sm btn-info mt-2"
+                          onClick={classifyDemand}
+                        >
+                          Preview Classification
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {showClassificationResult && classificationResult && (
+                    <div className="alert alert-info mb-3">
+                      <h6>Classification Result:</h6>
+                      <p className="mb-1">
+                        <strong>Classification:</strong> {classificationResult.classification} - 
+                        {classificationResult.classification === 'A' && ' High Risk'}
+                        {classificationResult.classification === 'B' && ' Medium Risk'}
+                        {classificationResult.classification === 'C' && ' Low Risk'}
+                      </p>
+                      <p className="mb-1">
+                        <strong>Confidence:</strong> {(classificationResult.confidenceScore * 100).toFixed(0)}%
+                      </p>
+                      <p className="mb-0">
+                        <strong>Applied Rule:</strong> {classificationResult.appliedRuleName || 'Default'}
+                      </p>
+                    </div>
+                  )}
 
                   <div className="d-flex justify-content-end">
                     <button type="submit" className="btn btn-success me-2">

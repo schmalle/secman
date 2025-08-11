@@ -140,6 +140,21 @@ const AdminPage = () => {
                     <div className="card">
                         <div className="card-body">
                             <h5 className="card-title">
+                                <i className="bi bi-funnel-fill me-2"></i>
+                                Classification Rules
+                            </h5>
+                            <p className="card-text">Manage demand classification rules and security assessment logic.</p>
+                            <a href="/admin/classification-rules" className="btn btn-primary">
+                                Manage Classification Rules
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                
+                <div className="col-md-4 mb-3">
+                    <div className="card">
+                        <div className="card-body">
+                            <h5 className="card-title">
                                 <i className="bi bi-gear-fill me-2"></i>
                                 System Settings
                             </h5>

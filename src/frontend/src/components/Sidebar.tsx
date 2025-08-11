@@ -102,6 +102,11 @@ const Sidebar = () => {
                     </a>
                 </li>
                 <li>
+                    <a href="/demands" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                        <i className="bi bi-clipboard-plus me-2"></i> Demand Management
+                    </a>
+                </li>
+                <li>
                     <a href="/import" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
                         <i className="bi bi-cloud-upload me-2"></i> Import
                     </a>
@@ -109,6 +114,12 @@ const Sidebar = () => {
                 <li>
                     <a href="/export" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
                         <i className="bi bi-download me-2"></i> Export
+                    </a>
+                </li>
+                
+                <li>
+                    <a href="/public-classification" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                        <i className="bi bi-funnel me-2"></i> Classification Tool
                     </a>
                 </li>
                 
