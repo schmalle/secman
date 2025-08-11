@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete } from '../utils/auth';
+import AssessmentPerformance from './AssessmentPerformance';
 
 interface Asset {
   id: number;
@@ -72,6 +73,9 @@ const RiskAssessmentManagement: React.FC = () => {
   const [editingAssessment, setEditingAssessment] = useState<RiskAssessment | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [basisTypeFilter, setBasisTypeFilter] = useState<string>('ALL');
+  const [showAssessmentModal, setShowAssessmentModal] = useState(false);
+  const [assessmentModalMode, setAssessmentModalMode] = useState<'perform' | 'review'>('perform');
+  const [selectedAssessmentId, setSelectedAssessmentId] = useState<number | null>(null);
   const [formData, setFormData] = useState<RiskAssessment>({
     assessmentBasisType: 'DEMAND',
     assessmentBasisId: 0,
@@ -309,20 +313,35 @@ const RiskAssessmentManagement: React.FC = () => {
     }
   };
 
-  const handlePerformAssessment = async (assessment: RiskAssessment) => {
-    try {
-      // Generate or get assessment token for direct access
-      const response = await authenticatedPost(`/api/risk-assessments/${assessment.id}/token`, {});
-      if (!response.ok) {
-        throw new Error(`Failed to generate assessment token: ${response.status}`);
-      }
-      const data = await response.json();
-      
-      // Navigate to the questionnaire page with the token
-      window.location.href = `/respond/${data.token}`;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred generating assessment link');
+  const handlePerformAssessment = (assessment: RiskAssessment) => {
+    if (!assessment.id) {
+      setError('Invalid assessment ID');
+      return;
     }
+    setSelectedAssessmentId(assessment.id);
+    setAssessmentModalMode('perform');
+    setShowAssessmentModal(true);
+  };
+
+  const handleCheckAnswers = (assessment: RiskAssessment) => {
+    if (!assessment.id) {
+      setError('Invalid assessment ID');
+      return;
+    }
+    setSelectedAssessmentId(assessment.id);
+    setAssessmentModalMode('review');
+    setShowAssessmentModal(true);
+  };
+
+  const handleAssessmentModalClose = () => {
+    setShowAssessmentModal(false);
+    setSelectedAssessmentId(null);
+  };
+
+  const handleAssessmentComplete = () => {
+    setShowAssessmentModal(false);
+    setSelectedAssessmentId(null);
+    fetchAssessments(); // Refresh the assessments list
   };
 
   const resetForm = () => {
@@ -765,6 +784,13 @@ const RiskAssessmentManagement: React.FC = () => {
                                   Perform Assessment
                                 </button>
                               )}
+                              <button 
+                                onClick={() => handleCheckAnswers(assessment)} 
+                                className="btn btn-outline-warning mb-1"
+                                title="Check assessment answers"
+                              >
+                                Check Answers
+                              </button>
                               {assessment.respondent && (
                                 <button 
                                   onClick={() => handleSendNotification(assessment)} 
@@ -804,6 +830,16 @@ const RiskAssessmentManagement: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Assessment Performance Modal */}
+      {showAssessmentModal && selectedAssessmentId && (
+        <AssessmentPerformance
+          assessmentId={selectedAssessmentId}
+          mode={assessmentModalMode}
+          onClose={handleAssessmentModalClose}
+          onComplete={handleAssessmentComplete}
+        />
       )}
     </div>
   );
