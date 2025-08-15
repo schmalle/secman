@@ -2,6 +2,9 @@ package com.secman.controller
 
 import com.secman.domain.Asset
 import com.secman.repository.AssetRepository
+import com.secman.repository.DemandRepository
+import com.secman.repository.RiskAssessmentRepository
+import com.secman.repository.RiskRepository
 import io.micronaut.core.annotation.Nullable
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.HttpStatus
@@ -23,6 +26,9 @@ import org.slf4j.LoggerFactory
 @ExecuteOn(TaskExecutors.BLOCKING)
 open class AssetController(
     private val assetRepository: AssetRepository,
+    private val demandRepository: DemandRepository,
+    private val riskAssessmentRepository: RiskAssessmentRepository,
+    private val riskRepository: RiskRepository,
     private val entityManager: EntityManager
 ) {
     
@@ -195,19 +201,38 @@ open class AssetController(
             val asset = assetRepository.findById(id).orElse(null)
                 ?: return HttpResponse.notFound(ErrorResponse("Asset not found"))
             
+            // Check for references before deletion
+            val referencingDemands = demandRepository.findByExistingAssetId(id)
+            val referencingRiskAssessments = riskAssessmentRepository.findAllByInvolvedAssetId(id)
+            val referencingRisks = riskRepository.findByAssetId(id)
+            
+            if (referencingDemands.isNotEmpty() || referencingRiskAssessments.isNotEmpty() || referencingRisks.isNotEmpty()) {
+                val errorMessages = mutableListOf<String>()
+                
+                if (referencingDemands.isNotEmpty()) {
+                    errorMessages.add("${referencingDemands.size} demand(s) reference this asset")
+                }
+                
+                if (referencingRiskAssessments.isNotEmpty()) {
+                    errorMessages.add("${referencingRiskAssessments.size} risk assessment(s) reference this asset")
+                }
+                
+                if (referencingRisks.isNotEmpty()) {
+                    errorMessages.add("${referencingRisks.size} risk(s) reference this asset")
+                }
+                
+                val detailedMessage = "Cannot delete asset '${asset.name}' - it is referenced by: ${errorMessages.joinToString(" and ")}. Please handle these references first."
+                
+                log.warn("Asset deletion blocked for id: {} - {}", id, detailedMessage)
+                return HttpResponse.badRequest(ErrorResponse(detailedMessage))
+            }
+            
             assetRepository.delete(asset)
             
             log.info("Deleted asset: {} with id: {}", asset.name, id)
             HttpResponse.ok(mapOf("message" to "Asset deleted successfully"))
         } catch (e: Exception) {
             log.error("Error deleting asset with id: {}", id, e)
-            
-            // Check if it's a constraint violation (asset in use by risks/risk assessments)
-            if (e.message?.contains("constraint", ignoreCase = true) == true ||
-                e.message?.contains("foreign key", ignoreCase = true) == true) {
-                return HttpResponse.badRequest(ErrorResponse("Cannot delete asset - it may be in use"))
-            }
-            
             HttpResponse.serverError<ErrorResponse>().body(ErrorResponse("Error deleting asset: ${e.message}"))
         }
     }

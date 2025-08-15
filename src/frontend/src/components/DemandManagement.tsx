@@ -67,6 +67,7 @@ const DemandManagement: React.FC = () => {
   const [summary, setSummary] = useState<DemandSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingDemand, setEditingDemand] = useState<Demand | null>(null);
   const [classificationResult, setClassificationResult] = useState<ClassificationResult | null>(null);
@@ -304,16 +305,24 @@ const DemandManagement: React.FC = () => {
       return;
     }
 
+    setDeletingId(id);
     try {
+      console.log(`Attempting to delete demand with ID: ${id}`);
       const response = await authenticatedDelete(`/api/demands/${id}`);
       if (!response.ok) {
-        throw new Error(`Failed to delete demand: ${response.status}`);
+        const errorText = await response.text();
+        console.error(`Delete failed with status ${response.status}:`, errorText);
+        throw new Error(`Failed to delete demand: ${response.status} - ${errorText}`);
       }
+      console.log(`Successfully deleted demand with ID: ${id}`);
       await fetchDemands();
       await fetchSummary();
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      console.error('Delete error:', err);
+      setError(err instanceof Error ? err.message : 'An error occurred during deletion');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -872,11 +881,27 @@ const DemandManagement: React.FC = () => {
                                 </>
                               )}
                               <button 
-                                onClick={() => demand.id && handleDelete(demand.id)} 
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  if (demand.id !== undefined && demand.id !== null) {
+                                    console.log('Deleting demand:', demand.id);
+                                    handleDelete(demand.id);
+                                  } else {
+                                    console.error('Demand ID is missing');
+                                  }
+                                }} 
                                 className="btn btn-outline-danger"
-                                disabled={demand.status === 'IN_PROGRESS' || demand.status === 'COMPLETED'}
+                                disabled={!demand.id || demand.status === 'IN_PROGRESS' || demand.status === 'COMPLETED' || deletingId === demand.id}
                               >
-                                Delete
+                                {deletingId === demand.id ? (
+                                  <>
+                                    <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                    Deleting...
+                                  </>
+                                ) : (
+                                  'Delete'
+                                )}
                               </button>
                             </div>
                           </td>
