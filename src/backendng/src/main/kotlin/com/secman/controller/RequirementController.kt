@@ -393,7 +393,7 @@ open class RequirementController(
             .header("Content-Disposition", "attachment; filename=\"$filename\"")
     }
 
-    @Get("/export/excel")
+    @Get("/export/xlsx")
     fun exportToExcel(): HttpResponse<StreamedFile> {
         val requirements = requirementRepository.findAll().sortedWith(
             compareBy<Requirement> { it.chapter ?: "" }.thenBy { it.id ?: 0 }
@@ -411,7 +411,7 @@ open class RequirementController(
             .header("Content-Disposition", "attachment; filename=\"$filename\"")
     }
 
-    @Get("/export/excel/usecase/{usecaseId}")
+    @Get("/export/xlsx/usecase/{usecaseId}")
     fun exportToExcelByUseCase(@PathVariable usecaseId: Long): HttpResponse<*> {
         val useCaseOptional = useCaseRepository.findById(usecaseId)
         
@@ -606,7 +606,7 @@ open class RequirementController(
         return workbook
     }
 
-    @Get("/api/requirements/export/docx/translated/{language}")
+    @Get("/export/docx/translated/{language}")
     fun exportToDocxTranslated(@PathVariable language: String): HttpResponse<*> {
         val activeConfig = translationService.getActiveConfig()
         if (activeConfig == null) {
@@ -644,7 +644,7 @@ open class RequirementController(
         }
     }
 
-    @Get("/api/requirements/export/docx/usecase/{usecaseId}/translated/{language}")
+    @Get("/export/docx/usecase/{usecaseId}/translated/{language}")
     fun exportToDocxTranslatedByUseCase(@PathVariable usecaseId: Long, @PathVariable language: String): HttpResponse<*> {
         val activeConfig = translationService.getActiveConfig()
         if (activeConfig == null) {

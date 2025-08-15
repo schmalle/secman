@@ -76,12 +76,17 @@ const AssetManagement: React.FC = () => {
     }
 
     try {
-      await authenticatedDelete(`/api/assets/${id}`);
+      const response = await authenticatedDelete(`/api/assets/${id}`);
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `Failed to delete asset: ${response.status}`);
+      }
 
       await fetchAssets();
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      setError(err instanceof Error ? err.message : 'An error occurred while deleting the asset');
     }
   };
 
@@ -270,7 +275,17 @@ const AssetManagement: React.FC = () => {
                           </td>
                           <td>
                             <button onClick={() => handleEdit(asset)} className="btn btn-sm btn-outline-primary me-2">Edit</button>
-                            <button onClick={() => asset.id && handleDelete(asset.id)} className="btn btn-sm btn-outline-danger">Delete</button>
+                            <button 
+                              onClick={() => {
+                                if (asset.id !== undefined && asset.id !== null) {
+                                  handleDelete(asset.id);
+                                }
+                              }} 
+                              className="btn btn-sm btn-outline-danger"
+                              disabled={asset.id === undefined || asset.id === null}
+                            >
+                              Delete
+                            </button>
                           </td>
                         </tr>
                       ))}
