@@ -15,7 +15,7 @@
     "test:all": "npm run test:checkin && npm run test:e2e"
   },
   "dependencies": {
-    "@astrojs/node": "^9.3.0",
+    "@astrojs/node": "^9.4.1",
     "@astrojs/react": "^4.3.0",
     "@popperjs/core": "^2.11.8",
     "@types/react": "^19.1.2",

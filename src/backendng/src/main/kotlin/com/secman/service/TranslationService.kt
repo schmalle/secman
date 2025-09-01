@@ -19,7 +19,7 @@ import java.util.concurrent.CompletableFuture
 @Singleton
 open class TranslationService(
     private val translationConfigRepository: TranslationConfigRepository,
-    @Client("translation") private val httpClient: HttpClient
+    private val httpClient: HttpClient
 ) {
     
     private val logger = LoggerFactory.getLogger(TranslationService::class.java)
@@ -35,20 +35,30 @@ open class TranslationService(
     @Serdeable
     data class Message(
         val role: String,
-        val content: String
+        val content: String,
+        val refusal: String? = null,
+        val reasoning: String? = null
     )
 
     @Serdeable
     data class TranslateResponse(
         val id: String? = null,
         val choices: List<Choice>? = null,
-        val error: ErrorDetail? = null
+        val error: ErrorDetail? = null,
+        val provider: String? = null,
+        val model: String? = null,
+        val `object`: String? = null,
+        val created: Long? = null,
+        val usage: Usage? = null
     )
 
     @Serdeable
     data class Choice(
         val message: Message? = null,
-        val finish_reason: String? = null
+        val finish_reason: String? = null,
+        val logprobs: Any? = null,
+        val native_finish_reason: String? = null,
+        val index: Int? = null
     )
 
     @Serdeable
@@ -56,6 +66,13 @@ open class TranslationService(
         val message: String? = null,
         val type: String? = null,
         val code: String? = null
+    )
+
+    @Serdeable
+    data class Usage(
+        val prompt_tokens: Int? = null,
+        val completion_tokens: Int? = null,
+        val total_tokens: Int? = null
     )
 
     @Serdeable
@@ -96,37 +113,53 @@ open class TranslationService(
                 temperature = config.temperature
             )
 
-            val httpRequest = HttpRequest.POST("/chat/completions", request)
+            val fullUrl = "${config.baseUrl}/chat/completions"
+            val httpRequest = HttpRequest.POST(fullUrl, request)
                 .contentType(MediaType.APPLICATION_JSON)
                 .header("Authorization", "Bearer ${config.apiKey}")
                 .header("HTTP-Referer", "https://secman.local")
                 .header("X-Title", "SecMan Translation Service")
 
-            val response = httpClient.toBlocking().exchange(httpRequest, TranslateResponse::class.java)
+            logger.debug("Making translation request to: {}", fullUrl)
+            val response = httpClient.toBlocking().exchange(httpRequest, String::class.java)
             
-            if (response.status.code == 200 && response.body() != null) {
-                val responseBody = response.body()!!
+            if (response.status.code == 200) {
+                val responseBodyString = response.body()
+                logger.debug("Raw API response: {}", responseBodyString?.take(200))
                 
-                if (responseBody.error != null) {
-                    logger.error("Translation API error: {}", responseBody.error.message)
+                if (responseBodyString.isNullOrBlank()) {
+                    logger.error("Empty response body from translation API")
                     return CompletableFuture.completedFuture(text)
                 }
                 
-                val translatedText = responseBody.choices?.firstOrNull()?.message?.content
-                if (!translatedText.isNullOrBlank()) {
-                    logger.debug("Translation successful: {} -> {}", text.take(50), translatedText.take(50))
-                    CompletableFuture.completedFuture(translatedText.trim())
-                } else {
-                    logger.warn("Empty translation response for text: {}", text.take(50))
+                return try {
+                    // Parse JSON manually to handle potential parsing issues
+                    val responseBody = com.fasterxml.jackson.databind.ObjectMapper().readValue(responseBodyString, TranslateResponse::class.java)
+                    
+                    if (responseBody.error != null) {
+                        logger.error("Translation API error: {}", responseBody.error.message)
+                        return CompletableFuture.completedFuture(text)
+                    }
+                    
+                    val translatedText = responseBody.choices?.firstOrNull()?.message?.content
+                    if (!translatedText.isNullOrBlank()) {
+                        logger.info("Translation successful: '{}' -> '{}'", text.take(50), translatedText.take(50))
+                        CompletableFuture.completedFuture(translatedText.trim())
+                    } else {
+                        logger.warn("Empty translation response for text: {}", text.take(50))
+                        CompletableFuture.completedFuture(text)
+                    }
+                } catch (e: Exception) {
+                    logger.error("Failed to parse translation response: {}", responseBodyString?.take(200), e)
                     CompletableFuture.completedFuture(text)
                 }
             } else {
-                logger.error("Translation API request failed with status: {}", response.status)
-                CompletableFuture.completedFuture(text)
+                logger.error("Translation API request failed with status: {} {}", response.status.code, response.status.reason)
+                return CompletableFuture.completedFuture(text)
             }
         } catch (e: Exception) {
             logger.error("Translation failed for text: {}", text.take(50), e)
-            CompletableFuture.completedFuture(text)
+            return CompletableFuture.completedFuture(text)
         }
     }
 
