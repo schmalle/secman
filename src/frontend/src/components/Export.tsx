@@ -177,10 +177,16 @@ const Export = () => {
 
     const handleExportToExcel = useCallback(async () => {
         setIsExporting(true);
-        setExportStatus('Exporting to Excel...');
+        
+        const isTranslated = selectedLanguage !== 'english' && translationConfigured;
+        const endpoint = isTranslated 
+            ? `/api/requirements/export/xlsx/translated/${selectedLanguage}`
+            : '/api/requirements/export/xlsx';
+        
+        setExportStatus(isTranslated ? `Translating and exporting to Excel in ${selectedLanguage}...` : 'Exporting to Excel...');
         
         try {
-            const response = await authenticatedFetch('/api/requirements/export/xlsx', {
+            const response = await authenticatedFetch(endpoint, {
                 method: 'GET',
             });
 
@@ -215,14 +221,17 @@ const Export = () => {
             a.remove();
             window.URL.revokeObjectURL(url);
             
-            setExportStatus('Requirements exported to Excel successfully');
+            const successMsg = isTranslated 
+                ? `Requirements exported and translated to ${selectedLanguage} in Excel successfully`
+                : 'Requirements exported to Excel successfully';
+            setExportStatus(successMsg);
         } catch (error: any) {
             console.error('Excel export error:', error);
             setExportStatus(`Error: ${error.message || 'Could not export requirements to Excel.'}`);
         } finally {
             setIsExporting(false);
         }
-    }, []);
+    }, [selectedLanguage, translationConfigured]);
 
     const handleExportToExcelByUseCase = useCallback(async () => {
         if (!selectedUseCase) {
@@ -231,10 +240,19 @@ const Export = () => {
         }
 
         setIsExporting(true);
-        setExportStatus('Exporting requirements for selected use case to Excel...');
+        
+        const isTranslated = selectedLanguage !== 'english' && translationConfigured;
+        const endpoint = isTranslated 
+            ? `/api/requirements/export/xlsx/usecase/${selectedUseCase}/translated/${selectedLanguage}`
+            : `/api/requirements/export/xlsx/usecase/${selectedUseCase}`;
+        
+        const statusMsg = isTranslated 
+            ? `Translating and exporting requirements for selected use case to Excel in ${selectedLanguage}...`
+            : 'Exporting requirements for selected use case to Excel...';
+        setExportStatus(statusMsg);
         
         try {
-            const response = await authenticatedFetch(`/api/requirements/export/xlsx/usecase/${selectedUseCase}`, {
+            const response = await authenticatedFetch(endpoint, {
                 method: 'GET',
             });
 
@@ -269,14 +287,17 @@ const Export = () => {
             a.remove();
             window.URL.revokeObjectURL(url);
             
-            setExportStatus('Requirements exported to Excel successfully for selected use case');
+            const successMsg = isTranslated 
+                ? `Requirements exported and translated to ${selectedLanguage} in Excel successfully for selected use case`
+                : 'Requirements exported to Excel successfully for selected use case';
+            setExportStatus(successMsg);
         } catch (error: any) {
             console.error('Excel export error:', error);
             setExportStatus(`Error: ${error.message || 'Could not export requirements to Excel.'}`);
         } finally {
             setIsExporting(false);
         }
-    }, [selectedUseCase]);
+    }, [selectedUseCase, selectedLanguage, translationConfigured]);
 
     return (
         <div className="container-fluid p-3">

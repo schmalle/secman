@@ -64,7 +64,12 @@ micronaut:
       translation:
         url: https://openrouter.ai/api/v1
     client:
-      read-timeout: 10s
+      read-timeout: 30s
+      connect-timeout: 10s
+      max-content-length: 1048576  # 1MB
+      translation:
+        read-timeout: 30s
+        connect-timeout: 10s
       
 oauth:
   http-client:

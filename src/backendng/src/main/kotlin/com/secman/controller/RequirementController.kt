@@ -6,7 +6,7 @@ import com.secman.domain.Norm
 import com.secman.repository.RequirementRepository
 import com.secman.repository.UseCaseRepository
 import com.secman.repository.NormRepository
-import com.secman.service.TranslationServiceSimple
+import com.secman.service.TranslationService
 import com.secman.service.InputValidationService
 import io.micronaut.core.annotation.Nullable
 import io.micronaut.data.model.Pageable
@@ -35,7 +35,7 @@ open class RequirementController(
     private val requirementRepository: RequirementRepository,
     private val useCaseRepository: UseCaseRepository,
     private val normRepository: NormRepository,
-    private val translationService: TranslationServiceSimple,
+    private val translationService: TranslationService,
     private val inputValidationService: InputValidationService
 ) {
 
@@ -746,7 +746,7 @@ open class RequirementController(
             shortReqRun.isBold = true
             
             val shortReqTranslated = try {
-                translationService.translateText(requirement.shortreq, targetLanguage)
+                translationService.translateText(requirement.shortreq, targetLanguage).get()
             } catch (e: Exception) {
                 requirement.shortreq
             }
@@ -762,7 +762,7 @@ open class RequirementController(
                 detailsRun.isBold = true
                 
                 val detailsTranslated = try {
-                    translationService.translateText(requirement.details!!, targetLanguage)
+                    translationService.translateText(requirement.details!!, targetLanguage).get()
                 } catch (e: Exception) {
                     requirement.details!!
                 }
@@ -779,7 +779,7 @@ open class RequirementController(
                 motivationRun.isBold = true
                 
                 val motivationTranslated = try {
-                    translationService.translateText(requirement.motivation!!, targetLanguage)
+                    translationService.translateText(requirement.motivation!!, targetLanguage).get()
                 } catch (e: Exception) {
                     requirement.motivation!!
                 }
@@ -796,7 +796,7 @@ open class RequirementController(
                 exampleRun.isBold = true
                 
                 val exampleTranslated = try {
-                    translationService.translateText(requirement.example!!, targetLanguage)
+                    translationService.translateText(requirement.example!!, targetLanguage).get()
                 } catch (e: Exception) {
                     requirement.example!!
                 }
@@ -810,7 +810,7 @@ open class RequirementController(
                 val usecaseParagraph = document.createParagraph()
                 val usecaseRun = usecaseParagraph.createRun()
                 val usecaseLabel = try {
-                    translationService.translateText("Use Cases", targetLanguage)
+                    translationService.translateText("Use Cases", targetLanguage).get()
                 } catch (e: Exception) {
                     "Use Cases"
                 }
@@ -826,7 +826,7 @@ open class RequirementController(
                 val normParagraph = document.createParagraph()
                 val normRun = normParagraph.createRun()
                 val normLabel = try {
-                    translationService.translateText("Standards/Norms", targetLanguage)
+                    translationService.translateText("Standards/Norms", targetLanguage).get()
                 } catch (e: Exception) {
                     "Standards/Norms"
                 }
@@ -843,5 +843,186 @@ open class RequirementController(
         }
         
         return document
+    }
+
+    @Get("/export/xlsx/translated/{language}")
+    fun exportToExcelTranslated(@PathVariable language: String): HttpResponse<*> {
+        val activeConfig = translationService.getActiveConfig()
+        if (activeConfig == null) {
+            return HttpResponse.badRequest(mapOf(
+                "error" to "No active translation configuration found",
+                "message" to "Please configure a translation service first"
+            ))
+        }
+
+        val requirements = requirementRepository.findAll().sortedWith(
+            compareBy<Requirement> { it.chapter ?: "" }.thenBy { it.id ?: 0 }
+        )
+
+        if (requirements.isEmpty()) {
+            return HttpResponse.ok(mapOf("message" to "No requirements found"))
+        }
+
+        return try {
+            val workbook = createTranslatedExcelWorkbook(requirements, language)
+            val outputStream = ByteArrayOutputStream()
+            workbook.write(outputStream)
+            workbook.close()
+
+            val inputStream = ByteArrayInputStream(outputStream.toByteArray())
+            val languageName = translationService.getSupportedLanguages()[language] ?: language
+            val filename = "requirements_translated_${language}_${LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"))}.xlsx"
+            
+            HttpResponse.ok(StreamedFile(inputStream, MediaType.of("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")))
+                .header("Content-Disposition", "attachment; filename=\"$filename\"")
+        } catch (e: Exception) {
+            HttpResponse.serverError(mapOf(
+                "error" to "Translation export failed",
+                "message" to e.message
+            ))
+        }
+    }
+
+    @Get("/export/xlsx/usecase/{usecaseId}/translated/{language}")
+    fun exportToExcelTranslatedByUseCase(@PathVariable usecaseId: Long, @PathVariable language: String): HttpResponse<*> {
+        val activeConfig = translationService.getActiveConfig()
+        if (activeConfig == null) {
+            return HttpResponse.badRequest(mapOf(
+                "error" to "No active translation configuration found",
+                "message" to "Please configure a translation service first"
+            ))
+        }
+
+        val useCaseOptional = useCaseRepository.findById(usecaseId)
+        if (useCaseOptional.isEmpty) {
+            return HttpResponse.notFound<Any>().body(mapOf("error" to "UseCase not found"))
+        }
+
+        val useCase = useCaseOptional.get()
+        val requirements = requirementRepository.findByUsecaseId(usecaseId).sortedWith(
+            compareBy<Requirement> { it.chapter ?: "" }.thenBy { it.id ?: 0 }
+        )
+
+        if (requirements.isEmpty()) {
+            return HttpResponse.ok(mapOf("message" to "No requirements found for this use case"))
+        }
+
+        return try {
+            val workbook = createTranslatedExcelWorkbook(requirements, language)
+            val outputStream = ByteArrayOutputStream()
+            workbook.write(outputStream)
+            workbook.close()
+
+            val inputStream = ByteArrayInputStream(outputStream.toByteArray())
+            val languageName = translationService.getSupportedLanguages()[language] ?: language
+            val filename = "requirements_usecase_${useCase.name.replace(" ", "_")}_translated_${language}_${LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"))}.xlsx"
+            
+            HttpResponse.ok(StreamedFile(inputStream, MediaType.of("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")))
+                .header("Content-Disposition", "attachment; filename=\"$filename\"")
+        } catch (e: Exception) {
+            HttpResponse.serverError(mapOf(
+                "error" to "Translation export failed",
+                "message" to e.message
+            ))
+        }
+    }
+
+    private fun createTranslatedExcelWorkbook(requirements: List<Requirement>, targetLanguage: String): XSSFWorkbook {
+        val workbook = XSSFWorkbook()
+        val sheet = workbook.createSheet("Requirements")
+        
+        val languageName = translationService.getSupportedLanguages()[targetLanguage] ?: targetLanguage
+        
+        // Create header style
+        val headerStyle = workbook.createCellStyle()
+        val headerFont = workbook.createFont()
+        headerFont.bold = true
+        headerStyle.setFont(headerFont)
+        
+        // Create info row with translation info
+        val infoRow = sheet.createRow(0)
+        val infoCell = infoRow.createCell(0)
+        infoCell.setCellValue("Translated to: $languageName - Generated on: ${LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))}")
+        infoCell.cellStyle = headerStyle
+        
+        // Create header row
+        val headerRow = sheet.createRow(1)
+        val headers = listOf("Chapter", "Norm", "Short Requirement", "Details", "Motivation", "Example", "Use Cases")
+        headers.forEachIndexed { index, header ->
+            val cell = headerRow.createCell(index)
+            // Translate header labels
+            val translatedHeader = try {
+                translationService.translateText(header, targetLanguage).get()
+            } catch (e: Exception) {
+                header
+            }
+            cell.setCellValue(translatedHeader)
+            cell.cellStyle = headerStyle
+        }
+        
+        // Add requirements data with translation
+        requirements.forEachIndexed { index, requirement ->
+            val row = sheet.createRow(index + 2) // +2 to account for info and header rows
+            
+            // Chapter (not translated)
+            row.createCell(0).setCellValue(requirement.chapter ?: "")
+            
+            // Norm (not translated)
+            row.createCell(1).setCellValue(requirement.norms.joinToString(", ") { it.name })
+            
+            // Short requirement (translated)
+            val shortReqTranslated = try {
+                translationService.translateText(requirement.shortreq, targetLanguage).get()
+            } catch (e: Exception) {
+                requirement.shortreq
+            }
+            row.createCell(2).setCellValue(shortReqTranslated)
+            
+            // Details (translated if present)
+            val detailsTranslated = if (!requirement.details.isNullOrBlank()) {
+                try {
+                    translationService.translateText(requirement.details!!, targetLanguage).get()
+                } catch (e: Exception) {
+                    requirement.details!!
+                }
+            } else {
+                ""
+            }
+            row.createCell(3).setCellValue(detailsTranslated)
+            
+            // Motivation (translated if present)
+            val motivationTranslated = if (!requirement.motivation.isNullOrBlank()) {
+                try {
+                    translationService.translateText(requirement.motivation!!, targetLanguage).get()
+                } catch (e: Exception) {
+                    requirement.motivation!!
+                }
+            } else {
+                ""
+            }
+            row.createCell(4).setCellValue(motivationTranslated)
+            
+            // Example (translated if present)
+            val exampleTranslated = if (!requirement.example.isNullOrBlank()) {
+                try {
+                    translationService.translateText(requirement.example!!, targetLanguage).get()
+                } catch (e: Exception) {
+                    requirement.example!!
+                }
+            } else {
+                ""
+            }
+            row.createCell(5).setCellValue(exampleTranslated)
+            
+            // Use Cases (not translated)
+            row.createCell(6).setCellValue(requirement.usecases.joinToString(", ") { it.name })
+        }
+        
+        // Auto-size columns
+        for (i in 0 until headers.size) {
+            sheet.autoSizeColumn(i)
+        }
+        
+        return workbook
     }
 }
