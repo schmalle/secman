@@ -112,7 +112,7 @@ class McpAdminController(
     @Get("/api-keys")
     suspend fun listApiKeys(
         authentication: Authentication?,
-        @QueryValue("include_inactive") includeInactive: Boolean = false
+        @QueryValue("include_inactive") includeInactive: Boolean? = false
     ): HttpResponse<McpApiKeyListResponse> {
         return try {
             val userId = getUserIdFromAuth(authentication)
@@ -122,7 +122,7 @@ class McpAdminController(
             }
 
             // Get API keys for user
-            val apiKeys = if (includeInactive) {
+            val apiKeys = if (includeInactive == true) {
                 apiKeyRepository.findByUserId(userId)
             } else {
                 apiKeyRepository.findActiveByUserId(userId)
