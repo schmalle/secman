@@ -1,0 +1,179 @@
+package com.secman.mcp.tools
+
+import com.secman.domain.McpOperation
+import com.secman.service.RequirementService
+import jakarta.inject.Inject
+import jakarta.inject.Singleton
+
+/**
+ * MCP tool for full-text search across security requirements.
+ */
+@Singleton
+class SearchRequirementsTool(
+    @Inject private val requirementService: RequirementService
+) : McpTool {
+
+    override val name = "search_requirements"
+    override val description = "Full-text search across security requirements with relevance scoring"
+    override val operation = McpOperation.READ
+
+    override val inputSchema = mapOf(
+        "type" to "object",
+        "properties" to mapOf(
+            "query" to mapOf(
+                "type" to "string",
+                "description" to "Search query string",
+                "minLength" to 1
+            ),
+            "limit" to mapOf(
+                "type" to "number",
+                "description" to "Maximum number of results to return",
+                "default" to 20,
+                "maximum" to 100
+            ),
+            "include_description" to mapOf(
+                "type" to "boolean",
+                "description" to "Include description field in search",
+                "default" to true
+            ),
+            "tags" to mapOf(
+                "type" to "array",
+                "items" to mapOf("type" to "string"),
+                "description" to "Filter results by tags"
+            ),
+            "priority" to mapOf(
+                "type" to "string",
+                "enum" to listOf("LOW", "MEDIUM", "HIGH", "CRITICAL"),
+                "description" to "Filter by priority level"
+            ),
+            "status" to mapOf(
+                "type" to "string",
+                "enum" to listOf("DRAFT", "ACTIVE", "DEPRECATED", "ARCHIVED"),
+                "description" to "Filter by requirement status"
+            )
+        ),
+        "required" to listOf("query")
+    )
+
+    override suspend fun execute(arguments: Map<String, Any>): McpToolResult {
+        val query = arguments["query"] as? String
+        if (query.isNullOrBlank()) {
+            return McpToolResult.error("INVALID_PARAMETER", "Query parameter is required and cannot be empty")
+        }
+
+        val limit = (arguments["limit"] as? Number)?.toInt() ?: 20
+        val includeDescription = arguments["include_description"] as? Boolean ?: true
+        val tags = (arguments["tags"] as? List<*>)?.filterIsInstance<String>()
+        val priority = arguments["priority"] as? String
+        val status = arguments["status"] as? String
+
+        if (limit > 100) {
+            return McpToolResult.error("INVALID_PARAMETER", "Limit cannot exceed 100")
+        }
+
+        try {
+            val searchResults = requirementService.searchRequirements(
+                query = query,
+                limit = limit,
+                includeDescription = includeDescription,
+                tags = tags,
+                priority = priority,
+                status = status
+            )
+
+            val enrichedResults = searchResults.map { requirement ->
+                val relevanceScore = calculateRelevanceScore(
+                    query,
+                    requirement.title,
+                    if (includeDescription) requirement.description else null
+                )
+
+                mapOf(
+                    "id" to requirement.id,
+                    "title" to requirement.title,
+                    "description" to requirement.description,
+                    "status" to requirement.status.name,
+                    "priority" to requirement.priority.name,
+                    "tags" to requirement.tags.map { it.name },
+                    "createdAt" to requirement.createdAt.toString(),
+                    "updatedAt" to requirement.updatedAt?.toString(),
+                    "relevanceScore" to relevanceScore,
+                    "matchedFields" to getMatchedFields(query, requirement.title, requirement.description)
+                )
+            }.sortedByDescending { it["relevanceScore"] as Double }
+
+            val metadata = mapOf(
+                "query" to query,
+                "totalResults" to enrichedResults.size,
+                "searchFields" to if (includeDescription) listOf("title", "description") else listOf("title"),
+                "filters" to mapOf(
+                    "tags" to tags,
+                    "priority" to priority,
+                    "status" to status
+                ).filterValues { it != null }
+            )
+
+            return McpToolResult.success(
+                mapOf(
+                    "requirements" to enrichedResults,
+                    "query" to query,
+                    "total" to enrichedResults.size
+                ),
+                metadata
+            )
+
+        } catch (e: Exception) {
+            return McpToolResult.error("EXECUTION_ERROR", "Search failed: ${e.message}")
+        }
+    }
+
+    private fun calculateRelevanceScore(query: String, title: String, description: String?): Double {
+        val queryTerms = query.lowercase().split("\\s+".toRegex()).filter { it.isNotBlank() }
+        if (queryTerms.isEmpty()) return 0.0
+
+        var score = 0.0
+        val titleLower = title.lowercase()
+        val descriptionLower = description?.lowercase() ?: ""
+
+        for (term in queryTerms) {
+            // Exact phrase match bonus
+            if (titleLower.contains(query.lowercase())) {
+                score += 10.0
+            }
+
+            // Title matches (weighted higher)
+            val titleMatches = titleLower.split(term).size - 1
+            score += titleMatches * 5.0
+
+            // Description matches
+            val descriptionMatches = descriptionLower.split(term).size - 1
+            score += descriptionMatches * 1.0
+
+            // Word boundary matches (whole words)
+            if (titleLower.contains("\\b$term\\b".toRegex())) {
+                score += 3.0
+            }
+            if (descriptionLower.contains("\\b$term\\b".toRegex())) {
+                score += 1.5
+            }
+        }
+
+        // Normalize by query length
+        return score / queryTerms.size
+    }
+
+    private fun getMatchedFields(query: String, title: String, description: String?): List<String> {
+        val matchedFields = mutableListOf<String>()
+        val queryLower = query.lowercase()
+
+        if (title.lowercase().contains(queryLower)) {
+            matchedFields.add("title")
+        }
+
+        if (description != null && description.lowercase().contains(queryLower)) {
+            matchedFields.add("description")
+        }
+
+        return matchedFields
+    }
+}
