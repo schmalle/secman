@@ -1,0 +1,611 @@
+openapi: 3.0.3
+info:
+  title: Secman MCP Tools
+  description: MCP tool definitions for Secman security requirement management
+  version: 0.1.0
+
+components:
+  schemas:
+    # Security Requirements Tools
+    GetRequirementsInput:
+      type: object
+      properties:
+        query:
+          type: string
+          description: Search query for requirement text
+        category:
+          type: string
+          description: Requirement category filter
+        status:
+          type: string
+          enum: [DRAFT, ACTIVE, ARCHIVED]
+        tags:
+          type: array
+          items:
+            type: string
+          description: Tag filters
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 10
+        offset:
+          type: integer
+          minimum: 0
+          default: 0
+
+    GetRequirementsOutput:
+      type: object
+      properties:
+        requirements:
+          type: array
+          items:
+            $ref: '#/components/schemas/SecurityRequirement'
+        totalCount:
+          type: integer
+        hasMore:
+          type: boolean
+
+    SecurityRequirement:
+      type: object
+      required:
+        - id
+        - title
+        - description
+        - status
+      properties:
+        id:
+          type: integer
+          description: Requirement ID
+        title:
+          type: string
+          description: Requirement title
+        description:
+          type: string
+          description: Detailed requirement description
+        category:
+          type: string
+          description: Requirement category
+        status:
+          type: string
+          enum: [DRAFT, ACTIVE, ARCHIVED]
+        priority:
+          type: string
+          enum: [LOW, MEDIUM, HIGH, CRITICAL]
+        tags:
+          type: array
+          items:
+            type: string
+        createdBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        files:
+          type: array
+          items:
+            $ref: '#/components/schemas/RequirementFile'
+
+    CreateRequirementInput:
+      type: object
+      required:
+        - title
+        - description
+      properties:
+        title:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+        category:
+          type: string
+        priority:
+          type: string
+          enum: [LOW, MEDIUM, HIGH, CRITICAL]
+          default: MEDIUM
+        tags:
+          type: array
+          items:
+            type: string
+          maxItems: 20
+
+    CreateRequirementOutput:
+      type: object
+      properties:
+        requirement:
+          $ref: '#/components/schemas/SecurityRequirement'
+        message:
+          type: string
+          example: "Security requirement created successfully"
+
+    UpdateRequirementInput:
+      type: object
+      required:
+        - id
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+        category:
+          type: string
+        status:
+          type: string
+          enum: [DRAFT, ACTIVE, ARCHIVED]
+        priority:
+          type: string
+          enum: [LOW, MEDIUM, HIGH, CRITICAL]
+        tags:
+          type: array
+          items:
+            type: string
+          maxItems: 20
+
+    # Risk Assessment Tools
+    GetRiskAssessmentsInput:
+      type: object
+      properties:
+        requirementId:
+          type: integer
+          description: Filter by requirement ID
+        assetId:
+          type: integer
+          description: Filter by asset ID
+        riskLevel:
+          type: string
+          enum: [LOW, MEDIUM, HIGH, CRITICAL]
+        status:
+          type: string
+          enum: [PENDING, COMPLETED, REVIEWED]
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 10
+        offset:
+          type: integer
+          minimum: 0
+          default: 0
+
+    GetRiskAssessmentsOutput:
+      type: object
+      properties:
+        assessments:
+          type: array
+          items:
+            $ref: '#/components/schemas/RiskAssessment'
+        totalCount:
+          type: integer
+        hasMore:
+          type: boolean
+
+    RiskAssessment:
+      type: object
+      required:
+        - id
+        - riskLevel
+        - status
+      properties:
+        id:
+          type: integer
+        assetId:
+          type: integer
+        requirementId:
+          type: integer
+        riskLevel:
+          type: string
+          enum: [LOW, MEDIUM, HIGH, CRITICAL]
+        status:
+          type: string
+          enum: [PENDING, COMPLETED, REVIEWED]
+        score:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 10
+        impact:
+          type: string
+        likelihood:
+          type: string
+        mitigation:
+          type: string
+        assessedBy:
+          type: string
+        assessedAt:
+          type: string
+          format: date-time
+        reviewedBy:
+          type: string
+        reviewedAt:
+          type: string
+          format: date-time
+
+    ExecuteRiskAssessmentInput:
+      type: object
+      required:
+        - assetId
+        - requirementIds
+      properties:
+        assetId:
+          type: integer
+          description: Target asset for assessment
+        requirementIds:
+          type: array
+          items:
+            type: integer
+          minItems: 1
+          maxItems: 50
+          description: Requirements to assess against
+        assessmentType:
+          type: string
+          enum: [AUTOMATED, MANUAL, HYBRID]
+          default: AUTOMATED
+        notes:
+          type: string
+          description: Additional assessment notes
+
+    ExecuteRiskAssessmentOutput:
+      type: object
+      properties:
+        assessmentId:
+          type: integer
+        status:
+          type: string
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/RiskAssessment'
+        executionTime:
+          type: integer
+          description: Assessment execution time in milliseconds
+
+    # File Management Tools
+    GetRequirementFilesInput:
+      type: object
+      required:
+        - requirementId
+      properties:
+        requirementId:
+          type: integer
+
+    GetRequirementFilesOutput:
+      type: object
+      properties:
+        files:
+          type: array
+          items:
+            $ref: '#/components/schemas/RequirementFile'
+
+    RequirementFile:
+      type: object
+      required:
+        - id
+        - filename
+        - mimeType
+        - size
+      properties:
+        id:
+          type: integer
+        filename:
+          type: string
+        mimeType:
+          type: string
+        size:
+          type: integer
+          description: File size in bytes
+        uploadedBy:
+          type: string
+        uploadedAt:
+          type: string
+          format: date-time
+        downloadUrl:
+          type: string
+          description: Temporary download URL
+
+    DownloadFileInput:
+      type: object
+      required:
+        - fileId
+      properties:
+        fileId:
+          type: integer
+
+    DownloadFileOutput:
+      type: object
+      properties:
+        filename:
+          type: string
+        content:
+          type: string
+          format: base64
+          description: File content encoded in base64
+        mimeType:
+          type: string
+        size:
+          type: integer
+
+    # Translation Tools
+    TranslateRequirementInput:
+      type: object
+      required:
+        - requirementId
+        - targetLanguage
+      properties:
+        requirementId:
+          type: integer
+        targetLanguage:
+          type: string
+          enum: [en, de, fr, es, it, pt, nl, sv, da, no]
+        includeDescription:
+          type: boolean
+          default: true
+        includeTitle:
+          type: boolean
+          default: true
+
+    TranslateRequirementOutput:
+      type: object
+      properties:
+        translatedTitle:
+          type: string
+        translatedDescription:
+          type: string
+        sourceLanguage:
+          type: string
+        targetLanguage:
+          type: string
+        translationQuality:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 1
+          description: Translation confidence score
+
+    # Audit and Monitoring Tools
+    GetAuditLogInput:
+      type: object
+      properties:
+        startDate:
+          type: string
+          format: date-time
+        endDate:
+          type: string
+          format: date-time
+        eventType:
+          type: string
+          enum: [TOOL_CALL, AUTH_SUCCESS, AUTH_FAILURE, PERMISSION_DENIED]
+        userId:
+          type: string
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 50
+        offset:
+          type: integer
+          minimum: 0
+          default: 0
+
+    GetAuditLogOutput:
+      type: object
+      properties:
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditEvent'
+        totalCount:
+          type: integer
+        hasMore:
+          type: boolean
+
+    AuditEvent:
+      type: object
+      required:
+        - id
+        - eventType
+        - timestamp
+      properties:
+        id:
+          type: integer
+        eventType:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        userId:
+          type: string
+        toolName:
+          type: string
+        resourcePath:
+          type: string
+        responseStatus:
+          type: string
+        errorMessage:
+          type: string
+        clientIp:
+          type: string
+        executionTimeMs:
+          type: integer
+
+    # Search and Discovery Tools
+    SearchAllInput:
+      type: object
+      required:
+        - query
+      properties:
+        query:
+          type: string
+          minLength: 1
+          maxLength: 500
+        includeRequirements:
+          type: boolean
+          default: true
+        includeAssessments:
+          type: boolean
+          default: true
+        includeFiles:
+          type: boolean
+          default: false
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 20
+
+    SearchAllOutput:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/SearchResult'
+        totalCount:
+          type: integer
+        queryTime:
+          type: integer
+          description: Search execution time in milliseconds
+
+    SearchResult:
+      type: object
+      required:
+        - type
+        - id
+        - title
+        - relevance
+      properties:
+        type:
+          type: string
+          enum: [REQUIREMENT, ASSESSMENT, FILE]
+        id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        relevance:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 1
+        highlights:
+          type: array
+          items:
+            type: string
+          description: Text snippets with search term highlights
+        url:
+          type: string
+          description: Direct link to resource in web UI
+
+# MCP Tool Definitions
+secman_mcp_tools:
+  # Security Requirements Tools
+  get_requirements:
+    name: get_requirements
+    description: Search and retrieve security requirements with filtering options
+    inputSchema:
+      $ref: '#/components/schemas/GetRequirementsInput'
+    outputSchema:
+      $ref: '#/components/schemas/GetRequirementsOutput'
+    permissions:
+      - REQUIREMENTS_READ
+
+  create_requirement:
+    name: create_requirement
+    description: Create a new security requirement
+    inputSchema:
+      $ref: '#/components/schemas/CreateRequirementInput'
+    outputSchema:
+      $ref: '#/components/schemas/CreateRequirementOutput'
+    permissions:
+      - REQUIREMENTS_WRITE
+
+  update_requirement:
+    name: update_requirement
+    description: Update an existing security requirement
+    inputSchema:
+      $ref: '#/components/schemas/UpdateRequirementInput'
+    outputSchema:
+      $ref: '#/components/schemas/SecurityRequirement'
+    permissions:
+      - REQUIREMENTS_WRITE
+
+  # Risk Assessment Tools
+  get_risk_assessments:
+    name: get_risk_assessments
+    description: Retrieve risk assessments with filtering options
+    inputSchema:
+      $ref: '#/components/schemas/GetRiskAssessmentsInput'
+    outputSchema:
+      $ref: '#/components/schemas/GetRiskAssessmentsOutput'
+    permissions:
+      - ASSESSMENTS_READ
+
+  execute_risk_assessment:
+    name: execute_risk_assessment
+    description: Execute a new risk assessment on specified assets and requirements
+    inputSchema:
+      $ref: '#/components/schemas/ExecuteRiskAssessmentInput'
+    outputSchema:
+      $ref: '#/components/schemas/ExecuteRiskAssessmentOutput'
+    permissions:
+      - ASSESSMENTS_EXECUTE
+
+  # File Management Tools
+  get_requirement_files:
+    name: get_requirement_files
+    description: List files attached to a security requirement
+    inputSchema:
+      $ref: '#/components/schemas/GetRequirementFilesInput'
+    outputSchema:
+      $ref: '#/components/schemas/GetRequirementFilesOutput'
+    permissions:
+      - FILES_READ
+
+  download_file:
+    name: download_file
+    description: Download a requirement file by ID
+    inputSchema:
+      $ref: '#/components/schemas/DownloadFileInput'
+    outputSchema:
+      $ref: '#/components/schemas/DownloadFileOutput'
+    permissions:
+      - FILES_READ
+
+  # Translation Tools
+  translate_requirement:
+    name: translate_requirement
+    description: Translate a security requirement to another language using OpenRouter
+    inputSchema:
+      $ref: '#/components/schemas/TranslateRequirementInput'
+    outputSchema:
+      $ref: '#/components/schemas/TranslateRequirementOutput'
+    permissions:
+      - TRANSLATION_USE
+
+  # Audit Tools
+  get_audit_log:
+    name: get_audit_log
+    description: Retrieve MCP server audit logs (admin only)
+    inputSchema:
+      $ref: '#/components/schemas/GetAuditLogInput'
+    outputSchema:
+      $ref: '#/components/schemas/GetAuditLogOutput'
+    permissions:
+      - AUDIT_READ
+
+  # Search Tools
+  search_all:
+    name: search_all
+    description: Search across all Secman resources (requirements, assessments, files)
+    inputSchema:
+      $ref: '#/components/schemas/SearchAllInput'
+    outputSchema:
+      $ref: '#/components/schemas/SearchAllOutput'
+    permissions:
+      - REQUIREMENTS_READ
