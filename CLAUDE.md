@@ -9,6 +9,7 @@ Secman is a security requirement management and risk assessment tool built with:
 - **Frontend**: Astro 5.12.3 with React 19.1.0 integration (port 4321)
 - **Database**: MariaDB 11.4
 - **Authentication**: JWT with OAuth2 support (GitHub provider configured)
+- **MCP Integration**: Model Context Protocol server for AI assistant access
 
 ## Essential Commands
 
@@ -87,12 +88,14 @@ docker-compose -f docker-compose.dev.yml exec frontend sh
   - `OAuthController`: OAuth2 flow handling
   - `RequirementController`: Requirements CRUD operations
   - `RiskAssessmentController`: Risk assessment management
+  - `McpController`: MCP server endpoints for AI assistant integration
   
 - **Services** (`src/backendng/src/main/kotlin/com/secman/service/`):
   - `OAuthService`: OAuth provider integration
   - `TranslationService`: OpenRouter API integration for translations
   - `EmailService`: Email notifications (JavaMail)
   - `NormParsingService`: Excel file parsing for requirements import
+  - `McpService`: MCP protocol implementation and session management
 
 - **Domain Models** (`src/backendng/src/main/kotlin/com/secman/domain/`): JPA entities with Hibernate
   
@@ -114,6 +117,15 @@ docker-compose -f docker-compose.dev.yml exec frontend sh
 - Authentication: Bearer token in Authorization header
 - CORS configured for localhost:4321 (frontend)
 - Anonymous endpoints: `/api/auth/login`, `/oauth/**`, `/health`
+- MCP endpoints: `/api/mcp/*` with API key authentication
+
+#### MCP Server Integration
+- Base MCP path: `/api/mcp/*`
+- Authentication: API key via `X-MCP-API-Key` header
+- Protocol: JSON-RPC 2.0 over HTTP/SSE
+- Available tools: requirements CRUD, risk assessments, file access, translations
+- Session management: stateful connections with cleanup
+- Real-time: Server-Sent Events for live updates
 
 ## Key Configuration Files
 

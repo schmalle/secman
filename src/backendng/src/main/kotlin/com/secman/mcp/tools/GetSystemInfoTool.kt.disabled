@@ -1,0 +1,288 @@
+package com.secman.mcp.tools
+
+import com.secman.domain.McpOperation
+import com.secman.service.McpSessionService
+import com.secman.service.McpAuditService
+import com.secman.service.RequirementService
+import com.secman.service.RiskAssessmentService
+import jakarta.inject.Inject
+import jakarta.inject.Singleton
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+
+/**
+ * MCP tool for retrieving system information and statistics (admin only).
+ */
+@Singleton
+class GetSystemInfoTool(
+    @Inject private val sessionService: McpSessionService,
+    @Inject private val auditService: McpAuditService,
+    @Inject private val requirementService: RequirementService,
+    @Inject private val riskAssessmentService: RiskAssessmentService
+) : McpTool {
+
+    override val name = "get_system_info"
+    override val description = "Get comprehensive system status, statistics, and health information (admin only)"
+    override val operation = McpOperation.READ
+
+    override val inputSchema = mapOf(
+        "type" to "object",
+        "properties" to mapOf(
+            "include_sessions" to mapOf(
+                "type" to "boolean",
+                "description" to "Include MCP session statistics",
+                "default" to true
+            ),
+            "include_audit" to mapOf(
+                "type" to "boolean",
+                "description" to "Include audit log statistics",
+                "default" to true
+            ),
+            "include_content" to mapOf(
+                "type" to "boolean",
+                "description" to "Include content statistics (requirements, assessments)",
+                "default" to true
+            ),
+            "include_performance" to mapOf(
+                "type" to "boolean",
+                "description" to "Include performance metrics",
+                "default" to false
+            ),
+            "time_range_hours" to mapOf(
+                "type" to "number",
+                "description" to "Time range for statistics in hours",
+                "default" to 24,
+                "maximum" to 168
+            )
+        )
+    )
+
+    override suspend fun execute(arguments: Map<String, Any>): McpToolResult {
+        val includeSessions = arguments["include_sessions"] as? Boolean ?: true
+        val includeAudit = arguments["include_audit"] as? Boolean ?: true
+        val includeContent = arguments["include_content"] as? Boolean ?: true
+        val includePerformance = arguments["include_performance"] as? Boolean ?: false
+        val timeRangeHours = (arguments["time_range_hours"] as? Number)?.toInt() ?: 24
+
+        if (timeRangeHours > 168) { // Max 7 days
+            return McpToolResult.error("INVALID_PARAMETER", "Time range cannot exceed 168 hours (7 days)")
+        }
+
+        try {
+            val systemInfo = mutableMapOf<String, Any>()
+
+            // Basic system information
+            systemInfo["system"] = mapOf(
+                "name" to "Secman",
+                "version" to "1.0.0-MCP",
+                "uptime" to getSystemUptime(),
+                "timestamp" to LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME),
+                "timezone" to java.time.ZoneId.systemDefault().toString(),
+                "jvm" to mapOf(
+                    "version" to System.getProperty("java.version"),
+                    "vendor" to System.getProperty("java.vendor"),
+                    "maxMemory" to Runtime.getRuntime().maxMemory(),
+                    "totalMemory" to Runtime.getRuntime().totalMemory(),
+                    "freeMemory" to Runtime.getRuntime().freeMemory()
+                )
+            )
+
+            // MCP session statistics
+            if (includeSessions) {
+                val sessionStats = sessionService.getSessionStatistics()
+                systemInfo["mcpSessions"] = mapOf(
+                    "totalActiveSessions" to sessionStats.totalActiveSessions,
+                    "recentlyActiveSessions" to sessionStats.recentlyActiveSessions,
+                    "memoryTrackedSessions" to sessionStats.memoryTrackedSessions,
+                    "connectionTypeBreakdown" to sessionStats.connectionTypeBreakdown,
+                    "utilizationPercentage" to sessionStats.utilizationPercentage,
+                    "maxConcurrentSessions" to sessionStats.maxConcurrentSessions
+                )
+            }
+
+            // Audit statistics
+            if (includeAudit) {
+                val since = LocalDateTime.now().minusHours(timeRangeHours.toLong())
+                val securityEvents = auditService.getSecurityEvents(since)
+
+                systemInfo["audit"] = mapOf(
+                    "timeRangeHours" to timeRangeHours,
+                    "totalEvents" to securityEvents.totalEvents,
+                    "highRiskEvents" to securityEvents.highRiskEvents,
+                    "eventsByType" to securityEvents.eventsByType,
+                    "topSourceIps" to securityEvents.topSourceIps.take(5),
+                    "securityHealthScore" to calculateSecurityHealthScore(securityEvents)
+                )
+            }
+
+            // Content statistics
+            if (includeContent) {
+                val contentStats = getContentStatistics()
+                systemInfo["content"] = contentStats
+            }
+
+            // Performance metrics
+            if (includePerformance) {
+                val performanceStats = auditService.getPerformanceOverview(timeRangeHours)
+                systemInfo["performance"] = mapOf(
+                    "analysisHours" to performanceStats.analysisHours,
+                    "totalSlowOperations" to performanceStats.totalSlowOperations,
+                    "averageResponseTime" to calculateAverageResponseTime(performanceStats),
+                    "operationMetrics" to performanceStats.operationMetrics.take(10),
+                    "hourlyTrends" to performanceStats.hourlyTrends.takeLast(24)
+                )
+            }
+
+            // System health assessment
+            systemInfo["health"] = assessSystemHealth(systemInfo)
+
+            val metadata = mapOf(
+                "generatedAt" to LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME),
+                "requestedSections" to mapOf(
+                    "sessions" to includeSessions,
+                    "audit" to includeAudit,
+                    "content" to includeContent,
+                    "performance" to includePerformance
+                ),
+                "timeRangeHours" to timeRangeHours
+            )
+
+            return McpToolResult.success(systemInfo, metadata)
+
+        } catch (e: Exception) {
+            return McpToolResult.error("EXECUTION_ERROR", "Failed to retrieve system information: ${e.message}")
+        }
+    }
+
+    private fun getSystemUptime(): String {
+        val uptimeMs = System.currentTimeMillis() - startTime
+        val hours = uptimeMs / (1000 * 60 * 60)
+        val minutes = (uptimeMs % (1000 * 60 * 60)) / (1000 * 60)
+        return "${hours}h ${minutes}m"
+    }
+
+    private suspend fun getContentStatistics(): Map<String, Any> {
+        return try {
+            val requirementStats = requirementService.getStatistics()
+            val assessmentStats = riskAssessmentService.getStatistics()
+
+            mapOf(
+                "requirements" to mapOf(
+                    "total" to requirementStats.total,
+                    "byStatus" to requirementStats.byStatus,
+                    "byPriority" to requirementStats.byPriority,
+                    "recentlyCreated" to requirementStats.createdLast7Days,
+                    "recentlyUpdated" to requirementStats.updatedLast7Days
+                ),
+                "assessments" to mapOf(
+                    "total" to assessmentStats.total,
+                    "byStatus" to assessmentStats.byStatus,
+                    "byRiskLevel" to assessmentStats.byRiskLevel,
+                    "completed" to assessmentStats.completed,
+                    "inProgress" to assessmentStats.inProgress
+                ),
+                "tags" to mapOf(
+                    "totalUniqueTags" to 0, // Would need tag service implementation
+                    "mostUsedTags" to emptyList<String>()
+                )
+            )
+        } catch (e: Exception) {
+            mapOf(
+                "error" to "Content statistics unavailable: ${e.message}"
+            )
+        }
+    }
+
+    private fun calculateSecurityHealthScore(securityEvents: com.secman.service.SecurityEventSummary): Double {
+        val totalEvents = securityEvents.totalEvents
+        val highRiskEvents = securityEvents.highRiskEvents
+
+        if (totalEvents == 0) return 100.0
+
+        val highRiskPercentage = (highRiskEvents.toDouble() / totalEvents) * 100
+        return maxOf(0.0, 100.0 - (highRiskPercentage * 2)) // Heavily weight high-risk events
+    }
+
+    private fun calculateAverageResponseTime(performanceStats: com.secman.service.PerformanceOverview): Double {
+        val metrics = performanceStats.operationMetrics
+        if (metrics.isEmpty()) return 0.0
+
+        val totalDuration = metrics.sumOf { it.avgDuration }
+        return totalDuration.toDouble() / metrics.size
+    }
+
+    private fun assessSystemHealth(systemInfo: Map<String, Any>): Map<String, Any> {
+        val healthChecks = mutableMapOf<String, Any>()
+
+        // Memory check
+        val jvmInfo = (systemInfo["system"] as? Map<*, *>)?.get("jvm") as? Map<*, *>
+        if (jvmInfo != null) {
+            val maxMemory = jvmInfo["maxMemory"] as? Long ?: 0L
+            val totalMemory = jvmInfo["totalMemory"] as? Long ?: 0L
+            val freeMemory = jvmInfo["freeMemory"] as? Long ?: 0L
+            val usedMemory = totalMemory - freeMemory
+            val memoryUsagePercent = if (maxMemory > 0) (usedMemory.toDouble() / maxMemory) * 100 else 0.0
+
+            healthChecks["memory"] = mapOf(
+                "status" to when {
+                    memoryUsagePercent < 70 -> "HEALTHY"
+                    memoryUsagePercent < 85 -> "WARNING"
+                    else -> "CRITICAL"
+                },
+                "usagePercent" to memoryUsagePercent,
+                "usedMB" to usedMemory / (1024 * 1024),
+                "maxMB" to maxMemory / (1024 * 1024)
+            )
+        }
+
+        // Session capacity check
+        val sessionInfo = systemInfo["mcpSessions"] as? Map<*, *>
+        if (sessionInfo != null) {
+            val utilization = sessionInfo["utilizationPercentage"] as? Double ?: 0.0
+            healthChecks["sessionCapacity"] = mapOf(
+                "status" to when {
+                    utilization < 70 -> "HEALTHY"
+                    utilization < 90 -> "WARNING"
+                    else -> "CRITICAL"
+                },
+                "utilizationPercent" to utilization
+            )
+        }
+
+        // Security health check
+        val auditInfo = systemInfo["audit"] as? Map<*, *>
+        if (auditInfo != null) {
+            val healthScore = auditInfo["securityHealthScore"] as? Double ?: 100.0
+            healthChecks["security"] = mapOf(
+                "status" to when {
+                    healthScore >= 80 -> "HEALTHY"
+                    healthScore >= 60 -> "WARNING"
+                    else -> "CRITICAL"
+                },
+                "healthScore" to healthScore
+            )
+        }
+
+        // Overall status
+        val worstStatus = healthChecks.values
+            .mapNotNull { (it as? Map<*, *>)?.get("status") as? String }
+            .maxByOrNull {
+                when (it) {
+                    "CRITICAL" -> 3
+                    "WARNING" -> 2
+                    "HEALTHY" -> 1
+                    else -> 0
+                }
+            } ?: "UNKNOWN"
+
+        return mapOf(
+            "overallStatus" to worstStatus,
+            "checks" to healthChecks,
+            "lastChecked" to LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+        )
+    }
+
+    companion object {
+        private val startTime = System.currentTimeMillis()
+    }
+}

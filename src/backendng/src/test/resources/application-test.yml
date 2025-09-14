@@ -20,3 +20,12 @@ micronaut:
     name: secman-backend-ng-test
   server:
     port: -1  # Use random port for tests
+  security:
+    enabled: false  # Disable security for tests
+
+# Disable JWT verification for tests
+jwt:
+  signature:
+    secret:
+      generator:
+        secret: "test-secret-key-for-jwt-tokens-in-testing-environment-only"

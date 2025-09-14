@@ -131,7 +131,7 @@ open class DemandClassificationController(
     }
     
     @Post("/rules")
-    @Secured("ROLE_ADMIN")
+    @Secured("ADMIN")
     @Transactional
     open fun createRule(
         @Valid @Body request: CreateRuleRequest,
@@ -159,7 +159,7 @@ open class DemandClassificationController(
     }
     
     @Put("/rules/{id}")
-    @Secured("ROLE_ADMIN")
+    @Secured("ADMIN")
     @Transactional
     open fun updateRule(
         id: Long,
@@ -195,7 +195,7 @@ open class DemandClassificationController(
     }
     
     @Put("/rules/priority")
-    @Secured("ROLE_ADMIN")
+    @Secured("ADMIN")
     @Transactional
     open fun updateRulePriorities(@Valid @Body request: UpdateRulePriorityRequest): HttpResponse<List<DemandClassificationRule>> {
         return try {
@@ -216,7 +216,7 @@ open class DemandClassificationController(
     }
     
     @Delete("/rules/{id}")
-    @Secured("ROLE_ADMIN")
+    @Secured("ADMIN")
     @Transactional
     open fun deleteRule(id: Long): HttpResponse<Map<String, String>> {
         return try {
@@ -244,7 +244,7 @@ open class DemandClassificationController(
     }
     
     @Post("/rules/import", consumes = [MediaType.MULTIPART_FORM_DATA])
-    @Secured("ROLE_ADMIN")
+    @Secured("ADMIN")
     @Transactional
     open fun importRules(
         file: CompletedFileUpload,

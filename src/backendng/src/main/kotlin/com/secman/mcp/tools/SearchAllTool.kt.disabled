@@ -1,0 +1,146 @@
+package com.secman.mcp.tools
+
+import com.secman.domain.McpOperation
+import com.secman.service.RequirementService
+import com.secman.service.RiskAssessmentService
+import jakarta.inject.Inject
+import jakarta.inject.Singleton
+
+/**
+ * Universal search tool that searches across all content types in Secman.
+ */
+@Singleton
+class SearchAllTool(
+    @Inject private val requirementService: RequirementService,
+    @Inject private val riskAssessmentService: RiskAssessmentService
+) : McpTool {
+
+    override val name = "search_all"
+    override val description = "Universal search across all content types (requirements, assessments, etc.)"
+    override val operation = McpOperation.READ
+
+    override val inputSchema = mapOf(
+        "type" to "object",
+        "properties" to mapOf(
+            "query" to mapOf(
+                "type" to "string",
+                "description" to "Search query string",
+                "minLength" to 1
+            ),
+            "limit" to mapOf(
+                "type" to "number",
+                "description" to "Maximum number of results per content type",
+                "default" to 10,
+                "maximum" to 50
+            ),
+            "types" to mapOf(
+                "type" to "array",
+                "items" to mapOf(
+                    "type" to "string",
+                    "enum" to listOf("requirements", "assessments", "tags")
+                ),
+                "description" to "Content types to search (default: all)",
+                "default" to listOf("requirements", "assessments")
+            )
+        ),
+        "required" to listOf("query")
+    )
+
+    override suspend fun execute(arguments: Map<String, Any>): McpToolResult {
+        val query = arguments["query"] as? String
+        if (query.isNullOrBlank()) {
+            return McpToolResult.error("INVALID_PARAMETER", "Query parameter is required and cannot be empty")
+        }
+
+        val limit = (arguments["limit"] as? Number)?.toInt() ?: 10
+        val types = (arguments["types"] as? List<*>)?.filterIsInstance<String>()
+            ?: listOf("requirements", "assessments")
+
+        if (limit > 50) {
+            return McpToolResult.error("INVALID_PARAMETER", "Limit cannot exceed 50 per content type")
+        }
+
+        val results = mutableMapOf<String, Any>()
+        var totalResults = 0
+
+        try {
+            // Search requirements
+            if ("requirements" in types) {
+                val requirements = requirementService.searchRequirements(query, limit)
+                results["requirements"] = requirements.map { req ->
+                    mapOf(
+                        "id" to req.id,
+                        "title" to req.title,
+                        "description" to req.description?.take(200) + "...",
+                        "status" to req.status.name,
+                        "priority" to req.priority.name,
+                        "tags" to req.tags.map { it.name },
+                        "relevance" to calculateRelevance(query, req.title + " " + req.description)
+                    )
+                }.sortedByDescending { (it["relevance"] as Double) }
+
+                totalResults += requirements.size
+            }
+
+            // Search risk assessments
+            if ("assessments" in types) {
+                val assessments = riskAssessmentService.searchAssessments(query, limit)
+                results["assessments"] = assessments.map { assessment ->
+                    mapOf(
+                        "id" to assessment.id,
+                        "title" to assessment.title,
+                        "description" to assessment.description?.take(200) + "...",
+                        "riskLevel" to assessment.riskLevel.name,
+                        "status" to assessment.status.name,
+                        "findings" to assessment.findings?.take(200) + "...",
+                        "relevance" to calculateRelevance(query, assessment.title + " " + assessment.description)
+                    )
+                }.sortedByDescending { (it["relevance"] as Double) }
+
+                totalResults += assessments.size
+            }
+
+            // Search tags
+            if ("tags" in types) {
+                val matchingTags = findMatchingTags(query, limit)
+                if (matchingTags.isNotEmpty()) {
+                    results["tags"] = matchingTags
+                    totalResults += matchingTags.size
+                }
+            }
+
+            val metadata = mapOf(
+                "query" to query,
+                "totalResults" to totalResults,
+                "searchedTypes" to types,
+                "executionTime" to System.currentTimeMillis()
+            )
+
+            return McpToolResult.success(results, metadata)
+
+        } catch (e: Exception) {
+            return McpToolResult.error("EXECUTION_ERROR", "Search failed: ${e.message}")
+        }
+    }
+
+    private fun calculateRelevance(query: String, text: String?): Double {
+        if (text.isNullOrBlank()) return 0.0
+
+        val queryTerms = query.lowercase().split("\\s+".toRegex())
+        val contentText = text.lowercase()
+
+        var score = 0.0
+        for (term in queryTerms) {
+            val occurrences = contentText.split(term).size - 1
+            score += occurrences * (1.0 / queryTerms.size)
+        }
+
+        return score
+    }
+
+    private fun findMatchingTags(query: String, limit: Int): List<Map<String, Any>> {
+        // This would search through available tags
+        // For now, return empty list as this requires tag service implementation
+        return emptyList()
+    }
+}

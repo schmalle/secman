@@ -155,6 +155,21 @@ const AdminPage = () => {
                     <div className="card">
                         <div className="card-body">
                             <h5 className="card-title">
+                                <i className="bi bi-key-fill me-2"></i>
+                                MCP API Keys
+                            </h5>
+                            <p className="card-text">Manage API keys for Model Context Protocol integration with AI assistants.</p>
+                            <a href="/admin/mcp-api-keys" className="btn btn-primary">
+                                Manage API Keys
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="col-md-4 mb-3">
+                    <div className="card">
+                        <div className="card-body">
+                            <h5 className="card-title">
                                 <i className="bi bi-gear-fill me-2"></i>
                                 System Settings
                             </h5>
