@@ -288,6 +288,7 @@ class McpAuthenticationService(
      */
     fun revokeApiKey(keyId: String, reason: String, revokedBy: Long): Boolean {
         return try {
+            // First, get the API key to retrieve its ID for logging
             val apiKeyOpt = apiKeyRepository.findByKeyIdAndActive(keyId)
             if (apiKeyOpt.isEmpty) {
                 logger.warn("Attempted to revoke non-existent API key: {}", keyId)
@@ -296,15 +297,23 @@ class McpAuthenticationService(
 
             val apiKey = apiKeyOpt.get()
 
-            // Deactivate the key (using JPA save since we need to update the entity)
-            apiKeyRepository.save(apiKey.copy(isActive = false))
+            // Deactivate the key using a direct UPDATE query (most efficient approach)
+            val updatedRows = apiKeyRepository.deactivateByKeyId(keyId)
+            if (updatedRows == 0) {
+                logger.warn("No rows updated when revoking API key: {}", keyId)
+                return false
+            }
 
-            // Log the revocation
-            val auditLog = McpAuditLog.createAuthFailure(
+            // Log the revocation using appropriate event type
+            val auditLog = McpAuditLog(
+                eventType = McpEventType.API_KEY_MANAGEMENT,
                 apiKeyId = apiKey.id,
-                errorCode = "KEY_REVOKED",
-                errorMessage = "API key revoked: $reason",
-                requestId = "revocation-${System.currentTimeMillis()}"
+                userId = apiKey.userId,
+                success = true,
+                contextData = """{"action":"revoke","reason":"$reason","revokedBy":$revokedBy}""",
+                requestId = "revocation-${System.currentTimeMillis()}",
+                timestamp = LocalDateTime.now(),
+                severity = AuditSeverity.WARN
             )
             auditLogRepository.save(auditLog)
 
@@ -313,6 +322,25 @@ class McpAuthenticationService(
 
         } catch (e: Exception) {
             logger.error("Failed to revoke API key: keyId={}", keyId, e)
+
+            // Log the failure for audit purposes
+            try {
+                val failureLog = McpAuditLog(
+                    eventType = McpEventType.API_KEY_MANAGEMENT,
+                    apiKeyId = null,
+                    userId = revokedBy,
+                    success = false,
+                    errorCode = "REVOCATION_FAILED",
+                    errorMessage = "API key revocation failed: ${e.message}",
+                    contextData = """{"action":"revoke","keyId":"$keyId","reason":"$reason","revokedBy":$revokedBy}""",
+                    requestId = "revocation-failed-${System.currentTimeMillis()}",
+                    timestamp = LocalDateTime.now()
+                )
+                auditLogRepository.save(failureLog)
+            } catch (auditException: Exception) {
+                logger.error("Failed to log revocation failure", auditException)
+            }
+
             false
         }
     }
