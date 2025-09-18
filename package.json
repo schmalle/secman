@@ -1,24 +1,19 @@
 {
-  "name": "secman-screenshots",
-  "version": "1.0.0",
-  "description": "Screenshot capture for Secman pre-commit hooks",
-  "main": "scripts/screenshots.js",
+  "name": "secman-mcp-server",
+  "version": "0.1.0",
+  "description": "MCP Server for Secman security requirements management",
+  "main": "mcp-server.js",
   "scripts": {
-    "install-hooks": "./scripts/install-hooks.sh",
-    "take-screenshots": "node scripts/screenshots.js",
-    "screenshots": "node scripts/screenshots.js",
-    "test-screenshots": "node scripts/screenshots.js",
-    "setup": "npm install && npx playwright install chromium"
+    "start": "node mcp-server.js"
   },
   "dependencies": {
-    "playwright": "^1.55.0"
+    "@modelcontextprotocol/sdk": "latest",
+    "node-fetch": "^3.3.2"
   },
-  "keywords": [
-    "screenshot",
-    "ui",
-    "testing",
-    "git-hooks"
-  ],
-  "author": "Secman Development Team",
-  "license": "MIT"
+  "engines": {
+    "node": ">=18"
+  },
+  "bin": {
+    "secman-mcp": "./mcp-server.js"
+  }
 }
