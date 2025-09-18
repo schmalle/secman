@@ -103,6 +103,14 @@ interface McpApiKeyRepository : JpaRepository<McpApiKey, Long> {
     @Query("UPDATE McpApiKey ak SET ak.isActive = false WHERE ak.expiresAt IS NOT NULL AND ak.expiresAt <= :now")
     fun deactivateExpired(now: LocalDateTime): Int
 
+    /**
+     * Deactivate an API key by its key ID.
+     * Used for secure API key revocation without entity lifecycle issues.
+     * Returns the number of rows affected (should be 1 for successful revocation).
+     */
+    @Query("UPDATE McpApiKey ak SET ak.isActive = false WHERE ak.keyId = :keyId AND ak.isActive = true")
+    fun deactivateByKeyId(keyId: String): Int
+
     // ===== USAGE TRACKING QUERIES =====
 
     /**
@@ -111,6 +119,7 @@ interface McpApiKeyRepository : JpaRepository<McpApiKey, Long> {
      */
     @Query("UPDATE McpApiKey ak SET ak.lastUsedAt = :lastUsedAt WHERE ak.id = :id")
     fun updateLastUsedAt(id: Long, lastUsedAt: LocalDateTime): Int
+
 
     /**
      * Find API keys that haven't been used for a specified period.

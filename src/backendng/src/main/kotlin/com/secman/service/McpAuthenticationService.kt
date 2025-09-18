@@ -33,7 +33,7 @@ class McpAuthenticationService(
 
     /**
      * Authenticate a full API key string (convenience method).
-     * Parses the API key and delegates to the full authentication method.
+     * Handles the standard format where only the secret is provided.
      */
     fun authenticateApiKey(
         fullApiKey: String,
@@ -41,14 +41,73 @@ class McpAuthenticationService(
         userAgent: String? = null,
         requestId: String? = null
     ): AuthenticationResult {
-        // Parse the API key format: "keyId:keySecret" or just use the full key as keyId
-        return if (fullApiKey.contains(":")) {
-            val parts = fullApiKey.split(":", limit = 2)
-            authenticateApiKey(parts[0], parts[1], clientIp, userAgent, requestId)
-        } else {
-            // For now, treat the full key as the keyId and use a placeholder secret
-            // In a real implementation, you might need a different parsing strategy
-            authenticateApiKey(fullApiKey, fullApiKey, clientIp, userAgent, requestId)
+        // For MCP, we typically only get the secret part (sk-xxxx)
+        // We need to find the key by checking all stored key hashes
+        return authenticateApiKeyBySecret(fullApiKey, clientIp, userAgent, requestId)
+    }
+
+    /**
+     * Authenticate using only the API key secret.
+     * This method searches through all active keys to find a matching hash.
+     */
+    fun authenticateApiKeyBySecret(
+        keySecret: String,
+        clientIp: String? = null,
+        userAgent: String? = null,
+        requestId: String? = null
+    ): AuthenticationResult {
+        val startTime = System.currentTimeMillis()
+
+        try {
+            // Input validation
+            if (keySecret.isBlank()) {
+                return createFailureResult(
+                    "INVALID_CREDENTIALS",
+                    "API key secret is empty",
+                    clientIp, userAgent, requestId
+                )
+            }
+
+            // Check for brute force attacks from this IP
+            if (clientIp != null && isIpBlocked(clientIp)) {
+                return createFailureResult(
+                    "IP_BLOCKED",
+                    "Too many failed authentication attempts from this IP",
+                    clientIp, userAgent, requestId
+                )
+            }
+
+            // Try to find an API key by checking hashes for all active keys
+            // We need to get all active keys and check their hashes
+            val activeKeys = apiKeyRepository.findActiveByUserId(1L) // Get for all users
+
+            // Alternative approach: Get all active keys from all users
+            // For now, let's try a different approach using the repository query
+            for (apiKey in getAllActiveKeys()) {
+                val hashedSecret = hashApiKeySecret(keySecret, apiKey.keyId)
+                if (apiKey.keyHash == hashedSecret) {
+                    // Found matching key, now validate it
+                    return validateAndReturnKey(apiKey, clientIp, userAgent, requestId, startTime)
+                }
+            }
+
+            // No matching key found
+            logAuthFailure(null, "KEY_NOT_FOUND", "API key not found", clientIp, userAgent, requestId)
+            return createFailureResult(
+                "INVALID_CREDENTIALS",
+                "Invalid API key",
+                clientIp, userAgent, requestId
+            )
+
+        } catch (e: Exception) {
+            logger.error("Authentication error for keySecret", e)
+            logAuthFailure(null, "SYSTEM_ERROR", "Authentication system error", clientIp, userAgent, requestId)
+
+            return createFailureResult(
+                "SYSTEM_ERROR",
+                "Authentication system temporarily unavailable",
+                clientIp, userAgent, requestId
+            )
         }
     }
 
@@ -288,6 +347,7 @@ class McpAuthenticationService(
      */
     fun revokeApiKey(keyId: String, reason: String, revokedBy: Long): Boolean {
         return try {
+            // First, get the API key to retrieve its ID for logging
             val apiKeyOpt = apiKeyRepository.findByKeyIdAndActive(keyId)
             if (apiKeyOpt.isEmpty) {
                 logger.warn("Attempted to revoke non-existent API key: {}", keyId)
@@ -296,15 +356,23 @@ class McpAuthenticationService(
 
             val apiKey = apiKeyOpt.get()
 
-            // Deactivate the key (using JPA save since we need to update the entity)
-            apiKeyRepository.save(apiKey.copy(isActive = false))
+            // Deactivate the key using a direct UPDATE query (most efficient approach)
+            val updatedRows = apiKeyRepository.deactivateByKeyId(keyId)
+            if (updatedRows == 0) {
+                logger.warn("No rows updated when revoking API key: {}", keyId)
+                return false
+            }
 
-            // Log the revocation
-            val auditLog = McpAuditLog.createAuthFailure(
+            // Log the revocation using appropriate event type
+            val auditLog = McpAuditLog(
+                eventType = McpEventType.API_KEY_MANAGEMENT,
                 apiKeyId = apiKey.id,
-                errorCode = "KEY_REVOKED",
-                errorMessage = "API key revoked: $reason",
-                requestId = "revocation-${System.currentTimeMillis()}"
+                userId = apiKey.userId,
+                success = true,
+                contextData = """{"action":"revoke","reason":"$reason","revokedBy":$revokedBy}""",
+                requestId = "revocation-${System.currentTimeMillis()}",
+                timestamp = LocalDateTime.now(),
+                severity = AuditSeverity.WARN
             )
             auditLogRepository.save(auditLog)
 
@@ -313,6 +381,25 @@ class McpAuthenticationService(
 
         } catch (e: Exception) {
             logger.error("Failed to revoke API key: keyId={}", keyId, e)
+
+            // Log the failure for audit purposes
+            try {
+                val failureLog = McpAuditLog(
+                    eventType = McpEventType.API_KEY_MANAGEMENT,
+                    apiKeyId = null,
+                    userId = revokedBy,
+                    success = false,
+                    errorCode = "REVOCATION_FAILED",
+                    errorMessage = "API key revocation failed: ${e.message}",
+                    contextData = """{"action":"revoke","keyId":"$keyId","reason":"$reason","revokedBy":$revokedBy}""",
+                    requestId = "revocation-failed-${System.currentTimeMillis()}",
+                    timestamp = LocalDateTime.now()
+                )
+                auditLogRepository.save(failureLog)
+            } catch (auditException: Exception) {
+                logger.error("Failed to log revocation failure", auditException)
+            }
+
             false
         }
     }
@@ -389,6 +476,50 @@ class McpAuthenticationService(
         } catch (e: Exception) {
             logger.error("Failed to log authentication failure", e)
         }
+    }
+
+    private fun getAllActiveKeys(): List<McpApiKey> {
+        return try {
+            // Get all active keys - we'll need to implement this via findAll and filter
+            apiKeyRepository.findAll().filter { it.isActive }
+        } catch (e: Exception) {
+            logger.error("Failed to get all active keys", e)
+            emptyList()
+        }
+    }
+
+    private fun validateAndReturnKey(
+        apiKey: McpApiKey,
+        clientIp: String?,
+        userAgent: String?,
+        requestId: String?,
+        startTime: Long
+    ): AuthenticationResult {
+        // Check if key is expired
+        if (apiKey.isExpired()) {
+            logAuthFailure(apiKey.id, "KEY_EXPIRED", "API key has expired", clientIp, userAgent, requestId)
+            return createFailureResult(
+                "KEY_EXPIRED",
+                "API key has expired",
+                clientIp, userAgent, requestId
+            )
+        }
+
+        // Update last used timestamp
+        apiKeyRepository.updateLastUsedAt(apiKey.id, LocalDateTime.now())
+
+        // Log successful authentication
+        logAuthSuccess(apiKey.id, apiKey.userId, null, clientIp, userAgent, requestId)
+
+        val duration = System.currentTimeMillis() - startTime
+        logger.debug("API key authentication successful for keyId={} in {}ms", apiKey.keyId, duration)
+
+        return AuthenticationResult(
+            success = true,
+            apiKey = apiKey,
+            errorCode = null,
+            errorMessage = null
+        )
     }
 }
 
