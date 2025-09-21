@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getAuthHeaders } from '../utils/auth';
+import { csrfPost } from '../utils/csrf';
 
 // Define an interface for the user data expected from the backend
 interface User {
@@ -281,18 +282,9 @@ const ClassificationRuleManager: React.FC = () => {
 
     setLoading(true);
     try {
-      const response = await fetch('/api/classification/rules/import', {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: formData
-      });
-
-      if (response.ok) {
-        await loadRules();
-        setError(null);
-      } else {
-        setError('Failed to import rules');
-      }
+      await csrfPost('/api/classification/rules/import', formData);
+      await loadRules();
+      setError(null);
     } catch (err) {
       setError('Error importing rules: ' + err);
     } finally {

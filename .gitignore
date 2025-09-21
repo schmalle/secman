@@ -38,3 +38,4 @@ Thumbs.db
 # Project specific
 .claude/
 .serena/
+src/backendng/.kotlin/sessions/*

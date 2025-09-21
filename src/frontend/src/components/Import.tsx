@@ -82,11 +82,7 @@ const Import = () => {
         formData.append('xlsxFile', selectedFile);
 
         try {
-            const response = await csrfPost('/api/import/upload-xlsx', formData, {
-                headers: {
-                    'Content-Type': 'multipart/form-data',
-                }
-            });
+            const response = await csrfPost('/api/import/upload-xlsx', formData);
 
             setUploadStatus(`Success: ${response.data.message || 'File uploaded and processed.'} (${response.data.requirementsProcessed} requirements added)`);
             setSelectedFile(null);

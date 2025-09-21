@@ -21,6 +21,7 @@ micronaut:
             - Authorization
             - Accept
             - Origin
+            - Csrf-Token
           exposed-headers:
             - Authorization
           allow-credentials: true

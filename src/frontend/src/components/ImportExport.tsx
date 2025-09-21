@@ -133,12 +133,8 @@ const ImportExport = () => {
         formData.append('xlsxFile', selectedFile); // Match the backend expected key
 
         try {
-            // Use the CSRF-enhanced POST method
-            const response = await csrfPost('/api/import/upload-xlsx', formData, {
-                headers: {
-                    'Content-Type': 'multipart/form-data',
-                }
-            });
+            // Use the CSRF-enhanced POST method; let axios set multipart boundary
+            const response = await csrfPost('/api/import/upload-xlsx', formData);
 
             setUploadStatus(`Success: ${response.data.message || 'File uploaded and processed.'} (${response.data.requirementsProcessed} requirements added)`);
             setSelectedFile(null); // Clear selection after successful upload

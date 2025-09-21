@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { csrfPost, csrfDelete } from '../utils/csrf';
+import { authenticatedFetch } from '../utils/auth';
 
 interface RequirementFile {
     id: number;
@@ -50,9 +51,9 @@ const RequirementFileUpload: React.FC<RequirementFileUploadProps> = ({
     const fetchFiles = async () => {
         setLoading(true);
         try {
-            const response = await fetch(
+            const response = await authenticatedFetch(
                 `/api/risk-assessments/${riskAssessmentId}/requirements/${requirementId}/files`,
-                { credentials: 'include' }
+                { credentials: 'include' as RequestCredentials }
             );
             if (response.ok) {
                 const data = await response.json();
@@ -99,12 +100,7 @@ const RequirementFileUpload: React.FC<RequirementFileUploadProps> = ({
         try {
             const response = await csrfPost(
                 `/api/risk-assessments/${riskAssessmentId}/requirements/${requirementId}/files`,
-                formData,
-                {
-                    headers: {
-                        'Content-Type': 'multipart/form-data',
-                    }
-                }
+                formData
             );
 
             await fetchFiles();
@@ -150,9 +146,9 @@ const RequirementFileUpload: React.FC<RequirementFileUploadProps> = ({
 
     const handleDownload = async (fileId: number, filename: string) => {
         try {
-            const response = await fetch(`/api/files/${fileId}/download`, {
+            const response = await authenticatedFetch(`/api/files/${fileId}/download`, {
                 credentials: 'include'
-            });
+            } as RequestInit);
             
             if (response.ok) {
                 const blob = await response.blob();

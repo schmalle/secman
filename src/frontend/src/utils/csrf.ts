@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { getAuthToken } from './auth';
 
 /**
  * Configure axios to automatically include CSRF tokens in all requests.
@@ -26,9 +27,17 @@ export function setupCSRFProtection() {
   axios.interceptors.request.use(
     config => {
       const token = getCSRFToken();
+      // Ensure headers object exists
+      config.headers = config.headers ?? {};
       if (token) {
         // Only use the header name that matches the backend configuration
         config.headers['Csrf-Token'] = token;
+      }
+
+      // Attach Authorization header for JWT-protected endpoints
+      const authToken = getAuthToken();
+      if (authToken && !('Authorization' in config.headers)) {
+        (config.headers as any)['Authorization'] = `Bearer ${authToken}`;
       }
       return config;
     },
@@ -46,11 +55,13 @@ export function setupCSRFProtection() {
  */
 export async function csrfPost(url: string, data: any, config: any = {}) {
   const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+  const authToken = getAuthToken();
   
   return axios.post(url, data, {
     headers: {
       // Use only the header name that matches the backend configuration
       'Csrf-Token': token,
+      ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {}),
       ...(config.headers || {})
     },
     ...config
@@ -66,11 +77,13 @@ export async function csrfPost(url: string, data: any, config: any = {}) {
  */
 export async function csrfDelete(url: string, config: any = {}) {
   const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+  const authToken = getAuthToken();
   
   return axios.delete(url, {
     headers: {
       // Use only the header name that matches the backend configuration
       'Csrf-Token': token,
+      ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {}),
       ...(config.headers || {})
     },
     ...config

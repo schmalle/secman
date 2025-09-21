@@ -5,13 +5,19 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="94ada8b3-9f4e-473c-9fea-3bc9651b5bdd" name="Changes" comment="test change">
-      <change beforePath="$PROJECT_DIR$/.claude/commands/plan.md" beforeDir="false" afterPath="$PROJECT_DIR$/.claude/commands/plan.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.claude/commands/specify.md" beforeDir="false" afterPath="$PROJECT_DIR$/.claude/commands/specify.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.specify/memory/constitution_update_checklist.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.specify/scripts/bash/update-agent-context.sh" beforeDir="false" afterPath="$PROJECT_DIR$/.specify/scripts/bash/update-agent-context.sh" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.specify/templates/plan-template.md" beforeDir="false" afterPath="$PROJECT_DIR$/.specify/templates/plan-template.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/dataSources.local.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/dataSources.local.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/secman.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/secman.iml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.specify/memory/constitution.md" beforeDir="false" afterPath="$PROJECT_DIR$/.specify/memory/constitution.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/backendng/.kotlin/sessions/kotlin-compiler-16991331428107562658.salive" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/src/backendng/.kotlin/sessions/kotlin-compiler-8160166179544561839.salive" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/resources/application.yml" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/resources/application.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/src/components/ClassificationRuleManager.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/components/ClassificationRuleManager.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/src/components/Import.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/components/Import.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/src/components/ImportExport.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/components/ImportExport.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/src/components/RequirementFileUpload.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/components/RequirementFileUpload.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/src/utils/csrf.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/utils/csrf.ts" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -75,7 +81,7 @@
     "RunOnceActivity.git.unshallow": "true",
     "SHARE_PROJECT_CONFIGURATION_FILES": "true",
     "SHELLCHECK.PATH": "/Users/flake/Library/Application Support/JetBrains/IntelliJIdea2025.1/plugins/Shell Script/shellcheck",
-    "git-widget-placeholder": "devel",
+    "git-widget-placeholder": "main",
     "junie.onboarding.icon.badge.shown": "true",
     "kotlin-language-version-configured": "true",
     "node.js.detected.package.eslint": "true",
@@ -173,8 +179,8 @@
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-jdk-9823dce3aa75-bf35d07a577b-intellij.indexing.shared.core-IU-252.25557.131" />
-        <option value="bundled-js-predefined-d6986cc7102b-b598e85cdad2-JavaScript-IU-252.25557.131" />
+        <option value="bundled-jdk-9823dce3aa75-bf35d07a577b-intellij.indexing.shared.core-IU-252.26199.169" />
+        <option value="bundled-js-predefined-d6986cc7102b-9c94529fcfe0-JavaScript-IU-252.26199.169" />
       </set>
     </attachedChunks>
   </component>
