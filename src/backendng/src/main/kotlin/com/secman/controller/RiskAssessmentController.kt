@@ -1,7 +1,9 @@
 package com.secman.controller
 
 import com.secman.domain.*
+import com.secman.event.RiskAssessmentCreatedEvent
 import com.secman.repository.*
+import io.micronaut.context.event.ApplicationEventPublisher
 import io.micronaut.core.annotation.Nullable
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.HttpStatus
@@ -32,9 +34,10 @@ open class RiskAssessmentController(
     private val assessmentTokenRepository: AssessmentTokenRepository,
     private val responseRepository: ResponseRepository,
     private val requirementRepository: RequirementRepository,
-    private val entityManager: EntityManager
+    private val entityManager: EntityManager,
+    private val eventPublisher: ApplicationEventPublisher<RiskAssessmentCreatedEvent>
 ) {
-    
+
     private val log = LoggerFactory.getLogger(RiskAssessmentController::class.java)
 
     @Serdeable
@@ -313,38 +316,42 @@ open class RiskAssessmentController(
                 AssessmentBasisType.DEMAND -> {
                     val demand = demandRepository.findById(basisId).orElse(null)
                         ?: return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", "Demand not found"))
-                    
+
                     if (demand.status != DemandStatus.APPROVED) {
-                        return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", 
+                        return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR",
                             "Only approved demands can have risk assessments created"))
                     }
-                    
-                    // Create demand-based risk assessment
+
+                    // Create demand-based risk assessment with proper fields
                     val assessment = RiskAssessment(
                         startDate = request.startDate ?: LocalDate.now(),
                         endDate = request.endDate,
-                        demand = demand,
+                        assessmentBasisType = AssessmentBasisType.DEMAND,
+                        assessmentBasisId = basisId,
                         assessor = assessor,
-                        requestor = requestor
+                        requestor = requestor,
+                        demand = demand // Keep for backward compatibility
                     )
-                    
+
                     // Update demand status to IN_PROGRESS
                     demand.status = DemandStatus.IN_PROGRESS
                     demandRepository.update(demand)
-                    
+
                     assessment
                 }
                 AssessmentBasisType.ASSET -> {
                     val asset = assetRepository.findById(basisId).orElse(null)
                         ?: return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", "Asset not found"))
-                    
-                    // Create asset-based risk assessment
+
+                    // Create asset-based risk assessment with proper fields
                     RiskAssessment(
                         startDate = request.startDate ?: LocalDate.now(),
                         endDate = request.endDate,
-                        asset = asset,
+                        assessmentBasisType = AssessmentBasisType.ASSET,
+                        assessmentBasisId = basisId,
                         assessor = assessor,
-                        requestor = requestor
+                        requestor = requestor,
+                        asset = asset // Keep for backward compatibility
                     )
                 }
             }
@@ -363,7 +370,10 @@ open class RiskAssessmentController(
             }
             
             val savedAssessment = riskAssessmentRepository.save(riskAssessment)
-            
+
+            // Flush to ensure the entity is persisted with an ID
+            entityManager.flush()
+
             // Force loading of related entities for response
             entityManager.refresh(savedAssessment)
             when (basisType) {
@@ -379,7 +389,22 @@ open class RiskAssessmentController(
             savedAssessment.requestor.username
             savedAssessment.respondent?.username
             savedAssessment.useCases.size
-            
+
+            // Publish RiskAssessmentCreatedEvent for email notifications
+            try {
+                // Only publish event if we have a valid saved assessment with ID
+                if (savedAssessment.id != null) {
+                    val event = createRiskAssessmentEvent(savedAssessment)
+                    eventPublisher.publishEvent(event)
+                    log.debug("Published RiskAssessmentCreatedEvent for assessment: {}", savedAssessment.id)
+                } else {
+                    log.warn("Cannot publish RiskAssessmentCreatedEvent - assessment ID is null")
+                }
+            } catch (e: Exception) {
+                log.error("Failed to publish RiskAssessmentCreatedEvent for assessment: {}", savedAssessment.id, e)
+                // Don't fail the request if event publishing fails
+            }
+
             log.info("Created risk assessment with id: {} for {} basis: {}", savedAssessment.id, basisType, basisId)
             HttpResponse.status<RiskAssessment>(HttpStatus.CREATED).body(savedAssessment)
         } catch (e: Exception) {
@@ -589,5 +614,123 @@ open class RiskAssessmentController(
             demandId = null,
             assetId = request.assetId
         ))
+    }
+
+    /**
+     * Create RiskAssessmentCreatedEvent from saved risk assessment
+     */
+    private fun createRiskAssessmentEvent(assessment: RiskAssessment): RiskAssessmentCreatedEvent {
+        val title = when (assessment.assessmentBasisType) {
+            AssessmentBasisType.DEMAND -> assessment.demand?.title ?: "Risk Assessment for Demand"
+            AssessmentBasisType.ASSET -> "Risk Assessment for Asset: ${assessment.asset?.name ?: "Unknown Asset"}"
+        }
+
+        val description = when (assessment.assessmentBasisType) {
+            AssessmentBasisType.DEMAND -> {
+                val demand = assessment.demand
+                buildString {
+                    append("Risk assessment for demand: ${demand?.title}")
+                    demand?.description?.let { append(" - $it") }
+                    demand?.existingAsset?.let { append(" (Asset: ${it.name})") }
+                }
+            }
+            AssessmentBasisType.ASSET -> {
+                val asset = assessment.asset
+                buildString {
+                    append("Risk assessment for asset: ${asset?.name}")
+                    asset?.description?.let { append(" - $it") }
+                    asset?.type?.let { append(" (Type: $it)") }
+                }
+            }
+        }
+
+        val category = when (assessment.assessmentBasisType) {
+            AssessmentBasisType.DEMAND -> "Demand Assessment"
+            AssessmentBasisType.ASSET -> "Asset Assessment"
+        }
+
+        // Determine risk level based on assessment characteristics
+        val riskLevel = determineRiskLevel(assessment)
+
+        // Create metadata map with additional assessment details
+        val metadata = mutableMapOf<String, Any>()
+
+        // Only add non-null values to avoid issues
+        assessment.id?.let { metadata["assessmentId"] = it }
+        metadata["assessmentBasisType"] = assessment.assessmentBasisType.name
+        metadata["assessmentBasisId"] = assessment.assessmentBasisId
+        metadata["startDate"] = assessment.startDate
+        metadata["endDate"] = assessment.endDate
+        assessment.assessor.id?.let { metadata["assessorId"] = it }
+        assessment.requestor.id?.let { metadata["requestorId"] = it }
+
+        assessment.respondent?.id?.let { metadata["respondentId"] = it }
+        assessment.notes?.let { metadata["notes"] = it }
+
+        if (assessment.useCases.isNotEmpty()) {
+            val useCaseIds = assessment.useCases.mapNotNull { it.id }
+            if (useCaseIds.isNotEmpty()) {
+                metadata["useCaseIds"] = useCaseIds
+                metadata["useCaseCount"] = useCaseIds.size
+            }
+        }
+
+        when (assessment.assessmentBasisType) {
+            AssessmentBasisType.DEMAND -> {
+                assessment.demand?.let { demand ->
+                    demand.id?.let { metadata["demandId"] = it }
+                    metadata["demandStatus"] = demand.status.name
+                    demand.existingAsset?.id?.let { metadata["existingAssetId"] = it }
+                }
+            }
+            AssessmentBasisType.ASSET -> {
+                assessment.asset?.let { asset ->
+                    asset.id?.let { metadata["assetId"] = it }
+                    metadata["assetType"] = asset.type ?: "UNKNOWN"
+                    metadata["assetStatus"] = "ACTIVE" // Asset doesn't have status property
+                }
+            }
+        }
+
+        return RiskAssessmentCreatedEvent.fromRiskAssessment(
+            id = assessment.id ?: throw IllegalStateException("Assessment ID is required for event creation"),
+            title = title,
+            riskLevel = riskLevel,
+            createdBy = assessment.requestor.username,
+            createdAt = assessment.createdAt ?: LocalDateTime.now(),
+            description = description,
+            category = category,
+            impact = "MEDIUM", // Default values - would be determined by business logic
+            probability = "MEDIUM",
+            additionalData = metadata
+        )
+    }
+
+    /**
+     * Determine risk level based on assessment characteristics
+     */
+    private fun determineRiskLevel(assessment: RiskAssessment): String {
+        // Simple risk level determination logic
+        // In a real implementation, this would be more sophisticated
+        return when (assessment.assessmentBasisType) {
+            AssessmentBasisType.DEMAND -> {
+                val demand = assessment.demand
+                when {
+                    demand?.priority == Priority.HIGH -> "HIGH"
+                    demand?.priority == Priority.CRITICAL -> "CRITICAL"
+                    assessment.useCases.size > 3 -> "MEDIUM"
+                    else -> "LOW"
+                }
+            }
+            AssessmentBasisType.ASSET -> {
+                val asset = assessment.asset
+                when {
+                    asset?.type == "CRITICAL_INFRASTRUCTURE" -> "CRITICAL"
+                    asset?.type == "SERVER" || asset?.type == "DATABASE" -> "HIGH"
+                    assessment.useCases.size > 2 -> "MEDIUM"
+                    else -> "LOW"
+                }
+            }
+        }
     }
 }

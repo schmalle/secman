@@ -35,26 +35,53 @@ const EmailConfigManagement: React.FC = () => {
     isActive: true
   });
 
-  // Check if user is authenticated
+  // Check if user is authenticated and has admin access
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [hasAdminAccess, setHasAdminAccess] = useState(false);
 
   useEffect(() => {
-    // Check authentication
+    // Check authentication and admin access
     const checkAuth = () => {
       if (typeof window !== 'undefined' && (window as any).currentUser) {
-        setCurrentUser((window as any).currentUser);
+        const user = (window as any).currentUser;
+        setCurrentUser(user);
+
+        // Check admin access
+        const hasAdmin = user.roles && (
+          user.roles.includes('ADMIN') ||
+          user.roles.includes('ROLE_ADMIN') ||
+          user.roles.includes('admin')
+        );
+        setHasAdminAccess(hasAdmin);
+
+        if (!hasAdmin) {
+          setError('Access denied. Admin privileges required to manage email configuration.');
+        }
       }
     };
-    
+
     checkAuth();
-    
+
     // Listen for userLoaded event
     const handleUserLoaded = () => {
       if (typeof window !== 'undefined' && (window as any).currentUser) {
-        setCurrentUser((window as any).currentUser);
+        const user = (window as any).currentUser;
+        setCurrentUser(user);
+
+        // Check admin access
+        const hasAdmin = user.roles && (
+          user.roles.includes('ADMIN') ||
+          user.roles.includes('ROLE_ADMIN') ||
+          user.roles.includes('admin')
+        );
+        setHasAdminAccess(hasAdmin);
+
+        if (!hasAdmin) {
+          setError('Access denied. Admin privileges required to manage email configuration.');
+        }
       }
     };
-    
+
     if (typeof window !== 'undefined') {
       window.addEventListener('userLoaded', handleUserLoaded);
       return () => window.removeEventListener('userLoaded', handleUserLoaded);
@@ -62,10 +89,10 @@ const EmailConfigManagement: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser && hasAdminAccess) {
       fetchConfigs();
     }
-  }, [currentUser]);
+  }, [currentUser, hasAdminAccess]);
 
   const fetchConfigs = async () => {
     try {
@@ -170,6 +197,20 @@ const EmailConfigManagement: React.FC = () => {
           <p>You must be logged in to access Email Configuration Management.</p>
           <hr />
           <p className="mb-0">Please <a href="/login">log in</a> to continue.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!hasAdminAccess) {
+    return (
+      <div className="container-fluid p-4">
+        <div className="alert alert-danger" role="alert">
+          <h4 className="alert-heading">Access Denied</h4>
+          <p>You need administrator privileges to access Email Configuration Management.</p>
+          <hr />
+          <p className="mb-0">Current user: <strong>{currentUser.username}</strong></p>
+          <p className="mb-0">Your roles: {currentUser.roles ? currentUser.roles.join(', ') : 'None'}</p>
         </div>
       </div>
     );

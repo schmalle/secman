@@ -33,7 +33,9 @@
       "Bash(./scripts/test-api-compatibility.sh:*)",
       "Bash(/Users/flake/sources/misc/secman/scripts/validate-migration-completion.sh)",
       "WebFetch(domain:localhost)",
-      "Bash(open http://localhost:4322/login)"
+      "Bash(open http://localhost:4322/login)",
+      "Read(//Users/flake/sources/misc/secman/**)",
+      "Bash(timeout 10s gradle run)"
     ],
     "deny": []
   }

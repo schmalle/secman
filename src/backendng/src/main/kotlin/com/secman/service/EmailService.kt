@@ -1,7 +1,10 @@
 package com.secman.service
 
 import com.secman.domain.EmailConfig
+import com.secman.domain.EmailNotificationLog
+import com.secman.domain.enums.EmailStatus
 import com.secman.repository.EmailConfigRepository
+import com.secman.repository.EmailNotificationLogRepository
 import io.micronaut.scheduling.TaskExecutors
 import io.micronaut.scheduling.annotation.ExecuteOn
 import jakarta.inject.Singleton
@@ -10,20 +13,30 @@ import jakarta.mail.internet.InternetAddress
 import jakarta.mail.internet.MimeBodyPart
 import jakarta.mail.internet.MimeMessage
 import jakarta.mail.internet.MimeMultipart
+import kotlinx.coroutines.*
 import kotlinx.coroutines.future.future
 import kotlinx.coroutines.runBlocking
 import org.jsoup.Jsoup
 import org.slf4j.LoggerFactory
+import java.time.LocalDateTime
 import java.util.*
 import java.util.concurrent.CompletableFuture
+import kotlin.time.Duration.Companion.seconds
 
 @Singleton
 @ExecuteOn(TaskExecutors.IO)
 open class EmailService(
-    private val emailConfigRepository: EmailConfigRepository
+    private val emailConfigRepository: EmailConfigRepository,
+    private val emailNotificationLogRepository: EmailNotificationLogRepository? = null
 ) {
-    
+
     private val log = LoggerFactory.getLogger(EmailService::class.java)
+
+    companion object {
+        private const val MAX_RETRY_ATTEMPTS = 3
+        private const val RETRY_DELAY_SECONDS = 2L
+        private const val EMAIL_TIMEOUT_SECONDS = 30L
+    }
     
     /**
      * Send email with both text and HTML content
@@ -222,6 +235,321 @@ open class EmailService(
     }
     
     /**
+     * Send notification email with retry logic and logging
+     */
+    fun sendNotificationEmail(
+        riskAssessmentId: Long,
+        to: String,
+        subject: String,
+        textContent: String,
+        htmlContent: String,
+        emailConfigId: Long? = null
+    ): CompletableFuture<Boolean> {
+        return CompletableFuture.supplyAsync {
+            runBlocking {
+                try {
+                    val config = emailConfigId?.let {
+                        emailConfigRepository.findById(it).orElse(null)
+                    } ?: getActiveEmailConfig()
+
+                    if (config == null) {
+                        log.error("No email configuration found for notification")
+                        return@runBlocking false
+                    }
+
+                    // Create notification log entry
+                    val logEntry = emailNotificationLogRepository?.let {
+                        createNotificationLogEntry(riskAssessmentId, config.id!!, to, subject)
+                    }
+
+                    // Send email with retry logic
+                    val success = sendEmailWithRetry(config, to, subject, textContent, htmlContent)
+
+                    // Update notification log
+                    logEntry?.let { entry ->
+                        updateNotificationLogEntry(entry, success)
+                    }
+
+                    success
+                } catch (e: Exception) {
+                    log.error("Failed to send notification email to {}: {}", to, e.message, e)
+                    false
+                }
+            }
+        }
+    }
+
+    /**
+     * Send email with retry logic
+     */
+    suspend fun sendEmailWithRetry(
+        config: EmailConfig,
+        to: String,
+        subject: String,
+        textContent: String,
+        htmlContent: String,
+        maxAttempts: Int = MAX_RETRY_ATTEMPTS
+    ): Boolean = withContext(Dispatchers.IO) {
+        var lastException: Exception? = null
+
+        repeat(maxAttempts) { attempt ->
+            try {
+                log.debug("Sending email attempt {} of {} to {}", attempt + 1, maxAttempts, to)
+
+                // Add timeout to email sending
+                val result = withTimeout(EMAIL_TIMEOUT_SECONDS.seconds) {
+                    sendEmailWithConfig(config, to, subject, textContent, htmlContent)
+                }
+
+                if (result) {
+                    if (attempt > 0) {
+                        log.info("Email sent successfully to {} after {} retries", to, attempt)
+                    }
+                    return@withContext true
+                }
+
+            } catch (e: Exception) {
+                lastException = e
+                log.warn("Email sending attempt {} failed for {}: {}", attempt + 1, to, e.message)
+
+                // Don't wait after the last attempt
+                if (attempt < maxAttempts - 1) {
+                    try {
+                        delay(RETRY_DELAY_SECONDS.seconds * (attempt + 1)) // Exponential backoff
+                    } catch (interrupted: Exception) {
+                        log.warn("Retry delay interrupted", interrupted)
+                        return@withContext false
+                    }
+                }
+            }
+        }
+
+        log.error("Failed to send email to {} after {} attempts", to, maxAttempts, lastException)
+        false
+    }
+
+    /**
+     * Send bulk notification emails
+     */
+    fun sendBulkNotificationEmails(
+        notifications: List<NotificationEmailRequest>
+    ): CompletableFuture<Map<String, Boolean>> {
+        return CompletableFuture.supplyAsync {
+            runBlocking {
+                val results = mutableMapOf<String, Boolean>()
+
+                notifications.forEach { request ->
+                    try {
+                        val success = sendNotificationEmail(
+                            riskAssessmentId = request.riskAssessmentId,
+                            to = request.to,
+                            subject = request.subject,
+                            textContent = request.textContent,
+                            htmlContent = request.htmlContent,
+                            emailConfigId = request.emailConfigId
+                        ).get()
+
+                        results[request.to] = success
+
+                    } catch (e: Exception) {
+                        log.error("Failed to send bulk notification to {}", request.to, e)
+                        results[request.to] = false
+                    }
+                }
+
+                log.info("Bulk notification completed: {} emails, {} successful",
+                    notifications.size, results.values.count { it })
+
+                results
+            }
+        }
+    }
+
+    /**
+     * Validate email configuration connectivity
+     */
+    suspend fun validateEmailConfigConnectivity(config: EmailConfig): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val properties = createMailProperties(config)
+            val session = createMailSession(properties, config)
+
+            val transport = session.getTransport("smtp")
+            transport.connect()
+            transport.close()
+
+            log.debug("Email configuration validation successful for {}", config.name)
+            true
+
+        } catch (e: Exception) {
+            log.warn("Email configuration validation failed for {}: {}", config.name, e.message)
+            false
+        }
+    }
+
+    /**
+     * Get email sending statistics
+     */
+    suspend fun getEmailStatistics(since: LocalDateTime? = null): Map<String, Any> = withContext(Dispatchers.IO) {
+        emailNotificationLogRepository?.let { repo ->
+            val stats = mutableMapOf<String, Any>()
+
+            val totalSent = since?.let {
+                repo.findSentBetween(it, LocalDateTime.now()).size.toLong()
+            } ?: repo.countByStatus(EmailStatus.SENT)
+
+            val totalFailed = since?.let {
+                repo.findCreatedBetween(it, LocalDateTime.now()).count { it.status == EmailStatus.FAILED }.toLong()
+            } ?: repo.countByStatus(EmailStatus.FAILED)
+
+            val totalPending = since?.let {
+                repo.findCreatedBetween(it, LocalDateTime.now()).count { it.status == EmailStatus.PENDING }.toLong()
+            } ?: repo.countByStatus(EmailStatus.PENDING)
+
+            stats["totalSent"] = totalSent
+            stats["totalFailed"] = totalFailed
+            stats["totalPending"] = totalPending
+            stats["successRate"] = if (totalSent + totalFailed > 0) {
+                (totalSent.toDouble() / (totalSent + totalFailed)) * 100
+            } else 0.0
+
+            return@withContext stats
+        } ?: emptyMap()
+    }
+
+    /**
+     * Retry failed notifications
+     */
+    fun retryFailedNotifications(beforeDate: LocalDateTime): CompletableFuture<Int> {
+        return CompletableFuture.supplyAsync {
+            runBlocking {
+                emailNotificationLogRepository?.let { repo ->
+                    val failedLogs = repo.findRetriableNotifications(5).filter {
+                        it.updatedAt?.isBefore(beforeDate) ?: true
+                    }
+                    var successCount = 0
+
+                    failedLogs.forEach { notificationLog ->
+                        try {
+                            val config = emailConfigRepository.findById(notificationLog.emailConfigId).orElse(null)
+                            if (config != null) {
+                                // Get original email content (would need to be stored or regenerated)
+                                val success = runBlocking { sendEmailWithRetry(
+                                    config = config,
+                                    to = notificationLog.recipientEmail,
+                                    subject = notificationLog.subject,
+                                    textContent = "Retry notification for risk assessment ${notificationLog.riskAssessmentId}",
+                                    htmlContent = "<p>Retry notification for risk assessment ${notificationLog.riskAssessmentId}</p>"
+                                ) }
+
+                                if (success) {
+                                    val updatedLog = notificationLog.markAsSent("retry-${System.currentTimeMillis()}")
+                                    repo.update(updatedLog)
+                                    successCount++
+                                }
+                            }
+                        } catch (e: Exception) {
+                            log.error("Failed to retry notification for log ID: ${notificationLog.id}", e)
+                        }
+                    }
+
+                    log.info("Retried {} failed notifications, {} succeeded", failedLogs.size, successCount)
+                    successCount
+                } ?: 0
+            }
+        }
+    }
+
+    /**
+     * Create notification log entry
+     */
+    private suspend fun createNotificationLogEntry(
+        riskAssessmentId: Long,
+        emailConfigId: Long,
+        recipientEmail: String,
+        subject: String
+    ): EmailNotificationLog? = withContext(Dispatchers.IO) {
+        emailNotificationLogRepository?.let { repo ->
+            val logEntry = EmailNotificationLog.create(
+                riskAssessmentId = riskAssessmentId,
+                emailConfigId = emailConfigId,
+                recipientEmail = recipientEmail,
+                subject = subject
+            )
+            repo.save(logEntry)
+        }
+    }
+
+    /**
+     * Update notification log entry with result
+     */
+    private suspend fun updateNotificationLogEntry(
+        logEntry: EmailNotificationLog,
+        success: Boolean
+    ) = withContext(Dispatchers.IO) {
+        emailNotificationLogRepository?.let { repo ->
+            val updatedEntry = if (success) {
+                logEntry.markAsSent("email-${System.currentTimeMillis()}")
+            } else {
+                logEntry.markAsFailed("Email delivery failed after retries")
+            }
+            repo.update(updatedEntry)
+        }
+    }
+
+    /**
+     * Enhanced email sending with config that includes timeout and detailed logging
+     */
+    private suspend fun sendEmailWithConfigEnhanced(
+        config: EmailConfig,
+        to: String,
+        subject: String,
+        textContent: String,
+        htmlContent: String
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            log.debug("Sending email to {} using SMTP {}:{}", to, config.smtpHost, config.smtpPort)
+
+            val startTime = System.currentTimeMillis()
+            val properties = createMailProperties(config)
+            val session = createMailSession(properties, config)
+
+            val message = MimeMessage(session).apply {
+                setFrom(InternetAddress(config.fromEmail, config.fromName))
+                setRecipients(Message.RecipientType.TO, InternetAddress.parse(to))
+                setSubject(subject)
+
+                // Create multipart message with both text and HTML
+                val multipart = MimeMultipart("alternative")
+
+                // Add text part
+                val textPart = MimeBodyPart().apply {
+                    setText(textContent, "UTF-8")
+                }
+                multipart.addBodyPart(textPart)
+
+                // Add HTML part
+                val htmlPart = MimeBodyPart().apply {
+                    setContent(htmlContent, "text/html; charset=UTF-8")
+                }
+                multipart.addBodyPart(htmlPart)
+
+                setContent(multipart)
+                sentDate = Date()
+            }
+
+            Transport.send(message)
+
+            val duration = System.currentTimeMillis() - startTime
+            log.info("Successfully sent email to {} with subject: {} ({}ms)", to, subject, duration)
+            true
+
+        } catch (e: Exception) {
+            log.error("Failed to send email to {}: {}", to, e.message, e)
+            false
+        }
+    }
+
+    /**
      * Convert HTML content to plain text
      */
     private fun convertHtmlToText(htmlContent: String): String {
@@ -235,4 +563,16 @@ open class EmailService(
                 .trim()
         }
     }
+
+    /**
+     * Data class for bulk notification requests
+     */
+    data class NotificationEmailRequest(
+        val riskAssessmentId: Long,
+        val to: String,
+        val subject: String,
+        val textContent: String,
+        val htmlContent: String,
+        val emailConfigId: Long? = null
+    )
 }

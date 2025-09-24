@@ -22,7 +22,7 @@ import org.slf4j.LoggerFactory
 import java.util.concurrent.CompletableFuture
 
 @Controller("/api/email-config")
-@Secured(SecurityRule.IS_AUTHENTICATED)
+@Secured("ADMIN")
 @ExecuteOn(TaskExecutors.BLOCKING)
 open class EmailConfigController(
     private val emailConfigRepository: EmailConfigRepository,
@@ -33,6 +33,7 @@ open class EmailConfigController(
 
     @Serdeable
     data class CreateEmailConfigRequest(
+        @NotBlank val name: String,
         @NotBlank val smtpHost: String,
         @Min(1) @Max(65535) val smtpPort: Int = 587,
         @Nullable val smtpUsername: String? = null,
@@ -46,6 +47,7 @@ open class EmailConfigController(
 
     @Serdeable
     data class UpdateEmailConfigRequest(
+        @Nullable val name: String? = null,
         @Nullable val smtpHost: String? = null,
         @Nullable val smtpPort: Int? = null,
         @Nullable val smtpUsername: String? = null,
@@ -140,6 +142,7 @@ open class EmailConfigController(
             }
             
             val config = EmailConfig(
+                name = request.name.trim(),
                 smtpHost = request.smtpHost.trim(),
                 smtpPort = request.smtpPort,
                 smtpUsername = request.smtpUsername?.trim()?.takeIf { it.isNotBlank() },
@@ -170,34 +173,32 @@ open class EmailConfigController(
             val config = emailConfigRepository.findById(id).orElse(null)
                 ?: return HttpResponse.notFound(ErrorResponse("Email configuration not found"))
             
-            // Update fields if provided
-            request.smtpHost?.let { config.smtpHost = it.trim() }
-            request.smtpPort?.let { config.smtpPort = it }
-            request.smtpUsername?.let { config.smtpUsername = it.trim().takeIf { it.isNotBlank() } }
-            request.smtpTls?.let { config.smtpTls = it }
-            request.smtpSsl?.let { config.smtpSsl = it }
-            request.fromEmail?.let { config.fromEmail = it.trim() }
-            request.fromName?.let { config.fromName = it.trim() }
-            
-            // Handle password update (only if not the masked value)
-            if (config.shouldUpdatePassword(request.smtpPassword)) {
-                config.smtpPassword = request.smtpPassword
-            }
-            
+            // Create updated config with new values
+            val updatedConfig = config.copy(
+                name = request.name?.trim() ?: config.name,
+                smtpHost = request.smtpHost?.trim() ?: config.smtpHost,
+                smtpPort = request.smtpPort ?: config.smtpPort,
+                smtpUsername = request.smtpUsername?.trim()?.takeIf { it.isNotBlank() } ?: config.smtpUsername,
+                smtpPassword = if (request.smtpPassword != null && request.smtpPassword != EmailConfig.PASSWORD_MASK)
+                    request.smtpPassword else config.smtpPassword,
+                smtpTls = request.smtpTls ?: config.smtpTls,
+                smtpSsl = request.smtpSsl ?: config.smtpSsl,
+                fromEmail = request.fromEmail?.trim() ?: config.fromEmail,
+                fromName = request.fromName?.trim() ?: config.fromName,
+                isActive = request.isActive ?: config.isActive
+            )
+
             // Handle active status change
-            request.isActive?.let { newActiveStatus ->
-                if (newActiveStatus && !config.isActive) {
-                    // Setting as active - deactivate all others first
-                    emailConfigRepository.deactivateAllExcept(id)
-                    log.debug("Deactivated all other configurations")
-                }
-                config.isActive = newActiveStatus
+            if (request.isActive == true && !config.isActive) {
+                // Setting as active - deactivate all others first
+                emailConfigRepository.deactivateAllExcept(id)
+                log.debug("Deactivated all other configurations")
             }
             
-            val updatedConfig = emailConfigRepository.update(config)
+            val savedConfig = emailConfigRepository.update(updatedConfig)
             
-            log.info("Updated email configuration: {} (active: {})", updatedConfig.smtpHost, updatedConfig.isActive)
-            HttpResponse.ok(updatedConfig.toSafeResponse())
+            log.info("Updated email configuration: {} (active: {})", savedConfig.smtpHost, savedConfig.isActive)
+            HttpResponse.ok(savedConfig.toSafeResponse())
         } catch (e: Exception) {
             log.error("Error updating email configuration with id: {}", id, e)
             HttpResponse.badRequest(ErrorResponse("Error updating email configuration: ${e.message}"))
