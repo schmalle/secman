@@ -41,6 +41,29 @@ micronaut:
           issuer: secman-backend-ng
     oauth2:
       enabled: true
+
+# Email functionality configuration
+secman:
+  encryption:
+    # Encryption password for sensitive data - MUST be overridden in production
+    password: ${SECMAN_ENCRYPTION_PASSWORD:SecManDefaultEncryptionPassword2024}
+    # Encryption salt - MUST be overridden in production
+    salt: ${SECMAN_ENCRYPTION_SALT:5c0744940b5c369b}
+  email:
+    # Email delivery configuration
+    retry:
+      max-attempts: 3
+      initial-delay: 30000  # 30 seconds
+      max-delay: 300000     # 5 minutes
+      backoff-multiplier: 2.0
+    # Email performance settings
+    performance:
+      delivery-timeout: 30000  # 30 seconds
+      connection-timeout: 10000  # 10 seconds
+    # Notification settings
+    notifications:
+      batch-size: 50
+      async-processing: true
     intercept-url-map:
       - pattern: /api/auth/login
         access:
