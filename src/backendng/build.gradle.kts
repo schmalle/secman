@@ -65,6 +65,8 @@ dependencies {
     
     // Logging
     runtimeOnly("ch.qos.logback:logback-classic")
+    // Bridge Log4j to Logback (required for Apache POI)
+    runtimeOnly("org.apache.logging.log4j:log4j-to-slf4j:2.24.3")
     
     // YAML configuration support
     runtimeOnly("org.yaml:snakeyaml")

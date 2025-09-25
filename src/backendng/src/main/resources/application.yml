@@ -114,7 +114,6 @@ jpa:
           auto: update
         show_sql: false
         format_sql: true
-        dialect: org.hibernate.dialect.MariaDBDialect
 
 jackson:
   dateFormat: yyyy-MM-dd'T'HH:mm:ss.SSSZ
