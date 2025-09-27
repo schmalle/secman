@@ -40,3 +40,5 @@ Thumbs.db
 .serena/
 src/backendng/.kotlin/sessions/*
 src/backendng/.claude/settings.local.json
+src/backendng/.claude/settings.local.json
+src/.claude/settings.local.json
