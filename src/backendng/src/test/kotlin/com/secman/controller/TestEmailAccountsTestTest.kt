@@ -1,10 +1,12 @@
 package com.secman.controller
 
+import com.secman.dto.TestErrorResponse
 import io.micronaut.http.HttpRequest
 import io.micronaut.http.HttpStatus
 import io.micronaut.http.MediaType
 import io.micronaut.http.client.HttpClient
 import io.micronaut.http.client.annotation.Client
+import io.micronaut.serde.annotation.Serdeable
 import io.micronaut.test.extensions.junit5.annotation.MicronautTest
 import jakarta.inject.Inject
 import org.junit.jupiter.api.Assertions.*
@@ -112,7 +114,7 @@ class TestEmailAccountsTestTest {
             .header("Authorization", authToken)
             .contentType(MediaType.APPLICATION_JSON)
 
-        val response = client.toBlocking().exchange(request, ErrorResponse::class.java)
+        val response = client.toBlocking().exchange(request, TestErrorResponse::class.java)
 
         // Assert
         assertEquals(HttpStatus.BAD_REQUEST, response.status)
@@ -135,7 +137,7 @@ class TestEmailAccountsTestTest {
             .header("Authorization", authToken)
             .contentType(MediaType.APPLICATION_JSON)
 
-        val response = client.toBlocking().exchange(request, ErrorResponse::class.java)
+        val response = client.toBlocking().exchange(request, TestErrorResponse::class.java)
 
         // Assert
         assertEquals(HttpStatus.NOT_FOUND, response.status)
@@ -158,12 +160,12 @@ class TestEmailAccountsTestTest {
             .header("Authorization", authToken)
             .contentType(MediaType.APPLICATION_JSON)
 
-        val response = client.toBlocking().exchange(request, ErrorResponse::class.java)
+        val response = client.toBlocking().exchange(request, TestErrorResponse::class.java)
 
         // Assert
         assertEquals(HttpStatus.BAD_REQUEST, response.status)
         assertNotNull(response.body())
-        assertTrue(response.body()!!.message.contains("cannot be tested"))
+        assertTrue(response.body()!!.message?.contains("cannot be tested") == true)
     }
 
     @Test
@@ -182,7 +184,7 @@ class TestEmailAccountsTestTest {
             .header("Authorization", authToken)
             .contentType(MediaType.APPLICATION_JSON)
 
-        val response = client.toBlocking().exchange(request, ErrorResponse::class.java)
+        val response = client.toBlocking().exchange(request, TestErrorResponse::class.java)
 
         // Assert
         assertEquals(HttpStatus.BAD_REQUEST, response.status)
@@ -191,6 +193,7 @@ class TestEmailAccountsTestTest {
 }
 
 // Request DTO matching OpenAPI contract
+@Serdeable
 data class TestEmailRequest(
     val subject: String,
     val content: String,
@@ -198,6 +201,7 @@ data class TestEmailRequest(
 )
 
 // Response DTO matching OpenAPI contract
+@Serdeable
 data class TestResult(
     val success: Boolean,
     val messageId: String?,
@@ -206,3 +210,4 @@ data class TestResult(
     val timestamp: LocalDateTime,
     val details: Map<String, Any>?
 )
+

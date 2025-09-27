@@ -5,7 +5,10 @@
       "Bash(./gradlew:*)",
       "Bash(gradle:*)",
       "mcp__context7__resolve-library-id",
-      "mcp__context7__get-library-docs"
+      "mcp__context7__get-library-docs",
+      "Bash(java:*)",
+      "Bash(env)",
+      "Read(//Users/flake/.sdkman/candidates/java/21.0.8-tem/**)"
     ],
     "deny": []
   }

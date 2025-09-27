@@ -35,7 +35,8 @@
       "WebFetch(domain:localhost)",
       "Bash(open http://localhost:4322/login)",
       "Read(//Users/flake/sources/misc/secman/**)",
-      "Bash(timeout 10s gradle run)"
+      "Bash(timeout 10s gradle run)",
+      "Bash(java:*)"
     ],
     "deny": []
   }

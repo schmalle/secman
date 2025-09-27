@@ -2,6 +2,7 @@ package com.secman.controller
 
 import com.secman.domain.enums.EmailStatus
 import io.micronaut.http.HttpRequest
+import io.micronaut.serde.annotation.Serdeable
 import io.micronaut.http.HttpStatus
 import io.micronaut.http.client.HttpClient
 import io.micronaut.http.client.annotation.Client
@@ -142,6 +143,7 @@ class NotificationLogsTest {
 }
 
 // Response DTOs matching OpenAPI contract
+@Serdeable
 data class NotificationLogsResponse(
     val logs: List<EmailNotificationLogDto>,
     val total: Int,
@@ -149,6 +151,7 @@ data class NotificationLogsResponse(
     val offset: Int
 )
 
+@Serdeable
 data class EmailNotificationLogDto(
     val id: Long,
     val riskAssessmentId: Long,

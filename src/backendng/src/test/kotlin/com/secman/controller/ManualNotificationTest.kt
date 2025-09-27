@@ -1,7 +1,9 @@
 package com.secman.controller
 
+import com.secman.dto.TestErrorResponse
 import io.micronaut.http.HttpRequest
 import io.micronaut.http.HttpStatus
+import io.micronaut.serde.annotation.Serdeable
 import io.micronaut.http.MediaType
 import io.micronaut.http.client.HttpClient
 import io.micronaut.http.client.annotation.Client
@@ -84,7 +86,7 @@ class ManualNotificationTest {
             .header("Authorization", authToken)
             .contentType(MediaType.APPLICATION_JSON)
 
-        val response = client.toBlocking().exchange(request, ErrorResponse::class.java)
+        val response = client.toBlocking().exchange(request, TestErrorResponse::class.java)
 
         // Assert
         assertEquals(HttpStatus.BAD_REQUEST, response.status)
@@ -109,7 +111,7 @@ class ManualNotificationTest {
             .header("Authorization", authToken)
             .contentType(MediaType.APPLICATION_JSON)
 
-        val response = client.toBlocking().exchange(request, ErrorResponse::class.java)
+        val response = client.toBlocking().exchange(request, TestErrorResponse::class.java)
 
         // Assert
         assertEquals(HttpStatus.BAD_REQUEST, response.status)
@@ -142,6 +144,7 @@ class ManualNotificationTest {
 }
 
 // Request DTO matching OpenAPI contract
+@Serdeable
 data class ManualNotificationRequest(
     val riskAssessmentId: Long,
     val recipientEmails: List<String>,
@@ -151,6 +154,7 @@ data class ManualNotificationRequest(
 )
 
 // Response DTO matching OpenAPI contract
+@Serdeable
 data class ManualNotificationResponse(
     val message: String,
     val notificationId: Long

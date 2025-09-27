@@ -2,7 +2,9 @@ package com.secman.controller
 
 import com.secman.domain.enums.EmailProvider
 import com.secman.domain.enums.TestAccountStatus
+import com.secman.dto.TestErrorResponse
 import io.micronaut.http.HttpRequest
+import io.micronaut.serde.annotation.Serdeable
 import io.micronaut.http.HttpStatus
 import io.micronaut.http.MediaType
 import io.micronaut.http.client.HttpClient
@@ -89,7 +91,7 @@ class TestEmailAccountsPostTest {
             .header("Authorization", authToken)
             .contentType(MediaType.APPLICATION_JSON)
 
-        val response = client.toBlocking().exchange(request, ErrorResponse::class.java)
+        val response = client.toBlocking().exchange(request, TestErrorResponse::class.java)
 
         // Assert
         assertEquals(HttpStatus.BAD_REQUEST, response.status)
@@ -113,7 +115,7 @@ class TestEmailAccountsPostTest {
             .header("Authorization", authToken)
             .contentType(MediaType.APPLICATION_JSON)
 
-        val response = client.toBlocking().exchange(request, ErrorResponse::class.java)
+        val response = client.toBlocking().exchange(request, TestErrorResponse::class.java)
 
         // Assert
         assertEquals(HttpStatus.BAD_REQUEST, response.status)
@@ -179,6 +181,7 @@ class TestEmailAccountsPostTest {
 }
 
 // Request DTO matching OpenAPI contract
+@Serdeable
 data class TestEmailAccountRequest(
     val name: String,
     val emailAddress: String,

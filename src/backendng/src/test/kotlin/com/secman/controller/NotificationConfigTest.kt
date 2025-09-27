@@ -3,6 +3,7 @@ package com.secman.controller
 import com.secman.domain.RiskAssessmentNotificationConfig
 import com.secman.repository.RiskAssessmentNotificationConfigRepository
 import io.micronaut.http.HttpRequest
+import io.micronaut.serde.annotation.Serdeable
 import io.micronaut.http.HttpStatus
 import io.micronaut.http.client.HttpClient
 import io.micronaut.http.client.annotation.Client
@@ -77,6 +78,7 @@ class NotificationConfigTest {
 }
 
 // DTO classes matching OpenAPI contract
+@Serdeable
 data class NotificationConfig(
     val id: Long,
     val name: String,
