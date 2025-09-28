@@ -8,7 +8,7 @@ import Layout from '../../layouts/Layout.astro';
           <div class="col-12">
             <div class="d-flex justify-content-between align-items-center mb-4">
               <h2>Email Configuration Management</h2>
-              <button class="btn btn-primary" onclick="toggleForm()">
+              <button class="btn btn-primary" onclick="toggleForm();">
                 <span id="toggle-btn-text">Add New Configuration</span>
               </button>
             </div>
@@ -22,6 +22,15 @@ import Layout from '../../layouts/Layout.astro';
               <div class="card-body">
                 <h5 class="card-title" id="form-title">Add New Email Configuration</h5>
                 <form id="email-config-form">
+                  <div class="row">
+                    <div class="col-md-12">
+                      <div class="mb-3">
+                        <label for="name" class="form-label">Configuration Name *</label>
+                        <input type="text" class="form-control" id="name" name="name" required placeholder="Gmail Configuration">
+                      </div>
+                    </div>
+                  </div>
+
                   <div class="row">
                     <div class="col-md-6">
                       <div class="mb-3">
@@ -153,7 +162,10 @@ import Layout from '../../layouts/Layout.astro';
 
       // Check if user has admin access
       function checkAdminAccess() {
+        console.log('checkAdminAccess called, currentUser:', currentUser);
+        
         if (!currentUser) {
+          console.log('No current user, redirecting to login');
           showAlert('Authentication required. Please log in.', 'danger');
           window.location.href = '/login';
           return;
@@ -166,7 +178,10 @@ import Layout from '../../layouts/Layout.astro';
           currentUser.roles.includes('admin')
         );
 
+        console.log('User roles:', currentUser.roles, 'hasAdminRole:', hasAdminRole);
+
         if (!hasAdminRole) {
+          console.log('User does not have admin role, redirecting to home');
           showAlert('Access denied. Admin privileges required to access email configuration.', 'danger');
           setTimeout(() => {
             window.location.href = '/';
@@ -207,10 +222,10 @@ import Layout from '../../layouts/Layout.astro';
           })
           .catch(err => {
             console.error('Failed to load configurations:', err);
-            showAlert('Failed to load configurations: ' + err.message, 'danger');
+            showAlert('Failed to load configurations: ' + err.message + '. Please ensure the backend service is running.', 'danger');
             document.getElementById('loading').style.display = 'none';
             document.getElementById('config-list').style.display = 'block';
-            document.getElementById('config-list').innerHTML = '<p class="text-danger">Failed to load configurations. Please check your authentication and try again.</p>';
+            document.getElementById('config-list').innerHTML = '<p class="text-danger">Failed to load configurations. Please check your authentication and ensure the backend service is running.</p>';
           });
       }
 
@@ -228,6 +243,7 @@ import Layout from '../../layouts/Layout.astro';
               <thead>
                 <tr>
                   <th>Status</th>
+                  <th>Name</th>
                   <th>SMTP Host</th>
                   <th>Port</th>
                   <th>From Email</th>
@@ -248,7 +264,7 @@ import Layout from '../../layouts/Layout.astro';
           if (config.smtpUsername) securityBadges.push('<span class="badge bg-success">Auth</span>');
 
           // Ensure we have a valid numeric ID
-          const configId = config.id || config.Id;
+          const configId = config.id;
           if (!configId) {
             console.error('Config missing ID:', config);
             return; // Skip this config if no valid ID
@@ -262,6 +278,7 @@ import Layout from '../../layouts/Layout.astro';
                   ${isActive ? 'Active' : 'Inactive'}
                 </span>
               </td>
+              <td>${config.name || ''}</td>
               <td>${config.smtpHost || ''}</td>
               <td>${config.smtpPort || ''}</td>
               <td>${config.fromEmail || ''}</td>
@@ -312,14 +329,19 @@ import Layout from '../../layouts/Layout.astro';
       }
 
       function toggleForm() {
+        console.log('toggleForm called');
         const form = document.getElementById('config-form');
         const btn = document.getElementById('toggle-btn-text');
         
-        if (form.style.display === 'none') {
+        console.log('Form display:', form.style.display);
+        
+        if (form.style.display === 'none' || form.style.display === '') {
           form.style.display = 'block';
           btn.textContent = 'Cancel';
+          console.log('Form shown');
         } else {
           resetForm();
+          console.log('Form reset and hidden');
         }
       }
 
@@ -328,6 +350,7 @@ import Layout from '../../layouts/Layout.astro';
         document.getElementById('config-form').style.display = 'none';
         document.getElementById('toggle-btn-text').textContent = 'Add New Configuration';
         document.getElementById('form-title').textContent = 'Add New Email Configuration';
+        document.getElementById('name').value = '';
         document.getElementById('smtpPort').value = '587';
         document.getElementById('fromName').value = 'SecMan Risk Assessment';
         document.getElementById('smtpTls').checked = true;
@@ -358,6 +381,7 @@ import Layout from '../../layouts/Layout.astro';
         
         try {
           // Fill form with config data
+          document.getElementById('name').value = config.name || '';
           document.getElementById('smtpHost').value = config.smtpHost || '';
           document.getElementById('smtpPort').value = config.smtpPort || 587;
           document.getElementById('smtpUsername').value = config.smtpUsername || '';
@@ -374,6 +398,7 @@ import Layout from '../../layouts/Layout.astro';
           document.getElementById('config-form').style.display = 'block';
           
           console.log('Form should now be visible with data:', {
+            name: config.name,
             smtpHost: config.smtpHost,
             smtpPort: config.smtpPort,
             fromEmail: config.fromEmail,
@@ -449,8 +474,11 @@ import Layout from '../../layouts/Layout.astro';
       document.getElementById('email-config-form').addEventListener('submit', function(e) {
         e.preventDefault();
         
+        console.log('Form submission started...');
+        
         const formData = new FormData(e.target);
         const data = {
+          name: formData.get('name'),
           smtpHost: formData.get('smtpHost'),
           smtpPort: parseInt(formData.get('smtpPort')),
           smtpUsername: formData.get('smtpUsername'),
@@ -462,6 +490,8 @@ import Layout from '../../layouts/Layout.astro';
           isActive: formData.has('isActive')
         };
 
+        console.log('Form data:', data);
+
         // Don't send empty password for edits
         if (editingConfig && !data.smtpPassword) {
           data.smtpPassword = '***HIDDEN***';
@@ -470,18 +500,25 @@ import Layout from '../../layouts/Layout.astro';
         const url = editingConfig ? `/api/email-config/${editingConfig.id}` : '/api/email-config';
         const method = editingConfig ? 'PUT' : 'POST';
 
+        console.log('Making API request:', method, url);
+
         authorizedFetch(url, {
           method: method,
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data)
         })
         .then(response => {
+          console.log('Response status:', response.status);
           if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            return response.text().then(text => {
+              console.error('Response error text:', text);
+              throw new Error(`HTTP ${response.status}: ${response.statusText}\n${text}`);
+            });
           }
           return response.json();
         })
         .then(data => {
+          console.log('Success response:', data);
           showAlert(editingConfig ? 'Configuration updated successfully' : 'Configuration created successfully', 'success');
           resetForm();
           loadConfigurations();
