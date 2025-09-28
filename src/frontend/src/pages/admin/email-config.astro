@@ -8,7 +8,7 @@ import Layout from '../../layouts/Layout.astro';
           <div class="col-12">
             <div class="d-flex justify-content-between align-items-center mb-4">
               <h2>Email Configuration Management</h2>
-              <button class="btn btn-primary" onclick="toggleForm();">
+              <button class="btn btn-primary" onclick="toggleForm();" data-testid="create-config-btn">
                 <span id="toggle-btn-text">Add New Configuration</span>
               </button>
             </div>
@@ -98,7 +98,7 @@ import Layout from '../../layouts/Layout.astro';
                   </div>
 
                   <div class="d-flex justify-content-end">
-                    <button type="submit" class="btn btn-success me-2">Save</button>
+                    <button type="submit" class="btn btn-success me-2" data-testid="save-config-btn">Save</button>
                     <button type="button" onclick="resetForm()" class="btn btn-secondary">Cancel</button>
                   </div>
                 </form>
@@ -118,7 +118,7 @@ import Layout from '../../layouts/Layout.astro';
                     <span class="visually-hidden">Loading...</span>
                   </div>
                 </div>
-                <div id="config-list" style="display: none;"></div>
+                <div id="config-list" style="display: none;" data-testid="config-list"></div>
               </div>
             </div>
           </div>
@@ -132,6 +132,34 @@ import Layout from '../../layouts/Layout.astro';
       let currentUser = null;
       let configs = [];
       let editingConfig = null;
+
+      // Make toggleForm globally accessible immediately
+      window.toggleForm = function() {
+        console.log('toggleForm called');
+        const form = document.getElementById('config-form');
+        const btn = document.getElementById('toggle-btn-text');
+        
+        if (!form || !btn) {
+          console.error('Form or button elements not found');
+          return;
+        }
+        
+        console.log('Form display style:', form.style.display);
+        
+        // Check if form is hidden (either display: none or not visible)
+        const isFormHidden = form.style.display === 'none' || 
+                             form.style.display === '' || 
+                             window.getComputedStyle(form).display === 'none';
+        
+        if (isFormHidden) {
+          form.style.display = 'block';
+          btn.textContent = 'Cancel';
+          console.log('Form shown');
+        } else {
+          resetForm();
+          console.log('Form reset and hidden');
+        }
+      };
 
       function authorizedFetch(input, init = {}) {
         const token = localStorage.getItem('authToken');
@@ -328,24 +356,8 @@ import Layout from '../../layouts/Layout.astro';
         }
       }
 
-      function toggleForm() {
-        console.log('toggleForm called');
-        const form = document.getElementById('config-form');
-        const btn = document.getElementById('toggle-btn-text');
-        
-        console.log('Form display:', form.style.display);
-        
-        if (form.style.display === 'none' || form.style.display === '') {
-          form.style.display = 'block';
-          btn.textContent = 'Cancel';
-          console.log('Form shown');
-        } else {
-          resetForm();
-          console.log('Form reset and hidden');
-        }
-      }
-
-      function resetForm() {
+      // Make resetForm globally accessible
+      window.resetForm = function() {
         document.getElementById('email-config-form').reset();
         document.getElementById('config-form').style.display = 'none';
         document.getElementById('toggle-btn-text').textContent = 'Add New Configuration';

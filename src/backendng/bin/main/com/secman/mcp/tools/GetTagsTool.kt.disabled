@@ -1,0 +1,139 @@
+package com.secman.mcp.tools
+
+import com.secman.domain.McpOperation
+import com.secman.service.TagService
+import jakarta.inject.Inject
+import jakarta.inject.Singleton
+
+/**
+ * MCP tool for retrieving available tags and categories.
+ */
+@Singleton
+class GetTagsTool(
+    @Inject private val tagService: TagService
+) : McpTool {
+
+    override val name = "get_tags"
+    override val description = "Retrieve all available tags and categories for requirements and assessments"
+    override val operation = McpOperation.READ
+
+    override val inputSchema = mapOf(
+        "type" to "object",
+        "properties" to mapOf(
+            "type" to mapOf(
+                "type" to "string",
+                "enum" to listOf("ALL", "REQUIREMENTS", "ASSESSMENTS"),
+                "description" to "Filter tags by where they are used",
+                "default" to "ALL"
+            ),
+            "category" to mapOf(
+                "type" to "string",
+                "description" to "Filter tags by category (e.g., 'compliance', 'security', 'privacy')"
+            ),
+            "usage_threshold" to mapOf(
+                "type" to "number",
+                "description" to "Only return tags used at least this many times",
+                "default" to 1,
+                "minimum" to 1
+            ),
+            "include_usage_count" to mapOf(
+                "type" to "boolean",
+                "description" to "Include usage count for each tag",
+                "default" to true
+            ),
+            "sort_by" to mapOf(
+                "type" to "string",
+                "enum" to listOf("name", "usage_count", "created_date"),
+                "description" to "Sort tags by specified field",
+                "default" to "name"
+            ),
+            "sort_order" to mapOf(
+                "type" to "string",
+                "enum" to listOf("asc", "desc"),
+                "description" to "Sort order",
+                "default" to "asc"
+            )
+        )
+    )
+
+    override suspend fun execute(arguments: Map<String, Any>): McpToolResult {
+        val type = arguments["type"] as? String ?: "ALL"
+        val category = arguments["category"] as? String
+        val usageThreshold = (arguments["usage_threshold"] as? Number)?.toInt() ?: 1
+        val includeUsageCount = arguments["include_usage_count"] as? Boolean ?: true
+        val sortBy = arguments["sort_by"] as? String ?: "name"
+        val sortOrder = arguments["sort_order"] as? String ?: "asc"
+
+        // Validate enum values
+        if (type !in listOf("ALL", "REQUIREMENTS", "ASSESSMENTS")) {
+            return McpToolResult.error("INVALID_PARAMETER", "Invalid type value")
+        }
+
+        if (sortBy !in listOf("name", "usage_count", "created_date")) {
+            return McpToolResult.error("INVALID_PARAMETER", "Invalid sort_by value")
+        }
+
+        if (sortOrder !in listOf("asc", "desc")) {
+            return McpToolResult.error("INVALID_PARAMETER", "Invalid sort_order value")
+        }
+
+        try {
+            val filterCriteria = mutableMapOf<String, Any>()
+            filterCriteria["type"] = type
+            category?.let { filterCriteria["category"] = it }
+            filterCriteria["usageThreshold"] = usageThreshold
+            filterCriteria["sortBy"] = sortBy
+            filterCriteria["sortOrder"] = sortOrder
+
+            val tags = tagService.getTags(filterCriteria)
+
+            val tagData = tags.map { tag ->
+                val baseData = mutableMapOf<String, Any>(
+                    "id" to tag.id,
+                    "name" to tag.name,
+                    "category" to (tag.category ?: "uncategorized"),
+                    "description" to (tag.description ?: ""),
+                    "color" to (tag.color ?: "#default"),
+                    "createdAt" to tag.createdAt.toString()
+                )
+
+                if (includeUsageCount) {
+                    baseData["usageCount"] = tag.usageCount ?: 0
+                    baseData["usedInRequirements"] = tag.requirementCount ?: 0
+                    baseData["usedInAssessments"] = tag.assessmentCount ?: 0
+                }
+
+                baseData.toMap()
+            }
+
+            // Group tags by category for better organization
+            val tagsByCategory = tagData.groupBy { it["category"] as String }
+
+            val result = mapOf(
+                "tags" to tagData,
+                "tagsByCategory" to tagsByCategory,
+                "summary" to mapOf(
+                    "totalTags" to tagData.size,
+                    "categories" to tagsByCategory.keys.toList(),
+                    "categoryCount" to tagsByCategory.size,
+                    "mostUsedTags" to if (includeUsageCount) {
+                        tagData.sortedByDescending { (it["usageCount"] as? Number)?.toInt() ?: 0 }
+                            .take(10)
+                            .map { mapOf("name" to it["name"], "usageCount" to it["usageCount"]) }
+                    } else emptyList()
+                )
+            )
+
+            val metadata = mapOf(
+                "filters" to filterCriteria,
+                "includeUsageCount" to includeUsageCount,
+                "executionTime" to System.currentTimeMillis()
+            )
+
+            return McpToolResult.success(result, metadata)
+
+        } catch (e: Exception) {
+            return McpToolResult.error("EXECUTION_ERROR", "Failed to retrieve tags: ${e.message}")
+        }
+    }
+}

@@ -1,0 +1,31 @@
+datasources:
+  default:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driverClassName: org.h2.Driver
+    username: sa
+    password: ""
+
+jpa:
+  default:
+    properties:
+      hibernate:
+        hbm2ddl:
+          auto: create-drop
+        show_sql: false
+        format_sql: true
+        dialect: org.hibernate.dialect.H2Dialect
+
+micronaut:
+  application:
+    name: secman-backend-ng-test
+  server:
+    port: -1  # Use random port for tests
+  security:
+    enabled: false  # Disable security for tests
+
+# Disable JWT verification for tests
+jwt:
+  signature:
+    secret:
+      generator:
+        secret: "test-secret-key-for-jwt-tokens-in-testing-environment-only"
