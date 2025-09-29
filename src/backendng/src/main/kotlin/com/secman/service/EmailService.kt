@@ -155,6 +155,7 @@ open class EmailService(
     ): Boolean {
         return try {
             log.debug("Sending email to {} using SMTP {}:{}", to, config.smtpHost, config.smtpPort)
+            log.debug("Email config - TLS: {}, SSL: {}, Auth: {}", config.smtpTls, config.smtpSsl, config.hasAuthentication())
             
             val properties = createMailProperties(config)
             val session = createMailSession(properties, config)
@@ -183,12 +184,13 @@ open class EmailService(
                 sentDate = Date()
             }
             
+            log.debug("Attempting to send email...")
             Transport.send(message)
             log.info("Successfully sent email to {} with subject: {}", to, subject)
             true
             
         } catch (e: Exception) {
-            log.error("Failed to send email to {}: {}", to, e.message, e)
+            log.error("Failed to send email to {}: {} - {}", to, e.javaClass.simpleName, e.message, e)
             false
         }
     }
@@ -226,7 +228,10 @@ open class EmailService(
         return if (config.hasAuthentication()) {
             Session.getInstance(properties, object : Authenticator() {
                 override fun getPasswordAuthentication(): PasswordAuthentication {
-                    return PasswordAuthentication(config.smtpUsername, config.smtpPassword)
+                    // Ensure non-null values (hasAuthentication already checked they're not null/blank)
+                    val username = config.smtpUsername ?: ""
+                    val password = config.smtpPassword ?: ""
+                    return PasswordAuthentication(username, password)
                 }
             })
         } else {

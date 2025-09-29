@@ -46,6 +46,7 @@ dependencies {
     
     // Email
     implementation("io.micronaut.email:micronaut-email-javamail")
+    implementation("org.eclipse.angus:angus-mail:2.0.3")
     
     // Serialization
     implementation("io.micronaut.serde:micronaut-serde-jackson")

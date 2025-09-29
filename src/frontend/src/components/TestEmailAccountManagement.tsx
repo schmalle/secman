@@ -5,17 +5,30 @@ interface TestEmailAccount {
   id?: number;
   name: string;
   email: string;
-  provider: 'GMAIL' | 'OUTLOOK' | 'YAHOO' | 'CUSTOM';
+  provider: 'GMAIL' | 'OUTLOOK' | 'YAHOO' | 'SMTP_CUSTOM' | 'IMAP_CUSTOM';
   credentials: string;
   smtpHost?: string;
   smtpPort?: number;
   imapHost?: string;
   imapPort?: number;
   description?: string;
-  status: 'VERIFICATION_PENDING' | 'TESTING' | 'VERIFIED' | 'VERIFICATION_FAILED';
+  status: 'VERIFICATION_PENDING' | 'TESTING' | 'ACTIVE' | 'FAILED';
   lastTestedAt?: string;
   createdAt?: string;
   updatedAt?: string;
+}
+
+interface TestEmailFormData {
+  name: string;
+  email: string;
+  provider: 'GMAIL' | 'OUTLOOK' | 'YAHOO' | 'SMTP_CUSTOM' | 'IMAP_CUSTOM';
+  username: string;
+  password: string;
+  smtpHost?: string;
+  smtpPort?: number;
+  imapHost?: string;
+  imapPort?: number;
+  description?: string;
 }
 
 interface TestEmailAccountStats {
@@ -38,17 +51,17 @@ const TestEmailAccountManagement: React.FC = () => {
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [filterProvider, setFilterProvider] = useState<string>('');
 
-  const [formData, setFormData] = useState<TestEmailAccount>({
+  const [formData, setFormData] = useState<TestEmailFormData>({
     name: '',
     email: '',
     provider: 'GMAIL',
-    credentials: '',
+    username: '',
+    password: '',
     smtpHost: '',
     smtpPort: 587,
     imapHost: '',
     imapPort: 993,
-    description: '',
-    status: 'VERIFICATION_PENDING'
+    description: ''
   });
 
   // Check if user is authenticated and has admin access
@@ -153,10 +166,45 @@ const TestEmailAccountManagement: React.FC = () => {
     e.preventDefault();
 
     try {
+      const requestData: any = {
+        name: formData.name,
+        email: formData.email,
+        provider: formData.provider,
+        description: formData.description
+      };
+
+      // Only include credentials if username and password are provided
+      // When editing, allow keeping existing credentials by leaving fields blank
+      if (formData.username && formData.password) {
+        // Build credentials JSON object
+        const credentialsObj: any = {
+          username: formData.username,
+          password: formData.password
+        };
+
+        // Add SMTP/IMAP details if provided
+        if (formData.smtpHost) credentialsObj.smtpHost = formData.smtpHost;
+        if (formData.smtpPort) credentialsObj.smtpPort = formData.smtpPort;
+        if (formData.imapHost) credentialsObj.imapHost = formData.imapHost;
+        if (formData.imapPort) credentialsObj.imapPort = formData.imapPort;
+
+        requestData.credentials = JSON.stringify(credentialsObj);
+      } else if (!editingAccount) {
+        // For new accounts, credentials are required
+        setError('Username and password are required for new accounts');
+        return;
+      }
+
+      // Add optional fields
+      if (formData.smtpHost) requestData.smtpHost = formData.smtpHost;
+      if (formData.smtpPort) requestData.smtpPort = formData.smtpPort;
+      if (formData.imapHost) requestData.imapHost = formData.imapHost;
+      if (formData.imapPort) requestData.imapPort = formData.imapPort;
+
       if (editingAccount) {
-        await authenticatedPut(`/api/test-email-accounts/${editingAccount.id}`, formData);
+        await authenticatedPut(`/api/test-email-accounts/${editingAccount.id}`, requestData);
       } else {
-        await authenticatedPost('/api/test-email-accounts', formData);
+        await authenticatedPost('/api/test-email-accounts', requestData);
       }
 
       await fetchAccounts();
@@ -170,7 +218,19 @@ const TestEmailAccountManagement: React.FC = () => {
 
   const handleEdit = (account: TestEmailAccount) => {
     setEditingAccount(account);
-    setFormData({ ...account, credentials: '' }); // Don't show credentials
+    // Don't show credentials when editing
+    setFormData({ 
+      name: account.name,
+      email: account.email,
+      provider: account.provider,
+      username: '',
+      password: '',
+      smtpHost: account.smtpHost || '',
+      smtpPort: account.smtpPort || 587,
+      imapHost: account.imapHost || '',
+      imapPort: account.imapPort || 993,
+      description: account.description || ''
+    });
     setShowForm(true);
   };
 
@@ -237,13 +297,13 @@ const TestEmailAccountManagement: React.FC = () => {
       name: '',
       email: '',
       provider: 'GMAIL',
-      credentials: '',
+      username: '',
+      password: '',
       smtpHost: '',
       smtpPort: 587,
       imapHost: '',
       imapPort: 993,
-      description: '',
-      status: 'VERIFICATION_PENDING'
+      description: ''
     });
     setEditingAccount(null);
     setShowForm(false);
@@ -282,10 +342,10 @@ const TestEmailAccountManagement: React.FC = () => {
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'VERIFIED': return 'bg-success';
+      case 'ACTIVE': return 'bg-success';
       case 'VERIFICATION_PENDING': return 'bg-warning';
       case 'TESTING': return 'bg-info';
-      case 'VERIFICATION_FAILED': return 'bg-danger';
+      case 'FAILED': return 'bg-danger';
       default: return 'bg-secondary';
     }
   };
@@ -396,10 +456,10 @@ const TestEmailAccountManagement: React.FC = () => {
             onChange={(e) => setFilterStatus(e.target.value)}
           >
             <option value="">All Statuses</option>
-            <option value="VERIFIED">Verified</option>
+            <option value="ACTIVE">Active</option>
             <option value="VERIFICATION_PENDING">Pending</option>
             <option value="TESTING">Testing</option>
-            <option value="VERIFICATION_FAILED">Failed</option>
+            <option value="FAILED">Failed</option>
           </select>
         </div>
         <div className="col-md-6">
@@ -412,7 +472,8 @@ const TestEmailAccountManagement: React.FC = () => {
             <option value="GMAIL">Gmail</option>
             <option value="OUTLOOK">Outlook</option>
             <option value="YAHOO">Yahoo</option>
-            <option value="CUSTOM">Custom</option>
+            <option value="SMTP_CUSTOM">Custom SMTP</option>
+            <option value="IMAP_CUSTOM">Custom IMAP</option>
           </select>
         </div>
       </div>
@@ -472,23 +533,57 @@ const TestEmailAccountManagement: React.FC = () => {
                           <option value="GMAIL">Gmail</option>
                           <option value="OUTLOOK">Outlook</option>
                           <option value="YAHOO">Yahoo</option>
-                          <option value="CUSTOM">Custom SMTP/IMAP</option>
+                          <option value="SMTP_CUSTOM">Custom SMTP</option>
+                          <option value="IMAP_CUSTOM">Custom IMAP</option>
                         </select>
                       </div>
                     </div>
                     <div className="col-md-6">
                       <div className="mb-3">
-                        <label htmlFor="credentials" className="form-label">Password/App Password *</label>
+                        <label htmlFor="username" className="form-label">Username *</label>
+                        <input
+                          type="text"
+                          className="form-control"
+                          id="username"
+                          name="username"
+                          value={formData.username}
+                          onChange={handleInputChange}
+                          required={!editingAccount}
+                          placeholder={editingAccount ? "Leave blank to keep existing" : "Email address or username"}
+                        />
+                        <small className="form-text text-muted">
+                          Usually your email address. Leave blank when editing to keep existing.
+                        </small>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="row">
+                    <div className="col-md-12">
+                      <div className="mb-3">
+                        <label htmlFor="password" className="form-label">
+                          Password/App Password *
+                          {(formData.provider === 'GMAIL' || formData.provider === 'YAHOO') && (
+                            <span className="text-warning ms-2">
+                              (App-specific password required)
+                            </span>
+                          )}
+                        </label>
                         <input
                           type="password"
                           className="form-control"
-                          id="credentials"
-                          name="credentials"
-                          value={formData.credentials}
+                          id="password"
+                          name="password"
+                          value={formData.password}
                           onChange={handleInputChange}
                           required={!editingAccount}
-                          placeholder={editingAccount ? "***HIDDEN***" : "Password or App Password"}
+                          placeholder={editingAccount ? "Leave blank to keep existing password" : "Password or App Password"}
                         />
+                        {(formData.provider === 'GMAIL' || formData.provider === 'YAHOO') && (
+                          <small className="form-text text-warning">
+                            Gmail and Yahoo require app-specific passwords. Leave blank when editing to keep existing.
+                          </small>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -640,7 +735,7 @@ const TestEmailAccountManagement: React.FC = () => {
                               <button
                                 onClick={() => account.id && handleSendTest(account.id)}
                                 className="btn btn-outline-success mb-1"
-                                disabled={sending === account.id || account.status !== 'VERIFIED'}
+                                disabled={sending === account.id || account.status !== 'ACTIVE'}
                               >
                                 {sending === account.id ? 'Sending...' : 'Send Test Email'}
                               </button>
