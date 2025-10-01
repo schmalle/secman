@@ -14,7 +14,8 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
 @Controller("/api/users")
 @Secured(SecurityRule.IS_AUTHENTICATED)
 open class UserController(
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val userDeletionValidator: com.secman.service.UserDeletionValidator
 ) {
     
     private val passwordEncoder = BCryptPasswordEncoder()
@@ -184,9 +185,29 @@ open class UserController(
     @Transactional
     open fun delete(@PathVariable id: Long): HttpResponse<*> {
         val userOptional = userRepository.findById(id)
-        
+
         if (userOptional.isEmpty) {
             return HttpResponse.notFound<Any>().body(mapOf("error" to "User not found"))
+        }
+
+        // Validate user deletion
+        val validationResult = userDeletionValidator.validateUserDeletion(id)
+
+        if (!validationResult.canDelete) {
+            // Return detailed error with blocking references
+            val response = mapOf(
+                "error" to "Cannot delete user",
+                "message" to validationResult.message,
+                "blockingReferences" to validationResult.blockingReferences.map { ref ->
+                    mapOf(
+                        "entityType" to ref.entityType,
+                        "count" to ref.count,
+                        "role" to ref.role,
+                        "details" to ref.details
+                    )
+                }
+            )
+            return HttpResponse.badRequest<Any>().body(response)
         }
 
         try {

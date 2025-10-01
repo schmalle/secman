@@ -36,7 +36,10 @@
       "Bash(open http://localhost:4322/login)",
       "Read(//Users/flake/sources/misc/secman/**)",
       "Bash(timeout 10s gradle run)",
-      "Bash(java:*)"
+      "Bash(java:*)",
+      "Bash(xargs:*)",
+      "Bash(for file in backendng/src/main/kotlin/com/secman/domain/{Demand.kt,RiskAssessment.kt,Release.kt,DemandClassification.kt})",
+      "Bash(done)"
     ],
     "deny": []
   }
