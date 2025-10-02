@@ -170,7 +170,9 @@ open class UserController(
                         return HttpResponse.badRequest(mapOf("error" to "Invalid role: $roleString"))
                     }
                 }
-                user.roles = roles
+                // Properly manage the collection instead of replacing it
+                user.roles.clear()
+                user.roles.addAll(roles)
             }
 
             val savedUser = userRepository.update(user)

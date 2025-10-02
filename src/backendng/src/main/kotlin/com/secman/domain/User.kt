@@ -32,7 +32,7 @@ data class User(
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "user_roles", joinColumns = [JoinColumn(name = "user_id")])
     @Enumerated(EnumType.STRING)
-    @Column(name = "role")
+    @Column(name = "role_name")
     var roles: MutableSet<Role> = mutableSetOf(Role.USER),
 
     @Column(name = "created_at", updatable = false)

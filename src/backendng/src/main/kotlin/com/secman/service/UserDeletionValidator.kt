@@ -97,7 +97,7 @@ class UserDeletionValidator(
         }
 
         // Check Releases where user is creator (nullable, but still informative)
-        val releasesAsCreator = releaseRepository.findByCreatedById(userId)
+        val releasesAsCreator = releaseRepository.findByCreatedBy_Id(userId)
         if (releasesAsCreator.isNotEmpty()) {
             blockingReferences.add(
                 BlockingReference(
@@ -110,7 +110,7 @@ class UserDeletionValidator(
         }
 
         // Check Demand Classification Rules where user is creator (nullable, but still informative)
-        val classificationRulesAsCreator = demandClassificationRuleRepository.findByCreatedById(userId)
+        val classificationRulesAsCreator = demandClassificationRuleRepository.findByCreatedBy_Id(userId)
         if (classificationRulesAsCreator.isNotEmpty()) {
             blockingReferences.add(
                 BlockingReference(
@@ -123,7 +123,7 @@ class UserDeletionValidator(
         }
 
         // Check Demand Classification Results where user overrode classification (nullable, but still informative)
-        val classificationResultsAsOverrider = demandClassificationResultRepository.findByOverriddenById(userId)
+        val classificationResultsAsOverrider = demandClassificationResultRepository.findByOverriddenBy_Id(userId)
         if (classificationResultsAsOverrider.isNotEmpty()) {
             blockingReferences.add(
                 BlockingReference(

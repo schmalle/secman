@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { FormEvent } from 'react';
-import { authenticatedGet, authenticatedPost, authenticatedDelete } from '../utils/auth';
+import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete } from '../utils/auth';
 
 // Define an interface for the user data expected from the backend
 interface User {
@@ -37,6 +37,18 @@ const UserManagement = () => {
     const [addUserError, setAddUserError] = useState<string | null>(null);
     const [isSubmittingUser, setIsSubmittingUser] = useState(false);
     const [deletingUserId, setDeletingUserId] = useState<number | null>(null);
+
+    // State for Edit User Modal
+    const [showEditUserModal, setShowEditUserModal] = useState(false);
+    const [editingUser, setEditingUser] = useState<User | null>(null);
+    const [editUser, setEditUser] = useState({
+        username: '',
+        email: '',
+        password: '', // Optional - only update if provided
+        roles: [] as string[],
+    });
+    const [editUserError, setEditUserError] = useState<string | null>(null);
+    const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
 
 
     useEffect(() => {
@@ -197,6 +209,87 @@ const UserManagement = () => {
         }
     };
 
+    const handleEditClick = (user: User) => {
+        setEditingUser(user);
+        setEditUser({
+            username: user.username,
+            email: user.email,
+            password: '', // Leave blank - only update if user enters a new password
+            roles: [...user.roles],
+        });
+        setEditUserError(null);
+        setShowEditUserModal(true);
+    };
+
+    const handleEditUserChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+        const { name, value } = e.target;
+        setEditUser(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleEditUserRolesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const { value, checked } = e.target;
+        setEditUser(prev => {
+            const newRoles = checked
+                ? [...prev.roles, value]
+                : prev.roles.filter(role => role !== value);
+            return { ...prev, roles: newRoles };
+        });
+    };
+
+    const handleEditUserSubmit = async (e: FormEvent) => {
+        e.preventDefault();
+        setEditUserError(null);
+        setIsSubmittingEdit(true);
+
+        if (!editingUser) {
+            setEditUserError("No user selected for editing.");
+            setIsSubmittingEdit(false);
+            return;
+        }
+
+        if (!editUser.username || !editUser.email) {
+            setEditUserError("Username and email are required.");
+            setIsSubmittingEdit(false);
+            return;
+        }
+        if (editUser.roles.length === 0) {
+            setEditUserError("At least one role must be selected.");
+            setIsSubmittingEdit(false);
+            return;
+        }
+
+        try {
+            // Build update payload - only include password if it was provided
+            const updatePayload: any = {
+                username: editUser.username,
+                email: editUser.email,
+                roles: editUser.roles,
+            };
+
+            // Only include password if user entered one
+            if (editUser.password && editUser.password.trim() !== '') {
+                updatePayload.password = editUser.password;
+            }
+
+            const response = await authenticatedPut(`/api/users/${editingUser.id}`, updatePayload);
+            if (response.ok) {
+                const data = await response.json();
+                setUsers(prevUsers => prevUsers.map(u => u.id === editingUser.id ? data : u));
+                setShowEditUserModal(false);
+                setEditingUser(null);
+                setEditUser({ username: '', email: '', password: '', roles: [] }); // Reset form
+            } else {
+                const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                throw new Error(errorData.error || `Failed to update user: ${response.status}`);
+            }
+        } catch (err: any) {
+            console.error('Edit user request failed:', err);
+            setEditUserError(err.message || 'An error occurred while updating the user. Please try again.');
+        } finally {
+            setIsSubmittingEdit(false);
+        }
+    };
+
 
     // --- Render Logic ---
     if (isLoading) {
@@ -286,6 +379,63 @@ const UserManagement = () => {
                 </div>
             )}
 
+            {/* Edit User Modal */}
+            {showEditUserModal && editingUser && (
+                <div className="modal fade show d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+                    <div className="modal-dialog modal-dialog-centered">
+                        <div className="modal-content">
+                            <form onSubmit={handleEditUserSubmit}>
+                                <div className="modal-header">
+                                    <h5 className="modal-title">Edit User: {editingUser.username}</h5>
+                                    <button type="button" className="btn-close" onClick={() => setShowEditUserModal(false)} aria-label="Close" disabled={isSubmittingEdit}></button>
+                                </div>
+                                <div className="modal-body">
+                                    {editUserError && <div className="alert alert-danger">{editUserError}</div>}
+                                    <div className="mb-3">
+                                        <label htmlFor="edit-username" className="form-label">Username</label>
+                                        <input type="text" className="form-control" id="edit-username" name="username" value={editUser.username} onChange={handleEditUserChange} required disabled={isSubmittingEdit} />
+                                    </div>
+                                    <div className="mb-3">
+                                        <label htmlFor="edit-email" className="form-label">Email</label>
+                                        <input type="email" className="form-control" id="edit-email" name="email" value={editUser.email} onChange={handleEditUserChange} required disabled={isSubmittingEdit} />
+                                    </div>
+                                    <div className="mb-3">
+                                        <label htmlFor="edit-password" className="form-label">Password</label>
+                                        <input type="password" className="form-control" id="edit-password" name="password" value={editUser.password} onChange={handleEditUserChange} placeholder="Leave blank to keep current password" disabled={isSubmittingEdit} />
+                                        <small className="form-text text-muted">Leave blank to keep the current password</small>
+                                    </div>
+                                    <div className="mb-3">
+                                        <label className="form-label">Roles</label>
+                                        <div>
+                                            {AVAILABLE_ROLES.map(role => (
+                                                <div className="form-check form-check-inline" key={role}>
+                                                    <input
+                                                        className="form-check-input"
+                                                        type="checkbox"
+                                                        id={`edit-role-${role}`}
+                                                        value={role}
+                                                        checked={editUser.roles.includes(role)}
+                                                        onChange={handleEditUserRolesChange}
+                                                        disabled={isSubmittingEdit}
+                                                    />
+                                                    <label className="form-check-label" htmlFor={`edit-role-${role}`}>{role}</label>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="modal-footer">
+                                    <button type="button" className="btn btn-secondary" onClick={() => setShowEditUserModal(false)} disabled={isSubmittingEdit}>Close</button>
+                                    <button type="submit" className="btn btn-primary" disabled={isSubmittingEdit}>
+                                        {isSubmittingEdit ? 'Updating...' : 'Update User'}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <table className="table table-striped table-hover">
                 <thead>
                     <tr>
@@ -305,12 +455,15 @@ const UserManagement = () => {
                                 <td>{user.email}</td>
                                 <td>{user.roles?.join(', ') || 'N/A'}</td>
                                 <td>
-                                    {/* Placeholder Action Buttons */}
-                                    <button className="btn btn-sm btn-primary me-1" title="Edit">
+                                    <button
+                                        className="btn btn-sm btn-primary me-1"
+                                        title="Edit"
+                                        onClick={() => handleEditClick(user)}
+                                    >
                                         <i className="bi bi-pencil-fill"></i>
                                     </button>
-                                    <button 
-                                        className="btn btn-sm btn-danger" 
+                                    <button
+                                        className="btn btn-sm btn-danger"
                                         title="Delete"
                                         onClick={() => handleDeleteUser(user.id, user.username)}
                                         disabled={deletingUserId === user.id}

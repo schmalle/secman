@@ -15,7 +15,7 @@ interface ReleaseRepository : JpaRepository<Release, Long> {
     
     fun findByStatus(status: Release.ReleaseStatus): List<Release>
     
-    fun findByCreatedById(createdById: Long): List<Release>
+    fun findByCreatedBy_Id(createdById: Long): List<Release>
     
     fun existsByVersion(version: String): Boolean
     

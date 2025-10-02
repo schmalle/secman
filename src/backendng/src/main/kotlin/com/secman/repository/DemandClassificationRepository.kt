@@ -18,7 +18,7 @@ interface DemandClassificationRuleRepository : JpaRepository<DemandClassificatio
     @Query("SELECT r FROM DemandClassificationRule r WHERE r.active = true AND r.name = :name")
     fun findActiveByName(name: String): Optional<DemandClassificationRule>
 
-    fun findByCreatedById(createdById: Long): List<DemandClassificationRule>
+    fun findByCreatedBy_Id(createdById: Long): List<DemandClassificationRule>
 }
 
 @Repository
@@ -40,5 +40,5 @@ interface DemandClassificationResultRepository : JpaRepository<DemandClassificat
     @Query("SELECT r FROM DemandClassificationResult r WHERE r.appliedRule.id = :ruleId")
     fun findByAppliedRuleId(ruleId: Long): List<DemandClassificationResult>
 
-    fun findByOverriddenById(overriddenById: Long): List<DemandClassificationResult>
+    fun findByOverriddenBy_Id(overriddenById: Long): List<DemandClassificationResult>
 }
