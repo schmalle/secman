@@ -52,6 +52,13 @@ export function isAdmin(): boolean {
 }
 
 /**
+ * Check if user has vulnerability management access (ADMIN or VULN role)
+ */
+export function hasVulnAccess(): boolean {
+    return hasRole('ADMIN') || hasRole('VULN');
+}
+
+/**
  * Clear authentication data (logout)
  */
 export function clearAuth(): void {

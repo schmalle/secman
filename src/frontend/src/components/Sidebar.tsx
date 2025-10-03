@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from 'react';
+import { hasVulnAccess } from '../utils/auth';
 
 const Sidebar = () => {
     const [requirementsExpanded, setRequirementsExpanded] = useState(false);
     const [riskManagementExpanded, setRiskManagementExpanded] = useState(false);
+    const [vulnMenuOpen, setVulnMenuOpen] = useState(false);
+    const [ioMenuOpen, setIoMenuOpen] = useState(false);
     const [isAdmin, setIsAdmin] = useState(false);
+    const [hasVuln, setHasVuln] = useState(false);
 
     const toggleRequirements = () => {
         setRequirementsExpanded(!requirementsExpanded);
@@ -13,22 +17,23 @@ const Sidebar = () => {
         setRiskManagementExpanded(!riskManagementExpanded);
     };
 
-    // Check if user has admin role
+    // Check if user has admin role and vuln access
     useEffect(() => {
-        function checkAdminRole() {
+        function checkRoles() {
             const user = (window as any).currentUser;
             const hasAdmin = user?.roles?.includes('ADMIN') || false;
             setIsAdmin(hasAdmin);
+            setHasVuln(hasVulnAccess());
         }
 
         // Check on mount
-        checkAdminRole();
+        checkRoles();
 
         // Listen for user data updates
-        window.addEventListener('userLoaded', checkAdminRole);
+        window.addEventListener('userLoaded', checkRoles);
 
         // Cleanup listener on unmount
-        return () => window.removeEventListener('userLoaded', checkAdminRole);
+        return () => window.removeEventListener('userLoaded', checkRoles);
     }, []);
 
     return (
@@ -124,25 +129,68 @@ const Sidebar = () => {
                         <i className="bi bi-clipboard-plus me-2"></i> Demand Management
                     </a>
                 </li>
+                {/* I/O section with Import and Export sub-items */}
                 <li>
-                    <a href="/import" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                        <i className="bi bi-cloud-upload me-2"></i> Import
-                    </a>
+                    <div
+                        onClick={() => setIoMenuOpen(!ioMenuOpen)}
+                        className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary cursor-pointer"
+                        style={{ cursor: 'pointer' }}
+                    >
+                        <i className="bi bi-arrow-down-up me-2"></i>
+                        I/O
+                        <i className={`bi ${ioMenuOpen ? 'bi-chevron-down' : 'bi-chevron-right'} ms-auto`}></i>
+                    </div>
+                    {ioMenuOpen && (
+                        <ul className="list-unstyled ps-4">
+                            <li>
+                                <a href="/import" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                    <i className="bi bi-cloud-upload me-2"></i> Import
+                                </a>
+                            </li>
+                            <li>
+                                <a href="/export" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                    <i className="bi bi-download me-2"></i> Export
+                                </a>
+                            </li>
+                        </ul>
+                    )}
                 </li>
-                {/* Scans section - Admin only (Feature: 002-implement-a-parsing) */}
-                {isAdmin && (
+
+                {/* Vulnerability Management - ADMIN or VULN role (Feature: 004-i-want-to) */}
+                {hasVuln && (
                     <li>
-                        <a href="/scans" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                            <i className="bi bi-diagram-3 me-2"></i> Scans
-                        </a>
+                        <div
+                            onClick={() => setVulnMenuOpen(!vulnMenuOpen)}
+                            className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary cursor-pointer"
+                            style={{ cursor: 'pointer' }}
+                        >
+                            <i className="bi bi-shield-exclamation me-2"></i>
+                            Vuln Management
+                            <i className={`bi ${vulnMenuOpen ? 'bi-chevron-down' : 'bi-chevron-right'} ms-auto`}></i>
+                        </div>
+                        {vulnMenuOpen && (
+                            <ul className="list-unstyled ps-4">
+                                <li>
+                                    <a href="/vulnerabilities/current" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-list-ul me-2"></i> Current Vulns
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="/vulnerabilities/exceptions" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-x-circle me-2"></i> Exceptions
+                                    </a>
+                                </li>
+                                {isAdmin && (
+                                    <li>
+                                        <a href="/scans" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                            <i className="bi bi-diagram-3 me-2"></i> Scans
+                                        </a>
+                                    </li>
+                                )}
+                            </ul>
+                        )}
                     </li>
                 )}
-                <li>
-                    <a href="/export" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                        <i className="bi bi-download me-2"></i> Export
-                    </a>
-                </li>
-                
                 <li>
                     <a href="/public-classification" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
                         <i className="bi bi-funnel me-2"></i> Classification Tool

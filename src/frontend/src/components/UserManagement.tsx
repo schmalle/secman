@@ -18,7 +18,7 @@ declare global {
 }
 
 // Available roles - could be fetched from backend in a real app
-const AVAILABLE_ROLES = ['USER', 'ADMIN'];
+const AVAILABLE_ROLES = ['USER', 'ADMIN', 'VULN'];
 
 const UserManagement = () => {
     const [isAdmin, setIsAdmin] = useState(false);

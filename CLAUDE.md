@@ -21,7 +21,7 @@
 - **Repository**: Micronaut Data repositories
 - **Service**: Business logic layer
 - **Controller**: RESTful APIs (@Controller, @Secured)
-- **Security**: JWT authentication, OAuth2, RBAC (normaluser, adminuser)
+- **Security**: JWT authentication, OAuth2, RBAC (USER, ADMIN, VULN roles)
 
 ### Frontend (`src/frontend/`)
 - **Framework**: Astro with React islands
@@ -30,6 +30,14 @@
 - **API Client**: Axios for backend communication
 
 ## Recent Changes
+
+### Feature 004: VULN Role & Vulnerability Management UI (2025-10-03)
+- Added VULN role to RBAC system (role-based access for vulnerability management)
+- Created VulnerabilityException entity (IP-based and product-based exceptions)
+- Implemented vulnerability exception management UI
+- Added current vulnerabilities view (latest scan per asset)
+- Built comprehensive E2E test coverage for access control and CRUD operations
+- Updated user management UI to support VULN role assignment
 
 ### Feature 003: Vulnerability Management (2025-10-03)
 - Added Vulnerability entity with asset relationship
@@ -51,7 +59,13 @@
 
 ## Key Entities
 
-### Vulnerability (NEW - Feature 003)
+### VulnerabilityException (NEW - Feature 004)
+- **Fields**: id, exceptionType (IP/PRODUCT), targetValue, expirationDate, reason, createdBy, createdAt, updatedAt
+- **Methods**: isActive(), matches(vulnerability, asset)
+- **Indexes**: exception_type, expiration_date
+- **Access**: ADMIN, VULN roles only
+
+### Vulnerability (Feature 003)
 - **Fields**: id, asset (FK), vulnerabilityId (CVE), cvssSeverity, vulnerableProductVersions, daysOpen, scanTimestamp, createdAt
 - **Relationships**: ManyToOne Asset (bidirectional, cascade delete)
 - **Indexes**: asset_id, (asset_id, scan_timestamp)
@@ -82,6 +96,13 @@
 - `GET /api/assets` - List assets
 - `GET /api/assets/{id}` - Asset detail
 - `GET /api/assets/{id}/vulnerabilities` - Asset vulnerabilities (Feature 003)
+
+### Vulnerability Management (Feature 004)
+- `GET /api/vulnerabilities/current` - Current vulnerabilities (ADMIN, VULN)
+- `GET /api/vulnerability-exceptions` - List exceptions (ADMIN, VULN)
+- `POST /api/vulnerability-exceptions` - Create exception (ADMIN, VULN)
+- `PUT /api/vulnerability-exceptions/{id}` - Update exception (ADMIN, VULN)
+- `DELETE /api/vulnerability-exceptions/{id}` - Delete exception (ADMIN, VULN)
 
 ### Authentication
 - `POST /api/auth/login` - JWT login
@@ -131,7 +152,8 @@
 
 ### Authentication
 - All API endpoints: `@Secured(SecurityRule.IS_AUTHENTICATED)`
-- Admin-only: Check `authentication.roles.contains("adminuser")`
+- Admin-only: Check `authentication.roles.contains("ADMIN")`
+- VULN role: Check `authentication.roles.contains("VULN")` or `authentication.roles.contains("ADMIN")`
 - Frontend: Store JWT in sessionStorage, add to Axios headers
 
 ## File Locations

@@ -42,7 +42,7 @@ data class User(
     var updatedAt: Instant? = null
 ) {
     enum class Role {
-        USER, ADMIN
+        USER, ADMIN, VULN
     }
 
     @PrePersist
