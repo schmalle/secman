@@ -102,11 +102,34 @@ const riskManagementItems = [
 </aside>
 
 <script>
+    // Admin menu visibility control based on user role
+    function updateAdminVisibility() {
+        const user = (window as any).currentUser;
+        const hasAdmin = user?.roles?.includes('ADMIN') || false;
+
+        // Find the Admin menu item link
+        const adminLink = document.querySelector('a[href="/admin"]');
+        if (adminLink) {
+            const adminListItem = adminLink.closest('li');
+            if (adminListItem) {
+                // Show or hide based on admin role
+                adminListItem.style.display = hasAdmin ? 'block' : 'none';
+            }
+        }
+    }
+
+    // Update visibility when user data is loaded
+    window.addEventListener('userLoaded', updateAdminVisibility);
+
+    // Also check immediately in case user data is already available
+    updateAdminVisibility();
+
+    // Logout button functionality
     const logoutButtonSidebar = document.getElementById('logoutButtonSidebar');
     if (logoutButtonSidebar) {
         logoutButtonSidebar.addEventListener('click', async () => {
             try {
-                const response = await fetch('/api/auth/logout', { 
+                const response = await fetch('/api/auth/logout', {
                     method: 'POST',
                     headers: {
                         // Add any necessary headers, e.g., CSRF token if re-enabled

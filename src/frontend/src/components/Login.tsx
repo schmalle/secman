@@ -57,6 +57,10 @@ const Login = () => {
                 // Login successful - store the JWT token
                 if (data.token) {
                     localStorage.setItem('authToken', data.token);
+
+                    // Also store token in a cookie for server-side middleware access
+                    document.cookie = `authToken=${data.token}; path=/; max-age=86400; SameSite=Strict`;
+
                     const userData = {
                         id: data.id,
                         username: data.username,
@@ -64,7 +68,7 @@ const Login = () => {
                         roles: data.roles
                     };
                     localStorage.setItem('user', JSON.stringify(userData));
-                    
+
                     // Set global user state for Header component
                     (window as any).currentUser = userData;
                     window.dispatchEvent(new CustomEvent('userLoaded'));
