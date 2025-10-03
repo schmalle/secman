@@ -1,0 +1,153 @@
+openapi: 3.0.3
+info:
+  title: Asset Port History API
+  version: 1.0.0
+  description: View port scan history for individual assets
+
+paths:
+  /api/assets/{id}/ports:
+    get:
+      summary: Get port scan history for asset
+      description: |
+        Retrieve chronological port scan history for a specific asset.
+        Shows all scans where this asset was discovered, with port details.
+        Results sorted by scan date descending (newest first).
+        **Authenticated users** - Any logged-in user can view port data.
+      operationId: getAssetPortHistory
+      tags:
+        - Assets
+        - Scans
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Asset ID
+          schema:
+            type: integer
+            format: int64
+        - name: limit
+          in: query
+          description: Maximum number of scan results to return
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+      responses:
+        '200':
+          description: Port history retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  assetId:
+                    type: integer
+                    format: int64
+                    example: 123
+                  assetName:
+                    type: string
+                    example: "www.heise.de"
+                  ipAddress:
+                    type: string
+                    example: "193.99.144.85"
+                  scanHistory:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AssetScanResult'
+                    description: Scans ordered by date descending
+        '401':
+          description: Unauthorized - authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Asset not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "Asset not found"
+                message: "No asset with ID 123"
+
+components:
+  schemas:
+    AssetScanResult:
+      type: object
+      description: Port data from a single scan of this asset
+      properties:
+        scanId:
+          type: integer
+          format: int64
+          example: 42
+        scanDate:
+          type: string
+          format: date-time
+          example: "2025-10-03T08:33:50Z"
+          description: When the scan was performed
+        scanType:
+          type: string
+          enum: [nmap, masscan]
+          example: "nmap"
+        hostname:
+          type: string
+          nullable: true
+          example: "www.heise.de"
+          description: Hostname at time of scan (may change)
+        ports:
+          type: array
+          items:
+            $ref: '#/components/schemas/PortDetail'
+          description: Ports discovered in this scan
+
+    PortDetail:
+      type: object
+      description: Individual port information
+      properties:
+        portNumber:
+          type: integer
+          minimum: 1
+          maximum: 65535
+          example: 443
+        protocol:
+          type: string
+          enum: [tcp, udp]
+          example: "tcp"
+        state:
+          type: string
+          enum: [open, filtered, closed]
+          example: "open"
+        service:
+          type: string
+          nullable: true
+          example: "https"
+          description: Detected service name
+        version:
+          type: string
+          nullable: true
+          example: "nginx"
+          description: Detected service version
+
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

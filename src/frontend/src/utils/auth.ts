@@ -110,6 +110,31 @@ export async function authenticatedGet(url: string): Promise<Response> {
  * Convenience method for POST requests
  */
 export async function authenticatedPost(url: string, data?: any): Promise<Response> {
+    const token = getAuthToken();
+    const headers: Record<string, string> = {};
+
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    // Handle FormData (file uploads) differently - don't set Content-Type, let browser handle it
+    if (data instanceof FormData) {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: headers,
+            body: data,
+            credentials: 'include',
+        });
+
+        if (response.status === 401) {
+            clearAuth();
+            window.location.href = '/login';
+        }
+
+        return response;
+    }
+
+    // For regular JSON data
     return authenticatedFetch(url, {
         method: 'POST',
         body: data ? JSON.stringify(data) : undefined,

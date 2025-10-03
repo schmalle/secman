@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete } from '../utils/auth';
+import PortHistory from './PortHistory';
 
 interface Asset {
   id?: number;
@@ -25,6 +26,8 @@ const AssetManagement: React.FC = () => {
     owner: '',
     description: ''
   });
+  const [showPortHistory, setShowPortHistory] = useState(false);
+  const [selectedAssetForPorts, setSelectedAssetForPorts] = useState<Asset | null>(null);
 
   useEffect(() => {
     fetchAssets();
@@ -105,6 +108,16 @@ const AssetManagement: React.FC = () => {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleShowPorts = (asset: Asset) => {
+    setSelectedAssetForPorts(asset);
+    setShowPortHistory(true);
+  };
+
+  const handleClosePortHistory = () => {
+    setShowPortHistory(false);
+    setSelectedAssetForPorts(null);
   };
 
   if (loading) {
@@ -274,18 +287,31 @@ const AssetManagement: React.FC = () => {
                             {asset.createdAt ? new Date(asset.createdAt).toLocaleDateString() : '-'}
                           </td>
                           <td>
-                            <button onClick={() => handleEdit(asset)} className="btn btn-sm btn-outline-primary me-2">Edit</button>
-                            <button 
-                              onClick={() => {
-                                if (asset.id !== undefined && asset.id !== null) {
-                                  handleDelete(asset.id);
-                                }
-                              }} 
-                              className="btn btn-sm btn-outline-danger"
-                              disabled={asset.id === undefined || asset.id === null}
-                            >
-                              Delete
-                            </button>
+                            <div className="btn-group" role="group">
+                              <button onClick={() => handleEdit(asset)} className="btn btn-sm btn-outline-primary">
+                                <i className="bi bi-pencil"></i> Edit
+                              </button>
+                              {asset.ip && (
+                                <button
+                                  onClick={() => handleShowPorts(asset)}
+                                  className="btn btn-sm btn-outline-info"
+                                  title="Show port history"
+                                >
+                                  <i className="bi bi-diagram-3"></i> Ports
+                                </button>
+                              )}
+                              <button
+                                onClick={() => {
+                                  if (asset.id !== undefined && asset.id !== null) {
+                                    handleDelete(asset.id);
+                                  }
+                                }}
+                                className="btn btn-sm btn-outline-danger"
+                                disabled={asset.id === undefined || asset.id === null}
+                              >
+                                <i className="bi bi-trash"></i> Delete
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -304,6 +330,15 @@ const AssetManagement: React.FC = () => {
           <a href="/" className="btn btn-secondary">Back to Home</a>
         </div>
       </div>
+
+      {/* Port History Modal */}
+      {showPortHistory && selectedAssetForPorts && selectedAssetForPorts.id && (
+        <PortHistory
+          assetId={selectedAssetForPorts.id}
+          assetName={selectedAssetForPorts.name}
+          onClose={handleClosePortHistory}
+        />
+      )}
 
     </div>
   );
