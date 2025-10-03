@@ -1,10 +1,14 @@
 package com.secman.controller
 
 import com.secman.domain.Asset
+import com.secman.dto.PortDTO
+import com.secman.dto.PortHistoryDTO
+import com.secman.dto.ScanPortsDTO
 import com.secman.repository.AssetRepository
 import com.secman.repository.DemandRepository
 import com.secman.repository.RiskAssessmentRepository
 import com.secman.repository.RiskRepository
+import com.secman.repository.ScanResultRepository
 import io.micronaut.core.annotation.Nullable
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.HttpStatus
@@ -29,7 +33,8 @@ open class AssetController(
     private val demandRepository: DemandRepository,
     private val riskAssessmentRepository: RiskAssessmentRepository,
     private val riskRepository: RiskRepository,
-    private val entityManager: EntityManager
+    private val entityManager: EntityManager,
+    private val scanResultRepository: ScanResultRepository
 ) {
     
     private val log = LoggerFactory.getLogger(AssetController::class.java)
@@ -228,12 +233,71 @@ open class AssetController(
             }
             
             assetRepository.delete(asset)
-            
+
             log.info("Deleted asset: {} with id: {}", asset.name, id)
             HttpResponse.ok(mapOf("message" to "Asset deleted successfully"))
         } catch (e: Exception) {
             log.error("Error deleting asset with id: {}", id, e)
             HttpResponse.serverError<ErrorResponse>().body(ErrorResponse("Error deleting asset: ${e.message}"))
+        }
+    }
+
+    /**
+     * Get port history for an asset
+     *
+     * GET /api/assets/{id}/ports
+     * Auth: Any authenticated user
+     * Response: PortHistoryDTO with scan history and port data
+     *
+     * Related to:
+     * - Feature: 002-implement-a-parsing (Nmap Scan Import)
+     * - Contract: specs/002-implement-a-parsing/contracts/asset-ports.yaml
+     * - FR-011: Display port scan history
+     */
+    @Get("/{id}/ports")
+    @Transactional(readOnly = true)
+    open fun getPortHistory(id: Long): HttpResponse<*> {
+        return try {
+            log.debug("Fetching port history for asset id: {}", id)
+
+            val asset = assetRepository.findById(id).orElse(null)
+                ?: return HttpResponse.notFound(ErrorResponse("Asset not found"))
+
+            // Get scan results ordered by discoveredAt DESC (newest first)
+            val scanResults = scanResultRepository.findByAssetIdOrderByDiscoveredAtDesc(id)
+
+            // Convert to DTOs
+            val scans = scanResults.map { result ->
+                val ports = result.ports.map { port ->
+                    PortDTO(
+                        portNumber = port.portNumber,
+                        protocol = port.protocol,
+                        state = port.state,
+                        service = port.service,
+                        version = port.version
+                    )
+                }
+
+                ScanPortsDTO(
+                    scanId = result.scan.id!!,
+                    scanDate = result.discoveredAt,
+                    scanType = result.scan.scanType,
+                    ports = ports
+                )
+            }
+
+            val response = PortHistoryDTO(
+                assetId = asset.id!!,
+                assetName = asset.name,
+                scans = scans
+            )
+
+            log.debug("Found {} scans for asset {}", scans.size, asset.name)
+            HttpResponse.ok(response)
+
+        } catch (e: Exception) {
+            log.error("Error fetching port history for asset id: {}", id, e)
+            HttpResponse.serverError<ErrorResponse>().body(ErrorResponse("Error fetching port history: ${e.message}"))
         }
     }
 }

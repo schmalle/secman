@@ -22,11 +22,11 @@ export async function loginAsAdmin(page: Page, customUsername?: string, customPa
   await page.waitForLoadState('networkidle', { timeout: 10000 });
   
   // Wait for login form to be visible
-  await page.waitForSelector('input[name="username"]', { timeout: 10000 });
-  
+  await page.waitForSelector('input[id="username"]', { timeout: 10000 });
+
   // Fill login form
-  await page.fill('input[name="username"]', username);
-  await page.fill('input[name="password"]', password);
+  await page.fill('input[id="username"]', username);
+  await page.fill('input[id="password"]', password);
   
   // Submit form
   await page.click('button[type="submit"]');

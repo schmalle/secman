@@ -129,6 +129,14 @@ const Sidebar = () => {
                         <i className="bi bi-cloud-upload me-2"></i> Import
                     </a>
                 </li>
+                {/* Scans section - Admin only (Feature: 002-implement-a-parsing) */}
+                {isAdmin && (
+                    <li>
+                        <a href="/scans" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                            <i className="bi bi-diagram-3 me-2"></i> Scans
+                        </a>
+                    </li>
+                )}
                 <li>
                     <a href="/export" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
                         <i className="bi bi-download me-2"></i> Export

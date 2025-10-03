@@ -47,7 +47,23 @@
 ## Constitution Check
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+Verify this feature complies with secman Constitution v1.0.0:
+
+| Principle | Compliance Check | Status |
+|-----------|------------------|--------|
+| I. Security-First | Security implications evaluated? Input validation planned? Auth enforced? | ⬜ |
+| II. TDD (NON-NEGOTIABLE) | Tests written before implementation? Red-Green-Refactor followed? | ⬜ |
+| III. API-First | RESTful APIs defined? Backward compatibility maintained? API docs planned? | ⬜ |
+| IV. Docker-First | Services containerized? .env config (no hardcoded values)? Multi-arch support? | ⬜ |
+| V. RBAC | User roles respected? Authorization at API & UI? Admin restrictions enforced? | ⬜ |
+| VI. Schema Evolution | Migrations automated? Schema backward-compatible? Constraints at DB level? | ⬜ |
+
+**Quality Gates**:
+- [ ] Tests achieve ≥80% coverage
+- [ ] Linting passes (Kotlin + ESLint)
+- [ ] Docker builds succeed (AMD64 + ARM64)
+- [ ] API endpoints respond <200ms (p95)
+- [ ] Security scan shows no critical vulnerabilities
 
 ## Project Structure
 
@@ -216,4 +232,4 @@ directories captured above]
 - [ ] Complexity deviations documented
 
 ---
-*Based on Constitution v2.1.1 - See `/memory/constitution.md`*
+*Based on Constitution v1.0.0 - See `.specify/memory/constitution.md`*
