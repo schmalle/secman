@@ -52,8 +52,12 @@
                 
                 // Store authentication data
                 localStorage.setItem('authToken', token);
+
+                // Also store token in a cookie for server-side middleware access
+                document.cookie = `authToken=${token}; path=/; max-age=86400; SameSite=Strict`;
+
                 localStorage.setItem('user', JSON.stringify(userData));
-                
+
                 // Set global user state for Header component
                 window.currentUser = userData;
                 window.dispatchEvent(new CustomEvent('userLoaded'));

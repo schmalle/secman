@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 const Sidebar = () => {
     const [requirementsExpanded, setRequirementsExpanded] = useState(false);
     const [riskManagementExpanded, setRiskManagementExpanded] = useState(false);
+    const [isAdmin, setIsAdmin] = useState(false);
 
     const toggleRequirements = () => {
         setRequirementsExpanded(!requirementsExpanded);
@@ -12,6 +13,23 @@ const Sidebar = () => {
         setRiskManagementExpanded(!riskManagementExpanded);
     };
 
+    // Check if user has admin role
+    useEffect(() => {
+        function checkAdminRole() {
+            const user = (window as any).currentUser;
+            const hasAdmin = user?.roles?.includes('ADMIN') || false;
+            setIsAdmin(hasAdmin);
+        }
+
+        // Check on mount
+        checkAdminRole();
+
+        // Listen for user data updates
+        window.addEventListener('userLoaded', checkAdminRole);
+
+        // Cleanup listener on unmount
+        return () => window.removeEventListener('userLoaded', checkAdminRole);
+    }, []);
 
     return (
         <nav id="sidebar" className="bg-light border-end">
@@ -123,12 +141,14 @@ const Sidebar = () => {
                     </a>
                 </li>
                 
-                {/* Admin section - direct link */}
-                <li>
-                    <a href="/admin" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                        <i className="bi bi-speedometer2 me-2"></i> Admin
-                    </a>
-                </li>
+                {/* Admin section - direct link (only visible to admin users) */}
+                {isAdmin && (
+                    <li>
+                        <a href="/admin" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                            <i className="bi bi-speedometer2 me-2"></i> Admin
+                        </a>
+                    </li>
+                )}
                 <li>
                     <a href="/about" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
                         <i className="bi bi-info-circle me-2"></i> About

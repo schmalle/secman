@@ -32,6 +32,10 @@ const Header = () => {
                 // Clear authentication data
                 localStorage.removeItem('authToken');
                 localStorage.removeItem('user');
+
+                // Also clear the authToken cookie
+                document.cookie = 'authToken=; path=/; max-age=0; SameSite=Strict';
+
                 window.currentUser = null;
                 setUser(null);
                 window.dispatchEvent(new CustomEvent('userLoggedOut'));

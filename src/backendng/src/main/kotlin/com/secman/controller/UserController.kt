@@ -12,7 +12,7 @@ import jakarta.transaction.Transactional
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
 
 @Controller("/api/users")
-@Secured(SecurityRule.IS_AUTHENTICATED)
+@Secured("ADMIN")
 open class UserController(
     private val userRepository: UserRepository,
     private val userDeletionValidator: com.secman.service.UserDeletionValidator
