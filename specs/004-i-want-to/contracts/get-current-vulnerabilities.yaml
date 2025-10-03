@@ -1,0 +1,160 @@
+openapi: 3.0.3
+info:
+  title: Get Current Vulnerabilities API
+  description: Retrieve current (latest scan per asset) vulnerabilities with optional filtering
+  version: 1.0.0
+  contact:
+    name: secman API
+
+paths:
+  /api/vulnerabilities/current:
+    get:
+      summary: Get current vulnerabilities
+      description: |
+        Retrieve all current vulnerabilities across all assets. "Current" means the most recent
+        scan timestamp per asset. Historical vulnerabilities from older scans are excluded.
+
+        Supports filtering by severity, system (asset name), and exception status.
+        Requires ADMIN or VULN role.
+      operationId: getCurrentVulnerabilities
+      tags:
+        - Vulnerability Management
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: severity
+          in: query
+          description: Filter by CVSS severity level
+          required: false
+          schema:
+            type: string
+            enum: [Critical, High, Medium, Low, Informational]
+        - name: system
+          in: query
+          description: Filter by asset name (exact match)
+          required: false
+          schema:
+            type: string
+            maxLength: 255
+        - name: exceptionStatus
+          in: query
+          description: Filter by exception coverage status
+          required: false
+          schema:
+            type: string
+            enum: [all, excepted, not-excepted]
+            default: all
+      responses:
+        '200':
+          description: Successfully retrieved current vulnerabilities
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VulnerabilityWithExceptionDto'
+        '401':
+          description: Unauthorized - No valid JWT token provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden - User does not have ADMIN or VULN role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    VulnerabilityWithExceptionDto:
+      type: object
+      required:
+        - id
+        - assetId
+        - assetName
+        - scanTimestamp
+        - hasException
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Vulnerability record ID
+          example: 123
+        assetId:
+          type: integer
+          format: int64
+          description: Asset ID this vulnerability affects
+          example: 45
+        assetName:
+          type: string
+          description: Asset hostname/name
+          example: "web-server-01"
+        assetIp:
+          type: string
+          nullable: true
+          description: Asset IP address
+          example: "192.168.1.10"
+        vulnerabilityId:
+          type: string
+          nullable: true
+          description: CVE or vulnerability identifier
+          example: "CVE-2016-2183"
+        cvssSeverity:
+          type: string
+          nullable: true
+          description: CVSS severity level
+          enum: [Critical, High, Medium, Low, Informational]
+          example: "High"
+        vulnerableProductVersions:
+          type: string
+          nullable: true
+          description: Affected product and version
+          example: "OpenSSH 7.4"
+        daysOpen:
+          type: string
+          nullable: true
+          description: Days vulnerability has been open
+          example: "58 days"
+        scanTimestamp:
+          type: string
+          format: date-time
+          description: When the scan was performed (ISO 8601 format)
+          example: "2025-09-15T14:30:00"
+        hasException:
+          type: boolean
+          description: Whether this vulnerability is covered by an active exception
+          example: false
+        exceptionReason:
+          type: string
+          nullable: true
+          description: Reason for exception (if hasException is true)
+          example: "Compensating controls in place - WAF blocks this attack vector"
+
+    Error:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          description: Error message
+          example: "Forbidden: User does not have required role"
+        details:
+          type: string
+          nullable: true
+          description: Additional error details
+          example: "Required role: ADMIN or VULN"
