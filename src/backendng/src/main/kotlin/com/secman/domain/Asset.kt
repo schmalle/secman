@@ -50,6 +50,44 @@ data class Asset(
     var lastSeen: LocalDateTime? = null,
 
     /**
+     * Comma-separated group names this asset belongs to
+     * Example: "SVR-MS-DMZ,Production"
+     * Related to: Feature 003-i-want-to (Vulnerability Management System)
+     */
+    @Column(name = "groups", length = 512)
+    var groups: String? = null,
+
+    /**
+     * Cloud service account ID
+     * Related to: Feature 003-i-want-to (Vulnerability Management System)
+     */
+    @Column(name = "cloud_account_id", length = 255)
+    var cloudAccountId: String? = null,
+
+    /**
+     * Cloud service instance ID
+     * Related to: Feature 003-i-want-to (Vulnerability Management System)
+     */
+    @Column(name = "cloud_instance_id", length = 255)
+    var cloudInstanceId: String? = null,
+
+    /**
+     * Active Directory domain this asset belongs to
+     * Example: "MS.HOME"
+     * Related to: Feature 003-i-want-to (Vulnerability Management System)
+     */
+    @Column(name = "ad_domain", length = 255)
+    var adDomain: String? = null,
+
+    /**
+     * Operating system version
+     * Example: "Windows Server 2030", "Ubuntu 22.04"
+     * Related to: Feature 003-i-want-to (Vulnerability Management System)
+     */
+    @Column(name = "os_version", length = 255)
+    var osVersion: String? = null,
+
+    /**
      * Bidirectional relationship to ScanResult
      * One asset can have multiple scan results over time (scan history)
      * Foreign key is in scan_result table (asset_id)
@@ -60,7 +98,20 @@ data class Asset(
      */
     @JsonIgnore
     @OneToMany(mappedBy = "asset", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
-    var scanResults: MutableList<ScanResult> = mutableListOf()
+    var scanResults: MutableList<ScanResult> = mutableListOf(),
+
+    /**
+     * Bidirectional relationship to Vulnerability
+     * One asset can have multiple vulnerabilities discovered across different scans
+     * Foreign key is in vulnerability table (asset_id)
+     * Related to: Feature 003-i-want-to (Vulnerability Management System)
+     *
+     * Note: @JsonIgnore prevents lazy loading errors during JSON serialization.
+     * Vulnerabilities should be loaded explicitly via asset vulnerabilities endpoint.
+     */
+    @JsonIgnore
+    @OneToMany(mappedBy = "asset", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
+    var vulnerabilities: MutableList<Vulnerability> = mutableListOf()
 ) {
     @PrePersist
     fun onCreate() {
