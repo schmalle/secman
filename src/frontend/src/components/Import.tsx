@@ -1,8 +1,9 @@
 import React, { useState, useRef } from 'react';
 import { csrfPost } from '../utils/csrf';
 import { authenticatedPost } from '../utils/auth';
+import VulnerabilityImportForm from './VulnerabilityImportForm';
 
-type ImportType = 'requirements' | 'nmap';
+type ImportType = 'requirements' | 'nmap' | 'vulnerabilities';
 
 interface ScanSummary {
     scanId: number;
@@ -219,9 +220,27 @@ const Import = () => {
                                         <span className="badge bg-warning text-dark ms-2">ADMIN</span>
                                     </button>
                                 </li>
+                                <li className="nav-item" role="presentation">
+                                    <button
+                                        className={`nav-link ${importType === 'vulnerabilities' ? 'active' : ''}`}
+                                        type="button"
+                                        onClick={() => handleImportTypeChange('vulnerabilities')}
+                                    >
+                                        <i className="bi bi-shield-exclamation me-2"></i>
+                                        Vulnerabilities
+                                    </button>
+                                </li>
                             </ul>
 
                             <div className="p-5">
+                            {/* Vulnerabilities Tab Content */}
+                            {importType === 'vulnerabilities' && (
+                                <VulnerabilityImportForm />
+                            )}
+
+                            {/* Requirements and Nmap Tab Content */}
+                            {importType !== 'vulnerabilities' && (
+                                <>
                             {/* File Upload Area */}
                             <div 
                                 className={`border-2 border-dashed rounded-3 p-5 text-center position-relative ${
@@ -389,6 +408,8 @@ const Import = () => {
                                         {uploadStatus}
                                     </div>
                                 </div>
+                            )}
+                        </>
                             )}
                         </div>
                     </div>

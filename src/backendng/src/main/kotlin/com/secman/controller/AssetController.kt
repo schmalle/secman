@@ -1,6 +1,9 @@
 package com.secman.controller
 
 import com.secman.domain.Asset
+import com.secman.domain.Vulnerability
+import io.micronaut.data.model.Page
+import io.micronaut.data.model.Pageable
 import com.secman.dto.PortDTO
 import com.secman.dto.PortHistoryDTO
 import com.secman.dto.ScanPortsDTO
@@ -9,6 +12,7 @@ import com.secman.repository.DemandRepository
 import com.secman.repository.RiskAssessmentRepository
 import com.secman.repository.RiskRepository
 import com.secman.repository.ScanResultRepository
+import com.secman.repository.VulnerabilityRepository
 import io.micronaut.core.annotation.Nullable
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.HttpStatus
@@ -34,7 +38,8 @@ open class AssetController(
     private val riskAssessmentRepository: RiskAssessmentRepository,
     private val riskRepository: RiskRepository,
     private val entityManager: EntityManager,
-    private val scanResultRepository: ScanResultRepository
+    private val scanResultRepository: ScanResultRepository,
+    private val vulnerabilityRepository: VulnerabilityRepository
 ) {
     
     private val log = LoggerFactory.getLogger(AssetController::class.java)
@@ -298,6 +303,46 @@ open class AssetController(
         } catch (e: Exception) {
             log.error("Error fetching port history for asset id: {}", id, e)
             HttpResponse.serverError<ErrorResponse>().body(ErrorResponse("Error fetching port history: ${e.message}"))
+        }
+    }
+
+    /**
+     * Get vulnerabilities for an asset
+     *
+     * GET /api/assets/{assetId}/vulnerabilities
+     * Auth: Any authenticated user
+     * Response: Page<Vulnerability> with pagination support
+     *
+     * Related to:
+     * - Feature: 003-i-want-to (Vulnerability Management System)
+     * - Contract: specs/003-i-want-to/contracts/get-asset-vulnerabilities.yaml
+     * - FR-002: Display vulnerabilities in asset inventory
+     */
+    @Get("/{assetId}/vulnerabilities")
+    @Transactional(readOnly = true)
+    open fun getVulnerabilities(
+        assetId: Long,
+        @Nullable pageable: Pageable?
+    ): HttpResponse<*> {
+        return try {
+            log.debug("Fetching vulnerabilities for asset id: {}", assetId)
+
+            // Check if asset exists
+            val asset = assetRepository.findById(assetId).orElse(null)
+                ?: return HttpResponse.notFound(ErrorResponse("Asset not found"))
+
+            // Use default pagination if not provided (page 0, size 20)
+            val effectivePageable = pageable ?: Pageable.from(0, 20)
+
+            // Fetch vulnerabilities with pagination
+            val vulnerabilities = vulnerabilityRepository.findByAssetId(assetId, effectivePageable)
+
+            log.debug("Found {} vulnerabilities for asset {}", vulnerabilities.totalSize, asset.name)
+            HttpResponse.ok(vulnerabilities)
+
+        } catch (e: Exception) {
+            log.error("Error fetching vulnerabilities for asset id: {}", assetId, e)
+            HttpResponse.serverError<ErrorResponse>().body(ErrorResponse("Error fetching vulnerabilities: ${e.message}"))
         }
     }
 }

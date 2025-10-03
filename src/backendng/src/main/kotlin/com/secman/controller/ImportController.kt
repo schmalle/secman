@@ -33,7 +33,8 @@ open class ImportController(
     private val normRepository: NormRepository,
     private val useCaseRepository: UseCaseRepository,
     private val normParsingService: NormParsingService,
-    private val entityManager: EntityManager
+    private val entityManager: EntityManager,
+    private val vulnerabilityImportService: com.secman.service.VulnerabilityImportService
 ) {
     
     private val log = LoggerFactory.getLogger(ImportController::class.java)
@@ -366,7 +367,92 @@ open class ImportController(
                 // Continue with next requirement instead of failing entire import
             }
         }
-        
+
         return processedCount
+    }
+
+    /**
+     * Upload vulnerability scan Excel file
+     *
+     * Related to: Feature 003-i-want-to (Vulnerability Management System)
+     *
+     * Endpoint: POST /api/import/upload-vulnerability-xlsx
+     * Request: multipart/form-data with xlsxFile and scanDate
+     * Response: VulnerabilityImportResponse with import counts
+     *
+     * @param xlsxFile Excel file containing vulnerability data
+     * @param scanDate ISO 8601 datetime string when scan was performed
+     * @return Import response with counts (imported, skipped, assetsCreated)
+     */
+    @Post("/upload-vulnerability-xlsx")
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    @Transactional
+    open fun uploadVulnerabilityXlsx(
+        @Part xlsxFile: CompletedFileUpload,
+        @Part scanDate: String
+    ): HttpResponse<*> {
+        return try {
+            log.debug("Processing vulnerability Excel file upload: {}, scan date: {}", xlsxFile.filename, scanDate)
+
+            // Validate file
+            val validation = validateVulnerabilityFile(xlsxFile)
+            if (validation != null) {
+                return HttpResponse.badRequest(ErrorResponse(validation))
+            }
+
+            // Parse scan date
+            val scanDateTime = try {
+                java.time.LocalDateTime.parse(scanDate)
+            } catch (e: Exception) {
+                return HttpResponse.badRequest(ErrorResponse("Invalid scan date format. Expected ISO 8601: ${e.message}"))
+            }
+
+            // Import vulnerabilities
+            val response = xlsxFile.inputStream.use { inputStream ->
+                vulnerabilityImportService.importFromExcel(inputStream, scanDateTime)
+            }
+
+            log.info("Successfully imported vulnerabilities: {}", response.message)
+            HttpResponse.ok(response)
+
+        } catch (e: Exception) {
+            log.error("Error processing vulnerability Excel file", e)
+            HttpResponse.status<ErrorResponse>(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ErrorResponse("Error processing file: ${e.message}"))
+        }
+    }
+
+    /**
+     * Validate vulnerability Excel file
+     *
+     * Checks: file size, extension, content type, not empty
+     *
+     * @param file Uploaded file
+     * @return Error message if invalid, null if valid
+     */
+    private fun validateVulnerabilityFile(file: CompletedFileUpload): String? {
+        // Check file size
+        if (file.size > MAX_FILE_SIZE) {
+            return "File size exceeds maximum limit of ${MAX_FILE_SIZE / 1024 / 1024}MB"
+        }
+
+        // Check file extension
+        val filename = file.filename.orEmpty()
+        if (!filename.lowercase().endsWith(".xlsx")) {
+            return "Only .xlsx files are supported"
+        }
+
+        // Check content type
+        val contentType = file.contentType.map { it.toString() }.orElse("")
+        if (!contentType.contains("spreadsheetml.sheet") && !contentType.contains("excel") && !contentType.contains("octet-stream")) {
+            return "Invalid file format. Please upload a valid Excel file."
+        }
+
+        // Check file is not empty
+        if (file.size == 0L) {
+            return "File is empty"
+        }
+
+        return null
     }
 }

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete } from '../utils/auth';
 import PortHistory from './PortHistory';
+import VulnerabilityHistory from './VulnerabilityHistory';
 
 interface Asset {
   id?: number;
@@ -9,6 +10,11 @@ interface Asset {
   ip?: string;
   owner: string;
   description?: string;
+  groups?: string;
+  cloudAccountId?: string;
+  cloudInstanceId?: string;
+  osVersion?: string;
+  adDomain?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -28,6 +34,8 @@ const AssetManagement: React.FC = () => {
   });
   const [showPortHistory, setShowPortHistory] = useState(false);
   const [selectedAssetForPorts, setSelectedAssetForPorts] = useState<Asset | null>(null);
+  const [showVulnerabilities, setShowVulnerabilities] = useState(false);
+  const [selectedAssetForVulns, setSelectedAssetForVulns] = useState<Asset | null>(null);
 
   useEffect(() => {
     fetchAssets();
@@ -118,6 +126,16 @@ const AssetManagement: React.FC = () => {
   const handleClosePortHistory = () => {
     setShowPortHistory(false);
     setSelectedAssetForPorts(null);
+  };
+
+  const handleShowVulnerabilities = (asset: Asset) => {
+    setSelectedAssetForVulns(asset);
+    setShowVulnerabilities(true);
+  };
+
+  const handleCloseVulnerabilities = () => {
+    setShowVulnerabilities(false);
+    setSelectedAssetForVulns(null);
   };
 
   if (loading) {
@@ -301,6 +319,13 @@ const AssetManagement: React.FC = () => {
                                 </button>
                               )}
                               <button
+                                onClick={() => handleShowVulnerabilities(asset)}
+                                className="btn btn-sm btn-outline-danger"
+                                title="Show vulnerabilities"
+                              >
+                                <i className="bi bi-shield-exclamation"></i> Vulnerabilities
+                              </button>
+                              <button
                                 onClick={() => {
                                   if (asset.id !== undefined && asset.id !== null) {
                                     handleDelete(asset.id);
@@ -337,6 +362,15 @@ const AssetManagement: React.FC = () => {
           assetId={selectedAssetForPorts.id}
           assetName={selectedAssetForPorts.name}
           onClose={handleClosePortHistory}
+        />
+      )}
+
+      {/* Vulnerability History Modal */}
+      {showVulnerabilities && selectedAssetForVulns && selectedAssetForVulns.id && (
+        <VulnerabilityHistory
+          assetId={selectedAssetForVulns.id}
+          assetName={selectedAssetForVulns.name}
+          onClose={handleCloseVulnerabilities}
         />
       )}
 
