@@ -5,7 +5,7 @@ import com.secman.domain.Scan
 import com.secman.domain.ScanResult
 import com.secman.dto.ScanSummaryDTO
 import com.secman.repository.AssetRepository
-import com.secman.repository.AuditLogRepository
+// import com.secman.repository.AuditLogRepository  // TODO: Repository doesn't exist yet
 import com.secman.repository.ScanRepository
 import com.secman.repository.ScanResultRepository
 import io.micronaut.test.extensions.junit5.annotation.MicronautTest
@@ -32,7 +32,7 @@ class ScanImportServiceTest {
     private lateinit var scanRepository: ScanRepository
     private lateinit var assetRepository: AssetRepository
     private lateinit var scanResultRepository: ScanResultRepository
-    private lateinit var auditLogRepository: AuditLogRepository
+    // private lateinit var auditLogRepository: AuditLogRepository  // TODO: Repository doesn't exist yet
     private lateinit var nmapParserService: NmapParserService
     private lateinit var scanImportService: ScanImportService
 
@@ -561,7 +561,7 @@ class ScanImportServiceTest {
     @Test
     fun `test empty scan file creates scan but no assets`() {
         // Given - Valid XML but no hosts
-        val xmlContent = "<nmaprun>...</nmaprun>"
+        val xmlContent = "<nmaprun>...</nmaprun>".toByteArray()
         val filename = "empty-scan.xml"
         val username = "testuser"
 
@@ -584,7 +584,7 @@ class ScanImportServiceTest {
         ).apply { id = 100L }
 
         every { scanRepository.save(any<Scan>()) } returns savedScan
-        every { auditLogRepository.save(any()) } returns mockk()
+        // every { auditLogRepository.save(any()) } returns mockk()  // TODO: Repository doesn't exist yet
 
         // When
         val summary = scanImportService.importNmapScan(xmlContent, filename, username)

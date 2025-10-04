@@ -80,14 +80,14 @@ data class ScanResult(
      * Orphan removal: Removing port from list deletes it
      */
     @OneToMany(mappedBy = "scanResult", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
-    var ports: List<ScanPort> = emptyList()
+    var ports: MutableList<ScanPort> = mutableListOf()
 ) {
     /**
      * Add ScanPort to this result
      * Maintains bidirectional relationship
      */
     fun addPort(port: ScanPort) {
-        ports = ports + port
+        ports.add(port)
         port.scanResult = this
     }
 

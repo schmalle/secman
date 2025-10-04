@@ -15,11 +15,13 @@ import io.micronaut.http.multipart.CompletedFileUpload
 import io.micronaut.scheduling.TaskExecutors
 import io.micronaut.scheduling.annotation.ExecuteOn
 import io.micronaut.security.annotation.Secured
+import io.micronaut.security.authentication.Authentication
 import io.micronaut.security.rules.SecurityRule
 import io.micronaut.serde.annotation.Serdeable
 import io.micronaut.transaction.annotation.Transactional
 import jakarta.inject.Inject
 import jakarta.persistence.EntityManager
+import java.time.LocalDateTime
 import org.apache.poi.ss.usermodel.*
 import org.apache.poi.xssf.usermodel.XSSFWorkbook
 import org.slf4j.LoggerFactory
@@ -34,7 +36,11 @@ open class ImportController(
     private val useCaseRepository: UseCaseRepository,
     private val normParsingService: NormParsingService,
     private val entityManager: EntityManager,
-    private val vulnerabilityImportService: com.secman.service.VulnerabilityImportService
+    private val vulnerabilityImportService: com.secman.service.VulnerabilityImportService,
+    private val masscanParserService: com.secman.service.MasscanParserService,
+    private val assetRepository: com.secman.repository.AssetRepository,
+    private val scanRepository: com.secman.repository.ScanRepository,
+    private val scanResultRepository: com.secman.repository.ScanResultRepository
 ) {
     
     private val log = LoggerFactory.getLogger(ImportController::class.java)
@@ -455,4 +461,184 @@ open class ImportController(
 
         return null
     }
+
+    /**
+     * Upload Masscan XML scan file
+     *
+     * Related to: Feature 005-add-funtionality-to (Masscan XML Import)
+     *
+     * Endpoint: POST /api/import/upload-masscan-xml
+     * Request: multipart/form-data with xmlFile
+     * Response: MasscanImportResponse with counts
+     *
+     * Default values for auto-created assets:
+     * - owner: "Security Team"
+     * - type: "Scanned Host"
+     * - name: null (Masscan doesn't provide hostname)
+     * - description: ""
+     *
+     * @param xmlFile Masscan XML file to import (max 10MB)
+     * @return Import response with counts (assetsCreated, assetsUpdated, portsImported)
+     */
+    @Post("/upload-masscan-xml")
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    @Transactional
+    @Secured(SecurityRule.IS_AUTHENTICATED)
+    open fun uploadMasscanXml(
+        @Part xmlFile: CompletedFileUpload,
+        authentication: Authentication
+    ): HttpResponse<*> {
+        return try {
+            log.debug("Processing Masscan XML file upload: {}", xmlFile.filename)
+
+            val username = authentication.name
+
+            // Validate file
+            val validation = validateMasscanFile(xmlFile)
+            if (validation != null) {
+                return HttpResponse.badRequest(ErrorResponse(validation))
+            }
+
+            // Parse XML
+            val scanData = masscanParserService.parseMasscanXml(xmlFile.bytes)
+
+            // Create Scan entity
+            val scan = com.secman.domain.Scan(
+                scanType = "masscan",
+                filename = xmlFile.filename,
+                scanDate = scanData.scanDate,
+                uploadedBy = username,
+                hostCount = scanData.hosts.size,
+                duration = null  // Masscan doesn't provide duration
+            )
+            val savedScan = scanRepository.save(scan)
+
+            var assetsCreated = 0
+            var assetsUpdated = 0
+            var portsImported = 0
+
+            // Import hosts and ports
+            for (host in scanData.hosts) {
+                try {
+                    // Find or create asset by IP
+                    val existingAsset = assetRepository.findByIp(host.ipAddress).firstOrNull()
+                    val asset = if (existingAsset == null) {
+                        // Create with defaults (name = IP since hostname not provided)
+                        val newAsset = com.secman.domain.Asset(
+                            name = host.ipAddress,  // Use IP as name
+                            ip = host.ipAddress,
+                            type = "Scanned Host",
+                            owner = "Security Team",
+                            description = ""
+                        )
+                        newAsset.lastSeen = host.timestamp
+                        val saved = assetRepository.save(newAsset)
+                        assetsCreated++
+                        saved
+                    } else {
+                        // Update lastSeen
+                        existingAsset.lastSeen = host.timestamp
+                        assetRepository.save(existingAsset)
+                        assetsUpdated++
+                        existingAsset
+                    }
+
+                    // Create ScanResult for this host
+                    val scanResult = com.secman.domain.ScanResult(
+                        scan = savedScan,
+                        asset = asset,
+                        ipAddress = host.ipAddress,
+                        hostname = null,  // Masscan doesn't provide hostname
+                        discoveredAt = host.timestamp
+                    )
+
+                    // Import ports (only "open" already filtered by parser)
+                    for (port in host.ports) {
+                        try {
+                            val scanPort = com.secman.domain.ScanPort(
+                                scanResult = scanResult,
+                                portNumber = port.portNumber,
+                                protocol = port.protocol,
+                                state = port.state,
+                                service = null,  // Masscan doesn't provide service detection
+                                version = null   // Masscan doesn't provide version detection
+                            )
+                            scanResult.addPort(scanPort)
+                            portsImported++
+                        } catch (e: Exception) {
+                            log.warn("Failed to import port {}: {}", port.portNumber, e.message)
+                        }
+                    }
+
+                    // Add result to scan and save
+                    savedScan.addResult(scanResult)
+                    asset.addScanResult(scanResult)
+
+                } catch (e: Exception) {
+                    log.warn("Failed to process host {}: {}", host.ipAddress, e.message)
+                }
+            }
+
+            // Save scan with all results
+            scanRepository.update(savedScan)
+
+            log.info("Successfully imported Masscan scan: {} assets created, {} updated, {} ports imported",
+                     assetsCreated, assetsUpdated, portsImported)
+
+            HttpResponse.ok(MasscanImportResponse(
+                message = "Imported $portsImported ports across $assetsCreated new assets" +
+                         (if (assetsUpdated > 0) ", updated $assetsUpdated existing asset${if (assetsUpdated > 1) "s" else ""}" else ""),
+                assetsCreated = assetsCreated,
+                assetsUpdated = assetsUpdated,
+                portsImported = portsImported
+            ))
+
+        } catch (e: Exception) {
+            log.error("Error processing Masscan XML file", e)
+            HttpResponse.status<ErrorResponse>(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ErrorResponse("Error processing file: ${e.message}"))
+        }
+    }
+
+    /**
+     * Validate Masscan XML file
+     *
+     * Checks: file size, extension, content type, not empty
+     *
+     * @param file Uploaded file
+     * @return Error message if invalid, null if valid
+     */
+    private fun validateMasscanFile(file: CompletedFileUpload): String? {
+        // Check file size
+        if (file.size > MAX_FILE_SIZE) {
+            return "File size exceeds maximum limit of ${MAX_FILE_SIZE / 1024 / 1024}MB"
+        }
+
+        // Check file extension
+        val filename = file.filename.orEmpty()
+        if (!filename.lowercase().endsWith(".xml")) {
+            return "Only .xml files are supported"
+        }
+
+        // Check content type
+        val contentType = file.contentType.map { it.toString() }.orElse("")
+        if (!contentType.contains("xml") && !contentType.contains("octet-stream")) {
+            return "Invalid file format. Please upload a valid XML file."
+        }
+
+        // Check file is not empty
+        if (file.size == 0L) {
+            return "File is empty"
+        }
+
+        return null
+    }
+
+    @Serdeable
+    data class MasscanImportResponse(
+        val message: String,
+        val assetsCreated: Int,
+        val assetsUpdated: Int,
+        val portsImported: Int
+    )
 }

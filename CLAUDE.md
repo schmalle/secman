@@ -31,22 +31,24 @@
 
 ## Recent Changes
 
+### Feature 005: Masscan XML Import (2025-10-04)
+- Added Masscan XML scan import functionality
+- Created MasscanParserService for XML parsing with XXE protection
+- Import endpoint: POST /api/import/upload-masscan-xml
+- Asset auto-creation with defaults (owner="Security Team", type="Scanned Host", name=IP)
+- Port state filtering (only "open" ports imported)
+- Historical tracking via Scan -> ScanResult -> ScanPort entity structure
+- Frontend UI tab for Masscan import with summary display
+- Reuses existing Scan, ScanResult, ScanPort entities (no schema changes)
+
 ### Feature 004: VULN Role & Vulnerability Management UI (2025-10-03)
 - Added VULN role to RBAC system (role-based access for vulnerability management)
 - Created VulnerabilityException entity (IP-based and product-based exceptions)
-- Implemented vulnerability exception management UI
-- Added current vulnerabilities view (latest scan per asset)
-- Built comprehensive E2E test coverage for access control and CRUD operations
-- Updated user management UI to support VULN role assignment
 
 ### Feature 003: Vulnerability Management (2025-10-03)
 - Added Vulnerability entity with asset relationship
 - Extended Asset entity: groups, cloudAccountId, cloudInstanceId, adDomain, osVersion
 - Vulnerability import from Excel (.xlsx) via /api/import/upload-vulnerability-xlsx
-- Asset auto-creation with defaults (owner="Security Team", type="Server")
-- Intelligent asset merge (append groups, update IP, preserve metadata)
-- Vulnerability display on asset detail page
-- Historical tracking: duplicate vulnerabilities kept as separate records
 
 ### Feature 002: Nmap Scan Import (2024-10-03)
 - Nmap XML parser for host/port discovery
@@ -90,6 +92,7 @@
 ### Import
 - `POST /api/import/upload-xlsx` - Requirements import
 - `POST /api/import/upload-nmap-xml` - Nmap scan import (Feature 002)
+- `POST /api/import/upload-masscan-xml` - Masscan scan import (Feature 005)
 - `POST /api/import/upload-vulnerability-xlsx` - Vulnerability import (Feature 003)
 
 ### Assets
