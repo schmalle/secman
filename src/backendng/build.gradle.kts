@@ -8,7 +8,7 @@ plugins {
 
     id("com.gradleup.shadow") version "8.3.8"
 
-    id("io.micronaut.application") version "4.4.3"
+    id("io.micronaut.application") version "4.5.4"
     // Disabled test resources to avoid Docker dependency
     // id("io.micronaut.test-resources") version "4.4.3"
     id("io.micronaut.aot") version "4.5.4"
@@ -73,12 +73,12 @@ dependencies {
     runtimeOnly("org.yaml:snakeyaml")
     
     // Password encoding
-    implementation("org.springframework.security:spring-security-crypto:6.3.5")
+    implementation("org.springframework.security:spring-security-crypto:6.4.4")
     implementation("commons-logging:commons-logging:1.3.4")
     
     // Document generation (Apache POI)
-    implementation("org.apache.poi:poi-ooxml:5.3.0")
-    implementation("org.apache.poi:poi-scratchpad:5.3.0")
+    implementation("org.apache.poi:poi-ooxml:5.4.1")
+    implementation("org.apache.poi:poi-scratchpad:5.4.1")
     
     // HTML processing for email
     implementation("org.jsoup:jsoup:1.18.3")

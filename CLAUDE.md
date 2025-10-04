@@ -30,34 +30,19 @@
 - **API Client**: Axios for backend communication
 
 ## Recent Changes
+- 007-please-evaluate-if: Updated Micronaut 4.4→4.5.4, Spring Security Crypto 6.3.5→6.4.4 (CVE fixes), Apache POI 5.3.0→5.4.1
 
 ### Feature 005: Masscan XML Import (2025-10-04)
 - Added Masscan XML scan import functionality
 - Created MasscanParserService for XML parsing with XXE protection
-- Import endpoint: POST /api/import/upload-masscan-xml
-- Asset auto-creation with defaults (owner="Security Team", type="Scanned Host", name=IP)
-- Port state filtering (only "open" ports imported)
-- Historical tracking via Scan -> ScanResult -> ScanPort entity structure
-- Frontend UI tab for Masscan import with summary display
-- Reuses existing Scan, ScanResult, ScanPort entities (no schema changes)
 
 ### Feature 004: VULN Role & Vulnerability Management UI (2025-10-03)
-- Added VULN role to RBAC system (role-based access for vulnerability management)
-- Created VulnerabilityException entity (IP-based and product-based exceptions)
 
 ### Feature 003: Vulnerability Management (2025-10-03)
-- Added Vulnerability entity with asset relationship
-- Extended Asset entity: groups, cloudAccountId, cloudInstanceId, adDomain, osVersion
-- Vulnerability import from Excel (.xlsx) via /api/import/upload-vulnerability-xlsx
 
 ### Feature 002: Nmap Scan Import (2024-10-03)
-- Nmap XML parser for host/port discovery
-- ScanResult entity for point-in-time port history
-- Asset last_seen timestamp tracking
 
 ### Feature 001: Admin Role Management (2024-10-01)
-- Admin-only access control for sensitive operations
-- Role-based UI visibility (normaluser vs adminuser)
 
 ## Key Entities
 
