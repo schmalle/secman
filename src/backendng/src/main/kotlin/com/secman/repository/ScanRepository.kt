@@ -5,6 +5,7 @@ import io.micronaut.data.annotation.Repository
 import io.micronaut.data.jpa.repository.JpaRepository
 import io.micronaut.data.model.Page
 import io.micronaut.data.model.Pageable
+import java.time.LocalDateTime
 
 /**
  * Repository for Scan entity
@@ -61,4 +62,20 @@ interface ScanRepository : JpaRepository<Scan, Long> {
      * Used for: Scanner statistics
      */
     fun countByScanType(scanType: String): Long
+
+    // MCP Tool Support - Feature 006: Scan history queries with date filtering
+
+    /**
+     * Find scans within a date range
+     * Used for: MCP get_scans tool with date filtering
+     * Related to: Feature 006 (MCP Tools for Security Data)
+     */
+    fun findByScanDateBetween(start: LocalDateTime, end: LocalDateTime, pageable: Pageable): Page<Scan>
+
+    /**
+     * Find scans by scan type with pagination (alias for compatibility)
+     * Used for: MCP get_scans tool
+     * Related to: Feature 006 (MCP Tools for Security Data)
+     */
+    fun findByScanType(scanType: String, pageable: Pageable): Page<Scan>
 }

@@ -31,33 +31,27 @@
 
 ## Recent Changes
 
+### Feature 006: MCP Tools for Security Data (2025-10-04)
+- Added Model Context Protocol (MCP) tools for AI assistant integration
+- Created 5 MCP tools: get_assets, get_scans, get_vulnerabilities, search_products, get_asset_profile
+- Added 3 new McpPermissions: ASSETS_READ, SCANS_READ, VULNERABILITIES_READ
+- Implemented sliding window rate limiting (1000 req/min, 50K req/hour)
+- Extended repositories with pagination and filtering methods
+- Added database indexes for performance (idx_vulnerability_severity, idx_scan_port_service)
+- Tools support pagination (max 500/page), filtering, and 50K total results limit
+- Registered all tools in McpToolRegistry with permission mappings
+
 ### Feature 005: Masscan XML Import (2025-10-04)
 - Added Masscan XML scan import functionality
 - Created MasscanParserService for XML parsing with XXE protection
-- Import endpoint: POST /api/import/upload-masscan-xml
-- Asset auto-creation with defaults (owner="Security Team", type="Scanned Host", name=IP)
-- Port state filtering (only "open" ports imported)
-- Historical tracking via Scan -> ScanResult -> ScanPort entity structure
-- Frontend UI tab for Masscan import with summary display
-- Reuses existing Scan, ScanResult, ScanPort entities (no schema changes)
 
 ### Feature 004: VULN Role & Vulnerability Management UI (2025-10-03)
-- Added VULN role to RBAC system (role-based access for vulnerability management)
-- Created VulnerabilityException entity (IP-based and product-based exceptions)
 
 ### Feature 003: Vulnerability Management (2025-10-03)
-- Added Vulnerability entity with asset relationship
-- Extended Asset entity: groups, cloudAccountId, cloudInstanceId, adDomain, osVersion
-- Vulnerability import from Excel (.xlsx) via /api/import/upload-vulnerability-xlsx
 
 ### Feature 002: Nmap Scan Import (2024-10-03)
-- Nmap XML parser for host/port discovery
-- ScanResult entity for point-in-time port history
-- Asset last_seen timestamp tracking
 
 ### Feature 001: Admin Role Management (2024-10-01)
-- Admin-only access control for sensitive operations
-- Role-based UI visibility (normaluser vs adminuser)
 
 ## Key Entities
 
@@ -110,6 +104,18 @@
 ### Authentication
 - `POST /api/auth/login` - JWT login
 - OAuth2 endpoints for SSO
+
+### MCP Tools (Feature 006)
+Model Context Protocol tools for AI assistant integration:
+- `get_assets` - Retrieve asset inventory with filtering (name, type, ip, owner, group) and pagination
+- `get_scans` - Retrieve scan history with filtering (scanType, uploadedBy, dateRange) and pagination
+- `get_vulnerabilities` - Retrieve vulnerabilities with filtering (cveId, severity, assetId, dateRange) and pagination
+- `search_products` - Search products/services discovered in scans, grouped by service+version
+- `get_asset_profile` - Get comprehensive asset profile (details, vulnerabilities, scan history, ports)
+
+**Limits**: Max 500 items/page, 50K total results per query
+**Rate Limits**: 1000 requests/minute, 50K requests/hour per API key
+**Permissions**: ASSETS_READ, SCANS_READ, VULNERABILITIES_READ
 
 ## Development Workflow
 
@@ -197,4 +203,4 @@ docker-compose down      # Stop all services
 ```
 
 ---
-*Auto-generated from feature specifications. Last updated: 2025-10-03*
+*Auto-generated from feature specifications. Last updated: 2025-10-04*

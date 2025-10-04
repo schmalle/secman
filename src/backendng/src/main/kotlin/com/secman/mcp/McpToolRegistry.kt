@@ -12,8 +12,13 @@ import org.slf4j.LoggerFactory
  */
 @Singleton
 class McpToolRegistry(
-    @Inject private val getRequirementsTool: GetRequirementsTool
-    // Add other tools here as they are implemented
+    @Inject private val getRequirementsTool: GetRequirementsTool,
+    // Feature 006: MCP Tools for Asset Inventory, Scans, Vulnerabilities, and Products
+    @Inject private val getAssetsTool: GetAssetsTool,
+    @Inject private val getScansTool: GetScansTool,
+    @Inject private val getVulnerabilitiesTool: GetVulnerabilitiesTool,
+    @Inject private val searchProductsTool: SearchProductsTool,
+    @Inject private val getAssetProfileTool: GetAssetProfileTool
 ) {
     private val logger = LoggerFactory.getLogger(McpToolRegistry::class.java)
 
@@ -22,8 +27,13 @@ class McpToolRegistry(
 
         // Register all tools
         listOf(
-            getRequirementsTool
-            // Add other tool instances here
+            getRequirementsTool,
+            // Feature 006: MCP Tools for Asset Inventory, Scans, Vulnerabilities, and Products
+            getAssetsTool,
+            getScansTool,
+            getVulnerabilitiesTool,
+            searchProductsTool,
+            getAssetProfileTool
         ).forEach { tool ->
             toolMap[tool.name] = tool
             logger.debug("Registered MCP tool: {}", tool.name)
@@ -122,6 +132,23 @@ class McpToolRegistry(
             }
             "get_user_activity" -> {
                 permissions.contains(McpPermission.USER_ACTIVITY)
+            }
+
+            // Feature 006: Asset Inventory, Scans, Vulnerabilities, and Products
+            "get_assets" -> {
+                permissions.contains(McpPermission.ASSETS_READ)
+            }
+            "get_scans" -> {
+                permissions.contains(McpPermission.SCANS_READ)
+            }
+            "get_vulnerabilities" -> {
+                permissions.contains(McpPermission.VULNERABILITIES_READ)
+            }
+            "search_products" -> {
+                permissions.contains(McpPermission.SCANS_READ)
+            }
+            "get_asset_profile" -> {
+                permissions.contains(McpPermission.ASSETS_READ)
             }
 
             else -> false

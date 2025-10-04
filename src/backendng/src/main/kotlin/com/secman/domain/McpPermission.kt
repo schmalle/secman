@@ -63,7 +63,22 @@ enum class McpPermission {
     /**
      * Read audit logs (admin only) - allows get_audit_log tool
      */
-    AUDIT_READ;
+    AUDIT_READ,
+
+    /**
+     * Read asset inventory - allows get_assets, get_asset_profile tools
+     */
+    ASSETS_READ,
+
+    /**
+     * Read scan data - allows get_scans, get_scan_results, search_products tools
+     */
+    SCANS_READ,
+
+    /**
+     * Read vulnerability data - allows get_vulnerabilities tool
+     */
+    VULNERABILITIES_READ;
 
     /**
      * Get display name for UI
@@ -82,6 +97,9 @@ enum class McpPermission {
             USER_ACTIVITY -> "User Activity"
             TRANSLATION_USE -> "Use Translations"
             AUDIT_READ -> "Read Audit Logs"
+            ASSETS_READ -> "Read Assets"
+            SCANS_READ -> "Read Scans"
+            VULNERABILITIES_READ -> "Read Vulnerabilities"
         }
     }
 
@@ -102,6 +120,9 @@ enum class McpPermission {
             USER_ACTIVITY -> "Monitor user activity and sessions"
             TRANSLATION_USE -> "Translate requirements to different languages"
             AUDIT_READ -> "View MCP server audit logs (admin only)"
+            ASSETS_READ -> "View and search asset inventory"
+            SCANS_READ -> "View scan data and results"
+            VULNERABILITIES_READ -> "View vulnerability information"
         }
     }
 

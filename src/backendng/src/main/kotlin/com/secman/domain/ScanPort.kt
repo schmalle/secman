@@ -21,7 +21,8 @@ import jakarta.validation.constraints.*
     name = "scan_port",
     indexes = [
         Index(name = "idx_scan_port_result", columnList = "scan_result_id"),
-        Index(name = "idx_scan_port_unique", columnList = "scan_result_id,port_number,protocol")
+        Index(name = "idx_scan_port_unique", columnList = "scan_result_id,port_number,protocol"),
+        Index(name = "idx_scan_port_service", columnList = "service")
     ]
 )
 @Serdeable
