@@ -124,6 +124,7 @@ logger:
   levels:
     com.secman: DEBUG
     io.micronaut.security: DEBUG
+    org.hibernate.orm.incubating: ERROR
 
 app:
   frontend:
