@@ -3,6 +3,8 @@ package com.secman.repository
 import com.secman.domain.ScanResult
 import io.micronaut.data.annotation.Repository
 import io.micronaut.data.jpa.repository.JpaRepository
+import io.micronaut.data.model.Page
+import io.micronaut.data.model.Pageable
 
 /**
  * Repository for ScanResult entity
@@ -58,4 +60,27 @@ interface ScanResultRepository : JpaRepository<ScanResult, Long> {
      * Returns: Most recent ScanResult or null
      */
     fun findFirstByAssetIdOrderByDiscoveredAtDesc(assetId: Long): ScanResult?
+
+    // MCP Tool Support - Feature 006: Scan result queries with pagination
+
+    /**
+     * Find all scan results for an asset with pagination
+     * Used for: MCP tools querying asset scan history
+     * Related to: Feature 006 (MCP Tools for Security Data)
+     */
+    fun findByAssetId(assetId: Long, pageable: Pageable): Page<ScanResult>
+
+    /**
+     * Find all scan results for an asset with pagination, ordered by discovery time (newest first)
+     * Used for: MCP get_asset_profile tool
+     * Related to: Feature 006 (MCP Tools for Security Data)
+     */
+    fun findByAssetIdOrderByDiscoveredAtDesc(assetId: Long, pageable: Pageable): Page<ScanResult>
+
+    /**
+     * Find all scan results for a scan with pagination
+     * Used for: MCP tools querying scan details
+     * Related to: Feature 006 (MCP Tools for Security Data)
+     */
+    fun findByScanId(scanId: Long, pageable: Pageable): Page<ScanResult>
 }

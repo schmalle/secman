@@ -1,0 +1,107 @@
+{
+  "tool": "get_vulnerabilities",
+  "description": "Retrieve vulnerability data with filtering and pagination",
+  "operation": "READ",
+  "permissions": ["VULNERABILITIES_READ"],
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "page": {
+        "type": "number",
+        "description": "Page number (0-indexed)",
+        "minimum": 0,
+        "default": 0
+      },
+      "pageSize": {
+        "type": "number",
+        "description": "Number of items per page (max 500)",
+        "minimum": 1,
+        "maximum": 500,
+        "default": 100
+      },
+      "assetId": {
+        "type": "number",
+        "description": "Filter by asset ID"
+      },
+      "cveId": {
+        "type": "string",
+        "description": "Filter by CVE identifier (partial match, case-insensitive)",
+        "maxLength": 255
+      },
+      "severity": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": ["Critical", "High", "Medium", "Low", "Informational"]
+        },
+        "description": "Filter by severity levels"
+      },
+      "startDate": {
+        "type": "string",
+        "description": "Filter vulnerabilities discovered after this date (ISO-8601)",
+        "format": "date-time"
+      },
+      "endDate": {
+        "type": "string",
+        "description": "Filter vulnerabilities discovered before this date (ISO-8601)",
+        "format": "date-time"
+      }
+    }
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "vulnerabilities": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "number"},
+            "assetId": {"type": "number"},
+            "assetName": {"type": "string"},
+            "vulnerabilityId": {"type": "string"},
+            "cvssSeverity": {"type": "string"},
+            "vulnerableProductVersions": {"type": "string"},
+            "daysOpen": {"type": "string"},
+            "scanTimestamp": {"type": "string", "format": "date-time"},
+            "createdAt": {"type": "string", "format": "date-time"}
+          },
+          "required": ["id", "assetId", "assetName", "scanTimestamp", "createdAt"]
+        }
+      },
+      "total": {"type": "number"},
+      "page": {"type": "number"},
+      "pageSize": {"type": "number"},
+      "totalPages": {"type": "number"}
+    },
+    "required": ["vulnerabilities", "total", "page", "pageSize", "totalPages"]
+  },
+  "examples": [
+    {
+      "request": {
+        "severity": ["Critical", "High"],
+        "page": 0,
+        "pageSize": 10
+      },
+      "response": {
+        "vulnerabilities": [
+          {
+            "id": 101,
+            "assetId": 1,
+            "assetName": "web-server-01",
+            "vulnerabilityId": "CVE-2024-12345",
+            "cvssSeverity": "Critical",
+            "vulnerableProductVersions": "OpenSSL 1.1.1k",
+            "daysOpen": "58 days",
+            "scanTimestamp": "2025-08-07T10:00:00Z",
+            "createdAt": "2025-08-07T11:30:00Z"
+          }
+        ],
+        "total": 1,
+        "page": 0,
+        "pageSize": 10,
+        "totalPages": 1
+      }
+    }
+  ]
+}

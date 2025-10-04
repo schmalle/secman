@@ -8,6 +8,8 @@ import jakarta.inject.Inject
 import jakarta.inject.Singleton
 import java.time.LocalDateTime
 import java.util.*
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 import org.slf4j.LoggerFactory
 
 /**
@@ -23,6 +25,15 @@ class McpToolPermissionService(
     @Inject private val auditService: McpAuditService
 ) {
     private val logger = LoggerFactory.getLogger(McpToolPermissionService::class.java)
+
+    // Rate limiting: sliding window trackers (Feature 006: MCP Tools for Security Data)
+    private val rateLimitTrackers = ConcurrentHashMap<Long, RateLimitTracker>()
+
+    // Rate limiting constants (from clarifications: 1000 req/min, 50,000 req/hour)
+    private val MAX_REQUESTS_PER_MINUTE = 1000
+    private val MAX_REQUESTS_PER_HOUR = 50000
+    private val MINUTE_WINDOW_MS = 60_000L
+    private val HOUR_WINDOW_MS = 3_600_000L
 
     /**
      * Check if an API key has permission to call a specific tool with given parameters.
@@ -488,15 +499,84 @@ class McpToolPermissionService(
         return tools
     }
 
+    /**
+     * Check rate limit for an API key using sliding window algorithm.
+     * Feature 006: MCP Tools for Security Data
+     *
+     * Enforces:
+     * - 1000 requests per minute per API key
+     * - 50,000 requests per hour per API key
+     *
+     * @param permission The permission being checked (for legacy maxCallsPerHour if set)
+     * @param requestId Optional request ID for logging
+     * @return RateLimitInfo if rate limiting is applicable, null otherwise
+     */
     private fun checkRateLimit(permission: McpToolPermission, requestId: String?): RateLimitInfo? {
-        val maxCalls = permission.maxCallsPerHour ?: return null
+        val apiKeyId = permission.apiKeyId
+        val now = System.currentTimeMillis()
 
-        // This would need to be implemented with a proper rate limiting mechanism
-        // For now, return no rate limit info
+        // Get or create tracker for this API key
+        val tracker = rateLimitTrackers.computeIfAbsent(apiKeyId) { RateLimitTracker() }
+
+        // Clean up expired windows
+        tracker.cleanup(now)
+
+        // Check minute window (1000 req/min)
+        val minuteKey = now / MINUTE_WINDOW_MS
+        val minuteCount = tracker.minuteWindow.computeIfAbsent(minuteKey) { AtomicInteger(0) }
+        val currentMinuteRequests = minuteCount.get()
+
+        if (currentMinuteRequests >= MAX_REQUESTS_PER_MINUTE) {
+            val nextMinuteStartMs = (minuteKey + 1) * MINUTE_WINDOW_MS
+            val resetTime = LocalDateTime.now().plusSeconds((nextMinuteStartMs - now) / 1000)
+
+            logger.warn("Rate limit exceeded (minute window): apiKeyId={}, requests={}/{}, requestId={}",
+                       apiKeyId, currentMinuteRequests, MAX_REQUESTS_PER_MINUTE, requestId)
+
+            return RateLimitInfo(
+                maxCallsPerHour = MAX_REQUESTS_PER_HOUR,
+                remainingCalls = 0,
+                resetTime = resetTime,
+                exceeded = true
+            )
+        }
+
+        // Check hour window (50,000 req/hour)
+        val hourKey = now / HOUR_WINDOW_MS
+        val hourCount = tracker.hourWindow.computeIfAbsent(hourKey) { AtomicInteger(0) }
+        val currentHourRequests = hourCount.get()
+
+        if (currentHourRequests >= MAX_REQUESTS_PER_HOUR) {
+            val nextHourStartMs = (hourKey + 1) * HOUR_WINDOW_MS
+            val resetTime = LocalDateTime.now().plusSeconds((nextHourStartMs - now) / 1000)
+
+            logger.warn("Rate limit exceeded (hour window): apiKeyId={}, requests={}/{}, requestId={}",
+                       apiKeyId, currentHourRequests, MAX_REQUESTS_PER_HOUR, requestId)
+
+            return RateLimitInfo(
+                maxCallsPerHour = MAX_REQUESTS_PER_HOUR,
+                remainingCalls = 0,
+                resetTime = resetTime,
+                exceeded = true
+            )
+        }
+
+        // Increment counters (request is allowed)
+        minuteCount.incrementAndGet()
+        hourCount.incrementAndGet()
+
+        // Calculate remaining calls (use the more restrictive limit)
+        val remainingMinute = MAX_REQUESTS_PER_MINUTE - currentMinuteRequests - 1
+        val remainingHour = MAX_REQUESTS_PER_HOUR - currentHourRequests - 1
+        val remaining = minOf(remainingMinute, remainingHour)
+
+        val nextHourStartMs = (hourKey + 1) * HOUR_WINDOW_MS
+        val resetTime = LocalDateTime.now().plusSeconds((nextHourStartMs - now) / 1000)
+
         return RateLimitInfo(
-            maxCallsPerHour = maxCalls,
-            remainingCalls = maxCalls, // Placeholder
-            resetTime = LocalDateTime.now().plusHours(1),
+            maxCallsPerHour = MAX_REQUESTS_PER_HOUR,
+            remainingCalls = remaining,
+            resetTime = resetTime,
             exceeded = false
         )
     }
@@ -587,3 +667,32 @@ data class RateLimitInfo(
     val resetTime: LocalDateTime,
     val exceeded: Boolean
 )
+
+/**
+ * Rate limit tracker using sliding window algorithm.
+ * Tracks requests per API key in minute and hour windows.
+ * Feature 006: MCP Tools for Security Data
+ *
+ * Thread-safe: Uses ConcurrentHashMap and AtomicInteger for concurrent access.
+ */
+data class RateLimitTracker(
+    val minuteWindow: ConcurrentHashMap<Long, AtomicInteger> = ConcurrentHashMap(),
+    val hourWindow: ConcurrentHashMap<Long, AtomicInteger> = ConcurrentHashMap()
+) {
+    /**
+     * Clean up expired window entries to prevent memory leaks.
+     * Removes minute windows older than 2 minutes and hour windows older than 2 hours.
+     *
+     * @param currentTimeMs Current time in milliseconds
+     */
+    fun cleanup(currentTimeMs: Long) {
+        val currentMinuteKey = currentTimeMs / 60_000L
+        val currentHourKey = currentTimeMs / 3_600_000L
+
+        // Remove minute windows older than 2 minutes
+        minuteWindow.keys.removeIf { it < currentMinuteKey - 2 }
+
+        // Remove hour windows older than 2 hours
+        hourWindow.keys.removeIf { it < currentHourKey - 2 }
+    }
+}

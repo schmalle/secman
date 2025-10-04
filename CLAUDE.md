@@ -32,6 +32,16 @@
 ## Recent Changes
 - 007-please-evaluate-if: Updated Micronaut 4.4→4.5.4, Spring Security Crypto 6.3.5→6.4.4 (CVE fixes), Apache POI 5.3.0→5.4.1
 
+### Feature 006: MCP Tools for Security Data (2025-10-04)
+- Added Model Context Protocol (MCP) tools for AI assistant integration
+- Created 5 MCP tools: get_assets, get_scans, get_vulnerabilities, search_products, get_asset_profile
+- Added 3 new McpPermissions: ASSETS_READ, SCANS_READ, VULNERABILITIES_READ
+- Implemented sliding window rate limiting (1000 req/min, 50K req/hour)
+- Extended repositories with pagination and filtering methods
+- Added database indexes for performance (idx_vulnerability_severity, idx_scan_port_service)
+- Tools support pagination (max 500/page), filtering, and 50K total results limit
+- Registered all tools in McpToolRegistry with permission mappings
+
 ### Feature 005: Masscan XML Import (2025-10-04)
 - Added Masscan XML scan import functionality
 - Created MasscanParserService for XML parsing with XXE protection
@@ -95,6 +105,18 @@
 ### Authentication
 - `POST /api/auth/login` - JWT login
 - OAuth2 endpoints for SSO
+
+### MCP Tools (Feature 006)
+Model Context Protocol tools for AI assistant integration:
+- `get_assets` - Retrieve asset inventory with filtering (name, type, ip, owner, group) and pagination
+- `get_scans` - Retrieve scan history with filtering (scanType, uploadedBy, dateRange) and pagination
+- `get_vulnerabilities` - Retrieve vulnerabilities with filtering (cveId, severity, assetId, dateRange) and pagination
+- `search_products` - Search products/services discovered in scans, grouped by service+version
+- `get_asset_profile` - Get comprehensive asset profile (details, vulnerabilities, scan history, ports)
+
+**Limits**: Max 500 items/page, 50K total results per query
+**Rate Limits**: 1000 requests/minute, 50K requests/hour per API key
+**Permissions**: ASSETS_READ, SCANS_READ, VULNERABILITIES_READ
 
 ## Development Workflow
 
@@ -182,4 +204,4 @@ docker-compose down      # Stop all services
 ```
 
 ---
-*Auto-generated from feature specifications. Last updated: 2025-10-03*
+*Auto-generated from feature specifications. Last updated: 2025-10-04*

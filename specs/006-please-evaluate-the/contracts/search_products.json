@@ -1,0 +1,100 @@
+{
+  "tool": "search_products",
+  "description": "Search for discovered products/services across infrastructure",
+  "operation": "READ",
+  "permissions": ["SCANS_READ"],
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "page": {
+        "type": "number",
+        "description": "Page number (0-indexed)",
+        "minimum": 0,
+        "default": 0
+      },
+      "pageSize": {
+        "type": "number",
+        "description": "Number of items per page (max 500)",
+        "minimum": 1,
+        "maximum": 500,
+        "default": 100
+      },
+      "service": {
+        "type": "string",
+        "description": "Filter by service name (partial match, case-insensitive)",
+        "maxLength": 100
+      },
+      "version": {
+        "type": "string",
+        "description": "Filter by version string (partial match, case-insensitive)",
+        "maxLength": 255
+      },
+      "protocol": {
+        "type": "string",
+        "description": "Filter by protocol",
+        "enum": ["tcp", "udp"]
+      },
+      "state": {
+        "type": "string",
+        "description": "Filter by port state",
+        "enum": ["open", "filtered", "closed"],
+        "default": "open"
+      }
+    }
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "products": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "service": {"type": "string"},
+            "version": {"type": "string"},
+            "protocol": {"type": "string"},
+            "portNumber": {"type": "number"},
+            "assetId": {"type": "number"},
+            "assetName": {"type": "string"},
+            "ip": {"type": "string"},
+            "state": {"type": "string"}
+          },
+          "required": ["service", "protocol", "portNumber", "assetId", "assetName", "state"]
+        }
+      },
+      "total": {"type": "number"},
+      "page": {"type": "number"},
+      "pageSize": {"type": "number"},
+      "totalPages": {"type": "number"}
+    },
+    "required": ["products", "total", "page", "pageSize", "totalPages"]
+  },
+  "examples": [
+    {
+      "request": {
+        "service": "ssh",
+        "state": "open",
+        "page": 0,
+        "pageSize": 10
+      },
+      "response": {
+        "products": [
+          {
+            "service": "ssh",
+            "version": "OpenSSH 8.0",
+            "protocol": "tcp",
+            "portNumber": 22,
+            "assetId": 1,
+            "assetName": "web-server-01",
+            "ip": "192.168.1.10",
+            "state": "open"
+          }
+        ],
+        "total": 1,
+        "page": 0,
+        "pageSize": 10,
+        "totalPages": 1
+      }
+    }
+  ]
+}
