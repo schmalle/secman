@@ -1,0 +1,227 @@
+openapi: 3.0.3
+info:
+  title: Masscan XML Import API
+  description: |
+    API contract for importing Masscan XML scan results into the asset inventory.
+
+    Related to:
+    - Feature: 005-add-funtionality-to (Masscan XML Import)
+    - Spec: specs/005-add-funtionality-to/spec.md
+
+    This endpoint follows the established import pattern from Nmap (Feature 002)
+    and Vulnerability (Feature 003) imports.
+  version: 1.0.0
+  contact:
+    name: secman Development Team
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+  - url: https://api.secman.example.com
+    description: Production server
+
+paths:
+  /api/import/upload-masscan-xml:
+    post:
+      summary: Import Masscan XML scan file
+      description: |
+        Upload and process a Masscan XML file to populate the asset inventory
+        with discovered hosts and open ports.
+
+        **Process**:
+        1. Validate file format and size
+        2. Parse Masscan XML structure
+        3. Extract hosts and ports
+        4. Create/update assets with default values
+        5. Create scan results for open ports only
+        6. Return import statistics
+
+        **Default Values for Auto-Created Assets**:
+        - owner: "Security Team"
+        - type: "Scanned Host"
+        - name: null (no hostname from Masscan)
+        - description: ""
+
+        **Port Filtering**:
+        - Only ports with state="open" are imported
+        - Closed and filtered ports are skipped
+
+        **Historical Tracking**:
+        - Duplicate ports create separate scan results (no deduplication)
+        - Each scan result has its own discoveredAt timestamp
+
+      operationId: uploadMasscanXml
+      security:
+        - bearerAuth: []
+      tags:
+        - Import
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - xmlFile
+              properties:
+                xmlFile:
+                  type: string
+                  format: binary
+                  description: Masscan XML file to import (max 10MB)
+            examples:
+              valid-masscan-file:
+                summary: Valid Masscan XML file
+                value:
+                  xmlFile: (binary content of masscan.xml)
+
+      responses:
+        '200':
+          description: File processed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MasscanImportResponse'
+              examples:
+                successful-import:
+                  summary: Successful import with 2 new assets
+                  value:
+                    message: "Imported 4 ports across 2 new assets"
+                    assetsCreated: 2
+                    assetsUpdated: 0
+                    portsImported: 4
+                existing-assets-updated:
+                  summary: Import updating existing assets
+                  value:
+                    message: "Imported 3 ports, updated 1 existing asset"
+                    assetsCreated: 0
+                    assetsUpdated: 1
+                    portsImported: 3
+
+        '400':
+          description: Invalid request - file validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                file-too-large:
+                  summary: File exceeds size limit
+                  value:
+                    error: "File size exceeds maximum limit of 10MB"
+                invalid-extension:
+                  summary: Wrong file extension
+                  value:
+                    error: "Only .xml files are supported"
+                invalid-xml:
+                  summary: Malformed XML
+                  value:
+                    error: "Invalid Masscan XML format: root element must be <nmaprun> with scanner=\"masscan\""
+                no-open-ports:
+                  summary: No valid data to import
+                  value:
+                    error: "No open ports found in file"
+
+        '401':
+          description: Unauthorized - authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missing-token:
+                  summary: No authentication token provided
+                  value:
+                    error: "Authentication required"
+
+        '500':
+          description: Internal server error during processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                parsing-error:
+                  summary: Unexpected parsing failure
+                  value:
+                    error: "Error processing file: Failed to parse XML at line 42"
+                database-error:
+                  summary: Database operation failed
+                  value:
+                    error: "Error processing file: Database constraint violation"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from /api/auth/login
+
+  schemas:
+    MasscanImportResponse:
+      type: object
+      required:
+        - message
+        - assetsCreated
+        - assetsUpdated
+        - portsImported
+      properties:
+        message:
+          type: string
+          description: Human-readable summary of import results
+          example: "Imported 10 ports across 3 new assets"
+        assetsCreated:
+          type: integer
+          format: int32
+          description: Number of new assets created during import
+          minimum: 0
+          example: 3
+        assetsUpdated:
+          type: integer
+          format: int32
+          description: Number of existing assets updated (lastSeen timestamp)
+          minimum: 0
+          example: 1
+        portsImported:
+          type: integer
+          format: int32
+          description: Total number of open ports imported (new scan results created)
+          minimum: 0
+          example: 10
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Error message describing what went wrong
+          example: "File size exceeds maximum limit of 10MB"
+
+  examples:
+    masscan-xml-sample:
+      summary: Sample Masscan XML structure
+      value: |
+        <?xml version="1.0"?>
+        <nmaprun scanner="masscan" start="1759560572" version="1.0-BETA">
+          <scaninfo type="syn" protocol="tcp" />
+          <host endtime="1759560572">
+            <address addr="193.99.144.85" addrtype="ipv4"/>
+            <ports>
+              <port protocol="tcp" portid="80">
+                <state state="open" reason="syn-ack" reason_ttl="249"/>
+              </port>
+              <port protocol="tcp" portid="443">
+                <state state="open" reason="syn-ack" reason_ttl="249"/>
+              </port>
+            </ports>
+          </host>
+          <runstats>
+            <finished time="1759560583" timestr="2025-10-04 08:49:43" elapsed="11" />
+          </runstats>
+        </nmaprun>
+
+tags:
+  - name: Import
+    description: File import operations for scan results and vulnerability data

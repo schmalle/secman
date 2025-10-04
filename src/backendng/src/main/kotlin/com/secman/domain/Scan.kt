@@ -91,7 +91,7 @@ data class Scan(
      * Orphan removal: Removing result from list deletes it
      */
     @OneToMany(mappedBy = "scan", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
-    var results: List<ScanResult> = emptyList()
+    var results: MutableList<ScanResult> = mutableListOf()
 ) {
     @PrePersist
     fun onCreate() {
@@ -103,7 +103,7 @@ data class Scan(
      * Maintains bidirectional relationship
      */
     fun addResult(result: ScanResult) {
-        results = results + result
+        results.add(result)
         result.scan = this
     }
 

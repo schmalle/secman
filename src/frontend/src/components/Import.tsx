@@ -3,7 +3,7 @@ import { csrfPost } from '../utils/csrf';
 import { authenticatedPost } from '../utils/auth';
 import VulnerabilityImportForm from './VulnerabilityImportForm';
 
-type ImportType = 'requirements' | 'nmap' | 'vulnerabilities';
+type ImportType = 'requirements' | 'nmap' | 'masscan' | 'vulnerabilities';
 
 interface ScanSummary {
     scanId: number;
@@ -16,6 +16,13 @@ interface ScanSummary {
     duration: string;
 }
 
+interface MasscanImportResponse {
+    message: string;
+    assetsCreated: number;
+    assetsUpdated: number;
+    portsImported: number;
+}
+
 const Import = () => {
     const [importType, setImportType] = useState<ImportType>('requirements');
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -23,6 +30,7 @@ const Import = () => {
     const [isUploading, setIsUploading] = useState<boolean>(false);
     const [isDragOver, setIsDragOver] = useState<boolean>(false);
     const [scanSummary, setScanSummary] = useState<ScanSummary | null>(null);
+    const [masscanSummary, setMasscanSummary] = useState<MasscanImportResponse | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const validateFile = (file: File): boolean => {
@@ -35,7 +43,7 @@ const Import = () => {
             const fileExtension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
 
             return validTypes.includes(file.type) || validExtensions.includes(fileExtension);
-        } else if (importType === 'nmap') {
+        } else if (importType === 'nmap' || importType === 'masscan') {
             const validTypes = ['text/xml', 'application/xml'];
             const fileExtension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
 
@@ -50,11 +58,14 @@ const Import = () => {
             setSelectedFile(file);
             setUploadStatus('');
             setScanSummary(null);
+            setMasscanSummary(null);
         } else {
             setSelectedFile(null);
             const fileTypeMsg = importType === 'requirements'
                 ? 'Excel file (.xlsx or .xls)'
-                : 'nmap XML file (.xml)';
+                : importType === 'nmap'
+                ? 'nmap XML file (.xml)'
+                : 'masscan XML file (.xml)';
             setUploadStatus(`Error: Please select a valid ${fileTypeMsg}.`);
         }
     };
@@ -64,6 +75,7 @@ const Import = () => {
         setSelectedFile(null);
         setUploadStatus('');
         setScanSummary(null);
+        setMasscanSummary(null);
         if (fileInputRef.current) {
             fileInputRef.current.value = '';
         }
@@ -163,6 +175,35 @@ const Import = () => {
         }
     };
 
+    const handleUploadMasscan = async () => {
+        if (!selectedFile) return;
+
+        const formData = new FormData();
+        formData.append('xmlFile', selectedFile);
+
+        try {
+            const response = await authenticatedPost('/api/import/upload-masscan-xml', formData);
+
+            if (response.ok) {
+                const data: MasscanImportResponse = await response.json();
+                setMasscanSummary(data);
+                setUploadStatus(`Success: ${data.message}`);
+                setSelectedFile(null);
+                if (fileInputRef.current) {
+                    fileInputRef.current.value = '';
+                }
+            } else if (response.status === 403) {
+                setUploadStatus('Error: Access denied. You must be authenticated to import scan files.');
+            } else {
+                const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                setUploadStatus(`Error: ${errorData.error || 'Upload failed'}`);
+            }
+        } catch (error: any) {
+            console.error('Upload error:', error);
+            setUploadStatus(`Error: ${error.message || 'Upload failed. Please try again.'}`);
+        }
+    };
+
     const handleUpload = async () => {
         if (!selectedFile) {
             setUploadStatus('Error: No file selected.');
@@ -172,12 +213,15 @@ const Import = () => {
         setIsUploading(true);
         setUploadStatus('Uploading...');
         setScanSummary(null);
+        setMasscanSummary(null);
 
         try {
             if (importType === 'requirements') {
                 await handleUploadRequirements();
             } else if (importType === 'nmap') {
                 await handleUploadNmap();
+            } else if (importType === 'masscan') {
+                await handleUploadMasscan();
             }
         } finally {
             setIsUploading(false);
@@ -222,6 +266,16 @@ const Import = () => {
                                 </li>
                                 <li className="nav-item" role="presentation">
                                     <button
+                                        className={`nav-link ${importType === 'masscan' ? 'active' : ''}`}
+                                        type="button"
+                                        onClick={() => handleImportTypeChange('masscan')}
+                                    >
+                                        <i className="bi bi-hdd-network me-2"></i>
+                                        Masscan
+                                    </button>
+                                </li>
+                                <li className="nav-item" role="presentation">
+                                    <button
                                         className={`nav-link ${importType === 'vulnerabilities' ? 'active' : ''}`}
                                         type="button"
                                         onClick={() => handleImportTypeChange('vulnerabilities')}
@@ -260,7 +314,9 @@ const Import = () => {
                                     className="d-none"
                                     accept={importType === 'requirements'
                                         ? ".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
-                                        : ".xml,text/xml,application/xml"}
+                                        : importType === 'nmap' || importType === 'masscan'
+                                        ? ".xml,text/xml,application/xml"
+                                        : ""}
                                     onChange={handleFileChange}
                                     disabled={isUploading}
                                 />
@@ -303,7 +359,8 @@ const Import = () => {
                                         <h4 className={isDragOver ? 'text-primary' : 'text-dark'}>
                                             {isDragOver ? 'Drop your file here' :
                                                 importType === 'requirements' ? 'Choose Excel file or drag & drop' :
-                                                'Choose nmap XML file or drag & drop'}
+                                                importType === 'nmap' ? 'Choose nmap XML file or drag & drop' :
+                                                'Choose masscan XML file or drag & drop'}
                                         </h4>
                                         <p className="text-muted mb-4">
                                             {importType === 'requirements'
@@ -377,6 +434,42 @@ const Import = () => {
                                 </div>
                             )}
 
+                            {/* Import Summary (for masscan) */}
+                            {importType === 'masscan' && masscanSummary && (
+                                <div className="mt-4">
+                                    <div className="card border-success">
+                                        <div className="card-header bg-success text-white">
+                                            <h6 className="mb-0">
+                                                <i className="bi bi-check-circle me-2"></i>
+                                                Import Summary
+                                            </h6>
+                                        </div>
+                                        <div className="card-body">
+                                            <div className="row">
+                                                <div className="col-md-4">
+                                                    <p className="mb-2">
+                                                        <strong>Assets Created:</strong>
+                                                        <span className="badge bg-success ms-2">{masscanSummary.assetsCreated}</span>
+                                                    </p>
+                                                </div>
+                                                <div className="col-md-4">
+                                                    <p className="mb-2">
+                                                        <strong>Assets Updated:</strong>
+                                                        <span className="badge bg-info ms-2">{masscanSummary.assetsUpdated}</span>
+                                                    </p>
+                                                </div>
+                                                <div className="col-md-4">
+                                                    <p className="mb-2">
+                                                        <strong>Ports Imported:</strong>
+                                                        <span className="badge bg-primary ms-2">{masscanSummary.portsImported}</span>
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Upload Button */}
                             <div className="mt-5 d-grid">
                                 <button
@@ -394,6 +487,10 @@ const Import = () => {
                                             <i className="bi bi-cloud-upload-fill me-2"></i>
                                             {importType === 'requirements'
                                                 ? 'Upload and Process Requirements'
+                                                : importType === 'nmap'
+                                                ? 'Upload and Import Nmap Scan'
+                                                : importType === 'masscan'
+                                                ? 'Upload and Import Masscan Results'
                                                 : 'Upload and Import Scan'}
                                         </>
                                     )}
