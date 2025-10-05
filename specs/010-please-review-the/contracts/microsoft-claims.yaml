@@ -1,0 +1,201 @@
+openapi: 3.0.3
+info:
+  title: Microsoft ID Token Claims Contract
+  description: Expected claims structure from Microsoft ID tokens for user provisioning
+  version: 1.0.0
+
+components:
+  schemas:
+    MicrosoftIDToken:
+      type: object
+      description: JWT ID token claims from Microsoft Azure AD
+      required:
+        - aud
+        - iss
+        - sub
+        - tid
+        - exp
+        - iat
+      properties:
+        aud:
+          type: string
+          description: Audience (client ID)
+          example: "12345678-1234-1234-1234-123456789012"
+        iss:
+          type: string
+          description: Issuer (Microsoft tenant-specific)
+          example: "https://login.microsoftonline.com/87654321-4321-4321-4321-210987654321/v2.0"
+        sub:
+          type: string
+          description: Subject (unique user identifier)
+          example: "AAAAAAAAAAAAAAAAAAAAAIkzqFVrSaSaFHy782bbtaQ"
+        tid:
+          type: string
+          description: Tenant ID (Azure AD tenant)
+          example: "87654321-4321-4321-4321-210987654321"
+        oid:
+          type: string
+          description: Object ID (user's object ID in Azure AD)
+          example: "00000000-0000-0000-0000-000000000001"
+        email:
+          type: string
+          format: email
+          description: User's email address (may be absent for some users)
+          example: "user@example.com"
+          nullable: true
+        name:
+          type: string
+          description: User's display name
+          example: "John Doe"
+          nullable: true
+        preferred_username:
+          type: string
+          description: User principal name (fallback for email)
+          example: "user@example.com"
+          nullable: true
+        upn:
+          type: string
+          description: User principal name (alternative to preferred_username)
+          example: "user@example.com"
+          nullable: true
+        exp:
+          type: integer
+          format: int64
+          description: Expiration time (Unix timestamp)
+          example: 1696512000
+        iat:
+          type: integer
+          format: int64
+          description: Issued at (Unix timestamp)
+          example: 1696508400
+        nbf:
+          type: integer
+          format: int64
+          description: Not before (Unix timestamp)
+          example: 1696508400
+          nullable: true
+        ver:
+          type: string
+          description: Token version
+          example: "2.0"
+          nullable: true
+        roles:
+          type: array
+          description: Azure AD roles (not used in this feature version)
+          items:
+            type: string
+          example: []
+          nullable: true
+        groups:
+          type: array
+          description: Azure AD group IDs (not used in this feature version)
+          items:
+            type: string
+          example: []
+          nullable: true
+
+    UserProvisioningData:
+      type: object
+      description: Data extracted from ID token for user provisioning
+      required:
+        - email
+        - name
+        - username
+        - tenantId
+      properties:
+        email:
+          type: string
+          format: email
+          description: User's email (from email, preferred_username, or upn claim)
+          example: "user@example.com"
+        name:
+          type: string
+          description: User's display name
+          example: "John Doe"
+        username:
+          type: string
+          description: Username for account creation (derived from email)
+          example: "user"
+        tenantId:
+          type: string
+          description: Azure AD tenant ID
+          example: "87654321-4321-4321-4321-210987654321"
+        role:
+          type: string
+          enum: [USER]
+          description: Assigned role (hardcoded to USER for this version)
+          example: "USER"
+
+# Claim Extraction Rules
+x-claim-extraction:
+  email:
+    priority:
+      - "email"
+      - "preferred_username"
+      - "upn"
+    validation:
+      - rule: "At least one email-like claim must be present"
+        error: "Email address required for account creation"
+    extraction: "Extract first non-null value from priority list"
+
+  name:
+    priority:
+      - "name"
+    fallback: "Extract from email (before @)"
+    validation:
+      - rule: "Name must not be empty"
+
+  username:
+    derivation: "email.substringBefore('@')"
+    fallback: "preferred_username.substringBefore('@')"
+    validation:
+      - rule: "Username must be alphanumeric + . _ -"
+
+  tenant_validation:
+    rule: "tid claim must match provider.tenantId"
+    error: "Tenant mismatch: User from wrong organization"
+    check: "idToken.claims['tid'] == provider.tenantId"
+
+# Role Assignment Rules
+x-role-assignment:
+  default_role: "USER"
+  rationale: "Per clarification: hardcoded USER role, no group/claim mapping in this version"
+  future_enhancement: "Azure AD group mapping deferred to future feature"
+
+# Example ID Tokens
+x-examples:
+  valid_microsoft_user:
+    aud: "12345678-1234-1234-1234-123456789012"
+    iss: "https://login.microsoftonline.com/87654321-4321-4321-4321-210987654321/v2.0"
+    sub: "AAAAAAAAAAAAAAAAAAAAAIkzqFVrSaSaFHy782bbtaQ"
+    tid: "87654321-4321-4321-4321-210987654321"
+    oid: "00000000-0000-0000-0000-000000000001"
+    email: "john.doe@contoso.com"
+    name: "John Doe"
+    preferred_username: "john.doe@contoso.com"
+    exp: 1696512000
+    iat: 1696508400
+
+  user_without_email:
+    aud: "12345678-1234-1234-1234-123456789012"
+    iss: "https://login.microsoftonline.com/87654321-4321-4321-4321-210987654321/v2.0"
+    sub: "BBBBBBBBBBBBBBBBBBBBBBIkzqFVrSaSaFHy782bbtaQ"
+    tid: "87654321-4321-4321-4321-210987654321"
+    oid: "00000000-0000-0000-0000-000000000002"
+    name: "Guest User"
+    preferred_username: "guest@external.com"
+    exp: 1696512000
+    iat: 1696508400
+    # Note: email claim absent - must use preferred_username
+
+  wrong_tenant:
+    aud: "12345678-1234-1234-1234-123456789012"
+    iss: "https://login.microsoftonline.com/99999999-9999-9999-9999-999999999999/v2.0"
+    sub: "CCCCCCCCCCCCCCCCCCCCCCIkzqFVrSaSaFHy782bbtaQ"
+    tid: "99999999-9999-9999-9999-999999999999"  # Wrong tenant!
+    oid: "00000000-0000-0000-0000-000000000003"
+    email: "user@wrongtenant.com"
+    name: "Wrong Tenant User"
+    exp: 1696512000
+    iat: 1696508400
+    # Expected error: "Tenant mismatch: User from wrong organization"

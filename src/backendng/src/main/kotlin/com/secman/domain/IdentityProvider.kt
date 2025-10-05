@@ -25,6 +25,9 @@ data class IdentityProvider(
     @Column(name = "client_secret")
     var clientSecret: String? = null,
 
+    @Column(name = "tenant_id")
+    var tenantId: String? = null,
+
     @Column(name = "discovery_url")
     var discoveryUrl: String? = null,
 

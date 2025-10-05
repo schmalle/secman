@@ -1,0 +1,157 @@
+openapi: 3.0.3
+info:
+  title: Microsoft OAuth Flow Extensions
+  description: Extended OAuth flow with Microsoft tenant validation
+  version: 1.0.0
+
+paths:
+  /oauth/authorize/{providerId}:
+    get:
+      summary: Initiate OAuth authorization
+      description: Redirects user to Microsoft authorization endpoint with tenant-specific URL
+      operationId: authorize
+      security: []  # Anonymous access required
+      parameters:
+        - name: providerId
+          in: path
+          required: true
+          description: Identity provider ID
+          schema:
+            type: integer
+            format: int64
+            example: 1
+      responses:
+        '302':
+          description: Redirect to Microsoft authorization endpoint
+          headers:
+            Location:
+              description: Microsoft tenant-specific authorization URL
+              schema:
+                type: string
+                example: "https://login.microsoftonline.com/{tenantId}/oauth2/v2.0/authorize?client_id=...&state=..."
+        '400':
+          description: Invalid provider configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Provider not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /oauth/callback:
+    get:
+      summary: Handle OAuth callback
+      description: Processes Microsoft OAuth callback with tenant and email validation
+      operationId: callback
+      security: []  # Anonymous access required
+      parameters:
+        - name: code
+          in: query
+          required: false
+          description: Authorization code from Microsoft
+          schema:
+            type: string
+            example: "0.AXoA..."
+        - name: state
+          in: query
+          required: false
+          description: CSRF protection state token
+          schema:
+            type: string
+            example: "abc123def456"
+        - name: error
+          in: query
+          required: false
+          description: OAuth error code (if error occurred)
+          schema:
+            type: string
+            example: "access_denied"
+        - name: error_description
+          in: query
+          required: false
+          description: Human-readable error description
+          schema:
+            type: string
+            example: "User denied consent"
+      responses:
+        '302':
+          description: Redirect to frontend with token or error
+          headers:
+            Location:
+              description: Frontend URL with token or error parameter
+              schema:
+                type: string
+                example: "http://localhost:4321/login/success?token=...&user=..."
+        '400':
+          description: Invalid OAuth callback parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - timestamp
+      properties:
+        error:
+          type: string
+          description: Error message
+        timestamp:
+          type: string
+          format: date-time
+          description: Error occurrence timestamp
+
+# OAuth Flow Validation Rules
+x-oauth-validation:
+  authorize:
+    - rule: "Provider must be enabled"
+      check: "provider.enabled == true"
+    - rule: "Tenant ID required for Microsoft"
+      check: "if (provider.name.contains('Microsoft')) provider.tenantId != null"
+    - rule: "State token generated and stored"
+      check: "oauthState saved with 10-minute expiry"
+    - rule: "Redirect URI includes backend callback URL"
+      check: "redirectUri == {baseUrl}/oauth/callback"
+
+  callback:
+    - rule: "State token must exist in database"
+      check: "oauthStateRepository.findByStateToken(state).isPresent"
+    - rule: "State token must not be expired"
+      check: "oauthState.expiresAt > LocalDateTime.now()"
+    - rule: "Provider ID must match state"
+      check: "oauthState.providerId == providerId"
+    - rule: "Code must be present (unless error)"
+      check: "code != null || error != null"
+
+  token_exchange:
+    - rule: "ID token must contain tid claim"
+      check: "idToken.claims['tid'] != null"
+    - rule: "Tenant ID must match configuration"
+      check: "idToken.claims['tid'] == provider.tenantId"
+    - rule: "Email claim must be present"
+      check: "idToken.claims['email'] != null || idToken.claims['preferred_username'] != null"
+    - rule: "User auto-provisioned if not exists"
+      check: "if (provider.autoProvision) createUser(email, name, USER_role)"
+
+# Microsoft-Specific Error Codes
+x-microsoft-errors:
+  AADSTS50020: "User account not found in this tenant"
+  AADSTS50034: "User account does not exist"
+  AADSTS50053: "Account is locked"
+  AADSTS50055: "Password expired"
+  AADSTS50057: "User disabled"
+  AADSTS50105: "User not assigned to application"
+  AADSTS50126: "Invalid username or password"
+  AADSTS50128: "Invalid tenant"
+  AADSTS50173: "Fresh authentication required"
+  AADSTS65001: "User has not consented to application"
+  AADSTS70000: "Invalid grant"
+  AADSTS700016: "Application not found in tenant"

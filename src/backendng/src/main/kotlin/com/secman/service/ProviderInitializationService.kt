@@ -52,7 +52,47 @@ class ProviderInitializationService(
             } else {
                 logger.info("GitHub OAuth provider already exists with ID: {}", existingGitHubProvider.get().id)
             }
-            
+
+            // Check if Microsoft provider exists
+            val existingMicrosoftProvider = identityProviderRepository.findByNameIgnoreCase("Microsoft")
+
+            if (existingMicrosoftProvider.isEmpty) {
+                val microsoftClientId = System.getenv("MICROSOFT_CLIENT_ID")
+                val microsoftClientSecret = System.getenv("MICROSOFT_CLIENT_SECRET")
+                val microsoftTenantId = System.getenv("MICROSOFT_TENANT_ID")
+
+                if (microsoftClientId != null && microsoftClientSecret != null && microsoftTenantId != null) {
+                    logger.info("Creating default Microsoft OAuth provider")
+
+                    val microsoftProvider = IdentityProvider(
+                        name = "Microsoft",
+                        type = IdentityProvider.ProviderType.OIDC,
+                        clientId = microsoftClientId,
+                        clientSecret = microsoftClientSecret,
+                        tenantId = microsoftTenantId,
+                        discoveryUrl = "https://login.microsoftonline.com/$microsoftTenantId/v2.0/.well-known/openid-configuration",
+                        authorizationUrl = "https://login.microsoftonline.com/$microsoftTenantId/oauth2/v2.0/authorize",
+                        tokenUrl = "https://login.microsoftonline.com/$microsoftTenantId/oauth2/v2.0/token",
+                        userInfoUrl = "https://graph.microsoft.com/v1.0/me",
+                        issuer = "https://login.microsoftonline.com/$microsoftTenantId/v2.0",
+                        jwksUri = "https://login.microsoftonline.com/$microsoftTenantId/discovery/v2.0/keys",
+                        scopes = "openid email profile",
+                        enabled = false,  // Disabled by default, admin must enable
+                        autoProvision = true,
+                        buttonText = "Sign in with Microsoft",
+                        buttonColor = "#0078d4"
+                    )
+
+                    val saved = identityProviderRepository.save(microsoftProvider)
+                    logger.info("Created Microsoft OAuth provider with ID: {} (disabled by default)", saved.id)
+                } else {
+                    logger.info("Skipping Microsoft OAuth provider creation - environment variables not set. " +
+                               "To auto-create, set MICROSOFT_CLIENT_ID, MICROSOFT_CLIENT_SECRET, and MICROSOFT_TENANT_ID.")
+                }
+            } else {
+                logger.info("Microsoft OAuth provider already exists with ID: {}", existingMicrosoftProvider.get().id)
+            }
+
         } catch (e: Exception) {
             logger.error("Failed to initialize default providers: {}", e.message, e)
         }

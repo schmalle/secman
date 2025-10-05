@@ -1,0 +1,167 @@
+openapi: 3.0.3
+info:
+  title: Identity Provider Test Endpoint
+  description: API contract for testing identity provider configuration
+  version: 1.0.0
+
+paths:
+  /api/identity-providers/{id}/test:
+    post:
+      summary: Test identity provider configuration
+      description: Validates provider configuration fields and URL formats without performing actual OAuth flow
+      operationId: testProvider
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Identity provider ID
+          schema:
+            type: integer
+            format: int64
+            example: 1
+      responses:
+        '200':
+          description: Validation results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestProviderResponse'
+              examples:
+                allPass:
+                  summary: All validations passed
+                  value:
+                    valid: true
+                    checks:
+                      - name: "Client ID"
+                        status: "pass"
+                        message: "Present"
+                      - name: "Client Secret"
+                        status: "pass"
+                        message: "Present"
+                      - name: "Tenant ID"
+                        status: "pass"
+                        message: "Valid UUID format"
+                      - name: "Authorization URL"
+                        status: "pass"
+                        message: "Valid HTTPS URL"
+                      - name: "Token URL"
+                        status: "pass"
+                        message: "Valid HTTPS URL"
+                      - name: "Scopes"
+                        status: "pass"
+                        message: "Includes 'openid'"
+                someFailed:
+                  summary: Some validations failed
+                  value:
+                    valid: false
+                    checks:
+                      - name: "Client ID"
+                        status: "pass"
+                        message: "Present"
+                      - name: "Tenant ID"
+                        status: "fail"
+                        message: "Required for Microsoft providers"
+                      - name: "Authorization URL"
+                        status: "fail"
+                        message: "Invalid URL format"
+                      - name: "Scopes"
+                        status: "warning"
+                        message: "Missing 'openid' scope"
+        '401':
+          description: Unauthorized - authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Provider not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    TestProviderResponse:
+      type: object
+      required:
+        - valid
+        - checks
+      properties:
+        valid:
+          type: boolean
+          description: Overall validation result (true if all checks pass)
+          example: true
+        checks:
+          type: array
+          description: Individual validation check results
+          items:
+            $ref: '#/components/schemas/ValidationCheck'
+
+    ValidationCheck:
+      type: object
+      required:
+        - name
+        - status
+        - message
+      properties:
+        name:
+          type: string
+          description: Name of the validation check
+          example: "Tenant ID"
+        status:
+          type: string
+          enum: [pass, fail, warning]
+          description: Validation result status
+          example: "pass"
+        message:
+          type: string
+          description: Detailed validation message
+          example: "Valid UUID format"
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - timestamp
+      properties:
+        error:
+          type: string
+          description: Error message
+          example: "Identity provider not found"
+        timestamp:
+          type: string
+          format: date-time
+          description: Error occurrence timestamp
+          example: "2025-10-05T12:34:56.789Z"
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+# Validation Rules (for contract tests)
+x-validation-rules:
+  - rule: "Client ID must be present"
+    check: "clientId != null && clientId.isNotBlank()"
+  - rule: "Client Secret must be present"
+    check: "clientSecret != null && clientSecret.isNotBlank()"
+  - rule: "Tenant ID required for Microsoft providers"
+    check: "if (name.contains('Microsoft', ignoreCase=true)) tenantId != null"
+  - rule: "Tenant ID must be UUID format"
+    check: "tenantId matches UUID regex"
+  - rule: "Authorization URL must be valid HTTPS"
+    check: "authorizationUrl matches ^https://.*"
+  - rule: "Token URL must be valid HTTPS"
+    check: "tokenUrl matches ^https://.*"
+  - rule: "Scopes must include 'openid'"
+    check: "scopes.contains('openid')"
