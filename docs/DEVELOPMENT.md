@@ -9,8 +9,9 @@ Secman is built with modern technologies:
 - **Backend**: Micronaut 4.4.3 with Kotlin 2.0.21
 - **Frontend**: Astro 5.11.0 with React 19.1.0
 - **Database**: MariaDB 11.4
+- **Helper Tools**: Python 3.11+ CLI utilities for external integrations
 - **Build System**: Gradle 8.14.3 (Kotlin DSL)
-- **Package Manager**: npm (Node.js 20+)
+- **Package Manager**: npm (Node.js 20+), pip (Python 3.11+)
 
 ## Prerequisites
 
@@ -27,6 +28,7 @@ Secman is built with modern technologies:
 - Node.js 20.19.4+
 - MariaDB 11.4+
 - Gradle 8.14+
+- Python 3.11+ (for helper tools)
 - Git
 
 ## Docker Development Setup
@@ -202,6 +204,72 @@ npm run test:e2e
 - React fast refresh
 - Available at http://localhost:4321
 
+### 4. Helper Tools Setup
+
+**Navigate to helper directory:**
+```bash
+cd src/helper
+```
+
+**Create virtual environment (recommended):**
+```bash
+# Create virtual environment
+python3 -m venv .venv
+
+# Activate virtual environment
+source .venv/bin/activate  # Linux/macOS
+# or
+.venv\Scripts\activate     # Windows
+```
+
+**Install dependencies:**
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Install in editable mode (for development)
+pip install -e .
+
+# Install development dependencies
+pip install -e ".[dev]"
+```
+
+**Configure environment variables:**
+Create `.env` file in `src/helper/` or set environment variables:
+```bash
+export FALCON_CLIENT_ID="your_client_id"
+export FALCON_CLIENT_SECRET="your_client_secret"
+export FALCON_CLOUD_REGION="us-1"  # or us-2, eu-1, us-gov-1
+```
+
+**Development commands:**
+```bash
+# Run the CLI tool
+falcon-vulns --help
+
+# Query vulnerabilities
+falcon-vulns --device-type SERVER --severity CRITICAL --min-days-open 30
+
+# Run tests
+pytest tests/
+
+# Type checking
+mypy src/
+
+# Linting
+ruff check src/ tests/
+
+# Format code
+ruff format src/ tests/
+```
+
+**Development features:**
+- Type hints with mypy
+- Fast linting with ruff
+- Comprehensive test suite (contract, integration, unit)
+- CLI with argparse
+- Export to XLSX, CSV, TXT formats
+
 ## IDE Configuration
 
 ### IntelliJ IDEA
@@ -229,6 +297,9 @@ npm run test:e2e
 - ES7+ React/Redux/React-Native snippets
 - Prettier - Code formatter
 - ESLint
+- Python
+- Pylance
+- Ruff
 
 **Configuration files:**
 ```json
@@ -237,7 +308,14 @@ npm run test:e2e
   "kotlin.languageServer.enabled": true,
   "typescript.preferences.importModuleSpecifier": "relative",
   "eslint.workingDirectories": ["src/frontend"],
-  "prettier.configPath": "src/frontend/.prettierrc"
+  "prettier.configPath": "src/frontend/.prettierrc",
+  "python.defaultInterpreterPath": "${workspaceFolder}/src/helper/.venv/bin/python",
+  "python.testing.pytestEnabled": true,
+  "python.testing.pytestArgs": ["tests"],
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.formatOnSave": true
+  }
 }
 ```
 
@@ -302,6 +380,47 @@ test('login page', async ({ page }) => {
   await page.goto('/login');
   await expect(page.getByRole('button', { name: 'Login' })).toBeVisible();
 });
+```
+
+### Helper Tool Tests (pytest)
+
+```bash
+cd src/helper
+
+# Run all tests
+pytest tests/
+
+# Run specific test type
+pytest tests/unit/
+pytest tests/contract/
+pytest tests/integration/
+
+# Run with coverage
+pytest --cov=src tests/
+
+# Run specific test file
+pytest tests/unit/test_models_validation.py
+
+# Run with verbose output
+pytest -v tests/
+
+# Run with markers
+pytest -m "not slow" tests/
+```
+
+**Writing tests:**
+```python
+import pytest
+from src.models.vulnerability import Vulnerability
+
+def test_vulnerability_validation():
+    vuln = Vulnerability(
+        vulnerability_id="CVE-2024-1234",
+        severity="CRITICAL",
+        days_open=45
+    )
+    assert vuln.is_critical()
+    assert vuln.days_open > 30
 ```
 
 ## Database Management

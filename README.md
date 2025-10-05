@@ -21,6 +21,7 @@ The tool was also started as a test how good / well AI supported coding really w
 - **Backend**: Micronaut Framework with Kotlin
 - **Frontend**: Astro with React integration
 - **Database**: MariaDB 11.4
+- **Helper Tools**: Python 3.11+ CLI utilities for external integrations
 - **Build System**: Gradle (Kotlin DSL)
 - **Containerization**: Docker with multi-architecture support
 - **Authentication**: JWT with OAuth2 support
@@ -39,6 +40,7 @@ The tool was also started as a test how good / well AI supported coding really w
 - (untested/dummy code) usage of external identity providers besides Github
 - Login via Github
 - **Asset management**
+- **Falcon API Helper Tool**: Query CrowdStrike Falcon API for vulnerability data with flexible filtering and export capabilities (XLSX, CSV, TXT)
 
 ## Getting Started
 
@@ -54,7 +56,9 @@ The tool was also started as a test how good / well AI supported coding really w
 - MariaDB 11.4 or higher
 - Gradle 8.14 or higher
 - Git
+- Python 3.11+ (optional, for helper tools)
 - OpenRouter Key (optional for translation features)
+- CrowdStrike Falcon API credentials (optional, for helper tools)
 
 ### Installation
 
@@ -125,12 +129,50 @@ To reset the database, use the script /scripts/`./reset_database.sh `.
 
 ## Usage
 
+### Web Application
+
 - **Access the Frontend:** http://localhost:4321
 - **Access the Backend API:** http://localhost:8080/api
 - **Database Access:** localhost:3306 (secman/CHANGEME)
-- **Health Checks:** 
+- **Health Checks:**
   - Frontend: http://localhost:4321/health
   - Backend: http://localhost:8080/health
+
+### Helper Tools
+
+#### Falcon API Vulnerability Query Tool
+
+**Installation:**
+```bash
+cd src/helper
+pip install -r requirements.txt
+pip install -e .
+```
+
+**Configuration:**
+Set environment variables for CrowdStrike Falcon API:
+```bash
+export FALCON_CLIENT_ID="your_client_id"
+export FALCON_CLIENT_SECRET="your_client_secret"
+export FALCON_CLOUD_REGION="us-1"  # or us-2, eu-1, us-gov-1
+```
+
+**Usage Examples:**
+```bash
+# Query critical vulnerabilities on servers open for 30+ days
+falcon-vulns --device-type SERVER --severity CRITICAL --min-days-open 30
+
+# Filter by domain and export to CSV
+falcon-vulns --device-type BOTH --severity HIGH CRITICAL \
+             --min-days-open 90 --ad-domain CORP.LOCAL \
+             --output /reports/vulns.csv --format CSV
+
+# Query with hostname filter and verbose logging
+falcon-vulns --device-type BOTH --severity MEDIUM HIGH CRITICAL \
+             --min-days-open 0 --hostname WEB-SERVER-01 --verbose
+```
+
+See [src/helper/README.md](src/helper/README.md) for detailed documentation.
 
 ## Roles / Default application users (pw password)
 
@@ -169,6 +211,10 @@ npm run test
 
 # End-to-end tests
 npm run test:e2e
+
+# Helper tool tests (pytest)
+cd src/helper
+pytest tests/
 ```
 
 **Legacy Test Scripts:**

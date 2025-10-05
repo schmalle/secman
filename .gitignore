@@ -35,6 +35,27 @@ Thumbs.db
 *.pid
 *.bak
 
+# Python (helper tools)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+dist/
+*.egg
+.venv/
+venv/
+ENV/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.cover
+.coverage
+htmlcov/
+
 # Project specific
 .claude/
 .serena/
@@ -42,3 +63,6 @@ src/backendng/.kotlin/sessions/*
 src/backendng/.claude/settings.local.json
 src/backendng/.claude/settings.local.json
 src/.claude/settings.local.json
+src/helper/.env
+src/helper/venv/
+src/helper/.venv/

@@ -3,14 +3,16 @@
 ## Project Overview
 **secman** - Security requirement and risk assessment management tool
 - Full-stack web application (Kotlin/Micronaut backend + Astro/React frontend)
+- Python helper utilities for external integrations
 - Purpose: Manage security requirements, norms, use cases, assets, and vulnerabilities
-- Tech stack: Micronaut 4.4, Kotlin 2.1, Astro 5.14, React 19, MariaDB 11.4
+- Tech stack: Micronaut 4.4, Kotlin 2.1, Astro 5.14, React 19, MariaDB 11.4, Python 3.11+
 
 ## Tech Stack
-- **Language**: Kotlin 2.1.0 / Java 21, TypeScript/JavaScript (Astro 5.14, React 19)
+- **Language**: Kotlin 2.1.0 / Java 21, TypeScript/JavaScript (Astro 5.14, React 19), Python 3.11+
 - **Framework**: Micronaut 4.4, Hibernate JPA, Apache POI 5.3 (Excel), Astro, React, Bootstrap 5.3
 - **Database**: MariaDB 11.4 via Hibernate JPA with auto-migration
-- **Testing**: JUnit 5 + MockK (backend), Playwright (frontend E2E)
+- **Helper Tools**: falconpy (CrowdStrike Falcon API), openpyxl (XLSX export), argparse (CLI)
+- **Testing**: JUnit 5 + MockK (backend), Playwright (frontend E2E), pytest (helper tools)
 - **Deployment**: Docker Compose (multi-arch: AMD64/ARM64)
 
 ## Architecture
@@ -28,6 +30,15 @@
 - **Components**: React .tsx components with Bootstrap 5
 - **Routing**: Astro file-based routing
 - **API Client**: Axios for backend communication
+
+### Helper Tools (`src/helper/`)
+- **Purpose**: CLI utilities for external integrations
+- **Falcon Vulnerability Tool**: Query CrowdStrike Falcon API for vulnerability data
+  - Filters: Device type (CLIENT/SERVER/BOTH), severity levels, days open, AD domain, hostname
+  - Export formats: XLSX, CSV, TXT
+  - Authentication: Environment-based (FALCON_CLIENT_ID, FALCON_CLIENT_SECRET, FALCON_CLOUD_REGION)
+  - CLI command: `falcon-vulns`
+- **Structure**: models/, services/, cli/, exporters/, lib/
 
 ## Recent Changes
 - 007-please-evaluate-if: Updated Micronaut 4.4→4.5.4, Spring Security Crypto 6.3.5→6.4.4 (CVE fixes), Apache POI 5.3.0→5.4.1
@@ -180,6 +191,15 @@ Model Context Protocol tools for AI assistant integration:
 - **Services**: `src/frontend/src/services/`
 - **Tests**: `src/frontend/tests/e2e/`
 
+### Helper Tools
+- **Root**: `src/helper/`
+- **Models**: `src/helper/src/models/`
+- **Services**: `src/helper/src/services/`
+- **CLI**: `src/helper/src/cli/`
+- **Exporters**: `src/helper/src/exporters/`
+- **Utilities**: `src/helper/src/lib/`
+- **Tests**: `src/helper/tests/` (contract/, integration/, unit/)
+
 ### Config
 - **Docker**: `docker-compose.yml`
 - **Env**: `.env` (not committed)
@@ -196,6 +216,14 @@ Model Context Protocol tools for AI assistant integration:
 npm run dev              # Dev server (port 4321)
 npm run build            # Production build
 npm test                 # E2E tests
+
+# Helper Tools (Falcon API)
+cd src/helper
+pip install -r requirements.txt  # Install dependencies
+pip install -e .                 # Install in editable mode
+falcon-vulns --device-type SERVER --severity CRITICAL --min-days-open 30  # Query vulnerabilities
+pytest tests/                    # Run tests
+ruff check .                     # Run linter
 
 # Docker
 docker-compose up -d     # Start all services
