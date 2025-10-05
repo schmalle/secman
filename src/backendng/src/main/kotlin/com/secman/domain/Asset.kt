@@ -88,6 +88,42 @@ data class Asset(
     var osVersion: String? = null,
 
     /**
+     * Many-to-many relationship with Workgroup
+     * Feature: 008-create-an-additional (Workgroup-Based Access Control)
+     * Assets can belong to 0..n workgroups
+     * EAGER fetch: workgroup membership checked for access control filtering
+     */
+    @ManyToMany(fetch = FetchType.EAGER)
+    @JoinTable(
+        name = "asset_workgroups",
+        joinColumns = [JoinColumn(name = "asset_id")],
+        inverseJoinColumns = [JoinColumn(name = "workgroup_id")]
+    )
+    var workgroups: MutableSet<Workgroup> = mutableSetOf(),
+
+    /**
+     * Dual ownership tracking - manual creator
+     * Feature: 008-create-an-additional (Workgroup-Based Access Control)
+     * User who manually created this asset via UI
+     * Nullable: allows user deletion (FR-027)
+     * LAZY fetch: not needed for list operations
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "manual_creator_id", nullable = true)
+    var manualCreator: User? = null,
+
+    /**
+     * Dual ownership tracking - scan uploader
+     * Feature: 008-create-an-additional (Workgroup-Based Access Control)
+     * User who uploaded scan that discovered this asset
+     * Nullable: allows user deletion (FR-027)
+     * LAZY fetch: not needed for list operations
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "scan_uploader_id", nullable = true)
+    var scanUploader: User? = null,
+
+    /**
      * Bidirectional relationship to ScanResult
      * One asset can have multiple scan results over time (scan history)
      * Foreign key is in scan_result table (asset_id)

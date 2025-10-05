@@ -78,4 +78,8 @@ interface ScanRepository : JpaRepository<Scan, Long> {
      * Related to: Feature 006 (MCP Tools for Security Data)
      */
     fun findByScanType(scanType: String, pageable: Pageable): Page<Scan>
+
+    // Workgroup-Based Access Control - Feature 008
+    // Note: Scan filtering requires service-level logic since uploadedBy is a username String,
+    // not a User FK. Methods moved to ScanFilteringService.
 }

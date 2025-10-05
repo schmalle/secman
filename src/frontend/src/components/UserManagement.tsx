@@ -8,6 +8,18 @@ interface User {
     username: string;
     email: string;
     roles: string[];
+    workgroups?: WorkgroupSummary[];
+}
+
+interface WorkgroupSummary {
+    id: number;
+    name: string;
+}
+
+interface Workgroup {
+    id: number;
+    name: string;
+    description?: string;
 }
 
 // Define a type for the global variable
@@ -24,6 +36,7 @@ const UserManagement = () => {
     const [isAdmin, setIsAdmin] = useState(false);
     const [isLoading, setIsLoading] = useState(true); // Start loading
     const [users, setUsers] = useState<User[]>([]);
+    const [workgroups, setWorkgroups] = useState<Workgroup[]>([]);
     const [error, setError] = useState<string | null>(null);
 
     // State for Add User Modal
@@ -33,6 +46,7 @@ const UserManagement = () => {
         email: '',
         password: '',
         roles: ['USER'] as string[], // Default to USER
+        workgroupIds: [] as number[],
     });
     const [addUserError, setAddUserError] = useState<string | null>(null);
     const [isSubmittingUser, setIsSubmittingUser] = useState(false);
@@ -46,6 +60,7 @@ const UserManagement = () => {
         email: '',
         password: '', // Optional - only update if provided
         roles: [] as string[],
+        workgroupIds: [] as number[],
     });
     const [editUserError, setEditUserError] = useState<string | null>(null);
     const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
@@ -68,9 +83,9 @@ const UserManagement = () => {
                     setIsLoading(false); // Permission check done
                 }
 
-                // If admin, fetch users
+                // If admin, fetch users and workgroups
                 if (userIsAdmin) {
-                    await fetchUsers(isMounted);
+                    await Promise.all([fetchUsers(isMounted), fetchWorkgroups()]);
                 } else {
                      // Not an admin, ensure loading is false
                      if (isMounted) setIsLoading(false);
@@ -121,7 +136,7 @@ const UserManagement = () => {
     const fetchUsers = async (isMounted: boolean) => {
         try {
             console.log("Fetching users...");
-            const response = await authenticatedGet('/api/users');
+            const response = await authenticatedGet('/api/users?includeWorkgroups=true');
             if (response.ok && isMounted) {
                 const data: User[] = await response.json();
                 setUsers(data);
@@ -143,6 +158,19 @@ const UserManagement = () => {
         }
     };
 
+    const fetchWorkgroups = async () => {
+        try {
+            console.log("Fetching workgroups...");
+            const response = await authenticatedGet('/api/workgroups');
+            if (response.ok) {
+                const data: Workgroup[] = await response.json();
+                setWorkgroups(data);
+            }
+        } catch (err: any) {
+            console.error("Error fetching workgroups:", err);
+        }
+    };
+
     const handleNewUserChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
         setNewUser(prev => ({ ...prev, [name]: value }));
@@ -155,6 +183,17 @@ const UserManagement = () => {
                 ? [...prev.roles, value]
                 : prev.roles.filter(role => role !== value);
             return { ...prev, roles: newRoles };
+        });
+    };
+
+    const handleNewUserWorkgroupsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const workgroupId = parseInt(e.target.value);
+        const { checked } = e.target;
+        setNewUser(prev => {
+            const newWorkgroupIds = checked
+                ? [...prev.workgroupIds, workgroupId]
+                : prev.workgroupIds.filter(id => id !== workgroupId);
+            return { ...prev, workgroupIds: newWorkgroupIds };
         });
     };
 
@@ -180,7 +219,7 @@ const UserManagement = () => {
                 const data = await response.json();
                 setUsers(prevUsers => [...prevUsers, data]);
                 setShowAddUserModal(false);
-                setNewUser({ username: '', email: '', password: '', roles: ['USER'] }); // Reset form
+                setNewUser({ username: '', email: '', password: '', roles: ['USER'], workgroupIds: [] }); // Reset form
             } else {
                 throw new Error(`Failed to create user: ${response.status}`);
             }
@@ -216,6 +255,7 @@ const UserManagement = () => {
             email: user.email,
             password: '', // Leave blank - only update if user enters a new password
             roles: [...user.roles],
+            workgroupIds: user.workgroups?.map(wg => wg.id) || [],
         });
         setEditUserError(null);
         setShowEditUserModal(true);
@@ -233,6 +273,17 @@ const UserManagement = () => {
                 ? [...prev.roles, value]
                 : prev.roles.filter(role => role !== value);
             return { ...prev, roles: newRoles };
+        });
+    };
+
+    const handleEditUserWorkgroupsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const workgroupId = parseInt(e.target.value);
+        const { checked } = e.target;
+        setEditUser(prev => {
+            const newWorkgroupIds = checked
+                ? [...prev.workgroupIds, workgroupId]
+                : prev.workgroupIds.filter(id => id !== workgroupId);
+            return { ...prev, workgroupIds: newWorkgroupIds };
         });
     };
 
@@ -264,6 +315,7 @@ const UserManagement = () => {
                 username: editUser.username,
                 email: editUser.email,
                 roles: editUser.roles,
+                workgroupIds: editUser.workgroupIds,
             };
 
             // Only include password if user entered one
@@ -277,7 +329,7 @@ const UserManagement = () => {
                 setUsers(prevUsers => prevUsers.map(u => u.id === editingUser.id ? data : u));
                 setShowEditUserModal(false);
                 setEditingUser(null);
-                setEditUser({ username: '', email: '', password: '', roles: [] }); // Reset form
+                setEditUser({ username: '', email: '', password: '', roles: [], workgroupIds: [] }); // Reset form
             } else {
                 const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
                 throw new Error(errorData.error || `Failed to update user: ${response.status}`);
@@ -366,6 +418,31 @@ const UserManagement = () => {
                                             ))}
                                         </div>
                                     </div>
+                                    <div className="mb-3">
+                                        <label className="form-label">Workgroups</label>
+                                        <div>
+                                            {workgroups.length > 0 ? (
+                                                workgroups.map(workgroup => (
+                                                    <div className="form-check" key={workgroup.id}>
+                                                        <input
+                                                            className="form-check-input"
+                                                            type="checkbox"
+                                                            id={`new-workgroup-${workgroup.id}`}
+                                                            value={workgroup.id}
+                                                            checked={newUser.workgroupIds.includes(workgroup.id)}
+                                                            onChange={handleNewUserWorkgroupsChange}
+                                                            disabled={isSubmittingUser}
+                                                        />
+                                                        <label className="form-check-label" htmlFor={`new-workgroup-${workgroup.id}`}>
+                                                            {workgroup.name}
+                                                        </label>
+                                                    </div>
+                                                ))
+                                            ) : (
+                                                <small className="text-muted">No workgroups available</small>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
                                 <div className="modal-footer">
                                     <button type="button" className="btn btn-secondary" onClick={() => setShowAddUserModal(false)} disabled={isSubmittingUser}>Close</button>
@@ -423,6 +500,31 @@ const UserManagement = () => {
                                             ))}
                                         </div>
                                     </div>
+                                    <div className="mb-3">
+                                        <label className="form-label">Workgroups</label>
+                                        <div>
+                                            {workgroups.length > 0 ? (
+                                                workgroups.map(workgroup => (
+                                                    <div className="form-check" key={workgroup.id}>
+                                                        <input
+                                                            className="form-check-input"
+                                                            type="checkbox"
+                                                            id={`edit-workgroup-${workgroup.id}`}
+                                                            value={workgroup.id}
+                                                            checked={editUser.workgroupIds.includes(workgroup.id)}
+                                                            onChange={handleEditUserWorkgroupsChange}
+                                                            disabled={isSubmittingEdit}
+                                                        />
+                                                        <label className="form-check-label" htmlFor={`edit-workgroup-${workgroup.id}`}>
+                                                            {workgroup.name}
+                                                        </label>
+                                                    </div>
+                                                ))
+                                            ) : (
+                                                <small className="text-muted">No workgroups available</small>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
                                 <div className="modal-footer">
                                     <button type="button" className="btn btn-secondary" onClick={() => setShowEditUserModal(false)} disabled={isSubmittingEdit}>Close</button>
@@ -443,6 +545,7 @@ const UserManagement = () => {
                         <th>Username</th>
                         <th>Email</th>
                         <th>Roles</th>
+                        <th>Workgroups</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -454,6 +557,17 @@ const UserManagement = () => {
                                 <td>{user.username}</td>
                                 <td>{user.email}</td>
                                 <td>{user.roles?.join(', ') || 'N/A'}</td>
+                                <td>
+                                    {user.workgroups && user.workgroups.length > 0 ? (
+                                        <div>
+                                            {user.workgroups.map(wg => (
+                                                <span key={wg.id} className="badge bg-info me-1">{wg.name}</span>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <span className="text-muted">None</span>
+                                    )}
+                                </td>
                                 <td>
                                     <button
                                         className="btn btn-sm btn-primary me-1"
@@ -479,7 +593,7 @@ const UserManagement = () => {
                         ))
                     ) : (
                         <tr>
-                            <td colSpan={5} className="text-center">
+                            <td colSpan={6} className="text-center">
                                 {/* Show different message based on whether there was an error or just no users */}
                                 {error && !error.includes("Access Denied") ? "Could not load users." : "No users found."}
                             </td>

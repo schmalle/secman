@@ -6,6 +6,7 @@ const Sidebar = () => {
     const [riskManagementExpanded, setRiskManagementExpanded] = useState(false);
     const [vulnMenuOpen, setVulnMenuOpen] = useState(false);
     const [ioMenuOpen, setIoMenuOpen] = useState(false);
+    const [adminMenuOpen, setAdminMenuOpen] = useState(false);
     const [isAdmin, setIsAdmin] = useState(false);
     const [hasVuln, setHasVuln] = useState(false);
 
@@ -197,12 +198,32 @@ const Sidebar = () => {
                     </a>
                 </li>
                 
-                {/* Admin section - direct link (only visible to admin users) */}
+                {/* Admin section - expandable menu (only visible to admin users) */}
                 {isAdmin && (
                     <li>
-                        <a href="/admin" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                            <i className="bi bi-speedometer2 me-2"></i> Admin
-                        </a>
+                        <div
+                            onClick={() => setAdminMenuOpen(!adminMenuOpen)}
+                            className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary cursor-pointer"
+                            style={{ cursor: 'pointer' }}
+                        >
+                            <i className="bi bi-speedometer2 me-2"></i>
+                            Admin
+                            <i className={`bi ${adminMenuOpen ? 'bi-chevron-down' : 'bi-chevron-right'} ms-auto`}></i>
+                        </div>
+                        {adminMenuOpen && (
+                            <ul className="list-unstyled ps-4">
+                                <li>
+                                    <a href="/admin" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-person-gear me-2"></i> User Management
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="/workgroups" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-people-fill me-2"></i> Workgroups
+                                    </a>
+                                </li>
+                            </ul>
+                        )}
                     </li>
                 )}
                 <li>

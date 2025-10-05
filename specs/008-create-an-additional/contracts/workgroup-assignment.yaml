@@ -1,0 +1,374 @@
+openapi: 3.0.3
+info:
+  title: Workgroup Assignment API
+  version: 1.0.0
+  description: |
+    Endpoints for assigning users and assets to workgroups (admin-only)
+    Feature: 008-create-an-additional (Workgroup-Based Access Control)
+
+paths:
+  /api/workgroups/{id}/users:
+    post:
+      summary: Assign users to workgroup
+      operationId: assignUsersToWorkgroup
+      tags: [Workgroup Assignment]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+          description: Workgroup ID
+        - name: X-User-Role
+          in: header
+          required: true
+          schema:
+            type: string
+            enum: [ADMIN]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - userIds
+              properties:
+                userIds:
+                  type: array
+                  items:
+                    type: integer
+                    format: int64
+                  description: Array of user IDs to add to workgroup
+                  example: [1, 2, 3]
+      responses:
+        '200':
+          description: Users assigned successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "3 users assigned to workgroup"
+                  workgroupId:
+                    type: integer
+                    format: int64
+                    example: 1
+                  addedUserIds:
+                    type: array
+                    items:
+                      type: integer
+                      format: int64
+                    example: [1, 2, 3]
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Invalid user ID: 999"
+        '404':
+          description: Workgroup not found
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/workgroups/{id}/users/{userId}:
+    delete:
+      summary: Remove user from workgroup
+      operationId: removeUserFromWorkgroup
+      tags: [Workgroup Assignment]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+          description: Workgroup ID
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+          description: User ID to remove
+        - name: X-User-Role
+          in: header
+          required: true
+          schema:
+            type: string
+            enum: [ADMIN]
+      responses:
+        '204':
+          description: User removed from workgroup successfully
+        '404':
+          description: Workgroup or user not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "User 5 not found in workgroup 1"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/workgroups/{id}/assets:
+    post:
+      summary: Assign assets to workgroup
+      operationId: assignAssetsToWorkgroup
+      tags: [Workgroup Assignment]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+          description: Workgroup ID
+        - name: X-User-Role
+          in: header
+          required: true
+          schema:
+            type: string
+            enum: [ADMIN]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - assetIds
+              properties:
+                assetIds:
+                  type: array
+                  items:
+                    type: integer
+                    format: int64
+                  description: Array of asset IDs to add to workgroup
+                  example: [10, 11, 12]
+      responses:
+        '200':
+          description: Assets assigned successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "3 assets assigned to workgroup"
+                  workgroupId:
+                    type: integer
+                    format: int64
+                    example: 1
+                  addedAssetIds:
+                    type: array
+                    items:
+                      type: integer
+                      format: int64
+                    example: [10, 11, 12]
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Invalid asset ID: 999"
+        '404':
+          description: Workgroup not found
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/workgroups/{id}/assets/{assetId}:
+    delete:
+      summary: Remove asset from workgroup
+      operationId: removeAssetFromWorkgroup
+      tags: [Workgroup Assignment]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+          description: Workgroup ID
+        - name: assetId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+          description: Asset ID to remove
+        - name: X-User-Role
+          in: header
+          required: true
+          schema:
+            type: string
+            enum: [ADMIN]
+      responses:
+        '204':
+          description: Asset removed from workgroup successfully
+        '404':
+          description: Workgroup or asset not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Asset 15 not found in workgroup 1"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/users/{userId}/workgroups:
+    get:
+      summary: Get workgroups for a user
+      operationId: getUserWorkgroups
+      tags: [Workgroup Assignment]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: X-User-Role
+          in: header
+          required: true
+          schema:
+            type: string
+            enum: [ADMIN]
+      responses:
+        '200':
+          description: List of workgroups user belongs to
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WorkgroupResponse'
+        '404':
+          description: User not found
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/assets/{assetId}/workgroups:
+    get:
+      summary: Get workgroups for an asset
+      operationId: getAssetWorkgroups
+      tags: [Workgroup Assignment]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: X-User-Role
+          in: header
+          required: true
+          schema:
+            type: string
+            enum: [ADMIN]
+      responses:
+        '200':
+          description: List of workgroups asset belongs to
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WorkgroupResponse'
+        '404':
+          description: Asset not found
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    WorkgroupResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
+        name:
+          type: string
+          example: "Engineering Team"
+        description:
+          type: string
+          nullable: true
+          example: "All engineers and developers"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+  responses:
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Unauthorized"
+
+    Forbidden:
+      description: Requires ADMIN role
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Forbidden: Requires ADMIN role"

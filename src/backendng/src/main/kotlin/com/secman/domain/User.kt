@@ -35,6 +35,20 @@ data class User(
     @Column(name = "role_name")
     var roles: MutableSet<Role> = mutableSetOf(Role.USER),
 
+    /**
+     * Many-to-many relationship with Workgroup
+     * Feature: 008-create-an-additional (Workgroup-Based Access Control)
+     * Users can belong to 0..n workgroups
+     * EAGER fetch: workgroup membership checked on every access control operation
+     */
+    @ManyToMany(fetch = FetchType.EAGER)
+    @JoinTable(
+        name = "user_workgroups",
+        joinColumns = [JoinColumn(name = "user_id")],
+        inverseJoinColumns = [JoinColumn(name = "workgroup_id")]
+    )
+    var workgroups: MutableSet<Workgroup> = mutableSetOf(),
+
     @Column(name = "created_at", updatable = false)
     var createdAt: Instant? = null,
 
