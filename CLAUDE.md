@@ -32,19 +32,21 @@
 ## Recent Changes
 - 007-please-evaluate-if: Updated Micronaut 4.4→4.5.4, Spring Security Crypto 6.3.5→6.4.4 (CVE fixes), Apache POI 5.3.0→5.4.1
 
+### Feature 008: Workgroup-Based Access Control (2025-10-04)
+- Added Workgroup domain entity with many-to-many relationships to User and Asset
+- Implemented dual ownership tracking: manual creator + scan uploader for assets
+- Created WorkgroupService with full CRUD and membership management
+- Created WorkgroupController with 9 ADMIN-only endpoints
+- Extended AssetFilterService for centralized access control filtering
+- Modified AssetController, VulnerabilityManagementController, ScanController for workgroup-based filtering
+- Updated UserController to include workgroup information in responses
+- Created WorkgroupManagement React component with full CRUD UI
+- Added workgroups navigation to Sidebar (ADMIN only)
+- Access control: ADMIN sees all, VULN respects workgroups, USER sees workgroup assets + owned assets
+
 ### Feature 006: MCP Tools for Security Data (2025-10-04)
-- Added Model Context Protocol (MCP) tools for AI assistant integration
-- Created 5 MCP tools: get_assets, get_scans, get_vulnerabilities, search_products, get_asset_profile
-- Added 3 new McpPermissions: ASSETS_READ, SCANS_READ, VULNERABILITIES_READ
-- Implemented sliding window rate limiting (1000 req/min, 50K req/hour)
-- Extended repositories with pagination and filtering methods
-- Added database indexes for performance (idx_vulnerability_severity, idx_scan_port_service)
-- Tools support pagination (max 500/page), filtering, and 50K total results limit
-- Registered all tools in McpToolRegistry with permission mappings
 
 ### Feature 005: Masscan XML Import (2025-10-04)
-- Added Masscan XML scan import functionality
-- Created MasscanParserService for XML parsing with XXE protection
 
 ### Feature 004: VULN Role & Vulnerability Management UI (2025-10-03)
 
@@ -55,6 +57,13 @@
 ### Feature 001: Admin Role Management (2024-10-01)
 
 ## Key Entities
+
+### Workgroup (NEW - Feature 008)
+- **Fields**: id, name, description, users (ManyToMany), assets (ManyToMany), createdAt, updatedAt
+- **Validation**: Name 1-100 chars, alphanumeric + spaces + hyphens, case-insensitive unique
+- **Relationships**: ManyToMany User (bidirectional), ManyToMany Asset (bidirectional)
+- **Join Tables**: user_workgroups, asset_workgroups
+- **Access**: ADMIN role only for CRUD operations
 
 ### VulnerabilityException (NEW - Feature 004)
 - **Fields**: id, exceptionType (IP/PRODUCT), targetValue, expirationDate, reason, createdBy, createdAt, updatedAt
@@ -67,10 +76,13 @@
 - **Relationships**: ManyToOne Asset (bidirectional, cascade delete)
 - **Indexes**: asset_id, (asset_id, scan_timestamp)
 
-### Asset (EXTENDED - Feature 003)
-- **New Fields**: groups (comma-separated), cloudAccountId, cloudInstanceId, adDomain, osVersion, vulnerabilities (OneToMany)
-- **Existing Fields**: id, name, type, ip, owner, description, lastSeen, scanResults
+### Asset (EXTENDED - Feature 003, 008)
+- **Workgroup Fields** (Feature 008): workgroups (ManyToMany), manualCreator (FK nullable), scanUploader (FK nullable)
+- **Metadata Fields**: groups (comma-separated), cloudAccountId, cloudInstanceId, adDomain, osVersion
+- **Core Fields**: id, name, type, ip, owner, description, lastSeen
+- **Relationships**: vulnerabilities (OneToMany), scanResults (OneToMany), workgroups (ManyToMany), manualCreator (ManyToOne User), scanUploader (ManyToOne User)
 - **Key Methods**: addScanResult(), mergeVulnerabilityData() (planned)
+- **Access Control**: Users see assets from their workgroups + assets they created/uploaded (Feature 008)
 
 ### Requirement
 - **Fields**: id, shortreq, chapter, norm, details, motivation, example, usecase
@@ -82,6 +94,12 @@
 - **Relationships**: ManyToOne Asset
 - **Source**: Nmap XML import
 
+### User (EXTENDED - Feature 008)
+- **Fields**: id, username, email, passwordHash, roles (ElementCollection), workgroups (ManyToMany), createdAt, updatedAt
+- **Roles**: USER, ADMIN, VULN
+- **Relationships**: workgroups (ManyToMany bidirectional)
+- **Access Control**: Users see resources from their workgroups + personally created/uploaded items
+
 ## API Endpoints
 
 ### Import
@@ -90,17 +108,32 @@
 - `POST /api/import/upload-masscan-xml` - Masscan scan import (Feature 005)
 - `POST /api/import/upload-vulnerability-xlsx` - Vulnerability import (Feature 003)
 
-### Assets
-- `GET /api/assets` - List assets
-- `GET /api/assets/{id}` - Asset detail
-- `GET /api/assets/{id}/vulnerabilities` - Asset vulnerabilities (Feature 003)
+### Assets (UPDATED - Feature 008)
+- `GET /api/assets` - List assets (workgroup-filtered: users see their workgroup assets + owned assets)
+- `GET /api/assets/{id}` - Asset detail (workgroup access control)
+- `POST /api/assets` - Create asset (tracks manual creator for ownership)
+- `GET /api/assets/{id}/vulnerabilities` - Asset vulnerabilities (workgroup-filtered)
 
-### Vulnerability Management (Feature 004)
-- `GET /api/vulnerabilities/current` - Current vulnerabilities (ADMIN, VULN)
+### Workgroup Management (NEW - Feature 008)
+- `POST /api/workgroups` - Create workgroup (ADMIN only)
+- `GET /api/workgroups` - List all workgroups (ADMIN only)
+- `GET /api/workgroups/{id}` - Get workgroup details (ADMIN only)
+- `PUT /api/workgroups/{id}` - Update workgroup (ADMIN only)
+- `DELETE /api/workgroups/{id}` - Delete workgroup (ADMIN only)
+- `POST /api/workgroups/{id}/users` - Assign users to workgroup (ADMIN only)
+- `DELETE /api/workgroups/{workgroupId}/users/{userId}` - Remove user from workgroup (ADMIN only)
+- `POST /api/workgroups/{id}/assets` - Assign assets to workgroup (ADMIN only)
+- `DELETE /api/workgroups/{workgroupId}/assets/{assetId}` - Remove asset from workgroup (ADMIN only)
+
+### Vulnerability Management (UPDATED - Feature 004, 008)
+- `GET /api/vulnerabilities/current` - Current vulnerabilities (ADMIN sees all, VULN respects workgroups)
 - `GET /api/vulnerability-exceptions` - List exceptions (ADMIN, VULN)
 - `POST /api/vulnerability-exceptions` - Create exception (ADMIN, VULN)
 - `PUT /api/vulnerability-exceptions/{id}` - Update exception (ADMIN, VULN)
 - `DELETE /api/vulnerability-exceptions/{id}` - Delete exception (ADMIN, VULN)
+
+### Scans (UPDATED - Feature 008)
+- `GET /api/scans` - List scans (workgroup-filtered: users see scans from workgroup members)
 
 ### Authentication
 - `POST /api/auth/login` - JWT login

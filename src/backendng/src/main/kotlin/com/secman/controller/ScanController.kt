@@ -4,6 +4,7 @@ import com.secman.dto.PortHistoryDTO
 import com.secman.dto.ScanSummaryDTO
 import com.secman.repository.ScanRepository
 import com.secman.repository.ScanResultRepository
+import com.secman.service.AssetFilterService
 import com.secman.service.ScanImportService
 import io.micronaut.data.model.Pageable
 import io.micronaut.http.HttpResponse
@@ -35,7 +36,8 @@ import org.slf4j.LoggerFactory
 open class ScanController(
     private val scanImportService: ScanImportService,
     private val scanRepository: ScanRepository,
-    private val scanResultRepository: ScanResultRepository
+    private val scanResultRepository: ScanResultRepository,
+    private val assetFilterService: AssetFilterService
 ) {
     private val logger = LoggerFactory.getLogger(ScanController::class.java)
 
@@ -105,41 +107,38 @@ open class ScanController(
     }
 
     /**
-     * List all scans with pagination
+     * List accessible scans with workgroup-based filtering
+     * Feature: 008-create-an-additional (Workgroup-Based Access Control)
      *
-     * GET /api/scans?page=0&size=20&scanType=nmap
-     * Auth: ADMIN role required
-     * Response: Page<ScanDTO>
+     * GET /api/scans?scanType=nmap
+     * Auth: Any authenticated user
+     * Response: List<Scan>
+     *
+     * FR-015, FR-016, FR-019: ADMIN sees all, regular users and VULN see scans from workgroup members
      *
      * Contract: specs/002-implement-a-parsing/contracts/list-scans.yaml
      */
-    @Get("/scans{?page,size,scanType}")
+    @Get("/scans{?scanType}")
     @Produces(MediaType.APPLICATION_JSON)
-    @Secured("ADMIN")
     open fun listScans(
-        @QueryValue(defaultValue = "0") page: Int,
-        @QueryValue(defaultValue = "20") size: Int,
+        authentication: Authentication,
         @QueryValue scanType: String?
     ): HttpResponse<*> {
         try {
-            // Validate pagination parameters
-            if (page < 0) {
-                return HttpResponse.badRequest(mapOf("error" to "page must be non-negative"))
-            }
-            if (size <= 0) {
-                return HttpResponse.badRequest(mapOf("error" to "size must be positive"))
-            }
+            logger.debug("Listing scans for user: {} with scanType: {}", authentication.name, scanType)
 
-            val pageable = Pageable.from(page, size)
+            // Use AssetFilterService for workgroup-based filtering
+            val accessibleScans = assetFilterService.getAccessibleScans(authentication)
 
-            val scansPage = if (scanType != null) {
-                scanRepository.findByScanTypeOrderByScanDateDesc(scanType, pageable)
+            // Apply scanType filter if provided
+            val filteredScans = if (scanType != null) {
+                accessibleScans.filter { it.scanType == scanType }
             } else {
-                scanRepository.findAllOrderByScanDateDesc(pageable)
+                accessibleScans
             }
 
             // Convert to DTOs
-            val dtoContent = scansPage.content.map { scan ->
+            val dtoContent = filteredScans.map { scan ->
                 mapOf(
                     "id" to scan.id,
                     "scanType" to scan.scanType,
@@ -152,18 +151,11 @@ open class ScanController(
                 )
             }
 
-            val response = mapOf(
-                "content" to dtoContent,
-                "totalElements" to scansPage.totalSize,
-                "totalPages" to scansPage.totalPages,
-                "size" to scansPage.size,
-                "number" to scansPage.pageNumber
-            )
-
-            return HttpResponse.ok(response)
+            logger.info("Returning {} accessible scans for user {}", filteredScans.size, authentication.name)
+            return HttpResponse.ok(dtoContent)
 
         } catch (e: Exception) {
-            logger.error("List scans failed: ${e.message}", e)
+            logger.error("List scans failed for user {}: {}", authentication.name, e.message, e)
             return HttpResponse.serverError(mapOf("error" to "Failed to list scans"))
         }
     }

@@ -3,6 +3,17 @@ import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDel
 import PortHistory from './PortHistory';
 import VulnerabilityHistory from './VulnerabilityHistory';
 
+interface WorkgroupSummary {
+  id: number;
+  name: string;
+}
+
+interface Workgroup {
+  id: number;
+  name: string;
+  description?: string;
+}
+
 interface Asset {
   id?: number;
   name: string;
@@ -17,20 +28,23 @@ interface Asset {
   adDomain?: string;
   createdAt?: string;
   updatedAt?: string;
+  workgroups?: WorkgroupSummary[];
 }
 
 const AssetManagement: React.FC = () => {
   const [assets, setAssets] = useState<Asset[]>([]);
+  const [workgroups, setWorkgroups] = useState<Workgroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
-  const [formData, setFormData] = useState<Asset>({
+  const [formData, setFormData] = useState<Asset & { workgroupIds?: number[] }>({
     name: '',
     type: '',
     ip: '',
     owner: '',
-    description: ''
+    description: '',
+    workgroupIds: []
   });
   const [showPortHistory, setShowPortHistory] = useState(false);
   const [selectedAssetForPorts, setSelectedAssetForPorts] = useState<Asset | null>(null);
@@ -39,6 +53,7 @@ const AssetManagement: React.FC = () => {
 
   useEffect(() => {
     fetchAssets();
+    fetchWorkgroups();
   }, []);
 
   const fetchAssets = async () => {
@@ -54,6 +69,18 @@ const AssetManagement: React.FC = () => {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchWorkgroups = async () => {
+    try {
+      const response = await authenticatedGet('/api/workgroups');
+      if (response.ok) {
+        const data: Workgroup[] = await response.json();
+        setWorkgroups(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch workgroups:', err);
     }
   };
 
@@ -77,7 +104,10 @@ const AssetManagement: React.FC = () => {
 
   const handleEdit = (asset: Asset) => {
     setEditingAsset(asset);
-    setFormData({ ...asset });
+    setFormData({
+      ...asset,
+      workgroupIds: asset.workgroups?.map(wg => wg.id) || []
+    });
     setShowForm(true);
   };
 
@@ -107,7 +137,8 @@ const AssetManagement: React.FC = () => {
       type: '',
       ip: '',
       owner: '',
-      description: ''
+      description: '',
+      workgroupIds: []
     });
     setEditingAsset(null);
     setShowForm(false);
@@ -116,6 +147,17 @@ const AssetManagement: React.FC = () => {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleWorkgroupChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const workgroupId = parseInt(e.target.value);
+    const { checked } = e.target;
+    setFormData(prev => {
+      const newWorkgroupIds = checked
+        ? [...(prev.workgroupIds || []), workgroupId]
+        : (prev.workgroupIds || []).filter(id => id !== workgroupId);
+      return { ...prev, workgroupIds: newWorkgroupIds };
+    });
   };
 
   const handleShowPorts = (asset: Asset) => {
@@ -256,6 +298,30 @@ const AssetManagement: React.FC = () => {
                       rows={3}
                     />
                   </div>
+                  <div className="mb-3">
+                    <label className="form-label">Workgroups</label>
+                    <div>
+                      {workgroups.length > 0 ? (
+                        workgroups.map(workgroup => (
+                          <div className="form-check" key={workgroup.id}>
+                            <input
+                              className="form-check-input"
+                              type="checkbox"
+                              id={`workgroup-${workgroup.id}`}
+                              value={workgroup.id}
+                              checked={(formData.workgroupIds || []).includes(workgroup.id)}
+                              onChange={handleWorkgroupChange}
+                            />
+                            <label className="form-check-label" htmlFor={`workgroup-${workgroup.id}`}>
+                              {workgroup.name}
+                            </label>
+                          </div>
+                        ))
+                      ) : (
+                        <small className="text-muted">No workgroups available</small>
+                      )}
+                    </div>
+                  </div>
                   <div className="d-flex justify-content-end">
                     <button type="submit" className="btn btn-success me-2">
                       {editingAsset ? 'Update' : 'Save'}
@@ -287,6 +353,7 @@ const AssetManagement: React.FC = () => {
                         <th>IP Address</th>
                         <th>Owner</th>
                         <th>Description</th>
+                        <th>Workgroups</th>
                         <th>Created</th>
                         <th>Actions</th>
                       </tr>
@@ -301,6 +368,17 @@ const AssetManagement: React.FC = () => {
                           <td>{asset.ip || '-'}</td>
                           <td>{asset.owner}</td>
                           <td>{asset.description || '-'}</td>
+                          <td>
+                            {asset.workgroups && asset.workgroups.length > 0 ? (
+                              <div>
+                                {asset.workgroups.map(wg => (
+                                  <span key={wg.id} className="badge bg-info me-1">{wg.name}</span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-muted">None</span>
+                            )}
+                          </td>
                           <td>
                             {asset.createdAt ? new Date(asset.createdAt).toLocaleDateString() : '-'}
                           </td>
