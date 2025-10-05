@@ -1,0 +1,104 @@
+{
+  "name": "get_asset_scan_results",
+  "description": "Retrieve all open ports and services discovered through network scans (Nmap, Masscan). Query by specific asset or across all accessible assets. Returns port number, service name, product, version, and discovery timestamp.",
+  "operation": "READ",
+  "permission": "SCANS_READ",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "page": {
+        "type": "number",
+        "description": "Page number (0-indexed)",
+        "minimum": 0,
+        "default": 0
+      },
+      "pageSize": {
+        "type": "number",
+        "description": "Number of items per page (max 1000)",
+        "minimum": 1,
+        "maximum": 1000,
+        "default": 100
+      },
+      "filters": {
+        "type": "object",
+        "description": "Optional filters to narrow results",
+        "properties": {
+          "assetId": {
+            "type": "number",
+            "description": "Filter by specific asset ID (must have access)"
+          },
+          "assetName": {
+            "type": "string",
+            "description": "Filter by asset name (partial match, case-insensitive)"
+          },
+          "port": {
+            "type": "number",
+            "description": "Filter by specific port number",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "service": {
+            "type": "string",
+            "description": "Filter by service name (partial match, case-insensitive)"
+          },
+          "product": {
+            "type": "string",
+            "description": "Filter by product name (partial match, case-insensitive)"
+          },
+          "scanType": {
+            "type": "string",
+            "enum": ["nmap", "masscan"],
+            "description": "Filter by scan type"
+          },
+          "discoveredAfter": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Filter by discovery timestamp (after this date)"
+          },
+          "discoveredBefore": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Filter by discovery timestamp (before this date)"
+          }
+        }
+      }
+    }
+  },
+  "outputSchema": {
+    "type": "object",
+    "required": ["scanResults", "total", "page", "pageSize", "totalPages"],
+    "properties": {
+      "scanResults": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": ["id", "assetId", "assetName", "port", "discoveredAt"],
+          "properties": {
+            "id": {"type": "number"},
+            "assetId": {"type": "number"},
+            "assetName": {"type": "string"},
+            "port": {"type": "number"},
+            "service": {"type": ["string", "null"]},
+            "product": {"type": ["string", "null"]},
+            "version": {"type": ["string", "null"]},
+            "discoveredAt": {"type": "string", "format": "date-time"},
+            "scanType": {"type": "string", "enum": ["nmap", "masscan"]}
+          }
+        }
+      },
+      "total": {"type": "number", "description": "Total number of matching scan results"},
+      "page": {"type": "number"},
+      "pageSize": {"type": "number"},
+      "totalPages": {"type": "number"}
+    }
+  },
+  "errorCodes": [
+    "INVALID_API_KEY",
+    "INSUFFICIENT_PERMISSIONS",
+    "RATE_LIMIT_EXCEEDED",
+    "INVALID_PAGINATION",
+    "TOTAL_RESULTS_EXCEEDED",
+    "ASSET_NOT_FOUND",
+    "QUERY_TIMEOUT"
+  ]
+}
