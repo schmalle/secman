@@ -51,6 +51,12 @@ const AssetManagement: React.FC = () => {
   const [showVulnerabilities, setShowVulnerabilities] = useState(false);
   const [selectedAssetForVulns, setSelectedAssetForVulns] = useState<Asset | null>(null);
 
+  // Filter states
+  const [nameFilter, setNameFilter] = useState<string>('');
+  const [ipFilter, setIpFilter] = useState<string>('');
+  const [ownerFilter, setOwnerFilter] = useState<string>('');
+  const [workgroupFilter, setWorkgroupFilter] = useState<string>('');
+
   useEffect(() => {
     fetchAssets();
     fetchWorkgroups();
@@ -178,6 +184,22 @@ const AssetManagement: React.FC = () => {
   const handleCloseVulnerabilities = () => {
     setShowVulnerabilities(false);
     setSelectedAssetForVulns(null);
+  };
+
+  // Filter assets based on current filter values
+  const getFilteredAssets = () => {
+    return assets.filter(asset => {
+      const nameMatch = !nameFilter || asset.name.toLowerCase().includes(nameFilter.toLowerCase());
+      const ipMatch = !ipFilter || (asset.ip && asset.ip.toLowerCase().includes(ipFilter.toLowerCase()));
+      const ownerMatch = !ownerFilter || asset.owner.toLowerCase().includes(ownerFilter.toLowerCase());
+      const workgroupMatch = !workgroupFilter || (
+        asset.workgroups && asset.workgroups.some(wg =>
+          wg.name.toLowerCase().includes(workgroupFilter.toLowerCase())
+        )
+      );
+
+      return nameMatch && ipMatch && ownerMatch && workgroupMatch;
+    });
   };
 
   if (loading) {
@@ -336,13 +358,90 @@ const AssetManagement: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Filters */}
+      <div className="row mb-4">
+        <div className="col-12">
+          <div className="card">
+            <div className="card-body">
+              <h6 className="card-title">Filters</h6>
+              <div className="row">
+                <div className="col-md-3">
+                  <label htmlFor="nameFilter" className="form-label">Name</label>
+                  <input
+                    type="text"
+                    id="nameFilter"
+                    className="form-control"
+                    placeholder="Filter by name..."
+                    value={nameFilter}
+                    onChange={(e) => setNameFilter(e.target.value)}
+                  />
+                </div>
+                <div className="col-md-3">
+                  <label htmlFor="ipFilter" className="form-label">IP Address</label>
+                  <input
+                    type="text"
+                    id="ipFilter"
+                    className="form-control"
+                    placeholder="Filter by IP..."
+                    value={ipFilter}
+                    onChange={(e) => setIpFilter(e.target.value)}
+                  />
+                </div>
+                <div className="col-md-3">
+                  <label htmlFor="ownerFilter" className="form-label">Owner</label>
+                  <input
+                    type="text"
+                    id="ownerFilter"
+                    className="form-control"
+                    placeholder="Filter by owner..."
+                    value={ownerFilter}
+                    onChange={(e) => setOwnerFilter(e.target.value)}
+                  />
+                </div>
+                <div className="col-md-3">
+                  <label htmlFor="workgroupFilter" className="form-label">Workgroups</label>
+                  <input
+                    type="text"
+                    id="workgroupFilter"
+                    className="form-control"
+                    placeholder="Filter by workgroup..."
+                    value={workgroupFilter}
+                    onChange={(e) => setWorkgroupFilter(e.target.value)}
+                  />
+                </div>
+              </div>
+              {(nameFilter || ipFilter || ownerFilter || workgroupFilter) && (
+                <div className="mt-2">
+                  <button
+                    className="btn btn-sm btn-outline-secondary"
+                    onClick={() => {
+                      setNameFilter('');
+                      setIpFilter('');
+                      setOwnerFilter('');
+                      setWorkgroupFilter('');
+                    }}
+                  >
+                    Clear All Filters
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="row">
         <div className="col-12">
           <div className="card">
             <div className="card-body">
-              <h5 className="card-title">Assets ({assets.length})</h5>
-              {assets.length === 0 ? (
-                <p className="text-muted">No assets found. Click "Add New Asset" to create one.</p>
+              <h5 className="card-title">Assets ({getFilteredAssets().length})</h5>
+              {getFilteredAssets().length === 0 ? (
+                <p className="text-muted">
+                  {assets.length === 0
+                    ? 'No assets found. Click "Add New Asset" to create one.'
+                    : 'No assets match the current filters.'}
+                </p>
               ) : (
                 <div className="table-responsive">
                   <table className="table table-striped table-hover">
@@ -359,7 +458,7 @@ const AssetManagement: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {assets.map((asset) => (
+                      {getFilteredAssets().map((asset) => (
                         <tr key={asset.id}>
                           <td>{asset.name}</td>
                           <td>

@@ -1,5 +1,46 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Component } from 'react';
 import { authenticatedGet } from '../utils/auth';
+
+// Error Boundary Component
+class ErrorBoundary extends Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('ScanManagement Error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="container-fluid p-4">
+          <div className="alert alert-danger" role="alert">
+            <h4 className="alert-heading">Something went wrong</h4>
+            <p>Error: {this.state.error?.message || 'Unknown error'}</p>
+            <hr />
+            <button
+              className="btn btn-primary"
+              onClick={() => window.location.reload()}
+            >
+              Reload Page
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 interface Scan {
   id: number;
@@ -49,7 +90,7 @@ interface PagedResponse {
  * - Feature: 002-implement-a-parsing (Nmap Scan Import)
  * - FR-007, FR-008: Scans page with admin-only access
  */
-const ScanManagement: React.FC = () => {
+const ScanManagementContent: React.FC = () => {
   const [scans, setScans] = useState<Scan[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -65,36 +106,63 @@ const ScanManagement: React.FC = () => {
   const [showDetailModal, setShowDetailModal] = useState(false);
 
   useEffect(() => {
+    console.log('ScanManagement: useEffect triggered, fetching scans...');
     fetchScans();
-  }, [currentPage, scanTypeFilter]);
+  }, [scanTypeFilter]);
 
   const fetchScans = async () => {
+    console.log('ScanManagement: fetchScans called');
     setLoading(true);
     setError(null);
 
     try {
-      let url = `/api/scans?page=${currentPage}&size=${pageSize}`;
+      // Backend doesn't support pagination, just pass scanType filter
+      let url = `/api/scans`;
       if (scanTypeFilter) {
-        url += `&scanType=${scanTypeFilter}`;
+        url += `?scanType=${scanTypeFilter}`;
       }
 
+      console.log('ScanManagement: Fetching from URL:', url);
       const response = await authenticatedGet(url);
+      console.log('ScanManagement: Response status:', response.status);
 
       if (response.ok) {
-        const data: PagedResponse = await response.json();
-        setScans(data.content);
-        setTotalPages(data.totalPages);
-        setTotalElements(data.totalElements);
+        const data = await response.json();
+        console.log('ScanManagement: Data received:', data);
+
+        // Handle both paginated and simple array responses
+        if (Array.isArray(data)) {
+          // Simple array response from backend
+          console.log('ScanManagement: Received simple array with', data.length, 'scans');
+          setScans(data);
+          setTotalElements(data.length);
+          setTotalPages(1);
+        } else if (data.content && Array.isArray(data.content)) {
+          // Paginated response
+          console.log('ScanManagement: Received paginated response');
+          setScans(data.content);
+          setTotalPages(data.totalPages || 0);
+          setTotalElements(data.totalElements || 0);
+        } else {
+          console.error('ScanManagement: Unexpected response format:', data);
+          setScans([]);
+          setTotalPages(0);
+          setTotalElements(0);
+        }
       } else if (response.status === 403) {
+        console.error('ScanManagement: Access denied (403)');
         setError('Access denied. This page is only accessible to administrators.');
       } else {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('ScanManagement: Error response:', errorData);
         setError(errorData.error || `Failed to fetch scans: ${response.status}`);
       }
     } catch (err) {
+      console.error('ScanManagement: Exception in fetchScans:', err);
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setLoading(false);
+      console.log('ScanManagement: fetchScans completed');
     }
   };
 
@@ -128,9 +196,16 @@ const ScanManagement: React.FC = () => {
     setSelectedScan(null);
   };
 
-  const formatDate = (dateString: string): string => {
-    const date = new Date(dateString);
-    return date.toLocaleString();
+  const formatDate = (dateString: string | null | undefined): string => {
+    if (!dateString) return 'N/A';
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'Invalid Date';
+      return date.toLocaleString();
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return 'Invalid Date';
+    }
   };
 
   const handlePageChange = (newPage: number) => {
@@ -149,6 +224,32 @@ const ScanManagement: React.FC = () => {
       <div className="d-flex justify-content-center p-5">
         <div className="spinner-border" role="status">
           <span className="visually-hidden">Loading...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (error && scans.length === 0) {
+    return (
+      <div className="container-fluid p-4">
+        <div className="row">
+          <div className="col-12">
+            <h2 className="mb-4">Scan Management</h2>
+            <div className="alert alert-danger" role="alert">
+              <i className="bi bi-exclamation-triangle me-2"></i>
+              {error}
+            </div>
+            <button
+              className="btn btn-primary"
+              onClick={() => {
+                setError(null);
+                fetchScans();
+              }}
+            >
+              <i className="bi bi-arrow-clockwise me-2"></i>
+              Retry
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -212,17 +313,17 @@ const ScanManagement: React.FC = () => {
                           onClick={() => handleScanClick(scan.id)}
                           style={{ cursor: 'pointer' }}
                         >
-                          <td>{scan.id}</td>
+                          <td>{scan.id || 'N/A'}</td>
                           <td>
                             <span className={`badge bg-${scan.scanType === 'nmap' ? 'primary' : 'secondary'}`}>
-                              {scan.scanType}
+                              {scan.scanType || 'unknown'}
                             </span>
                           </td>
-                          <td>{scan.filename}</td>
+                          <td>{scan.filename || 'N/A'}</td>
                           <td>{formatDate(scan.scanDate)}</td>
-                          <td>{scan.uploadedBy}</td>
-                          <td>{scan.hostCount}</td>
-                          <td>{scan.duration}</td>
+                          <td>{scan.uploadedBy || 'N/A'}</td>
+                          <td>{scan.hostCount || 0}</td>
+                          <td>{scan.duration || 'N/A'}</td>
                           <td>{formatDate(scan.createdAt)}</td>
                         </tr>
                       ))
@@ -231,47 +332,10 @@ const ScanManagement: React.FC = () => {
                 </table>
               </div>
 
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="d-flex justify-content-between align-items-center mt-3">
-                  <div className="text-muted">
-                    Showing {currentPage * pageSize + 1} to {Math.min((currentPage + 1) * pageSize, totalElements)} of {totalElements} scans
-                  </div>
-                  <nav>
-                    <ul className="pagination mb-0">
-                      <li className={`page-item ${currentPage === 0 ? 'disabled' : ''}`}>
-                        <button
-                          className="page-link"
-                          onClick={() => handlePageChange(currentPage - 1)}
-                          disabled={currentPage === 0}
-                        >
-                          Previous
-                        </button>
-                      </li>
-                      {[...Array(totalPages)].map((_, index) => (
-                        <li
-                          key={index}
-                          className={`page-item ${currentPage === index ? 'active' : ''}`}
-                        >
-                          <button
-                            className="page-link"
-                            onClick={() => handlePageChange(index)}
-                          >
-                            {index + 1}
-                          </button>
-                        </li>
-                      ))}
-                      <li className={`page-item ${currentPage === totalPages - 1 ? 'disabled' : ''}`}>
-                        <button
-                          className="page-link"
-                          onClick={() => handlePageChange(currentPage + 1)}
-                          disabled={currentPage === totalPages - 1}
-                        >
-                          Next
-                        </button>
-                      </li>
-                    </ul>
-                  </nav>
+              {/* Total count */}
+              {totalElements > 0 && (
+                <div className="text-muted mt-3">
+                  Total: {totalElements} scan{totalElements !== 1 ? 's' : ''}
                 </div>
               )}
             </div>
@@ -310,7 +374,7 @@ const ScanManagement: React.FC = () => {
                       </div>
                     </div>
 
-                    <h6>Discovered Hosts ({selectedScan.hosts.length})</h6>
+                    <h6>Discovered Hosts ({selectedScan.hosts?.length || 0})</h6>
                     <div className="table-responsive">
                       <table className="table table-sm">
                         <thead>
@@ -322,14 +386,22 @@ const ScanManagement: React.FC = () => {
                           </tr>
                         </thead>
                         <tbody>
-                          {selectedScan.hosts.map((host, index) => (
-                            <tr key={index}>
-                              <td><code>{host.ipAddress}</code></td>
-                              <td>{host.hostname || <span className="text-muted">N/A</span>}</td>
-                              <td>{formatDate(host.discoveredAt)}</td>
-                              <td>{host.portCount}</td>
+                          {selectedScan.hosts && selectedScan.hosts.length > 0 ? (
+                            selectedScan.hosts.map((host, index) => (
+                              <tr key={index}>
+                                <td><code>{host.ipAddress || 'N/A'}</code></td>
+                                <td>{host.hostname || <span className="text-muted">N/A</span>}</td>
+                                <td>{formatDate(host.discoveredAt)}</td>
+                                <td>{host.portCount || 0}</td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan={4} className="text-center text-muted">
+                                No hosts discovered in this scan.
+                              </td>
                             </tr>
-                          ))}
+                          )}
                         </tbody>
                       </table>
                     </div>
@@ -346,6 +418,15 @@ const ScanManagement: React.FC = () => {
         </div>
       )}
     </div>
+  );
+};
+
+// Wrapper component with error boundary
+const ScanManagement: React.FC = () => {
+  return (
+    <ErrorBoundary>
+      <ScanManagementContent />
+    </ErrorBoundary>
   );
 };
 

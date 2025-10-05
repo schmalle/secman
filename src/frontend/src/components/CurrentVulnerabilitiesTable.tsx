@@ -24,6 +24,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
     const [severityFilter, setSeverityFilter] = useState<string>('');
     const [systemFilter, setSystemFilter] = useState<string>('');
     const [exceptionFilter, setExceptionFilter] = useState<string>('');
+    const [productFilter, setProductFilter] = useState<string>('');
 
     // Sort states
     const [sortField, setSortField] = useState<keyof CurrentVulnerability>('scanTimestamp');
@@ -31,7 +32,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
 
     useEffect(() => {
         fetchVulnerabilities();
-    }, [severityFilter, systemFilter, exceptionFilter]);
+    }, [severityFilter, systemFilter, exceptionFilter, productFilter]);
 
     const fetchVulnerabilities = async () => {
         try {
@@ -39,7 +40,8 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
             const data = await getCurrentVulnerabilities(
                 severityFilter || undefined,
                 systemFilter || undefined,
-                exceptionFilter || undefined
+                exceptionFilter || undefined,
+                productFilter || undefined
             );
             setVulnerabilities(data);
             setError(null);
@@ -147,7 +149,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
 
             {/* Filters */}
             <div className="row mb-4">
-                <div className="col-md-4">
+                <div className="col-md-3">
                     <label htmlFor="severityFilter" className="form-label">Severity</label>
                     <select
                         id="severityFilter"
@@ -162,7 +164,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                         <option value="Low">Low</option>
                     </select>
                 </div>
-                <div className="col-md-4">
+                <div className="col-md-3">
                     <label htmlFor="systemFilter" className="form-label">System</label>
                     <input
                         type="text"
@@ -173,7 +175,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                         onChange={(e) => setSystemFilter(e.target.value)}
                     />
                 </div>
-                <div className="col-md-4">
+                <div className="col-md-3">
                     <label htmlFor="exceptionFilter" className="form-label">Exception Status</label>
                     <select
                         id="exceptionFilter"
@@ -186,6 +188,17 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                         <option value="NOT_EXCEPTED">Not Excepted</option>
                         <option value="EXPIRED">Expired</option>
                     </select>
+                </div>
+                <div className="col-md-3">
+                    <label htmlFor="productFilter" className="form-label">Product</label>
+                    <input
+                        type="text"
+                        id="productFilter"
+                        className="form-control"
+                        placeholder="Filter by product..."
+                        value={productFilter}
+                        onChange={(e) => setProductFilter(e.target.value)}
+                    />
                 </div>
             </div>
 
