@@ -19,11 +19,11 @@
 **Project Type**: web - frontend (Astro/React) + backend (Micronaut/Kotlin)
 
 ### Backend (`src/backendng/`)
-- **Domain**: JPA entities (Requirement, Norm, UseCase, Asset, Vulnerability)
+- **Domain**: JPA entities (Requirement, Norm, UseCase, Asset, Vulnerability, Release, RequirementSnapshot)
 - **Repository**: Micronaut Data repositories
 - **Service**: Business logic layer
 - **Controller**: RESTful APIs (@Controller, @Secured)
-- **Security**: JWT authentication, OAuth2, RBAC (USER, ADMIN, VULN roles)
+- **Security**: JWT authentication, OAuth2, RBAC (USER, ADMIN, VULN, RELEASE_MANAGER roles)
 
 ### Frontend (`src/frontend/`)
 - **Framework**: Astro with React islands
@@ -41,9 +41,11 @@
 - **Structure**: models/, services/, cli/, exporters/, lib/
 
 ## Recent Changes
+- 011-i-want-to: Added Release-Based Requirement Version Management (2025-10-05) - Point-in-time snapshots, historical exports, field-level comparison, RELEASE_MANAGER role
 - 010-please-review-the: Added Kotlin 2.1.0 / Java 21 (backend), TypeScript/JavaScript (Astro 5.14 + React 19)
 - 009-i-want-to: Added Kotlin 2.1.0 / Java 21 (backend MCP server) + Micronaut 4.4, Hibernate JPA, existing MCP server infrastructure from Feature 006
-- 007-please-evaluate-if: Updated Micronaut 4.4→4.5.4, Spring Security Crypto 6.3.5→6.4.4 (CVE fixes), Apache POI 5.3.0→5.4.1
+
+### Feature 011: Release-Based Requirement Version Management (2025-10-05)
 
 ### Feature 008: Workgroup-Based Access Control (2025-10-04)
 
@@ -60,6 +62,19 @@
 ### Feature 001: Admin Role Management (2024-10-01)
 
 ## Key Entities
+
+### Release (NEW - Feature 011)
+- **Fields**: id, version (semantic versioning), name, description, status (DRAFT/PUBLISHED/ARCHIVED), releaseDate, createdBy, createdAt, updatedAt
+- **Validation**: Unique version, semantic versioning format (MAJOR.MINOR.PATCH)
+- **Relationships**: OneToMany RequirementSnapshot (cascade delete)
+- **Access**: ADMIN, RELEASE_MANAGER roles for create/delete; all authenticated users for read
+
+### RequirementSnapshot (NEW - Feature 011)
+- **Fields**: id, release (FK), originalRequirementId, all requirement fields (shortreq, chapter, norm, details, motivation, example, usecase), usecaseIdsSnapshot (JSON), normIdsSnapshot (JSON), snapshotTimestamp
+- **Purpose**: Immutable point-in-time copy of requirement state
+- **Relationships**: ManyToOne Release (cascade delete)
+- **Indexes**: release_id, original_requirement_id
+- **Factory**: Companion object method `fromRequirement(requirement, release)` for snapshot creation
 
 ### Workgroup (NEW - Feature 008)
 - **Fields**: id, name, description, users (ManyToMany), assets (ManyToMany), createdAt, updatedAt
@@ -87,19 +102,20 @@
 - **Key Methods**: addScanResult(), mergeVulnerabilityData() (planned)
 - **Access Control**: Users see assets from their workgroups + assets they created/uploaded (Feature 008)
 
-### Requirement
+### Requirement (EXTENDED - Feature 011)
 - **Fields**: id, shortreq, chapter, norm, details, motivation, example, usecase
 - **Relationships**: ManyToMany Norm, ManyToMany UseCase
 - **Import**: Excel import via /api/import/upload-xlsx
+- **Deletion**: Prevented if requirement is frozen in any release (Feature 011)
 
 ### ScanResult (Feature 002)
 - **Fields**: id, asset (FK), port, service, product, version, discoveredAt
 - **Relationships**: ManyToOne Asset
 - **Source**: Nmap XML import
 
-### User (EXTENDED - Feature 008)
+### User (EXTENDED - Feature 008, 011)
 - **Fields**: id, username, email, passwordHash, roles (ElementCollection), workgroups (ManyToMany), createdAt, updatedAt
-- **Roles**: USER, ADMIN, VULN
+- **Roles**: USER, ADMIN, VULN, RELEASE_MANAGER (Feature 011)
 - **Relationships**: workgroups (ManyToMany bidirectional)
 - **Access Control**: Users see resources from their workgroups + personally created/uploaded items
 
@@ -137,6 +153,20 @@
 
 ### Scans (UPDATED - Feature 008)
 - `GET /api/scans` - List scans (workgroup-filtered: users see scans from workgroup members)
+
+### Release Management (NEW - Feature 011)
+- `POST /api/releases` - Create release (ADMIN, RELEASE_MANAGER)
+- `GET /api/releases?status=PUBLISHED` - List releases with optional status filter (authenticated)
+- `GET /api/releases/{id}` - Get release details (authenticated)
+- `DELETE /api/releases/{id}` - Delete release (ADMIN, RELEASE_MANAGER)
+- `GET /api/releases/{id}/requirements` - Get release snapshots (authenticated)
+- `GET /api/releases/compare?fromReleaseId={id}&toReleaseId={id}` - Compare two releases (authenticated)
+
+### Requirements Export (UPDATED - Feature 011)
+- `GET /api/requirements/export/xlsx?releaseId={id}` - Export to Excel (optional release parameter)
+- `GET /api/requirements/export/docx?releaseId={id}` - Export to Word (optional release parameter)
+- `GET /api/requirements/export/xlsx/translated/{lang}?releaseId={id}` - Export translated Excel
+- `GET /api/requirements/export/docx/translated/{lang}?releaseId={id}` - Export translated Word
 
 ### Authentication
 - `POST /api/auth/login` - JWT login

@@ -83,6 +83,16 @@ const Sidebar = () => {
                                     <i className="bi bi-diagram-3 me-2"></i> UseCase Management
                                 </a>
                             </li>
+                            <li>
+                                <a href="/releases" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                    <i className="bi bi-archive me-2"></i> Releases
+                                </a>
+                            </li>
+                            <li>
+                                <a href="/releases/compare" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                    <i className="bi bi-columns-gap me-2"></i> Compare Releases
+                                </a>
+                            </li>
                         </ul>
                     )}
                 </li>

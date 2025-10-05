@@ -1,0 +1,217 @@
+package com.secman.controller
+
+import com.secman.domain.Release
+import com.secman.domain.RequirementSnapshot
+import com.secman.repository.RequirementSnapshotRepository
+import com.secman.service.ReleaseService
+import io.micronaut.core.annotation.Introspected
+import io.micronaut.http.HttpResponse
+import io.micronaut.http.HttpStatus
+import io.micronaut.http.annotation.*
+import io.micronaut.security.annotation.Secured
+import io.micronaut.security.authentication.Authentication
+import io.micronaut.security.rules.SecurityRule
+import io.micronaut.serde.annotation.Serdeable
+import jakarta.inject.Inject
+import org.slf4j.LoggerFactory
+
+@Controller("/api/releases")
+@Secured(SecurityRule.IS_AUTHENTICATED)
+class ReleaseController(
+    @Inject private val releaseService: ReleaseService,
+    @Inject private val snapshotRepository: RequirementSnapshotRepository
+) {
+    private val logger = LoggerFactory.getLogger(ReleaseController::class.java)
+
+    /**
+     * POST /api/releases - Create new release
+     * Authorization: ADMIN or RELEASE_MANAGER only
+     */
+    @Post
+    @Secured("ADMIN", "RELEASE_MANAGER")
+    fun createRelease(
+        @Body request: ReleaseCreateRequest,
+        authentication: Authentication
+    ): HttpResponse<Map<String, Any>> {
+        logger.info("Creating release: version=${request.version}, name=${request.name}")
+
+        try {
+            val release = releaseService.createRelease(
+                version = request.version,
+                name = request.name,
+                description = request.description,
+                authentication = authentication
+            )
+
+            val snapshotCount = snapshotRepository.countByReleaseId(release.id!!)
+
+            return HttpResponse.status<Map<String, Any>>(HttpStatus.CREATED)
+                .body(toReleaseResponse(release, snapshotCount.toInt()))
+        } catch (e: IllegalArgumentException) {
+            logger.warn("Release creation failed: ${e.message}")
+            return HttpResponse.badRequest(
+                mapOf(
+                    "error" to "Bad Request",
+                    "message" to (e.message ?: "Invalid request")
+                )
+            )
+        }
+    }
+
+    /**
+     * GET /api/releases - List all releases
+     * Optional filter by status
+     */
+    @Get
+    fun listReleases(
+        @QueryValue("status") status: Release.ReleaseStatus?
+    ): HttpResponse<List<Map<String, Any>>> {
+        logger.debug("Listing releases with status filter: $status")
+
+        val releases = releaseService.listReleases(status)
+        val responseDtos = releases.map { release ->
+            val snapshotCount = snapshotRepository.countByReleaseId(release.id!!)
+            toReleaseResponse(release, snapshotCount.toInt())
+        }
+
+        return HttpResponse.ok(responseDtos)
+    }
+
+    /**
+     * GET /api/releases/{id} - Get release details
+     */
+    @Get("/{id}")
+    fun getReleaseById(@PathVariable id: Long): HttpResponse<Map<String, Any>> {
+        logger.debug("Getting release by ID: $id")
+
+        try {
+            val release = releaseService.getReleaseById(id)
+            val snapshotCount = snapshotRepository.countByReleaseId(id)
+
+            return HttpResponse.ok(toReleaseResponse(release, snapshotCount.toInt()))
+        } catch (e: NoSuchElementException) {
+            logger.warn("Release not found: $id")
+            return HttpResponse.notFound(
+                mapOf(
+                    "error" to "Not Found",
+                    "message" to (e.message ?: "Release not found")
+                )
+            )
+        }
+    }
+
+    /**
+     * DELETE /api/releases/{id} - Delete release
+     * Authorization: ADMIN or RELEASE_MANAGER only
+     */
+    @Delete("/{id}")
+    @Secured("ADMIN", "RELEASE_MANAGER")
+    fun deleteRelease(@PathVariable id: Long): HttpResponse<Void> {
+        logger.info("Deleting release: $id")
+
+        try {
+            releaseService.deleteRelease(id)
+            return HttpResponse.noContent()
+        } catch (e: NoSuchElementException) {
+            logger.warn("Release not found for deletion: $id")
+            return HttpResponse.notFound()
+        }
+    }
+
+    /**
+     * GET /api/releases/{id}/requirements - List snapshots in release
+     */
+    @Get("/{id}/requirements")
+    fun getReleaseRequirements(@PathVariable id: Long): HttpResponse<*> {
+        logger.debug("Getting requirements for release: $id")
+
+        try {
+            // Verify release exists
+            releaseService.getReleaseById(id)
+
+            // Get snapshots
+            val snapshots = snapshotRepository.findByReleaseId(id)
+            val responseDtos = snapshots.map { toSnapshotResponse(it) }
+
+            return HttpResponse.ok(responseDtos)
+        } catch (e: NoSuchElementException) {
+            logger.warn("Release not found: $id")
+            return HttpResponse.notFound(
+                mapOf(
+                    "error" to "Not Found",
+                    "message" to (e.message ?: "Release not found")
+                )
+            )
+        }
+    }
+
+    /**
+     * Convert Release entity to response DTO
+     */
+    private fun toReleaseResponse(release: Release, requirementCount: Int): Map<String, Any> {
+        return mapOf(
+            "id" to release.id!!,
+            "version" to release.version,
+            "name" to release.name,
+            "description" to (release.description ?: ""),
+            "status" to release.status.name,
+            "requirementCount" to requirementCount,
+            "releaseDate" to (release.releaseDate?.toString() ?: ""),
+            "createdBy" to (release.createdBy?.email ?: ""),
+            "createdAt" to release.createdAt!!.toString(),
+            "updatedAt" to release.updatedAt!!.toString()
+        )
+    }
+
+    /**
+     * Convert RequirementSnapshot to response DTO
+     */
+    private fun toSnapshotResponse(snapshot: RequirementSnapshot): Map<String, Any> {
+        // Parse JSON arrays for usecase and norm IDs
+        val usecaseIds = parseJsonIds(snapshot.usecaseIdsSnapshot)
+        val normIds = parseJsonIds(snapshot.normIdsSnapshot)
+
+        return mapOf(
+            "id" to snapshot.id!!,
+            "originalRequirementId" to snapshot.originalRequirementId,
+            "shortreq" to snapshot.shortreq,
+            "details" to (snapshot.details ?: ""),
+            "language" to (snapshot.language ?: ""),
+            "example" to (snapshot.example ?: ""),
+            "motivation" to (snapshot.motivation ?: ""),
+            "usecase" to (snapshot.usecase ?: ""),
+            "norm" to (snapshot.norm ?: ""),
+            "chapter" to (snapshot.chapter ?: ""),
+            "usecaseIds" to usecaseIds,
+            "normIds" to normIds,
+            "snapshotTimestamp" to snapshot.snapshotTimestamp.toString()
+        )
+    }
+
+    /**
+     * Parse JSON array string like "[1,2,3]" to List<Long>
+     */
+    private fun parseJsonIds(jsonString: String?): List<Long> {
+        if (jsonString.isNullOrBlank() || jsonString == "[]") return emptyList()
+
+        return try {
+            jsonString.trim('[', ']')
+                .split(",")
+                .filter { it.isNotBlank() }
+                .map { it.trim().toLong() }
+        } catch (e: Exception) {
+            logger.warn("Failed to parse JSON IDs: $jsonString", e)
+            emptyList()
+        }
+    }
+}
+
+/**
+ * Request DTO for creating a release
+ */
+@Serdeable
+data class ReleaseCreateRequest(
+    val version: String,
+    val name: String,
+    val description: String? = null
+)
