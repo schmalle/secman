@@ -214,7 +214,12 @@ const Sidebar = () => {
                             <ul className="list-unstyled ps-4">
                                 <li>
                                     <a href="/admin" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                        <i className="bi bi-person-gear me-2"></i> User Management
+                                        <i className="bi bi-gear me-2"></i> General
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="/admin/user-management" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-people-fill me-2"></i> Manage Users
                                     </a>
                                 </li>
                                 <li>

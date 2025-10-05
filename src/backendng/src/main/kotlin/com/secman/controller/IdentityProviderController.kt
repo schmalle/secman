@@ -34,6 +34,7 @@ open class IdentityProviderController(
         val type: String,
         val clientId: String,
         val clientSecret: String? = null,
+        val tenantId: String? = null,
         val discoveryUrl: String? = null,
         val authorizationUrl: String? = null,
         val tokenUrl: String? = null,
@@ -55,6 +56,7 @@ open class IdentityProviderController(
         val type: String?,
         val clientId: String?,
         val clientSecret: String?,
+        val tenantId: String?,
         val discoveryUrl: String?,
         val authorizationUrl: String?,
         val tokenUrl: String?,
@@ -68,6 +70,19 @@ open class IdentityProviderController(
         val buttonColor: String?,
         val roleMapping: String?,
         val claimMappings: String?
+    )
+
+    @Serdeable
+    data class TestProviderResponse(
+        val valid: Boolean,
+        val checks: List<ValidationCheck>
+    )
+
+    @Serdeable
+    data class ValidationCheck(
+        val name: String,
+        val status: String,  // "pass", "fail", "warning"
+        val message: String
     )
 
     /**
@@ -134,6 +149,18 @@ open class IdentityProviderController(
                 return HttpResponse.badRequest(ErrorResponse("Identity provider with name '${request.name}' already exists"))
             }
 
+            // Validate tenant ID for Microsoft providers
+            if (request.name.contains("Microsoft", ignoreCase = true)) {
+                if (request.tenantId.isNullOrBlank()) {
+                    return HttpResponse.badRequest(ErrorResponse("Tenant ID is required for Microsoft providers"))
+                }
+
+                val uuidRegex = Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+                if (!uuidRegex.matches(request.tenantId)) {
+                    return HttpResponse.badRequest(ErrorResponse("Tenant ID must be a valid UUID format"))
+                }
+            }
+
             // Parse and validate type
             val providerType = try {
                 IdentityProvider.ProviderType.valueOf(request.type.uppercase())
@@ -146,6 +173,7 @@ open class IdentityProviderController(
                 type = providerType,
                 clientId = request.clientId,
                 clientSecret = request.clientSecret,
+                tenantId = request.tenantId,
                 discoveryUrl = request.discoveryUrl,
                 authorizationUrl = request.authorizationUrl,
                 tokenUrl = request.tokenUrl,
@@ -193,9 +221,17 @@ open class IdentityProviderController(
                 }
             }
 
+            // Validate tenant ID if being updated for Microsoft providers
+            if (request.tenantId != null && provider.name.contains("Microsoft", ignoreCase = true)) {
+                val uuidRegex = Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+                if (!uuidRegex.matches(request.tenantId)) {
+                    return HttpResponse.badRequest(ErrorResponse("Tenant ID must be a valid UUID format"))
+                }
+            }
+
             // Update fields if provided
             request.name?.let { provider.name = it }
-            request.type?.let { 
+            request.type?.let {
                 provider.type = try {
                     IdentityProvider.ProviderType.valueOf(it.uppercase())
                 } catch (e: IllegalArgumentException) {
@@ -204,6 +240,7 @@ open class IdentityProviderController(
             }
             request.clientId?.let { provider.clientId = it }
             request.clientSecret?.let { provider.clientSecret = it }
+            request.tenantId?.let { provider.tenantId = it }
             request.discoveryUrl?.let { provider.discoveryUrl = it }
             request.authorizationUrl?.let { provider.authorizationUrl = it }
             request.tokenUrl?.let { provider.tokenUrl = it }
@@ -248,6 +285,94 @@ open class IdentityProviderController(
         } catch (e: Exception) {
             logger.error("Error deleting identity provider {}: {}", id, e.message, e)
             HttpResponse.serverError(ErrorResponse("Failed to delete identity provider: ${e.message}"))
+        }
+    }
+
+    /**
+     * Test identity provider configuration
+     */
+    @Post("/{id}/test")
+    @Secured(SecurityRule.IS_AUTHENTICATED)
+    open fun testProvider(@PathVariable id: Long): HttpResponse<*> {
+        return try {
+            val providerOpt = identityProviderRepository.findById(id)
+            if (!providerOpt.isPresent) {
+                return HttpResponse.notFound(ErrorResponse("Identity provider not found"))
+            }
+
+            val provider = providerOpt.get()
+            val checks = mutableListOf<ValidationCheck>()
+
+            // Check 1: Client ID present
+            checks.add(
+                if (provider.clientId.isNotBlank()) {
+                    ValidationCheck("Client ID", "pass", "Present")
+                } else {
+                    ValidationCheck("Client ID", "fail", "Missing")
+                }
+            )
+
+            // Check 2: Client Secret present
+            checks.add(
+                if (!provider.clientSecret.isNullOrBlank()) {
+                    ValidationCheck("Client Secret", "pass", "Present")
+                } else {
+                    ValidationCheck("Client Secret", "fail", "Missing")
+                }
+            )
+
+            // Check 3: Tenant ID valid UUID format (for Microsoft)
+            if (provider.name.contains("Microsoft", ignoreCase = true)) {
+                val uuidRegex = Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+                val tenantId = provider.tenantId
+                checks.add(
+                    when {
+                        tenantId.isNullOrBlank() -> ValidationCheck("Tenant ID", "fail", "Required for Microsoft providers")
+                        !uuidRegex.matches(tenantId) -> ValidationCheck("Tenant ID", "fail", "Invalid UUID format")
+                        else -> ValidationCheck("Tenant ID", "pass", "Valid UUID format")
+                    }
+                )
+            }
+
+            // Check 4: Authorization URL valid HTTPS
+            val authUrl = provider.authorizationUrl
+            checks.add(
+                when {
+                    authUrl.isNullOrBlank() -> ValidationCheck("Authorization URL", "fail", "Missing")
+                    authUrl.startsWith("https://") -> ValidationCheck("Authorization URL", "pass", "Valid HTTPS URL")
+                    else -> ValidationCheck("Authorization URL", "fail", "Must be HTTPS URL")
+                }
+            )
+
+            // Check 5: Token URL valid HTTPS
+            val tokenUrl = provider.tokenUrl
+            checks.add(
+                when {
+                    tokenUrl.isNullOrBlank() -> ValidationCheck("Token URL", "fail", "Missing")
+                    tokenUrl.startsWith("https://") -> ValidationCheck("Token URL", "pass", "Valid HTTPS URL")
+                    else -> ValidationCheck("Token URL", "fail", "Must be HTTPS URL")
+                }
+            )
+
+            // Check 6: Scopes include 'openid'
+            val scopes = provider.scopes
+            checks.add(
+                when {
+                    scopes.isNullOrBlank() -> ValidationCheck("Scopes", "fail", "Missing")
+                    scopes.contains("openid") -> ValidationCheck("Scopes", "pass", "Includes 'openid'")
+                    else -> ValidationCheck("Scopes", "warning", "Missing 'openid' scope")
+                }
+            )
+
+            val allPass = checks.all { it.status == "pass" }
+            val response = TestProviderResponse(valid = allPass, checks = checks)
+
+            logger.info("Tested identity provider {}: {}", provider.name, if (allPass) "PASS" else "FAIL")
+            HttpResponse.ok(response)
+
+        } catch (e: Exception) {
+            logger.error("Error testing identity provider {}: {}", id, e.message, e)
+            HttpResponse.serverError(ErrorResponse("Failed to test identity provider: ${e.message}"))
         }
     }
 }
