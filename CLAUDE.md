@@ -41,11 +41,11 @@
 - **Structure**: models/, services/, cli/, exporters/, lib/
 
 ## Recent Changes
+- 010-please-review-the: Added Kotlin 2.1.0 / Java 21 (backend), TypeScript/JavaScript (Astro 5.14 + React 19)
 - 009-i-want-to: Added Kotlin 2.1.0 / Java 21 (backend MCP server) + Micronaut 4.4, Hibernate JPA, existing MCP server infrastructure from Feature 006
 - 007-please-evaluate-if: Updated Micronaut 4.4→4.5.4, Spring Security Crypto 6.3.5→6.4.4 (CVE fixes), Apache POI 5.3.0→5.4.1
 
 ### Feature 008: Workgroup-Based Access Control (2025-10-04)
-- Added Workgroup domain entity with many-to-many relationships to User and Asset
 
 ### Feature 006: MCP Tools for Security Data (2025-10-04)
 

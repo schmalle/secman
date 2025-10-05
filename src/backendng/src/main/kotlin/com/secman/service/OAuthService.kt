@@ -7,6 +7,7 @@ import com.secman.domain.User
 import com.secman.repository.IdentityProviderRepository
 import com.secman.repository.OAuthStateRepository
 import com.secman.repository.UserRepository
+import com.secman.util.MicrosoftErrorMapper
 import io.micronaut.http.HttpRequest
 import io.micronaut.http.client.HttpClient
 import io.micronaut.http.client.annotation.Client
@@ -27,6 +28,7 @@ open class OAuthService(
     private val userRepository: UserRepository,
     private val tokenGenerator: TokenGenerator,
     private val objectMapper: ObjectMapper,
+    private val microsoftErrorMapper: MicrosoftErrorMapper,
     @Client("\${oauth.http-client.url:https://api.github.com}") private val githubApiClient: HttpClient,
     @Client private val genericHttpClient: HttpClient
 ) {
@@ -80,8 +82,13 @@ open class OAuthService(
             return null
         }
 
-        // Build authorization URL
-        val authUrl = provider.authorizationUrl ?: return null
+        // Build authorization URL - replace {tenantId} placeholder for Microsoft providers
+        var authUrl = provider.authorizationUrl ?: return null
+        val tenantId = provider.tenantId
+        if (!tenantId.isNullOrBlank() && authUrl.contains("{tenantId}")) {
+            authUrl = authUrl.replace("{tenantId}", tenantId)
+        }
+
         val clientId = URLEncoder.encode(provider.clientId, StandardCharsets.UTF_8)
         val encodedRedirectUri = URLEncoder.encode(redirectUri, StandardCharsets.UTF_8)
         val encodedState = URLEncoder.encode(state, StandardCharsets.UTF_8)
@@ -132,11 +139,53 @@ open class OAuthService(
                 return CallbackResult.Error("Unable to authenticate with ${provider.name}. Please try again.")
             }
 
-            // Get user info
-            val userInfo = getUserInfo(provider, tokenResponse.accessToken)
-            if (userInfo == null) {
-                oauthStateRepository.deleteByStateToken(state)
-                return CallbackResult.Error("Unable to retrieve user information from ${provider.name}. Please try again.")
+            // For OIDC providers (Microsoft), validate ID token
+            var emailFromIdToken: String? = null
+            if (tokenResponse.idToken != null) {
+                val idTokenClaims = parseIdToken(tokenResponse.idToken)
+                if (idTokenClaims == null) {
+                    oauthStateRepository.deleteByStateToken(state)
+                    return CallbackResult.Error("Invalid ID token received from ${provider.name}.")
+                }
+
+                // Validate tenant ID for Microsoft providers
+                if (!validateTenantId(provider, idTokenClaims)) {
+                    oauthStateRepository.deleteByStateToken(state)
+                    val errorMessage = if (microsoftErrorMapper.isTenantMismatchError("AADSTS50128")) {
+                        microsoftErrorMapper.mapError("AADSTS50128")
+                    } else {
+                        "User account not found in the configured tenant. Please contact your administrator."
+                    }
+                    return CallbackResult.Error(errorMessage)
+                }
+
+                // Extract email from ID token
+                emailFromIdToken = extractEmailFromIdToken(idTokenClaims)
+
+                // For Microsoft providers, email is required
+                if (provider.name.contains("Microsoft", ignoreCase = true) && emailFromIdToken.isNullOrBlank()) {
+                    oauthStateRepository.deleteByStateToken(state)
+                    return CallbackResult.Error("Email address is required but not provided by ${provider.name}. Please ensure your account has an email address configured.")
+                }
+            }
+
+            // Get user info (for GitHub and other providers without ID token)
+            val userInfo = if (emailFromIdToken != null) {
+                // For OIDC providers with ID token, create minimal UserInfoResponse
+                UserInfoResponse(
+                    id = "oidc-user",
+                    login = emailFromIdToken.substringBefore("@"),
+                    email = emailFromIdToken,
+                    name = emailFromIdToken.substringBefore("@")
+                )
+            } else {
+                // For OAuth 2.0 providers (GitHub), fetch from userinfo endpoint
+                val info = getUserInfo(provider, tokenResponse.accessToken)
+                if (info == null) {
+                    oauthStateRepository.deleteByStateToken(state)
+                    return CallbackResult.Error("Unable to retrieve user information from ${provider.name}. Please try again.")
+                }
+                info
             }
 
             // Find or create user
@@ -189,8 +238,14 @@ open class OAuthService(
 
     private fun exchangeCodeForToken(provider: IdentityProvider, code: String, redirectUri: String): TokenResponse? {
         return try {
-            val tokenUrl = provider.tokenUrl ?: return null
-            
+            var tokenUrl = provider.tokenUrl ?: return null
+
+            // Replace {tenantId} placeholder for Microsoft providers
+            val tenantId = provider.tenantId
+            if (!tenantId.isNullOrBlank() && tokenUrl.contains("{tenantId}")) {
+                tokenUrl = tokenUrl.replace("{tenantId}", tenantId)
+            }
+
             logger.debug("Exchanging code for token with provider: {}", provider.name)
             
             // For GitHub, the token endpoint expects form data
@@ -210,23 +265,33 @@ open class OAuthService(
             
             // Parse JSON response
             val responseData = parseJsonResponse(response)
-            
+
             // Check for error in response
             if (responseData.containsKey("error")) {
                 val error = responseData["error"] as? String
                 val errorDescription = responseData["error_description"] as? String
-                logger.error("OAuth token exchange error: {} - {}", error, errorDescription)
+
+                // Use Microsoft error mapper if it's a Microsoft provider
+                val friendlyMessage = if (provider.name.contains("Microsoft", ignoreCase = true)) {
+                    microsoftErrorMapper.mapError(error, errorDescription)
+                } else {
+                    errorDescription ?: error ?: "Token exchange failed"
+                }
+
+                logger.error("OAuth token exchange error: {} - {}", error, friendlyMessage)
                 return null
             }
-            
+
             val accessToken = responseData["access_token"] as? String ?: return null
             val tokenType = responseData["token_type"] as? String ?: "bearer"
             val scope = responseData["scope"] as? String ?: provider.scopes ?: ""
-            
+            val idToken = responseData["id_token"] as? String  // Extract ID token for OIDC providers
+
             TokenResponse(
                 accessToken = accessToken,
                 tokenType = tokenType,
-                scope = scope
+                scope = scope,
+                idToken = idToken
             )
             
         } catch (e: Exception) {
@@ -280,6 +345,79 @@ open class OAuthService(
         }
     }
 
+    /**
+     * Parse ID token JWT and extract claims (payload only, no signature verification)
+     */
+    private fun parseIdToken(idToken: String): Map<String, Any>? {
+        return try {
+            // JWT format: header.payload.signature
+            val parts = idToken.split(".")
+            if (parts.size != 3) {
+                logger.error("Invalid ID token format")
+                return null
+            }
+
+            // Decode base64url payload
+            val payload = parts[1]
+            val decodedBytes = Base64.getUrlDecoder().decode(payload)
+            val payloadJson = String(decodedBytes, StandardCharsets.UTF_8)
+
+            // Parse JSON
+            @Suppress("UNCHECKED_CAST")
+            objectMapper.readValue(payloadJson, Map::class.java) as Map<String, Any>
+        } catch (e: Exception) {
+            logger.error("Failed to parse ID token: {}", e.message, e)
+            null
+        }
+    }
+
+    /**
+     * Validate Microsoft tenant ID from ID token
+     */
+    private fun validateTenantId(provider: IdentityProvider, idTokenClaims: Map<String, Any>): Boolean {
+        // Only validate for Microsoft providers with configured tenant ID
+        if (!provider.name.contains("Microsoft", ignoreCase = true)) {
+            return true  // Not a Microsoft provider, skip validation
+        }
+
+        if (provider.tenantId.isNullOrBlank()) {
+            logger.warn("Microsoft provider {} has no tenant ID configured", provider.name)
+            return true  // No tenant ID configured, skip validation
+        }
+
+        val tokenTenantId = idTokenClaims["tid"] as? String
+        if (tokenTenantId.isNullOrBlank()) {
+            logger.error("ID token missing 'tid' claim")
+            return false
+        }
+
+        if (tokenTenantId != provider.tenantId) {
+            logger.error("Tenant ID mismatch: expected {}, got {}", provider.tenantId, tokenTenantId)
+            return false
+        }
+
+        return true
+    }
+
+    /**
+     * Extract email from ID token claims
+     */
+    private fun extractEmailFromIdToken(idTokenClaims: Map<String, Any>): String? {
+        // Try 'email' claim first
+        val email = idTokenClaims["email"] as? String
+        if (!email.isNullOrBlank()) {
+            return email
+        }
+
+        // Try 'preferred_username' as fallback (often contains email for Microsoft)
+        val preferredUsername = idTokenClaims["preferred_username"] as? String
+        if (!preferredUsername.isNullOrBlank() && preferredUsername.contains("@")) {
+            return preferredUsername
+        }
+
+        return null
+    }
+
     private fun findOrCreateUser(provider: IdentityProvider, userInfo: UserInfoResponse): User? {
         val email = userInfo.email ?: return null
         
@@ -317,7 +455,8 @@ open class OAuthService(
     data class TokenResponse(
         val accessToken: String,
         val tokenType: String,
-        val scope: String
+        val scope: String,
+        val idToken: String? = null
     )
 
     data class UserInfoResponse(

@@ -7,6 +7,7 @@ interface IdentityProvider {
   type: 'OIDC' | 'SAML';
   clientId: string;
   clientSecret?: string;
+  tenantId?: string;
   discoveryUrl?: string;
   authorizationUrl?: string;
   tokenUrl?: string;
@@ -68,7 +69,11 @@ export default function IdentityProviderManagement() {
     },
     microsoft: {
       name: 'Microsoft',
-      discoveryUrl: 'https://login.microsoftonline.com/common/v2.0/.well-known/openid_configuration',
+      tenantId: '',
+      discoveryUrl: 'https://login.microsoftonline.com/{tenantId}/v2.0/.well-known/openid_configuration',
+      authorizationUrl: 'https://login.microsoftonline.com/{tenantId}/oauth2/v2.0/authorize',
+      tokenUrl: 'https://login.microsoftonline.com/{tenantId}/oauth2/v2.0/token',
+      scopes: 'openid email profile',
       buttonText: 'Sign in with Microsoft',
       buttonColor: '#0078d4'
     },
@@ -77,6 +82,7 @@ export default function IdentityProviderManagement() {
       authorizationUrl: 'https://github.com/login/oauth/authorize',
       tokenUrl: 'https://github.com/login/oauth/access_token',
       userInfoUrl: 'https://api.github.com/user',
+      scopes: 'user:email',
       buttonText: 'Sign in with GitHub',
       buttonColor: '#333333'
     }
@@ -338,6 +344,24 @@ export default function IdentityProviderManagement() {
                       </div>
                     </div>
                   </div>
+
+                  {formData.name.toLowerCase().includes('microsoft') && (
+                    <div className="mb-3">
+                      <label className="form-label">Tenant ID *</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={formData.tenantId || ''}
+                        onChange={(e) => handleInputChange('tenantId', e.target.value)}
+                        placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                        pattern="[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+                        required
+                      />
+                      <div className="form-text">
+                        Azure AD Tenant ID (UUID format). Required for Microsoft authentication.
+                      </div>
+                    </div>
+                  )}
 
                   <div className="mb-3">
                     <label className="form-label">Discovery URL (OIDC)</label>
