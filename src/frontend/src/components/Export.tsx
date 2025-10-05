@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { authenticatedFetch } from '../utils/auth';
+import ReleaseSelector from './ReleaseSelector';
 
 interface UseCase {
     id: number;
@@ -14,6 +15,7 @@ const Export = () => {
     const [isLoadingUseCases, setIsLoadingUseCases] = useState<boolean>(false);
     const [selectedLanguage, setSelectedLanguage] = useState<string>('english');
     const [translationConfigured, setTranslationConfigured] = useState<boolean>(false);
+    const [selectedReleaseId, setSelectedReleaseId] = useState<number | null>(null);
 
     useEffect(() => {
         const fetchUseCases = async () => {
@@ -53,12 +55,17 @@ const Export = () => {
 
     const handleExportToWord = useCallback(async () => {
         setIsExporting(true);
-        
+
         const isTranslated = selectedLanguage !== 'english' && translationConfigured;
-        const endpoint = isTranslated 
+        let endpoint = isTranslated
             ? `/api/requirements/export/docx/translated/${selectedLanguage}`
             : '/api/requirements/export/docx';
-        
+
+        // Add releaseId parameter if a release is selected
+        if (selectedReleaseId !== null) {
+            endpoint += `?releaseId=${selectedReleaseId}`;
+        }
+
         setExportStatus(isTranslated ? `Translating and exporting to ${selectedLanguage}...` : 'Exporting to Word...');
         
         try {
@@ -107,7 +114,7 @@ const Export = () => {
         } finally {
             setIsExporting(false);
         }
-    }, [selectedLanguage, translationConfigured]);
+    }, [selectedLanguage, translationConfigured, selectedReleaseId]);
 
     const handleExportByUseCase = useCallback(async () => {
         if (!selectedUseCase) {
@@ -177,12 +184,17 @@ const Export = () => {
 
     const handleExportToExcel = useCallback(async () => {
         setIsExporting(true);
-        
+
         const isTranslated = selectedLanguage !== 'english' && translationConfigured;
-        const endpoint = isTranslated 
+        let endpoint = isTranslated
             ? `/api/requirements/export/xlsx/translated/${selectedLanguage}`
             : '/api/requirements/export/xlsx';
-        
+
+        // Add releaseId parameter if a release is selected
+        if (selectedReleaseId !== null) {
+            endpoint += `?releaseId=${selectedReleaseId}`;
+        }
+
         setExportStatus(isTranslated ? `Translating and exporting to Excel in ${selectedLanguage}...` : 'Exporting to Excel...');
         
         try {
@@ -231,7 +243,7 @@ const Export = () => {
         } finally {
             setIsExporting(false);
         }
-    }, [selectedLanguage, translationConfigured]);
+    }, [selectedLanguage, translationConfigured, selectedReleaseId]);
 
     const handleExportToExcelByUseCase = useCallback(async () => {
         if (!selectedUseCase) {
@@ -302,8 +314,24 @@ const Export = () => {
     return (
         <div className="container-fluid p-3">
             <div className="row">
-                {/* Language Selection - Top Left */}
-                <div className="col-md-4 mb-3">
+                {/* Release Version Selection */}
+                <div className="col-md-3 mb-3">
+                    <div className="card h-100 border-0 shadow-sm">
+                        <div className="card-body p-3">
+                            <h6 className="card-title mb-2">
+                                <i className="bi bi-tag me-2 text-primary"></i>Release Version
+                            </h6>
+                            <ReleaseSelector
+                                onReleaseChange={setSelectedReleaseId}
+                                selectedReleaseId={selectedReleaseId}
+                                className="release-selector-compact"
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                {/* Language Selection */}
+                <div className="col-md-3 mb-3">
                     <div className="card h-100 border-0 shadow-sm">
                         <div className="card-body p-3">
                             <h6 className="card-title mb-2">
@@ -332,8 +360,8 @@ const Export = () => {
                     </div>
                 </div>
 
-                {/* Use Case Selection - Top Right */}
-                <div className="col-md-4 mb-3">
+                {/* Use Case Selection */}
+                <div className="col-md-3 mb-3">
                     <div className="card h-100 border-0 shadow-sm">
                         <div className="card-body p-3">
                             <h6 className="card-title mb-2">
@@ -356,8 +384,8 @@ const Export = () => {
                     </div>
                 </div>
 
-                {/* Status - Top Right */}
-                <div className="col-md-4 mb-3">
+                {/* Status */}
+                <div className="col-md-3 mb-3">
                     {exportStatus && (
                         <div className={`alert mb-0 ${exportStatus.startsWith('Error:') ? 'alert-danger' : 'alert-success'}`} role="alert">
                             <small className="d-flex align-items-center">

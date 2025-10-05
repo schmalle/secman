@@ -6,12 +6,10 @@ interface Release {
     version: string;
     name: string;
     description: string;
-    status: 'DRAFT' | 'ACTIVE' | 'ARCHIVED';
+    status: 'DRAFT' | 'ACTIVE' | 'PUBLISHED' | 'ARCHIVED';
+    requirementCount: number;
     releaseDate: string | null;
-    createdBy: {
-        id: number;
-        username: string;
-    };
+    createdBy: string;
     createdAt: string;
     updatedAt: string;
 }
@@ -46,20 +44,25 @@ const ReleaseManagement = () => {
     const loadData = async () => {
         try {
             setLoading(true);
-            const [releasesResponse, statsResponse] = await Promise.all([
-                authenticatedFetch('/api/releases'),
-                authenticatedFetch('/api/releases/stats')
-            ]);
+            const releasesResponse = await authenticatedFetch('/api/releases');
 
-            if (!releasesResponse.ok || !statsResponse.ok) {
+            if (!releasesResponse.ok) {
                 throw new Error('Failed to load data');
             }
 
             const releasesData = await releasesResponse.json();
-            const statsData = await statsResponse.json();
-
             setReleases(releasesData);
-            setStats(statsData);
+
+            // Calculate stats from releases data
+            const publishedReleases = releasesData.filter((r: Release) => r.status === 'PUBLISHED');
+            const draftReleases = releasesData.filter((r: Release) => r.status === 'DRAFT');
+
+            setStats({
+                currentRelease: publishedReleases[0] || null,
+                draftCount: draftReleases.length,
+                totalReleases: releasesData.length,
+                activeAssessments: 0
+            });
         } catch (err) {
             setError('Failed to load release data');
             console.error('Error loading data:', err);
@@ -222,7 +225,8 @@ const ReleaseManagement = () => {
     const getStatusBadgeClass = (status: string) => {
         switch (status) {
             case 'DRAFT': return 'bg-warning text-dark';
-            case 'ACTIVE': return 'bg-success';
+            case 'ACTIVE': return 'bg-primary';
+            case 'PUBLISHED': return 'bg-success';
             case 'ARCHIVED': return 'bg-secondary';
             default: return 'bg-light text-dark';
         }
@@ -346,8 +350,9 @@ const ReleaseManagement = () => {
                                             <th>Version</th>
                                             <th>Name</th>
                                             <th>Status</th>
+                                            <th>Requirements</th>
                                             <th>Created By</th>
-                                            <th>Release Date</th>
+                                            <th>Created At</th>
                                             <th>Actions</th>
                                         </tr>
                                     </thead>
@@ -362,8 +367,8 @@ const ReleaseManagement = () => {
                                                         <strong>{release.name}</strong>
                                                         {release.description && (
                                                             <div className="text-muted small">
-                                                                {release.description.length > 50 
-                                                                    ? release.description.substring(0, 50) + '...' 
+                                                                {release.description.length > 50
+                                                                    ? release.description.substring(0, 50) + '...'
                                                                     : release.description}
                                                             </div>
                                                         )}
@@ -374,12 +379,22 @@ const ReleaseManagement = () => {
                                                         {release.status}
                                                     </span>
                                                 </td>
-                                                <td>{release.createdBy.username}</td>
                                                 <td>
-                                                    {release.releaseDate ? formatDate(release.releaseDate) : 'Not released'}
+                                                    <span className="badge bg-info">
+                                                        {release.requirementCount} frozen
+                                                    </span>
                                                 </td>
+                                                <td>{release.createdBy}</td>
+                                                <td>{formatDate(release.createdAt)}</td>
                                                 <td>
                                                     <div className="btn-group btn-group-sm">
+                                                        <button
+                                                            className="btn btn-outline-info"
+                                                            onClick={() => window.location.href = `/release/${release.id}/requirements`}
+                                                            title="View Requirements"
+                                                        >
+                                                            <i className="bi bi-list-check"></i>
+                                                        </button>
                                                         {release.status === 'DRAFT' && (
                                                             <>
                                                                 <button
@@ -390,13 +405,6 @@ const ReleaseManagement = () => {
                                                                     <i className="bi bi-pencil"></i>
                                                                 </button>
                                                                 <button
-                                                                    className="btn btn-outline-success"
-                                                                    onClick={() => handlePublishRelease(release.id)}
-                                                                    title="Publish"
-                                                                >
-                                                                    <i className="bi bi-send"></i>
-                                                                </button>
-                                                                <button
                                                                     className="btn btn-outline-danger"
                                                                     onClick={() => handleDeleteRelease(release.id)}
                                                                     title="Delete"
@@ -405,17 +413,9 @@ const ReleaseManagement = () => {
                                                                 </button>
                                                             </>
                                                         )}
-                                                        {release.status === 'ACTIVE' && (
-                                                            <button
-                                                                className="btn btn-outline-warning"
-                                                                onClick={() => handleArchiveRelease(release.id)}
-                                                                title="Archive"
-                                                            >
-                                                                <i className="bi bi-archive"></i>
-                                                            </button>
-                                                        )}
                                                         <button
                                                             className="btn btn-outline-secondary"
+                                                            onClick={() => window.location.href = `/export?releaseId=${release.id}`}
                                                             title="Export"
                                                         >
                                                             <i className="bi bi-download"></i>

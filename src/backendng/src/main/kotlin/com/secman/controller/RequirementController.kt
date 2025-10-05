@@ -1,9 +1,12 @@
 package com.secman.controller
 
 import com.secman.domain.Requirement
+import com.secman.domain.RequirementSnapshot
 import com.secman.domain.UseCase
 import com.secman.domain.Norm
 import com.secman.repository.RequirementRepository
+import com.secman.repository.RequirementSnapshotRepository
+import com.secman.repository.ReleaseRepository
 import com.secman.repository.UseCaseRepository
 import com.secman.repository.NormRepository
 import com.secman.service.TranslationService
@@ -36,7 +39,9 @@ open class RequirementController(
     private val useCaseRepository: UseCaseRepository,
     private val normRepository: NormRepository,
     private val translationService: TranslationService,
-    private val inputValidationService: InputValidationService
+    private val inputValidationService: InputValidationService,
+    private val releaseRepository: ReleaseRepository,
+    private val snapshotRepository: RequirementSnapshotRepository
 ) {
 
     @Serdeable
@@ -347,19 +352,45 @@ open class RequirementController(
     }
 
     @Get("/export/docx")
-    fun exportToDocx(): HttpResponse<StreamedFile> {
-        val requirements = requirementRepository.findAll().sortedWith(
-            compareBy<Requirement> { it.chapter ?: "" }.thenBy { it.id ?: 0 }
-        )
-        
-        val document = createWordDocument(requirements, "All Requirements")
+    fun exportToDocx(@Nullable @QueryValue("releaseId") releaseId: Long?): HttpResponse<*> {
+        val requirements: List<Requirement>
+        val filename: String
+        val title: String
+
+        if (releaseId != null) {
+            // Export from release snapshot
+            val releaseOpt = releaseRepository.findById(releaseId)
+            if (releaseOpt.isEmpty) {
+                return HttpResponse.notFound(mapOf("error" to "Release not found"))
+            }
+
+            val release = releaseOpt.get()
+            val snapshots = snapshotRepository.findByReleaseId(releaseId)
+
+            // Convert snapshots to Requirements for export
+            requirements = snapshots.map { snapshotToRequirement(it) }.sortedWith(
+                compareBy<Requirement> { it.chapter ?: "" }.thenBy { it.id ?: 0 }
+            )
+
+            val dateStr = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"))
+            filename = "requirements_v${release.version}_$dateStr.docx"
+            title = "Requirements - Release ${release.version}"
+        } else {
+            // Export current requirements (default behavior)
+            requirements = requirementRepository.findAll().sortedWith(
+                compareBy<Requirement> { it.chapter ?: "" }.thenBy { it.id ?: 0 }
+            )
+            filename = "requirements_export.docx"
+            title = "All Requirements"
+        }
+
+        val document = createWordDocument(requirements, title)
         val outputStream = ByteArrayOutputStream()
         document.write(outputStream)
         document.close()
 
         val inputStream = ByteArrayInputStream(outputStream.toByteArray())
-        val filename = "requirements_export.docx"
-        
+
         return HttpResponse.ok(StreamedFile(inputStream, MediaType.of("application/vnd.openxmlformats-officedocument.wordprocessingml.document")))
             .header("Content-Disposition", "attachment; filename=\"$filename\"")
     }
@@ -394,19 +425,42 @@ open class RequirementController(
     }
 
     @Get("/export/xlsx")
-    fun exportToExcel(): HttpResponse<StreamedFile> {
-        val requirements = requirementRepository.findAll().sortedWith(
-            compareBy<Requirement> { it.chapter ?: "" }.thenBy { it.id ?: 0 }
-        )
-        
+    fun exportToExcel(@Nullable @QueryValue("releaseId") releaseId: Long?): HttpResponse<*> {
+        val requirements: List<Requirement>
+        val filename: String
+
+        if (releaseId != null) {
+            // Export from release snapshot
+            val releaseOpt = releaseRepository.findById(releaseId)
+            if (releaseOpt.isEmpty) {
+                return HttpResponse.notFound(mapOf("error" to "Release not found"))
+            }
+
+            val release = releaseOpt.get()
+            val snapshots = snapshotRepository.findByReleaseId(releaseId)
+
+            // Convert snapshots to Requirements for export
+            requirements = snapshots.map { snapshotToRequirement(it) }.sortedWith(
+                compareBy<Requirement> { it.chapter ?: "" }.thenBy { it.id ?: 0 }
+            )
+
+            val dateStr = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"))
+            filename = "requirements_v${release.version}_$dateStr.xlsx"
+        } else {
+            // Export current requirements (default behavior)
+            requirements = requirementRepository.findAll().sortedWith(
+                compareBy<Requirement> { it.chapter ?: "" }.thenBy { it.id ?: 0 }
+            )
+            filename = "requirements_export.xlsx"
+        }
+
         val workbook = createExcelWorkbook(requirements)
         val outputStream = ByteArrayOutputStream()
         workbook.write(outputStream)
         workbook.close()
 
         val inputStream = ByteArrayInputStream(outputStream.toByteArray())
-        val filename = "requirements_export.xlsx"
-        
+
         return HttpResponse.ok(StreamedFile(inputStream, MediaType.of("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")))
             .header("Content-Disposition", "attachment; filename=\"$filename\"")
     }
@@ -1022,7 +1076,27 @@ open class RequirementController(
         for (i in 0 until headers.size) {
             sheet.autoSizeColumn(i)
         }
-        
+
         return workbook
+    }
+
+    /**
+     * Helper method to convert RequirementSnapshot to Requirement for export
+     * Note: This creates a detached Requirement entity (not persisted)
+     */
+    private fun snapshotToRequirement(snapshot: RequirementSnapshot): Requirement {
+        return Requirement(
+            id = snapshot.originalRequirementId,
+            shortreq = snapshot.shortreq,
+            details = snapshot.details,
+            language = snapshot.language,
+            example = snapshot.example,
+            motivation = snapshot.motivation,
+            usecase = snapshot.usecase,
+            norm = snapshot.norm,
+            chapter = snapshot.chapter,
+            usecases = mutableSetOf(),  // Snapshots store IDs as JSON, not objects
+            norms = mutableSetOf()       // For export purposes, empty sets are acceptable
+        )
     }
 }

@@ -44,7 +44,7 @@ data class Release(
     var updatedAt: Instant? = null
 ) {
     enum class ReleaseStatus {
-        DRAFT, PUBLISHED, ARCHIVED
+        DRAFT, ACTIVE, PUBLISHED, ARCHIVED
     }
 
     @PrePersist

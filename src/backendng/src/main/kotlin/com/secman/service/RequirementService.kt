@@ -2,13 +2,15 @@ package com.secman.service
 
 import com.secman.domain.Requirement
 import com.secman.repository.RequirementRepository
+import com.secman.repository.RequirementSnapshotRepository
 import jakarta.inject.Inject
 import jakarta.inject.Singleton
 import java.time.Instant
 
 @Singleton
 class RequirementService(
-    @Inject private val requirementRepository: RequirementRepository
+    @Inject private val requirementRepository: RequirementRepository,
+    @Inject private val snapshotRepository: RequirementSnapshotRepository
 ) {
 
     fun getAllRequirements(limit: Int? = null): List<Requirement> {
@@ -60,6 +62,15 @@ class RequirementService(
     }
 
     fun deleteRequirement(id: Long): Boolean {
+        // Check if requirement is frozen in any release
+        val snapshots = snapshotRepository.findByOriginalRequirementId(id)
+        if (snapshots.isNotEmpty()) {
+            val releaseVersions = snapshots.map { it.release.version }.distinct().sorted()
+            throw IllegalStateException(
+                "Cannot delete requirement: frozen in releases ${releaseVersions.joinToString(", ")}"
+            )
+        }
+
         return if (requirementRepository.existsById(id)) {
             requirementRepository.deleteById(id)
             true

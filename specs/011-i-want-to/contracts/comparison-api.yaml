@@ -1,0 +1,202 @@
+openapi: 3.0.3
+info:
+  title: Release Comparison API
+  description: API for comparing requirement snapshots across releases
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/releases/compare:
+    get:
+      summary: Compare two releases
+      description: Compare requirement snapshots between two releases, showing additions, deletions, and modifications
+      operationId: compareReleases
+      security:
+        - bearerAuth: []
+      tags:
+        - Release Comparison
+      parameters:
+        - name: fromReleaseId
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int64
+          description: ID of the earlier/baseline release
+          example: 1
+        - name: toReleaseId
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int64
+          description: ID of the later/comparison release
+          example: 2
+      responses:
+        '200':
+          description: Comparison result with categorized differences
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComparisonResult'
+        '400':
+          description: Invalid release IDs (same ID, non-existent)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Bad Request"
+                message: "fromReleaseId and toReleaseId must be different"
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          description: One or both releases not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Not Found"
+                message: "Release with ID 999 not found"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    ComparisonResult:
+      type: object
+      properties:
+        fromRelease:
+          $ref: '#/components/schemas/ReleaseInfo'
+        toRelease:
+          $ref: '#/components/schemas/ReleaseInfo'
+        added:
+          type: array
+          items:
+            $ref: '#/components/schemas/RequirementSnapshotSummary'
+          description: Requirements present in toRelease but not in fromRelease
+        deleted:
+          type: array
+          items:
+            $ref: '#/components/schemas/RequirementSnapshotSummary'
+          description: Requirements present in fromRelease but not in toRelease
+        modified:
+          type: array
+          items:
+            $ref: '#/components/schemas/RequirementDiff'
+          description: Requirements present in both releases but with field changes
+        unchanged:
+          type: integer
+          example: 235
+          description: Count of requirements with identical content in both releases
+
+    ReleaseInfo:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
+        version:
+          type: string
+          example: "1.0.0"
+        name:
+          type: string
+          example: "Q3 2024 Baseline"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2024-07-15T10:00:00Z"
+
+    RequirementSnapshotSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Snapshot ID
+        originalRequirementId:
+          type: integer
+          format: int64
+          description: Original requirement ID
+        shortreq:
+          type: string
+          example: "SEC-001: System must enforce authentication"
+        details:
+          type: string
+          nullable: true
+          example: "All API endpoints must require valid JWT tokens"
+
+    RequirementDiff:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Original requirement ID
+        shortreq:
+          type: string
+          example: "SEC-002: Data encryption at rest"
+          description: Requirement identifier for display
+        changes:
+          type: array
+          items:
+            $ref: '#/components/schemas/FieldChange'
+          description: List of field-level changes
+
+    FieldChange:
+      type: object
+      properties:
+        fieldName:
+          type: string
+          enum:
+            - shortreq
+            - details
+            - language
+            - example
+            - motivation
+            - usecase
+            - norm
+            - chapter
+          example: "details"
+        oldValue:
+          type: string
+          nullable: true
+          example: "System must encrypt data at rest using AES-256"
+          description: Value in fromRelease (null if field was empty)
+        newValue:
+          type: string
+          nullable: true
+          example: "System must encrypt data at rest using AES-256 or equivalent"
+          description: Value in toRelease (null if field was cleared)
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+          nullable: true
+
+  responses:
+    UnauthorizedError:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "Unauthorized"
+            message: "Please log in to access this resource"

@@ -1,0 +1,324 @@
+openapi: 3.0.3
+info:
+  title: Release Management API
+  description: API for managing requirement releases (version snapshots)
+  version: 1.0.0
+  contact:
+    name: secman Development Team
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/releases:
+    get:
+      summary: List all releases
+      description: Retrieve all releases with optional status filtering
+      operationId: listReleases
+      security:
+        - bearerAuth: []
+      tags:
+        - Release Management
+      parameters:
+        - name: status
+          in: query
+          description: Filter by release status
+          required: false
+          schema:
+            type: string
+            enum: [DRAFT, PUBLISHED, ARCHIVED]
+      responses:
+        '200':
+          description: List of releases
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReleaseResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+    post:
+      summary: Create new release
+      description: Create a new release and freeze all current requirements into immutable snapshots
+      operationId: createRelease
+      security:
+        - bearerAuth: [ADMIN, RELEASE_MANAGER]
+      tags:
+        - Release Management
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReleaseCreateRequest'
+      responses:
+        '201':
+          description: Release created successfully with frozen requirement snapshots
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReleaseResponse'
+        '400':
+          description: Validation error (duplicate version, invalid format, empty name)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+  /api/releases/{id}:
+    get:
+      summary: Get release details
+      description: Retrieve detailed information about a specific release
+      operationId: getRelease
+      security:
+        - bearerAuth: []
+      tags:
+        - Release Management
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Release details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReleaseResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+    delete:
+      summary: Delete release
+      description: Delete release and all associated requirement snapshots (cascade delete)
+      operationId: deleteRelease
+      security:
+        - bearerAuth: [ADMIN, RELEASE_MANAGER]
+      tags:
+        - Release Management
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '204':
+          description: Release deleted successfully
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+  /api/releases/{id}/requirements:
+    get:
+      summary: List requirements in release
+      description: Retrieve all requirement snapshots frozen in this release
+      operationId: getReleaseRequirements
+      security:
+        - bearerAuth: []
+      tags:
+        - Release Management
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Frozen requirement snapshots
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RequirementSnapshotResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    ReleaseCreateRequest:
+      type: object
+      required:
+        - version
+        - name
+      properties:
+        version:
+          type: string
+          pattern: '^\d+\.\d+\.\d+$'
+          example: "1.0.0"
+          description: Semantic version number (MAJOR.MINOR.PATCH)
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: "Q4 2024 Compliance Review"
+          description: Human-readable release name
+        description:
+          type: string
+          maxLength: 1000
+          nullable: true
+          example: "Annual compliance review for regulatory submission"
+          description: Optional detailed description of the release
+
+    ReleaseResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 123
+        version:
+          type: string
+          example: "1.0.0"
+        name:
+          type: string
+          example: "Q4 2024 Compliance Review"
+        description:
+          type: string
+          nullable: true
+          example: "Annual compliance review for regulatory submission"
+        status:
+          type: string
+          enum: [DRAFT, PUBLISHED, ARCHIVED]
+          example: "PUBLISHED"
+        requirementCount:
+          type: integer
+          example: 247
+          description: Number of requirements frozen in this release
+        releaseDate:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2024-10-05T14:30:00Z"
+        createdBy:
+          type: string
+          example: "john.doe@example.com"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2024-10-05T10:15:30Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2024-10-05T10:15:30Z"
+
+    RequirementSnapshotResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        originalRequirementId:
+          type: integer
+          format: int64
+          description: ID of the original requirement this is a snapshot of
+        shortreq:
+          type: string
+        details:
+          type: string
+          nullable: true
+        language:
+          type: string
+          nullable: true
+        example:
+          type: string
+          nullable: true
+        motivation:
+          type: string
+          nullable: true
+        usecase:
+          type: string
+          nullable: true
+        norm:
+          type: string
+          nullable: true
+        chapter:
+          type: string
+          nullable: true
+        usecaseIds:
+          type: array
+          items:
+            type: integer
+            format: int64
+          description: IDs of use cases associated at freeze time
+        normIds:
+          type: array
+          items:
+            type: integer
+            format: int64
+          description: IDs of norms associated at freeze time
+        snapshotTimestamp:
+          type: string
+          format: date-time
+          description: When this snapshot was created
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "Version must follow semantic versioning format (MAJOR.MINOR.PATCH)"
+        message:
+          type: string
+          nullable: true
+
+  responses:
+    UnauthorizedError:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "Unauthorized"
+            message: "Please log in to access this resource"
+
+    ForbiddenError:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "Forbidden"
+            message: "ADMIN or RELEASE_MANAGER role required"
+
+    NotFoundError:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "Not Found"
+            message: "Release not found"
