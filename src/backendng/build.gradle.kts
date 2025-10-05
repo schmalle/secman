@@ -39,6 +39,9 @@ dependencies {
     // Security
     implementation("io.micronaut.security:micronaut-security-jwt")
     implementation("io.micronaut.security:micronaut-security-oauth2")
+
+    // Redis (for rate limiting in Feature 009)
+    implementation("io.micronaut.redis:micronaut-redis-lettuce")
     
     // Validation
     implementation("io.micronaut.validation:micronaut-validation")

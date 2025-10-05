@@ -26,6 +26,24 @@ services:
       retries: 5
       start_period: 60s
 
+  redis:
+    image: redis:7-alpine
+    container_name: secman-redis-prod
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - secman-network
+    restart: always
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+
   backend:
     build:
       context: .
@@ -36,6 +54,7 @@ services:
       - DB_PASSWORD=${MYSQL_PASSWORD}
       - DB_URL=jdbc:mariadb://database:3306/secman
       - JWT_SECRET=${JWT_SECRET}
+      - REDIS_URI=redis://redis:6379
       - MICRONAUT_ENVIRONMENTS=prod
     ports:
       - "8080:8080"
@@ -43,6 +62,8 @@ services:
       - secman-network
     depends_on:
       database:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     restart: always
     healthcheck:
@@ -80,3 +101,4 @@ networks:
 
 volumes:
   database_data:
+  redis_data:

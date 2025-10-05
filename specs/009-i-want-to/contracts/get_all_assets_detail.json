@@ -1,0 +1,128 @@
+{
+  "name": "get_all_assets_detail",
+  "description": "Retrieve complete asset inventory with all stored attributes including workgroups, creators, and metadata. Supports filtering and pagination with workgroup-based access control.",
+  "operation": "READ",
+  "permission": "ASSETS_READ",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "page": {
+        "type": "number",
+        "description": "Page number (0-indexed)",
+        "minimum": 0,
+        "default": 0
+      },
+      "pageSize": {
+        "type": "number",
+        "description": "Number of items per page (max 1000)",
+        "minimum": 1,
+        "maximum": 1000,
+        "default": 100
+      },
+      "filters": {
+        "type": "object",
+        "description": "Optional filters to narrow results",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Filter by asset name (partial match, case-insensitive)",
+            "maxLength": 255
+          },
+          "type": {
+            "type": "string",
+            "description": "Filter by exact asset type"
+          },
+          "ip": {
+            "type": "string",
+            "description": "Filter by IP address (partial match, case-insensitive)",
+            "maxLength": 45
+          },
+          "owner": {
+            "type": "string",
+            "description": "Filter by owner (exact match)"
+          },
+          "workgroupId": {
+            "type": "number",
+            "description": "Filter by workgroup ID (must be user's workgroup)"
+          },
+          "adDomain": {
+            "type": "string",
+            "description": "Filter by Active Directory domain"
+          },
+          "cloudAccountId": {
+            "type": "string",
+            "description": "Filter by cloud account ID"
+          }
+        }
+      }
+    }
+  },
+  "outputSchema": {
+    "type": "object",
+    "required": ["assets", "total", "page", "pageSize", "totalPages"],
+    "properties": {
+      "assets": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": ["id", "name", "type", "createdAt", "updatedAt"],
+          "properties": {
+            "id": {"type": "number"},
+            "name": {"type": "string"},
+            "type": {"type": "string"},
+            "ip": {"type": ["string", "null"]},
+            "owner": {"type": ["string", "null"]},
+            "description": {"type": ["string", "null"]},
+            "groups": {"type": "array", "items": {"type": "string"}},
+            "cloudAccountId": {"type": ["string", "null"]},
+            "cloudInstanceId": {"type": ["string", "null"]},
+            "adDomain": {"type": ["string", "null"]},
+            "osVersion": {"type": ["string", "null"]},
+            "lastSeen": {"type": ["string", "null"], "format": "date-time"},
+            "workgroups": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {"type": "number"},
+                  "name": {"type": "string"},
+                  "description": {"type": ["string", "null"]}
+                }
+              }
+            },
+            "manualCreator": {
+              "type": ["object", "null"],
+              "properties": {
+                "id": {"type": "number"},
+                "username": {"type": "string"},
+                "email": {"type": "string"}
+              }
+            },
+            "scanUploader": {
+              "type": ["object", "null"],
+              "properties": {
+                "id": {"type": "number"},
+                "username": {"type": "string"},
+                "email": {"type": "string"}
+              }
+            },
+            "createdAt": {"type": "string", "format": "date-time"},
+            "updatedAt": {"type": "string", "format": "date-time"}
+          }
+        }
+      },
+      "total": {"type": "number", "description": "Total number of matching assets"},
+      "page": {"type": "number"},
+      "pageSize": {"type": "number"},
+      "totalPages": {"type": "number"}
+    }
+  },
+  "errorCodes": [
+    "INVALID_API_KEY",
+    "INSUFFICIENT_PERMISSIONS",
+    "RATE_LIMIT_EXCEEDED",
+    "INVALID_PAGINATION",
+    "TOTAL_RESULTS_EXCEEDED",
+    "QUERY_TIMEOUT"
+  ]
+}
