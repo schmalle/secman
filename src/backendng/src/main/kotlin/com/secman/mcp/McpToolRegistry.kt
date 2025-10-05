@@ -18,7 +18,12 @@ class McpToolRegistry(
     @Inject private val getScansTool: GetScansTool,
     @Inject private val getVulnerabilitiesTool: GetVulnerabilitiesTool,
     @Inject private val searchProductsTool: SearchProductsTool,
-    @Inject private val getAssetProfileTool: GetAssetProfileTool
+    @Inject private val getAssetProfileTool: GetAssetProfileTool,
+    // Feature 009: Enhanced MCP Tools with Authentication and Rate Limiting
+    @Inject private val getAllAssetsDetailTool: GetAllAssetsDetailTool,
+    @Inject private val getAssetScanResultsTool: GetAssetScanResultsTool,
+    @Inject private val getAllVulnerabilitiesDetailTool: GetAllVulnerabilitiesDetailTool,
+    @Inject private val getAssetCompleteProfileTool: GetAssetCompleteProfileTool
 ) {
     private val logger = LoggerFactory.getLogger(McpToolRegistry::class.java)
 
@@ -33,7 +38,12 @@ class McpToolRegistry(
             getScansTool,
             getVulnerabilitiesTool,
             searchProductsTool,
-            getAssetProfileTool
+            getAssetProfileTool,
+            // Feature 009: Enhanced MCP Tools with Authentication and Rate Limiting
+            getAllAssetsDetailTool,
+            getAssetScanResultsTool,
+            getAllVulnerabilitiesDetailTool,
+            getAssetCompleteProfileTool
         ).forEach { tool ->
             toolMap[tool.name] = tool
             logger.debug("Registered MCP tool: {}", tool.name)
@@ -148,6 +158,20 @@ class McpToolRegistry(
                 permissions.contains(McpPermission.SCANS_READ)
             }
             "get_asset_profile" -> {
+                permissions.contains(McpPermission.ASSETS_READ)
+            }
+
+            // Feature 009: Enhanced MCP Tools with Authentication and Rate Limiting
+            "get_all_assets_detail" -> {
+                permissions.contains(McpPermission.ASSETS_READ)
+            }
+            "get_asset_scan_results" -> {
+                permissions.contains(McpPermission.SCANS_READ)
+            }
+            "get_all_vulnerabilities_detail" -> {
+                permissions.contains(McpPermission.VULNERABILITIES_READ)
+            }
+            "get_asset_complete_profile" -> {
                 permissions.contains(McpPermission.ASSETS_READ)
             }
 

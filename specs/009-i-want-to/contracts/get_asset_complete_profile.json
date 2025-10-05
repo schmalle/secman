@@ -1,0 +1,157 @@
+{
+  "name": "get_asset_complete_profile",
+  "description": "Retrieve comprehensive profile for a single asset including all details, associated vulnerabilities, scan history, and discovered ports/services. Returns complete nested data in one request.",
+  "operation": "READ",
+  "permission": "ASSETS_READ",
+  "inputSchema": {
+    "type": "object",
+    "required": ["assetId"],
+    "properties": {
+      "assetId": {
+        "type": "number",
+        "description": "Asset ID to retrieve (must have access)"
+      },
+      "includeVulnerabilities": {
+        "type": "boolean",
+        "default": true,
+        "description": "Include vulnerability list in response"
+      },
+      "includeScanResults": {
+        "type": "boolean",
+        "default": true,
+        "description": "Include scan results (open ports) in response"
+      },
+      "vulnerabilityFilters": {
+        "type": "object",
+        "description": "Optional filters for nested vulnerabilities",
+        "properties": {
+          "severity": {
+            "type": "string",
+            "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW"]
+          },
+          "exceptionStatus": {
+            "type": "string",
+            "enum": ["all", "excepted_only", "not_excepted"],
+            "default": "not_excepted"
+          }
+        }
+      },
+      "scanResultFilters": {
+        "type": "object",
+        "description": "Optional filters for nested scan results",
+        "properties": {
+          "port": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "service": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "outputSchema": {
+    "type": "object",
+    "required": ["asset"],
+    "properties": {
+      "asset": {
+        "type": "object",
+        "required": ["id", "name", "type", "createdAt", "updatedAt"],
+        "properties": {
+          "id": {"type": "number"},
+          "name": {"type": "string"},
+          "type": {"type": "string"},
+          "ip": {"type": ["string", "null"]},
+          "owner": {"type": ["string", "null"]},
+          "description": {"type": ["string", "null"]},
+          "groups": {"type": "array", "items": {"type": "string"}},
+          "cloudAccountId": {"type": ["string", "null"]},
+          "cloudInstanceId": {"type": ["string", "null"]},
+          "adDomain": {"type": ["string", "null"]},
+          "osVersion": {"type": ["string", "null"]},
+          "lastSeen": {"type": ["string", "null"], "format": "date-time"},
+          "workgroups": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {"type": "number"},
+                "name": {"type": "string"},
+                "description": {"type": ["string", "null"]}
+              }
+            }
+          },
+          "manualCreator": {
+            "type": ["object", "null"],
+            "properties": {
+              "id": {"type": "number"},
+              "username": {"type": "string"},
+              "email": {"type": "string"}
+            }
+          },
+          "scanUploader": {
+            "type": ["object", "null"],
+            "properties": {
+              "id": {"type": "number"},
+              "username": {"type": "string"},
+              "email": {"type": "string"}
+            }
+          },
+          "createdAt": {"type": "string", "format": "date-time"},
+          "updatedAt": {"type": "string", "format": "date-time"},
+          "vulnerabilities": {
+            "type": "array",
+            "description": "List of vulnerabilities (empty if includeVulnerabilities=false)",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {"type": "number"},
+                "vulnerabilityId": {"type": "string"},
+                "cvssSeverity": {"type": "string"},
+                "vulnerableProductVersions": {"type": ["string", "null"]},
+                "daysOpen": {"type": "number"},
+                "scanTimestamp": {"type": "string", "format": "date-time"},
+                "isExcepted": {"type": "boolean"},
+                "exceptionReason": {"type": ["string", "null"]}
+              }
+            }
+          },
+          "scanResults": {
+            "type": "array",
+            "description": "List of discovered ports/services (empty if includeScanResults=false)",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {"type": "number"},
+                "port": {"type": "number"},
+                "service": {"type": ["string", "null"]},
+                "product": {"type": ["string", "null"]},
+                "version": {"type": ["string", "null"]},
+                "discoveredAt": {"type": "string", "format": "date-time"},
+                "scanType": {"type": "string"}
+              }
+            }
+          },
+          "statistics": {
+            "type": "object",
+            "properties": {
+              "totalVulnerabilities": {"type": "number"},
+              "criticalVulnerabilities": {"type": "number"},
+              "highVulnerabilities": {"type": "number"},
+              "totalOpenPorts": {"type": "number"}
+            }
+          }
+        }
+      }
+    }
+  },
+  "errorCodes": [
+    "INVALID_API_KEY",
+    "INSUFFICIENT_PERMISSIONS",
+    "RATE_LIMIT_EXCEEDED",
+    "ASSET_NOT_FOUND",
+    "QUERY_TIMEOUT"
+  ]
+}

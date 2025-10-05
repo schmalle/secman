@@ -3,6 +3,10 @@ micronaut:
     name: secman-backend-ng
   server:
     port: 8080
+    max-request-size: 20MB
+    multipart:
+      max-file-size: 20MB
+      disk: true
     cors:
       enabled: true
       configurations:
@@ -105,6 +109,11 @@ datasources:
     driverClassName: org.mariadb.jdbc.Driver
     username: ${DB_USERNAME:secman}
     password: ${DB_PASSWORD:CHANGEME}
+
+# Redis configuration for MCP rate limiting (Feature 009)
+redis:
+  uri: ${REDIS_URI:redis://localhost:6379}
+  ssl: ${REDIS_SSL:false}
     
 jpa:
   default:
