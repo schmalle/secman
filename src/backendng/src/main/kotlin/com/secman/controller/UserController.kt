@@ -15,7 +15,8 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
 @Secured("ADMIN")
 open class UserController(
     private val userRepository: UserRepository,
-    private val userDeletionValidator: com.secman.service.UserDeletionValidator
+    private val userDeletionValidator: com.secman.service.UserDeletionValidator,
+    private val workgroupRepository: com.secman.repository.WorkgroupRepository
 ) {
     
     private val passwordEncoder = BCryptPasswordEncoder()
@@ -25,7 +26,8 @@ open class UserController(
         val username: String,
         val email: String,
         val password: String,
-        val roles: List<String>? = null
+        val roles: List<String>? = null,
+        val workgroupIds: List<Long>? = null
     )
 
     @Serdeable
@@ -33,7 +35,8 @@ open class UserController(
         val username: String? = null,
         val email: String? = null,
         val password: String? = null,
-        val roles: List<String>? = null
+        val roles: List<String>? = null,
+        val workgroupIds: List<Long>? = null
     )
 
     @Serdeable
@@ -43,25 +46,44 @@ open class UserController(
         val email: String,
         val roles: List<String>,
         val createdAt: String?,
-        val updatedAt: String?
+        val updatedAt: String?,
+        val workgroups: List<WorkgroupSummary>? = null,
+        val workgroupCount: Int? = null
     ) {
         companion object {
-            fun from(user: User): UserResponse {
+            fun from(user: User, includeWorkgroups: Boolean = false): UserResponse {
                 return UserResponse(
                     id = user.id!!,
                     username = user.username,
                     email = user.email,
                     roles = user.roles.map { it.name },
                     createdAt = user.createdAt?.toString(),
-                    updatedAt = user.updatedAt?.toString()
+                    updatedAt = user.updatedAt?.toString(),
+                    workgroups = if (includeWorkgroups) {
+                        user.workgroups.map { WorkgroupSummary(it.id!!, it.name) }
+                    } else null,
+                    workgroupCount = if (includeWorkgroups) user.workgroups.size else null
                 )
             }
         }
     }
 
+    @Serdeable
+    data class WorkgroupSummary(
+        val id: Long,
+        val name: String
+    )
+
+    /**
+     * List all users with optional workgroup information
+     * Feature: 008-create-an-additional (Workgroup-Based Access Control)
+     *
+     * GET /api/users?includeWorkgroups=true
+     * FR-010: Display user workgroup membership in admin views
+     */
     @Get
-    fun list(): HttpResponse<List<UserResponse>> {
-        val users = userRepository.findAll().map { UserResponse.from(it) }
+    fun list(@QueryValue(defaultValue = "false") includeWorkgroups: Boolean): HttpResponse<List<UserResponse>> {
+        val users = userRepository.findAll().map { UserResponse.from(it, includeWorkgroups) }
         return HttpResponse.ok(users)
     }
 
@@ -106,22 +128,46 @@ open class UserController(
             )
 
             val savedUser = userRepository.save(user)
-            return HttpResponse.ok(UserResponse.from(savedUser))
+
+            // Assign workgroups if provided
+            request.workgroupIds?.let { workgroupIds ->
+                val workgroups = workgroupIds.mapNotNull { id ->
+                    workgroupRepository.findById(id).orElse(null)
+                }
+
+                if (workgroups.size != workgroupIds.size) {
+                    return HttpResponse.badRequest(mapOf("error" to "One or more workgroup IDs not found"))
+                }
+
+                savedUser.workgroups.clear()
+                savedUser.workgroups.addAll(workgroups)
+                userRepository.update(savedUser)
+            }
+
+            return HttpResponse.ok(UserResponse.from(savedUser, includeWorkgroups = true))
             
         } catch (e: Exception) {
             return HttpResponse.serverError<Any>().body(mapOf("error" to "Failed to create user: ${e.message}"))
         }
     }
 
+    /**
+     * Get user by ID with workgroup information
+     * Feature: 008-create-an-additional (Workgroup-Based Access Control)
+     *
+     * GET /api/users/{id}
+     * FR-010: Display user workgroup membership in detail views
+     */
     @Get("/{id}")
     fun get(@PathVariable id: Long): HttpResponse<*> {
         val userOptional = userRepository.findById(id)
-        
+
         if (userOptional.isEmpty) {
             return HttpResponse.notFound<Any>().body(mapOf("error" to "User not found"))
         }
 
-        return HttpResponse.ok(UserResponse.from(userOptional.get()))
+        // Always include workgroups in detail view
+        return HttpResponse.ok(UserResponse.from(userOptional.get(), includeWorkgroups = true))
     }
 
     @Put("/{id}")
@@ -175,8 +221,22 @@ open class UserController(
                 user.roles.addAll(roles)
             }
 
+            request.workgroupIds?.let { workgroupIds ->
+                val workgroups = workgroupIds.mapNotNull { id ->
+                    workgroupRepository.findById(id).orElse(null)
+                }
+
+                if (workgroups.size != workgroupIds.size) {
+                    return HttpResponse.badRequest(mapOf("error" to "One or more workgroup IDs not found"))
+                }
+
+                // Update workgroup assignments
+                user.workgroups.clear()
+                user.workgroups.addAll(workgroups)
+            }
+
             val savedUser = userRepository.update(user)
-            return HttpResponse.ok(UserResponse.from(savedUser))
+            return HttpResponse.ok(UserResponse.from(savedUser, includeWorkgroups = true))
             
         } catch (e: Exception) {
             return HttpResponse.serverError<Any>().body(mapOf("error" to "Failed to update user: ${e.message}"))

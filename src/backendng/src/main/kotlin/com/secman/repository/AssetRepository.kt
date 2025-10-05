@@ -55,4 +55,35 @@ interface AssetRepository : JpaRepository<Asset, Long> {
      * Related to: Feature 006 (MCP Tools for Security Data)
      */
     fun findByNameContainingIgnoreCase(name: String, pageable: Pageable): Page<Asset>
+
+    // Workgroup-Based Access Control - Feature 008
+
+    /**
+     * Find assets accessible to a specific user based on workgroup membership
+     * Returns assets that are either:
+     * 1. In workgroups the user belongs to
+     * 2. Created manually by the user
+     * 3. Discovered via scans uploaded by the user
+     *
+     * Related to: Feature 008 (Workgroup-Based Access Control) - FR-013, FR-017
+     *
+     * @param userId The user ID to filter by
+     * @return List of assets accessible to the user
+     */
+    fun findByWorkgroupsUsersIdOrManualCreatorIdOrScanUploaderIdOrderByNameAsc(
+        userId: Long,
+        manualCreatorId: Long,
+        scanUploaderId: Long
+    ): List<Asset>
+
+    /**
+     * Find assets in specific workgroups
+     * Used for admin workgroup management views
+     *
+     * Related to: Feature 008 (Workgroup-Based Access Control) - FR-009
+     *
+     * @param workgroupId The workgroup ID to filter by
+     * @return List of assets in the specified workgroup
+     */
+    fun findByWorkgroupsIdOrderByNameAsc(workgroupId: Long): List<Asset>
 }

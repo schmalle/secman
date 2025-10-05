@@ -1,0 +1,355 @@
+openapi: 3.0.3
+info:
+  title: Workgroup-Filtered List APIs
+  version: 1.0.0
+  description: |
+    Modified list endpoints that apply workgroup-based access control
+    Feature: 008-create-an-additional (Workgroup-Based Access Control)
+
+    Filtering Rules (FR-015, FR-016, FR-017, FR-017a, FR-018, FR-018a):
+    - ADMIN role: See ALL records (bypass workgroup filtering)
+    - VULN role: See records from assigned workgroups + personally created records
+    - USER role: See records from assigned workgroups + personally created records
+
+paths:
+  /api/assets:
+    get:
+      summary: List assets (workgroup-filtered)
+      operationId: listAssets
+      tags: [Assets]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: X-User-Id
+          in: header
+          required: true
+          schema:
+            type: integer
+            format: int64
+          description: Current user ID
+        - name: X-User-Role
+          in: header
+          required: true
+          schema:
+            type: string
+            enum: [ADMIN, VULN, USER]
+      responses:
+        '200':
+          description: List of assets visible to the user
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AssetResponse'
+              examples:
+                admin:
+                  summary: ADMIN sees all assets
+                  value:
+                    - id: 1
+                      name: "web-server-01"
+                      type: "Server"
+                      owner: "IT Team"
+                      workgroups: ["Engineering", "DevOps"]
+                    - id: 2
+                      name: "db-server-01"
+                      type: "Database"
+                      owner: "DBA Team"
+                      workgroups: ["Database Admins"]
+                user_in_engineering:
+                  summary: USER in "Engineering" workgroup sees only engineering assets + owned assets
+                  value:
+                    - id: 1
+                      name: "web-server-01"
+                      type: "Server"
+                      owner: "IT Team"
+                      workgroups: ["Engineering", "DevOps"]
+                      # Visible because user is in "Engineering" workgroup
+                user_no_workgroups:
+                  summary: USER in no workgroups sees only personally created assets
+                  value:
+                    - id: 10
+                      name: "test-laptop"
+                      type: "Laptop"
+                      owner: "alice"
+                      workgroups: []
+                      manualCreatorId: 5  # Current user's ID
+                      # Visible because user created it manually
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/vulnerabilities/current:
+    get:
+      summary: List current vulnerabilities (workgroup-filtered)
+      operationId: listCurrentVulnerabilities
+      tags: [Vulnerabilities]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: X-User-Id
+          in: header
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: X-User-Role
+          in: header
+          required: true
+          schema:
+            type: string
+            enum: [ADMIN, VULN, USER]
+      responses:
+        '200':
+          description: List of vulnerabilities for accessible assets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VulnerabilityResponse'
+              examples:
+                admin:
+                  summary: ADMIN sees all vulnerabilities
+                  value:
+                    - id: 1
+                      assetId: 1
+                      assetName: "web-server-01"
+                      vulnerabilityId: "CVE-2025-1234"
+                      cvssSeverity: "Critical"
+                user_in_devops:
+                  summary: VULN role in "DevOps" workgroup sees only DevOps vulnerabilities
+                  value:
+                    - id: 1
+                      assetId: 1
+                      assetName: "web-server-01"
+                      vulnerabilityId: "CVE-2025-1234"
+                      cvssSeverity: "Critical"
+                      # Visible because web-server-01 is in "DevOps" workgroup
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: VULN role required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Forbidden: Requires VULN or ADMIN role"
+
+  /api/scans:
+    get:
+      summary: List scans (workgroup-filtered)
+      operationId: listScans
+      tags: [Scans]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: X-User-Id
+          in: header
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: X-User-Role
+          in: header
+          required: true
+          schema:
+            type: string
+            enum: [ADMIN, VULN, USER]
+      responses:
+        '200':
+          description: List of scans for accessible assets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ScanResponse'
+              examples:
+                admin:
+                  summary: ADMIN sees all scans
+                  value:
+                    - id: 1
+                      assetId: 1
+                      assetName: "web-server-01"
+                      scanType: "nmap"
+                      uploadedBy: "alice"
+                      uploadedAt: "2025-10-01T10:00:00Z"
+                user_created_scan:
+                  summary: USER sees scans they uploaded + scans for their workgroup assets
+                  value:
+                    - id: 5
+                      assetId: 10
+                      assetName: "test-laptop"
+                      scanType: "nmap"
+                      uploadedBy: "bob"
+                      uploadedAt: "2025-10-03T14:30:00Z"
+                      # Visible because bob uploaded this scan
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/assets/{id}/vulnerabilities:
+    get:
+      summary: Get vulnerabilities for an asset (workgroup-filtered)
+      operationId: getAssetVulnerabilities
+      tags: [Vulnerabilities]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: X-User-Id
+          in: header
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: X-User-Role
+          in: header
+          required: true
+          schema:
+            type: string
+            enum: [ADMIN, VULN, USER]
+      responses:
+        '200':
+          description: List of vulnerabilities for the asset
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VulnerabilityResponse'
+        '403':
+          description: User does not have access to this asset
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Forbidden: Asset not in user's accessible workgroups"
+        '404':
+          description: Asset not found or not accessible
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    AssetResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        type:
+          type: string
+        owner:
+          type: string
+        ip:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        workgroups:
+          type: array
+          items:
+            type: string
+          description: Names of workgroups this asset belongs to
+        manualCreatorId:
+          type: integer
+          format: int64
+          nullable: true
+          description: User who manually created this asset (dual ownership - FR-020)
+        scanUploaderId:
+          type: integer
+          format: int64
+          nullable: true
+          description: User who uploaded scan that discovered this asset (dual ownership - FR-020)
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    VulnerabilityResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        assetId:
+          type: integer
+          format: int64
+        assetName:
+          type: string
+        vulnerabilityId:
+          type: string
+          description: CVE ID or vulnerability identifier
+        cvssSeverity:
+          type: string
+          enum: [Critical, High, Medium, Low, Informational]
+        vulnerableProductVersions:
+          type: string
+          nullable: true
+        daysOpen:
+          type: integer
+          format: int32
+        scanTimestamp:
+          type: string
+          format: date-time
+
+    ScanResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        assetId:
+          type: integer
+          format: int64
+          nullable: true
+        assetName:
+          type: string
+          nullable: true
+        scanType:
+          type: string
+          enum: [nmap, masscan]
+        uploadedBy:
+          type: string
+          description: Username of uploader
+        uploadedAt:
+          type: string
+          format: date-time
+        resultsCount:
+          type: integer
+          format: int32
+          description: Number of scan results (ports)
+
+  responses:
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Unauthorized"
