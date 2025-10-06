@@ -1,8 +1,8 @@
 plugins {
-    id("org.jetbrains.kotlin.jvm") version "2.1.0"
-    id("org.jetbrains.kotlin.plugin.allopen") version "2.1.0"
-    id("org.jetbrains.kotlin.plugin.jpa") version "2.1.0"
-    id("com.google.devtools.ksp") version "2.1.0-1.0.29"
+    id("org.jetbrains.kotlin.jvm") version "2.2.20"
+    id("org.jetbrains.kotlin.plugin.allopen") version "2.2.20"
+    id("org.jetbrains.kotlin.plugin.jpa") version "2.2.20"
+    id("com.google.devtools.ksp") version "2.2.20-2.0.3"
 
     //id("com.github.johnrengelman.shadow") version "8.1.1"
 
@@ -20,6 +20,7 @@ group = "com.secman"
 val kotlinVersion = project.properties.get("kotlinVersion")
 repositories {
     mavenCentral()
+	google()
 }
 
 dependencies {
@@ -49,7 +50,7 @@ dependencies {
     
     // Email
     implementation("io.micronaut.email:micronaut-email-javamail")
-    implementation("org.eclipse.angus:angus-mail:2.0.3")
+    implementation("org.eclipse.angus:angus-mail:2.0.5")
     
     // Serialization
     implementation("io.micronaut.serde:micronaut-serde-jackson")
@@ -70,13 +71,13 @@ dependencies {
     // Logging
     runtimeOnly("ch.qos.logback:logback-classic")
     // Bridge Log4j to Logback (required for Apache POI)
-    runtimeOnly("org.apache.logging.log4j:log4j-to-slf4j:2.24.3")
+    runtimeOnly("org.apache.logging.log4j:log4j-to-slf4j:2.25.2")
     
     // YAML configuration support
     runtimeOnly("org.yaml:snakeyaml")
     
     // Password encoding
-    implementation("org.springframework.security:spring-security-crypto:6.4.4")
+    implementation("org.springframework.security:spring-security-crypto:6.5.5")
     implementation("commons-logging:commons-logging:1.3.4")
     
     // Document generation (Apache POI)
@@ -84,7 +85,7 @@ dependencies {
     implementation("org.apache.poi:poi-scratchpad:5.4.1")
     
     // HTML processing for email
-    implementation("org.jsoup:jsoup:1.18.3")
+    implementation("org.jsoup:jsoup:1.21.2")
     
     // Testing
     testImplementation("io.micronaut:micronaut-http-client")
