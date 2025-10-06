@@ -1,22 +1,27 @@
 /**
  * Current Vulnerabilities Table Component
  *
- * Displays current vulnerabilities with filtering and sorting capabilities
+ * Displays current vulnerabilities with filtering, sorting, and pagination capabilities
  *
  * Features:
  * - Filter by severity, system, and exception status
  * - Sortable columns
  * - Exception status badges with tooltips
+ * - Pagination (50 items per page)
  * - Loading and error states
  *
  * Related to: Feature 004-i-want-to (VULN Role & Vulnerability Management UI)
  */
 
 import React, { useState, useEffect } from 'react';
-import { getCurrentVulnerabilities, type CurrentVulnerability } from '../services/vulnerabilityManagementService';
+import { 
+    getCurrentVulnerabilities, 
+    type CurrentVulnerability, 
+    type PaginatedVulnerabilitiesResponse 
+} from '../services/vulnerabilityManagementService';
 
 const CurrentVulnerabilitiesTable: React.FC = () => {
-    const [vulnerabilities, setVulnerabilities] = useState<CurrentVulnerability[]>([]);
+    const [paginatedResponse, setPaginatedResponse] = useState<PaginatedVulnerabilitiesResponse | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -26,13 +31,17 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
     const [exceptionFilter, setExceptionFilter] = useState<string>('');
     const [productFilter, setProductFilter] = useState<string>('');
 
+    // Pagination states
+    const [currentPage, setCurrentPage] = useState<number>(0);
+    const [pageSize] = useState<number>(50);
+
     // Sort states
     const [sortField, setSortField] = useState<keyof CurrentVulnerability>('scanTimestamp');
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
     useEffect(() => {
         fetchVulnerabilities();
-    }, [severityFilter, systemFilter, exceptionFilter, productFilter]);
+    }, [severityFilter, systemFilter, exceptionFilter, productFilter, currentPage]);
 
     const fetchVulnerabilities = async () => {
         try {
@@ -41,15 +50,22 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                 severityFilter || undefined,
                 systemFilter || undefined,
                 exceptionFilter || undefined,
-                productFilter || undefined
+                productFilter || undefined,
+                currentPage,
+                pageSize
             );
-            setVulnerabilities(data);
+            setPaginatedResponse(data);
             setError(null);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to fetch vulnerabilities');
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleFilterChange = () => {
+        // Reset to first page when filters change
+        setCurrentPage(0);
     };
 
     const handleSort = (field: keyof CurrentVulnerability) => {
@@ -62,7 +78,9 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
     };
 
     const getSortedVulnerabilities = () => {
-        return [...vulnerabilities].sort((a, b) => {
+        if (!paginatedResponse) return [];
+        
+        return [...paginatedResponse.content].sort((a, b) => {
             const aVal = a[sortField];
             const bVal = b[sortField];
 
@@ -84,17 +102,18 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
         return 'bg-secondary';
     };
 
-    const getExceptionBadge = (status: string) => {
-        switch (status) {
-            case 'EXCEPTED':
-                return <span className="badge bg-success" title="This vulnerability is excepted">Excepted</span>;
-            case 'NOT_EXCEPTED':
-                return <span className="badge bg-danger" title="No active exception">Not Excepted</span>;
-            case 'EXPIRED':
-                return <span className="badge bg-warning text-dark" title="Exception has expired">Expired</span>;
-            default:
-                return <span className="badge bg-secondary">{status}</span>;
+    const getExceptionBadge = (hasException: boolean, reason: string | null) => {
+        if (hasException) {
+            return (
+                <span 
+                    className="badge bg-success" 
+                    title={reason || "This vulnerability is excepted"}
+                >
+                    Excepted
+                </span>
+            );
         }
+        return <span className="badge bg-danger" title="No active exception">Not Excepted</span>;
     };
 
     const SortIcon: React.FC<{ field: keyof CurrentVulnerability }> = ({ field }) => {
@@ -102,6 +121,117 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
         return sortOrder === 'asc' ?
             <i className="bi bi-chevron-up ms-1"></i> :
             <i className="bi bi-chevron-down ms-1"></i>;
+    };
+
+    const handlePageChange = (newPage: number) => {
+        setCurrentPage(newPage);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const renderPagination = () => {
+        if (!paginatedResponse || paginatedResponse.totalPages <= 1) return null;
+
+        const { currentPage, totalPages, hasPrevious, hasNext, totalElements } = paginatedResponse;
+        const startItem = currentPage * pageSize + 1;
+        const endItem = Math.min((currentPage + 1) * pageSize, totalElements);
+
+        // Generate page numbers to show
+        const maxPagesToShow = 7;
+        let startPage = Math.max(0, currentPage - Math.floor(maxPagesToShow / 2));
+        let endPage = Math.min(totalPages - 1, startPage + maxPagesToShow - 1);
+        
+        // Adjust if we're near the end
+        if (endPage - startPage < maxPagesToShow - 1) {
+            startPage = Math.max(0, endPage - maxPagesToShow + 1);
+        }
+
+        const pageNumbers = [];
+        for (let i = startPage; i <= endPage; i++) {
+            pageNumbers.push(i);
+        }
+
+        return (
+            <div className="d-flex justify-content-between align-items-center mt-4">
+                <div className="text-muted">
+                    Showing {startItem} to {endItem} of {totalElements} vulnerabilities
+                </div>
+                <nav aria-label="Vulnerability pagination">
+                    <ul className="pagination mb-0">
+                        <li className={`page-item ${!hasPrevious ? 'disabled' : ''}`}>
+                            <button
+                                className="page-link"
+                                onClick={() => handlePageChange(currentPage - 1)}
+                                disabled={!hasPrevious}
+                                aria-label="Previous"
+                            >
+                                <span aria-hidden="true">&laquo;</span>
+                            </button>
+                        </li>
+                        
+                        {startPage > 0 && (
+                            <>
+                                <li className="page-item">
+                                    <button className="page-link" onClick={() => handlePageChange(0)}>
+                                        1
+                                    </button>
+                                </li>
+                                {startPage > 1 && (
+                                    <li className="page-item disabled">
+                                        <span className="page-link">...</span>
+                                    </li>
+                                )}
+                            </>
+                        )}
+
+                        {pageNumbers.map(pageNum => (
+                            <li 
+                                key={pageNum} 
+                                className={`page-item ${currentPage === pageNum ? 'active' : ''}`}
+                            >
+                                <button
+                                    className="page-link"
+                                    onClick={() => handlePageChange(pageNum)}
+                                >
+                                    {pageNum + 1}
+                                </button>
+                            </li>
+                        ))}
+
+                        {endPage < totalPages - 1 && (
+                            <>
+                                {endPage < totalPages - 2 && (
+                                    <li className="page-item disabled">
+                                        <span className="page-link">...</span>
+                                    </li>
+                                )}
+                                <li className="page-item">
+                                    <button 
+                                        className="page-link" 
+                                        onClick={() => handlePageChange(totalPages - 1)}
+                                    >
+                                        {totalPages}
+                                    </button>
+                                </li>
+                            </>
+                        )}
+
+                        <li className={`page-item ${!hasNext ? 'disabled' : ''}`}>
+                            <button
+                                className="page-link"
+                                onClick={() => handlePageChange(currentPage + 1)}
+                                disabled={!hasNext}
+                                aria-label="Next"
+                            >
+                                <span aria-hidden="true">&raquo;</span>
+                            </button>
+                        </li>
+                    </ul>
+                </nav>
+                <div className="text-muted">
+                    Page {currentPage + 1} of {totalPages}
+                </div>
+            </div>
+        );
     };
 
     if (loading) {
@@ -126,6 +256,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
     }
 
     const sortedVulnerabilities = getSortedVulnerabilities();
+    const totalCount = paginatedResponse?.totalElements || 0;
 
     return (
         <div className="container-fluid p-4">
@@ -155,7 +286,10 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                         id="severityFilter"
                         className="form-select"
                         value={severityFilter}
-                        onChange={(e) => setSeverityFilter(e.target.value)}
+                        onChange={(e) => {
+                            setSeverityFilter(e.target.value);
+                            handleFilterChange();
+                        }}
                     >
                         <option value="">All Severities</option>
                         <option value="Critical">Critical</option>
@@ -172,7 +306,10 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                         className="form-control"
                         placeholder="Filter by system name..."
                         value={systemFilter}
-                        onChange={(e) => setSystemFilter(e.target.value)}
+                        onChange={(e) => {
+                            setSystemFilter(e.target.value);
+                            handleFilterChange();
+                        }}
                     />
                 </div>
                 <div className="col-md-3">
@@ -181,12 +318,14 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                         id="exceptionFilter"
                         className="form-select"
                         value={exceptionFilter}
-                        onChange={(e) => setExceptionFilter(e.target.value)}
+                        onChange={(e) => {
+                            setExceptionFilter(e.target.value);
+                            handleFilterChange();
+                        }}
                     >
                         <option value="">All Statuses</option>
                         <option value="EXCEPTED">Excepted</option>
                         <option value="NOT_EXCEPTED">Not Excepted</option>
-                        <option value="EXPIRED">Expired</option>
                     </select>
                 </div>
                 <div className="col-md-3">
@@ -197,7 +336,10 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                         className="form-control"
                         placeholder="Filter by product..."
                         value={productFilter}
-                        onChange={(e) => setProductFilter(e.target.value)}
+                        onChange={(e) => {
+                            setProductFilter(e.target.value);
+                            handleFilterChange();
+                        }}
                     />
                 </div>
             </div>
@@ -208,102 +350,107 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                     <div className="card">
                         <div className="card-body">
                             <h5 className="card-title">
-                                Vulnerabilities ({sortedVulnerabilities.length})
+                                Vulnerabilities ({totalCount} total)
                             </h5>
                             {sortedVulnerabilities.length === 0 ? (
                                 <p className="text-muted">No vulnerabilities found.</p>
                             ) : (
-                                <div className="table-responsive">
-                                    <table className="table table-striped table-hover">
-                                        <thead>
-                                            <tr>
-                                                <th
-                                                    onClick={() => handleSort('assetName')}
-                                                    style={{ cursor: 'pointer' }}
-                                                >
-                                                    System
-                                                    <SortIcon field="assetName" />
-                                                </th>
-                                                <th
-                                                    onClick={() => handleSort('assetIp')}
-                                                    style={{ cursor: 'pointer' }}
-                                                >
-                                                    IP
-                                                    <SortIcon field="assetIp" />
-                                                </th>
-                                                <th
-                                                    onClick={() => handleSort('vulnerabilityId')}
-                                                    style={{ cursor: 'pointer' }}
-                                                >
-                                                    CVE
-                                                    <SortIcon field="vulnerabilityId" />
-                                                </th>
-                                                <th
-                                                    onClick={() => handleSort('cvssSeverity')}
-                                                    style={{ cursor: 'pointer' }}
-                                                >
-                                                    Severity
-                                                    <SortIcon field="cvssSeverity" />
-                                                </th>
-                                                <th
-                                                    onClick={() => handleSort('vulnerableProductVersions')}
-                                                    style={{ cursor: 'pointer' }}
-                                                >
-                                                    Product
-                                                    <SortIcon field="vulnerableProductVersions" />
-                                                </th>
-                                                <th
-                                                    onClick={() => handleSort('daysOpen')}
-                                                    style={{ cursor: 'pointer' }}
-                                                >
-                                                    Days Open
-                                                    <SortIcon field="daysOpen" />
-                                                </th>
-                                                <th
-                                                    onClick={() => handleSort('scanTimestamp')}
-                                                    style={{ cursor: 'pointer' }}
-                                                >
-                                                    Scan Date
-                                                    <SortIcon field="scanTimestamp" />
-                                                </th>
-                                                <th
-                                                    onClick={() => handleSort('exceptionStatus')}
-                                                    style={{ cursor: 'pointer' }}
-                                                >
-                                                    Exception
-                                                    <SortIcon field="exceptionStatus" />
-                                                </th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {sortedVulnerabilities.map((vuln) => (
-                                                <tr key={vuln.id}>
-                                                    <td>{vuln.assetName}</td>
-                                                    <td>{vuln.assetIp || '-'}</td>
-                                                    <td>
-                                                        <code>{vuln.vulnerabilityId || '-'}</code>
-                                                    </td>
-                                                    <td>
-                                                        <span className={`badge ${getSeverityBadgeClass(vuln.cvssSeverity)}`}>
-                                                            {vuln.cvssSeverity || 'Unknown'}
-                                                        </span>
-                                                    </td>
-                                                    <td style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                        {vuln.vulnerableProductVersions || '-'}
-                                                    </td>
-                                                    <td>{vuln.daysOpen || '-'}</td>
-                                                    <td>
-                                                        {vuln.scanTimestamp ?
-                                                            new Date(vuln.scanTimestamp).toLocaleDateString() : '-'}
-                                                    </td>
-                                                    <td>
-                                                        {getExceptionBadge(vuln.exceptionStatus)}
-                                                    </td>
+                                <>
+                                    <div className="table-responsive">
+                                        <table className="table table-striped table-hover">
+                                            <thead>
+                                                <tr>
+                                                    <th
+                                                        onClick={() => handleSort('assetName')}
+                                                        style={{ cursor: 'pointer' }}
+                                                    >
+                                                        System
+                                                        <SortIcon field="assetName" />
+                                                    </th>
+                                                    <th
+                                                        onClick={() => handleSort('assetIp')}
+                                                        style={{ cursor: 'pointer' }}
+                                                    >
+                                                        IP
+                                                        <SortIcon field="assetIp" />
+                                                    </th>
+                                                    <th
+                                                        onClick={() => handleSort('vulnerabilityId')}
+                                                        style={{ cursor: 'pointer' }}
+                                                    >
+                                                        CVE
+                                                        <SortIcon field="vulnerabilityId" />
+                                                    </th>
+                                                    <th
+                                                        onClick={() => handleSort('cvssSeverity')}
+                                                        style={{ cursor: 'pointer' }}
+                                                    >
+                                                        Severity
+                                                        <SortIcon field="cvssSeverity" />
+                                                    </th>
+                                                    <th
+                                                        onClick={() => handleSort('vulnerableProductVersions')}
+                                                        style={{ cursor: 'pointer' }}
+                                                    >
+                                                        Product
+                                                        <SortIcon field="vulnerableProductVersions" />
+                                                    </th>
+                                                    <th
+                                                        onClick={() => handleSort('daysOpen')}
+                                                        style={{ cursor: 'pointer' }}
+                                                    >
+                                                        Days Open
+                                                        <SortIcon field="daysOpen" />
+                                                    </th>
+                                                    <th
+                                                        onClick={() => handleSort('scanTimestamp')}
+                                                        style={{ cursor: 'pointer' }}
+                                                    >
+                                                        Scan Date
+                                                        <SortIcon field="scanTimestamp" />
+                                                    </th>
+                                                    <th
+                                                        onClick={() => handleSort('hasException')}
+                                                        style={{ cursor: 'pointer' }}
+                                                    >
+                                                        Exception
+                                                        <SortIcon field="hasException" />
+                                                    </th>
                                                 </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
+                                            </thead>
+                                            <tbody>
+                                                {sortedVulnerabilities.map((vuln) => (
+                                                    <tr key={vuln.id}>
+                                                        <td>{vuln.assetName}</td>
+                                                        <td>{vuln.assetIp || '-'}</td>
+                                                        <td>
+                                                            <code>{vuln.vulnerabilityId || '-'}</code>
+                                                        </td>
+                                                        <td>
+                                                            <span className={`badge ${getSeverityBadgeClass(vuln.cvssSeverity)}`}>
+                                                                {vuln.cvssSeverity || 'Unknown'}
+                                                            </span>
+                                                        </td>
+                                                        <td style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                            {vuln.vulnerableProductVersions || '-'}
+                                                        </td>
+                                                        <td>{vuln.daysOpen || '-'}</td>
+                                                        <td>
+                                                            {vuln.scanTimestamp ?
+                                                                new Date(vuln.scanTimestamp).toLocaleDateString() : '-'}
+                                                        </td>
+                                                        <td>
+                                                            {getExceptionBadge(vuln.hasException, vuln.exceptionReason)}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    
+                                    {/* Pagination Controls */}
+                                    {renderPagination()}
+                                </>
                             )}
                         </div>
                     </div>
