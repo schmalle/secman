@@ -17,6 +17,8 @@
 import React, { useState, useEffect } from 'react';
 import { releaseService, type Release, type PaginatedResponse } from '../services/releaseService';
 import { hasRole, getUser } from '../utils/auth';
+import ReleaseCreateModal from './ReleaseCreateModal';
+import Toast from './Toast';
 
 interface ReleaseListProps {
     // No props needed - standalone component
@@ -38,6 +40,20 @@ const ReleaseList: React.FC<ReleaseListProps> = () => {
     const [totalPages, setTotalPages] = useState(1);
     const [totalItems, setTotalItems] = useState(0);
     const pageSize = 20;
+
+    // Modal state
+    const [showCreateModal, setShowCreateModal] = useState(false);
+
+    // Toast state
+    const [toast, setToast] = useState<{
+        show: boolean;
+        message: string;
+        type: 'success' | 'error' | 'warning' | 'info';
+    }>({
+        show: false,
+        message: '',
+        type: 'success',
+    });
 
     // User/Role info
     const user = getUser();
@@ -109,6 +125,34 @@ const ReleaseList: React.FC<ReleaseListProps> = () => {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
+    // Handle create button click
+    function handleCreateClick() {
+        setShowCreateModal(true);
+    }
+
+    // Handle create success
+    function handleCreateSuccess() {
+        // Show success toast
+        setToast({
+            show: true,
+            message: 'Release created successfully! It has been added to the list with DRAFT status.',
+            type: 'success',
+        });
+
+        // Reload releases
+        loadReleases();
+    }
+
+    // Handle modal close
+    function handleModalClose() {
+        setShowCreateModal(false);
+    }
+
+    // Handle toast close
+    function handleToastClose() {
+        setToast((prev) => ({ ...prev, show: false }));
+    }
+
     // Navigate to detail page
     function handleReleaseClick(releaseId: number) {
         window.location.href = `/releases/${releaseId}`;
@@ -172,7 +216,7 @@ const ReleaseList: React.FC<ReleaseListProps> = () => {
                     </div>
                     {canCreate && (
                         <div className="col-auto">
-                            <button className="btn btn-primary" onClick={() => alert('Create modal coming soon')}>
+                            <button className="btn btn-primary" onClick={handleCreateClick}>
                                 <i className="bi bi-plus-circle me-2"></i>
                                 Create New Release
                             </button>
@@ -189,7 +233,7 @@ const ReleaseList: React.FC<ReleaseListProps> = () => {
                             : 'No releases have been created yet. Contact an administrator.'}
                     </p>
                     {canCreate && (
-                        <button className="btn btn-primary mt-3" onClick={() => alert('Create modal coming soon')}>
+                        <button className="btn btn-primary mt-3" onClick={handleCreateClick}>
                             Create First Release
                         </button>
                     )}
@@ -210,7 +254,7 @@ const ReleaseList: React.FC<ReleaseListProps> = () => {
                 </div>
                 {canCreate && (
                     <div className="col-auto">
-                        <button className="btn btn-primary" onClick={() => alert('Create modal coming soon')}>
+                        <button className="btn btn-primary" onClick={handleCreateClick}>
                             <i className="bi bi-plus-circle me-2"></i>
                             Create New Release
                         </button>
@@ -380,6 +424,21 @@ const ReleaseList: React.FC<ReleaseListProps> = () => {
                     </ul>
                 </nav>
             )}
+
+            {/* Create Release Modal */}
+            <ReleaseCreateModal
+                isOpen={showCreateModal}
+                onClose={handleModalClose}
+                onSuccess={handleCreateSuccess}
+            />
+
+            {/* Toast Notifications */}
+            <Toast
+                message={toast.message}
+                type={toast.type}
+                show={toast.show}
+                onClose={handleToastClose}
+            />
         </div>
     );
 };
