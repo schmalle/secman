@@ -34,6 +34,16 @@ export const TEST_USERS = {
         password: 'rm123',
         roles: ['RELEASE_MANAGER'],
     },
+    releaseManager1: {
+        username: 'releasemanager1',
+        password: 'rm1123',
+        roles: ['RELEASE_MANAGER'],
+    },
+    releaseManager2: {
+        username: 'releasemanager2',
+        password: 'rm2123',
+        roles: ['RELEASE_MANAGER'],
+    },
     user: {
         username: 'user',
         password: 'user123',
@@ -66,9 +76,18 @@ export async function loginAsAdmin(page: Page): Promise<void> {
 
 /**
  * Login as release manager
+ * 
+ * @param page Playwright page
+ * @param manager Optional specific manager (releasemanager1, releasemanager2, etc)
  */
-export async function loginAsReleaseManager(page: Page): Promise<void> {
-    await login(page, TEST_USERS.releaseManager);
+export async function loginAsReleaseManager(page: Page, manager?: string): Promise<void> {
+    if (manager === 'releasemanager1') {
+        await login(page, TEST_USERS.releaseManager1);
+    } else if (manager === 'releasemanager2') {
+        await login(page, TEST_USERS.releaseManager2);
+    } else {
+        await login(page, TEST_USERS.releaseManager);
+    }
 }
 
 /**
@@ -91,13 +110,13 @@ export async function logout(page: Page): Promise<void> {
  *
  * @param page Playwright page (for API context)
  * @param release Release data
- * @returns Created release ID
+ * @returns Created release with id and other fields
  */
 export async function createTestRelease(
     page: Page,
     release: TestRelease
-): Promise<number> {
-    const token = await page.evaluate(() => localStorage.getItem('authToken'));
+): Promise<{ id: number; version: string; name: string; description?: string; createdBy: string }> {
+    const token = await page.evaluate(() => sessionStorage.getItem('token'));
     
     const response = await page.request.post('/api/releases', {
         headers: {
@@ -112,7 +131,7 @@ export async function createTestRelease(
     }
 
     const data = await response.json();
-    return data.id;
+    return data;
 }
 
 /**
@@ -122,13 +141,29 @@ export async function createTestRelease(
  * @param releaseId Release ID to delete
  */
 export async function deleteTestRelease(page: Page, releaseId: number): Promise<void> {
-    const token = await page.evaluate(() => localStorage.getItem('authToken'));
+    const token = await page.evaluate(() => sessionStorage.getItem('token'));
     
     await page.request.delete(`/api/releases/${releaseId}`, {
         headers: {
             'Authorization': `Bearer ${token}`,
         },
     });
+}
+
+/**
+ * Clean up multiple test releases
+ *
+ * @param page Playwright page (for API context)
+ * @param releaseIds Array of release IDs to delete
+ */
+export async function cleanupTestReleases(page: Page, releaseIds: number[]): Promise<void> {
+    for (const id of releaseIds) {
+        try {
+            await deleteTestRelease(page, id);
+        } catch (error) {
+            console.log(`Failed to delete test release ${id}:`, error);
+        }
+    }
 }
 
 /**
@@ -141,7 +176,7 @@ export async function deleteAllTestReleases(
     page: Page,
     versionPrefix: string = 'test-'
 ): Promise<void> {
-    const token = await page.evaluate(() => localStorage.getItem('authToken'));
+    const token = await page.evaluate(() => sessionStorage.getItem('token'));
     
     // Get all releases
     const response = await page.request.get('/api/releases', {

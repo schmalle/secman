@@ -7,36 +7,40 @@
  * Tasks: T064-T068
  */
 
-import { test, expect } from '@playwright/test';
+import { test, expect, Page } from '@playwright/test';
 import { 
     loginAsAdmin, 
+    loginAsUser,
     createTestRelease, 
     deleteTestRelease,
-    getAuthToken 
+    generateTestVersion
 } from '../helpers/releaseHelpers';
 
 test.describe('Release Selector in Export Pages', () => {
-    let adminToken: string;
     let testReleaseId: number;
     let testReleaseVersion: string;
+    let testPage: Page;
 
-    test.beforeAll(async () => {
-        adminToken = await getAuthToken('admin', 'admin123');
+    test.beforeAll(async ({ browser }) => {
+        // Create a page context for test setup
+        const context = await browser.newContext();
+        testPage = await context.newPage();
+        await loginAsAdmin(testPage);
         
         // Create a test release for export testing
-        const release = await createTestRelease(adminToken, {
-            version: `98.${Date.now()}.0`,
+        testReleaseVersion = generateTestVersion();
+        testReleaseId = await createTestRelease(testPage, {
+            version: testReleaseVersion,
             name: 'Export Test Release',
             description: 'Testing export with release selection'
         });
-        testReleaseId = release.id;
-        testReleaseVersion = release.version;
     });
 
     test.afterAll(async () => {
         // Clean up test release
-        if (testReleaseId) {
-            await deleteTestRelease(adminToken, testReleaseId);
+        if (testReleaseId && testPage) {
+            await deleteTestRelease(testPage, testReleaseId);
+            await testPage.close();
         }
     });
 

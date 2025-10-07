@@ -17,7 +17,9 @@
 import React, { useState, useEffect } from 'react';
 import { releaseService, type Release, type PaginatedResponse } from '../services/releaseService';
 import { hasRole, getUser } from '../utils/auth';
+import { canDeleteRelease } from '../utils/permissions';
 import ReleaseCreateModal from './ReleaseCreateModal';
+import ReleaseDeleteConfirm from './ReleaseDeleteConfirm';
 import Toast from './Toast';
 
 interface ReleaseListProps {
@@ -43,6 +45,9 @@ const ReleaseList: React.FC<ReleaseListProps> = () => {
 
     // Modal state
     const [showCreateModal, setShowCreateModal] = useState(false);
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [releaseToDelete, setReleaseToDelete] = useState<Release | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     // Toast state
     const [toast, setToast] = useState<{
@@ -57,6 +62,7 @@ const ReleaseList: React.FC<ReleaseListProps> = () => {
 
     // User/Role info
     const user = getUser();
+    const userRoles = user?.roles || [];
     const canCreate = hasRole('ADMIN') || hasRole('RELEASE_MANAGER');
 
     // Debounce search query (300ms)
@@ -151,6 +157,61 @@ const ReleaseList: React.FC<ReleaseListProps> = () => {
     // Handle toast close
     function handleToastClose() {
         setToast((prev) => ({ ...prev, show: false }));
+    }
+
+    // Handle delete button click
+    function handleDeleteClick(release: Release, e: React.MouseEvent) {
+        e.stopPropagation(); // Prevent row click navigation
+        setReleaseToDelete(release);
+        setShowDeleteModal(true);
+    }
+
+    // Handle delete confirmation
+    async function handleDeleteConfirm() {
+        if (!releaseToDelete) return;
+
+        setIsDeleting(true);
+        try {
+            await releaseService.delete(releaseToDelete.id);
+            
+            setToast({
+                show: true,
+                message: `Release v${releaseToDelete.version} deleted successfully`,
+                type: 'success',
+            });
+
+            // Close modal
+            setShowDeleteModal(false);
+            setReleaseToDelete(null);
+
+            // Reload releases
+            await loadReleases();
+        } catch (err) {
+            console.error('Failed to delete release:', err);
+            const errorMessage = err instanceof Error 
+                ? err.message 
+                : 'Failed to delete release. Please try again.';
+            
+            setToast({
+                show: true,
+                message: errorMessage,
+                type: 'error',
+            });
+
+            // Close modal on error too
+            setShowDeleteModal(false);
+            setReleaseToDelete(null);
+        } finally {
+            setIsDeleting(false);
+        }
+    }
+
+    // Handle delete modal close
+    function handleDeleteModalClose() {
+        if (!isDeleting) {
+            setShowDeleteModal(false);
+            setReleaseToDelete(null);
+        }
     }
 
     // Navigate to detail page
@@ -322,6 +383,7 @@ const ReleaseList: React.FC<ReleaseListProps> = () => {
                             <th>Created By</th>
                             <th>Created Date</th>
                             <th>Requirements</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -330,6 +392,7 @@ const ReleaseList: React.FC<ReleaseListProps> = () => {
                                 key={release.id}
                                 onClick={() => handleReleaseClick(release.id)}
                                 style={{ cursor: 'pointer' }}
+                                data-testid={`release-card-${release.id}`}
                             >
                                 <td>
                                     <span data-testid="release-version">
@@ -350,6 +413,18 @@ const ReleaseList: React.FC<ReleaseListProps> = () => {
                                 <td>{formatDate(release.createdAt)}</td>
                                 <td>
                                     <span className="badge bg-info">{release.requirementCount}</span>
+                                </td>
+                                <td onClick={(e) => e.stopPropagation()}>
+                                    {canDeleteRelease(release, user, userRoles) && (
+                                        <button
+                                            className="btn btn-sm btn-outline-danger"
+                                            onClick={(e) => handleDeleteClick(release, e)}
+                                            title="Delete release"
+                                            data-testid={`delete-release-${release.id}`}
+                                        >
+                                            <i className="bi bi-trash"></i>
+                                        </button>
+                                    )}
                                 </td>
                             </tr>
                         ))}
@@ -430,6 +505,15 @@ const ReleaseList: React.FC<ReleaseListProps> = () => {
                 isOpen={showCreateModal}
                 onClose={handleModalClose}
                 onSuccess={handleCreateSuccess}
+            />
+
+            {/* Delete Release Modal */}
+            <ReleaseDeleteConfirm
+                release={releaseToDelete}
+                isOpen={showDeleteModal}
+                isDeleting={isDeleting}
+                onClose={handleDeleteModalClose}
+                onConfirm={handleDeleteConfirm}
             />
 
             {/* Toast Notifications */}
