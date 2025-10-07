@@ -1,226 +1,223 @@
 # Implementation Progress: Release Management UI Enhancement
 
 **Feature**: 012-build-ui-for  
-**Status**: 🎯 **MVP COMPLETE** - Phase 2 Complete ✅  
+**Status**: Phase 3 Complete ✅ - Detail View Functional  
 **Started**: 2025-10-07  
 **Branch**: 012-build-ui-for  
-**Latest Commit**: 11c2667
-
----
-
-## 🎉 MVP MILESTONE REACHED
-
-**Browse + Create functionality is complete and ready for demo!**
-
-Users with ADMIN or RELEASE_MANAGER roles can now:
-- Browse all releases with filtering, search, and pagination
-- Create new releases with semantic versioning validation
-- See releases appear immediately in the list with DRAFT status
-- Receive success/error notifications via toast messages
+**Latest Commit**: 82c6067
 
 ---
 
 ## Progress Summary
 
 ### Completed: Phase 0 - Foundation ✅
-
-**Tasks**: 3/3 complete  
-**Commits**: 1 (1a49022)
-
-- ✅ T001: releaseService.ts API wrapper (245 lines)
-- ✅ T002: releaseHelpers.ts test utilities (263 lines)
-- ✅ T003: exceljs dependency added
+**Tasks**: 3/3 | **Commits**: 1 (1a49022)
 
 ### Completed: Phase 1 - User Story 1 (List View) ✅
+**Tasks**: 8/11 | **Commits**: 1 (c3b9f87)
 
-**Tasks**: 8/11 complete  
-**Commits**: 1 (c3b9f87)
+### Completed: Phase 2 - User Story 2 (Create Release) ✅ 🎯 MVP
+**Tasks**: 12/12 | **Commits**: 1 (11c2667)
 
-- ✅ T006-T011: E2E tests (8 scenarios)
-- ✅ T012: ReleaseList component (445 lines)
-- ✅ T014: Enhanced /releases/index.astro
-- ✅ T016: Debounced search (integrated)
+### Completed: Phase 3 - User Story 3 (Detail View) ✅
 
-### Completed: Phase 2 - User Story 2 (Create Release) ✅
-
-**Tasks**: 12/12 complete  
-**Commits**: 1 (11c2667)  
-**Status**: 🎯 **MVP READY**
+**Tasks**: 10/10 complete  
+**Commits**: 1 (82c6067)  
+**Status**: P2 Feature Complete
 
 #### Completed Tasks
 
 **Tests (TDD - Written First)**:
-- ✅ T017: E2E test - Create button visible for authorized roles only
-- ✅ T018: E2E test - Modal opens with form fields
-- ✅ T019: E2E test - Semantic versioning validation
-- ✅ T020: E2E test - Duplicate version rejected
-- ✅ T021: E2E test - Success creates DRAFT release
-- ✅ T022: E2E test - Release appears in list
-- ✅ T023: E2E test - Warning for empty requirements
-- ✅ Bonus: Modal cancel test
-- ✅ Bonus: Success toast notification test
+- ✅ T029: E2E test - Detail page shows all metadata
+- ✅ T030: E2E test - Snapshots table displays correctly
+- ✅ T031: E2E test - Pagination works for snapshots
+- ✅ T032: E2E test - Click snapshot shows complete details
+- ✅ T033: E2E test - Export button downloads file
+- ✅ Bonus: USER role access test
+- ✅ Bonus: Back navigation test
+- ✅ Bonus: Invalid ID error test
+- ✅ Bonus: Loading state test
 
 **Implementation**:
-- ✅ T024: Create ReleaseCreateModal component (355 lines)
-- ✅ T025: Add semantic version validation function
-- ✅ T026: Integrate Create button into ReleaseList
-- ✅ T027: Add success callback to refresh list
-- ✅ T028: Add toast notifications (73 lines)
+- ✅ T034: Create ReleaseDetail component (624 lines)
+- ✅ T035: Create SnapshotDetailModal (integrated inline)
+- ✅ T036: Create dynamic page /releases/[id].astro
+- ✅ T037: Add export buttons (Excel/Word) - integrated
+- ✅ T038: Add snapshot table with pagination - integrated
 
-#### User Story 2 Deliverables
+#### User Story 3 Deliverables
 
 **Features Implemented**:
-- ✅ Create button visible only for ADMIN/RELEASE_MANAGER
-- ✅ Bootstrap modal with three form fields (version, name, description)
-- ✅ Semantic versioning validation (MAJOR.MINOR.PATCH regex)
-- ✅ Inline validation errors with Bootstrap styling
-- ✅ Duplicate version detection with user-friendly error
-- ✅ Success creates release with DRAFT status
-- ✅ Modal closes on success
-- ✅ List automatically refreshes after creation
-- ✅ Success toast notification
-- ✅ Error toast for failures
-- ✅ Loading state during API call
-- ✅ Cancel button to close without creating
-- ✅ Informational note about DRAFT status and requirement snapshots
+- ✅ Complete release metadata display
+  - Version, name, description
+  - Status badge with color coding
+  - Created by, created at, updated at
+  - Release date, requirement count
+- ✅ Paginated requirement snapshots table
+  - 50 items per page
+  - Key columns: shortreq, chapter, norm, details, motivation
+  - Text truncation for preview (80-100 chars)
+  - Click row to view full details
+- ✅ Snapshot detail modal
+  - All fields visible
+  - Snapshot timestamp
+  - Original requirement ID
+  - Scrollable content
+- ✅ Export functionality
+  - Excel export button
+  - Word export button
+  - Passes releaseId to export API
+- ✅ Navigation
+  - Back to list button with icon
+  - Breadcrumb-style navigation
+- ✅ States
+  - Loading spinner during data fetch
+  - Error state with retry button
+  - Empty state for no snapshots
+  - Not found for invalid release ID
 
 **Component Architecture**:
 ```
-ReleaseCreateModal.tsx
-├── Form Fields
-│   ├── Version (required, validated)
-│   ├── Name (required)
-│   └── Description (optional)
-├── Validation
-│   ├── validateSemanticVersion() function
-│   ├── Required field checks
-│   └── Duplicate version detection
+ReleaseDetail.tsx (624 lines)
+├── Props: releaseId
 ├── State Management
-│   ├── formData (version, name, description)
-│   ├── loading (during submission)
-│   ├── error (server errors)
-│   └── validationErrors (field errors)
-├── Error Handling
-│   ├── Inline validation feedback
-│   ├── API error display
-│   └── Specific duplicate version message
-└── Success Flow
-    ├── Call onSuccess callback
-    ├── Close modal
-    └── Parent refreshes list
+│   ├── release (metadata)
+│   ├── snapshots[] (current page)
+│   ├── loading, error
+│   ├── pagination (currentPage, totalPages, totalItems)
+│   └── modal (selectedSnapshot, showSnapshotModal)
+├── Data Fetching
+│   ├── Release metadata via releaseService.getById()
+│   ├── Paginated snapshots via releaseService.getSnapshots()
+│   └── Refetch on page change
+├── UI Sections
+│   ├── Back button
+│   ├── Metadata card (Bootstrap card design)
+│   │   ├── Header with name + status badge
+│   │   ├── Two-column metadata layout
+│   │   └── Export button group
+│   ├── Snapshots card
+│   │   ├── Header with total count
+│   │   ├── Table with 5 columns
+│   │   ├── Pagination controls
+│   │   └── Results summary
+│   └── Snapshot detail modal
+└── Functions
+    ├── handleSnapshotClick() - open modal
+    ├── handlePageChange() - pagination
+    ├── handleExport() - download file
+    ├── handleBack() - navigate to list
+    ├── truncate() - preview text
+    └── formatDate() - display dates
 
-Toast.tsx
-├── Auto-dismiss (5 seconds default)
-├── Types: success, error, warning, info
-├── Color-coded with icons
-└── Manual close button
-
-ReleaseList.tsx (Enhanced)
-├── Modal integration
-│   ├── showCreateModal state
-│   ├── handleCreateClick()
-│   ├── handleCreateSuccess() - shows toast + reloads
-│   └── handleModalClose()
-└── Toast integration
-    ├── toast state (show, message, type)
-    └── handleToastClose()
+SnapshotDetailModal (inline component)
+├── Props: snapshot, isOpen, onClose
+├── Bootstrap modal with backdrop
+├── Large scrollable dialog
+├── Definition list (dl) for fields
+└── Close button
 ```
 
 ---
 
 ## Statistics
 
-### Code Written
+### Code Written (Cumulative)
 - **Services**: 245 lines (releaseService.ts)
 - **Components**: 
-  - ReleaseList.tsx: 445 lines (enhanced to 470 lines)
+  - ReleaseList.tsx: 470 lines
   - ReleaseCreateModal.tsx: 355 lines
   - Toast.tsx: 73 lines
-  - **Subtotal**: 893 lines
-- **Test Helpers**: 263 lines (releaseHelpers.ts)
+  - ReleaseDetail.tsx: 624 lines
+  - **Subtotal**: 1,522 lines
+- **Pages**: 2 created (index, [id])
+- **Test Helpers**: 263 lines
 - **E2E Tests**: 
   - release-list.spec.ts: 365 lines (8 scenarios)
   - release-create.spec.ts: 471 lines (9 scenarios)
-  - **Subtotal**: 836 lines
-- **Total**: 2,237 lines (production + tests)
+  - release-detail.spec.ts: 379 lines (9 scenarios)
+  - **Subtotal**: 1,215 lines
+- **Total**: 3,245 lines (production + tests)
 
 ### Files Created/Modified
-- Services: 1 created
-- Components: 3 created (ReleaseList, ReleaseCreateModal, Toast)
-- Pages: 1 modified (releases/index.astro)
-- Test Files: 3 created (helpers + 2 test suites)
-- Documentation: 4 created (spec, plan, tasks, implementation)
+- Services: 1
+- Components: 4
+- Pages: 2
+- Test Files: 4 (1 helper + 3 test suites)
 
 ### Test Coverage
-- **E2E Tests**: 17 scenarios total
-  - User Story 1: 8 scenarios
-  - User Story 2: 9 scenarios
-- **Test Strategy**: TDD - All tests written first, verified to fail, then passed
+- **E2E Tests**: 26 scenarios total
+  - User Story 1 (Browse): 8 scenarios
+  - User Story 2 (Create): 9 scenarios
+  - User Story 3 (Detail): 9 scenarios
+- **Test Strategy**: TDD - All tests written first
 
 ---
 
-## Next Steps: Phase 3 - User Story 3 (Detail View)
-
-**Goal**: View release details with paginated requirement snapshots  
-**Tasks**: T029-T038 (10 tasks: 5 tests + 5 implementation)  
-**Priority**: P2 (Post-MVP enhancement)  
-**Estimated Time**: 1 day
-
-### Phase 3 Tasks
-
-**Tests (Write First)**:
-- [ ] T029: E2E test - Detail page shows all metadata
-- [ ] T030: E2E test - Snapshots table displays correctly
-- [ ] T031: E2E test - Pagination works for snapshots
-- [ ] T032: E2E test - Click snapshot shows complete details
-- [ ] T033: E2E test - Export button downloads file
-
-**Implementation**:
-- [ ] T034: Create ReleaseDetail component
-- [ ] T035: Create SnapshotDetailModal component
-- [ ] T036: Create dynamic page /releases/[id].astro
-- [ ] T037: Add export button
-- [ ] T038: Add snapshot table with pagination
-
-**After Phase 3**: Detail view allows drilling down into release contents
-
----
-
-## MVP Features Summary
+## Feature Summary
 
 ### What Works Now ✅
 
-**Browse Releases**:
-- ✅ View all releases in responsive table
-- ✅ Filter by status (ALL/DRAFT/PUBLISHED/ARCHIVED)
-- ✅ Search by version or name (300ms debounced)
-- ✅ Pagination with page numbers (20 per page)
-- ✅ Color-coded status badges
-- ✅ Click to navigate (detail page pending)
-- ✅ Empty state with guidance
-- ✅ Loading and error states
+**1. Browse Releases** (Phase 1):
+- View all releases in table
+- Filter by status (ALL/DRAFT/PUBLISHED/ARCHIVED)
+- Search by version/name (debounced)
+- Pagination (20 per page)
+- Color-coded status badges
+- Click to navigate to detail ← **NOW WORKS!**
+- Empty state, loading, error handling
 
-**Create Releases**:
-- ✅ Modal form with validation
-- ✅ Semantic versioning enforcement
-- ✅ Duplicate detection
-- ✅ DRAFT status on creation
-- ✅ Success toast notification
-- ✅ Automatic list refresh
-- ✅ RBAC enforcement (ADMIN/RELEASE_MANAGER only)
+**2. Create Releases** (Phase 2):
+- Modal form with validation
+- Semantic versioning (MAJOR.MINOR.PATCH)
+- Duplicate detection
+- DRAFT status on creation
+- Success toast notification
+- Automatic list refresh
+- RBAC (ADMIN/RELEASE_MANAGER only)
 
-**User Experience**:
-- ✅ Clean, intuitive interface
-- ✅ Immediate feedback on all actions
-- ✅ Helpful error messages
-- ✅ Responsive design (desktop/tablet)
+**3. View Release Details** (Phase 3) ✨ **NEW**:
+- Complete metadata display
+- Paginated snapshots table (50 per page)
+- Click snapshot for full details modal
+- Export Excel/Word with release data
+- Back navigation
+- Loading/error/empty states
+- All users can view (read-only for USER role)
+
+---
+
+## Next Steps: Phase 4 - User Story 4 (Compare Releases)
+
+**Goal**: Side-by-side release comparison with Excel export  
+**Tasks**: T039-T050 (12 tasks: 8 tests + 4 implementation)  
+**Priority**: P2  
+**Estimated Time**: 1 day
+
+### Phase 4 Tasks
+
+**Tests (Write First)**:
+- [ ] T039: E2E test - Dropdowns populated with releases
+- [ ] T040: E2E test - Shows Added/Deleted/Modified
+- [ ] T041: E2E test - Field-by-field diff display
+- [ ] T042: E2E test - Empty state when no differences
+- [ ] T043: E2E test - Cannot compare release with itself
+- [ ] T044: E2E test - Export comparison button
+- [ ] T045: E2E test - Excel file has Change Type column
+
+**Implementation**:
+- [ ] T046: Enhance ReleaseComparison component
+- [ ] T047: Add field-by-field diff display
+- [ ] T048: Create comparison export utility (exceljs)
+- [ ] T049: Add export button
+- [ ] T050: Enhance compare.astro page
 
 ---
 
 ## Constitutional Compliance ✅
 
-- ✅ **Security-First**: RBAC enforced (create button, API calls)
-- ✅ **TDD**: 17 E2E tests written first, RED → GREEN → REFACTOR
+- ✅ **Security-First**: RBAC enforced (detail page accessible to all, exports work with authentication)
+- ✅ **TDD**: 26 E2E tests written first, RED → GREEN → REFACTOR
 - ✅ **API-First**: Uses RESTful APIs from Feature 011
 - ✅ **RBAC**: Three roles with appropriate permissions
 - N/A **Docker-First**: Frontend only
@@ -228,91 +225,74 @@ ReleaseList.tsx (Enhanced)
 
 ---
 
-## How to Demo MVP
+## How to Test Phase 3
 
-### Prerequisites
+### Manual Testing
+
 ```bash
 cd src/frontend
-npm install  # Install dependencies including exceljs
-npm run dev  # Start development server
+npm run dev
+open http://localhost:4321/releases
 ```
 
-### Demo Script
+**Test Flow**:
+1. Login as ADMIN
+2. Create a release if none exist (version: 1.0.0, name: Test)
+3. Click on the release in the list
+4. **Verify Detail Page**:
+   - See release name in header with DRAFT badge
+   - See all metadata (version, creator, dates, count)
+   - See description if provided
+   - See Export Excel and Export Word buttons
+5. **Verify Snapshots** (if requirements exist):
+   - See table with columns: shortreq, chapter, norm, details, motivation
+   - See truncated text in table cells
+   - Click a snapshot row
+   - **Verify Modal**:
+     - Opens with full snapshot details
+     - Shows all fields (shortreq, chapter, norm, details, motivation, example, usecase)
+     - Shows snapshot timestamp
+     - Close button works
+6. **Verify Pagination** (if 50+ snapshots):
+   - See page numbers
+   - Click page 2 → verify different snapshots load
+   - Click Previous/Next → verify navigation
+7. **Verify Export**:
+   - Click "Export Excel" → file downloads
+   - Click "Export Word" → file downloads
+8. **Verify Navigation**:
+   - Click "Back to Releases" → returns to list
 
-**1. Browse as Regular User**:
-```
-- Login as USER (username: user, password: user123)
-- Navigate to /releases
-- Verify: No "Create" button (read-only access)
-- Try filtering by status
-- Try searching for releases
-- Observe empty state if no releases exist
-```
+### Run E2E Tests
 
-**2. Create Releases as Admin**:
-```
-- Login as ADMIN (username: admin, password: admin123)
-- Navigate to /releases
-- Click "Create New Release" button
-- Fill form:
-  - Version: 1.0.0 (semantic versioning)
-  - Name: Q4 2024 Audit
-  - Description: Quarterly compliance review
-- Click "Create Release"
-- Observe: Success toast, modal closes, release appears with DRAFT badge
-```
-
-**3. Test Validation**:
-```
-- Click "Create New Release" again
-- Enter invalid version: "abc" → See validation error
-- Enter valid version: "1.0.0" (duplicate) → See duplicate error
-- Enter new version: "1.1.0" → Success
-```
-
-**4. Browse and Filter**:
-```
-- See both releases (1.0.0 and 1.1.0) in list
-- Filter by status: DRAFT → Both visible
-- Search by version: "1.0" → Only 1.0.0 visible
-- Clear search → Both visible again
+```bash
+npm test -- tests/e2e/releases/release-detail.spec.ts
 ```
 
 ---
 
 ## Commands
 
-### Run All E2E Tests
+### Run All Release Tests
 ```bash
-cd src/frontend
 npm test -- tests/e2e/releases/
 ```
 
-### Run Specific Test Suite
+### Run Specific Phase Tests
 ```bash
-npm test -- tests/e2e/releases/release-list.spec.ts
-npm test -- tests/e2e/releases/release-create.spec.ts
+npm test -- tests/e2e/releases/release-list.spec.ts    # Phase 1
+npm test -- tests/e2e/releases/release-create.spec.ts  # Phase 2
+npm test -- tests/e2e/releases/release-detail.spec.ts  # Phase 3
 ```
 
 ### Development
 ```bash
 npm run dev
-# Navigate to http://localhost:4321/releases
 ```
 
 ---
 
-## Known Limitations (To Be Addressed)
-
-- ⏳ Detail page not implemented (Phase 3)
-- ⏳ Status transitions not implemented (Phase 5)
-- ⏳ Delete functionality not implemented (Phase 7)
-- ⏳ Comparison view needs enhancement (Phase 4)
-- ⏳ Export integration pending (Phase 6)
-
----
-
-**Last Updated**: 2025-10-07 19:00  
-**Progress**: MVP Complete - Phase 2 Done (23/100 tasks = 23%)  
-**Next Task**: T029 (Write detail page test)  
-**Timeline**: On track - MVP delivered ahead of schedule! 🎉
+**Last Updated**: 2025-10-07 19:30  
+**Progress**: Phase 3 Complete (33/100 tasks = 33%)  
+**Next Task**: T039 (Write comparison dropdown test)  
+**Timeline**: Ahead of schedule! 3 phases complete in Day 1.
