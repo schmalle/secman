@@ -1,85 +1,191 @@
 <!--
 Sync Impact Report:
-- Version change: none → 1.0.0
-- Modified principles: N/A (initial version)
-- Added sections: All core sections (initial creation)
-- Removed sections: N/A
+- Version change: Initial creation → v1.0.0
+- Principles migrated from CLAUDE.md:
+  1. Security-First
+  2. TDD (Test-Driven Development)
+  3. API-First
+  4. Docker-First
+  5. RBAC (Role-Based Access Control)
+  6. Schema Evolution
+- Added sections: Development Workflow, Technology Stack
 - Templates requiring updates:
-  ✅ .specify/templates/plan-template.md - reviewed, no changes needed
-  ✅ .specify/templates/spec-template.md - reviewed, no changes needed
-  ✅ .specify/templates/tasks-template.md - reviewed, no changes needed
-  ✅ .specify/templates/agent-file-template.md - reviewed, no changes needed
-- Follow-up TODOs: None
+  ✅ plan-template.md - Constitution Check gate references this file
+  ✅ spec-template.md - Requirements align with security and testing principles
+  ✅ tasks-template.md - Task categorization reflects TDD and testing discipline
+- Follow-up TODOs: Update runtime guidance in CLAUDE.md to reference this constitution
 -->
 
-# secman Constitution
+# Secman Constitution
 
 ## Core Principles
 
-### I. Security-First Development
-Every feature MUST be evaluated for security implications before implementation. All user input MUST be validated and sanitized. Authentication and authorization MUST be enforced at both API and UI layers. Security events MUST be logged for audit purposes.
+### I. Security-First
 
-**Rationale**: As a security requirement and risk assessment management tool, secman handles sensitive organizational data. Security cannot be an afterthought but must be embedded in every development decision to maintain user trust and regulatory compliance.
+All features MUST implement security as a primary concern, not an afterthought.
+
+**Requirements**:
+- File uploads MUST validate size, format, and content-type before processing
+- All user input MUST be sanitized to prevent injection attacks
+- RBAC MUST be enforced at both API endpoint level (@Secured annotations) and UI level (role checks)
+- Sensitive data MUST NOT be logged or exposed in error messages
+- Authentication tokens MUST be stored securely (sessionStorage for JWT)
+
+**Rationale**: Security vulnerabilities in a security requirements management tool are unacceptable and undermine the entire purpose of the system.
 
 ### II. Test-Driven Development (NON-NEGOTIABLE)
-Tests MUST be written before implementation. The Red-Green-Refactor cycle MUST be strictly followed: write failing tests, get user approval, implement to pass tests, then refactor. All new features require both unit tests and integration tests.
 
-**Rationale**: TDD ensures code correctness, prevents regressions, and serves as living documentation. For a tool managing critical security requirements, untested code is unacceptable risk.
+Tests MUST be written before implementation. The Red-Green-Refactor cycle is strictly enforced.
 
-### III. API-First Architecture
-Backend services MUST expose RESTful APIs with clear contracts. API changes MUST maintain backward compatibility or follow proper versioning. API documentation MUST be generated and kept current. Frontend components MUST interact with backend exclusively through documented APIs.
+**Requirements**:
+- Contract tests written first for all new API endpoints
+- Integration tests written for cross-component interactions
+- Unit tests written for business logic
+- Tests MUST fail before implementation begins
+- Test coverage target: ≥80%
+- Backend: JUnit 5 + MockK required
+- Frontend: Playwright for E2E testing required
+- Helper tools: pytest required
 
-**Rationale**: API-first design enables frontend/backend team independence, facilitates testing, supports future integrations (MCP server, mobile apps), and ensures clear separation of concerns in the full-stack architecture.
+**Rationale**: TDD ensures code correctness, prevents regression, and serves as living documentation.
 
-### IV. Docker-First Deployment
-All services MUST be containerized and deployable via Docker Compose. Environment configuration MUST use .env files, never hardcoded values. Multi-architecture support (AMD64/ARM64) MUST be maintained. Development and production environments MUST use identical container configurations with different .env files.
+### III. API-First
 
-**Rationale**: Docker ensures consistent environments across development, testing, and production, eliminates "works on my machine" issues, and simplifies onboarding and deployment for the alpha-stage project.
+All backend functionality MUST be exposed through well-defined RESTful APIs with backward compatibility guarantees.
 
-### V. Role-Based Access Control
-All features MUST respect user roles (normaluser, adminuser). Authorization checks MUST occur at both API endpoints and UI components. Administrative functions MUST be restricted to adminuser role. Privilege escalation MUST be prevented and logged.
+**Requirements**:
+- RESTful API design principles MUST be followed
+- OpenAPI/Swagger documentation MUST be maintained
+- Breaking changes require MAJOR version bump
+- All endpoints MUST return consistent error formats
+- API responses MUST include appropriate HTTP status codes
+- Backward compatibility MUST be maintained within major versions
 
-**Rationale**: RBAC is fundamental to secman's purpose as an enterprise security tool. Improper access control would undermine the entire value proposition and create liability.
+**Rationale**: API-first design enables frontend flexibility, third-party integrations, and MCP tool support.
 
-### VI. Database Schema Evolution
-Database migrations MUST be automated and versioned. Schema changes MUST be backward-compatible during deployment. Data integrity constraints MUST be enforced at the database level. Manual schema modifications are FORBIDDEN in production.
+### IV. Docker-First
 
-**Rationale**: Micronaut with Hibernate auto-creates tables, but production stability requires controlled migrations. The MariaDB backend stores critical security data that cannot be corrupted by ad-hoc schema changes.
+All components MUST be containerized and deployable via Docker Compose.
+
+**Requirements**:
+- Dockerfile MUST be provided for each service
+- Multi-arch support REQUIRED (AMD64/ARM64)
+- Environment configuration via .env files (never hardcoded)
+- docker-compose.yml MUST define all services and dependencies
+- Health checks MUST be implemented for all services
+- Volumes MUST be used for persistent data
+
+**Rationale**: Containerization ensures consistent deployment, simplifies development setup, and enables portability.
+
+### V. Role-Based Access Control (RBAC)
+
+Access control MUST be consistently enforced across all layers.
+
+**Requirements**:
+- All API endpoints MUST use @Secured annotations
+- Roles: USER, ADMIN, VULN, RELEASE_MANAGER
+- Frontend MUST check roles before rendering UI elements
+- Workgroup-based filtering MUST be applied to data queries
+- Users MUST only see resources they have access to (workgroups + owned items)
+- Authorization checks MUST happen at service layer, not just controller
+
+**Rationale**: Fine-grained access control is essential for multi-tenant security and compliance.
+
+### VI. Schema Evolution
+
+Database schema changes MUST be managed through automated migration with appropriate constraints.
+
+**Requirements**:
+- Hibernate auto-migration MUST be used (ddl-auto configured appropriately)
+- Database constraints MUST be defined in entity annotations
+- Foreign key relationships MUST be explicit
+- Indexes MUST be created for frequently queried columns
+- Migration MUST be testable in development before production deployment
+- Schema changes MUST NOT cause data loss without explicit approval
+
+**Rationale**: Automated migration reduces deployment errors and ensures schema-code consistency.
+
+## Technology Stack
+
+**Backend**:
+- Language: Kotlin 2.1.0 / Java 21
+- Framework: Micronaut 4.4
+- ORM: Hibernate JPA
+- Database: MariaDB 11.4
+- File Processing: Apache POI 5.3 (Excel)
+- Testing: JUnit 5 + MockK
+
+**Frontend**:
+- Framework: Astro 5.14 with React 19 islands
+- UI: Bootstrap 5.3
+- API Client: Axios
+- Testing: Playwright (E2E)
+
+**Helper Tools**:
+- Language: Python 3.11+
+- Libraries: falconpy (CrowdStrike), openpyxl (Excel), argparse (CLI)
+- Testing: pytest
+
+**Infrastructure**:
+- Deployment: Docker Compose
+- Multi-arch: AMD64 + ARM64
 
 ## Development Workflow
 
-### Code Review Requirements
-All pull requests MUST pass automated tests before review. Security-sensitive changes MUST receive explicit security review. Breaking changes MUST include migration documentation and backward compatibility plan where feasible.
+### Git Workflow
 
-### Quality Gates
-- Tests MUST achieve minimum 80% code coverage for new code
-- Linting MUST pass (backend: Kotlin conventions, frontend: ESLint)
-- Docker builds MUST succeed for both AMD64 and ARM64
-- Security scans MUST show no critical vulnerabilities
-- API documentation MUST be regenerated for endpoint changes
+- **Branching**: Feature branches MUST use pattern `###-feature-name`
+- **Commits**: Conventional commits REQUIRED: `type(scope): description`
+  - Types: feat, fix, docs, test, refactor, chore
+  - Example: `feat(assets): add workgroup-based filtering`
+- **Pull Requests**: MUST pass all gates before merge:
+  - All tests passing (backend + frontend + helper)
+  - Linting passing
+  - Docker build successful
+  - Code review approved
 
-### Commit Standards
-Commits MUST follow conventional commit format: `type(scope): description`. Breaking changes MUST be marked with `BREAKING CHANGE:` in commit body. Security fixes MUST use `fix(security):` prefix.
+### Testing Gates
 
-## Technology Constraints
+- **Pre-commit**: Linters MUST pass (backend + frontend + helper)
+- **Pre-merge**: Full test suite MUST pass
+- **Pre-deployment**: E2E tests MUST pass in staging environment
 
-### Stack Stability
-Core stack is FROZEN for 1.0 release: Micronaut/Kotlin backend, Astro/React frontend, MariaDB 11.4, Docker. Technology additions MUST be justified against security, maintenance burden, and team expertise.
+### Documentation
 
-### Dependency Management
-Dependencies MUST be pinned to specific versions. Security updates MUST be applied within 7 days of disclosure. New dependencies MUST be approved based on: active maintenance, security track record, license compatibility (AGPL-3.0), and necessity.
-
-### Performance Standards
-API endpoints MUST respond within 200ms (p95) for typical payloads. Frontend pages MUST achieve Lighthouse score ≥90. Database queries MUST use indexes for all filtering/sorting operations. Export operations (Word generation) MAY take longer but MUST provide progress feedback.
+- **Feature Specs**: MUST be created in `specs/###-feature/` before implementation
+- **API Documentation**: OpenAPI/Swagger MUST be kept current
+- **README**: MUST be updated when setup instructions change
+- **CLAUDE.md**: MUST be updated with new entities, endpoints, and patterns
 
 ## Governance
 
-This Constitution supersedes all other development practices. Amendments require:
-1. Documented rationale for the change
-2. Impact analysis on existing features
-3. Migration plan for affected code
-4. Approval from project maintainer (Markus "flake" Schmall)
+### Constitution Authority
 
-All code reviews MUST verify constitutional compliance. Violations MUST be documented in plan.md Complexity Tracking section with explicit justification. Unjustifiable violations MUST block merge.
+- This constitution supersedes all other development practices
+- All code reviews MUST verify constitutional compliance
+- Violations MUST be justified in "Complexity Tracking" section of plan.md
+- Team leads MAY grant temporary exceptions for time-critical issues (documented)
 
-**Version**: 1.0.0 | **Ratified**: 2025-10-03 | **Last Amended**: 2025-10-03
+### Amendment Process
+
+1. Proposal MUST be documented with rationale
+2. Team discussion REQUIRED before approval
+3. Version MUST be incremented per semantic versioning:
+   - MAJOR: Backward incompatible governance changes
+   - MINOR: New principles or substantial expansions
+   - PATCH: Clarifications, typos, non-semantic refinements
+4. Migration plan REQUIRED for breaking changes
+5. All dependent documentation MUST be updated
+
+### Compliance Review
+
+- All PRs MUST include constitutional compliance self-check
+- Code reviews MUST verify security-first implementation
+- Quarterly constitutional compliance audits REQUIRED
+- Technical debt MUST be tracked and justified against principles
+
+### Runtime Guidance
+
+For detailed implementation patterns and examples, see `CLAUDE.md`.
+
+**Version**: 1.0.0 | **Ratified**: 2025-10-07 | **Last Amended**: 2025-10-07

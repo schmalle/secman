@@ -122,4 +122,45 @@ class ReleaseService(
             releaseRepository.findAllOrderByCreatedAtDesc()
         }
     }
+
+    /**
+     * Update release status with workflow validation
+     * Enforces workflow: DRAFT → PUBLISHED → ARCHIVED (one-way only)
+     *
+     * @param releaseId ID of release to update
+     * @param newStatus New status to transition to
+     * @return Updated release
+     * @throws NoSuchElementException if release not found
+     * @throws IllegalStateException if transition is not allowed
+     */
+    fun updateReleaseStatus(releaseId: Long, newStatus: Release.ReleaseStatus): Release {
+        logger.info("Updating release $releaseId status to $newStatus")
+
+        val release = releaseRepository.findById(releaseId)
+            .orElseThrow { NoSuchElementException("Release with ID $releaseId not found") }
+
+        val currentStatus = release.status
+
+        // Validate status transition workflow
+        val validTransition = when (currentStatus) {
+            Release.ReleaseStatus.DRAFT -> newStatus == Release.ReleaseStatus.PUBLISHED
+            Release.ReleaseStatus.ACTIVE -> newStatus == Release.ReleaseStatus.PUBLISHED || newStatus == Release.ReleaseStatus.ARCHIVED
+            Release.ReleaseStatus.PUBLISHED -> newStatus == Release.ReleaseStatus.ARCHIVED
+            Release.ReleaseStatus.ARCHIVED -> false // No transitions from ARCHIVED
+        }
+
+        if (!validTransition) {
+            throw IllegalStateException(
+                "Invalid status transition from $currentStatus to $newStatus. " +
+                "Allowed workflow: DRAFT → PUBLISHED → ARCHIVED"
+            )
+        }
+
+        // Update status
+        release.status = newStatus
+        val updatedRelease = releaseRepository.update(release)
+        logger.info("Release $releaseId status updated to $newStatus")
+
+        return updatedRelease
+    }
 }

@@ -27,7 +27,9 @@ const ReleaseSelector: React.FC<ReleaseSelectorProps> = ({
     const [selectedId, setSelectedId] = useState<number | null>(selectedReleaseId);
 
     useEffect(() => {
-        fetchReleases();
+        if (typeof window !== 'undefined') {
+            fetchReleases();
+        }
     }, []);
 
     const fetchReleases = async () => {
@@ -44,7 +46,6 @@ const ReleaseSelector: React.FC<ReleaseSelectorProps> = ({
             const data = await response.json();
             setReleases(data);
         } catch (err) {
-            console.error('Error fetching releases:', err);
             setError('Failed to load releases');
         } finally {
             setIsLoading(false);
@@ -85,6 +86,7 @@ const ReleaseSelector: React.FC<ReleaseSelectorProps> = ({
                 value={selectedId === null ? '' : selectedId.toString()}
                 onChange={handleChange}
                 disabled={isLoading}
+                data-testid="release-selector"
             >
                 <option value="">Current Version (Live)</option>
 
@@ -108,4 +110,4 @@ const ReleaseSelector: React.FC<ReleaseSelectorProps> = ({
     );
 };
 
-export default ReleaseSelector;
+export default React.memo(ReleaseSelector);

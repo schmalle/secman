@@ -60,12 +60,14 @@ class ReleaseController(
 
     /**
      * GET /api/releases - List all releases
-     * Optional filter by status
+     * Optional filter by status, with pagination
      */
     @Get
     fun listReleases(
-        @QueryValue("status") status: Release.ReleaseStatus?
-    ): HttpResponse<List<Map<String, Any>>> {
+        @QueryValue("status") status: Release.ReleaseStatus?,
+        @QueryValue("page") page: Int?,
+        @QueryValue("pageSize") pageSize: Int?
+    ): HttpResponse<Map<String, Any>> {
         logger.debug("Listing releases with status filter: $status")
 
         val releases = releaseService.listReleases(status)
@@ -74,7 +76,29 @@ class ReleaseController(
             toReleaseResponse(release, snapshotCount.toInt())
         }
 
-        return HttpResponse.ok(responseDtos)
+        // Simple pagination (client-side for now since we load all releases)
+        val currentPage = page ?: 1
+        val itemsPerPage = pageSize ?: 20
+        val totalItems = responseDtos.size
+        val totalPages = if (totalItems == 0) 1 else ((totalItems + itemsPerPage - 1) / itemsPerPage)
+
+        val startIndex = (currentPage - 1) * itemsPerPage
+        val endIndex = minOf(startIndex + itemsPerPage, totalItems)
+        val paginatedData = if (startIndex < totalItems) {
+            responseDtos.subList(startIndex, endIndex)
+        } else {
+            emptyList()
+        }
+
+        val paginatedResponse = mapOf(
+            "data" to paginatedData,
+            "currentPage" to currentPage,
+            "totalPages" to totalPages,
+            "totalItems" to totalItems,
+            "pageSize" to itemsPerPage
+        )
+
+        return HttpResponse.ok(paginatedResponse)
     }
 
     /**
@@ -115,6 +139,43 @@ class ReleaseController(
         } catch (e: NoSuchElementException) {
             logger.warn("Release not found for deletion: $id")
             return HttpResponse.notFound()
+        }
+    }
+
+    /**
+     * PUT /api/releases/{id}/status - Update release status
+     * Authorization: ADMIN or RELEASE_MANAGER only
+     * Workflow: DRAFT → PUBLISHED → ARCHIVED (one-way transitions)
+     */
+    @Put("/{id}/status")
+    @Secured("ADMIN", "RELEASE_MANAGER")
+    fun updateReleaseStatus(
+        @PathVariable id: Long,
+        @Body request: ReleaseStatusUpdateRequest
+    ): HttpResponse<Map<String, Any>> {
+        logger.info("Updating release status: id=$id, newStatus=${request.status}")
+
+        try {
+            val updatedRelease = releaseService.updateReleaseStatus(id, request.status)
+            val snapshotCount = snapshotRepository.countByReleaseId(id)
+
+            return HttpResponse.ok(toReleaseResponse(updatedRelease, snapshotCount.toInt()))
+        } catch (e: NoSuchElementException) {
+            logger.warn("Release not found for status update: $id")
+            return HttpResponse.notFound(
+                mapOf(
+                    "error" to "Not Found",
+                    "message" to (e.message ?: "Release not found")
+                )
+            )
+        } catch (e: IllegalStateException) {
+            logger.warn("Invalid status transition for release $id: ${e.message}")
+            return HttpResponse.badRequest(
+                mapOf(
+                    "error" to "Bad Request",
+                    "message" to (e.message ?: "Invalid status transition")
+                )
+            )
         }
     }
 
@@ -214,4 +275,12 @@ data class ReleaseCreateRequest(
     val version: String,
     val name: String,
     val description: String? = null
+)
+
+/**
+ * Request DTO for updating release status
+ */
+@Serdeable
+data class ReleaseStatusUpdateRequest(
+    val status: Release.ReleaseStatus
 )

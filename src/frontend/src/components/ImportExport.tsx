@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { csrfPost } from '../utils/csrf'; // Import the CSRF-enhanced POST helper
 import { authenticatedFetch } from '../utils/auth';
+import ReleaseSelector from './ReleaseSelector';
 
 interface UseCase {
     id: number;
@@ -18,6 +19,7 @@ const ImportExport = () => {
     const [isLoadingUseCases, setIsLoadingUseCases] = useState<boolean>(false);
     const [selectedLanguage, setSelectedLanguage] = useState<string>('english');
     const [translationConfigured, setTranslationConfigured] = useState<boolean>(false);
+    const [selectedReleaseId, setSelectedReleaseId] = useState<number | null>(null);
     const [isDragOver, setIsDragOver] = useState<boolean>(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -163,9 +165,14 @@ const ImportExport = () => {
         
         // Determine the endpoint based on language selection
         const isTranslated = selectedLanguage !== 'english' && translationConfigured;
-        const endpoint = isTranslated 
+        let endpoint = isTranslated 
             ? `/api/requirements/export/docx/translated/${selectedLanguage}`
             : '/api/requirements/export/docx';
+        
+        // Add releaseId parameter if a release is selected
+        if (selectedReleaseId !== null) {
+            endpoint += `?releaseId=${selectedReleaseId}`;
+        }
         
         setExportStatus(isTranslated ? `Translating and exporting to ${selectedLanguage}...` : 'Exporting to Word...');
         
@@ -216,7 +223,7 @@ const ImportExport = () => {
         } finally {
             setIsExporting(false);
         }
-    }, [selectedLanguage, translationConfigured]);
+    }, [selectedLanguage, translationConfigured, selectedReleaseId]);
 
     const handleExportByUseCase = useCallback(async () => {
         if (!selectedUseCase) {
@@ -290,8 +297,14 @@ const ImportExport = () => {
         setIsExporting(true);
         setExportStatus('Exporting to Excel...');
         
+        // Add releaseId parameter if a release is selected
+        let endpoint = '/api/requirements/export/xlsx';
+        if (selectedReleaseId !== null) {
+            endpoint += `?releaseId=${selectedReleaseId}`;
+        }
+        
         try {
-            const response = await authenticatedFetch('/api/requirements/export/xlsx', {
+            const response = await authenticatedFetch(endpoint, {
                 method: 'GET',
             });
 
@@ -334,7 +347,7 @@ const ImportExport = () => {
         } finally {
             setIsExporting(false);
         }
-    }, []);
+    }, [selectedReleaseId]);
 
     const handleExportToExcelByUseCase = useCallback(async () => {
         if (!selectedUseCase) {
@@ -345,8 +358,14 @@ const ImportExport = () => {
         setIsExporting(true);
         setExportStatus('Exporting requirements for selected use case to Excel...');
         
+        // Add releaseId parameter if a release is selected
+        let endpoint = `/api/requirements/export/xlsx/usecase/${selectedUseCase}`;
+        if (selectedReleaseId !== null) {
+            endpoint += `?releaseId=${selectedReleaseId}`;
+        }
+        
         try {
-            const response = await authenticatedFetch(`/api/requirements/export/xlsx/usecase/${selectedUseCase}`, {
+            const response = await authenticatedFetch(endpoint, {
                 method: 'GET',
             });
 
@@ -389,7 +408,7 @@ const ImportExport = () => {
         } finally {
             setIsExporting(false);
         }
-    }, [selectedUseCase]);
+    }, [selectedUseCase, selectedReleaseId]);
 
     return (
         <div className="container-fluid mt-4">
@@ -571,6 +590,29 @@ const ImportExport = () => {
                             <p className="text-white-50 mb-0 mt-1">Generate and download requirement documents</p>
                         </div>
                         <div className="card-body p-4">
+                            {/* Release Version Selection */}
+                            <div className="mb-4">
+                                <h5 className="fw-semibold mb-3">
+                                    <i className="bi bi-tag me-2 text-primary"></i>Release Version
+                                </h5>
+                                <div className="bg-light rounded-3 p-3">
+                                    <ReleaseSelector
+                                        onReleaseChange={setSelectedReleaseId}
+                                        selectedReleaseId={selectedReleaseId}
+                                        className="release-selector-compact"
+                                    />
+                                    <div className="mt-2">
+                                        <small className="text-muted">
+                                            {selectedReleaseId === null ? (
+                                                <><i className="bi bi-info-circle me-1"></i>Exporting current (latest) requirements</>
+                                            ) : (
+                                                <><i className="bi bi-archive me-1"></i>Exporting from selected release version</>
+                                            )}
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+
                             {/* Language Selection */}
                             <div className="mb-4">
                                 <h5 className="fw-semibold mb-3">

@@ -41,9 +41,71 @@
 - **Structure**: models/, services/, cli/, exporters/, lib/
 
 ## Recent Changes
+- 012-build-ui-for: Release Management UI Enhancement (2025-10-07) - Complete UI for release management with browse, create, view details, compare, status lifecycle, delete (RBAC), and export integration
 - 011-i-want-to: Added Release-Based Requirement Version Management (2025-10-05) - Point-in-time snapshots, historical exports, field-level comparison, RELEASE_MANAGER role
 - 010-please-review-the: Added Kotlin 2.1.0 / Java 21 (backend), TypeScript/JavaScript (Astro 5.14 + React 19)
 - 009-i-want-to: Added Kotlin 2.1.0 / Java 21 (backend MCP server) + Micronaut 4.4, Hibernate JPA, existing MCP server infrastructure from Feature 006
+
+### Feature 012: Release Management UI Enhancement (2025-10-07)
+
+Complete user interface for release management with 8 major components:
+
+**Pages**:
+- `/releases` - Browse all releases with filtering, search, and pagination
+- `/releases/[id]` - Release detail view with metadata and requirement snapshots
+- `/releases/compare` - Side-by-side release comparison with field-level diff
+- `/export`, `/import-export` - Enhanced with release selector for historical exports
+
+**Components** (`src/frontend/src/components/`):
+- **ReleaseList.tsx** (530 lines) - Main release listing with filters, search, pagination, RBAC-enforced actions
+- **ReleaseDetail.tsx** (631 lines) - Release detail view with paginated snapshots, export, delete actions
+- **ReleaseComparison.tsx** (360 lines) - Side-by-side comparison with summary stats, color-coded changes, Excel export
+- **ReleaseCreateModal.tsx** (295 lines) - Modal form with semantic versioning validation, keyboard navigation (Escape)
+- **ReleaseDeleteConfirm.tsx** (118 lines) - Confirmation modal with warning, keyboard navigation, RBAC enforcement
+- **ReleaseStatusActions.tsx** (247 lines) - Status transition buttons (Publish/Archive) with confirmation modal
+- **ReleaseSelector.tsx** (112 lines) - Dropdown component for release selection (memoized with React.memo)
+- **ReleaseManagement.tsx** (614 lines) - Admin page wrapper
+
+**Services** (`src/frontend/src/services/`):
+- **releaseService.ts** (238 lines) - Complete API wrapper with JSDoc documentation
+  - Methods: list(), getById(), create(), updateStatus(), delete(), getSnapshots(), compare()
+  - Pagination support, error handling, TypeScript interfaces
+
+**Utilities** (`src/frontend/src/utils/`):
+- **permissions.ts** (126 lines) - RBAC permission checks
+  - canDeleteRelease() - ADMIN deletes any, RELEASE_MANAGER deletes own only
+  - canCreateRelease(), canUpdateReleaseStatus(), canViewReleases()
+  - getPermissionErrorMessage()
+- **comparisonExport.ts** - Client-side Excel export using ExcelJS library
+  - Multiple sheets: Summary, Added, Deleted, Modified, Unchanged
+  - Color-coded rows, formatted columns, auto-width
+
+**Features Implemented**:
+1. **Browse & Search** (P1): List view with status filtering, version/name search, pagination (20/page)
+2. **Create Release** (P1): Modal with semantic versioning validation, duplicate detection, RBAC enforcement (ADMIN/RELEASE_MANAGER)
+3. **View Details** (P2): Complete metadata display, paginated snapshots (50/page), snapshot detail modal, export buttons
+4. **Compare Releases** (P2): Dropdown selectors, summary stats, color-coded sections (Added/Deleted/Modified/Unchanged), field-by-field diff, Excel export
+5. **Status Lifecycle** (P2): Publish DRAFT → PUBLISHED, Archive PUBLISHED → ARCHIVED, confirmation modals, RBAC enforcement
+6. **Export Integration** (P2): Release selector on export pages, default to "Current", historical exports with releaseId parameter
+7. **Delete Release** (P3): RBAC-enforced delete (ADMIN: any release, RELEASE_MANAGER: own releases only), confirmation modal, cascade warning
+
+**Accessibility & Polish** (Phase 8):
+- Keyboard navigation: Escape to close modals, Tab order, Enter to submit
+- ARIA labels: Status badges, modals, buttons, form fields
+- Loading states: Disabled buttons, spinner indicators, skeleton loaders
+- Error handling: Toast notifications, inline validation, permission errors (403)
+- Performance: React.memo on child components, pagination for large datasets
+- No console statements (all removed)
+
+**Test Coverage**:
+- 71 E2E test scenarios across 7 test files (Playwright)
+- Tests written first (TDD approach): RED → GREEN → REFACTOR
+- Coverage: Browse (8), Create (9), Detail (9), Compare (9), Status (12), Export (11), Delete (13)
+
+**Statistics**:
+- Production code: 2,907 lines (components) + 238 lines (service) + 532 lines (utilities) = 3,677 lines
+- E2E tests: 2,785 lines
+- Total: 6,462 lines (production + tests)
 
 ### Feature 011: Release-Based Requirement Version Management (2025-10-05)
 
@@ -204,6 +266,9 @@ Model Context Protocol tools for AI assistant integration:
 - **E2E**: `npm run test:e2e`
 
 ## Constitutional Principles (v1.0.0)
+
+**Full Constitution**: See `.specify/memory/constitution.md` for complete details, rationale, and governance.
+
 1. **Security-First**: File validation, input sanitization, RBAC enforced
 2. **TDD**: Tests before implementation (Red-Green-Refactor)
 3. **API-First**: RESTful with OpenAPI, backward compatibility

@@ -1,41 +1,14 @@
 import React, { useState } from 'react';
 import { authenticatedFetch } from '../utils/auth';
+import { 
+    exportComparisonToExcel, 
+    type ComparisonResult,
+    type ReleaseInfo,
+    type RequirementSnapshotSummary,
+    type RequirementDiff,
+    type FieldChange
+} from '../utils/comparisonExport';
 import ReleaseSelector from './ReleaseSelector';
-
-interface ReleaseInfo {
-    id: number;
-    version: string;
-    name: string;
-    createdAt: string;
-}
-
-interface RequirementSnapshotSummary {
-    id: number;
-    originalRequirementId: number;
-    shortreq: string;
-    details: string | null;
-}
-
-interface FieldChange {
-    fieldName: string;
-    oldValue: string | null;
-    newValue: string | null;
-}
-
-interface RequirementDiff {
-    id: number;
-    shortreq: string;
-    changes: FieldChange[];
-}
-
-interface ComparisonResult {
-    fromRelease: ReleaseInfo;
-    toRelease: ReleaseInfo;
-    added: RequirementSnapshotSummary[];
-    deleted: RequirementSnapshotSummary[];
-    modified: RequirementDiff[];
-    unchanged: number;
-}
 
 const ReleaseComparison: React.FC = () => {
     const [fromReleaseId, setFromReleaseId] = useState<number | null>(null);
@@ -44,6 +17,7 @@ const ReleaseComparison: React.FC = () => {
     const [isComparing, setIsComparing] = useState<boolean>(false);
     const [error, setError] = useState<string>('');
     const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
+    const [isExporting, setIsExporting] = useState<boolean>(false);
 
     const handleCompare = async () => {
         if (fromReleaseId === null || toReleaseId === null) {
@@ -73,7 +47,6 @@ const ReleaseComparison: React.FC = () => {
             const data: ComparisonResult = await response.json();
             setComparisonResult(data);
         } catch (err) {
-            console.error('Error comparing releases:', err);
             setError(err instanceof Error ? err.message : 'Failed to compare releases');
         } finally {
             setIsComparing(false);
@@ -90,6 +63,19 @@ const ReleaseComparison: React.FC = () => {
             }
             return newSet;
         });
+    };
+
+    const handleExportToExcel = async () => {
+        if (!comparisonResult) return;
+
+        setIsExporting(true);
+        try {
+            await exportComparisonToExcel(comparisonResult);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to export comparison');
+        } finally {
+            setIsExporting(false);
+        }
     };
 
     return (
@@ -148,6 +134,27 @@ const ReleaseComparison: React.FC = () => {
 
             {comparisonResult && (
                 <div className="comparison-results mt-4">
+                    {/* Export Button */}
+                    <div className="mb-3 d-flex justify-content-end">
+                        <button
+                            className="btn btn-success"
+                            onClick={handleExportToExcel}
+                            disabled={isExporting}
+                        >
+                            {isExporting ? (
+                                <>
+                                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                    Exporting...
+                                </>
+                            ) : (
+                                <>
+                                    <i className="bi bi-download me-2"></i>
+                                    Export to Excel
+                                </>
+                            )}
+                        </button>
+                    </div>
+
                     <div className="row mb-3">
                         <div className="col-md-6">
                             <div className="card">
