@@ -16,6 +16,7 @@
 import React, { useState, useEffect } from 'react';
 import { releaseService, type Release, type RequirementSnapshot, type PaginatedResponse } from '../services/releaseService';
 import { hasRole } from '../utils/auth';
+import ReleaseStatusActions from './ReleaseStatusActions';
 
 interface ReleaseDetailProps {
     releaseId: number;
@@ -215,6 +216,11 @@ const ReleaseDetail: React.FC<ReleaseDetailProps> = ({ releaseId }) => {
         window.location.href = '/releases';
     }
 
+    // Handle status change (callback from ReleaseStatusActions)
+    function handleStatusChange(updatedRelease: Release) {
+        setRelease(updatedRelease);
+    }
+
     // Get status badge class
     function getStatusBadgeClass(status: string): string {
         switch (status) {
@@ -356,6 +362,14 @@ const ReleaseDetail: React.FC<ReleaseDetailProps> = ({ releaseId }) => {
                         </div>
                     )}
 
+                    {/* Status Actions - Publish/Archive buttons */}
+                    <div className="mt-4">
+                        <ReleaseStatusActions
+                            release={release}
+                            onStatusChange={handleStatusChange}
+                        />
+                    </div>
+
                     {/* Action Buttons */}
                     <div className="mt-4">
                         <div className="btn-group" role="group">
@@ -364,14 +378,14 @@ const ReleaseDetail: React.FC<ReleaseDetailProps> = ({ releaseId }) => {
                                 onClick={() => handleExport('xlsx')}
                             >
                                 <i className="bi bi-download me-2"></i>
-                                Export Excel
+                                Export to Excel
                             </button>
                             <button
                                 className="btn btn-outline-primary"
                                 onClick={() => handleExport('docx')}
                             >
                                 <i className="bi bi-file-word me-2"></i>
-                                Export Word
+                                Export to Word
                             </button>
                         </div>
                     </div>

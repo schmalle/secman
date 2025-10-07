@@ -119,6 +119,43 @@ class ReleaseController(
     }
 
     /**
+     * PUT /api/releases/{id}/status - Update release status
+     * Authorization: ADMIN or RELEASE_MANAGER only
+     * Workflow: DRAFT → PUBLISHED → ARCHIVED (one-way transitions)
+     */
+    @Put("/{id}/status")
+    @Secured("ADMIN", "RELEASE_MANAGER")
+    fun updateReleaseStatus(
+        @PathVariable id: Long,
+        @Body request: ReleaseStatusUpdateRequest
+    ): HttpResponse<Map<String, Any>> {
+        logger.info("Updating release status: id=$id, newStatus=${request.status}")
+
+        try {
+            val updatedRelease = releaseService.updateReleaseStatus(id, request.status)
+            val snapshotCount = snapshotRepository.countByReleaseId(id)
+
+            return HttpResponse.ok(toReleaseResponse(updatedRelease, snapshotCount.toInt()))
+        } catch (e: NoSuchElementException) {
+            logger.warn("Release not found for status update: $id")
+            return HttpResponse.notFound(
+                mapOf(
+                    "error" to "Not Found",
+                    "message" to (e.message ?: "Release not found")
+                )
+            )
+        } catch (e: IllegalStateException) {
+            logger.warn("Invalid status transition for release $id: ${e.message}")
+            return HttpResponse.badRequest(
+                mapOf(
+                    "error" to "Bad Request",
+                    "message" to (e.message ?: "Invalid status transition")
+                )
+            )
+        }
+    }
+
+    /**
      * GET /api/releases/{id}/requirements - List snapshots in release
      */
     @Get("/{id}/requirements")
@@ -214,4 +251,12 @@ data class ReleaseCreateRequest(
     val version: String,
     val name: String,
     val description: String? = null
+)
+
+/**
+ * Request DTO for updating release status
+ */
+@Serdeable
+data class ReleaseStatusUpdateRequest(
+    val status: Release.ReleaseStatus
 )
