@@ -85,6 +85,7 @@ const ReleaseSelector: React.FC<ReleaseSelectorProps> = ({
                 value={selectedId === null ? '' : selectedId.toString()}
                 onChange={handleChange}
                 disabled={isLoading}
+                data-testid="release-selector"
             >
                 <option value="">Current Version (Live)</option>
 

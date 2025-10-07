@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { authenticatedFetch } from '../utils/auth';
+import { exportComparisonToExcel, type ComparisonResult } from '../utils/comparisonExport';
 import ReleaseSelector from './ReleaseSelector';
 
 interface ReleaseInfo {
@@ -13,7 +14,12 @@ interface RequirementSnapshotSummary {
     id: number;
     originalRequirementId: number;
     shortreq: string;
+    chapter?: string;
+    norm?: string;
     details: string | null;
+    motivation?: string | null;
+    example?: string | null;
+    usecase?: string | null;
 }
 
 interface FieldChange {
@@ -24,7 +30,10 @@ interface FieldChange {
 
 interface RequirementDiff {
     id: number;
+    originalRequirementId?: number;
     shortreq: string;
+    chapter?: string;
+    norm?: string;
     changes: FieldChange[];
 }
 
@@ -44,6 +53,7 @@ const ReleaseComparison: React.FC = () => {
     const [isComparing, setIsComparing] = useState<boolean>(false);
     const [error, setError] = useState<string>('');
     const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
+    const [isExporting, setIsExporting] = useState<boolean>(false);
 
     const handleCompare = async () => {
         if (fromReleaseId === null || toReleaseId === null) {
@@ -90,6 +100,20 @@ const ReleaseComparison: React.FC = () => {
             }
             return newSet;
         });
+    };
+
+    const handleExportToExcel = async () => {
+        if (!comparisonResult) return;
+
+        setIsExporting(true);
+        try {
+            await exportComparisonToExcel(comparisonResult);
+        } catch (err) {
+            console.error('Error exporting comparison:', err);
+            setError(err instanceof Error ? err.message : 'Failed to export comparison');
+        } finally {
+            setIsExporting(false);
+        }
     };
 
     return (
@@ -148,6 +172,27 @@ const ReleaseComparison: React.FC = () => {
 
             {comparisonResult && (
                 <div className="comparison-results mt-4">
+                    {/* Export Button */}
+                    <div className="mb-3 d-flex justify-content-end">
+                        <button
+                            className="btn btn-success"
+                            onClick={handleExportToExcel}
+                            disabled={isExporting}
+                        >
+                            {isExporting ? (
+                                <>
+                                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                    Exporting...
+                                </>
+                            ) : (
+                                <>
+                                    <i className="bi bi-download me-2"></i>
+                                    Export to Excel
+                                </>
+                            )}
+                        </button>
+                    </div>
+
                     <div className="row mb-3">
                         <div className="col-md-6">
                             <div className="card">
