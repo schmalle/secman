@@ -45,6 +45,20 @@ const StatusTransitionModal: React.FC<StatusTransitionModalProps> = ({
     onClose,
     onConfirm
 }) => {
+    // Handle keyboard navigation (Escape to close)
+    React.useEffect(() => {
+        if (!isOpen) return;
+
+        function handleKeyDown(e: KeyboardEvent) {
+            if (e.key === 'Escape' && !isLoading) {
+                onClose();
+            }
+        }
+
+        document.addEventListener('keydown', handleKeyDown);
+        return () => document.removeEventListener('keydown', handleKeyDown);
+    }, [isOpen, isLoading, onClose]);
+
     if (!isOpen || !transitionType) {
         return null;
     }
@@ -173,7 +187,6 @@ export const ReleaseStatusActions: React.FC<ReleaseStatusActionsProps> = ({ rele
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Failed to update status';
             setError(message);
-            console.error('Status transition error:', err);
         } finally {
             setIsLoading(false);
         }

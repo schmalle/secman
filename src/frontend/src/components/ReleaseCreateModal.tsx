@@ -57,6 +57,20 @@ const ReleaseCreateModal: React.FC<ReleaseCreateModalProps> = ({ isOpen, onClose
         }
     }, [isOpen]);
 
+    // Handle keyboard navigation (Escape to close)
+    useEffect(() => {
+        if (!isOpen) return;
+
+        function handleKeyDown(e: KeyboardEvent) {
+            if (e.key === 'Escape' && !loading) {
+                handleCancel();
+            }
+        }
+
+        document.addEventListener('keydown', handleKeyDown);
+        return () => document.removeEventListener('keydown', handleKeyDown);
+    }, [isOpen, loading]);
+
     // Handle input changes
     function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
         const { name, value } = e.target;
@@ -109,7 +123,6 @@ const ReleaseCreateModal: React.FC<ReleaseCreateModalProps> = ({ isOpen, onClose
             
             // Show success message (will be handled by parent component)
         } catch (err) {
-            console.error('Failed to create release:', err);
             const errorMessage = err instanceof Error ? err.message : 'Failed to create release. Please try again.';
             
             // Check for specific error types
@@ -292,4 +305,4 @@ const ReleaseCreateModal: React.FC<ReleaseCreateModalProps> = ({ isOpen, onClose
     );
 };
 
-export default ReleaseCreateModal;
+export default React.memo(ReleaseCreateModal);

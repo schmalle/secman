@@ -96,7 +96,6 @@ const ReleaseList: React.FC<ReleaseListProps> = () => {
             setTotalItems(result.totalItems);
             setCurrentPage(result.currentPage);
         } catch (err) {
-            console.error('Failed to load releases:', err);
             setError(err instanceof Error ? err.message : 'Failed to load releases');
             setReleases([]);
         } finally {
@@ -187,7 +186,6 @@ const ReleaseList: React.FC<ReleaseListProps> = () => {
             // Reload releases
             await loadReleases();
         } catch (err) {
-            console.error('Failed to delete release:', err);
             const errorMessage = err instanceof Error 
                 ? err.message 
                 : 'Failed to delete release. Please try again.';
@@ -405,7 +403,10 @@ const ReleaseList: React.FC<ReleaseListProps> = () => {
                                     </a>
                                 </td>
                                 <td>
-                                    <span className={`badge ${getStatusBadgeClass(release.status)}`}>
+                                    <span 
+                                        className={`badge ${getStatusBadgeClass(release.status)}`}
+                                        aria-label={`Release status: ${release.status}`}
+                                    >
                                         {release.status}
                                     </span>
                                 </td>

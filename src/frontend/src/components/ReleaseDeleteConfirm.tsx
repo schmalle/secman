@@ -17,6 +17,7 @@ interface ReleaseDeleteConfirmProps {
  * 
  * Shows warning message about permanent deletion and cascading deletion of snapshots
  * Provides Cancel and Confirm actions
+ * Supports keyboard navigation (Escape to cancel)
  */
 const ReleaseDeleteConfirm: React.FC<ReleaseDeleteConfirmProps> = ({
   release,
@@ -25,6 +26,20 @@ const ReleaseDeleteConfirm: React.FC<ReleaseDeleteConfirmProps> = ({
   onClose,
   onConfirm,
 }) => {
+  // Handle keyboard navigation (Escape to close)
+  React.useEffect(() => {
+    if (!isOpen) return;
+
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape' && !isDeleting) {
+        onClose();
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, isDeleting, onClose]);
+
   if (!isOpen || !release) return null;
 
   return (
@@ -115,4 +130,4 @@ const ReleaseDeleteConfirm: React.FC<ReleaseDeleteConfirmProps> = ({
   );
 };
 
-export default ReleaseDeleteConfirm;
+export default React.memo(ReleaseDeleteConfirm);

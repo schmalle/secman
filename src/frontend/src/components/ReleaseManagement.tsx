@@ -65,7 +65,6 @@ const ReleaseManagement = () => {
             });
         } catch (err) {
             setError('Failed to load release data');
-            console.error('Error loading data:', err);
         } finally {
             setLoading(false);
         }
@@ -122,7 +121,6 @@ const ReleaseManagement = () => {
             setError(null); // Clear any previous errors
             loadData();
         } catch (err) {
-            console.error('Error creating release:', err);
             setError(err instanceof Error ? err.message : 'Failed to create release');
         }
     };
@@ -149,7 +147,6 @@ const ReleaseManagement = () => {
             setFormData({ version: '', name: '', description: '' });
             loadData();
         } catch (err) {
-            console.error('Error updating release:', err);
             setError(err instanceof Error ? err.message : 'Failed to update release');
         }
     };
@@ -167,7 +164,6 @@ const ReleaseManagement = () => {
 
             loadData();
         } catch (err) {
-            console.error('Error publishing release:', err);
             setError(err instanceof Error ? err.message : 'Failed to publish release');
         }
     };
@@ -185,7 +181,6 @@ const ReleaseManagement = () => {
 
             loadData();
         } catch (err) {
-            console.error('Error archiving release:', err);
             setError(err instanceof Error ? err.message : 'Failed to archive release');
         }
     };
@@ -207,7 +202,6 @@ const ReleaseManagement = () => {
 
             loadData();
         } catch (err) {
-            console.error('Error deleting release:', err);
             setError(err instanceof Error ? err.message : 'Failed to delete release');
         }
     };

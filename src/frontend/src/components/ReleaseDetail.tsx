@@ -200,7 +200,6 @@ const ReleaseDetail: React.FC<ReleaseDetailProps> = ({ releaseId }) => {
             setTotalItems(snapshotsData.totalItems);
             setCurrentPage(snapshotsData.currentPage);
         } catch (err) {
-            console.error('Failed to load release data:', err);
             setError(err instanceof Error ? err.message : 'Failed to load release details');
         } finally {
             setLoading(false);
@@ -270,7 +269,6 @@ const ReleaseDetail: React.FC<ReleaseDetailProps> = ({ releaseId }) => {
                 window.location.href = '/releases';
             }, 1500);
         } catch (err) {
-            console.error('Failed to delete release:', err);
             const errorMessage = err instanceof Error 
                 ? err.message 
                 : 'Failed to delete release. Please try again.';
@@ -387,7 +385,10 @@ const ReleaseDetail: React.FC<ReleaseDetailProps> = ({ releaseId }) => {
                 <div className="card-header bg-primary text-white">
                     <h2 className="mb-0">
                         {release.name}
-                        <span className={`badge ${getStatusBadgeClass(release.status)} ms-3`}>
+                        <span 
+                            className={`badge ${getStatusBadgeClass(release.status)} ms-3`}
+                            aria-label={`Release status: ${release.status}`}
+                        >
                             {release.status}
                         </span>
                     </h2>
@@ -401,7 +402,10 @@ const ReleaseDetail: React.FC<ReleaseDetailProps> = ({ releaseId }) => {
 
                                 <dt className="col-sm-4">Status:</dt>
                                 <dd className="col-sm-8">
-                                    <span className={`badge ${getStatusBadgeClass(release.status)}`}>
+                                    <span 
+                                        className={`badge ${getStatusBadgeClass(release.status)}`}
+                                        aria-label={`Release status: ${release.status}`}
+                                    >
                                         {release.status}
                                     </span>
                                 </dd>

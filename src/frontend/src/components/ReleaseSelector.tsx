@@ -44,7 +44,6 @@ const ReleaseSelector: React.FC<ReleaseSelectorProps> = ({
             const data = await response.json();
             setReleases(data);
         } catch (err) {
-            console.error('Error fetching releases:', err);
             setError('Failed to load releases');
         } finally {
             setIsLoading(false);
@@ -109,4 +108,4 @@ const ReleaseSelector: React.FC<ReleaseSelectorProps> = ({
     );
 };
 
-export default ReleaseSelector;
+export default React.memo(ReleaseSelector);

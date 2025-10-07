@@ -83,7 +83,6 @@ const ReleaseComparison: React.FC = () => {
             const data: ComparisonResult = await response.json();
             setComparisonResult(data);
         } catch (err) {
-            console.error('Error comparing releases:', err);
             setError(err instanceof Error ? err.message : 'Failed to compare releases');
         } finally {
             setIsComparing(false);
@@ -109,7 +108,6 @@ const ReleaseComparison: React.FC = () => {
         try {
             await exportComparisonToExcel(comparisonResult);
         } catch (err) {
-            console.error('Error exporting comparison:', err);
             setError(err instanceof Error ? err.message : 'Failed to export comparison');
         } finally {
             setIsExporting(false);

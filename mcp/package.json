@@ -1,0 +1,19 @@
+{
+  "name": "secman-mcp-server",
+  "version": "0.1.0",
+  "description": "MCP Server for Secman security requirements management",
+  "main": "mcp-server.js",
+  "scripts": {
+    "start": "node mcp-server.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "latest",
+    "node-fetch": "^3.3.2"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "bin": {
+    "secman-mcp": "./mcp-server.js"
+  }
+}
