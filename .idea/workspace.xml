@@ -5,8 +5,21 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="94ada8b3-9f4e-473c-9fea-3bc9651b5bdd" name="Changes" comment="test change">
-      <change beforePath="$PROJECT_DIR$/.github/workflows/claude-code-review.yml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/kotlinc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/kotlinc.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/mcp-server.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/mcp/package.json" beforeDir="false" afterPath="$PROJECT_DIR$/mcp/package.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/package-lock.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/package.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/ReleaseController.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/ReleaseController.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/src/components/ReleaseComparison.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/components/ReleaseComparison.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/src/components/ReleaseDetail.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/components/ReleaseDetail.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/src/components/ReleaseList.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/components/ReleaseList.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/src/components/ReleaseManagement.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/components/ReleaseManagement.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/src/components/ReleaseSelector.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/components/ReleaseSelector.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/src/components/ReleaseStatusActions.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/components/ReleaseStatusActions.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/src/utils/auth.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/utils/auth.ts" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -70,9 +83,10 @@
     "RunOnceActivity.git.unshallow": "true",
     "SHARE_PROJECT_CONFIGURATION_FILES": "true",
     "SHELLCHECK.PATH": "/Users/flake/Library/Application Support/JetBrains/IntelliJIdea2025.1/plugins/Shell Script/shellcheck",
-    "git-widget-placeholder": "main",
+    "git-widget-placeholder": "012-build-ui-for",
     "junie.onboarding.icon.badge.shown": "true",
     "kotlin-language-version-configured": "true",
+    "last_opened_file_path": "/Users/flake/sources/misc/secman",
     "node.js.detected.package.eslint": "true",
     "node.js.selected.package.eslint": "(autodetect)",
     "nodejs_package_manager_path": "npm",
@@ -91,11 +105,11 @@
 }]]></component>
   <component name="RecentsManager">
     <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/mcp" />
       <recent name="$PROJECT_DIR$/scripts/tests" />
       <recent name="$PROJECT_DIR$/scripts/install" />
       <recent name="$PROJECT_DIR$/scripts/kotlin" />
       <recent name="$PROJECT_DIR$/docs" />
-      <recent name="$PROJECT_DIR$/scripts" />
     </key>
   </component>
   <component name="RunManager" selected="Gradle.backendng [build]">

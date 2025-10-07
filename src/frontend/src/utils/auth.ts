@@ -11,6 +11,7 @@ export interface User {
  * Get the stored JWT token
  */
 export function getAuthToken(): string | null {
+    if (typeof window === 'undefined') return null;
     return localStorage.getItem('authToken');
 }
 
@@ -18,13 +19,13 @@ export function getAuthToken(): string | null {
  * Get the stored user information
  */
 export function getUser(): User | null {
+    if (typeof window === 'undefined') return null;
     const userStr = localStorage.getItem('user');
     if (!userStr) return null;
-    
+
     try {
         return JSON.parse(userStr);
     } catch (e) {
-        console.error('Failed to parse user data:', e);
         return null;
     }
 }
@@ -62,6 +63,7 @@ export function hasVulnAccess(): boolean {
  * Clear authentication data (logout)
  */
 export function clearAuth(): void {
+    if (typeof window === 'undefined') return;
     localStorage.removeItem('authToken');
     localStorage.removeItem('user');
 }
@@ -100,7 +102,9 @@ export async function authenticatedFetch(url: string, options: RequestInit = {})
     // If we get 401, clear auth data and redirect to login
     if (response.status === 401) {
         clearAuth();
-        window.location.href = '/login';
+        if (typeof window !== 'undefined') {
+            window.location.href = '/login';
+        }
     }
     
     return response;
@@ -135,7 +139,9 @@ export async function authenticatedPost(url: string, data?: any): Promise<Respon
 
         if (response.status === 401) {
             clearAuth();
-            window.location.href = '/login';
+            if (typeof window !== 'undefined') {
+                window.location.href = '/login';
+            }
         }
 
         return response;

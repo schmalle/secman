@@ -38,7 +38,9 @@ const ReleaseManagement = () => {
     });
 
     useEffect(() => {
-        loadData();
+        if (typeof window !== 'undefined') {
+            loadData();
+        }
     }, []);
 
     const loadData = async () => {

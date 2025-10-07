@@ -155,7 +155,7 @@ export const ReleaseStatusActions: React.FC<ReleaseStatusActionsProps> = ({ rele
     const [error, setError] = useState<string | null>(null);
 
     // Check user permissions
-    const canManageStatus = hasRole(['ADMIN', 'RELEASE_MANAGER']);
+    const canManageStatus = typeof window !== 'undefined' && hasRole(['ADMIN', 'RELEASE_MANAGER']);
 
     // Only show actions if user has permission
     if (!canManageStatus) {

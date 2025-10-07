@@ -61,9 +61,9 @@ const ReleaseList: React.FC<ReleaseListProps> = () => {
     });
 
     // User/Role info
-    const user = getUser();
+    const user = typeof window !== 'undefined' ? getUser() : null;
     const userRoles = user?.roles || [];
-    const canCreate = hasRole('ADMIN') || hasRole('RELEASE_MANAGER');
+    const canCreate = typeof window !== 'undefined' && (hasRole('ADMIN') || hasRole('RELEASE_MANAGER'));
 
     // Debounce search query (300ms)
     useEffect(() => {
@@ -77,7 +77,9 @@ const ReleaseList: React.FC<ReleaseListProps> = () => {
 
     // Fetch releases
     useEffect(() => {
-        loadReleases();
+        if (typeof window !== 'undefined') {
+            loadReleases();
+        }
     }, [statusFilter, debouncedSearch, currentPage]);
 
     async function loadReleases() {

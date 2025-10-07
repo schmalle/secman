@@ -27,7 +27,9 @@ const ReleaseSelector: React.FC<ReleaseSelectorProps> = ({
     const [selectedId, setSelectedId] = useState<number | null>(selectedReleaseId);
 
     useEffect(() => {
-        fetchReleases();
+        if (typeof window !== 'undefined') {
+            fetchReleases();
+        }
     }, []);
 
     const fetchReleases = async () => {

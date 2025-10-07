@@ -60,12 +60,14 @@ class ReleaseController(
 
     /**
      * GET /api/releases - List all releases
-     * Optional filter by status
+     * Optional filter by status, with pagination
      */
     @Get
     fun listReleases(
-        @QueryValue("status") status: Release.ReleaseStatus?
-    ): HttpResponse<List<Map<String, Any>>> {
+        @QueryValue("status") status: Release.ReleaseStatus?,
+        @QueryValue("page") page: Int?,
+        @QueryValue("pageSize") pageSize: Int?
+    ): HttpResponse<Map<String, Any>> {
         logger.debug("Listing releases with status filter: $status")
 
         val releases = releaseService.listReleases(status)
@@ -74,7 +76,29 @@ class ReleaseController(
             toReleaseResponse(release, snapshotCount.toInt())
         }
 
-        return HttpResponse.ok(responseDtos)
+        // Simple pagination (client-side for now since we load all releases)
+        val currentPage = page ?: 1
+        val itemsPerPage = pageSize ?: 20
+        val totalItems = responseDtos.size
+        val totalPages = if (totalItems == 0) 1 else ((totalItems + itemsPerPage - 1) / itemsPerPage)
+
+        val startIndex = (currentPage - 1) * itemsPerPage
+        val endIndex = minOf(startIndex + itemsPerPage, totalItems)
+        val paginatedData = if (startIndex < totalItems) {
+            responseDtos.subList(startIndex, endIndex)
+        } else {
+            emptyList()
+        }
+
+        val paginatedResponse = mapOf(
+            "data" to paginatedData,
+            "currentPage" to currentPage,
+            "totalPages" to totalPages,
+            "totalItems" to totalItems,
+            "pageSize" to itemsPerPage
+        )
+
+        return HttpResponse.ok(paginatedResponse)
     }
 
     /**

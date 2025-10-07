@@ -171,12 +171,14 @@ const ReleaseDetail: React.FC<ReleaseDetailProps> = ({ releaseId }) => {
     });
 
     // User info
-    const user = getUser();
+    const user = typeof window !== 'undefined' ? getUser() : null;
     const userRoles = user?.roles || [];
 
     // Fetch release and snapshots
     useEffect(() => {
-        loadReleaseData();
+        if (typeof window !== 'undefined') {
+            loadReleaseData();
+        }
     }, [releaseId, currentPage]);
 
     async function loadReleaseData() {

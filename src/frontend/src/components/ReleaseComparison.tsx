@@ -1,50 +1,14 @@
 import React, { useState } from 'react';
 import { authenticatedFetch } from '../utils/auth';
-import { exportComparisonToExcel, type ComparisonResult } from '../utils/comparisonExport';
+import { 
+    exportComparisonToExcel, 
+    type ComparisonResult,
+    type ReleaseInfo,
+    type RequirementSnapshotSummary,
+    type RequirementDiff,
+    type FieldChange
+} from '../utils/comparisonExport';
 import ReleaseSelector from './ReleaseSelector';
-
-interface ReleaseInfo {
-    id: number;
-    version: string;
-    name: string;
-    createdAt: string;
-}
-
-interface RequirementSnapshotSummary {
-    id: number;
-    originalRequirementId: number;
-    shortreq: string;
-    chapter?: string;
-    norm?: string;
-    details: string | null;
-    motivation?: string | null;
-    example?: string | null;
-    usecase?: string | null;
-}
-
-interface FieldChange {
-    fieldName: string;
-    oldValue: string | null;
-    newValue: string | null;
-}
-
-interface RequirementDiff {
-    id: number;
-    originalRequirementId?: number;
-    shortreq: string;
-    chapter?: string;
-    norm?: string;
-    changes: FieldChange[];
-}
-
-interface ComparisonResult {
-    fromRelease: ReleaseInfo;
-    toRelease: ReleaseInfo;
-    added: RequirementSnapshotSummary[];
-    deleted: RequirementSnapshotSummary[];
-    modified: RequirementDiff[];
-    unchanged: number;
-}
 
 const ReleaseComparison: React.FC = () => {
     const [fromReleaseId, setFromReleaseId] = useState<number | null>(null);
