@@ -204,6 +204,9 @@ Model Context Protocol tools for AI assistant integration:
 - **E2E**: `npm run test:e2e`
 
 ## Constitutional Principles (v1.0.0)
+
+**Full Constitution**: See `.specify/memory/constitution.md` for complete details, rationale, and governance.
+
 1. **Security-First**: File validation, input sanitization, RBAC enforced
 2. **TDD**: Tests before implementation (Red-Green-Refactor)
 3. **API-First**: RESTful with OpenAPI, backward compatibility
