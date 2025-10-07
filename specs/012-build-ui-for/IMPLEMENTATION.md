@@ -1,16 +1,16 @@
 # Implementation Progress: Release Management UI Enhancement
 
 **Feature**: 012-build-ui-for  
-**Status**: Phase 4 Complete ✅ - All P2 Features Delivered!  
+**Status**: Phase 5 Complete ✅ - Status Lifecycle Management Delivered!  
 **Started**: 2025-10-07  
 **Branch**: 012-build-ui-for  
-**Latest Commit**: 2ce18d2
+**Latest Commit**: 3f89872
 
 ---
 
-## 🎉 ALL P2 FEATURES COMPLETE!
+## 🎉 PHASE 5 COMPLETE - STATUS LIFECYCLE MANAGEMENT!
 
-**Phases 0-4 complete**: Foundation, Browse, Create, Detail, and Comparison all functional!
+**Phases 0-5 complete**: Foundation, Browse, Create, Detail, Comparison, and Status Management all functional!
 
 ---
 
@@ -29,111 +29,106 @@
 **Tasks**: 10/10 | **Commits**: 1
 
 ### Completed: Phase 4 - User Story 4 (Compare Releases) ✅
+**Tasks**: 12/12 | **Commits**: 1
 
-**Tasks**: 12/12 complete  
-**Commits**: 1 (2ce18d2)  
-**Status**: P2 Complete - All Comparison Features Delivered
+### Completed: Phase 5 - User Story 5 (Status Lifecycle) ✅
+
+**Tasks**: 13/13 complete  
+**Commits**: 1 (3f89872)  
+**Status**: P2 Complete - Status Management Delivered
 
 #### Completed Tasks
 
 **Tests (TDD - Written First)**:
-- ✅ T039: E2E test - Dropdowns populated with releases
-- ✅ T040: E2E test - Shows Added/Deleted/Modified sections
-- ✅ T041: E2E test - Field-by-field diff display
-- ✅ T042: E2E test - Empty state when identical
-- ✅ T043: E2E test - Prevents comparing release with itself
-- ✅ T044: E2E test - Export comparison button visible
-- ✅ T045: E2E test - Excel export triggers download
-- ✅ Bonus: USER role access test
+- ✅ T051: E2E test - Publish button for ADMIN/RELEASE_MANAGER, hidden for USER
+- ✅ T052: E2E test - Confirmation modal before publish
+- ✅ T053: E2E test - Publish transitions DRAFT→PUBLISHED
+- ✅ T054: E2E test - Archive button for PUBLISHED
+- ✅ T055: E2E test - Confirmation modal before archive
+- ✅ T056: E2E test - Archive transitions PUBLISHED→ARCHIVED
+- ✅ T057: E2E test - No actions for ARCHIVED
+- ✅ Bonus: Complete workflow test
 - ✅ Bonus: Loading state test
 
 **Implementation**:
-- ✅ T046: Enhanced ReleaseComparison component
-- ✅ T047: Added field-by-field diff display (already existed, enhanced)
-- ✅ T048: Created comparison export utility with exceljs (280 lines)
-- ✅ T049: Added export button with loading state
-- ✅ T050: Enhanced compare.astro page (already existed, uses enhanced component)
+- ✅ T058: Create ReleaseStatusActions component (209 lines)
+- ✅ T059: Create StatusTransitionModal component (embedded in ReleaseStatusActions)
+- ✅ T060: Add updateStatus method to releaseService (already exists)
+- ✅ T061: Integrate into ReleaseDetail component
+- ✅ T062: Add handleStatusChange callback
+- ✅ Backend: Add PUT /api/releases/{id}/status endpoint
+- ✅ Backend: Add ReleaseStatusUpdateRequest DTO
+- ✅ Backend: Add updateReleaseStatus() to ReleaseService
 
-#### User Story 4 Deliverables
+#### User Story 5 Deliverables
 
 **Features Implemented**:
-- ✅ Two dropdown selectors for release selection
-- ✅ "Compare →" button between dropdowns
-- ✅ Summary statistics cards (4 metrics)
-  - Added (green) - count and list
-  - Deleted (red) - count and list
-  - Modified (yellow) - count and list with field diffs
-  - Unchanged (gray) - count only
-- ✅ Color-coded sections for each change type
-- ✅ Field-by-field diff table for modified requirements
-  - Expandable/collapsible items
-  - Shows field name, old value (strikethrough), new value (underlined)
-  - Badge showing change count
-- ✅ Empty state when releases are identical
-- ✅ Validation: Cannot compare release with itself
-- ✅ Export to Excel button
-  - Client-side generation with exceljs
-  - Summary sheet with metadata
-  - Separate sheets for Added/Deleted/Modified
-  - Change Type column for filtering
-  - Styled headers and formatted cells
-  - Download with descriptive filename
+- ✅ Status workflow enforcement: DRAFT → PUBLISHED → ARCHIVED (one-way only)
+- ✅ Publish button for DRAFT releases
+  - ADMIN and RELEASE_MANAGER only
+  - Hidden for regular users
+  - Green button with upload icon
+- ✅ Archive button for PUBLISHED releases
+  - ADMIN and RELEASE_MANAGER only
+  - Hidden for regular users
+  - Yellow/warning button with archive icon
+- ✅ No action buttons for ARCHIVED releases
+  - Read-only state
+  - Can still export and compare
+- ✅ Confirmation modals before each transition
+  - Publish: "This will make it available for exports and comparisons"
+  - Archive: "This will mark it as historical"
+  - Confirm/Cancel buttons
+  - Disabled UI during loading
+- ✅ Real-time status badge updates
+  - DRAFT: yellow badge with bg-warning
+  - PUBLISHED: green badge with bg-success
+  - ARCHIVED: gray badge with bg-secondary
+- ✅ Error handling
+  - Invalid transitions return 400 with message
+  - Network errors display user-friendly alerts
+  - Dismissible error messages
 
-**Excel Export Structure**:
-```
-Release_Comparison_{from}_to_{to}_{date}.xlsx
-├── Summary Sheet
-│   ├── Comparison date
-│   ├── From release info (version, name, created)
-│   ├── To release info (version, name, created)
-│   └── Statistics (added, deleted, modified, unchanged, total)
-├── Added Sheet (if any)
-│   └── Columns: Change Type, Short Req, Chapter, Norm, Details, Motivation, Example, Use Case
-├── Deleted Sheet (if any)
-│   └── Columns: Change Type, Short Req, Chapter, Norm, Details, Motivation, Example, Use Case
-└── Modified Sheet (if any)
-    └── Columns: Change Type, Short Req, Chapter, Norm, Field Changed, Old Value, New Value
+**Backend Workflow Validation**:
+```kotlin
+when (currentStatus) {
+    DRAFT -> newStatus == PUBLISHED
+    ACTIVE -> newStatus in [PUBLISHED, ARCHIVED]
+    PUBLISHED -> newStatus == ARCHIVED
+    ARCHIVED -> false // No transitions from ARCHIVED
+}
 ```
 
 **Component Architecture**:
 ```
-ReleaseComparison.tsx (enhanced)
+ReleaseStatusActions.tsx (209 lines)
 ├── State Management
-│   ├── fromReleaseId, toReleaseId (dropdowns)
-│   ├── comparisonResult (API data)
-│   ├── isComparing, isExporting (loading states)
-│   ├── error (validation/API errors)
-│   └── expandedItems (modified req details)
+│   ├── transitionType: 'publish' | 'archive' | null
+│   ├── isLoading: boolean
+│   └── error: string | null
+├── Permission Check
+│   └── hasRole(['ADMIN', 'RELEASE_MANAGER'])
+├── Workflow Logic
+│   ├── showPublishButton: status === 'DRAFT'
+│   └── showArchiveButton: status === 'PUBLISHED'
 ├── API Integration
-│   ├── GET /api/releases/compare?fromReleaseId=X&toReleaseId=Y
-│   └── Error handling for validation and network errors
-├── UI Sections
-│   ├── Two ReleaseSelector dropdowns
-│   ├── Compare button (center, loading state)
-│   ├── Export to Excel button (top right of results)
-│   ├── Release info cards (from/to)
-│   ├── Summary statistics (4 cards)
-│   ├── Added section (list-group-item-success)
-│   ├── Deleted section (list-group-item-danger)
-│   ├── Modified section (list-group-item-warning)
-│   │   ├── Expandable items
-│   │   └── Field diff table
-│   └── Empty state (no differences)
-└── Export Function
-    ├── handleExportToExcel()
-    ├── Calls exportComparisonToExcel() utility
-    └── Loading state during export
+│   ├── PUT /api/releases/{id}/status
+│   └── Error handling (404, 400, network errors)
+└── UI Components
+    ├── Publish button (green, upload icon)
+    ├── Archive button (warning, archive icon)
+    └── StatusTransitionModal (confirmation)
 
-comparisonExport.ts (NEW - 280 lines)
-├── Interfaces matching API response
-├── exportComparisonToExcel() - main export function
-│   ├── Creates workbook with exceljs
-│   ├── Builds 4 sheets (Summary, Added, Deleted, Modified)
-│   ├── Styles headers with color coding
-│   ├── Formats cells (wrap text, borders, alignment)
-│   ├── Generates buffer
-│   └── Triggers browser download
-└── styleHeaderRow() - shared styling utility
+StatusTransitionModal (embedded)
+├── Props: release, transitionType, isOpen, isLoading, onClose, onConfirm
+├── Dynamic Content
+│   ├── Title: "Publish Release" | "Archive Release"
+│   ├── Message: contextual warning
+│   └── Button color: success | warning
+├── Loading State
+│   ├── Spinner in confirm button
+│   └── Disabled close button
+└── Bootstrap Modal Styling
 ```
 
 ---
@@ -142,24 +137,28 @@ comparisonExport.ts (NEW - 280 lines)
 
 ### Code Written (Cumulative)
 - **Services**: 245 lines
-- **Components**: 1,522 lines (enhanced ReleaseComparison +50 lines)
-- **Utilities**: 280 lines (comparisonExport.ts)
+- **Components**: 1,731 lines (+209 ReleaseStatusActions)
+- **Utilities**: 280 lines
 - **Pages**: 2
 - **Test Helpers**: 263 lines
+- **Backend Endpoints**: +50 lines (ReleaseController)
+- **Backend Service**: +45 lines (ReleaseService)
 - **E2E Tests**: 
   - release-list.spec.ts: 365 lines
   - release-create.spec.ts: 471 lines
   - release-detail.spec.ts: 379 lines
   - release-comparison.spec.ts: 475 lines
-  - **Subtotal**: 1,690 lines
-- **Total**: 4,000 lines (production + tests)
+  - release-status.spec.ts: 464 lines (NEW)
+  - **Subtotal**: 2,154 lines (+464)
+- **Total**: 4,570 lines (production + tests + backend)
 
 ### Test Coverage
-- **E2E Tests**: 35 scenarios total
+- **E2E Tests**: 47 scenarios total (+12 from Phase 5)
   - User Story 1 (Browse): 8 scenarios
   - User Story 2 (Create): 9 scenarios
   - User Story 3 (Detail): 9 scenarios
   - User Story 4 (Compare): 9 scenarios
+  - User Story 5 (Status): 12 scenarios ✨ **NEW**
 - **Test Strategy**: TDD - All tests written first
 
 ---
@@ -181,7 +180,7 @@ comparisonExport.ts (NEW - 280 lines)
 - Snapshot detail modal
 - Export Excel/Word
 
-**4. Compare Releases** (Phase 4) ✨ **NEW**:
+**4. Compare Releases** (Phase 4):
 - Dropdown selectors for two releases
 - Side-by-side comparison
 - Summary statistics (Added/Deleted/Modified/Unchanged)
@@ -189,102 +188,122 @@ comparisonExport.ts (NEW - 280 lines)
 - Field-by-field diff for modified items
 - Expandable detail view
 - Client-side Excel export with multiple sheets
-- Change Type column for filtering
-- Validation and error handling
+
+**5. Status Lifecycle Management** (Phase 5) ✨ **NEW**:
+- Publish DRAFT releases
+- Archive PUBLISHED releases
+- Workflow enforcement (one-way: DRAFT→PUBLISHED→ARCHIVED)
+- Confirmation modals
+- Real-time status badge updates
+- RBAC enforcement (ADMIN/RELEASE_MANAGER only)
+- Error handling for invalid transitions
+- Loading states during API calls
 
 ---
 
-## Next Steps: Phase 5 - User Story 5 (Status Lifecycle)
+## Next Steps: Phase 6 - User Story 7 (Export Integration)
 
-**Goal**: Publish and archive releases with workflow management  
-**Tasks**: T051-T063 (13 tasks: 7 tests + 6 implementation)  
+**Goal**: Integrate release selector into export pages  
+**Tasks**: T064-T073 (10 tasks: 5 tests + 5 implementation)  
 **Priority**: P2  
-**Estimated Time**: 1 day
+**Estimated Time**: 0.5 day
 
-### Phase 5 Tasks
+### Phase 6 Tasks
 
 **Tests (Write First)**:
-- [ ] T051: E2E test - Publish button visible for DRAFT
-- [ ] T052: E2E test - Confirmation modal before publish
-- [ ] T053: E2E test - Status changes to PUBLISHED
-- [ ] T054: E2E test - Archive button visible for PUBLISHED
-- [ ] T055: E2E test - Confirmation modal before archive
-- [ ] T056: E2E test - Status changes to ARCHIVED
-- [ ] T057: E2E test - No actions for ARCHIVED
+- [ ] T064: E2E test - Export page has release selector
+- [ ] T065: E2E test - Selector defaults to "Current (latest)"
+- [ ] T066: E2E test - Excel export passes releaseId
+- [ ] T067: E2E test - Word export passes releaseId
+- [ ] T068: E2E test - Translated exports work with release
 
 **Implementation**:
-- [ ] T058: Add publish button to detail page
-- [ ] T059: Add archive button to detail page
-- [ ] T060: Create status confirmation modal
-- [ ] T061: Add status update API call
-- [ ] T062: Update status badge after transition
-- [ ] T063: Add status workflow validation
+- [ ] T069: Verify ReleaseSelector component
+- [ ] T070: Integrate into /export page
+- [ ] T071: Integrate into /import-export page
+- [ ] T072: Update export handlers with releaseId
+- [ ] T073: Add visual indicator for selected release
 
-**Workflow**:
-```
-DRAFT → (Publish) → PUBLISHED → (Archive) → ARCHIVED
-```
+**Then**: Phase 7 - Delete (P3) - 13 tasks
 
 ---
 
 ## Constitutional Compliance ✅
 
-- ✅ **Security-First**: RBAC enforced, validation prevents errors
-- ✅ **TDD**: 35 E2E tests written first, RED → GREEN → REFACTOR
-- ✅ **API-First**: Uses RESTful APIs from Feature 011
-- ✅ **RBAC**: Three roles with appropriate permissions
+- ✅ **Security-First**: RBAC enforced, status workflow validated server-side
+- ✅ **TDD**: 47 E2E tests written first, RED → GREEN → REFACTOR
+- ✅ **API-First**: RESTful PUT endpoint for status updates
+- ✅ **RBAC**: Three roles with status management permissions
 - N/A **Docker-First**: Frontend only
 - N/A **Schema Evolution**: No DB changes
 
 ---
 
-## How to Test Phase 4
+## How to Test Phase 5
 
 ### Manual Testing
 
 ```bash
 cd src/frontend
 npm run dev
-open http://localhost:4321/releases/compare
+open http://localhost:4321/releases
 ```
 
-**Test Flow**:
+**Test Flow - Publish**:
 1. Login as ADMIN
-2. Navigate to /releases/compare
-3. **Verify Dropdowns**:
-   - See two release selectors
-   - Both populated with available releases
-4. **Select Releases**:
-   - Select Release 1 in first dropdown
-   - Select Release 2 in second dropdown
-5. **Compare**:
-   - Click "Compare →" button
-   - See loading state
-6. **Verify Results**:
-   - See 4 summary cards (Added, Deleted, Modified, Unchanged)
-   - See color-coded sections (green/red/yellow)
-   - If modified items exist:
-     - Click to expand
-     - See field diff table (Field, Old Value, New Value)
-7. **Export**:
-   - Click "Export to Excel" button
-   - File downloads
-   - Open Excel file:
-     - Summary sheet with metadata
-     - Added/Deleted/Modified sheets
-     - Change Type column in each sheet
-     - Styled headers
+2. Create a new release (starts as DRAFT)
+3. Navigate to release detail page
+4. **Verify**:
+   - Status badge shows "DRAFT" (yellow)
+   - "Publish" button is visible
+   - "Archive" button is NOT visible
+5. Click "Publish" button
+6. **Verify**:
+   - Confirmation modal appears
+   - Modal shows release version and warning
+   - Confirm/Cancel buttons present
+7. Click "Confirm"
+8. **Verify**:
+   - Modal closes
+   - Status badge changes to "PUBLISHED" (green)
+   - "Publish" button disappears
+   - "Archive" button appears
 
-### Edge Cases to Test:
-- Select same release twice → Error or disabled button
-- Compare identical releases → "No differences" message
-- Empty comparison (no requirements) → Empty state
-- Large comparison (100+ changes) → Performance check
+**Test Flow - Archive**:
+1. On PUBLISHED release detail page
+2. Click "Archive" button
+3. **Verify**:
+   - Confirmation modal with archive warning
+4. Click "Confirm"
+5. **Verify**:
+   - Status badge changes to "ARCHIVED" (gray)
+   - Both "Publish" and "Archive" buttons disappear
+   - Export buttons still work
+
+**Test Flow - RBAC**:
+1. Login as USER (not ADMIN/RELEASE_MANAGER)
+2. Navigate to any release detail page
+3. **Verify**:
+   - No "Publish" or "Archive" buttons visible
+   - Can still view and export release
+
+### Backend Testing
+
+```bash
+# Test status update endpoint
+curl -X PUT http://localhost:8080/api/releases/1/status \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"status":"PUBLISHED"}'
+
+# Should return 200 with updated release
+# Should return 400 for invalid transition (e.g., ARCHIVED→PUBLISHED)
+```
 
 ### Run E2E Tests
 
 ```bash
-npm test -- tests/e2e/releases/release-comparison.spec.ts
+npm test -- tests/e2e/releases/release-status.spec.ts
 ```
 
 ---
@@ -303,7 +322,7 @@ npm run dev
 
 ---
 
-**Last Updated**: 2025-10-07 20:00  
-**Progress**: Phase 4 Complete (45/100 tasks = 45%)  
-**Next Task**: T051 (Write publish button test)  
-**Timeline**: 4 phases in 1 day - Exceptional progress! 🚀
+**Last Updated**: 2025-10-07 21:30  
+**Progress**: Phase 5 Complete (58/100 tasks = 58%)  
+**Next Task**: T064 (Write export selector test)  
+**Timeline**: 5 phases in 1 day - Outstanding progress! 🚀
