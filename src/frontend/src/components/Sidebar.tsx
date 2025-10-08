@@ -183,7 +183,17 @@ const Sidebar = () => {
                             <ul className="list-unstyled ps-4">
                                 <li>
                                     <a href="/vulnerabilities/current" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                        <i className="bi bi-list-ul me-2"></i> Current Vulns
+                                        <i className="bi bi-list-ul me-2"></i> Vuln overview
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="/vulnerabilities/domain" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-globe me-2"></i> Domain vulns
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="/vulnerabilities/system" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-hdd me-2"></i> System vulns
                                     </a>
                                 </li>
                                 <li>
