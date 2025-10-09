@@ -40,7 +40,8 @@ open class ImportController(
     private val masscanParserService: com.secman.service.MasscanParserService,
     private val assetRepository: com.secman.repository.AssetRepository,
     private val scanRepository: com.secman.repository.ScanRepository,
-    private val scanResultRepository: com.secman.repository.ScanResultRepository
+    private val scanResultRepository: com.secman.repository.ScanResultRepository,
+    private val userMappingImportService: com.secman.service.UserMappingImportService
 ) {
     
     private val log = LoggerFactory.getLogger(ImportController::class.java)
@@ -460,6 +461,59 @@ open class ImportController(
         }
 
         return null
+    }
+
+    /**
+     * Upload user mapping Excel file
+     *
+     * Feature: 013-user-mapping-upload
+     *
+     * Endpoint: POST /api/import/upload-user-mappings
+     * Request: multipart/form-data with xlsxFile
+     * Response: ImportResult with counts (imported, skipped, errors)
+     * Access: ADMIN only
+     *
+     * Expected Excel format:
+     * - Column 1: Email Address (required, valid email)
+     * - Column 2: AWS Account ID (required, 12 digits)
+     * - Column 3: Domain (required, alphanumeric + dots + hyphens)
+     *
+     * @param xlsxFile Excel file containing user mappings
+     * @return Import response with counts and any error messages
+     */
+    @Post("/upload-user-mappings")
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    @Transactional
+    @Secured("ADMIN")
+    open fun uploadUserMappings(
+        @Part xlsxFile: CompletedFileUpload
+    ): HttpResponse<*> {
+        return try {
+            log.debug("Processing user mapping Excel file upload: {}", xlsxFile.filename)
+
+            // Validate file (reuse existing validation method)
+            val validation = validateVulnerabilityFile(xlsxFile)
+            if (validation != null) {
+                return HttpResponse.badRequest(ErrorResponse(validation))
+            }
+
+            // Import user mappings
+            val response = xlsxFile.inputStream.use { inputStream ->
+                userMappingImportService.importFromExcel(inputStream)
+            }
+
+            log.info("Successfully imported user mappings: {}", response.message)
+            HttpResponse.ok(response)
+
+        } catch (e: IllegalArgumentException) {
+            // Validation errors (missing headers, etc.)
+            log.warn("Validation error in user mapping file: {}", e.message)
+            HttpResponse.badRequest(ErrorResponse(e.message ?: "Invalid file format"))
+        } catch (e: Exception) {
+            log.error("Error processing user mapping Excel file", e)
+            HttpResponse.status<ErrorResponse>(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ErrorResponse("Error processing file: ${e.message}"))
+        }
     }
 
     /**
