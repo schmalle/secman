@@ -1,0 +1,190 @@
+import React, { useState } from 'react';
+import type { ImportResult } from '../services/userMappingService';
+import { uploadUserMappings, getSampleFileUrl } from '../services/userMappingService';
+
+/**
+ * UserMappingUpload Component
+ * Feature: 013-user-mapping-upload
+ * 
+ * Provides UI for uploading Excel files with user-to-AWS-account-to-domain mappings.
+ * Displays file requirements, handles upload, and shows results/errors.
+ */
+const UserMappingUpload: React.FC = () => {
+  const [file, setFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [result, setResult] = useState<ImportResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = event.target.files?.[0];
+    if (selectedFile) {
+      setFile(selectedFile);
+      setResult(null);
+      setError(null);
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!file) {
+      setError('Please select a file');
+      return;
+    }
+
+    setUploading(true);
+    setError(null);
+    setResult(null);
+
+    try {
+      const response = await uploadUserMappings(file);
+      setResult(response);
+      setFile(null);
+      // Clear file input
+      const fileInput = document.getElementById('userMappingFile') as HTMLInputElement;
+      if (fileInput) {
+        fileInput.value = '';
+      }
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.error || err.message || 'Failed to upload file';
+      setError(errorMessage);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="container mt-4">
+      <h2>
+        <i className="bi bi-diagram-3-fill me-2"></i>
+        User Mapping Upload
+      </h2>
+      <p className="text-muted">
+        Upload Excel files to map users (by email) to AWS account IDs and organizational domains.
+      </p>
+
+      {/* File Requirements Card */}
+      <div className="card mb-4">
+        <div className="card-header bg-info text-white">
+          <i className="bi bi-info-circle me-2"></i>
+          File Requirements
+        </div>
+        <div className="card-body">
+          <ul className="mb-0">
+            <li><strong>Format:</strong> Excel (.xlsx) file only</li>
+            <li><strong>Max Size:</strong> 10 MB</li>
+            <li><strong>Required Columns:</strong>
+              <ul>
+                <li><code>Email Address</code> - User's email address</li>
+                <li><code>AWS Account ID</code> - 12-digit AWS account identifier</li>
+                <li><code>Domain</code> - Organizational domain name</li>
+              </ul>
+            </li>
+            <li>
+              <strong>Sample Template:</strong>{' '}
+              <a href={getSampleFileUrl()} download className="btn btn-sm btn-outline-primary">
+                <i className="bi bi-download me-1"></i>
+                Download Sample
+              </a>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      {/* File Upload Section */}
+      <div className="card mb-4">
+        <div className="card-body">
+          <div className="mb-3">
+            <label htmlFor="userMappingFile" className="form-label">
+              <i className="bi bi-file-earmark-excel me-2"></i>
+              Select Excel File
+            </label>
+            <input
+              type="file"
+              className="form-control"
+              id="userMappingFile"
+              accept=".xlsx"
+              onChange={handleFileChange}
+              disabled={uploading}
+            />
+            {file && (
+              <div className="form-text">
+                <i className="bi bi-check-circle-fill text-success me-1"></i>
+                Selected: {file.name} ({(file.size / 1024).toFixed(2)} KB)
+              </div>
+            )}
+          </div>
+
+          <button
+            className="btn btn-primary"
+            onClick={handleUpload}
+            disabled={!file || uploading}
+          >
+            {uploading ? (
+              <>
+                <span className="spinner-border spinner-border-sm me-2" role="status" aria-label="Uploading"></span>
+                Uploading...
+              </>
+            ) : (
+              <>
+                <i className="bi bi-upload me-2"></i>
+                Upload
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* Error Alert */}
+      {error && (
+        <div className="alert alert-danger alert-dismissible fade show" role="alert">
+          <i className="bi bi-exclamation-triangle-fill me-2"></i>
+          <strong>Upload Failed</strong>
+          <p className="mb-0 mt-2">{error}</p>
+          <button
+            type="button"
+            className="btn-close"
+            onClick={() => setError(null)}
+            aria-label="Close"
+          ></button>
+        </div>
+      )}
+
+      {/* Success Alert */}
+      {result && (
+        <div className="alert alert-success alert-dismissible fade show" role="alert">
+          <i className="bi bi-check-circle-fill me-2"></i>
+          <strong>Import Complete</strong>
+          <div className="mt-2">
+            <p className="mb-1">{result.message}</p>
+            <ul className="mb-0">
+              <li><strong>Imported:</strong> {result.imported} mappings</li>
+              <li><strong>Skipped:</strong> {result.skipped} mappings</li>
+            </ul>
+          </div>
+
+          {/* Error List */}
+          {result.errors && result.errors.length > 0 && (
+            <div className="mt-3">
+              <strong>Details:</strong>
+              <div className="mt-2" style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                <ul className="mb-0 small">
+                  {result.errors.map((err, idx) => (
+                    <li key={idx} className="text-danger">{err}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+
+          <button
+            type="button"
+            className="btn-close"
+            onClick={() => setResult(null)}
+            aria-label="Close"
+          ></button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default UserMappingUpload;
