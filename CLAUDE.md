@@ -41,6 +41,7 @@
 - **Structure**: models/, services/, cli/, exporters/, lib/
 
 ## Recent Changes
+- 013-user-mapping-upload: User Mapping with AWS Account & Domain Upload (2025-10-08) - Excel upload for email-AWS-domain mappings, ADMIN-only access, comprehensive validation and duplicate handling, foundation for future RBAC
 - 012-build-ui-for: Release Management UI Enhancement (2025-10-07) - Complete UI for release management with browse, create, view details, compare, status lifecycle, delete (RBAC), and export integration
 - 011-i-want-to: Added Release-Based Requirement Version Management (2025-10-05) - Point-in-time snapshots, historical exports, field-level comparison, RELEASE_MANAGER role
 - 010-please-review-the: Added Kotlin 2.1.0 / Java 21 (backend), TypeScript/JavaScript (Astro 5.14 + React 19)
@@ -138,6 +139,15 @@ Complete user interface for release management with 8 major components:
 - **Indexes**: release_id, original_requirement_id
 - **Factory**: Companion object method `fromRequirement(requirement, release)` for snapshot creation
 
+### UserMapping (NEW - Feature 013)
+- **Fields**: id, email, awsAccountId (12 digits), domain, createdAt, updatedAt
+- **Validation**: Email format (contains @), AWS account format (exactly 12 digits), domain format (alphanumeric + dots + hyphens)
+- **Relationships**: Independent (no FK to User entity - may reference future users)
+- **Indexes**: Unique composite (email, awsAccountId, domain), individual indexes on email, awsAccountId, domain, (email + awsAccountId)
+- **Access**: ADMIN role only for upload and view
+- **Purpose**: Foundation for multi-tenant RBAC across AWS accounts and domains
+- **Normalization**: Email and domain stored lowercase for case-insensitive matching
+
 ### Workgroup (NEW - Feature 008)
 - **Fields**: id, name, description, users (ManyToMany), assets (ManyToMany), createdAt, updatedAt
 - **Validation**: Name 1-100 chars, alphanumeric + spaces + hyphens, case-insensitive unique
@@ -188,6 +198,11 @@ Complete user interface for release management with 8 major components:
 - `POST /api/import/upload-nmap-xml` - Nmap scan import (Feature 002)
 - `POST /api/import/upload-masscan-xml` - Masscan scan import (Feature 005)
 - `POST /api/import/upload-vulnerability-xlsx` - Vulnerability import (Feature 003)
+- `POST /api/import/upload-user-mappings` - User mapping upload (Feature 013, ADMIN only)
+  - Request: multipart/form-data with xlsxFile
+  - Response: ImportResult { message, imported, skipped, errors[] }
+  - Validation: Email format, AWS account (12 digits), domain format
+  - Behavior: Skip invalid/duplicate rows, continue with valid ones
 
 ### Assets (UPDATED - Feature 008)
 - `GET /api/assets` - List assets (workgroup-filtered: users see their workgroup assets + owned assets)

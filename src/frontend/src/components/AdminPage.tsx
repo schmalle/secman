@@ -170,6 +170,36 @@ const AdminPage = () => {
                     <div className="card">
                         <div className="card-body">
                             <h5 className="card-title">
+                                <i className="bi bi-shield-lock me-2"></i>
+                                CrowdStrike Falcon
+                            </h5>
+                            <p className="card-text">Configure CrowdStrike Falcon API credentials for vulnerability scanning.</p>
+                            <a href="/admin/falcon-config" className="btn btn-primary">
+                                Configure Falcon
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="col-md-4 mb-3">
+                    <div className="card">
+                        <div className="card-body">
+                            <h5 className="card-title">
+                                <i className="bi bi-diagram-3-fill me-2"></i>
+                                User Mappings
+                            </h5>
+                            <p className="card-text">Upload and manage user-to-AWS-account-to-domain mappings for role-based access control.</p>
+                            <a href="/admin/user-mappings" className="btn btn-primary">
+                                Manage Mappings
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="col-md-4 mb-3">
+                    <div className="card">
+                        <div className="card-body">
+                            <h5 className="card-title">
                                 <i className="bi bi-gear-fill me-2"></i>
                                 System Settings
                             </h5>
