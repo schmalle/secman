@@ -16,7 +16,7 @@ import jakarta.inject.Inject
 import org.slf4j.LoggerFactory
 
 @Controller("/api/releases")
-@Secured(SecurityRule.IS_AUTHENTICATED)
+@Secured("ADMIN")
 class ReleaseController(
     @Inject private val releaseService: ReleaseService,
     @Inject private val snapshotRepository: RequirementSnapshotRepository

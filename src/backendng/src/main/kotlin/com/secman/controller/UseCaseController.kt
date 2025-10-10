@@ -18,7 +18,7 @@ import jakarta.validation.constraints.NotBlank
 import org.slf4j.LoggerFactory
 
 @Controller("/api/usecases")
-@Secured(SecurityRule.IS_AUTHENTICATED)
+@Secured("ADMIN", "CHAMPION", "REQ")
 @ExecuteOn(TaskExecutors.BLOCKING)
 open class UseCaseController(
     private val useCaseRepository: UseCaseRepository,

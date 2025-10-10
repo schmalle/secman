@@ -21,7 +21,7 @@ import jakarta.validation.constraints.NotBlank
 import org.slf4j.LoggerFactory
 
 @Controller("/api/standards")
-@Secured(SecurityRule.IS_AUTHENTICATED)
+@Secured("ADMIN", "CHAMPION", "REQ")
 @ExecuteOn(TaskExecutors.BLOCKING)
 open class StandardController(
     private val standardRepository: StandardRepository,

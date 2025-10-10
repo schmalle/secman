@@ -36,6 +36,78 @@ export function isReleaseManager(roles: string[] | undefined): boolean {
 }
 
 /**
+ * Check if user has CHAMPION role
+ */
+export function isChampion(roles: string[] | undefined): boolean {
+  if (!roles || !Array.isArray(roles)) return false;
+  return roles.includes('CHAMPION');
+}
+
+/**
+ * Check if user has REQ role
+ */
+export function isReq(roles: string[] | undefined): boolean {
+  if (!roles || !Array.isArray(roles)) return false;
+  return roles.includes('REQ');
+}
+
+/**
+ * Check if user can access Norm Management
+ * 
+ * Rules:
+ * - ADMIN can access
+ * - CHAMPION can access
+ * - REQ can access
+ */
+export function canAccessNormManagement(roles: string[] | undefined): boolean {
+  return isAdmin(roles) || isChampion(roles) || isReq(roles);
+}
+
+/**
+ * Check if user can access Standard Management
+ * 
+ * Rules:
+ * - ADMIN can access
+ * - CHAMPION can access
+ * - REQ can access
+ */
+export function canAccessStandardManagement(roles: string[] | undefined): boolean {
+  return isAdmin(roles) || isChampion(roles) || isReq(roles);
+}
+
+/**
+ * Check if user can access UseCase Management
+ * 
+ * Rules:
+ * - ADMIN can access
+ * - CHAMPION can access
+ * - REQ can access
+ */
+export function canAccessUseCaseManagement(roles: string[] | undefined): boolean {
+  return isAdmin(roles) || isChampion(roles) || isReq(roles);
+}
+
+/**
+ * Check if user can access Releases
+ * 
+ * Rules:
+ * - ADMIN only
+ */
+export function canAccessReleases(roles: string[] | undefined): boolean {
+  return isAdmin(roles);
+}
+
+/**
+ * Check if user can access Compare Releases
+ * 
+ * Rules:
+ * - ADMIN only
+ */
+export function canAccessCompareReleases(roles: string[] | undefined): boolean {
+  return isAdmin(roles);
+}
+
+/**
  * Check if user can delete a specific release
  * 
  * Rules:

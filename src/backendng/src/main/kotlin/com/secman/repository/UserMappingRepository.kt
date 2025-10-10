@@ -52,34 +52,34 @@ interface UserMappingRepository : JpaRepository<UserMapping, Long> {
 
     /**
      * Check if a specific mapping exists (duplicate detection)
-     * 
+     *
      * Use case: Skip duplicate mappings during Excel import
-     * 
-     * @param email User's email address
-     * @param awsAccountId AWS account identifier
-     * @param domain Organizational domain name
+     *
+     * @param email User's email address (required)
+     * @param awsAccountId AWS account identifier (nullable)
+     * @param domain Organizational domain name (nullable)
      * @return true if mapping exists, false otherwise
      */
     fun existsByEmailAndAwsAccountIdAndDomain(
         email: String,
-        awsAccountId: String,
-        domain: String
+        awsAccountId: String?,
+        domain: String?
     ): Boolean
 
     /**
      * Find a specific mapping by composite key
-     * 
+     *
      * Use case: Retrieve mapping for update or verification
-     * 
-     * @param email User's email address
-     * @param awsAccountId AWS account identifier
-     * @param domain Organizational domain name
+     *
+     * @param email User's email address (required)
+     * @param awsAccountId AWS account identifier (nullable)
+     * @param domain Organizational domain name (nullable)
      * @return Optional containing the mapping if found
      */
     fun findByEmailAndAwsAccountIdAndDomain(
         email: String,
-        awsAccountId: String,
-        domain: String
+        awsAccountId: String?,
+        domain: String?
     ): Optional<UserMapping>
 
     /**
@@ -104,23 +104,23 @@ interface UserMappingRepository : JpaRepository<UserMapping, Long> {
 
     /**
      * Find distinct AWS account IDs for a user
-     * 
+     *
      * Use case: Get list of AWS accounts a user can access
-     * 
+     *
      * @param email User's email address
-     * @return List of distinct AWS account IDs
+     * @return List of distinct AWS account IDs (excluding null values)
      */
-    @Query("SELECT DISTINCT m.awsAccountId FROM UserMapping m WHERE m.email = :email")
+    @Query("SELECT DISTINCT m.awsAccountId FROM UserMapping m WHERE m.email = :email AND m.awsAccountId IS NOT NULL")
     fun findDistinctAwsAccountIdByEmail(email: String): List<String>
 
     /**
      * Find distinct domains for a user
-     * 
+     *
      * Use case: Get list of domains a user has access to
-     * 
+     *
      * @param email User's email address
-     * @return List of distinct domains
+     * @return List of distinct domains (excluding null values)
      */
-    @Query("SELECT DISTINCT m.domain FROM UserMapping m WHERE m.email = :email")
+    @Query("SELECT DISTINCT m.domain FROM UserMapping m WHERE m.email = :email AND m.domain IS NOT NULL")
     fun findDistinctDomainByEmail(email: String): List<String>
 }

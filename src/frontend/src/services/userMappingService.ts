@@ -1,4 +1,4 @@
-import axios from 'axios';
+import { authenticatedPost } from '../utils/auth';
 
 /**
  * Service for User Mapping API operations
@@ -14,7 +14,7 @@ export interface ImportResult {
 
 /**
  * Upload user mapping Excel file
- * 
+ *
  * @param file Excel file with user mappings
  * @returns ImportResult with counts and error details
  * @throws Error if upload fails or validation errors occur
@@ -23,17 +23,14 @@ export async function uploadUserMappings(file: File): Promise<ImportResult> {
   const formData = new FormData();
   formData.append('xlsxFile', file);
 
-  const response = await axios.post<ImportResult>(
-    '/api/import/upload-user-mappings',
-    formData,
-    {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    }
-  );
+  const response = await authenticatedPost('/api/import/upload-user-mappings', formData);
 
-  return response.data;
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ error: 'Upload failed' }));
+    throw new Error(errorData.error || `Upload failed with status ${response.status}`);
+  }
+
+  return await response.json();
 }
 
 /**

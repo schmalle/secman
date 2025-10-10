@@ -9,22 +9,24 @@ import java.time.Instant
 
 /**
  * UserMapping entity - stores mappings between user emails, AWS account IDs, and domains
- * 
+ *
  * Feature: 013-user-mapping-upload
  * Purpose: Enable role-based access control across multiple AWS accounts and domains
- * 
+ *
  * Business Rules:
+ * - Email is REQUIRED
+ * - At least one of AWS Account ID or Domain must be provided
  * - One email can map to multiple AWS accounts (many-to-many)
  * - One email can map to multiple domains (many-to-many)
  * - Unique constraint on (email, awsAccountId, domain) prevents duplicates
  * - Email and domain are normalized to lowercase for case-insensitive matching
- * - AWS account IDs must be exactly 12 numeric digits
- * 
+ * - AWS account IDs must be exactly 12 numeric digits when provided
+ *
  * Example Mappings:
- * - john@example.com → 123456789012 → example.com
- * - john@example.com → 987654321098 → example.com (same user, different AWS account)
- * - john@example.com → 123456789012 → other.com (same user, different domain)
- * 
+ * - john@example.com → 123456789012 → null (email + AWS account only)
+ * - john@example.com → null → example.com (email + domain only)
+ * - john@example.com → 123456789012 → example.com (email + both AWS account and domain)
+ *
  * Related to: Feature 013 (User Mapping Upload)
  */
 @Entity
@@ -54,15 +56,13 @@ data class UserMapping(
     @NotBlank(message = "Email address is required")
     var email: String,
 
-    @Column(name = "aws_account_id", nullable = false, length = 12)
-    @NotBlank(message = "AWS Account ID is required")
+    @Column(name = "aws_account_id", nullable = true, length = 12)
     @Pattern(regexp = "^\\d{12}$", message = "AWS Account ID must be exactly 12 numeric digits")
-    var awsAccountId: String,
+    var awsAccountId: String?,
 
-    @Column(nullable = false, length = 255)
-    @NotBlank(message = "Domain is required")
+    @Column(nullable = true, length = 255)
     @Pattern(regexp = "^[a-z0-9.-]+$", message = "Domain must contain only lowercase letters, numbers, dots, and hyphens")
-    var domain: String,
+    var domain: String?,
 
     @Column(name = "created_at", updatable = false)
     var createdAt: Instant? = null,
@@ -81,8 +81,8 @@ data class UserMapping(
         updatedAt = now
         // Normalize email and domain to lowercase for case-insensitive matching
         email = email.lowercase().trim()
-        domain = domain.lowercase().trim()
-        awsAccountId = awsAccountId.trim()
+        domain = domain?.lowercase()?.trim()
+        awsAccountId = awsAccountId?.trim()
     }
 
     /**

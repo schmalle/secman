@@ -12,22 +12,23 @@ import java.io.InputStream
 
 /**
  * Service for importing user mappings from Excel files
- * 
+ *
  * Feature: 013-user-mapping-upload
- * 
+ *
  * Responsibilities:
  * - Parse Excel files (.xlsx format)
  * - Validate headers (case-insensitive matching)
- * - Validate each row (email, AWS account ID, domain)
+ * - Validate each row (email + at least one of AWS account ID or domain)
  * - Skip invalid rows, continue processing valid rows
  * - Detect and skip duplicate mappings
  * - Return detailed import results
- * 
+ *
  * Excel Format:
  * - Column 1: Email Address (required, must contain @)
- * - Column 2: AWS Account ID (required, exactly 12 numeric digits)
- * - Column 3: Domain (required, alphanumeric + dots + hyphens)
- * 
+ * - Column 2: AWS Account ID (optional, exactly 12 numeric digits when provided)
+ * - Column 3: Domain (optional, alphanumeric + dots + hyphens when provided)
+ * - At least one of AWS Account ID or Domain must be provided
+ *
  * Related to: Feature 013 (User Mapping Upload)
  */
 @Singleton
@@ -177,7 +178,7 @@ open class UserMappingImportService(
 
     /**
      * Parse a single row into a UserMapping
-     * 
+     *
      * @param row Excel row to parse
      * @param headerMap Mapping of header names to column indices
      * @param rowNumber Row number for error messages (1-based)
@@ -193,11 +194,10 @@ open class UserMappingImportService(
         if (email.isNullOrBlank()) {
             throw IllegalArgumentException("Email address is required")
         }
-        if (awsAccountId.isNullOrBlank()) {
-            throw IllegalArgumentException("AWS Account ID is required")
-        }
-        if (domain.isNullOrBlank()) {
-            throw IllegalArgumentException("Domain is required")
+
+        // At least one of AWS Account ID or Domain must be provided
+        if (awsAccountId.isNullOrBlank() && domain.isNullOrBlank()) {
+            throw IllegalArgumentException("At least one of AWS Account ID or Domain must be provided")
         }
 
         // Validate email format
@@ -205,20 +205,20 @@ open class UserMappingImportService(
             throw IllegalArgumentException("Invalid email format: $email")
         }
 
-        // Validate AWS account ID format (12 digits)
-        if (!validateAwsAccountId(awsAccountId)) {
+        // Validate AWS account ID format (12 digits) - only if provided
+        if (!awsAccountId.isNullOrBlank() && !validateAwsAccountId(awsAccountId)) {
             throw IllegalArgumentException("AWS Account ID must be exactly 12 numeric digits: $awsAccountId")
         }
 
-        // Validate domain format
-        if (!validateDomain(domain)) {
+        // Validate domain format - only if provided
+        if (!domain.isNullOrBlank() && !validateDomain(domain)) {
             throw IllegalArgumentException("Invalid domain format: $domain")
         }
 
         return UserMapping(
             email = email.lowercase(),
-            awsAccountId = awsAccountId,
-            domain = domain.lowercase()
+            awsAccountId = if (awsAccountId.isNullOrBlank()) null else awsAccountId,
+            domain = if (domain.isNullOrBlank()) null else domain.lowercase()
         )
     }
 

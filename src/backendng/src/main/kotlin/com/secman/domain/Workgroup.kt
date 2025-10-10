@@ -1,5 +1,6 @@
 package com.secman.domain
 
+import com.fasterxml.jackson.annotation.JsonIgnore
 import io.micronaut.serde.annotation.Serdeable
 import jakarta.persistence.*
 import jakarta.validation.constraints.NotBlank
@@ -40,7 +41,9 @@ data class Workgroup(
      * Many-to-many relationship with User
      * Users can belong to 0..n workgroups
      * Workgroups can have 0..n users
+     * Note: @JsonIgnore prevents circular reference during JSON serialization
      */
+    @JsonIgnore
     @ManyToMany(mappedBy = "workgroups", fetch = FetchType.LAZY)
     var users: MutableSet<User> = mutableSetOf(),
 
@@ -48,7 +51,9 @@ data class Workgroup(
      * Many-to-many relationship with Asset
      * Assets can belong to 0..n workgroups
      * Workgroups can have 0..n assets
+     * Note: @JsonIgnore prevents circular reference during JSON serialization
      */
+    @JsonIgnore
     @ManyToMany(mappedBy = "workgroups", fetch = FetchType.LAZY)
     var assets: MutableSet<Asset> = mutableSetOf(),
 

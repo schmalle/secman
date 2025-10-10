@@ -1,5 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { hasVulnAccess } from '../utils/auth';
+import { 
+    canAccessNormManagement, 
+    canAccessStandardManagement, 
+    canAccessUseCaseManagement,
+    canAccessReleases,
+    canAccessCompareReleases
+} from '../utils/permissions';
 
 const Sidebar = () => {
     const [requirementsExpanded, setRequirementsExpanded] = useState(false);
@@ -9,6 +16,7 @@ const Sidebar = () => {
     const [adminMenuOpen, setAdminMenuOpen] = useState(false);
     const [isAdmin, setIsAdmin] = useState(false);
     const [hasVuln, setHasVuln] = useState(false);
+    const [userRoles, setUserRoles] = useState<string[]>([]);
 
     const toggleRequirements = () => {
         setRequirementsExpanded(!requirementsExpanded);
@@ -22,9 +30,11 @@ const Sidebar = () => {
     useEffect(() => {
         function checkRoles() {
             const user = (window as any).currentUser;
-            const hasAdmin = user?.roles?.includes('ADMIN') || false;
+            const roles = user?.roles || [];
+            const hasAdmin = roles.includes('ADMIN');
             setIsAdmin(hasAdmin);
             setHasVuln(hasVulnAccess());
+            setUserRoles(roles);
         }
 
         // Check on mount
@@ -68,31 +78,41 @@ const Sidebar = () => {
                                     <i className="bi bi-card-checklist me-2"></i> Requirements Overview
                                 </a>
                             </li>
-                            <li>
-                                <a href="/norms" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                    <i className="bi bi-bookmark-star me-2"></i> Norm Management
-                                </a>
-                            </li>
-                            <li>
-                                <a href="/standards" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                    <i className="bi bi-list-check me-2"></i> Standard Management
-                                </a>
-                            </li>
-                            <li>
-                                <a href="/usecases" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                    <i className="bi bi-diagram-3 me-2"></i> UseCase Management
-                                </a>
-                            </li>
-                            <li>
-                                <a href="/releases" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                    <i className="bi bi-archive me-2"></i> Releases
-                                </a>
-                            </li>
-                            <li>
-                                <a href="/releases/compare" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                    <i className="bi bi-columns-gap me-2"></i> Compare Releases
-                                </a>
-                            </li>
+                            {canAccessNormManagement(userRoles) && (
+                                <li>
+                                    <a href="/norms" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-bookmark-star me-2"></i> Norm Management
+                                    </a>
+                                </li>
+                            )}
+                            {canAccessStandardManagement(userRoles) && (
+                                <li>
+                                    <a href="/standards" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-list-check me-2"></i> Standard Management
+                                    </a>
+                                </li>
+                            )}
+                            {canAccessUseCaseManagement(userRoles) && (
+                                <li>
+                                    <a href="/usecases" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-diagram-3 me-2"></i> UseCase Management
+                                    </a>
+                                </li>
+                            )}
+                            {canAccessReleases(userRoles) && (
+                                <li>
+                                    <a href="/releases" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-archive me-2"></i> Releases
+                                    </a>
+                                </li>
+                            )}
+                            {canAccessCompareReleases(userRoles) && (
+                                <li>
+                                    <a href="/releases/compare" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-columns-gap me-2"></i> Compare Releases
+                                    </a>
+                                </li>
+                            )}
                         </ul>
                     )}
                 </li>

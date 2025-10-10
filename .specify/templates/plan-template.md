@@ -31,16 +31,7 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-Review against `.specify/memory/constitution.md` principles:
-
-- [ ] **Security-First**: File validation, input sanitization, RBAC enforcement addressed?
-- [ ] **TDD**: Test strategy defined? Contract tests, integration tests, unit tests planned?
-- [ ] **API-First**: RESTful design? OpenAPI documentation planned? Backward compatibility considered?
-- [ ] **Docker-First**: Containerization plan? Multi-arch support? Environment configuration via .env?
-- [ ] **RBAC**: Role requirements identified? @Secured annotations planned? UI role checks planned?
-- [ ] **Schema Evolution**: Database changes? Migration strategy? Constraints and indexes defined?
-
-*Document any deviations in Complexity Tracking section below.*
+[Gates determined based on constitution file]
 
 ## Project Structure
 
