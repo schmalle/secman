@@ -72,9 +72,13 @@ As a system administrator, I want to introduce CHAMPION and REQ roles so that I 
 
 | Feature | USER | ADMIN | VULN | RELEASE_MANAGER | CHAMPION | REQ |
 |---------|------|-------|------|-----------------|----------|-----|
-| Norm Management | ❌ | ✅ | ❌ | ❌ | ✅ | ✅ |
-| Standard Management | ❌ | ✅ | ❌ | ❌ | ✅ | ✅ |
-| UseCase Management | ❌ | ✅ | ❌ | ❌ | ✅ | ✅ |
+| Requirements Overview | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Norm Management (View) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Norm Management (Edit) | ❌ | ✅ | ❌ | ❌ | ✅ | ✅ |
+| Standard Management (View) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Standard Management (Edit) | ❌ | ✅ | ❌ | ❌ | ✅ | ✅ |
+| UseCase Management (View) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| UseCase Management (Edit) | ❌ | ✅ | ❌ | ❌ | ✅ | ✅ |
 | Releases (View/List) | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Compare Releases | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Create Release | ❌ | ✅ | ❌ | ✅ | ❌ | ❌ |

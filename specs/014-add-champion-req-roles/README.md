@@ -8,9 +8,12 @@ Added two new user roles (CHAMPION and REQ) with role-based access control for r
 | Feature | USER | ADMIN | VULN | RELEASE_MANAGER | CHAMPION | REQ |
 |---------|------|-------|------|-----------------|----------|-----|
 | **Requirements Overview** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **Norm Management** | ❌ | ✅ | ❌ | ❌ | ✅ | ✅ |
-| **Standard Management** | ❌ | ✅ | ❌ | ❌ | ✅ | ✅ |
-| **UseCase Management** | ❌ | ✅ | ❌ | ❌ | ✅ | ✅ |
+| **Norm Management (View)** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Norm Management (Edit)** | ❌ | ✅ | ❌ | ❌ | ✅ | ✅ |
+| **Standard Management (View)** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Standard Management (Edit)** | ❌ | ✅ | ❌ | ❌ | ✅ | ✅ |
+| **UseCase Management (View)** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **UseCase Management (Edit)** | ❌ | ✅ | ❌ | ❌ | ✅ | ✅ |
 | **Releases (View/List)** | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
 | **Compare Releases** | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
 | **Create Release** | ❌ | ✅ | ❌ | ✅ | ❌ | ❌ |

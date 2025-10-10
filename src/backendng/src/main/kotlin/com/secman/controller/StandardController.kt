@@ -21,7 +21,7 @@ import jakarta.validation.constraints.NotBlank
 import org.slf4j.LoggerFactory
 
 @Controller("/api/standards")
-@Secured("ADMIN", "CHAMPION", "REQ")
+@Secured(SecurityRule.IS_AUTHENTICATED) // All authenticated users can read
 @ExecuteOn(TaskExecutors.BLOCKING)
 open class StandardController(
     private val standardRepository: StandardRepository,
@@ -98,6 +98,7 @@ open class StandardController(
     }
 
     @Post
+    @Secured("ADMIN", "CHAMPION", "REQ") // Only privileged users can create
     @Transactional
     open fun createStandard(@Valid @Body request: CreateStandardRequest): HttpResponse<*> {
         return try {
@@ -147,6 +148,7 @@ open class StandardController(
     }
 
     @Put("/{id}")
+    @Secured("ADMIN", "CHAMPION", "REQ") // Only privileged users can update
     @Transactional
     open fun updateStandard(id: Long, @Valid @Body request: UpdateStandardRequest): HttpResponse<*> {
         return try {
@@ -204,6 +206,7 @@ open class StandardController(
     }
 
     @Delete("/{id}")
+    @Secured("ADMIN", "CHAMPION", "REQ") // Only privileged users can delete
     @Transactional
     open fun deleteStandard(id: Long): HttpResponse<*> {
         return try {

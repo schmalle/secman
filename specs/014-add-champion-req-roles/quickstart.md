@@ -34,7 +34,8 @@ specs/014-add-champion-req-roles/quickstart.md (new)
 ```
 
 ## Access Control Summary
-- **Norm/Standard/UseCase Management**: ADMIN, CHAMPION, REQ only
+- **Norm/Standard/UseCase Management (View)**: All authenticated users
+- **Norm/Standard/UseCase Management (Edit)**: ADMIN, CHAMPION, REQ only
 - **Releases & Compare Releases**: ADMIN only
 - **Create/Delete Release**: ADMIN and RELEASE_MANAGER (unchanged)
 

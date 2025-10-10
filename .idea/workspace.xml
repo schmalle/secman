@@ -5,8 +5,14 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="94ada8b3-9f4e-473c-9fea-3bc9651b5bdd" name="Changes" comment="test change">
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/specs/014-add-champion-req-roles/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/specs/014-add-champion-req-roles/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/specs/014-add-champion-req-roles/spec.md" beforeDir="false" afterPath="$PROJECT_DIR$/specs/014-add-champion-req-roles/spec.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/build.gradle.kts" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/build.gradle.kts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/NormController.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/NormController.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/StandardController.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/StandardController.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/UseCaseController.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/UseCaseController.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/test/kotlin/com/secman/service/UserMappingImportServiceTest.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/test/kotlin/com/secman/service/UserMappingImportServiceTest.kt" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

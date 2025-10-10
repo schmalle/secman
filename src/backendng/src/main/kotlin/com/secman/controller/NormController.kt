@@ -18,7 +18,7 @@ import jakarta.validation.constraints.NotBlank
 import org.slf4j.LoggerFactory
 
 @Controller("/api/norms")
-@Secured("ADMIN", "CHAMPION", "REQ")
+@Secured(SecurityRule.IS_AUTHENTICATED) // All authenticated users can read
 @ExecuteOn(TaskExecutors.BLOCKING)
 open class NormController(
     private val normRepository: NormRepository,
@@ -88,6 +88,7 @@ open class NormController(
     }
 
     @Post
+    @Secured("ADMIN", "CHAMPION", "REQ") // Only privileged users can create
     @Transactional
     open fun createNorm(@Valid @Body request: CreateNormRequest): HttpResponse<*> {
         return try {
@@ -132,6 +133,7 @@ open class NormController(
     }
 
     @Put("/{id}")
+    @Secured("ADMIN", "CHAMPION", "REQ") // Only privileged users can update
     @Transactional
     open fun updateNorm(id: Long, @Valid @Body request: UpdateNormRequest): HttpResponse<*> {
         return try {
@@ -179,6 +181,7 @@ open class NormController(
     }
 
     @Delete("/{id}")
+    @Secured("ADMIN", "CHAMPION", "REQ") // Only privileged users can delete
     @Transactional
     open fun deleteNorm(id: Long): HttpResponse<*> {
         return try {
@@ -205,6 +208,7 @@ open class NormController(
     }
 
     @Delete("/all")
+    @Secured("ADMIN", "CHAMPION", "REQ") // Only privileged users can delete all
     @Transactional
     open fun deleteAllNorms(): HttpResponse<*> {
         return try {

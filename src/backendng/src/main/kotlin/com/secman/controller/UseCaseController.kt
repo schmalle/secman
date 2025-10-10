@@ -18,7 +18,7 @@ import jakarta.validation.constraints.NotBlank
 import org.slf4j.LoggerFactory
 
 @Controller("/api/usecases")
-@Secured("ADMIN", "CHAMPION", "REQ")
+@Secured(SecurityRule.IS_AUTHENTICATED) // All authenticated users can read
 @ExecuteOn(TaskExecutors.BLOCKING)
 open class UseCaseController(
     private val useCaseRepository: UseCaseRepository,
@@ -84,6 +84,7 @@ open class UseCaseController(
     }
 
     @Post
+    @Secured("ADMIN", "CHAMPION", "REQ") // Only privileged users can create
     @Transactional
     open fun createUseCase(@Valid @Body request: CreateUseCaseRequest): HttpResponse<*> {
         return try {
@@ -117,6 +118,7 @@ open class UseCaseController(
     }
 
     @Put("/{id}")
+    @Secured("ADMIN", "CHAMPION", "REQ") // Only privileged users can update
     @Transactional
     open fun updateUseCase(id: Long, @Valid @Body request: UpdateUseCaseRequest): HttpResponse<*> {
         return try {
@@ -153,6 +155,7 @@ open class UseCaseController(
     }
 
     @Delete("/{id}")
+    @Secured("ADMIN", "CHAMPION", "REQ") // Only privileged users can delete
     @Transactional
     open fun deleteUseCase(id: Long): HttpResponse<*> {
         return try {

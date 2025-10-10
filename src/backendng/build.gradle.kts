@@ -142,3 +142,12 @@ micronaut {
 tasks.named<io.micronaut.gradle.docker.NativeImageDockerfile>("dockerfileNative") {
     jdkVersion.set("21")
 }
+
+// Configure Kotlin compiler options
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
+    compilerOptions {
+        // Suppress annotation target warnings (Kotlin 2.x future compatibility)
+        // Opt-in to applying annotations to both parameter and field (future behavior)
+        freeCompilerArgs.add("-Xannotation-default-target=param-property")
+    }
+}

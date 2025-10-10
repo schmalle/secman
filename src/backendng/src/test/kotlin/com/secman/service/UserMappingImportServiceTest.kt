@@ -216,8 +216,8 @@ class UserMappingImportServiceTest {
         assertTrue(mappings.all { it.email == it.email.lowercase() }, 
             "All emails should be normalized to lowercase")
         
-        // All domains should be lowercase
-        assertTrue(mappings.all { it.domain == it.domain.lowercase() }, 
+        // All domains should be lowercase (if present)
+        assertTrue(mappings.all { it.domain == null || it.domain == it.domain!!.lowercase() }, 
             "All domains should be normalized to lowercase")
     }
 
@@ -238,7 +238,7 @@ class UserMappingImportServiceTest {
         // AWS account ID should be preserved as 12-digit string
         assertEquals("123456789012", mapping!!.awsAccountId, 
             "AWS account ID should be preserved as string")
-        assertEquals(12, mapping.awsAccountId.length, 
+        assertEquals(12, mapping.awsAccountId?.length ?: 0, 
             "AWS account ID should have 12 digits")
     }
 
