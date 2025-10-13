@@ -19,4 +19,7 @@ interface FalconConfigRepository : JpaRepository<FalconConfig, Long> {
     
     @Query("UPDATE FalconConfig f SET f.isActive = false WHERE f.isActive = true")
     fun deactivateAll(): Int
+
+    @Query("SELECT f FROM FalconConfig f ORDER BY f.createdAt DESC LIMIT 1")
+    fun findMostRecent(): Optional<FalconConfig>
 }

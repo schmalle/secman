@@ -30,6 +30,7 @@ dependencies {
     implementation("io.micronaut:micronaut-jackson-databind")
     implementation("io.micronaut.kotlin:micronaut-kotlin-runtime")
     implementation("io.micronaut.kotlin:micronaut-kotlin-extension-functions")
+    implementation("io.micronaut:micronaut-retry")
     
     // Database
     implementation("io.micronaut.data:micronaut-data-hibernate-jpa")
@@ -83,7 +84,10 @@ dependencies {
     // Document generation (Apache POI)
     implementation("org.apache.poi:poi-ooxml:5.4.1")
     implementation("org.apache.poi:poi-scratchpad:5.4.1")
-    
+
+    // CSV parsing (Apache Commons CSV) - Feature 016
+    implementation("org.apache.commons:commons-csv:1.11.0")
+
     // HTML processing for email
     implementation("org.jsoup:jsoup:1.21.2")
     
@@ -118,6 +122,9 @@ kotlin {
 
 allOpen {
     annotation("io.micronaut.aop.Around")
+    annotation("io.micronaut.test.extensions.junit5.annotation.MicronautTest")
+    annotation("jakarta.inject.Singleton")
+    annotation("jakarta.transaction.Transactional")
 }
 
 graalvmNative.toolchainDetection.set(false)
