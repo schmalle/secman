@@ -17,7 +17,7 @@ import org.junit.jupiter.api.AfterEach
  */
 @MicronautTest
 @Transactional
-class UserMappingTest {
+open class UserMappingTest {
 
     @Inject
     lateinit var entityManager: EntityManager
