@@ -1,4 +1,5 @@
 # Dependencies
+backendng/bin/
 node_modules/
 mcp/package-lock.json
 
