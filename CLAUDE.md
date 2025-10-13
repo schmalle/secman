@@ -9,7 +9,7 @@
 
 ## Tech Stack
 - **Language**: Kotlin 2.1.0 / Java 21, TypeScript/JavaScript (Astro 5.14, React 19), Python 3.11+
-- **Framework**: Micronaut 4.4, Hibernate JPA, Apache POI 5.3 (Excel), Astro, React, Bootstrap 5.3
+- **Framework**: Micronaut 4.4, Hibernate JPA, Apache POI 5.3 (Excel), Apache Commons CSV 1.11.0 (CSV), Astro, React, Bootstrap 5.3
 - **Database**: MariaDB 11.4 via Hibernate JPA with auto-migration
 - **Helper Tools**: falconpy (CrowdStrike Falcon API), openpyxl (XLSX export), argparse (CLI)
 - **Testing**: JUnit 5 + MockK (backend), Playwright (frontend E2E), pytest (helper tools)
@@ -41,43 +41,99 @@
 - **Structure**: models/, services/, cli/, exporters/, lib/
 
 ## Recent Changes
+- 016-i-want-to: CSV-Based User Mapping Upload (2025-10-13) - CSV upload support for email-AWS-domain mappings, parallel to Excel upload (Feature 013), handles scientific notation AWS account IDs, auto-detects CSV delimiter/encoding
+- 015-we-have-currently: Added Kotlin 2.1.0 / Java 21 (backend), TypeScript/JavaScript (frontend - Astro 5.14 + React 19) + Micronaut 4.4, Hibernate JPA, Apache POI 5.3, Astro, React 19, Bootstrap 5.3, HTTP client for CrowdStrike API
 - 013-user-mapping-upload: User Mapping with AWS Account & Domain Upload (2025-10-08) - Excel upload for email-AWS-domain mappings, ADMIN-only access, comprehensive validation and duplicate handling, foundation for future RBAC
 - 012-build-ui-for: Release Management UI Enhancement (2025-10-07) - Complete UI for release management with browse, create, view details, compare, status lifecycle, delete (RBAC), and export integration
-- 011-i-want-to: Added Release-Based Requirement Version Management (2025-10-05) - Point-in-time snapshots, historical exports, field-level comparison, RELEASE_MANAGER role
-- 010-please-review-the: Added Kotlin 2.1.0 / Java 21 (backend), TypeScript/JavaScript (Astro 5.14 + React 19)
-- 009-i-want-to: Added Kotlin 2.1.0 / Java 21 (backend MCP server) + Micronaut 4.4, Hibernate JPA, existing MCP server infrastructure from Feature 006
+
+### Feature 016: CSV-Based User Mapping Upload (2025-10-13)
+
+Complete CSV upload support for user mappings, parallel to existing Excel upload (Feature 013):
+
+**Backend Components** (`src/backendng/`):
+- **CSVUserMappingParser.kt** (460 lines) - Core CSV parsing service
+  - Encoding detection: UTF-8 BOM detection + ISO-8859-1 fallback (no heavy dependencies)
+  - Delimiter auto-detection: Comma, semicolon, tab (counts occurrences in first line)
+  - Scientific notation parsing: BigDecimal for AWS account IDs (9.98987E+11 → 998987000000)
+  - Header validation: Case-insensitive matching (account_id, Account_ID, ACCOUNT_ID all work)
+  - Field validation: Email format, 12-digit AWS account ID, domain format
+  - Duplicate detection: Within file (HashSet) + database (repository query)
+  - Batch persistence: Repository.saveAll() for efficiency
+  - Error handling: Skip invalid rows, continue with valid ones, return structured errors
+
+- **ImportController.kt** - CSV endpoints
+  - `POST /api/import/upload-user-mappings-csv` - Upload CSV file (ADMIN only)
+  - `GET /api/import/user-mapping-template-csv` - Download CSV template (ADMIN only)
+  - File validation: 10MB max, .csv extension, empty file check
+  - Response: ImportResult { message, imported, skipped, errors[] }
+
+**Frontend Components** (`src/frontend/src/components/`):
+- **UserMappingUpload.tsx** (Enhanced) - Dual upload UI for Excel and CSV
+  - Side-by-side cards: Excel upload (left) + CSV upload (right)
+  - Separate file inputs with proper accept filters (.xlsx vs .csv)
+  - Client-side validation: Extension, size (10MB), empty file
+  - Loading states: Spinner during upload, disabled buttons
+  - Result display: Imported/skipped counts, error details with line numbers
+  - Template downloads: Excel and CSV template buttons
+
+**Frontend Services** (`src/frontend/src/services/`):
+- **userMappingService.ts** - API wrapper
+  - `uploadUserMappingsCSV(file)` - Upload CSV with validation
+  - `downloadCSVTemplate()` - Download CSV template with blob handling
+
+**Test Coverage** (Feature 016):
+- **Backend Tests**: 46 tests total
+  - 20 contract tests (CSVUploadContractTest.kt) - API compliance
+  - 26 unit tests (CSVUserMappingParserTest.kt) - Parser logic
+- **Test Scenarios**:
+  - Delimiter detection (comma, semicolon, tab)
+  - Scientific notation parsing (Excel exports)
+  - Encoding detection (UTF-8 BOM, ISO-8859-1)
+  - Email validation (valid/invalid formats)
+  - Account ID validation (12 digits, non-numeric, scientific notation)
+  - Domain validation (format, default to "-NONE-")
+  - Duplicate detection (within file, existing in DB)
+  - Row skipping with structured error reporting
+  - Format flexibility (reversed columns, case variations, extra columns)
+  - Authentication/authorization (401, 403)
+  - File validation (empty, wrong extension, oversized)
+
+**Features Implemented** (3 User Stories):
+1. **US1 (P1 - MVP)**: Upload CSV user mappings with validation and duplicate detection
+2. **US2 (P2)**: Handle CSV format variations (column order, case-insensitive headers, extra columns)
+3. **US3 (P3)**: Download CSV template with example data
+
+**CSV Format Requirements**:
+- **Required Columns**: `account_id` (12 digits), `owner_email`
+- **Optional Columns**: `domain` (defaults to "-NONE-")
+- **Supported Delimiters**: Comma (,), semicolon (;), tab (\t)
+- **Header Flexibility**: Case-insensitive, any column order
+- **Encoding Support**: UTF-8, ISO-8859-1
+- **Special Handling**: Scientific notation for AWS account IDs (Excel exports)
+- **Max File Size**: 10 MB
+- **Error Behavior**: Skip invalid rows, continue with valid ones, return detailed error list (max 50 errors)
+
+**Statistics**:
+- Production code: 460 lines (parser) + 100 lines (controller) + 200 lines (frontend) = 760 lines
+- Test code: 46 backend tests (contract + unit)
+- Total: ~1,200 lines (production + tests)
 
 ### Feature 012: Release Management UI Enhancement (2025-10-07)
 
 Complete user interface for release management with 8 major components:
 
 **Pages**:
-- `/releases` - Browse all releases with filtering, search, and pagination
-- `/releases/[id]` - Release detail view with metadata and requirement snapshots
-- `/releases/compare` - Side-by-side release comparison with field-level diff
-- `/export`, `/import-export` - Enhanced with release selector for historical exports
 
 **Components** (`src/frontend/src/components/`):
-- **ReleaseList.tsx** (530 lines) - Main release listing with filters, search, pagination, RBAC-enforced actions
-- **ReleaseDetail.tsx** (631 lines) - Release detail view with paginated snapshots, export, delete actions
-- **ReleaseComparison.tsx** (360 lines) - Side-by-side comparison with summary stats, color-coded changes, Excel export
-- **ReleaseCreateModal.tsx** (295 lines) - Modal form with semantic versioning validation, keyboard navigation (Escape)
-- **ReleaseDeleteConfirm.tsx** (118 lines) - Confirmation modal with warning, keyboard navigation, RBAC enforcement
-- **ReleaseStatusActions.tsx** (247 lines) - Status transition buttons (Publish/Archive) with confirmation modal
-- **ReleaseSelector.tsx** (112 lines) - Dropdown component for release selection (memoized with React.memo)
-- **ReleaseManagement.tsx** (614 lines) - Admin page wrapper
 
 **Services** (`src/frontend/src/services/`):
-- **releaseService.ts** (238 lines) - Complete API wrapper with JSDoc documentation
   - Methods: list(), getById(), create(), updateStatus(), delete(), getSnapshots(), compare()
   - Pagination support, error handling, TypeScript interfaces
 
 **Utilities** (`src/frontend/src/utils/`):
-- **permissions.ts** (126 lines) - RBAC permission checks
   - canDeleteRelease() - ADMIN deletes any, RELEASE_MANAGER deletes own only
   - canCreateRelease(), canUpdateReleaseStatus(), canViewReleases()
   - getPermissionErrorMessage()
-- **comparisonExport.ts** - Client-side Excel export using ExcelJS library
   - Multiple sheets: Summary, Added, Deleted, Modified, Unchanged
   - Color-coded rows, formatted columns, auto-width
 
@@ -91,22 +147,10 @@ Complete user interface for release management with 8 major components:
 7. **Delete Release** (P3): RBAC-enforced delete (ADMIN: any release, RELEASE_MANAGER: own releases only), confirmation modal, cascade warning
 
 **Accessibility & Polish** (Phase 8):
-- Keyboard navigation: Escape to close modals, Tab order, Enter to submit
-- ARIA labels: Status badges, modals, buttons, form fields
-- Loading states: Disabled buttons, spinner indicators, skeleton loaders
-- Error handling: Toast notifications, inline validation, permission errors (403)
-- Performance: React.memo on child components, pagination for large datasets
-- No console statements (all removed)
 
 **Test Coverage**:
-- 71 E2E test scenarios across 7 test files (Playwright)
-- Tests written first (TDD approach): RED → GREEN → REFACTOR
-- Coverage: Browse (8), Create (9), Detail (9), Compare (9), Status (12), Export (11), Delete (13)
 
 **Statistics**:
-- Production code: 2,907 lines (components) + 238 lines (service) + 532 lines (utilities) = 3,677 lines
-- E2E tests: 2,785 lines
-- Total: 6,462 lines (production + tests)
 
 ### Feature 011: Release-Based Requirement Version Management (2025-10-05)
 
@@ -198,11 +242,18 @@ Complete user interface for release management with 8 major components:
 - `POST /api/import/upload-nmap-xml` - Nmap scan import (Feature 002)
 - `POST /api/import/upload-masscan-xml` - Masscan scan import (Feature 005)
 - `POST /api/import/upload-vulnerability-xlsx` - Vulnerability import (Feature 003)
-- `POST /api/import/upload-user-mappings` - User mapping upload (Feature 013, ADMIN only)
+- `POST /api/import/upload-user-mappings` - User mapping Excel upload (Feature 013, ADMIN only)
   - Request: multipart/form-data with xlsxFile
   - Response: ImportResult { message, imported, skipped, errors[] }
   - Validation: Email format, AWS account (12 digits), domain format
   - Behavior: Skip invalid/duplicate rows, continue with valid ones
+- `POST /api/import/upload-user-mappings-csv` - User mapping CSV upload (Feature 016, ADMIN only)
+  - Request: multipart/form-data with csvFile
+  - Response: ImportResult { message, imported, skipped, errors[] }
+  - Validation: Same as Excel upload (email, AWS account, domain)
+  - CSV Format: RFC 4180, auto-detects delimiter (comma/semicolon/tab), UTF-8/ISO-8859-1
+  - Scientific Notation: Handles AWS account IDs in format 9.98987E+11
+  - Behavior: Skip invalid/duplicate rows, continue with valid ones, domain defaults to "-NONE-"
 
 ### Assets (UPDATED - Feature 008)
 - `GET /api/assets` - List assets (workgroup-filtered: users see their workgroup assets + owned assets)
@@ -300,6 +351,21 @@ Model Context Protocol tools for AI assistant integration:
 4. Parse rows in try-catch (skip invalid, continue valid)
 5. Return counts: imported, skipped, assetsCreated
 
+### CSV Import Pattern (Feature 016)
+1. Validate file (size ≤10MB, .csv extension, content-type)
+2. Detect encoding (UTF-8 BOM or default UTF-8 with ISO-8859-1 fallback)
+3. Detect delimiter (comma/semicolon/tab from first line)
+4. Parse with Apache Commons CSV (RFC 4180 compliant)
+5. Validate headers (case-insensitive: account_id, owner_email, optional domain)
+6. For each row:
+   - Parse account ID (handle scientific notation with BigDecimal)
+   - Validate fields (email format, 12-digit account ID, domain format)
+   - Normalize (lowercase email/domain, trim whitespace)
+   - Check for duplicates (database + within file)
+   - Create entity or skip with reason
+7. Batch save valid entities
+8. Return ImportResult: imported count, skipped count, errors[]
+
 ### Entity Merge Pattern (Asset)
 1. Find existing by hostname: `assetRepository.findByName(hostname)`
 2. If exists: Merge (append groups, update IP, preserve owner/type/description)
@@ -317,8 +383,12 @@ Model Context Protocol tools for AI assistant integration:
 ### Backend
 - **Domain**: `src/backendng/src/main/kotlin/com/secman/domain/`
 - **Controllers**: `src/backendng/src/main/kotlin/com/secman/controller/`
+  - `ImportController.kt` - Data import endpoints (xlsx, nmap, masscan, vulnerabilities, user mappings)
 - **Services**: `src/backendng/src/main/kotlin/com/secman/service/`
+  - `CSVUserMappingParser.kt` - CSV parsing for user mappings (Feature 016)
 - **Tests**: `src/backendng/src/test/kotlin/com/secman/`
+  - `contract/CSVUploadContractTest.kt` - Contract tests for CSV upload endpoint (Feature 016)
+  - `service/CSVUserMappingParserTest.kt` - Unit tests for CSV parser (Feature 016)
 
 ### Frontend
 - **Components**: `src/frontend/src/components/`
@@ -367,4 +437,4 @@ docker-compose down      # Stop all services
 ```
 
 ---
-*Auto-generated from feature specifications. Last updated: 2025-10-04*
+*Auto-generated from feature specifications. Last updated: 2025-10-13*

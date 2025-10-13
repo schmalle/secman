@@ -41,7 +41,8 @@ open class ImportController(
     private val assetRepository: com.secman.repository.AssetRepository,
     private val scanRepository: com.secman.repository.ScanRepository,
     private val scanResultRepository: com.secman.repository.ScanResultRepository,
-    private val userMappingImportService: com.secman.service.UserMappingImportService
+    private val userMappingImportService: com.secman.service.UserMappingImportService,
+    private val csvUserMappingParser: com.secman.service.CSVUserMappingParser
 ) {
     
     private val log = LoggerFactory.getLogger(ImportController::class.java)
@@ -513,6 +514,165 @@ open class ImportController(
             log.error("Error processing user mapping Excel file", e)
             HttpResponse.status<ErrorResponse>(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ErrorResponse("Error processing file: ${e.message}"))
+        }
+    }
+
+    /**
+     * Upload user mapping CSV file
+     *
+     * Feature: 016-i-want-to (CSV-Based User Mapping Upload)
+     *
+     * Endpoint: POST /api/import/upload-user-mappings-csv
+     * Request: multipart/form-data with csvFile
+     * Response: ImportResult with counts (imported, skipped, errors)
+     * Access: ADMIN only
+     *
+     * Expected CSV format:
+     * - Required columns: account_id, owner_email (case-insensitive, any order)
+     * - Optional column: domain (defaults to "-NONE-" if omitted)
+     * - Max file size: 10MB
+     * - Supported encodings: UTF-8, ISO-8859-1
+     * - Supported delimiters: comma, semicolon, tab (auto-detected)
+     * - Scientific notation: Handles AWS account IDs like 9.98987E+11
+     *
+     * @param csvFile CSV file containing user mappings
+     * @param authentication Authentication context (for logging)
+     * @return Import response with counts and any error messages
+     */
+    @Post("/upload-user-mappings-csv")
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    @Transactional
+    @Secured("ADMIN")
+    open fun uploadUserMappingsCSV(
+        @Part csvFile: CompletedFileUpload,
+        authentication: Authentication
+    ): HttpResponse<*> {
+        val startTime = System.currentTimeMillis()
+        val username = authentication.name
+
+        return try {
+            log.info("CSV upload started: user={}, filename={}, size={}",
+                     username, csvFile.filename, csvFile.size)
+
+            // Validate file size
+            if (csvFile.size > MAX_FILE_SIZE) {
+                val errorMsg = "File size exceeds maximum limit of ${MAX_FILE_SIZE / 1024 / 1024}MB"
+                log.warn("CSV upload rejected: {}", errorMsg)
+                return HttpResponse.status<ErrorResponse>(HttpStatus.REQUEST_ENTITY_TOO_LARGE)
+                    .body(ErrorResponse(errorMsg))
+            }
+
+            // Validate file extension
+            val filename = csvFile.filename.orEmpty()
+            if (!filename.lowercase().endsWith(".csv")) {
+                val errorMsg = "Invalid file type: expected .csv file, received ${filename.substringAfterLast('.')}"
+                log.warn("CSV upload rejected: {}", errorMsg)
+                return HttpResponse.badRequest(ErrorResponse(errorMsg))
+            }
+
+            // Validate content type (allow text/csv, application/csv, or generic octet-stream)
+            val contentType = csvFile.contentType.map { it.toString() }.orElse("")
+            if (!contentType.contains("csv", ignoreCase = true) &&
+                !contentType.contains("text", ignoreCase = true) &&
+                !contentType.contains("octet-stream", ignoreCase = true)) {
+                log.warn("CSV upload: unexpected content-type: {}", contentType)
+                // Allow anyway since browsers may send different content types
+            }
+
+            // Check file is not empty
+            if (csvFile.size == 0L) {
+                val errorMsg = "Empty file uploaded"
+                log.warn("CSV upload rejected: {}", errorMsg)
+                return HttpResponse.badRequest(ErrorResponse(errorMsg))
+            }
+
+            // Save to temporary file for processing
+            val tempFile = java.io.File.createTempFile("csv_upload_", ".csv")
+            try {
+                csvFile.inputStream.use { input ->
+                    tempFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+
+                // Parse CSV
+                val result = csvUserMappingParser.parse(tempFile)
+
+                val duration = System.currentTimeMillis() - startTime
+                log.info("CSV upload completed: user={}, imported={}, skipped={}, duration={}ms",
+                         username, result.imported, result.skipped, duration)
+
+                HttpResponse.ok(result)
+
+            } finally {
+                // Clean up temp file
+                if (tempFile.exists()) {
+                    tempFile.delete()
+                }
+            }
+
+        } catch (e: IllegalArgumentException) {
+            // Validation errors (missing headers, empty file, etc.)
+            log.warn("CSV upload validation error: user={}, error={}", username, e.message)
+            HttpResponse.badRequest(ErrorResponse(e.message ?: "Invalid CSV format"))
+
+        } catch (e: IOException) {
+            // File I/O errors
+            log.error("CSV upload I/O error: user={}, error={}", username, e.message, e)
+            HttpResponse.status<ErrorResponse>(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ErrorResponse("Error reading CSV file: ${e.message}"))
+
+        } catch (e: Exception) {
+            // Unexpected errors
+            log.error("CSV upload unexpected error: user={}, error={}", username, e.message, e)
+            HttpResponse.status<ErrorResponse>(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ErrorResponse("Error processing CSV file: ${e.message}"))
+        }
+    }
+
+    /**
+     * Download CSV template for user mappings
+     *
+     * Feature: 016-i-want-to (CSV-Based User Mapping Upload)
+     *
+     * Endpoint: GET /api/import/user-mapping-template-csv
+     * Response: CSV file with headers and example row
+     * Access: ADMIN only
+     *
+     * Template format:
+     * - Headers: account_id,owner_email,domain
+     * - Example row: 123456789012,user@example.com,example.com
+     *
+     * @return CSV template file as download
+     */
+    @Get("/user-mapping-template-csv")
+    @Produces(MediaType.TEXT_PLAIN)
+    @Secured("ADMIN")
+    open fun downloadUserMappingTemplateCSV(): HttpResponse<*> {
+        return try {
+            log.debug("CSV template download requested")
+
+            // Load template from resources
+            val templateStream = javaClass.classLoader.getResourceAsStream("templates/user-mapping-template.csv")
+                ?: throw IllegalStateException("CSV template file not found in resources")
+
+            val templateContent = templateStream.bufferedReader().use { it.readText() }
+
+            log.info("CSV template downloaded successfully")
+
+            HttpResponse.ok(templateContent)
+                .contentType(MediaType.TEXT_PLAIN_TYPE)
+                .header("Content-Disposition", "attachment; filename=\"user-mapping-template.csv\"")
+
+        } catch (e: IllegalStateException) {
+            log.error("CSV template file missing: {}", e.message)
+            HttpResponse.status<ErrorResponse>(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ErrorResponse("Template file not found"))
+
+        } catch (e: Exception) {
+            log.error("Error downloading CSV template: {}", e.message, e)
+            HttpResponse.status<ErrorResponse>(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ErrorResponse("Error downloading template: ${e.message}"))
         }
     }
 

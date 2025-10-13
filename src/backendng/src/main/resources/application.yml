@@ -91,6 +91,24 @@ secman:
     services:
       translation:
         url: https://openrouter.ai/api/v1
+      crowdstrike:
+        # Base URLs by region (credentials loaded from falcon_configs table)
+        base-urls:
+          us-1: https://api.crowdstrike.com
+          us-2: https://api.us-2.crowdstrike.com
+          eu-1: https://api.eu-1.crowdstrike.com
+          us-gov-1: https://api.laggar.gcw.crowdstrike.com
+          us-gov-2: https://api.laggar.gcw.crowdstrike.com
+        timeout:
+          query: 10s  # Query timeout (SC-001: < 10 seconds)
+          auth: 5s    # Authentication timeout
+        retry:
+          max-attempts: 3
+          initial-delay: 1000  # 1 second
+          max-delay: 4000      # 4 seconds (exponential backoff for 429)
+          backoff-multiplier: 2.0
+        token:
+          cache-duration: 1800  # 30 minutes (1800 seconds)
     client:
       read-timeout: 30s
       connect-timeout: 10s
@@ -98,6 +116,10 @@ secman:
       translation:
         read-timeout: 30s
         connect-timeout: 10s
+      crowdstrike:
+        read-timeout: 10s
+        connect-timeout: 5s
+        max-content-length: 10485760  # 10MB for large result sets
       
 oauth:
   http-client:
