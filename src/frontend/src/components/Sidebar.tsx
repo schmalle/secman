@@ -217,6 +217,16 @@ const Sidebar = () => {
                                     </a>
                                 </li>
                                 <li>
+                                    <a
+                                        href={isAdmin ? "#" : "/account-vulns"}
+                                        className={`d-flex align-items-center p-2 text-decoration-none rounded ${isAdmin ? 'text-muted' : 'text-dark hover-bg-secondary'}`}
+                                        title={isAdmin ? "Admins should use System Vulns view" : "View vulnerabilities for your AWS accounts"}
+                                        style={isAdmin ? { cursor: 'not-allowed', pointerEvents: 'none' } : {}}
+                                    >
+                                        <i className="bi bi-cloud me-2"></i> Account vulns
+                                    </a>
+                                </li>
+                                <li>
                                     <a href="/vulnerabilities/exceptions" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
                                         <i className="bi bi-x-circle me-2"></i> Exceptions
                                     </a>

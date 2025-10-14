@@ -41,17 +41,80 @@
 - **Structure**: models/, services/, cli/, exporters/, lib/
 
 ## Recent Changes
+- 018-under-vuln-management: Account Vulns - AWS Account-Based Vulnerability Overview (2025-10-14) - New view for non-admin users to see vulnerabilities grouped by their mapped AWS accounts, admin redirect, error handling
 - 016-i-want-to: CSV-Based User Mapping Upload (2025-10-13) - CSV upload support for email-AWS-domain mappings, parallel to Excel upload (Feature 013), handles scientific notation AWS account IDs, auto-detects CSV delimiter/encoding
 - 015-we-have-currently: Added Kotlin 2.1.0 / Java 21 (backend), TypeScript/JavaScript (frontend - Astro 5.14 + React 19) + Micronaut 4.4, Hibernate JPA, Apache POI 5.3, Astro, React 19, Bootstrap 5.3, HTTP client for CrowdStrike API
-- 013-user-mapping-upload: User Mapping with AWS Account & Domain Upload (2025-10-08) - Excel upload for email-AWS-domain mappings, ADMIN-only access, comprehensive validation and duplicate handling, foundation for future RBAC
-- 012-build-ui-for: Release Management UI Enhancement (2025-10-07) - Complete UI for release management with browse, create, view details, compare, status lifecycle, delete (RBAC), and export integration
+
+### Feature 018: Account Vulns - AWS Account-Based Vulnerability Overview (2025-10-14)
+
+New vulnerability view for non-admin users to see assets and vulnerabilities in their mapped AWS accounts:
+
+**Backend Components** (`src/backendng/`):
+- **AccountVulnsService.kt** - Business logic for account-based filtering
+  - AWS account lookup from user_mapping table
+  - Asset filtering by cloudAccountId
+  - Vulnerability counting per asset
+  - Grouping by AWS account, sorting by vulnerability count
+  - Admin role rejection, no mapping error handling
+- **AccountVulnsController.kt** - RESTful API endpoint
+  - `GET /api/account-vulns` - Get account vulnerability summary (authenticated, non-admin only)
+  - Returns: AccountVulnsSummaryDto with account groups, assets, vulnerability counts
+  - Error responses: 401 (unauthorized), 403 (admin redirect), 404 (no mappings), 500 (server error)
+- **DTOs** - AssetVulnCountDto, AccountGroupDto, AccountVulnsSummaryDto
+- **Repository Enhancement** - Added `findByCloudAccountIdIn()` to AssetRepository
+
+**Frontend Components** (`src/frontend/src/components/`):
+- **AccountVulnsView.tsx** - Main React component
+  - Fetches data from /api/account-vulns endpoint
+  - Displays summary stats (accounts, assets, vulnerabilities)
+  - Renders account groups with asset tables
+  - Error handling: Loading state, admin redirect, no mappings, general errors
+  - Refresh button for manual data reload
+- **AssetVulnTable.tsx** - Asset table component
+  - Displays assets with name, type, vulnerability count
+  - Sortable by vulnerability count (descending)
+  - Clickable asset names for navigation
+  - Color-coded vulnerability badges (green/info/warning/danger)
+- **account-vulns.astro** - Astro page wrapper
+
+**Frontend Services** (`src/frontend/src/services/`):
+- **accountVulnsService.ts** - API client
+  - `getAccountVulns()` - Fetch account vulnerability summary
+  - TypeScript interfaces for request/response types
+
+**Navigation** (`src/frontend/src/components/Sidebar.tsx`):
+- Added "Account Vulns" link under Vuln Management menu
+- Role-aware styling: Disabled/grayed for admin users with tooltip
+- Active/clickable for non-admin users
+
+**Features Implemented** (5 User Stories):
+1. **US1 (P1 - MVP)**: View Vulnerabilities for Single AWS Account - Assets displayed with vuln counts, sorted by count
+2. **US2 (P2)**: Multi-Account Grouping - Multiple AWS accounts displayed in separate groups with summary stats
+3. **US3 (P1)**: Error Handling for Missing Mappings - Clear error message when user has no AWS account mappings
+4. **US4 (P1)**: Admin Role Redirect - Admin users get 403 error with redirect guidance to System Vulns view
+5. **US5 (P3)**: Asset Navigation - Clickable asset names navigate to asset detail page
+
+**Access Control**:
+- AWS account mapping is PRIMARY access control (workgroup restrictions do NOT apply per clarification)
+- Authenticated users only (JWT required)
+- Admin users rejected with 403 Forbidden
+- Non-admin users see assets from their mapped AWS accounts only
+
+**Data Model**:
+- Uses existing entities: UserMapping, Asset, Vulnerability
+- No schema changes required
+- Leverages existing indexes on user_mapping.email, assets.cloudAccountId
+
+**Statistics**:
+- Production code: ~600 lines (backend: service + controller + DTOs + repo method) + ~400 lines (frontend: components + service) = 1,000 lines
+- Test code: 3 contract tests, 8 unit tests (service logic validation)
+- Total: ~1,500 lines (production + tests)
 
 ### Feature 016: CSV-Based User Mapping Upload (2025-10-13)
 
 Complete CSV upload support for user mappings, parallel to existing Excel upload (Feature 013):
 
 **Backend Components** (`src/backendng/`):
-- **CSVUserMappingParser.kt** (460 lines) - Core CSV parsing service
   - Encoding detection: UTF-8 BOM detection + ISO-8859-1 fallback (no heavy dependencies)
   - Delimiter auto-detection: Comma, semicolon, tab (counts occurrences in first line)
   - Scientific notation parsing: BigDecimal for AWS account IDs (9.98987E+11 → 998987000000)
@@ -61,14 +124,12 @@ Complete CSV upload support for user mappings, parallel to existing Excel upload
   - Batch persistence: Repository.saveAll() for efficiency
   - Error handling: Skip invalid rows, continue with valid ones, return structured errors
 
-- **ImportController.kt** - CSV endpoints
   - `POST /api/import/upload-user-mappings-csv` - Upload CSV file (ADMIN only)
   - `GET /api/import/user-mapping-template-csv` - Download CSV template (ADMIN only)
   - File validation: 10MB max, .csv extension, empty file check
   - Response: ImportResult { message, imported, skipped, errors[] }
 
 **Frontend Components** (`src/frontend/src/components/`):
-- **UserMappingUpload.tsx** (Enhanced) - Dual upload UI for Excel and CSV
   - Side-by-side cards: Excel upload (left) + CSV upload (right)
   - Separate file inputs with proper accept filters (.xlsx vs .csv)
   - Client-side validation: Extension, size (10MB), empty file
@@ -77,15 +138,12 @@ Complete CSV upload support for user mappings, parallel to existing Excel upload
   - Template downloads: Excel and CSV template buttons
 
 **Frontend Services** (`src/frontend/src/services/`):
-- **userMappingService.ts** - API wrapper
   - `uploadUserMappingsCSV(file)` - Upload CSV with validation
   - `downloadCSVTemplate()` - Download CSV template with blob handling
 
 **Test Coverage** (Feature 016):
-- **Backend Tests**: 46 tests total
   - 20 contract tests (CSVUploadContractTest.kt) - API compliance
   - 26 unit tests (CSVUserMappingParserTest.kt) - Parser logic
-- **Test Scenarios**:
   - Delimiter detection (comma, semicolon, tab)
   - Scientific notation parsing (Excel exports)
   - Encoding detection (UTF-8 BOM, ISO-8859-1)
@@ -104,19 +162,8 @@ Complete CSV upload support for user mappings, parallel to existing Excel upload
 3. **US3 (P3)**: Download CSV template with example data
 
 **CSV Format Requirements**:
-- **Required Columns**: `account_id` (12 digits), `owner_email`
-- **Optional Columns**: `domain` (defaults to "-NONE-")
-- **Supported Delimiters**: Comma (,), semicolon (;), tab (\t)
-- **Header Flexibility**: Case-insensitive, any column order
-- **Encoding Support**: UTF-8, ISO-8859-1
-- **Special Handling**: Scientific notation for AWS account IDs (Excel exports)
-- **Max File Size**: 10 MB
-- **Error Behavior**: Skip invalid rows, continue with valid ones, return detailed error list (max 50 errors)
 
 **Statistics**:
-- Production code: 460 lines (parser) + 100 lines (controller) + 200 lines (frontend) = 760 lines
-- Test code: 46 backend tests (contract + unit)
-- Total: ~1,200 lines (production + tests)
 
 ### Feature 012: Release Management UI Enhancement (2025-10-07)
 
