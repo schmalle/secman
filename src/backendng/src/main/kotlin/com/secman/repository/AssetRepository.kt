@@ -86,4 +86,15 @@ interface AssetRepository : JpaRepository<Asset, Long> {
      * @return List of assets in the specified workgroup
      */
     fun findByWorkgroupsIdOrderByNameAsc(workgroupId: Long): List<Asset>
+
+    /**
+     * Find assets by cloud account IDs
+     * Used for Account Vulns view to filter assets by user's AWS account mappings
+     *
+     * Related to: Feature 018 (Account Vulns - AWS Account-Based Vulnerability Overview)
+     *
+     * @param cloudAccountIds List of AWS account IDs to filter by
+     * @return List of assets in the specified AWS accounts
+     */
+    fun findByCloudAccountIdIn(cloudAccountIds: List<String>): List<Asset>
 }
