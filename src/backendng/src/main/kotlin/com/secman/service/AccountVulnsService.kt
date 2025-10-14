@@ -38,14 +38,16 @@ class AccountVulnsService(
      *
      * @param authentication User authentication details (email + roles)
      * @return AccountVulnsSummaryDto with account groups, assets, and vulnerability counts
-     * @throws IllegalStateException if user has ADMIN role
+     * @throws IllegalStateException if user has ADMIN role or email not found in authentication
      * @throws NoSuchElementException if user has no AWS account mappings
      */
     fun getAccountVulnsSummary(authentication: Authentication): AccountVulnsSummaryDto {
-        val userEmail = authentication.name
+        // Extract email from authentication attributes (username is in authentication.name)
+        val userEmail = authentication.attributes["email"]?.toString()
+            ?: throw IllegalStateException("Email not found in authentication context")
         val roles = authentication.roles
 
-        logger.debug("Getting account vulns summary for user: {}", userEmail)
+        logger.debug("Getting account vulns summary for user: {} (username: {})", userEmail, authentication.name)
 
         // Check if user is admin - reject with error
         if (roles.contains("ADMIN")) {
