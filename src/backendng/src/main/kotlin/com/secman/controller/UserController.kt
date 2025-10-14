@@ -1,9 +1,14 @@
 package com.secman.controller
 
 import com.secman.domain.User
+import com.secman.dto.CreateUserMappingRequest
+import com.secman.dto.UpdateUserMappingRequest
+import com.secman.dto.UserMappingResponse
 import com.secman.repository.UserRepository
+import com.secman.service.UserMappingService
 import io.micronaut.data.model.Pageable
 import io.micronaut.http.HttpResponse
+import io.micronaut.http.HttpStatus
 import io.micronaut.http.annotation.*
 import io.micronaut.security.annotation.Secured
 import io.micronaut.security.rules.SecurityRule
@@ -16,7 +21,8 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
 open class UserController(
     private val userRepository: UserRepository,
     private val userDeletionValidator: com.secman.service.UserDeletionValidator,
-    private val workgroupRepository: com.secman.repository.WorkgroupRepository
+    private val workgroupRepository: com.secman.repository.WorkgroupRepository,
+    private val userMappingService: UserMappingService
 ) {
     
     private val passwordEncoder = BCryptPasswordEncoder()
@@ -278,5 +284,59 @@ open class UserController(
         } catch (e: Exception) {
             return HttpResponse.serverError<Any>().body(mapOf("error" to "Failed to delete user: ${e.message}"))
         }
+    }
+
+    // User Mapping Management Endpoints (Feature 017)
+    
+    /**
+     * Get all mappings for a user
+     * Feature: 017-user-mapping-management
+     * User Story 1: View User's Existing Mappings (P1)
+     */
+    @Get("/{userId}/mappings")
+    fun getUserMappings(@PathVariable userId: Long): List<UserMappingResponse> {
+        return userMappingService.getUserMappings(userId)
+    }
+    
+    /**
+     * Create a new mapping for a user
+     * Feature: 017-user-mapping-management
+     * User Story 2: Add New Mapping (P2)
+     */
+    @Post("/{userId}/mappings")
+    @Status(HttpStatus.CREATED)
+    fun createUserMapping(
+        @PathVariable userId: Long,
+        @Body request: CreateUserMappingRequest
+    ): UserMappingResponse {
+        return userMappingService.createMapping(userId, request)
+    }
+    
+    /**
+     * Update an existing mapping
+     * Feature: 017-user-mapping-management
+     * User Story 4: Edit Existing Mapping (P3)
+     */
+    @Put("/{userId}/mappings/{mappingId}")
+    fun updateUserMapping(
+        @PathVariable userId: Long,
+        @PathVariable mappingId: Long,
+        @Body request: UpdateUserMappingRequest
+    ): UserMappingResponse {
+        return userMappingService.updateMapping(userId, mappingId, request)
+    }
+    
+    /**
+     * Delete a mapping
+     * Feature: 017-user-mapping-management
+     * User Story 3: Delete Existing Mapping (P2)
+     */
+    @Delete("/{userId}/mappings/{mappingId}")
+    @Status(HttpStatus.NO_CONTENT)
+    fun deleteUserMapping(
+        @PathVariable userId: Long,
+        @PathVariable mappingId: Long
+    ) {
+        userMappingService.deleteMapping(userId, mappingId)
     }
 }

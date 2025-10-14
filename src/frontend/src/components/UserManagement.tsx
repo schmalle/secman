@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { FormEvent } from 'react';
 import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete } from '../utils/auth';
+import { getUserMappings, createMapping, updateMapping, deleteMapping, type UserMapping, type CreateMappingRequest, type UpdateMappingRequest } from '../api/userMappings';
 
 // Define an interface for the user data expected from the backend
 interface User {
@@ -64,6 +65,22 @@ const UserManagement = () => {
     });
     const [editUserError, setEditUserError] = useState<string | null>(null);
     const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
+
+    // State for User Mappings (Feature 017)
+    const [mappings, setMappings] = useState<UserMapping[]>([]);
+    const [mappingsError, setMappingsError] = useState<string | null>(null);
+    const [mappingsSuccess, setMappingsSuccess] = useState<string | null>(null);
+    const [isLoadingMappings, setIsLoadingMappings] = useState(false);
+    const [isAddingMapping, setIsAddingMapping] = useState(false);
+    const [newMapping, setNewMapping] = useState<CreateMappingRequest>({
+        awsAccountId: '',
+        domain: ''
+    });
+    const [editingMappingId, setEditingMappingId] = useState<number | null>(null);
+    const [editMappingData, setEditMappingData] = useState<UpdateMappingRequest>({
+        awsAccountId: '',
+        domain: ''
+    });
 
 
     useEffect(() => {
@@ -259,6 +276,8 @@ const UserManagement = () => {
         });
         setEditUserError(null);
         setShowEditUserModal(true);
+        // Load mappings for this user (Feature 017)
+        loadUserMappings(user.id);
     };
 
     const handleEditUserChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -340,6 +359,126 @@ const UserManagement = () => {
         } finally {
             setIsSubmittingEdit(false);
         }
+    };
+
+    // --- User Mapping Management Functions (Feature 017) ---
+    
+    const loadUserMappings = async (userId: number) => {
+        setIsLoadingMappings(true);
+        try {
+            const data = await getUserMappings(userId);
+            setMappings(data);
+            setMappingsError(null);
+        } catch (err: any) {
+            console.error('Failed to load mappings:', err);
+            setMappingsError(err.message || 'Failed to load mappings');
+        } finally {
+            setIsLoadingMappings(false);
+        }
+    };
+
+    const handleAddMapping = async () => {
+        if (!editingUser) return;
+        
+        // Validate at least one field
+        const hasAwsId = newMapping.awsAccountId && newMapping.awsAccountId.trim() !== '';
+        const hasDomain = newMapping.domain && newMapping.domain.trim() !== '';
+        
+        if (!hasAwsId && !hasDomain) {
+            setMappingsError('At least one of AWS Account ID or Domain must be provided');
+            return;
+        }
+
+        setIsLoadingMappings(true);
+        try {
+            const mappingData: CreateMappingRequest = {
+                awsAccountId: hasAwsId ? newMapping.awsAccountId : null,
+                domain: hasDomain ? newMapping.domain : null
+            };
+
+            await createMapping(editingUser.id, mappingData);
+            setNewMapping({ awsAccountId: '', domain: '' });
+            setIsAddingMapping(false);
+            setMappingsError(null);
+            setMappingsSuccess('Mapping added successfully');
+            setTimeout(() => setMappingsSuccess(null), 5000);
+            await loadUserMappings(editingUser.id);
+        } catch (err: any) {
+            setMappingsError(err.message || 'Failed to create mapping');
+            setTimeout(() => setMappingsError(null), 5000);
+        } finally {
+            setIsLoadingMappings(false);
+        }
+    };
+
+    const handleDeleteMapping = async (mappingId: number) => {
+        if (!editingUser) return;
+        
+        if (!confirm('Are you sure you want to delete this mapping?')) {
+            return;
+        }
+
+        setIsLoadingMappings(true);
+        try {
+            await deleteMapping(editingUser.id, mappingId);
+            setMappingsSuccess('Mapping deleted successfully');
+            setTimeout(() => setMappingsSuccess(null), 5000);
+            await loadUserMappings(editingUser.id);
+        } catch (err: any) {
+            setMappingsError(err.message || 'Failed to delete mapping');
+            setTimeout(() => setMappingsError(null), 5000);
+        } finally {
+            setIsLoadingMappings(false);
+        }
+    };
+
+    const handleEditMapping = (mapping: UserMapping) => {
+        setEditingMappingId(mapping.id);
+        setEditMappingData({
+            awsAccountId: mapping.awsAccountId || '',
+            domain: mapping.domain || ''
+        });
+        setMappingsError(null);
+    };
+
+    const handleSaveMapping = async () => {
+        if (!editingUser || editingMappingId === null) return;
+        
+        // Validate at least one field
+        const hasAwsId = editMappingData.awsAccountId && editMappingData.awsAccountId.trim() !== '';
+        const hasDomain = editMappingData.domain && editMappingData.domain.trim() !== '';
+        
+        if (!hasAwsId && !hasDomain) {
+            setMappingsError('At least one of AWS Account ID or Domain must be provided');
+            return;
+        }
+
+        setIsLoadingMappings(true);
+        try {
+            const updateData: UpdateMappingRequest = {
+                awsAccountId: hasAwsId ? editMappingData.awsAccountId : null,
+                domain: hasDomain ? editMappingData.domain : null
+            };
+
+            await updateMapping(editingUser.id, editingMappingId, updateData);
+            setEditingMappingId(null);
+            setEditMappingData({ awsAccountId: '', domain: '' });
+            setMappingsError(null);
+            setMappingsSuccess('Mapping updated successfully');
+            setTimeout(() => setMappingsSuccess(null), 5000);
+            await loadUserMappings(editingUser.id);
+        } catch (err: any) {
+            setMappingsError(err.message || 'Failed to update mapping');
+            setTimeout(() => setMappingsError(null), 5000);
+        } finally {
+            setIsLoadingMappings(false);
+        }
+    };
+
+    const handleCancelEdit = () => {
+        setEditingMappingId(null);
+        setEditMappingData({ awsAccountId: '', domain: '' });
+        setMappingsError(null);
     };
 
 
@@ -524,6 +663,245 @@ const UserManagement = () => {
                                                 <small className="text-muted">No workgroups available</small>
                                             )}
                                         </div>
+                                    </div>
+
+                                    {/* User Mappings Section (Feature 017) */}
+                                    <div className="mb-3 mt-4">
+                                        <h3>Access Mappings</h3>
+                                        
+                                        {mappingsSuccess && (
+                                            <div className="alert alert-success alert-dismissible fade show" role="alert">
+                                                <i className="bi bi-check-circle me-2"></i>{mappingsSuccess}
+                                                <button type="button" className="btn-close" onClick={() => setMappingsSuccess(null)} aria-label="Close"></button>
+                                            </div>
+                                        )}
+                                        
+                                        {mappingsError && (
+                                            <div className="alert alert-danger alert-dismissible fade show" role="alert">
+                                                <i className="bi bi-exclamation-triangle me-2"></i>{mappingsError}
+                                                <button type="button" className="btn-close" onClick={() => setMappingsError(null)} aria-label="Close"></button>
+                                            </div>
+                                        )}
+                                        
+                                        {isLoadingMappings && (
+                                            <div className="text-center my-3">
+                                                <div className="spinner-border text-primary" role="status">
+                                                    <span className="visually-hidden">Loading mappings...</span>
+                                                </div>
+                                            </div>
+                                        )}
+                                        
+                                        <table className="table table-sm">
+                                            <thead>
+                                                <tr>
+                                                    <th>AWS Account ID</th>
+                                                    <th>Domain</th>
+                                                    <th>Created</th>
+                                                    <th>Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {mappings.length > 0 ? (
+                                                    mappings.map(mapping => (
+                                                        <tr key={mapping.id}>
+                                                            {editingMappingId === mapping.id ? (
+                                                                // Edit mode
+                                                                <>
+                                                                    <td>
+                                                                        <input
+                                                                            type="text"
+                                                                            className="form-control form-control-sm"
+                                                                            value={editMappingData.awsAccountId}
+                                                                            onChange={e => setEditMappingData({...editMappingData, awsAccountId: e.target.value})}
+                                                                            onKeyDown={e => {
+                                                                                if (e.key === 'Enter') handleSaveMapping();
+                                                                                if (e.key === 'Escape') handleCancelEdit();
+                                                                            }}
+                                                                            pattern="\d{12}"
+                                                                            placeholder="123456789012"
+                                                                            disabled={isLoadingMappings}
+                                                                            aria-label="AWS Account ID"
+                                                                            aria-describedby="aws-id-help"
+                                                                            autoFocus
+                                                                        />
+                                                                    </td>
+                                                                    <td>
+                                                                        <input
+                                                                            type="text"
+                                                                            className="form-control form-control-sm"
+                                                                            value={editMappingData.domain}
+                                                                            onChange={e => setEditMappingData({...editMappingData, domain: e.target.value})}
+                                                                            onKeyDown={e => {
+                                                                                if (e.key === 'Enter') handleSaveMapping();
+                                                                                if (e.key === 'Escape') handleCancelEdit();
+                                                                            }}
+                                                                            placeholder="example.com"
+                                                                            disabled={isLoadingMappings}
+                                                                            aria-label="Domain"
+                                                                            aria-describedby="domain-help"
+                                                                        />
+                                                                    </td>
+                                                                    <td>{new Date(mapping.createdAt).toLocaleDateString()}</td>
+                                                                    <td>
+                                                                        <button 
+                                                                            className="btn btn-sm btn-success me-1"
+                                                                            onClick={handleSaveMapping}
+                                                                            type="button"
+                                                                            disabled={isLoadingMappings}
+                                                                            aria-label="Save mapping changes"
+                                                                        >
+                                                                            {isLoadingMappings ? (
+                                                                                <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                                                            ) : 'Save'}
+                                                                        </button>
+                                                                        <button 
+                                                                            className="btn btn-sm btn-secondary"
+                                                                            onClick={handleCancelEdit}
+                                                                            type="button"
+                                                                            disabled={isLoadingMappings}
+                                                                            aria-label="Cancel editing"
+                                                                        >
+                                                                            Cancel
+                                                                        </button>
+                                                                    </td>
+                                                                </>
+                                                            ) : (
+                                                                // View mode
+                                                                <>
+                                                                    <td>{mapping.awsAccountId || '-'}</td>
+                                                                    <td>{mapping.domain || '-'}</td>
+                                                                    <td>{new Date(mapping.createdAt).toLocaleDateString()}</td>
+                                                                    <td>
+                                                                        <button 
+                                                                            className="btn btn-sm btn-primary me-1"
+                                                                            onClick={() => handleEditMapping(mapping)}
+                                                                            type="button"
+                                                                            disabled={isLoadingMappings || editingMappingId !== null}
+                                                                            aria-label={`Edit mapping for ${mapping.awsAccountId || mapping.domain}`}
+                                                                        >
+                                                                            <i className="bi bi-pencil me-1"></i>Edit
+                                                                        </button>
+                                                                        <button 
+                                                                            className="btn btn-sm btn-danger"
+                                                                            onClick={() => handleDeleteMapping(mapping.id)}
+                                                                            type="button"
+                                                                            disabled={isLoadingMappings || editingMappingId !== null}
+                                                                            aria-label={`Delete mapping for ${mapping.awsAccountId || mapping.domain}`}
+                                                                        >
+                                                                            <i className="bi bi-trash me-1"></i>Delete
+                                                                        </button>
+                                                                    </td>
+                                                                </>
+                                                            )}
+                                                        </tr>
+                                                    ))
+                                                ) : (
+                                                    <tr>
+                                                        <td colSpan={4} className="text-center text-muted">
+                                                            No mappings configured for this user
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                        </table>
+                                        
+                                        {!isAddingMapping && (
+                                            <button 
+                                                type="button"
+                                                className="btn btn-primary btn-sm"
+                                                onClick={() => setIsAddingMapping(true)}
+                                                disabled={isLoadingMappings || editingMappingId !== null}
+                                                aria-label="Add new mapping"
+                                            >
+                                                <i className="bi bi-plus-circle me-1"></i>Add Mapping
+                                            </button>
+                                        )}
+                                        
+                                        {isAddingMapping && (
+                                            <div className="card mt-2">
+                                                <div className="card-body">
+                                                    <h5 className="card-title">Add New Mapping</h5>
+                                                    <p className="text-muted small">Provide at least one of AWS Account ID or Domain</p>
+                                                    <div className="mb-2">
+                                                        <label htmlFor="new-aws-id" className="form-label">AWS Account ID (12 digits)</label>
+                                                        <input
+                                                            id="new-aws-id"
+                                                            type="text"
+                                                            className="form-control"
+                                                            value={newMapping.awsAccountId}
+                                                            onChange={e => setNewMapping({...newMapping, awsAccountId: e.target.value})}
+                                                            onKeyDown={e => {
+                                                                if (e.key === 'Enter') handleAddMapping();
+                                                                if (e.key === 'Escape') {
+                                                                    setIsAddingMapping(false);
+                                                                    setNewMapping({ awsAccountId: '', domain: '' });
+                                                                    setMappingsError(null);
+                                                                }
+                                                            }}
+                                                            pattern="\d{12}"
+                                                            placeholder="123456789012"
+                                                            disabled={isLoadingMappings}
+                                                            aria-describedby="aws-id-help"
+                                                            autoFocus
+                                                        />
+                                                        <small id="aws-id-help" className="form-text text-muted">Must be exactly 12 digits</small>
+                                                    </div>
+                                                    <div className="mb-2">
+                                                        <label htmlFor="new-domain" className="form-label">Domain</label>
+                                                        <input
+                                                            id="new-domain"
+                                                            type="text"
+                                                            className="form-control"
+                                                            value={newMapping.domain}
+                                                            onChange={e => setNewMapping({...newMapping, domain: e.target.value})}
+                                                            onKeyDown={e => {
+                                                                if (e.key === 'Enter') handleAddMapping();
+                                                                if (e.key === 'Escape') {
+                                                                    setIsAddingMapping(false);
+                                                                    setNewMapping({ awsAccountId: '', domain: '' });
+                                                                    setMappingsError(null);
+                                                                }
+                                                            }}
+                                                            placeholder="example.com"
+                                                            disabled={isLoadingMappings}
+                                                            aria-describedby="domain-help"
+                                                        />
+                                                        <small id="domain-help" className="form-text text-muted">Lowercase letters, numbers, dots, and hyphens</small>
+                                                    </div>
+                                                    <button 
+                                                        type="button"
+                                                        className="btn btn-success btn-sm me-2" 
+                                                        onClick={handleAddMapping}
+                                                        disabled={isLoadingMappings}
+                                                        aria-label="Save new mapping"
+                                                    >
+                                                        {isLoadingMappings ? (
+                                                            <>
+                                                                <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                                                Saving...
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <i className="bi bi-check-lg me-1"></i>Save
+                                                            </>
+                                                        )}
+                                                    </button>
+                                                    <button 
+                                                        type="button"
+                                                        className="btn btn-secondary btn-sm" 
+                                                        onClick={() => {
+                                                            setIsAddingMapping(false);
+                                                            setNewMapping({ awsAccountId: '', domain: '' });
+                                                            setMappingsError(null);
+                                                        }}
+                                                        disabled={isLoadingMappings}
+                                                        aria-label="Cancel adding mapping"
+                                                    >
+                                                        <i className="bi bi-x-lg me-1"></i>Cancel
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                                 <div className="modal-footer">
