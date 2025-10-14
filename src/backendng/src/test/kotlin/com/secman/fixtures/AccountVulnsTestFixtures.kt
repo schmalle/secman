@@ -4,7 +4,7 @@ import com.secman.domain.Asset
 import com.secman.domain.User
 import com.secman.domain.UserMapping
 import com.secman.domain.Vulnerability
-import java.time.Instant
+import java.time.LocalDateTime
 
 /**
  * Test fixtures for Account Vulns feature testing
@@ -19,7 +19,7 @@ object AccountVulnsTestFixtures {
      */
     fun createTestUser(
         email: String = "test@example.com",
-        roles: Set<String> = setOf("USER")
+        roles: Set<User.Role> = setOf(User.Role.USER)
     ): User {
         return User(
             id = null,
@@ -34,7 +34,7 @@ object AccountVulnsTestFixtures {
      * Create an admin test User
      */
     fun createAdminUser(email: String = "admin@example.com"): User {
-        return createTestUser(email = email, roles = setOf("ADMIN"))
+        return createTestUser(email = email, roles = setOf(User.Role.ADMIN))
     }
 
     /**
@@ -60,17 +60,18 @@ object AccountVulnsTestFixtures {
         name: String = "test-asset",
         type: String = "SERVER",
         cloudAccountId: String = "123456789012",
-        ip: String? = "10.0.0.1"
+        ip: String? = "10.0.0.1",
+        owner: String = "test-owner"
     ): Asset {
         return Asset(
             id = null,
             name = name,
             type = type,
             ip = ip,
+            owner = owner,
             cloudAccountId = cloudAccountId,
-            owner = null,
             description = null,
-            lastSeen = Instant.now()
+            lastSeen = LocalDateTime.now()
         )
     }
 
@@ -90,7 +91,7 @@ object AccountVulnsTestFixtures {
             cvssSeverity = cvssSeverity,
             vulnerableProductVersions = "Apache 2.4.0",
             daysOpen = daysOpen,
-            scanTimestamp = Instant.now()
+            scanTimestamp = LocalDateTime.now()
         )
     }
 

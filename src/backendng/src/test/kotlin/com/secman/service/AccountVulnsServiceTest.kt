@@ -108,15 +108,15 @@ class AccountVulnsServiceTest {
     fun testAdminUserRejection() {
         // Arrange: Create admin authentication
         val adminAuth = mockk<Authentication>()
-        every { adminAuth.name } returns "admin@example.com"
+        every { adminAuth.name } returns "adminuser"
+        every { adminAuth.attributes } returns mapOf("email" to "admin@example.com")
         every { adminAuth.roles } returns setOf("ADMIN")
 
         // Act & Assert
-        // When implemented, this should throw IllegalStateException
-        // For now, we expect the TODO to throw NotImplementedError
-        assertThrows(NotImplementedError::class.java) {
+        val exception = assertThrows(IllegalStateException::class.java) {
             service.getAccountVulnsSummary(adminAuth)
         }
+        assertTrue(exception.message!!.contains("Admin users should use System Vulns view"))
     }
 
     @Test
@@ -124,15 +124,15 @@ class AccountVulnsServiceTest {
     fun testNoMappingsThrowsException() {
         // Arrange: Create regular user authentication
         val userAuth = mockk<Authentication>()
-        every { userAuth.name } returns "nomapping@example.com"
+        every { userAuth.name } returns "nomappinguser"
+        every { userAuth.attributes } returns mapOf("email" to "nomapping@example.com")
         every { userAuth.roles } returns setOf("USER")
 
         // Act & Assert
-        // When implemented, this should throw NoSuchElementException
-        // For now, we expect the TODO to throw NotImplementedError
-        assertThrows(NotImplementedError::class.java) {
+        val exception = assertThrows(NoSuchElementException::class.java) {
             service.getAccountVulnsSummary(userAuth)
         }
+        assertTrue(exception.message!!.contains("No AWS accounts are mapped"))
     }
 
     @Test
