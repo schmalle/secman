@@ -8,7 +8,12 @@ import jakarta.validation.constraints.Size
 import java.time.LocalDateTime
 
 @Entity
-@Table(name = "asset")
+@Table(
+    name = "asset",
+    indexes = [
+        Index(name = "idx_asset_ip_numeric", columnList = "ip_numeric")
+    ]
+)
 @Serdeable
 data class Asset(
     @Id
@@ -26,6 +31,15 @@ data class Asset(
 
     @Column
     var ip: String? = null,
+
+    /**
+     * Numeric representation of IP address for efficient range queries
+     * Feature: 020-i-want-to (IP Address Mapping)
+     * Computed from ip field in @PrePersist and @PreUpdate
+     * Example: "192.168.1.100" -> 3232235876
+     */
+    @Column(name = "ip_numeric", nullable = true)
+    var ipNumeric: Long? = null,
 
     @Column(nullable = false)
     @NotBlank
@@ -154,11 +168,47 @@ data class Asset(
         val now = LocalDateTime.now()
         createdAt = now
         updatedAt = now
+        computeIpNumeric()
     }
 
     @PreUpdate
     fun onUpdate() {
         updatedAt = LocalDateTime.now()
+        computeIpNumeric()
+    }
+
+    /**
+     * Compute numeric representation of IP address
+     * Feature: 020-i-want-to (IP Address Mapping)
+     * Converts IPv4 address string to Long for efficient range queries
+     */
+    private fun computeIpNumeric() {
+        ipNumeric = if (ip != null) {
+            try {
+                ipToNumeric(ip!!)
+            } catch (e: Exception) {
+                null // Invalid IP format, skip numeric conversion
+            }
+        } else {
+            null
+        }
+    }
+
+    /**
+     * Convert IPv4 address string to numeric representation
+     * Example: "192.168.1.100" -> 3232235876
+     */
+    private fun ipToNumeric(ipAddress: String): Long {
+        val parts = ipAddress.split('.')
+        if (parts.size != 4) return 0L
+
+        var result = 0L
+        for (part in parts) {
+            val octet = part.toIntOrNull() ?: return 0L
+            if (octet < 0 || octet > 255) return 0L
+            result = (result shl 8) or octet.toLong()
+        }
+        return result
     }
 
     /**

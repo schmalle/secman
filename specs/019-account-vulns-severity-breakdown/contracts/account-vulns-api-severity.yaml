@@ -1,0 +1,360 @@
+openapi: 3.0.3
+info:
+  title: Secman Account Vulns API with Severity Breakdown
+  description: API for viewing vulnerabilities grouped by AWS account with severity breakdowns (Feature 019)
+  version: 1.1.0
+  contact:
+    name: Secman Development Team
+
+servers:
+  - url: http://localhost:8080/api
+    description: Local development server
+  - url: https://secman.example.com/api
+    description: Production server
+
+security:
+  - bearerAuth: []
+
+paths:
+  /account-vulns:
+    get:
+      summary: Get vulnerability overview for user's AWS accounts
+      description: |
+        Returns assets grouped by AWS account ID, with vulnerability counts per asset.
+
+        **Access Control**:
+        - Requires authentication (JWT token)
+        - Admin users receive 403 (should use System Vulns view instead)
+        - Non-admin users with no AWS account mappings receive 404
+
+        **Grouping & Sorting**:
+        - Assets grouped by AWS account ID (one group per account)
+        - Account groups sorted by account ID (ascending)
+        - Assets within each group sorted by vulnerability count (descending)
+
+        **Pagination**:
+        - All assets returned (no backend pagination)
+        - Frontend implements per-account pagination (20 assets per page per account)
+      operationId: getAccountVulns
+      tags:
+        - Account Vulnerabilities
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Successfully retrieved account vulnerability overview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountVulnsSummaryDto'
+              examples:
+                singleAccount:
+                  summary: Single AWS account with 5 assets
+                  value:
+                    accountGroups:
+                      - awsAccountId: "123456789012"
+                        totalAssets: 5
+                        totalVulnerabilities: 143
+                        assets:
+                          - id: 1
+                            name: "web-server-01"
+                            type: "SERVER"
+                            vulnerabilityCount: 100
+                          - id: 2
+                            name: "db-server-01"
+                            type: "SERVER"
+                            vulnerabilityCount: 25
+                          - id: 3
+                            name: "app-server-01"
+                            type: "SERVER"
+                            vulnerabilityCount: 10
+                          - id: 4
+                            name: "monitoring-01"
+                            type: "SERVER"
+                            vulnerabilityCount: 5
+                          - id: 5
+                            name: "backup-server"
+                            type: "SERVER"
+                            vulnerabilityCount: 3
+                    totalAssets: 5
+                    totalVulnerabilities: 143
+
+                multipleAccounts:
+                  summary: Three AWS accounts with varying asset counts
+                  value:
+                    accountGroups:
+                      - awsAccountId: "123456789012"
+                        totalAssets: 12
+                        totalVulnerabilities: 47
+                        assets:
+                          - id: 1
+                            name: "prod-web-01"
+                            type: "SERVER"
+                            vulnerabilityCount: 25
+                          - id: 2
+                            name: "prod-web-02"
+                            type: "SERVER"
+                            vulnerabilityCount: 15
+                          - id: 3
+                            name: "prod-db-01"
+                            type: "SERVER"
+                            vulnerabilityCount: 7
+                      - awsAccountId: "555555555555"
+                        totalAssets: 8
+                        totalVulnerabilities: 22
+                        assets:
+                          - id: 10
+                            name: "test-server-01"
+                            type: "SERVER"
+                            vulnerabilityCount: 12
+                          - id: 11
+                            name: "test-server-02"
+                            type: "SERVER"
+                            vulnerabilityCount: 10
+                      - awsAccountId: "987654321098"
+                        totalAssets: 3
+                        totalVulnerabilities: 5
+                        assets:
+                          - id: 20
+                            name: "dev-workstation"
+                            type: "WORKSTATION"
+                            vulnerabilityCount: 3
+                          - id: 21
+                            name: "dev-server"
+                            type: "SERVER"
+                            vulnerabilityCount: 2
+                          - id: 22
+                            name: "staging-web"
+                            type: "SERVER"
+                            vulnerabilityCount: 0
+                    totalAssets: 23
+                    totalVulnerabilities: 74
+
+        '401':
+          description: Authentication required (missing or invalid JWT token)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                message: "Authentication required"
+                status: 401
+
+        '403':
+          description: Admin users forbidden (should use System Vulns view)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminRedirectError'
+              example:
+                message: "Please use System Vulns view"
+                redirectUrl: "/system-vulns"
+                status: 403
+
+        '404':
+          description: No AWS account mappings found for user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                message: "No AWS accounts are mapped to your user account. Please contact your administrator."
+                status: 404
+
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                message: "Internal server error"
+                status: 500
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from /api/auth/login
+
+  schemas:
+    AccountVulnsSummaryDto:
+      type: object
+      description: Top-level response containing all account groups with global severity totals
+      required:
+        - accountGroups
+        - totalAssets
+        - totalVulnerabilities
+      properties:
+        accountGroups:
+          type: array
+          description: List of AWS account groups (sorted by account ID ascending)
+          items:
+            $ref: '#/components/schemas/AccountGroupDto'
+        totalAssets:
+          type: integer
+          description: Total number of assets across all accounts
+          minimum: 0
+          example: 23
+        totalVulnerabilities:
+          type: integer
+          description: Total number of vulnerabilities across all assets
+          minimum: 0
+          example: 174
+        globalCritical:
+          type: integer
+          nullable: true
+          description: Total CRITICAL vulnerabilities across all accounts (optional)
+          minimum: 0
+          example: 18
+        globalHigh:
+          type: integer
+          nullable: true
+          description: Total HIGH vulnerabilities across all accounts (optional)
+          minimum: 0
+          example: 67
+        globalMedium:
+          type: integer
+          nullable: true
+          description: Total MEDIUM vulnerabilities across all accounts (optional)
+          minimum: 0
+          example: 89
+
+    AccountGroupDto:
+      type: object
+      description: Single AWS account group with its assets and severity aggregations
+      required:
+        - awsAccountId
+        - assets
+        - totalAssets
+        - totalVulnerabilities
+      properties:
+        awsAccountId:
+          type: string
+          description: 12-digit AWS account ID
+          pattern: '^\d{12}$'
+          example: "123456789012"
+        assets:
+          type: array
+          description: Assets in this account (sorted by vulnerability count descending)
+          items:
+            $ref: '#/components/schemas/AssetVulnCountDto'
+        totalAssets:
+          type: integer
+          description: Number of assets in this account
+          minimum: 0
+          example: 12
+        totalVulnerabilities:
+          type: integer
+          description: Total vulnerabilities in this account
+          minimum: 0
+          example: 47
+        totalCritical:
+          type: integer
+          nullable: true
+          description: Aggregated CRITICAL vulnerabilities in this account (optional)
+          minimum: 0
+          example: 8
+        totalHigh:
+          type: integer
+          nullable: true
+          description: Aggregated HIGH vulnerabilities in this account (optional)
+          minimum: 0
+          example: 22
+        totalMedium:
+          type: integer
+          nullable: true
+          description: Aggregated MEDIUM vulnerabilities in this account (optional)
+          minimum: 0
+          example: 17
+
+    AssetVulnCountDto:
+      type: object
+      description: Single asset with its vulnerability count and severity breakdown
+      required:
+        - id
+        - name
+        - type
+        - vulnerabilityCount
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Asset ID (used for navigation to asset detail page)
+          example: 42
+        name:
+          type: string
+          description: Asset name
+          minLength: 1
+          maxLength: 255
+          example: "web-server-01"
+        type:
+          type: string
+          description: Asset type
+          example: "SERVER"
+        vulnerabilityCount:
+          type: integer
+          description: Total number of vulnerabilities for this asset
+          minimum: 0
+          example: 28
+        criticalCount:
+          type: integer
+          nullable: true
+          description: Number of CRITICAL severity vulnerabilities (optional for backward compatibility)
+          minimum: 0
+          example: 5
+        highCount:
+          type: integer
+          nullable: true
+          description: Number of HIGH severity vulnerabilities (optional for backward compatibility)
+          minimum: 0
+          example: 12
+        mediumCount:
+          type: integer
+          nullable: true
+          description: Number of MEDIUM severity vulnerabilities (optional for backward compatibility)
+          minimum: 0
+          example: 8
+
+    ErrorResponse:
+      type: object
+      description: Standard error response
+      required:
+        - message
+        - status
+      properties:
+        message:
+          type: string
+          description: Human-readable error message
+          example: "No AWS accounts are mapped to your user account. Please contact your administrator."
+        status:
+          type: integer
+          description: HTTP status code
+          example: 404
+
+    AdminRedirectError:
+      type: object
+      description: Error response for admin users with redirect guidance
+      required:
+        - message
+        - redirectUrl
+        - status
+      properties:
+        message:
+          type: string
+          description: Redirect instruction message
+          example: "Please use System Vulns view"
+        redirectUrl:
+          type: string
+          description: URL to navigate to instead
+          example: "/system-vulns"
+        status:
+          type: integer
+          description: HTTP status code (403)
+          example: 403
+
+tags:
+  - name: Account Vulnerabilities
+    description: Operations for viewing vulnerabilities grouped by AWS account

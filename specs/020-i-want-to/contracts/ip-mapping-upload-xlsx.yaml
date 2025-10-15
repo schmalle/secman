@@ -1,0 +1,88 @@
+openapi: 3.0.3
+info:
+  title: IP Mapping Excel Upload API
+  description: Upload IP address mappings via Excel (.xlsx) file for user access control
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8080
+  - url: https://api.secman.example.com
+
+paths:
+  /api/import/upload-ip-mappings-xlsx:
+    post:
+      summary: Upload IP mappings via Excel file
+      description: |
+        Upload an Excel (.xlsx) file containing IP address mappings.
+        Format identical to CSV upload: columns for email, ip_address, domain.
+      operationId: uploadIpMappingsExcel
+      tags:
+        - Import
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - xlsxFile
+              properties:
+                xlsxFile:
+                  type: string
+                  format: binary
+                  description: Excel file (.xlsx) with columns: email, ip_address, domain
+      responses:
+        '200':
+          description: Upload successful
+          content:
+            application/json:
+              schema:
+                $ref: './ip-mapping-upload-csv.yaml#/components/schemas/IpMappingUploadResult'
+        '400':
+          description: Bad request (invalid file)
+          content:
+            application/json:
+              schema:
+                $ref: './ip-mapping-upload-csv.yaml#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden (non-admin)
+        '500':
+          description: Internal server error
+
+  /api/import/ip-mapping-template-xlsx:
+    get:
+      summary: Download Excel template for IP mappings
+      description: Returns an Excel file with example IP mapping data
+      operationId: downloadIpMappingTemplateExcel
+      tags:
+        - Import
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Excel template file
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+              example: attachment; filename="ip-mapping-template.xlsx"
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

@@ -6,16 +6,19 @@
  *
  * Features:
  * - Displays asset name, type, and vulnerability count
+ * - Feature 019: Displays severity breakdown (critical, high, medium)
  * - Clickable asset names for navigation to asset detail
  * - Pre-sorted by vulnerability count (descending)
  * - Bootstrap 5 styling
  *
  * Related to: Feature 018-under-vuln-management (Account Vulns)
+ * Feature 019: Account Vulns Severity Breakdown
  * User Story: US1 (P1) - View Vulnerabilities for Single AWS Account
  */
 
 import React from 'react';
 import type { AssetVulnCount } from '../services/accountVulnsService';
+import SeverityBadge from './SeverityBadge';
 
 interface AssetVulnTableProps {
     assets: AssetVulnCount[];
@@ -23,6 +26,25 @@ interface AssetVulnTableProps {
 }
 
 const AssetVulnTable: React.FC<AssetVulnTableProps> = ({ assets, awsAccountId }) => {
+    console.log('[AssetVulnTable] Rendering with:', {
+        assetsType: typeof assets,
+        assetsIsArray: Array.isArray(assets),
+        assetsLength: assets?.length,
+        awsAccountId,
+        assets
+    });
+
+    // Safety check - ensure assets is an array
+    if (!assets || !Array.isArray(assets)) {
+        console.error('[AssetVulnTable] Invalid assets prop:', assets);
+        return (
+            <div className="alert alert-warning">
+                <i className="bi bi-exclamation-triangle me-2"></i>
+                Error: Invalid asset data received
+            </div>
+        );
+    }
+
     if (assets.length === 0) {
         return (
             <div className="alert alert-info">
@@ -46,7 +68,8 @@ const AssetVulnTable: React.FC<AssetVulnTableProps> = ({ assets, awsAccountId })
                     <tr>
                         <th>Asset Name</th>
                         <th>Type</th>
-                        <th className="text-end">Vulnerabilities</th>
+                        <th className="text-end">Total Vulnerabilities</th>
+                        <th>Severity Breakdown</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -67,6 +90,23 @@ const AssetVulnTable: React.FC<AssetVulnTableProps> = ({ assets, awsAccountId })
                                 <span className={`badge ${getVulnBadgeClass(asset.vulnerabilityCount)}`}>
                                     {asset.vulnerabilityCount}
                                 </span>
+                            </td>
+                            <td>
+                                {/* Feature 019: Severity breakdown badges */}
+                                <div className="d-flex flex-wrap gap-1">
+                                    <SeverityBadge 
+                                        severity="CRITICAL" 
+                                        count={asset.criticalCount ?? 0} 
+                                    />
+                                    <SeverityBadge 
+                                        severity="HIGH" 
+                                        count={asset.highCount ?? 0} 
+                                    />
+                                    <SeverityBadge 
+                                        severity="MEDIUM" 
+                                        count={asset.mediumCount ?? 0} 
+                                    />
+                                </div>
                             </td>
                         </tr>
                     ))}

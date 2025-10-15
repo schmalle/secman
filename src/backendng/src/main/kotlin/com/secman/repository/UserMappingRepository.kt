@@ -123,4 +123,68 @@ interface UserMappingRepository : JpaRepository<UserMapping, Long> {
      */
     @Query("SELECT DISTINCT m.domain FROM UserMapping m WHERE m.email = :email AND m.domain IS NOT NULL")
     fun findDistinctDomainByEmail(email: String): List<String>
+
+    // IP Address Mapping - Feature 020
+
+    /**
+     * Find all IP address mappings for a specific email
+     *
+     * Use case: Get all IP ranges a user has access to
+     *
+     * Related to: Feature 020 (IP Address Mapping)
+     *
+     * @param email User's email address
+     * @return List of mappings with IP addresses (excluding null IP addresses)
+     */
+    @Query("SELECT m FROM UserMapping m WHERE m.email = :email AND m.ipAddress IS NOT NULL")
+    fun findIpMappingsByEmail(email: String): List<UserMapping>
+
+    /**
+     * Check if a specific IP mapping exists (duplicate detection)
+     *
+     * Use case: Skip duplicate IP mappings during CSV/Excel import
+     *
+     * Related to: Feature 020 (IP Address Mapping)
+     *
+     * @param email User's email address (required)
+     * @param ipAddress IP address string (nullable)
+     * @param domain Organizational domain name (nullable)
+     * @return true if mapping exists, false otherwise
+     */
+    fun existsByEmailAndIpAddressAndDomain(
+        email: String,
+        ipAddress: String?,
+        domain: String?
+    ): Boolean
+
+    /**
+     * Find a specific IP mapping by composite key
+     *
+     * Use case: Retrieve IP mapping for update or verification
+     *
+     * Related to: Feature 020 (IP Address Mapping)
+     *
+     * @param email User's email address (required)
+     * @param ipAddress IP address string (nullable)
+     * @param domain Organizational domain name (nullable)
+     * @return Optional containing the mapping if found
+     */
+    fun findByEmailAndIpAddressAndDomain(
+        email: String,
+        ipAddress: String?,
+        domain: String?
+    ): Optional<UserMapping>
+
+    /**
+     * Count total IP mappings for a user
+     *
+     * Use case: Display user's IP-based access scope
+     *
+     * Related to: Feature 020 (IP Address Mapping)
+     *
+     * @param email User's email address
+     * @return Number of IP mappings for the user
+     */
+    @Query("SELECT COUNT(m) FROM UserMapping m WHERE m.email = :email AND m.ipAddress IS NOT NULL")
+    fun countIpMappingsByEmail(email: String): Long
 }

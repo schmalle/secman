@@ -41,51 +41,40 @@
 - **Structure**: models/, services/, cli/, exporters/, lib/
 
 ## Recent Changes
+- 020-i-want-to: Added Kotlin 2.1.0 / Java 21 (backend), TypeScript/JavaScript (frontend - Astro 5.14 + React 19) + Micronaut 4.4, Hibernate JPA, Apache POI 5.3 (Excel), Apache Commons CSV 1.11.0 (CSV), Astro, React 19, Bootstrap 5.3
 - 018-under-vuln-management: Account Vulns - AWS Account-Based Vulnerability Overview (2025-10-14) - New view for non-admin users to see vulnerabilities grouped by their mapped AWS accounts, admin redirect, error handling
 - 016-i-want-to: CSV-Based User Mapping Upload (2025-10-13) - CSV upload support for email-AWS-domain mappings, parallel to Excel upload (Feature 013), handles scientific notation AWS account IDs, auto-detects CSV delimiter/encoding
-- 015-we-have-currently: Added Kotlin 2.1.0 / Java 21 (backend), TypeScript/JavaScript (frontend - Astro 5.14 + React 19) + Micronaut 4.4, Hibernate JPA, Apache POI 5.3, Astro, React 19, Bootstrap 5.3, HTTP client for CrowdStrike API
 
 ### Feature 018: Account Vulns - AWS Account-Based Vulnerability Overview (2025-10-14)
 
 New vulnerability view for non-admin users to see assets and vulnerabilities in their mapped AWS accounts:
 
 **Backend Components** (`src/backendng/`):
-- **AccountVulnsService.kt** - Business logic for account-based filtering
   - AWS account lookup from user_mapping table
   - Asset filtering by cloudAccountId
   - Vulnerability counting per asset
   - Grouping by AWS account, sorting by vulnerability count
   - Admin role rejection, no mapping error handling
-- **AccountVulnsController.kt** - RESTful API endpoint
   - `GET /api/account-vulns` - Get account vulnerability summary (authenticated, non-admin only)
   - Returns: AccountVulnsSummaryDto with account groups, assets, vulnerability counts
   - Error responses: 401 (unauthorized), 403 (admin redirect), 404 (no mappings), 500 (server error)
-- **DTOs** - AssetVulnCountDto, AccountGroupDto, AccountVulnsSummaryDto
-- **Repository Enhancement** - Added `findByCloudAccountIdIn()` to AssetRepository
 
 **Frontend Components** (`src/frontend/src/components/`):
-- **AccountVulnsView.tsx** - Main React component
   - Fetches data from /api/account-vulns endpoint
   - Displays summary stats (accounts, assets, vulnerabilities)
   - Renders account groups with asset tables
   - Error handling: Loading state, admin redirect, no mappings, general errors
   - Refresh button for manual data reload
-- **AssetVulnTable.tsx** - Asset table component
   - Displays assets with name, type, vulnerability count
   - Sortable by vulnerability count (descending)
   - Clickable asset names for navigation
   - Color-coded vulnerability badges (green/info/warning/danger)
-- **account-vulns.astro** - Astro page wrapper
 
 **Frontend Services** (`src/frontend/src/services/`):
-- **accountVulnsService.ts** - API client
   - `getAccountVulns()` - Fetch account vulnerability summary
   - TypeScript interfaces for request/response types
 
 **Navigation** (`src/frontend/src/components/Sidebar.tsx`):
-- Added "Account Vulns" link under Vuln Management menu
-- Role-aware styling: Disabled/grayed for admin users with tooltip
-- Active/clickable for non-admin users
 
 **Features Implemented** (5 User Stories):
 1. **US1 (P1 - MVP)**: View Vulnerabilities for Single AWS Account - Assets displayed with vuln counts, sorted by count
@@ -95,20 +84,10 @@ New vulnerability view for non-admin users to see assets and vulnerabilities in 
 5. **US5 (P3)**: Asset Navigation - Clickable asset names navigate to asset detail page
 
 **Access Control**:
-- AWS account mapping is PRIMARY access control (workgroup restrictions do NOT apply per clarification)
-- Authenticated users only (JWT required)
-- Admin users rejected with 403 Forbidden
-- Non-admin users see assets from their mapped AWS accounts only
 
 **Data Model**:
-- Uses existing entities: UserMapping, Asset, Vulnerability
-- No schema changes required
-- Leverages existing indexes on user_mapping.email, assets.cloudAccountId
 
 **Statistics**:
-- Production code: ~600 lines (backend: service + controller + DTOs + repo method) + ~400 lines (frontend: components + service) = 1,000 lines
-- Test code: 3 contract tests, 8 unit tests (service logic validation)
-- Total: ~1,500 lines (production + tests)
 
 ### Feature 016: CSV-Based User Mapping Upload (2025-10-13)
 

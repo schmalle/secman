@@ -97,4 +97,32 @@ interface AssetRepository : JpaRepository<Asset, Long> {
      * @return List of assets in the specified AWS accounts
      */
     fun findByCloudAccountIdIn(cloudAccountIds: List<String>): List<Asset>
+
+    // IP Address Mapping - Feature 020
+
+    /**
+     * Find assets with IP addresses in a numeric range
+     * Used for IP-based access control filtering
+     *
+     * Related to: Feature 020 (IP Address Mapping)
+     *
+     * @param startIp Start of IP range (numeric)
+     * @param endIp End of IP range (numeric)
+     * @return List of assets with IPs in the specified range
+     */
+    fun findByIpNumericBetween(startIp: Long, endIp: Long): List<Asset>
+
+    /**
+     * Find assets with IP addresses matching any of the provided numeric ranges
+     * Used for IP-based access control when user has multiple IP mappings
+     *
+     * Note: This is a convenience method for the common case where a user has multiple IP ranges.
+     * For complex queries, use custom JPA queries in the service layer.
+     *
+     * Related to: Feature 020 (IP Address Mapping)
+     *
+     * @param ipNumeric Single IP address (numeric)
+     * @return List of assets with the specified IP
+     */
+    fun findByIpNumeric(ipNumeric: Long): List<Asset>
 }

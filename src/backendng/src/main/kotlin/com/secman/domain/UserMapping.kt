@@ -8,26 +8,29 @@ import jakarta.validation.constraints.Pattern
 import java.time.Instant
 
 /**
- * UserMapping entity - stores mappings between user emails, AWS account IDs, and domains
+ * UserMapping entity - stores mappings between user emails, AWS account IDs, domains, and IP addresses
  *
- * Feature: 013-user-mapping-upload
- * Purpose: Enable role-based access control across multiple AWS accounts and domains
+ * Features: 013-user-mapping-upload, 020-i-want-to (IP address mapping)
+ * Purpose: Enable role-based access control across multiple AWS accounts, domains, and IP addresses
  *
  * Business Rules:
  * - Email is REQUIRED
- * - At least one of AWS Account ID or Domain must be provided
+ * - At least one of AWS Account ID, Domain, or IP Address must be provided
  * - One email can map to multiple AWS accounts (many-to-many)
  * - One email can map to multiple domains (many-to-many)
- * - Unique constraint on (email, awsAccountId, domain) prevents duplicates
+ * - One email can map to multiple IP addresses/ranges (many-to-many)
+ * - Unique constraint on (email, awsAccountId, domain, ipAddress) prevents duplicates
  * - Email and domain are normalized to lowercase for case-insensitive matching
  * - AWS account IDs must be exactly 12 numeric digits when provided
+ * - IP addresses support three formats: single (192.168.1.100), CIDR (192.168.1.0/24), dash range (192.168.1.1-192.168.1.100)
  *
  * Example Mappings:
- * - john@example.com → 123456789012 → null (email + AWS account only)
- * - john@example.com → null → example.com (email + domain only)
- * - john@example.com → 123456789012 → example.com (email + both AWS account and domain)
+ * - john@example.com → 123456789012 → null → null (email + AWS account only)
+ * - john@example.com → null → example.com → null (email + domain only)
+ * - john@example.com → null → null → 192.168.1.0/24 (email + IP range)
+ * - john@example.com → 123456789012 → example.com → 192.168.1.0/24 (email + AWS + domain + IP)
  *
- * Related to: Feature 013 (User Mapping Upload)
+ * Related to: Feature 013 (User Mapping Upload), Feature 020 (IP Address Mapping)
  */
 @Entity
 @Table(
@@ -35,14 +38,17 @@ import java.time.Instant
     uniqueConstraints = [
         UniqueConstraint(
             name = "uk_user_mapping_composite",
-            columnNames = ["email", "aws_account_id", "domain"]
+            columnNames = ["email", "aws_account_id", "domain", "ip_address"]
         )
     ],
     indexes = [
         Index(name = "idx_user_mapping_email", columnList = "email"),
         Index(name = "idx_user_mapping_aws_account", columnList = "aws_account_id"),
         Index(name = "idx_user_mapping_domain", columnList = "domain"),
-        Index(name = "idx_user_mapping_email_aws", columnList = "email,aws_account_id")
+        Index(name = "idx_user_mapping_email_aws", columnList = "email,aws_account_id"),
+        Index(name = "idx_user_mapping_ip_address", columnList = "ip_address"),
+        Index(name = "idx_user_mapping_ip_range", columnList = "ip_range_start,ip_range_end"),
+        Index(name = "idx_user_mapping_email_ip", columnList = "email,ip_address")
     ]
 )
 @Serdeable
@@ -63,6 +69,20 @@ data class UserMapping(
     @Column(nullable = true, length = 255)
     @Pattern(regexp = "^[a-z0-9.-]+$", message = "Domain must contain only lowercase letters, numbers, dots, and hyphens")
     var domain: String?,
+
+    // IP Address Mapping Fields (Feature 020)
+    @Column(name = "ip_address", nullable = true, length = 100)
+    var ipAddress: String? = null,
+
+    @Column(name = "ip_range_type", nullable = true, length = 20)
+    @Enumerated(EnumType.STRING)
+    var ipRangeType: IpRangeType? = null,
+
+    @Column(name = "ip_range_start", nullable = true)
+    var ipRangeStart: Long? = null,
+
+    @Column(name = "ip_range_end", nullable = true)
+    var ipRangeEnd: Long? = null,
 
     @Column(name = "created_at", updatable = false)
     var createdAt: Instant? = null,
@@ -95,7 +115,7 @@ data class UserMapping(
     }
 
     override fun toString(): String {
-        return "UserMapping(id=$id, email='$email', awsAccountId='$awsAccountId', domain='$domain')"
+        return "UserMapping(id=$id, email='$email', awsAccountId='$awsAccountId', domain='$domain', ipAddress='$ipAddress', ipRangeType=$ipRangeType)"
     }
 
     override fun equals(other: Any?): Boolean {
