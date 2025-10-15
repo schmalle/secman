@@ -6,6 +6,9 @@ export interface UserMapping {
   email: string;
   awsAccountId: string | null;
   domain: string | null;
+  ipAddress?: string | null;
+  ipRangeType?: 'SINGLE' | 'CIDR' | 'DASH_RANGE' | null;
+  ipCount?: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -13,11 +16,13 @@ export interface UserMapping {
 export interface CreateMappingRequest {
   awsAccountId: string | null;
   domain: string | null;
+  ipAddress?: string | null;
 }
 
 export interface UpdateMappingRequest {
   awsAccountId: string | null;
   domain: string | null;
+  ipAddress?: string | null;
 }
 
 const API_BASE = 'http://localhost:8080/api';

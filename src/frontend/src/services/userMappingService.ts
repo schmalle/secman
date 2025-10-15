@@ -2,7 +2,7 @@ import { authenticatedPost } from '../utils/auth';
 
 /**
  * Service for User Mapping API operations
- * Feature: 013-user-mapping-upload
+ * Features: 013-user-mapping-upload, 020-i-want-to (IP Address Mapping)
  */
 
 export interface ImportResult {
@@ -10,6 +10,52 @@ export interface ImportResult {
   imported: number;
   skipped: number;
   errors?: string[];
+}
+
+/**
+ * User Mapping DTO (Feature 020: extended with IP address fields)
+ */
+export interface UserMapping {
+  id: number;
+  email: string;
+  awsAccountId?: string;
+  domain?: string;
+  ipAddress?: string;
+  ipRangeType?: 'SINGLE' | 'CIDR' | 'DASH_RANGE';
+  ipCount?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Create User Mapping Request
+ */
+export interface CreateUserMappingRequest {
+  email: string;
+  awsAccountId?: string;
+  domain?: string;
+  ipAddress?: string;
+}
+
+/**
+ * Update User Mapping Request
+ */
+export interface UpdateUserMappingRequest {
+  email: string;
+  awsAccountId?: string;
+  domain?: string;
+  ipAddress?: string;
+}
+
+/**
+ * Paginated list response
+ */
+export interface UserMappingListResponse {
+  content: UserMapping[];
+  totalElements: number;
+  totalPages: number;
+  page: number;
+  size: number;
 }
 
 /**
@@ -133,5 +179,204 @@ export async function downloadCSVTemplate(): Promise<void> {
       throw error;
     }
     throw new Error('Failed to download CSV template');
+  }
+}
+
+// ========== IP Mapping CRUD Operations (Feature 020) ==========
+
+/**
+ * List user mappings with pagination
+ * Feature: 020-i-want-to (IP Address Mapping)
+ *
+ * @param page Page number (0-indexed)
+ * @param size Page size
+ * @param email Optional email filter
+ * @param domain Optional domain filter
+ * @returns Paginated list of user mappings
+ */
+export async function listUserMappings(
+  page: number = 0,
+  size: number = 20,
+  email?: string,
+  domain?: string
+): Promise<UserMappingListResponse> {
+  const token = sessionStorage.getItem('token');
+  if (!token) {
+    throw new Error('Not authenticated');
+  }
+
+  const params = new URLSearchParams();
+  params.append('page', page.toString());
+  params.append('size', size.toString());
+  if (email) params.append('email', email);
+  if (domain) params.append('domain', domain);
+
+  const response = await fetch(`/api/user-mappings?${params.toString()}`, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error('Authentication required');
+    } else if (response.status === 403) {
+      throw new Error('Insufficient permissions (ADMIN role required)');
+    } else {
+      throw new Error(`Failed to list user mappings: ${response.status}`);
+    }
+  }
+
+  return await response.json();
+}
+
+/**
+ * Get user mapping by ID
+ * Feature: 020-i-want-to (IP Address Mapping)
+ *
+ * @param id Mapping ID
+ * @returns User mapping details
+ */
+export async function getUserMapping(id: number): Promise<UserMapping> {
+  const token = sessionStorage.getItem('token');
+  if (!token) {
+    throw new Error('Not authenticated');
+  }
+
+  const response = await fetch(`/api/user-mappings/${id}`, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    if (response.status === 404) {
+      throw new Error('User mapping not found');
+    } else if (response.status === 401) {
+      throw new Error('Authentication required');
+    } else if (response.status === 403) {
+      throw new Error('Insufficient permissions (ADMIN role required)');
+    } else {
+      throw new Error(`Failed to get user mapping: ${response.status}`);
+    }
+  }
+
+  return await response.json();
+}
+
+/**
+ * Create new user mapping (AWS account, IP address, or both)
+ * Feature: 020-i-want-to (IP Address Mapping)
+ *
+ * @param request Create mapping request
+ * @returns Created user mapping
+ */
+export async function createUserMapping(request: CreateUserMappingRequest): Promise<UserMapping> {
+  const token = sessionStorage.getItem('token');
+  if (!token) {
+    throw new Error('Not authenticated');
+  }
+
+  const response = await fetch('/api/user-mappings', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ message: 'Failed to create mapping' }));
+
+    if (response.status === 400) {
+      throw new Error(errorData.message || 'Invalid request');
+    } else if (response.status === 401) {
+      throw new Error('Authentication required');
+    } else if (response.status === 403) {
+      throw new Error('Insufficient permissions (ADMIN role required)');
+    } else {
+      throw new Error(errorData.message || `Failed to create user mapping: ${response.status}`);
+    }
+  }
+
+  return await response.json();
+}
+
+/**
+ * Update existing user mapping
+ * Feature: 020-i-want-to (IP Address Mapping)
+ *
+ * @param id Mapping ID
+ * @param request Update mapping request
+ * @returns Updated user mapping
+ */
+export async function updateUserMapping(id: number, request: UpdateUserMappingRequest): Promise<UserMapping> {
+  const token = sessionStorage.getItem('token');
+  if (!token) {
+    throw new Error('Not authenticated');
+  }
+
+  const response = await fetch(`/api/user-mappings/${id}`, {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ message: 'Failed to update mapping' }));
+
+    if (response.status === 404) {
+      throw new Error('User mapping not found');
+    } else if (response.status === 400) {
+      throw new Error(errorData.message || 'Invalid request');
+    } else if (response.status === 401) {
+      throw new Error('Authentication required');
+    } else if (response.status === 403) {
+      throw new Error('Insufficient permissions (ADMIN role required)');
+    } else {
+      throw new Error(errorData.message || `Failed to update user mapping: ${response.status}`);
+    }
+  }
+
+  return await response.json();
+}
+
+/**
+ * Delete user mapping
+ * Feature: 020-i-want-to (IP Address Mapping)
+ *
+ * @param id Mapping ID
+ */
+export async function deleteUserMapping(id: number): Promise<void> {
+  const token = sessionStorage.getItem('token');
+  if (!token) {
+    throw new Error('Not authenticated');
+  }
+
+  const response = await fetch(`/api/user-mappings/${id}`, {
+    method: 'DELETE',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    if (response.status === 404) {
+      throw new Error('User mapping not found');
+    } else if (response.status === 401) {
+      throw new Error('Authentication required');
+    } else if (response.status === 403) {
+      throw new Error('Insufficient permissions (ADMIN role required)');
+    } else {
+      throw new Error(`Failed to delete user mapping: ${response.status}`);
+    }
   }
 }

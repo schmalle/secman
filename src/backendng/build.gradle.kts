@@ -88,6 +88,9 @@ dependencies {
     // CSV parsing (Apache Commons CSV) - Feature 016
     implementation("org.apache.commons:commons-csv:1.11.0")
 
+    // IP address parsing (Apache Commons Net) - Feature 020
+    implementation("commons-net:commons-net:3.11.1")
+
     // HTML processing for email
     implementation("org.jsoup:jsoup:1.21.2")
     

@@ -1,0 +1,269 @@
+openapi: 3.0.3
+info:
+  title: IP Mapping CSV Upload API
+  description: Upload IP address mappings via CSV file for user access control
+  version: 1.0.0
+  contact:
+    name: Secman API Team
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+  - url: https://api.secman.example.com
+    description: Production server
+
+paths:
+  /api/import/upload-ip-mappings-csv:
+    post:
+      summary: Upload IP mappings via CSV file
+      description: |
+        Upload a CSV file containing IP address mappings (email → IP/range → domain).
+        Supports individual IPs, CIDR ranges, and dash ranges.
+        Invalid rows are skipped with detailed error reporting.
+      operationId: uploadIpMappingsCSV
+      tags:
+        - Import
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - csvFile
+              properties:
+                csvFile:
+                  type: string
+                  format: binary
+                  description: CSV file with columns: email, ip_address, domain
+            examples:
+              validCsv:
+                summary: Valid CSV with mixed IP formats
+                value: |
+                  email,ip_address,domain
+                  user@example.com,192.168.1.100,example.com
+                  admin@example.com,10.0.0.0/24,-NONE-
+                  team@example.com,172.16.0.1-172.16.0.255,team.example.com
+      responses:
+        '200':
+          description: Upload successful (all or partial rows imported)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IpMappingUploadResult'
+              examples:
+                allImported:
+                  summary: All rows imported successfully
+                  value:
+                    message: "Successfully imported 3 IP mappings"
+                    imported: 3
+                    skipped: 0
+                    errors: []
+                partialImport:
+                  summary: Partial import with some errors
+                  value:
+                    message: "Imported 2 IP mappings, skipped 1 row"
+                    imported: 2
+                    skipped: 1
+                    errors:
+                      - row: 3
+                        reason: "Invalid IP format: must be IPv4 address (e.g., 192.168.1.100)"
+                        ipAddress: "999.999.999.999"
+                        email: "invalid@example.com"
+        '400':
+          description: Bad request (file validation failed)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalidFileType:
+                  summary: Wrong file extension
+                  value:
+                    error: "Invalid file format"
+                    message: "File must have .csv extension"
+                    timestamp: "2025-10-15T10:00:00Z"
+                fileTooLarge:
+                  summary: File exceeds size limit
+                  value:
+                    error: "File too large"
+                    message: "File size must not exceed 10MB"
+                    timestamp: "2025-10-15T10:00:00Z"
+                emptyFile:
+                  summary: Empty CSV file
+                  value:
+                    error: "Empty file"
+                    message: "CSV file contains no data rows"
+                    timestamp: "2025-10-15T10:00:00Z"
+        '401':
+          description: Unauthorized (missing or invalid JWT token)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                unauthorized:
+                  summary: Missing authentication token
+                  value:
+                    error: "Unauthorized"
+                    message: "Authentication required"
+                    timestamp: "2025-10-15T10:00:00Z"
+        '403':
+          description: Forbidden (user lacks ADMIN role)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                forbidden:
+                  summary: User is not an administrator
+                  value:
+                    error: "Forbidden"
+                    message: "Admin role required to manage IP mappings"
+                    timestamp: "2025-10-15T10:00:00Z"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                serverError:
+                  summary: Database connection failure
+                  value:
+                    error: "Internal Server Error"
+                    message: "An unexpected error occurred during import"
+                    timestamp: "2025-10-15T10:00:00Z"
+
+  /api/import/ip-mapping-template-csv:
+    get:
+      summary: Download CSV template for IP mappings
+      description: Returns a CSV file with example IP mapping data and column headers
+      operationId: downloadIpMappingTemplateCSV
+      tags:
+        - Import
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: CSV template file
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+              example: |
+                email,ip_address,domain
+                user@example.com,192.168.1.100,example.com
+                admin@example.com,10.0.0.0/24,-NONE-
+                team@example.com,172.16.0.1-172.16.0.255,team.example.com
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+              description: Attachment filename
+              example: attachment; filename="ip-mapping-template.csv"
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden (non-admin user)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT authentication token (obtained from /api/auth/login)
+
+  schemas:
+    IpMappingUploadResult:
+      type: object
+      required:
+        - message
+        - imported
+        - skipped
+        - errors
+      properties:
+        message:
+          type: string
+          description: Human-readable summary of upload result
+          example: "Imported 10 IP mappings, skipped 2 rows"
+        imported:
+          type: integer
+          minimum: 0
+          description: Number of rows successfully imported
+          example: 10
+        skipped:
+          type: integer
+          minimum: 0
+          description: Number of rows skipped due to validation errors or duplicates
+          example: 2
+        errors:
+          type: array
+          description: Detailed error information for skipped rows
+          items:
+            $ref: '#/components/schemas/IpMappingUploadError'
+
+    IpMappingUploadError:
+      type: object
+      required:
+        - row
+        - reason
+      properties:
+        row:
+          type: integer
+          minimum: 1
+          description: 1-based row number in CSV file (excluding header)
+          example: 3
+        reason:
+          type: string
+          description: Human-readable error message explaining why row was skipped
+          example: "Invalid CIDR prefix: must be 0-32"
+        ipAddress:
+          type: string
+          nullable: true
+          description: The problematic IP address (if available)
+          example: "192.168.1.0/33"
+        email:
+          type: string
+          format: email
+          nullable: true
+          description: The email address from the row (if available)
+          example: "user@example.com"
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+        - timestamp
+      properties:
+        error:
+          type: string
+          description: Error type (e.g., "Bad Request", "Unauthorized")
+          example: "Bad Request"
+        message:
+          type: string
+          description: Human-readable error message
+          example: "File must have .csv extension"
+        timestamp:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp of error occurrence
+          example: "2025-10-15T10:00:00Z"
+        details:
+          type: object
+          additionalProperties: true
+          description: Optional additional error context
+          nullable: true

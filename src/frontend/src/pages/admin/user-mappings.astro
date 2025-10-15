@@ -1,6 +1,6 @@
 ---
 import Layout from '../../layouts/Layout.astro';
-import UserMappingUpload from '../../components/UserMappingUpload';
+import UserMappingManager from '../../components/UserMappingManager';
 ---
 
 <Layout title="User Mappings - Admin">
@@ -13,6 +13,6 @@ import UserMappingUpload from '../../components/UserMappingUpload';
             </ol>
         </nav>
 
-        <UserMappingUpload client:load />
+        <UserMappingManager client:load />
     </div>
 </Layout>
