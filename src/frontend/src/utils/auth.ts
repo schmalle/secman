@@ -114,7 +114,10 @@ export async function authenticatedFetch(url: string, options: RequestInit = {})
  * Convenience method for GET requests
  */
 export async function authenticatedGet(url: string): Promise<Response> {
-    return authenticatedFetch(url, { method: 'GET' });
+    console.log('[auth] authenticatedGet called with URL:', url);
+    const response = await authenticatedFetch(url, { method: 'GET' });
+    console.log('[auth] authenticatedGet completed for URL:', url, 'status:', response.status);
+    return response;
 }
 
 /**

@@ -11,11 +11,19 @@ import io.micronaut.serde.annotation.Serdeable
  * @property name Asset name (displayed in table, clickable link)
  * @property type Asset type (e.g., SERVER, WORKSTATION)
  * @property vulnerabilityCount Number of vulnerabilities for this asset (0 if none)
+ * @property criticalCount Number of CRITICAL severity vulnerabilities (nullable for backward compatibility)
+ * @property highCount Number of HIGH severity vulnerabilities (nullable for backward compatibility)
+ * @property mediumCount Number of MEDIUM severity vulnerabilities (nullable for backward compatibility)
  */
 @Serdeable
 data class AssetVulnCountDto(
     val id: Long,
     val name: String,
     val type: String,
-    val vulnerabilityCount: Int
+    val vulnerabilityCount: Int,
+    
+    // Severity breakdown (Feature 019 - nullable for backward compatibility)
+    val criticalCount: Int? = null,
+    val highCount: Int? = null,
+    val mediumCount: Int? = null
 )

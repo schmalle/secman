@@ -96,6 +96,36 @@ object AccountVulnsTestFixtures {
     }
 
     /**
+     * Create multiple vulnerabilities with mixed severities for testing Feature 019.
+     * Returns 8 vulnerabilities: 2 CRITICAL, 3 HIGH, 1 MEDIUM, 1 LOW, 1 with empty string severity (UNKNOWN)
+     *
+     * @param asset Asset to attach vulnerabilities to
+     * @return List of vulnerabilities with various severity levels
+     */
+    fun createVulnerabilitiesWithSeverity(asset: Asset): List<Vulnerability> {
+        return listOf(
+            createVulnerability(asset, "CVE-2024-0001", "CRITICAL", "10"),
+            createVulnerability(asset, "CVE-2024-0002", "CRITICAL", "15"),
+            createVulnerability(asset, "CVE-2024-0003", "HIGH", "20"),
+            createVulnerability(asset, "CVE-2024-0004", "HIGH", "25"),
+            createVulnerability(asset, "CVE-2024-0005", "HIGH", "30"),
+            createVulnerability(asset, "CVE-2024-0006", "MEDIUM", "35"),
+            createVulnerability(asset, "CVE-2024-0007", "LOW", "40"),
+            createVulnerability(asset, "CVE-2024-0008", "", "45") // Empty severity (UNKNOWN)
+        )
+    }
+    
+    /**
+     * Create a vulnerability with NULL severity for testing (Feature 019).
+     * Useful for testing UNKNOWN severity handling.
+     */
+    fun createVulnerabilityWithNullSeverity(asset: Asset): Vulnerability {
+        val vuln = createVulnerability(asset, "CVE-2024-9999", "placeholder", "50")
+        vuln.cvssSeverity = null // Set to null after creation
+        return vuln
+    }
+
+    /**
      * Create multiple assets with vulnerabilities for a single AWS account
      * Returns list of assets (vulnerabilities are set via relationship)
      */
