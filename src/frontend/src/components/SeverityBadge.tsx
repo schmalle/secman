@@ -21,26 +21,27 @@ interface SeverityBadgeProps {
 /**
  * Configuration for each severity level
  * Includes Bootstrap class, icon, label, and aria-label for accessibility
+ * Updated with subtle, professional colors matching requirements page design
  */
 const severityConfig = {
   CRITICAL: {
-    bgClass: 'bg-danger',
-    textClass: '',
-    icon: 'bi-exclamation-triangle-fill',
+    bgClass: 'bg-danger bg-opacity-10 border border-danger',
+    textClass: 'text-danger',
+    icon: 'bi-exclamation-circle',
     label: 'Critical',
     ariaLabel: 'Critical severity vulnerabilities',
   },
   HIGH: {
-    bgClass: 'bg-warning',
-    textClass: 'text-dark',
-    icon: 'bi-arrow-up-circle-fill',
+    bgClass: 'bg-warning bg-opacity-10 border border-warning',
+    textClass: 'text-warning',
+    icon: 'bi-arrow-up-circle',
     label: 'High',
     ariaLabel: 'High severity vulnerabilities',
   },
   MEDIUM: {
-    bgClass: 'bg-info',
-    textClass: 'text-dark',
-    icon: 'bi-dash-circle-fill',
+    bgClass: 'bg-info bg-opacity-10 border border-info',
+    textClass: 'text-info',
+    icon: 'bi-dash-circle',
     label: 'Medium',
     ariaLabel: 'Medium severity vulnerabilities',
   },

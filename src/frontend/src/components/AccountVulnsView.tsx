@@ -185,46 +185,46 @@ const AccountVulnsView: React.FC = () => {
             {/* Summary Stats */}
             <div className="row mb-4">
                 <div className="col-md-3">
-                    <div className="card text-center">
+                    <div className="card text-center border-0 shadow-sm">
                         <div className="card-body">
-                            <h5 className="card-title text-muted">AWS Accounts</h5>
-                            <p className="display-6">{summary.accountGroups.length}</p>
+                            <h6 className="card-title text-muted mb-3">AWS Accounts</h6>
+                            <p className="h3 mb-0">{summary.accountGroups.length}</p>
                         </div>
                     </div>
                 </div>
                 <div className="col-md-3">
-                    <div className="card text-center">
+                    <div className="card text-center border-0 shadow-sm">
                         <div className="card-body">
-                            <h5 className="card-title text-muted">Total Assets</h5>
-                            <p className="display-6">{summary.totalAssets}</p>
+                            <h6 className="card-title text-muted mb-3">Total Assets</h6>
+                            <p className="h3 mb-0">{summary.totalAssets}</p>
                         </div>
                     </div>
                 </div>
                 <div className="col-md-3">
-                    <div className="card text-center">
+                    <div className="card text-center border-0 shadow-sm">
                         <div className="card-body">
-                            <h5 className="card-title text-muted">Total Vulnerabilities</h5>
-                            <p className="display-6 text-danger">{summary.totalVulnerabilities}</p>
+                            <h6 className="card-title text-muted mb-3">Total Vulnerabilities</h6>
+                            <p className="h3 mb-0">{summary.totalVulnerabilities}</p>
                         </div>
                     </div>
                 </div>
                 {/* Feature 019: Global severity summary (US3) */}
                 <div className="col-md-3">
-                    <div className="card text-center">
+                    <div className="card text-center border-0 shadow-sm">
                         <div className="card-body">
-                            <h5 className="card-title text-muted">By Severity</h5>
+                            <h6 className="card-title text-muted mb-3">By Severity</h6>
                             <div className="d-flex flex-column gap-2 align-items-center">
-                                <SeverityBadge 
-                                    severity="CRITICAL" 
-                                    count={summary.globalCritical ?? 0} 
+                                <SeverityBadge
+                                    severity="CRITICAL"
+                                    count={summary.globalCritical ?? 0}
                                 />
-                                <SeverityBadge 
-                                    severity="HIGH" 
-                                    count={summary.globalHigh ?? 0} 
+                                <SeverityBadge
+                                    severity="HIGH"
+                                    count={summary.globalHigh ?? 0}
                                 />
-                                <SeverityBadge 
-                                    severity="MEDIUM" 
-                                    count={summary.globalMedium ?? 0} 
+                                <SeverityBadge
+                                    severity="MEDIUM"
+                                    count={summary.globalMedium ?? 0}
                                 />
                             </div>
                         </div>
@@ -244,32 +244,29 @@ const AccountVulnsView: React.FC = () => {
                 });
 
                 return (
-                    <div key={group.awsAccountId} className="card mb-4">
-                        <div className="card-header bg-primary text-white">
+                    <div key={group.awsAccountId} className="card mb-4 border-0 shadow-sm">
+                        <div className="card-header bg-light border-bottom">
                             <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                                <h5 className="mb-0">
-                                    <i className="bi bi-cloud-fill me-2"></i>
+                                <h5 className="mb-0 text-dark">
+                                    <i className="bi bi-cloud me-2 text-primary"></i>
                                     AWS Account: {group.awsAccountId}
                                 </h5>
                                 {/* Feature 019: Account-level severity breakdown (US2) */}
                                 <div className="d-flex gap-2 flex-wrap align-items-center">
-                                    <span className="badge bg-light text-dark">
+                                    <span className="badge bg-secondary bg-opacity-10 text-secondary border border-secondary">
                                         {group.totalAssets} asset{group.totalAssets !== 1 ? 's' : ''}
                                     </span>
                                     <SeverityBadge
                                         severity="CRITICAL"
                                         count={group.totalCritical ?? 0}
-                                        className="shadow-sm"
                                     />
                                     <SeverityBadge
                                         severity="HIGH"
                                         count={group.totalHigh ?? 0}
-                                        className="shadow-sm"
                                     />
                                     <SeverityBadge
                                         severity="MEDIUM"
                                         count={group.totalMedium ?? 0}
-                                        className="shadow-sm"
                                     />
                                 </div>
                             </div>

@@ -55,10 +55,10 @@ const AssetVulnTable: React.FC<AssetVulnTableProps> = ({ assets, awsAccountId })
     }
 
     const getVulnBadgeClass = (count: number): string => {
-        if (count === 0) return 'bg-success';
-        if (count < 5) return 'bg-info text-dark';
-        if (count < 10) return 'bg-warning text-dark';
-        return 'bg-danger';
+        if (count === 0) return 'bg-success bg-opacity-10 text-success border border-success';
+        if (count < 10) return 'bg-secondary bg-opacity-10 text-secondary border border-secondary';
+        if (count < 50) return 'bg-warning bg-opacity-10 text-warning border border-warning';
+        return 'bg-danger bg-opacity-10 text-danger border border-danger';
     };
 
     return (
@@ -84,7 +84,7 @@ const AssetVulnTable: React.FC<AssetVulnTableProps> = ({ assets, awsAccountId })
                                 </a>
                             </td>
                             <td>
-                                <span className="badge bg-secondary">{asset.type}</span>
+                                <span className="badge bg-secondary bg-opacity-10 text-secondary border border-secondary">{asset.type}</span>
                             </td>
                             <td className="text-end">
                                 <span className={`badge ${getVulnBadgeClass(asset.vulnerabilityCount)}`}>
