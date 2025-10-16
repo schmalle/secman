@@ -40,4 +40,22 @@ interface WorkgroupRepository : JpaRepository<Workgroup, Long> {
      * @return Optional containing the workgroup if found
      */
     override fun findById(id: Long): Optional<Workgroup>
+
+    /**
+     * Find all workgroups that a user is a member of by user email
+     * Used for WG Vulns feature (022-wg-vulns-handling)
+     *
+     * This query joins the workgroup table with the user_workgroups join table
+     * and filters by the user's email address.
+     *
+     * @param email User email address
+     * @return List of workgroups the user is a member of (empty list if none)
+     */
+    @io.micronaut.data.annotation.Query("""
+        SELECT DISTINCT w FROM Workgroup w 
+        JOIN w.users u 
+        WHERE u.email = :email
+        ORDER BY w.name ASC
+    """)
+    fun findWorkgroupsByUserEmail(email: String): List<Workgroup>
 }
