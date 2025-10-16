@@ -44,9 +44,26 @@ const ReleaseSelector: React.FC<ReleaseSelectorProps> = ({
             }
 
             const data = await response.json();
-            setReleases(data);
+
+            // Handle paginated response format
+            if (Array.isArray(data)) {
+                // Direct array response
+                setReleases(data);
+            } else if (data && Array.isArray(data.data)) {
+                // Paginated response with data field
+                setReleases(data.data);
+            } else if (data && Array.isArray(data.releases)) {
+                // Alternative wrapped response
+                setReleases(data.releases);
+            } else {
+                console.error('Invalid releases data format:', data);
+                setReleases([]);
+                setError('Invalid data format from server');
+            }
         } catch (err) {
+            console.error('Error fetching releases:', err);
             setError('Failed to load releases');
+            setReleases([]);
         } finally {
             setIsLoading(false);
         }
@@ -93,7 +110,7 @@ const ReleaseSelector: React.FC<ReleaseSelectorProps> = ({
                 {isLoading ? (
                     <option disabled>Loading releases...</option>
                 ) : (
-                    releases.map((release) => (
+                    Array.isArray(releases) && releases.map((release) => (
                         <option key={release.id} value={release.id}>
                             {release.version} - {release.name} ({release.status})
                         </option>
