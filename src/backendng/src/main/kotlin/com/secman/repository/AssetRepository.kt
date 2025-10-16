@@ -125,4 +125,23 @@ interface AssetRepository : JpaRepository<Asset, Long> {
      * @return List of assets with the specified IP
      */
     fun findByIpNumeric(ipNumeric: Long): List<Asset>
+
+    /**
+     * Find assets that belong to any of the specified workgroups
+     * Used for WG Vulns feature (022-wg-vulns-handling)
+     *
+     * This query joins the asset table with the asset_workgroups join table
+     * and filters by workgroup IDs. Returns distinct assets to avoid duplicates
+     * when an asset belongs to multiple specified workgroups.
+     *
+     * @param workgroupIds List of workgroup IDs to filter by
+     * @return List of distinct assets in the specified workgroups (empty list if none)
+     */
+    @io.micronaut.data.annotation.Query("""
+        SELECT DISTINCT a FROM Asset a 
+        JOIN a.workgroups w 
+        WHERE w.id IN :workgroupIds
+        ORDER BY a.name ASC
+    """)
+    fun findByWorkgroupIdIn(workgroupIds: List<Long>): List<Asset>
 }
