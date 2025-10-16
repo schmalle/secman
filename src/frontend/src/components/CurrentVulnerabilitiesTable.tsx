@@ -4,13 +4,14 @@
  * Displays current vulnerabilities with filtering, sorting, and pagination capabilities
  *
  * Features:
- * - Filter by severity, system, and exception status
- * - Sortable columns
- * - Exception status badges with tooltips
+ * - Filter by severity, system, exception status, and overdue status
+ * - Sortable columns including overdue status
+ * - Exception and overdue status badges with tooltips
  * - Pagination (50 items per page)
  * - Loading and error states
  *
  * Related to: Feature 004-i-want-to (VULN Role & Vulnerability Management UI)
+ * Related to: Feature 021-vulnerability-overdue-exception-logic
  */
 
 import React, { useState, useEffect } from 'react';
@@ -19,6 +20,7 @@ import {
     type CurrentVulnerability, 
     type PaginatedVulnerabilitiesResponse 
 } from '../services/vulnerabilityManagementService';
+import OverdueStatusBadge from './OverdueStatusBadge';
 
 const CurrentVulnerabilitiesTable: React.FC = () => {
     const [paginatedResponse, setPaginatedResponse] = useState<PaginatedVulnerabilitiesResponse | null>(null);
@@ -313,7 +315,15 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                     />
                 </div>
                 <div className="col-md-3">
-                    <label htmlFor="exceptionFilter" className="form-label">Exception Status</label>
+                    <label htmlFor="exceptionFilter" className="form-label">
+                        Overdue Status
+                        <i 
+                            className="bi bi-question-circle ms-2 text-muted" 
+                            data-bs-toggle="tooltip" 
+                            title="Filter by vulnerability overdue status. OVERDUE = exceeds threshold, EXCEPTED = has active exception, OK = within threshold"
+                            style={{ cursor: 'help', fontSize: '0.875rem' }}
+                        ></i>
+                    </label>
                     <select
                         id="exceptionFilter"
                         className="form-select"
@@ -324,8 +334,9 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                         }}
                     >
                         <option value="">All Statuses</option>
-                        <option value="EXCEPTED">Excepted</option>
-                        <option value="NOT_EXCEPTED">Not Excepted</option>
+                        <option value="overdue">🔴 Overdue Only</option>
+                        <option value="excepted">🛡️ Excepted Only</option>
+                        <option value="ok">✅ OK Only</option>
                     </select>
                 </div>
                 <div className="col-md-3">
@@ -410,11 +421,11 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                                                         <SortIcon field="scanTimestamp" />
                                                     </th>
                                                     <th
-                                                        onClick={() => handleSort('hasException')}
+                                                        onClick={() => handleSort('overdueStatus')}
                                                         style={{ cursor: 'pointer' }}
                                                     >
-                                                        Exception
-                                                        <SortIcon field="hasException" />
+                                                        Overdue Status
+                                                        <SortIcon field="overdueStatus" />
                                                     </th>
                                                 </tr>
                                             </thead>
@@ -440,7 +451,13 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                                                                 new Date(vuln.scanTimestamp).toLocaleDateString() : '-'}
                                                         </td>
                                                         <td>
-                                                            {getExceptionBadge(vuln.hasException, vuln.exceptionReason)}
+                                                            <OverdueStatusBadge
+                                                                status={vuln.overdueStatus || 'OK'}
+                                                                daysOverdue={vuln.daysOverdue}
+                                                                ageInDays={vuln.ageInDays}
+                                                                exceptionReason={vuln.exceptionReason}
+                                                                exceptionEndDate={vuln.exceptionEndDate}
+                                                            />
                                                         </td>
                                                     </tr>
                                                 ))}
