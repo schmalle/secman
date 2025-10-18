@@ -154,6 +154,7 @@ data class RiskAssessment(
     /**
      * Gets the demand associated with this risk assessment if basis type is DEMAND
      */
+    @Suppress("DEPRECATION")
     fun getDemandBasis(): Demand? {
         return when (assessmentBasisType) {
             AssessmentBasisType.DEMAND -> demand ?: throw IllegalStateException("Demand not loaded for DEMAND basis type")
@@ -164,6 +165,7 @@ data class RiskAssessment(
     /**
      * Gets the asset associated with this risk assessment if basis type is ASSET
      */
+    @Suppress("DEPRECATION")
     fun getAssetBasis(): Asset? {
         return when (assessmentBasisType) {
             AssessmentBasisType.ASSET -> asset ?: throw IllegalStateException("Asset not loaded for ASSET basis type")
@@ -231,16 +233,17 @@ data class RiskAssessment(
     /**
      * Validates that the assessment basis configuration is consistent
      */
+    @Suppress("DEPRECATION")
     fun validateBasisConsistency(): Boolean {
         return when (assessmentBasisType) {
             AssessmentBasisType.DEMAND -> {
-                demand != null && 
-                demand?.id == assessmentBasisId && 
+                demand != null &&
+                demand?.id == assessmentBasisId &&
                 asset == null
             }
             AssessmentBasisType.ASSET -> {
-                asset != null && 
-                asset?.id == assessmentBasisId && 
+                asset != null &&
+                asset?.id == assessmentBasisId &&
                 demand == null
             }
         }
@@ -249,9 +252,10 @@ data class RiskAssessment(
     /**
      * Gets validation errors for the assessment basis configuration
      */
+    @Suppress("DEPRECATION")
     fun getBasisValidationErrors(): List<String> {
         val errors = mutableListOf<String>()
-        
+
         when (assessmentBasisType) {
             AssessmentBasisType.DEMAND -> {
                 if (demand == null) {
@@ -276,7 +280,7 @@ data class RiskAssessment(
                 }
             }
         }
-        
+
         return errors
     }
 

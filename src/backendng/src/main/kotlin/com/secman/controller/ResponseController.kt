@@ -535,11 +535,7 @@ open class ResponseController(
             }
             
             // Determine the asset for the risk
-            val asset = when (assessment.assessmentBasisType) {
-                AssessmentBasisType.ASSET -> assessment.asset
-                AssessmentBasisType.DEMAND -> assessment.demand?.existingAsset
-                else -> null
-            }
+            val asset = assessment.getAssociatedAsset()
             
             // Create the risk
             val risk = Risk(

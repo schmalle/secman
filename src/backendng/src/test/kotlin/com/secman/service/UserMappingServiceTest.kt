@@ -45,11 +45,12 @@ class UserMappingServiceTest {
             id = userId
         }
         
-        val mapping = UserMapping().apply {
-            id = 1L
-            email = "user@example.com"
-            awsAccountId = "123456789012"
+        val mapping = UserMapping(
+            email = "user@example.com",
+            awsAccountId = "123456789012",
             domain = null
+        ).apply {
+            id = 1L
             createdAt = Instant.now()
             updatedAt = Instant.now()
         }
@@ -85,7 +86,12 @@ class UserMappingServiceTest {
     fun `createMapping validates at least one field provided`() {
         // Given
         val userId = 1L
-        val request = CreateUserMappingRequest(null, null)
+        val request = CreateUserMappingRequest(
+            email = "user@example.com",
+            awsAccountId = null,
+            domain = null,
+            ipAddress = null
+        )
 
         // When/Then
         val exception = assertThrows<IllegalArgumentException> {
@@ -105,7 +111,12 @@ class UserMappingServiceTest {
         ).apply {
             id = userId
         }
-        val request = CreateUserMappingRequest("123456789012", null)
+        val request = CreateUserMappingRequest(
+            email = "user@example.com",
+            awsAccountId = "123456789012",
+            domain = null,
+            ipAddress = null
+        )
         
         every { userRepository.findById(userId) } returns Optional.of(user)
         every { 
@@ -138,12 +149,18 @@ class UserMappingServiceTest {
         ).apply {
             id = userId
         }
-        val request = CreateUserMappingRequest("123456789012", null)
-        val savedMapping = UserMapping().apply {
-            id = 1L
-            email = "user@example.com"
-            awsAccountId = "123456789012"
+        val request = CreateUserMappingRequest(
+            email = "user@example.com",
+            awsAccountId = "123456789012",
+            domain = null,
+            ipAddress = null
+        )
+        val savedMapping = UserMapping(
+            email = "user@example.com",
+            awsAccountId = "123456789012",
             domain = null
+        ).apply {
+            id = 1L
             createdAt = Instant.now()
             updatedAt = Instant.now()
         }
@@ -169,7 +186,12 @@ class UserMappingServiceTest {
         // Given
         val userId = 1L
         val mappingId = 1L
-        val request = UpdateUserMappingRequest(null, null)
+        val request = UpdateUserMappingRequest(
+            email = "user@example.com",
+            awsAccountId = null,
+            domain = null,
+            ipAddress = null
+        )
 
         // When/Then
         val exception = assertThrows<IllegalArgumentException> {
@@ -190,15 +212,21 @@ class UserMappingServiceTest {
         ).apply {
             id = userId
         }
-        val existingMapping = UserMapping().apply {
-            id = mappingId
-            email = "user@example.com"
-            awsAccountId = "111111111111"
+        val existingMapping = UserMapping(
+            email = "user@example.com",
+            awsAccountId = "111111111111",
             domain = null
+        ).apply {
+            id = mappingId
             createdAt = Instant.now()
             updatedAt = Instant.now()
         }
-        val request = UpdateUserMappingRequest("222222222222", null)
+        val request = UpdateUserMappingRequest(
+            email = "user@example.com",
+            awsAccountId = "222222222222",
+            domain = null,
+            ipAddress = null
+        )
         
         every { userRepository.findById(userId) } returns Optional.of(user)
         every { userMappingRepository.findById(mappingId) } returns Optional.of(existingMapping)
@@ -227,15 +255,21 @@ class UserMappingServiceTest {
         ).apply {
             id = userId
         }
-        val mapping = UserMapping().apply {
-            id = mappingId
-            email = "other@example.com"  // Different email!
-            awsAccountId = "123456789012"
+        val mapping = UserMapping(
+            email = "other@example.com",  // Different email!
+            awsAccountId = "123456789012",
             domain = null
+        ).apply {
+            id = mappingId
             createdAt = Instant.now()
             updatedAt = Instant.now()
         }
-        val request = UpdateUserMappingRequest("111111111111", null)
+        val request = UpdateUserMappingRequest(
+            email = "other@example.com",
+            awsAccountId = "111111111111",
+            domain = null,
+            ipAddress = null
+        )
         
         every { userRepository.findById(userId) } returns Optional.of(user)
         every { userMappingRepository.findById(mappingId) } returns Optional.of(mapping)
@@ -260,20 +294,27 @@ class UserMappingServiceTest {
         ).apply {
             id = userId
         }
-        val existingMapping = UserMapping().apply {
-            id = mappingId
-            email = "user@example.com"
-            awsAccountId = "111111111111"
+        val existingMapping = UserMapping(
+            email = "user@example.com",
+            awsAccountId = "111111111111",
             domain = null
+        ).apply {
+            id = mappingId
             createdAt = Instant.now()
             updatedAt = Instant.now()
         }
-        val request = UpdateUserMappingRequest("222222222222", null)
-        val updatedMapping = UserMapping().apply {
-            id = mappingId
-            email = "user@example.com"
-            awsAccountId = "222222222222"
+        val request = UpdateUserMappingRequest(
+            email = "user@example.com",
+            awsAccountId = "222222222222",
+            domain = null,
+            ipAddress = null
+        )
+        val updatedMapping = UserMapping(
+            email = "user@example.com",
+            awsAccountId = "222222222222",
             domain = null
+        ).apply {
+            id = mappingId
             createdAt = existingMapping.createdAt
             updatedAt = Instant.now()
         }
@@ -307,15 +348,16 @@ class UserMappingServiceTest {
         ).apply {
             id = userId
         }
-        val mapping = UserMapping().apply {
-            id = mappingId
-            email = "other@example.com"  // Different email!
-            awsAccountId = "123456789012"
+        val mapping = UserMapping(
+            email = "other@example.com",  // Different email!
+            awsAccountId = "123456789012",
             domain = null
+        ).apply {
+            id = mappingId
             createdAt = Instant.now()
             updatedAt = Instant.now()
         }
-        
+
         every { userRepository.findById(userId) } returns Optional.of(user)
         every { userMappingRepository.findById(mappingId) } returns Optional.of(mapping)
 
@@ -339,15 +381,16 @@ class UserMappingServiceTest {
         ).apply {
             id = userId
         }
-        val mapping = UserMapping().apply {
-            id = mappingId
-            email = "user@example.com"
-            awsAccountId = "123456789012"
+        val mapping = UserMapping(
+            email = "user@example.com",
+            awsAccountId = "123456789012",
             domain = null
+        ).apply {
+            id = mappingId
             createdAt = Instant.now()
             updatedAt = Instant.now()
         }
-        
+
         every { userRepository.findById(userId) } returns Optional.of(user)
         every { userMappingRepository.findById(mappingId) } returns Optional.of(mapping)
         every { userMappingRepository.delete(any<UserMapping>()) } returns Unit

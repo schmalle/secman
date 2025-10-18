@@ -33,6 +33,7 @@ class DemandRiskAssessmentIntegrationTest {
     }
 
     @Test
+    @Suppress("DEPRECATION")
     fun `test complete demand to risk assessment workflow`() {
         // Given - Create test data
         val asset = Asset(
@@ -121,6 +122,7 @@ class DemandRiskAssessmentIntegrationTest {
     }
 
     @Test
+    @Suppress("DEPRECATION")
     fun `test CREATE_NEW demand workflow`() {
         // Given - Create test data for new asset demand
         val requestor = User(
@@ -353,6 +355,7 @@ class DemandRiskAssessmentIntegrationTest {
     }
 
     @Test
+    @Suppress("DEPRECATION")
     fun `test migration compatibility - legacy asset field support`() {
         // Given - Legacy risk assessment with asset field (for migration compatibility)
         val asset = Asset(

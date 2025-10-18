@@ -53,6 +53,7 @@ class SearchProductsTool(
         )
     )
 
+    @Suppress("UNCHECKED_CAST")
     override suspend fun execute(arguments: Map<String, Any>): McpToolResult {
         val page = (arguments["page"] as? Number)?.toInt() ?: 0
         val pageSize = (arguments["pageSize"] as? Number)?.toInt() ?: 100

@@ -10,6 +10,7 @@ import io.micronaut.http.client.HttpClient
 import io.micronaut.http.client.annotation.Client
 import io.micronaut.test.extensions.junit5.annotation.MicronautTest
 import io.mockk.every
+import io.mockk.justRun
 import io.mockk.mockk
 import io.mockk.verify
 import jakarta.inject.Inject
@@ -37,11 +38,14 @@ class UserControllerMappingTest {
         val userId = 1L
         val mappings = listOf(
             UserMappingResponse(
-                1, 
-                "user@example.com", 
-                "123456789012", 
-                null, 
-                "2025-01-01T00:00:00Z", 
+                1,
+                "user@example.com",
+                "123456789012",
+                null,  // domain
+                null,  // ipAddress
+                null,  // ipRangeType
+                null,  // ipCount
+                "2025-01-01T00:00:00Z",
                 "2025-01-01T00:00:00Z"
             )
         )
@@ -91,14 +95,19 @@ class UserControllerMappingTest {
         // Given
         val userId = 1L
         val createRequest = CreateUserMappingRequest(
+            email = "user@example.com",
             awsAccountId = "123456789012",
-            domain = null
+            domain = null,
+            ipAddress = null
         )
         val createdMapping = UserMappingResponse(
             1,
             "user@example.com",
             "123456789012",
-            null,
+            null,  // domain
+            null,  // ipAddress
+            null,  // ipRangeType
+            null,  // ipCount
             "2025-01-01T00:00:00Z",
             "2025-01-01T00:00:00Z"
         )
@@ -118,8 +127,10 @@ class UserControllerMappingTest {
         // Given
         val userId = 1L
         val invalidRequest = CreateUserMappingRequest(
+            email = "user@example.com",
             awsAccountId = null,
-            domain = null
+            domain = null,
+            ipAddress = null
         )
         every { userMappingService.createMapping(userId, invalidRequest) } throws 
             IllegalArgumentException("At least one field must be provided")
@@ -140,14 +151,19 @@ class UserControllerMappingTest {
         val userId = 1L
         val mappingId = 1L
         val updateRequest = UpdateUserMappingRequest(
+            email = "user@example.com",
             awsAccountId = "999999999999",
-            domain = "updated.example.com"
+            domain = "updated.example.com",
+            ipAddress = null
         )
         val updatedMapping = UserMappingResponse(
             1,
             "user@example.com",
             "999999999999",
             "updated.example.com",
+            null,  // ipAddress
+            null,  // ipRangeType
+            null,  // ipCount
             "2025-01-01T00:00:00Z",
             "2025-01-02T00:00:00Z"
         )
@@ -168,10 +184,12 @@ class UserControllerMappingTest {
         val userId = 1L
         val mappingId = 999L
         val updateRequest = UpdateUserMappingRequest(
+            email = "user@example.com",
             awsAccountId = "999999999999",
-            domain = null
+            domain = null,
+            ipAddress = null
         )
-        every { userMappingService.updateMapping(userId, mappingId, updateRequest) } throws 
+        every { userMappingService.updateMapping(userId, mappingId, updateRequest) } throws
             NoSuchElementException("Mapping not found")
         
         // When/Then
@@ -190,10 +208,12 @@ class UserControllerMappingTest {
         val userId = 1L
         val mappingId = 1L
         val updateRequest = UpdateUserMappingRequest(
+            email = "user@example.com",
             awsAccountId = "999999999999",
-            domain = null
+            domain = null,
+            ipAddress = null
         )
-        every { userMappingService.updateMapping(userId, mappingId, updateRequest) } throws 
+        every { userMappingService.updateMapping(userId, mappingId, updateRequest) } throws
             IllegalArgumentException("Mapping does not belong to this user")
         
         // When/Then
@@ -211,7 +231,7 @@ class UserControllerMappingTest {
         // Given
         val userId = 1L
         val mappingId = 1L
-        every { userMappingService.deleteMapping(userId, mappingId) } returns Unit
+        justRun { userMappingService.deleteMapping(userId, mappingId) }
         
         // When
         val request = HttpRequest.DELETE<Any>("/api/users/$userId/mappings/$mappingId")

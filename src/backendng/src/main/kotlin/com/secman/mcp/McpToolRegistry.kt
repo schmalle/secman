@@ -193,6 +193,7 @@ class McpToolRegistry(
     /**
      * Validate tool arguments against the tool's input schema.
      */
+    @Suppress("UNCHECKED_CAST")
     fun validateArguments(toolName: String, arguments: Map<String, Any>): ValidationResult {
         val tool = getTool(toolName)
             ?: return ValidationResult(false, "Tool '$toolName' not found")

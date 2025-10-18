@@ -193,6 +193,7 @@ data class McpToolPermission(
     /**
      * Parse parameter restrictions JSON into a structured format.
      */
+    @Suppress("UNCHECKED_CAST")
     private fun parseParameterRestrictions(restrictionsJson: String): Map<String, Any> {
         return try {
             com.fasterxml.jackson.databind.ObjectMapper()
