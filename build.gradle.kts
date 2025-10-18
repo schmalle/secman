@@ -5,6 +5,7 @@ plugins {
     id("com.google.devtools.ksp") version "2.1.0-1.0.28" apply false
     id("io.micronaut.application") version "4.4.2" apply false
     id("io.micronaut.library") version "4.4.2" apply false
+    id("io.micronaut.aot") version "4.4.2" apply false
     id("com.gradleup.shadow") version "8.3.8" apply false
 }
 

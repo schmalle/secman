@@ -32,8 +32,18 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.*
 
+/**
+ * Requirement Controller
+ * Feature: 025-role-based-access-control
+ *
+ * Access Control:
+ * - ADMIN: Full access to all requirement operations
+ * - REQ: Full access to all requirement operations
+ * - SECCHAMPION: Full access to all requirement operations
+ * - Other roles: Access denied (403 Forbidden)
+ */
 @Controller("/api/requirements")
-@Secured(SecurityRule.IS_AUTHENTICATED)
+@Secured("ADMIN", "REQ", "SECCHAMPION")
 open class RequirementController(
     private val requirementRepository: RequirementRepository,
     private val useCaseRepository: UseCaseRepository,

@@ -11,7 +11,15 @@
     <logger name="org.hibernate" level="WARN"/>
     <logger name="org.mariadb" level="WARN"/>
     <logger name="com.zaxxer.hikari" level="WARN"/>
-    
+
+    <!-- Access Denial Audit Logger (Feature: 025-role-based-access-control) -->
+    <!-- Logs all access denial events for security audit purposes -->
+    <!-- Level: WARN (not ERROR - expected behavior for unauthorized access) -->
+    <!-- Constitutional Compliance: Principle I (Security-First) - FR-014 -->
+    <logger name="ACCESS_DENIAL_AUDIT" level="WARN" additivity="false">
+        <appender-ref ref="STDOUT"/>
+    </logger>
+
     <root level="INFO">
         <appender-ref ref="STDOUT"/>
     </root>

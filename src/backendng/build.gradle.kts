@@ -100,6 +100,7 @@ dependencies {
     testImplementation("org.mockito.kotlin:mockito-kotlin:5.1.0")
     testImplementation("io.mockk:mockk:1.13.14")
     testImplementation("com.h2database:h2:2.2.224")
+    testImplementation("ch.qos.logback:logback-classic:1.5.12") // For AccessDenialLoggerTest
     
     // KSP
     ksp("io.micronaut:micronaut-http-validation")

@@ -41,9 +41,9 @@
 - **Structure**: models/, services/, cli/, exporters/, lib/
 
 ## Recent Changes
+- 025-role-based-access-control: Added Kotlin 2.1.0 / Java 21 (backend), TypeScript/JavaScript (frontend - Astro 5.14 + React 19) + Micronaut 4.4, Hibernate JPA, Apache POI 5.3, Astro, React 19, Bootstrap 5.3
 - 020-i-want-to: Added Kotlin 2.1.0 / Java 21 (backend), TypeScript/JavaScript (frontend - Astro 5.14 + React 19) + Micronaut 4.4, Hibernate JPA, Apache POI 5.3 (Excel), Apache Commons CSV 1.11.0 (CSV), Astro, React 19, Bootstrap 5.3
 - 018-under-vuln-management: Account Vulns - AWS Account-Based Vulnerability Overview (2025-10-14) - New view for non-admin users to see vulnerabilities grouped by their mapped AWS accounts, admin redirect, error handling
-- 016-i-want-to: CSV-Based User Mapping Upload (2025-10-13) - CSV upload support for email-AWS-domain mappings, parallel to Excel upload (Feature 013), handles scientific notation AWS account IDs, auto-detects CSV delimiter/encoding
 
 ### Feature 018: Account Vulns - AWS Account-Based Vulnerability Overview (2025-10-14)
 

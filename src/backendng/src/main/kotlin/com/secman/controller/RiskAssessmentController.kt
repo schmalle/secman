@@ -22,8 +22,18 @@ import org.slf4j.LoggerFactory
 import java.time.LocalDate
 import java.time.LocalDateTime
 
+/**
+ * Risk Assessment Controller
+ * Feature: 025-role-based-access-control
+ *
+ * Access Control:
+ * - ADMIN: Full access to all risk assessment operations
+ * - RISK: Full access to all risk assessment operations
+ * - SECCHAMPION: Full access to all risk assessment operations
+ * - Other roles: Access denied (403 Forbidden)
+ */
 @Controller("/api/risk-assessments")
-@Secured(SecurityRule.IS_AUTHENTICATED)
+@Secured("ADMIN", "RISK", "SECCHAMPION")
 @ExecuteOn(TaskExecutors.BLOCKING)
 open class RiskAssessmentController(
     private val riskAssessmentRepository: RiskAssessmentRepository,

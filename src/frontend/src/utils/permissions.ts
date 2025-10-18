@@ -36,11 +36,21 @@ export function isReleaseManager(roles: string[] | undefined): boolean {
 }
 
 /**
- * Check if user has CHAMPION role
+ * Check if user has CHAMPION role (DEPRECATED)
+ * @deprecated Use isSecChampion() instead - CHAMPION renamed to SECCHAMPION
  */
 export function isChampion(roles: string[] | undefined): boolean {
   if (!roles || !Array.isArray(roles)) return false;
   return roles.includes('CHAMPION');
+}
+
+/**
+ * Check if user has SECCHAMPION role
+ * Feature: 025-role-based-access-control
+ */
+export function isSecChampion(roles: string[] | undefined): boolean {
+  if (!roles || !Array.isArray(roles)) return false;
+  return roles.includes('SECCHAMPION');
 }
 
 /**
@@ -52,39 +62,74 @@ export function isReq(roles: string[] | undefined): boolean {
 }
 
 /**
- * Check if user can access Norm Management
- * 
+ * Check if user has RISK role
+ * Feature: 025-role-based-access-control
+ */
+export function isRisk(roles: string[] | undefined): boolean {
+  if (!roles || !Array.isArray(roles)) return false;
+  return roles.includes('RISK');
+}
+
+/**
+ * Check if user has access to Risk Management
+ * Feature: 025-role-based-access-control
+ *
  * Rules:
  * - ADMIN can access
- * - CHAMPION can access
+ * - RISK can access
+ * - SECCHAMPION can access
+ */
+export function hasRiskAccess(roles: string[] | undefined): boolean {
+  return isAdmin(roles) || isRisk(roles) || isSecChampion(roles);
+}
+
+/**
+ * Check if user has access to Requirements
+ * Feature: 025-role-based-access-control
+ *
+ * Rules:
+ * - ADMIN can access
+ * - REQ can access
+ * - SECCHAMPION can access
+ */
+export function hasReqAccess(roles: string[] | undefined): boolean {
+  return isAdmin(roles) || isReq(roles) || isSecChampion(roles);
+}
+
+/**
+ * Check if user can access Norm Management
+ *
+ * Rules:
+ * - ADMIN can access
+ * - SECCHAMPION can access (updated from CHAMPION)
  * - REQ can access
  */
 export function canAccessNormManagement(roles: string[] | undefined): boolean {
-  return isAdmin(roles) || isChampion(roles) || isReq(roles);
+  return isAdmin(roles) || isSecChampion(roles) || isReq(roles);
 }
 
 /**
  * Check if user can access Standard Management
- * 
+ *
  * Rules:
  * - ADMIN can access
- * - CHAMPION can access
+ * - SECCHAMPION can access (updated from CHAMPION)
  * - REQ can access
  */
 export function canAccessStandardManagement(roles: string[] | undefined): boolean {
-  return isAdmin(roles) || isChampion(roles) || isReq(roles);
+  return isAdmin(roles) || isSecChampion(roles) || isReq(roles);
 }
 
 /**
  * Check if user can access UseCase Management
- * 
+ *
  * Rules:
  * - ADMIN can access
- * - CHAMPION can access
+ * - SECCHAMPION can access (updated from CHAMPION)
  * - REQ can access
  */
 export function canAccessUseCaseManagement(roles: string[] | undefined): boolean {
-  return isAdmin(roles) || isChampion(roles) || isReq(roles);
+  return isAdmin(roles) || isSecChampion(roles) || isReq(roles);
 }
 
 /**
