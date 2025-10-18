@@ -55,8 +55,20 @@ data class User(
     @Column(name = "updated_at")
     var updatedAt: Instant? = null
 ) {
+    /**
+     * User roles for access control
+     * Feature: 025-role-based-access-control
+     *
+     * - USER: Basic authenticated user
+     * - ADMIN: Full system access
+     * - VULN: Vulnerability management access
+     * - RELEASE_MANAGER: Release management access
+     * - REQ: Requirements access
+     * - RISK: Risk assessment access
+     * - SECCHAMPION: Security champion (Risk + Req + Vuln, but NOT Admin)
+     */
     enum class Role {
-        USER, ADMIN, VULN, RELEASE_MANAGER, CHAMPION, REQ
+        USER, ADMIN, VULN, RELEASE_MANAGER, REQ, RISK, SECCHAMPION
     }
 
     @PrePersist
@@ -74,6 +86,27 @@ data class User(
     fun hasRole(role: Role): Boolean = roles.contains(role)
 
     fun isAdmin(): Boolean = hasRole(Role.ADMIN)
+
+    /**
+     * Check if user has RISK role
+     * Feature: 025-role-based-access-control
+     * @return true if user has RISK role
+     */
+    fun isRisk(): Boolean = hasRole(Role.RISK)
+
+    /**
+     * Check if user has REQ role
+     * Feature: 025-role-based-access-control
+     * @return true if user has REQ role
+     */
+    fun isReq(): Boolean = hasRole(Role.REQ)
+
+    /**
+     * Check if user has SECCHAMPION role
+     * Feature: 025-role-based-access-control
+     * @return true if user has SECCHAMPION role
+     */
+    fun isSecChampion(): Boolean = hasRole(Role.SECCHAMPION)
 
     override fun toString(): String {
         return "User(id=$id, username='$username', email='$email', roles=$roles)"

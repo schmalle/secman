@@ -17,8 +17,18 @@ import jakarta.validation.Valid
 import jakarta.validation.constraints.NotBlank
 import org.slf4j.LoggerFactory
 
+/**
+ * UseCase Controller
+ * Feature: 025-role-based-access-control
+ *
+ * Access Control:
+ * - ADMIN: Full access to all use case operations
+ * - REQ: Full access to all use case operations
+ * - SECCHAMPION: Full access to all use case operations
+ * - Other roles: Access denied (403 Forbidden)
+ */
 @Controller("/api/usecases")
-@Secured(SecurityRule.IS_AUTHENTICATED) // All authenticated users can read
+@Secured("ADMIN", "REQ", "SECCHAMPION")
 @ExecuteOn(TaskExecutors.BLOCKING)
 open class UseCaseController(
     private val useCaseRepository: UseCaseRepository,
@@ -84,7 +94,7 @@ open class UseCaseController(
     }
 
     @Post
-    @Secured("ADMIN", "CHAMPION", "REQ") // Only privileged users can create
+    @Secured("ADMIN", "SECCHAMPION", "REQ") // Only privileged users can create
     @Transactional
     open fun createUseCase(@Valid @Body request: CreateUseCaseRequest): HttpResponse<*> {
         return try {
@@ -118,7 +128,7 @@ open class UseCaseController(
     }
 
     @Put("/{id}")
-    @Secured("ADMIN", "CHAMPION", "REQ") // Only privileged users can update
+    @Secured("ADMIN", "SECCHAMPION", "REQ") // Only privileged users can update
     @Transactional
     open fun updateUseCase(id: Long, @Valid @Body request: UpdateUseCaseRequest): HttpResponse<*> {
         return try {
@@ -155,7 +165,7 @@ open class UseCaseController(
     }
 
     @Delete("/{id}")
-    @Secured("ADMIN", "CHAMPION", "REQ") // Only privileged users can delete
+    @Secured("ADMIN", "SECCHAMPION", "REQ") // Only privileged users can delete
     @Transactional
     open fun deleteUseCase(id: Long): HttpResponse<*> {
         return try {

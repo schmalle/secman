@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { hasVulnAccess } from '../utils/auth';
-import { 
-    canAccessNormManagement, 
-    canAccessStandardManagement, 
+import {
+    canAccessNormManagement,
+    canAccessStandardManagement,
     canAccessUseCaseManagement,
     canAccessReleases,
-    canAccessCompareReleases
+    canAccessCompareReleases,
+    hasRiskAccess,
+    hasReqAccess
 } from '../utils/permissions';
 
 const Sidebar = () => {
@@ -16,6 +18,8 @@ const Sidebar = () => {
     const [adminMenuOpen, setAdminMenuOpen] = useState(false);
     const [isAdmin, setIsAdmin] = useState(false);
     const [hasVuln, setHasVuln] = useState(false);
+    const [hasRisk, setHasRisk] = useState(false);
+    const [hasReq, setHasReq] = useState(false);
     const [userRoles, setUserRoles] = useState<string[]>([]);
 
     const toggleRequirements = () => {
@@ -26,7 +30,8 @@ const Sidebar = () => {
         setRiskManagementExpanded(!riskManagementExpanded);
     };
 
-    // Check if user has admin role and vuln access
+    // Check if user has admin role and access permissions
+    // Feature: 025-role-based-access-control
     useEffect(() => {
         function checkRoles() {
             const user = (window as any).currentUser;
@@ -34,6 +39,8 @@ const Sidebar = () => {
             const hasAdmin = roles.includes('ADMIN');
             setIsAdmin(hasAdmin);
             setHasVuln(hasVulnAccess());
+            setHasRisk(hasRiskAccess(roles));
+            setHasReq(hasReqAccess(roles));
             setUserRoles(roles);
         }
 
@@ -60,17 +67,18 @@ const Sidebar = () => {
                     </a>
                 </li>
                 
-                {/* Requirements with sub-items */}
-                <li>
-                    <div 
-                        onClick={toggleRequirements}
-                        className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary cursor-pointer"
-                        style={{ cursor: 'pointer' }}
-                    >
-                        <i className="bi bi-card-checklist me-2"></i> 
-                        Requirements
-                        <i className={`bi ${requirementsExpanded ? 'bi-chevron-down' : 'bi-chevron-right'} ms-auto`}></i>
-                    </div>
+                {/* Requirements with sub-items - ADMIN, REQ, or SECCHAMPION only (Feature: 025-role-based-access-control) */}
+                {hasReq && (
+                    <li>
+                        <div
+                            onClick={toggleRequirements}
+                            className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary cursor-pointer"
+                            style={{ cursor: 'pointer' }}
+                        >
+                            <i className="bi bi-card-checklist me-2"></i>
+                            Requirements
+                            <i className={`bi ${requirementsExpanded ? 'bi-chevron-down' : 'bi-chevron-right'} ms-auto`}></i>
+                        </div>
                     {requirementsExpanded && (
                         <ul className="list-unstyled ps-4">
                             <li>
@@ -116,9 +124,11 @@ const Sidebar = () => {
                         </ul>
                     )}
                 </li>
+                )}
 
-                
-                {/* Risk Management with sub-items */}
+
+                {/* Risk Management with sub-items - ADMIN, RISK, or SECCHAMPION only (Feature: 025-role-based-access-control) */}
+                {hasRisk && (
                 <li>
                     <div 
                         onClick={toggleRiskManagement}
@@ -149,6 +159,7 @@ const Sidebar = () => {
                         </ul>
                     )}
                 </li>
+                )}
 
                 <li>
                     <a href="/assets" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">

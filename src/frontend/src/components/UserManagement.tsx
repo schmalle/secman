@@ -30,8 +30,11 @@ declare global {
     }
 }
 
-// Available roles - could be fetched from backend in a real app
-const AVAILABLE_ROLES = ['USER', 'ADMIN', 'VULN'];
+// Available roles - Feature: 025-role-based-access-control
+// All roles implemented: USER (baseline), ADMIN (full access),
+// VULN (vulnerabilities), RISK (risk management), REQ (requirements),
+// SECCHAMPION (broad access: risk+req+vuln), RELEASE_MANAGER (release management)
+const AVAILABLE_ROLES = ['USER', 'ADMIN', 'VULN', 'RISK', 'REQ', 'SECCHAMPION', 'RELEASE_MANAGER'];
 
 const UserManagement = () => {
     const [isAdmin, setIsAdmin] = useState(false);
