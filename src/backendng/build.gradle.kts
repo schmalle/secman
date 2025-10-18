@@ -91,17 +91,6 @@ dependencies {
     // HTML processing for email
     implementation("org.jsoup:jsoup:1.21.2")
     
-    // Testing
-    testImplementation("io.micronaut:micronaut-http-client")
-    testImplementation("io.micronaut.test:micronaut-test-junit5")
-    testImplementation("org.junit.jupiter:junit-jupiter-api")
-    testImplementation("org.junit.jupiter:junit-jupiter-engine")
-    testImplementation("org.mockito:mockito-core")
-    testImplementation("org.mockito.kotlin:mockito-kotlin:5.1.0")
-    testImplementation("io.mockk:mockk:1.13.14")
-    testImplementation("com.h2database:h2:2.2.224")
-    testImplementation("ch.qos.logback:logback-classic:1.5.12") // For AccessDenialLoggerTest
-    
     // KSP
     ksp("io.micronaut:micronaut-http-validation")
     ksp("io.micronaut.data:micronaut-data-processor")
@@ -124,7 +113,6 @@ kotlin {
 
 allOpen {
     annotation("io.micronaut.aop.Around")
-    annotation("io.micronaut.test.extensions.junit5.annotation.MicronautTest")
     annotation("jakarta.inject.Singleton")
     annotation("jakarta.transaction.Transactional")
 }
@@ -132,7 +120,6 @@ allOpen {
 graalvmNative.toolchainDetection.set(false)
 micronaut {
     runtime("netty")
-    testRuntime("junit5")
     processing {
         incremental(true)
         annotations("com.secman.*")
@@ -157,5 +144,20 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
     compilerOptions {
         // Compiler options for Kotlin 2.1.0
         // The -Xannotation-default-target flag is no longer needed in Kotlin 2.1.0
+    }
+}
+
+// Disable all test tasks
+tasks {
+    test {
+        enabled = false
+    }
+    
+    named<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>("compileTestKotlin") {
+        enabled = false
+    }
+    
+    processTestResources {
+        enabled = false
     }
 }

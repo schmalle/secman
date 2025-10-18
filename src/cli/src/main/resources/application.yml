@@ -1,0 +1,13 @@
+micronaut:
+  application:
+    name: secman-cli
+
+secman:
+  backend:
+    base-url: ${SECMAN_BACKEND_URL:http://localhost:8080}
+
+# Logging configuration
+logger:
+  levels:
+    com.secman.cli: INFO
+    io.micronaut.http.client: WARN

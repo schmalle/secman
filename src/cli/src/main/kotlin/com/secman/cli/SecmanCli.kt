@@ -1,6 +1,7 @@
 package com.secman.cli
 
 import com.secman.cli.commands.ConfigCommand
+import com.secman.cli.commands.MonitorCommand
 import com.secman.cli.commands.QueryCommand
 import org.slf4j.LoggerFactory
 
@@ -10,11 +11,12 @@ import org.slf4j.LoggerFactory
  * Usage (future with Picocli):
  *   secman query [options]
  *   secman config [options]
+ *   secman monitor [options]
  *   secman help
  *
  * For now, this is a simple CLI router for testing the CLI module structure.
  *
- * Related to: Feature 023-create-in-the
+ * Related to: Feature 023-create-in-the, 026-crowdstrike-polling-monitor
  * Task: T052
  */
 class SecmanCli {
@@ -53,6 +55,36 @@ class SecmanCli {
                 }
                 configCommand.execute()
             }
+            args[0] == "monitor" -> {
+                val monitorCommand = MonitorCommand()
+                // Parse remaining args into properties
+                var i = 1
+                while (i < args.size) {
+                    when {
+                        args[i] == "--interval" && i + 1 < args.size -> {
+                            monitorCommand.intervalMinutes = args[i + 1].toIntOrNull() ?: 5
+                            i++
+                        }
+                        args[i] == "--hostnames" && i + 1 < args.size -> {
+                            monitorCommand.hostnames = args[i + 1].split(",").map { it.trim() }
+                            i++
+                        }
+                        args[i] == "--backend-url" && i + 1 < args.size -> {
+                            monitorCommand.backendUrl = args[i + 1]
+                            i++
+                        }
+                        args[i] == "--config" && i + 1 < args.size -> {
+                            monitorCommand.configPath = args[i + 1]
+                            i++
+                        }
+                        args[i] == "--dry-run" -> monitorCommand.dryRun = true
+                        args[i] == "--verbose" -> monitorCommand.verbose = true
+                        args[i] == "--no-storage" -> monitorCommand.noStorage = true
+                    }
+                    i++
+                }
+                monitorCommand.execute()
+            }
             else -> {
                 System.err.println("Unknown command: ${args[0]}")
                 showHelp()
@@ -69,6 +101,7 @@ class SecmanCli {
 
             Commands:
               query      Query CrowdStrike vulnerabilities
+              monitor    Continuously monitor for HIGH/CRITICAL vulnerabilities
               config     Configure CrowdStrike API credentials
               help       Show this help message
 
@@ -81,10 +114,21 @@ class SecmanCli {
               --output <file>          Output file path
               --verbose                Enable verbose logging
 
+            Monitor Options:
+              --interval <minutes>     Polling interval in minutes (default: 5)
+              --hostnames <list>       Comma-separated list of hostnames to monitor
+              --backend-url <url>      Backend API URL (default: http://localhost:8080)
+              --config <path>          Configuration file path
+              --dry-run                Query but don't store results
+              --no-storage             Disable automatic storage
+              --verbose                Enable verbose logging
+
             Examples:
               secman config --client-id <id> --client-secret <secret>
               secman query --hostname EC2AMAZ-6167U5R --severity critical --format csv --output vulns.csv
               secman query --hostname server01 --limit 50 --format json --output results.json
+              secman monitor --interval 10 --hostnames server01,server02,server03
+              secman monitor --dry-run --verbose
               secman config --show
 
             For more information, visit: https://github.com/schmalle/secman

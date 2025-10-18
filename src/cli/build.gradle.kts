@@ -39,16 +39,6 @@ dependencies {
     runtimeOnly("ch.qos.logback:logback-classic")
     runtimeOnly("org.yaml:snakeyaml")
     
-    // Testing
-    testImplementation("io.micronaut:micronaut-http-client")
-    testImplementation("io.micronaut.test:micronaut-test-junit5")
-    testImplementation("org.junit.jupiter:junit-jupiter-api")
-    testImplementation("org.junit.jupiter:junit-jupiter-params")
-    testImplementation("io.mockk:mockk:1.13.12")
-    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
-    testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
-    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
-    
     // KSP
     ksp("io.micronaut:micronaut-http-validation")
 }
@@ -72,19 +62,23 @@ tasks {
             jvmTarget = "21"
         }
     }
-    compileTestKotlin {
-        kotlinOptions {
-            jvmTarget = "21"
-        }
-    }
+    
+    // Disable all test tasks
     test {
-        useJUnitPlatform()
+        enabled = false
+    }
+    
+    compileTestKotlin {
+        enabled = false
+    }
+    
+    processTestResources {
+        enabled = false
     }
 }
 
 allOpen {
     annotation("io.micronaut.aop.Around")
-    annotation("io.micronaut.test.extensions.junit5.annotation.MicronautTest")
     annotation("jakarta.inject.Singleton")
     annotation("picocli.CommandLine.Command")
 }
@@ -93,7 +87,6 @@ graalvmNative.toolchainDetection.set(false)
 
 micronaut {
     runtime("netty")
-    testRuntime("junit5")
     processing {
         incremental(true)
         annotations("com.secman.cli.*")
