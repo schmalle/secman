@@ -203,21 +203,28 @@ open class EmailService(
             put("mail.smtp.host", config.smtpHost)
             put("mail.smtp.port", config.smtpPort.toString())
             put("mail.smtp.auth", config.hasAuthentication().toString())
-            
+
             if (config.smtpTls) {
                 put("mail.smtp.starttls.enable", "true")
                 put("mail.smtp.starttls.required", "true")
             }
-            
+
             if (config.smtpSsl) {
                 put("mail.smtp.ssl.enable", "true")
                 put("mail.smtp.socketFactory.class", "javax.net.ssl.SSLSocketFactory")
                 put("mail.smtp.socketFactory.port", config.smtpPort.toString())
+                put("mail.smtp.socketFactory.fallback", "false")
             }
-            
+
             // Additional security properties
             put("mail.smtp.ssl.trust", config.smtpHost)
-            put("mail.smtp.ssl.protocols", "TLSv1.2")
+            put("mail.smtp.ssl.protocols", "TLSv1.2 TLSv1.3")
+
+            // Debug properties for troubleshooting
+            put("mail.debug", "true")
+            put("mail.smtp.connectiontimeout", "10000")
+            put("mail.smtp.timeout", "10000")
+            put("mail.smtp.writetimeout", "10000")
         }
     }
     
@@ -229,8 +236,14 @@ open class EmailService(
             Session.getInstance(properties, object : Authenticator() {
                 override fun getPasswordAuthentication(): PasswordAuthentication {
                     // Ensure non-null values (hasAuthentication already checked they're not null/blank)
-                    val username = config.smtpUsername ?: ""
-                    val password = config.smtpPassword ?: ""
+                    // Trim to remove any spaces (Gmail app passwords often have spaces when copied)
+                    val username = (config.smtpUsername ?: "").trim().replace(" ", "")
+                    val password = (config.smtpPassword ?: "").trim().replace(" ", "")
+
+                    log.debug("Authenticating with username: {} (length: {})", username, username.length)
+                    log.debug("Password length: {} (first char: {})", password.length,
+                        if (password.isNotEmpty()) password[0] else "empty")
+
                     return PasswordAuthentication(username, password)
                 }
             })

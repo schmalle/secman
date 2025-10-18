@@ -145,8 +145,8 @@ open class EmailConfigController(
                 name = request.name.trim(),
                 smtpHost = request.smtpHost.trim(),
                 smtpPort = request.smtpPort,
-                smtpUsername = request.smtpUsername?.trim()?.takeIf { it.isNotBlank() },
-                smtpPassword = request.smtpPassword?.takeIf { it.isNotBlank() },
+                smtpUsername = request.smtpUsername?.trim()?.replace(" ", "")?.takeIf { it.isNotBlank() },
+                smtpPassword = request.smtpPassword?.trim()?.replace(" ", "")?.takeIf { it.isNotBlank() },
                 smtpTls = request.smtpTls,
                 smtpSsl = request.smtpSsl,
                 fromEmail = request.fromEmail.trim(),
@@ -155,8 +155,9 @@ open class EmailConfigController(
             )
             
             val savedConfig = emailConfigRepository.save(config)
-            
-            log.info("Created email configuration: {} (active: {})", savedConfig.smtpHost, savedConfig.isActive)
+
+            log.info("Created email configuration: {} (active: {}, username: {})",
+                savedConfig.smtpHost, savedConfig.isActive, savedConfig.smtpUsername)
             HttpResponse.status<EmailConfig>(HttpStatus.CREATED).body(savedConfig.toSafeResponse())
         } catch (e: Exception) {
             log.error("Error creating email configuration", e)
@@ -178,9 +179,10 @@ open class EmailConfigController(
                 name = request.name?.trim() ?: config.name,
                 smtpHost = request.smtpHost?.trim() ?: config.smtpHost,
                 smtpPort = request.smtpPort ?: config.smtpPort,
-                smtpUsername = request.smtpUsername?.trim()?.takeIf { it.isNotBlank() } ?: config.smtpUsername,
+                smtpUsername = if (request.smtpUsername != null && request.smtpUsername != EmailConfig.USERNAME_MASK)
+                    request.smtpUsername.trim().replace(" ", "").takeIf { it.isNotBlank() } else config.smtpUsername,
                 smtpPassword = if (request.smtpPassword != null && request.smtpPassword != EmailConfig.PASSWORD_MASK)
-                    request.smtpPassword else config.smtpPassword,
+                    request.smtpPassword.trim().replace(" ", "").takeIf { it.isNotBlank() } else config.smtpPassword,
                 smtpTls = request.smtpTls ?: config.smtpTls,
                 smtpSsl = request.smtpSsl ?: config.smtpSsl,
                 fromEmail = request.fromEmail?.trim() ?: config.fromEmail,
@@ -196,8 +198,9 @@ open class EmailConfigController(
             }
             
             val savedConfig = emailConfigRepository.update(updatedConfig)
-            
-            log.info("Updated email configuration: {} (active: {})", savedConfig.smtpHost, savedConfig.isActive)
+
+            log.info("Updated email configuration: {} (active: {}, username: {})",
+                savedConfig.smtpHost, savedConfig.isActive, savedConfig.smtpUsername)
             HttpResponse.ok(savedConfig.toSafeResponse())
         } catch (e: Exception) {
             log.error("Error updating email configuration with id: {}", id, e)

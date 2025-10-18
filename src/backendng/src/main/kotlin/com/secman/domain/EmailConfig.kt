@@ -191,11 +191,17 @@ data class EmailConfig(
             props["mail.smtp.ssl.enable"] = "true"
             props["mail.smtp.socketFactory.class"] = "javax.net.ssl.SSLSocketFactory"
             props["mail.smtp.socketFactory.port"] = smtpPort.toString()
+            props["mail.smtp.socketFactory.fallback"] = "false"
         }
 
         // Security properties
         props["mail.smtp.ssl.trust"] = smtpHost
-        props["mail.smtp.ssl.protocols"] = "TLSv1.2"
+        props["mail.smtp.ssl.protocols"] = "TLSv1.2 TLSv1.3"
+
+        // Timeout properties
+        props["mail.smtp.connectiontimeout"] = "10000"
+        props["mail.smtp.timeout"] = "10000"
+        props["mail.smtp.writetimeout"] = "10000"
 
         return props
     }
