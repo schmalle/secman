@@ -197,7 +197,9 @@ open class RiskAssessmentController(
             
             // Force loading of related entities
             assessments.forEach { assessment ->
+                @Suppress("DEPRECATION")
                 assessment.demand?.title // Force loading
+                @Suppress("DEPRECATION")
                 assessment.demand?.existingAsset?.name // Force loading
                 assessment.assessor.username // Force loading
                 assessment.requestor.username // Force loading
@@ -228,10 +230,13 @@ open class RiskAssessmentController(
             allAssessments.forEach { assessment ->
                 when (assessment.assessmentBasisType) {
                     AssessmentBasisType.DEMAND -> {
+                        @Suppress("DEPRECATION")
                         assessment.demand?.title
+                        @Suppress("DEPRECATION")
                         assessment.demand?.existingAsset?.name
                     }
                     AssessmentBasisType.ASSET -> {
+                        @Suppress("DEPRECATION")
                         assessment.asset?.name
                     }
                 }
@@ -261,10 +266,13 @@ open class RiskAssessmentController(
             assessments.forEach { assessment ->
                 when (assessment.assessmentBasisType) {
                     AssessmentBasisType.DEMAND -> {
+                        @Suppress("DEPRECATION")
                         assessment.demand?.title
+                        @Suppress("DEPRECATION")
                         assessment.demand?.existingAsset?.name
                     }
                     AssessmentBasisType.ASSET -> {
+                        @Suppress("DEPRECATION")
                         assessment.asset?.name
                     }
                 }
@@ -378,10 +386,13 @@ open class RiskAssessmentController(
             entityManager.refresh(savedAssessment)
             when (basisType) {
                 AssessmentBasisType.DEMAND -> {
+                    @Suppress("DEPRECATION")
                     savedAssessment.demand?.title
+                    @Suppress("DEPRECATION")
                     savedAssessment.demand?.existingAsset?.name
                 }
                 AssessmentBasisType.ASSET -> {
+                    @Suppress("DEPRECATION")
                     savedAssessment.asset?.name
                 }
             }
@@ -448,7 +459,9 @@ open class RiskAssessmentController(
             
             // Force loading of related entities
             entityManager.refresh(updatedAssessment)
+            @Suppress("DEPRECATION")
             updatedAssessment.demand?.title
+            @Suppress("DEPRECATION")
             updatedAssessment.demand?.existingAsset?.name
             @Suppress("DEPRECATION")
             updatedAssessment.asset?.name // Legacy field
@@ -583,6 +596,7 @@ open class RiskAssessmentController(
     @Post("/demand-based")
     @Transactional
     @Deprecated("Use main POST /api/risk-assessments endpoint with demandId instead")
+    @Suppress("DEPRECATION")
     open fun createDemandBasedRiskAssessment(@Valid @Body request: CreateRiskAssessmentRequestDemand): HttpResponse<*> {
         log.debug("Legacy demand-based risk assessment creation called")
         @Suppress("DEPRECATION")
@@ -601,6 +615,7 @@ open class RiskAssessmentController(
     @Post("/asset-based")
     @Transactional
     @Deprecated("Use main POST /api/risk-assessments endpoint with assetId instead")
+    @Suppress("DEPRECATION")
     open fun createAssetBasedRiskAssessment(@Valid @Body request: CreateRiskAssessmentRequestAsset): HttpResponse<*> {
         log.debug("Legacy asset-based risk assessment creation called")
         @Suppress("DEPRECATION")
@@ -619,6 +634,7 @@ open class RiskAssessmentController(
     /**
      * Create RiskAssessmentCreatedEvent from saved risk assessment
      */
+    @Suppress("DEPRECATION")
     private fun createRiskAssessmentEvent(assessment: RiskAssessment): RiskAssessmentCreatedEvent {
         val title = when (assessment.assessmentBasisType) {
             AssessmentBasisType.DEMAND -> assessment.demand?.title ?: "Risk Assessment for Demand"
@@ -709,6 +725,7 @@ open class RiskAssessmentController(
     /**
      * Determine risk level based on assessment characteristics
      */
+    @Suppress("DEPRECATION")
     private fun determineRiskLevel(assessment: RiskAssessment): String {
         // Simple risk level determination logic
         // In a real implementation, this would be more sophisticated

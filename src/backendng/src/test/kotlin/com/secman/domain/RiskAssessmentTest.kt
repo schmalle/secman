@@ -34,6 +34,7 @@ class RiskAssessmentTest {
     }
 
     @Test
+    @Suppress("DEPRECATION")
     fun `demand-based risk assessment should set correct basis type and id`() {
         val demand = createTestDemand(100L, "Test Demand")
         val assessor = createTestUser(2L, "assessor")
@@ -54,6 +55,7 @@ class RiskAssessmentTest {
     }
 
     @Test
+    @Suppress("DEPRECATION")
     fun `asset-based risk assessment should set correct basis type and id`() {
         val asset = createTestAsset(200L, "Test Asset")
         val assessor = createTestUser(2L, "assessor")

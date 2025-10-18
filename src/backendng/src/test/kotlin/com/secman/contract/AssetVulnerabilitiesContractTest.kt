@@ -63,9 +63,8 @@ class AssetVulnerabilitiesContractTest {
                 validateVulnerabilitySchema(content[0] as Map<*, *>)
             }
         } else {
-            // Simple array response
-            assertTrue(body is Map<*, *> || response.body() is List<*>,
-                "Response must be either a Map (paginated) or List (array)")
+            // Simple array response - body is already verified as Map<*, *> by successful cast on line 46
+            // No additional assertion needed
         }
     }
 

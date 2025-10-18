@@ -1,17 +1,11 @@
 plugins {
-    id("org.jetbrains.kotlin.jvm") version "2.2.20"
-    id("org.jetbrains.kotlin.plugin.allopen") version "2.2.20"
-    id("org.jetbrains.kotlin.plugin.jpa") version "2.2.20"
-    id("com.google.devtools.ksp") version "2.2.20-2.0.3"
-
-    //id("com.github.johnrengelman.shadow") version "8.1.1"
-
-    id("com.gradleup.shadow") version "8.3.8"
-
-    id("io.micronaut.application") version "4.5.4"
-    // Disabled test resources to avoid Docker dependency
-    // id("io.micronaut.test-resources") version "4.4.3"
-    id("io.micronaut.aot") version "4.5.4"
+    id("org.jetbrains.kotlin.jvm")
+    id("org.jetbrains.kotlin.plugin.allopen")
+    id("org.jetbrains.kotlin.plugin.jpa")
+    id("com.google.devtools.ksp")
+    id("com.gradleup.shadow")
+    id("io.micronaut.application")
+    id("io.micronaut.aot")
 }
 
 version = "0.1"
@@ -24,6 +18,9 @@ repositories {
 }
 
 dependencies {
+    // Shared CrowdStrike Module
+    implementation(project(":shared"))
+    
     // Micronaut Core
     implementation("io.micronaut:micronaut-http-client")
     implementation("io.micronaut:micronaut-http-server-netty")
@@ -100,6 +97,7 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter-api")
     testImplementation("org.junit.jupiter:junit-jupiter-engine")
     testImplementation("org.mockito:mockito-core")
+    testImplementation("org.mockito.kotlin:mockito-kotlin:5.1.0")
     testImplementation("io.mockk:mockk:1.13.14")
     testImplementation("com.h2database:h2:2.2.224")
     
@@ -156,8 +154,7 @@ tasks.named<io.micronaut.gradle.docker.NativeImageDockerfile>("dockerfileNative"
 // Configure Kotlin compiler options
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
     compilerOptions {
-        // Suppress annotation target warnings (Kotlin 2.x future compatibility)
-        // Opt-in to applying annotations to both parameter and field (future behavior)
-        freeCompilerArgs.add("-Xannotation-default-target=param-property")
+        // Compiler options for Kotlin 2.1.0
+        // The -Xannotation-default-target flag is no longer needed in Kotlin 2.1.0
     }
 }

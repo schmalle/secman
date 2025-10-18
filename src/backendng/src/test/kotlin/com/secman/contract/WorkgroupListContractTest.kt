@@ -54,6 +54,7 @@ class WorkgroupListContractTest {
     }
 
     @Test
+    @Suppress("UNCHECKED_CAST")
     fun `test returns list of all workgroups`() {
         // Given: Multiple workgroups exist
         val workgroup1 = mapOf("name" to "Engineering", "description" to "Engineering team")

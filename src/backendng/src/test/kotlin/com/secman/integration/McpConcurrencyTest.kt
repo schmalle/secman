@@ -419,7 +419,7 @@ class McpConcurrencyTest {
     private fun callTool(apiKey: String, toolName: String, arguments: Map<String, Any>): io.micronaut.http.HttpResponse<JsonNode> {
         val requestBody = mapOf(
             "jsonrpc" to "2.0",
-            "id" to "concurrency-test-${System.currentTimeMillis()}-${Thread.currentThread().id}",
+            "id" to "concurrency-test-${System.currentTimeMillis()}-${Thread.currentThread().threadId()}",
             "method" to "tools/call",
             "params" to mapOf(
                 "name" to toolName,

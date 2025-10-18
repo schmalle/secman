@@ -13,6 +13,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import jakarta.inject.Inject
+import jakarta.persistence.EntityManager
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
@@ -40,6 +41,9 @@ class AccountVulnsServiceTest {
     @Inject
     lateinit var vulnerabilityRepository: VulnerabilityRepository
 
+    @Inject
+    lateinit var entityManager: EntityManager
+
     lateinit var service: AccountVulnsService
 
     @BeforeEach
@@ -47,7 +51,8 @@ class AccountVulnsServiceTest {
         service = AccountVulnsService(
             userMappingRepository = userMappingRepository,
             assetRepository = assetRepository,
-            vulnerabilityRepository = vulnerabilityRepository
+            vulnerabilityRepository = vulnerabilityRepository,
+            entityManager = entityManager
         )
     }
 

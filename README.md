@@ -1,146 +1,264 @@
-### ALPHA ALPHA ALPHA
+# SecMan - Security Management Platform
 
-![landing.png](docs/landing.png)
+![Landing Page](docs/landing.png)
 
-**A requirement management, risk assessment management tool**
+**A comprehensive security requirement, vulnerability, and risk assessment management platform**
+
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+[![Status: Alpha](https://img.shields.io/badge/Status-Alpha-yellow.svg)]()
 
 ---
 
-### ALPHA ALPHA ALPHA
+## Overview
 
-## Overview / background
+SecMan is a full-stack security management platform that helps organizations manage security requirements, track vulnerabilities, assess risks, and maintain compliance. Originally started as a simple requirement formatter, it has evolved into a comprehensive security operations tool with vulnerability management, asset tracking, workgroup-based access control, and AI assistant integration.
 
-secman was initially started as a security requirement formatter tool. The goal was to generate a beautiful looking MS word document out of a well formatted MS Excel sheet (it was just a helper tool for a repeating task).
-
-Then the idea was born to extend this tooling for some other use cases like risk management or context specific document rendering.
-
-The tool was also started as a test how good / well AI supported coding really works.
+**Key Capabilities:**
+- 📋 Security requirements management with version control and release tracking
+- 🔍 Vulnerability management with CrowdStrike Falcon integration
+- 🖥️ Asset inventory with network scan import (Nmap, Masscan)
+- 👥 Multi-tenant workgroup-based access control
+- 🤖 AI assistant integration via Model Context Protocol (MCP)
+- 📊 Multi-format export (Excel, Word, CSV) with automated translation
+- 🔐 Enterprise authentication (JWT, OAuth2, GitHub SSO)
 
 ## Technology Stack
 
-- **Backend**: Micronaut Framework with Kotlin
-- **Frontend**: Astro with React integration
-- **Database**: MariaDB 11.4
-- **Helper Tools**: Python 3.11+ CLI utilities for external integrations
-- **Build System**: Gradle (Kotlin DSL)
-- **Containerization**: Docker with multi-architecture support
-- **Authentication**: JWT with OAuth2 support
-
----
+- **Backend**: Micronaut 4.4 + Kotlin 2.1.0 (Java 21)
+- **Frontend**: Astro 5.14 + React 19 + Bootstrap 5.3
+- **Database**: MariaDB 11.4 with Hibernate JPA
+- **Helper Tools**: Python 3.11+ (CrowdStrike Falcon API integration)
+- **Build System**: Gradle 8.14+ (Kotlin DSL)
+- **Testing**: JUnit 5 + MockK (backend), Playwright (E2E), pytest (Python)
+- **Container**: Docker with multi-architecture support (AMD64/ARM64)
+- **Authentication**: JWT with OAuth2 and GitHub SSO
 
 ## Features
 
-- **Requirements Management:** Create, edit, prioritize, and track requirements.
-- **Export requirements** in a well formatted word file
-- (untested/dummy code) **Risk Assessment:** Identify, evaluate, and document risks associated with requirements or processes.
-- **User Roles:** Assign and manage different user roles (normaluser, adminuser) with appropriate permissions.
-- (untested/dummy code) MCP server
-- (untested/dummy code) E-Mail notification
-- Automatic translation of requirements into other languages (via Openrouter API)
-- (untested/dummy code) usage of external identity providers besides Github
-- Login via Github
-- **Asset management**
-- **Falcon API Helper Tool**: Query CrowdStrike Falcon API for vulnerability data with flexible filtering and export capabilities (XLSX, CSV, TXT)
+### Requirements Management
+- ✅ Create, edit, and organize security requirements
+- ✅ Version control with release management (DRAFT → PUBLISHED → ARCHIVED)
+- ✅ Release comparison and diff visualization
+- ✅ Point-in-time requirement snapshots
+- ✅ Excel and Word export with customizable templates
+- ✅ Automated translation (20+ languages via OpenRouter API)
+- ✅ Relationship tracking (requirements ↔ norms ↔ use cases)
 
-## Getting Started
+### Vulnerability Management
+- ✅ Import vulnerabilities from Excel/CSV or CrowdStrike Falcon API
+- ✅ CVE tracking with CVSS severity scoring
+- ✅ Vulnerability exceptions (IP-based or product-based)
+- ✅ Workgroup-scoped vulnerability views
+- ✅ AWS account-based vulnerability overview
+- ✅ Days-open tracking and trending
+- ✅ Vulnerability lifecycle management
+
+### Asset Management
+- ✅ Import assets from Nmap XML scans
+- ✅ Import assets from Masscan XML scans
+- ✅ Network service discovery and port tracking
+- ✅ Asset metadata (cloud account ID, AD domain, OS version)
+- ✅ Workgroup-based asset assignment
+- ✅ Vulnerability correlation per asset
+- ✅ Asset profile views with comprehensive details
+
+### Access Control & Multi-Tenancy
+- ✅ **Workgroups**: Organize users and assets into isolated groups
+- ✅ **User Mapping**: CSV/Excel upload for AWS account ↔ user associations
+- ✅ **Role-Based Access Control (RBAC)**:
+  - `USER` - Basic access to assigned workgroups
+  - `ADMIN` - Full system administration
+  - `VULN` - Vulnerability management permissions
+  - `RELEASE_MANAGER` - Release creation and management
+- ✅ **Row-Level Security**: Users see only their workgroup resources + owned items
+
+### AI Assistant Integration
+- ✅ **MCP Tools** (Model Context Protocol) for AI assistants:
+  - `get_assets` - Query asset inventory
+  - `get_scans` - Retrieve scan history
+  - `get_vulnerabilities` - Search vulnerabilities
+  - `search_products` - Find products/services
+  - `get_asset_profile` - Comprehensive asset profiles
+- ✅ Permission-scoped API access (ASSETS_READ, SCANS_READ, VULNERABILITIES_READ)
+- ✅ Rate limiting (1000 req/min, 50K req/hour)
+
+### Helper Tools
+- ✅ **Falcon Vulnerability Query Tool** (`falcon-vulns` CLI):
+  - Query CrowdStrike Falcon API with flexible filters
+  - Filter by device type (CLIENT/SERVER), severity, days open
+  - Export to XLSX, CSV, or TXT formats
+  - AD domain and hostname filtering
+
+### Import/Export
+- ✅ Excel import for requirements, vulnerabilities, user mappings
+- ✅ CSV import for user mappings (auto-detect delimiter/encoding)
+- ✅ Nmap/Masscan XML import for network scans
+- ✅ Export to Excel/Word with release selection
+- ✅ Multi-language export (automated translation)
+- ✅ Release comparison export with diff highlighting
+
+## Quick Start
 
 ### Prerequisites
 
-**Option 1: Docker (Recommended)**
-- Docker and Docker Compose
+**Docker (Recommended)**
+- Docker 20.10+
+- Docker Compose 2.0+
 - Git
 
-**Option 2: Local Development**
-- Java 17 or higher
-- Node.js 20 or higher
-- MariaDB 11.4 or higher
-- Gradle 8.14 or higher
-- Git
+**Local Development**
+- Java 21 (JDK 21)
+- Node.js 20+
+- MariaDB 11.4+
+- Gradle 8.14+
 - Python 3.11+ (optional, for helper tools)
-- OpenRouter Key (optional for translation features)
-- CrowdStrike Falcon API credentials (optional, for helper tools)
 
 ### Installation
 
-1. **Clone the repository:**
+**Option 1: Docker (Recommended)**
 
-   ```
-   git clone https://github.com/schmalle/secman.git
-   cd secman
-   ```
-2. **Create database**
-
-```cd
-cd scripts/install
-./install.sh
-```
-
-3. **Build the project (backend):**
-
-```sh
-sbt run dev
-```
-
-Please note: The Micronaut framework with Hibernate automatically creates database tables on startup.
-
-2. **Build the project (frontend):**
-
-   ```sh
-   npm run dev
-   ```
-
-## Docker Deployment
-
-**Development Environment:**
 ```bash
-# Start all services
-./docker/scripts/dev.sh up
+# Clone repository
+git clone https://github.com/schmalle/secman.git
+cd secman
 
-# Start in detached mode
-./docker/scripts/dev.sh up -d
+# Copy environment template
+cp .env.example .env
+
+# Start all services
+docker-compose up -d
 
 # View logs
-./docker/scripts/dev.sh logs
+docker-compose logs -f
 
-# Stop services
-./docker/scripts/dev.sh down
+# Access application
+# Frontend: http://localhost:4321
+# Backend API: http://localhost:8080/api
 ```
 
-**Production Deployment:**
+**Option 2: Local Development**
+
 ```bash
-# Configure environment
-cp .env.example .env
-# Edit .env with production values
+# Clone repository
+git clone https://github.com/schmalle/secman.git
+cd secman
 
-# Deploy to production
-./docker/scripts/deploy.sh deploy
+# Create database
+cd scripts/install
+./install.sh
+cd ../..
 
-# Check status
-./docker/scripts/deploy.sh status
+# Start backend (in one terminal)
+cd src/backendng
+./gradlew run
+
+# Start frontend (in another terminal)
+cd src/frontend
+npm install
+npm run dev
 ```
 
-**Multi-Architecture Build:**
+### Default Credentials
+
+| Username | Password | Roles |
+|----------|----------|-------|
+| `adminuser` | `password` | ADMIN, USER |
+| `normaluser` | `password` | USER |
+| `vulnuser` | `password` | VULN, USER |
+| `releaseuser` | `password` | RELEASE_MANAGER, USER |
+
+**⚠️ IMPORTANT:** Change default passwords immediately in production!
+
+## Development
+
+### Project Structure
+
+```
+secman/
+├── src/
+│   ├── backendng/          # Kotlin/Micronaut backend
+│   │   ├── src/main/kotlin/com/secman/
+│   │   │   ├── controller/ # REST controllers
+│   │   │   ├── domain/     # JPA entities
+│   │   │   ├── repository/ # Data repositories
+│   │   │   ├── service/    # Business logic
+│   │   │   └── mcp/        # MCP tools
+│   │   └── src/test/       # Backend tests
+│   ├── frontend/           # Astro + React frontend
+│   │   ├── src/
+│   │   │   ├── components/ # React components
+│   │   │   ├── pages/      # Astro pages
+│   │   │   └── services/   # API clients
+│   │   └── tests/e2e/      # Playwright tests
+│   └── helper/             # Python CLI tools
+│       ├── src/
+│       │   ├── cli/        # CLI commands
+│       │   ├── services/   # Business logic
+│       │   └── exporters/  # Export utilities
+│       └── tests/          # pytest tests
+├── docker/                 # Docker configs
+└── scripts/                # Utility scripts
+```
+
+### Common Commands
+
 ```bash
-# Build for AMD64 and ARM64
-./docker/scripts/build-multiarch.sh latest
+# Backend
+cd src/backendng
+./gradlew build              # Build
+./gradlew test               # Run tests
+./gradlew run                # Start server (port 8080)
+
+# Frontend
+cd src/frontend
+npm run dev                  # Dev server (port 4321)
+npm run build                # Production build
+npm run test                 # E2E tests (Playwright)
+
+# Helper Tools
+cd src/helper
+pip install -e .             # Install in dev mode
+falcon-vulns --help          # CLI help
+pytest tests/                # Run tests
+ruff check .                 # Lint
+
+# Docker
+docker-compose up -d         # Start all services
+docker-compose logs -f       # View logs
+docker-compose down          # Stop all services
+docker-compose exec backend ./gradlew test  # Run backend tests in container
 ```
 
-To reset the database, use the script /scripts/`./reset_database.sh `.
+### Testing
 
-## Usage
+The project follows Test-Driven Development (TDD) with comprehensive test coverage:
 
-### Web Application
+```bash
+# Backend tests (JUnit 5 + MockK)
+cd src/backendng
+./gradlew test                    # Run all tests
+./gradlew test --tests "*Contract*"  # Contract tests only
 
-- **Access the Frontend:** http://localhost:4321
-- **Access the Backend API:** http://localhost:8080/api
-- **Database Access:** localhost:3306 (secman/CHANGEME)
-- **Health Checks:**
-  - Frontend: http://localhost:4321/health
-  - Backend: http://localhost:8080/health
+# Frontend E2E tests (Playwright)
+cd src/frontend
+npm run test                      # Run all E2E tests
+npm run test:debug                # Debug mode
 
-### Helper Tools
+# Helper tool tests (pytest)
+cd src/helper
+pytest tests/                     # Run all tests
+pytest tests/unit/                # Unit tests only
+pytest tests/integration/         # Integration tests
+pytest --cov                      # With coverage
+```
 
-#### Falcon API Vulnerability Query Tool
+**Test Coverage Targets:** ≥80% for all components
+
+## Helper Tools
+
+### Falcon Vulnerability Query Tool
+
+Query CrowdStrike Falcon API for vulnerability data with flexible filtering.
 
 **Installation:**
 ```bash
@@ -150,139 +268,216 @@ pip install -e .
 ```
 
 **Configuration:**
-Set environment variables for CrowdStrike Falcon API:
 ```bash
 export FALCON_CLIENT_ID="your_client_id"
 export FALCON_CLIENT_SECRET="your_client_secret"
-export FALCON_CLOUD_REGION="us-1"  # or us-2, eu-1, us-gov-1
+export FALCON_CLOUD_REGION="us-1"  # us-1, us-2, eu-1, us-gov-1
 ```
 
 **Usage Examples:**
 ```bash
-# Query critical vulnerabilities on servers open for 30+ days
+# Critical vulnerabilities on servers, open 30+ days
 falcon-vulns --device-type SERVER --severity CRITICAL --min-days-open 30
 
-# Filter by domain and export to CSV
+# Export to CSV with domain filter
 falcon-vulns --device-type BOTH --severity HIGH CRITICAL \
-             --min-days-open 90 --ad-domain CORP.LOCAL \
-             --output /reports/vulns.csv --format CSV
+             --ad-domain CORP.LOCAL \
+             --output vulns.csv --format CSV
 
-# Query with hostname filter and verbose logging
-falcon-vulns --device-type BOTH --severity MEDIUM HIGH CRITICAL \
-             --min-days-open 0 --hostname WEB-SERVER-01 --verbose
+# Verbose logging with hostname filter
+falcon-vulns --device-type CLIENT --hostname WEB-* --verbose
 ```
 
-See [src/helper/README.md](src/helper/README.md) for detailed documentation.
+See [src/helper/README.md](src/helper/README.md) for full documentation.
 
-## Roles / Default application users (pw password)
+## API Documentation
 
-- **adminuser:** Full administrative rights, including user management and configuration.
-- **normaluser:** Basic access for submitting and tracking requirements/risks.
+### Authentication
+All endpoints require JWT authentication via `Authorization: Bearer <token>` header.
 
----
-
-## Testing
-
-**Docker-based Testing (Recommended):**
+**Login:**
 ```bash
-# Start test environment
-./docker/scripts/dev.sh up -d
-
-# Run frontend tests
-docker-compose -f docker-compose.dev.yml exec frontend npm run test
-
-# Run backend tests
-docker-compose -f docker-compose.dev.yml exec backend gradle test
-
-# Run end-to-end tests
-cd src/frontend
-npm run test:e2e
+POST /api/auth/login
+{
+  "username": "adminuser",
+  "password": "password"
+}
 ```
 
-**Local Testing:**
-```bash
-# Backend tests (Micronaut Test)
-cd src/backendng
-gradle test
+### Key Endpoints
 
-# Frontend tests (Playwright)
-cd src/frontend
-npm run test
+| Endpoint | Method | Description | Roles |
+|----------|--------|-------------|-------|
+| `/api/requirements` | GET | List requirements | Authenticated |
+| `/api/requirements/export/xlsx` | GET | Export to Excel | Authenticated |
+| `/api/releases` | POST | Create release | ADMIN, RELEASE_MANAGER |
+| `/api/assets` | GET | List assets (workgroup-filtered) | Authenticated |
+| `/api/vulnerabilities/current` | GET | Current vulnerabilities | ADMIN, VULN |
+| `/api/account-vulns` | GET | User's account vulnerabilities | USER (non-admin) |
+| `/api/workgroups` | POST | Create workgroup | ADMIN |
+| `/api/import/upload-nmap-xml` | POST | Import Nmap scan | ADMIN |
+| `/api/import/upload-user-mappings-csv` | POST | Import user mappings | ADMIN |
 
-# End-to-end tests
-npm run test:e2e
+See [CLAUDE.md](CLAUDE.md) for complete API reference.
 
-# Helper tool tests (pytest)
-cd src/helper
-pytest tests/
-```
+## Database
 
-**Legacy Test Scripts:**
-```
-  Option 1: Simple Test Runner
-  # Default credentials (adminuser/password)
-  ./scripts/simple-e2e-test.sh
-
-  # Custom credentials
-  ./scripts/simple-e2e-test.sh --username=myuser --password=mypass
-
-  Option 2: Comprehensive Test Runner
-  # All tests with default credentials
-  ./scripts/comprehensive-e2e-test.sh
-
-  # Custom credentials
-  ./scripts/comprehensive-e2e-test.sh --username=myuser --password=mypass
-
-  # Just smoke tests
-  ./scripts/comprehensive-e2e-test.sh --smoke-only
-
-  Option 3: Direct Playwright
-  cd src/frontend
-  export PLAYWRIGHT_TEST_USERNAME=adminuser
-  export PLAYWRIGHT_TEST_PASSWORD=password
-  npx playwright test
-```
-
-## Database Details
-
-- **Database:** secman
-- **User:** secman/CHANGEME
-- **Host:** localhost (or 'database' container in Docker)
-- **Port:** 3306
 - **Engine:** MariaDB 11.4
+- **Database:** `secman`
+- **User:** `secman` / `CHANGEME`
+- **Port:** 3306
+- **Schema:** Auto-migrated via Hibernate
 
-**Configuration:**
-- Backend configuration: `src/backendng/src/main/resources/application.yml`
-- Docker environment: `.env` file
-- Database initialization: `docker/database/init/`
-
-**Management:**
+**Access:**
 ```bash
-# Docker database access
-docker-compose -f docker-compose.dev.yml exec database mysql -u secman -pCHANGEME secman
+# Via Docker
+docker-compose exec database mysql -u secman -pCHANGEME secman
 
-# Create backup
-./docker/scripts/deploy.sh backup
+# Local
+mysql -u secman -pCHANGEME secman
 
-# Reset database (development)
+# Reset database (development only)
 ./scripts/reset_database.sh
+```
+
+## Configuration
+
+**Backend:** `src/backendng/src/main/resources/application.yml`
+**Frontend:** `src/frontend/astro.config.mjs`
+**Docker:** `.env` file (copy from `.env.example`)
+**Helper Tools:** Environment variables (see above)
+
+### Key Environment Variables
+
+```bash
+# Database
+DB_HOST=localhost
+DB_PORT=3306
+DB_NAME=secman
+DB_PASSWORD=CHANGEME
+
+# JWT
+JWT_SECRET=your-secret-key-here
+
+# OAuth (optional)
+GITHUB_CLIENT_ID=your-github-client-id
+GITHUB_CLIENT_SECRET=your-github-secret
+
+# Translation (optional)
+OPENROUTER_API_KEY=your-openrouter-key
+
+# Falcon API (optional)
+FALCON_CLIENT_ID=your-falcon-client-id
+FALCON_CLIENT_SECRET=your-falcon-secret
+FALCON_CLOUD_REGION=us-1
+```
+
+## Docker Deployment
+
+### Multi-Architecture Build
+
+```bash
+# Build for AMD64 and ARM64
+./docker/scripts/build-multiarch.sh latest
+
+# Tag and push
+docker tag secman/backend:latest your-registry/secman-backend:latest
+docker push your-registry/secman-backend:latest
+```
+
+### Production Deployment
+
+```bash
+# Configure environment
+cp .env.example .env.production
+# Edit .env.production with production values
+
+# Deploy
+docker-compose -f docker-compose.prod.yml up -d
+
+# Health checks
+curl http://localhost:8080/health  # Backend
+curl http://localhost:4321/health  # Frontend
+```
+
+## Development Workflow
+
+This project follows **Test-Driven Development (TDD)**:
+
+1. **Write contract tests** (API compliance)
+2. **Write unit tests** (business logic)
+3. **Implement code** to make tests pass
+4. **Refactor** while keeping tests green
+5. **Commit** with conventional commit messages
+
+### Conventional Commits
+
+```bash
+feat(vulnerability): add CVE severity filtering
+fix(asset): correct workgroup permission check
+docs(readme): update installation instructions
+test(release): add comparison endpoint tests
+```
+
+### Git Workflow
+
+```bash
+# Create feature branch
+git checkout -b 024-feature-name
+
+# Make changes with TDD
+# ... write tests, implement, refactor ...
+
+# Commit with conventional commits
+git add .
+git commit -m "feat(scope): description"
+
+# Push and create PR
+git push origin 024-feature-name
 ```
 
 ## Contributing
 
-We welcome contributions at a later stage. For the moment any idea / potential topic would be great.
+We welcome contributions! Please follow these guidelines:
 
----
+1. **Fork** the repository
+2. **Create a feature branch** (`024-feature-name`)
+3. **Write tests first** (TDD approach)
+4. **Ensure tests pass** (`./gradlew test`, `npm test`)
+5. **Follow code style** (Kotlin conventions, ESLint)
+6. **Submit a pull request** with clear description
+
+For major changes, please open an issue first to discuss what you would like to change.
+
+## Roadmap
+
+- [ ] Advanced vulnerability correlation and trending
+- [ ] Automated remediation workflows
+- [ ] Integration with additional vulnerability scanners
+- [ ] Advanced reporting and dashboards
+- [ ] Mobile application (React Native)
+- [ ] SAML/LDAP authentication
+- [ ] Compliance frameworks (SOC2, ISO 27001)
+- [ ] Risk scoring engine with ML
 
 ## License
 
-A-GPL 3.0 license
+[GNU Affero General Public License v3.0 (AGPL-3.0)](https://www.gnu.org/licenses/agpl-3.0)
 
----
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
 
 ## Contact
 
-- **Maintainer:** Markus "flake" Schmall
-- Mastodon: flakedev@infosec.exchange
-- Telegram: flakedev
+**Maintainer:** Markus "flake" Schmall
+
 - **Email:** markus@schmall.io
+- **Mastodon:** [@flakedev@infosec.exchange](https://infosec.exchange/@flakedev)
+- **Telegram:** @flakedev
+
+## Acknowledgments
+
+Built with assistance from AI-powered development tools (Anthropic Claude).
+
+---
+
+**⚠️ Alpha Software:** This project is under active development. Features may change, and breaking changes may occur. Not recommended for production use without thorough testing.

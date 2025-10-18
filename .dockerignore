@@ -1,0 +1,98 @@
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+README*
+CHANGELOG*
+LICENSE*
+docs/
+specs/
+
+# IDE & Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.sublime-*
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Dependencies (should be installed in container)
+node_modules/
+.npm/
+.pnpm-store/
+
+# Build artifacts (should be built in container)
+build/
+dist/
+out/
+target/
+*.jar
+*.war
+*.ear
+
+# Gradle (except wrapper)
+.gradle/
+**/build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Test outputs
+test-results/
+playwright-report/
+coverage/
+*.log
+*.log.*
+
+# Environment & Secrets (NEVER include in images)
+.env*
+!.env.example
+*.key
+*.pem
+*.p12
+*.jks
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+.venv/
+venv/
+ENV/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Temporary files
+*.tmp
+*.temp
+*.pid
+*.bak
+*.swp
+
+# Docker (don't include Docker files in images)
+Dockerfile*
+.dockerignore
+docker-compose*.yml
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+Jenkinsfile
+azure-pipelines.yml
+
+# Project specific
+.claude/
+.serena/
+checkin-test-results/
