@@ -1,19 +1,24 @@
 <!--
 Sync Impact Report:
-- Version change: Initial creation → v1.0.0
-- Principles migrated from CLAUDE.md:
-  1. Security-First
-  2. TDD (Test-Driven Development)
-  3. API-First
-  4. Docker-First
-  5. RBAC (Role-Based Access Control)
-  6. Schema Evolution
-- Added sections: Development Workflow, Technology Stack
+- Version change: v1.0.0 → v2.0.0
+- Principles removed:
+  * Principle IV: Docker-First (REMOVED - all containerization requirements dropped)
+- Principles added:
+  * Principle IV: User-Requested Testing (NEW - testing prepared only when explicitly requested)
+- Principles renumbered:
+  * Former Principle V (RBAC) → now Principle V
+  * Former Principle VI (Schema Evolution) → now Principle VI
+- Development Workflow updated:
+  * Removed Docker build gate from Pull Requests section
+  * Removed Docker-related testing gates
+- Infrastructure section updated:
+  * Removed Docker Compose deployment requirement
+  * Removed multi-arch requirement
 - Templates requiring updates:
-  ✅ plan-template.md - Constitution Check gate references this file
-  ✅ spec-template.md - Requirements align with security and testing principles
-  ✅ tasks-template.md - Task categorization reflects TDD and testing discipline
-- Follow-up TODOs: Update runtime guidance in CLAUDE.md to reference this constitution
+  ✅ plan-template.md - Constitution Check references updated
+  ✅ spec-template.md - Requirements align with new testing principle
+  ✅ tasks-template.md - Test task warnings align with new testing principle
+- Follow-up TODOs: Update CLAUDE.md to reference constitution and remove Docker-First mentions
 -->
 
 # Secman Constitution
@@ -63,19 +68,17 @@ All backend functionality MUST be exposed through well-defined RESTful APIs with
 
 **Rationale**: API-first design enables frontend flexibility, third-party integrations, and MCP tool support.
 
-### IV. Docker-First
+### IV. User-Requested Testing
 
-All components MUST be containerized and deployable via Docker Compose.
+Test planning and preparation MUST ONLY occur when explicitly requested by the user.
 
 **Requirements**:
-- Dockerfile MUST be provided for each service
-- Multi-arch support REQUIRED (AMD64/ARM64)
-- Environment configuration via .env files (never hardcoded)
-- docker-compose.yml MUST define all services and dependencies
-- Health checks MUST be implemented for all services
-- Volumes MUST be used for persistent data
+- NEVER proactively prepare test cases, test plans, or test task lists unless the user explicitly requests testing
+- Test-related tasks in tasks.md MUST be clearly marked as OPTIONAL and only included when requested
+- Testing frameworks and infrastructure (JUnit, Playwright, pytest) remain required per TDD principle, but planning of specific test cases requires user request
+- When tests ARE requested, they MUST follow TDD principles (written first, fail before implementation)
 
-**Rationale**: Containerization ensures consistent deployment, simplifies development setup, and enables portability.
+**Rationale**: Respects user autonomy and avoids unnecessary preparation work. Users may have different testing strategies, timelines, or may wish to focus on implementation first. This principle separates the requirement to WRITE tests (TDD) from the requirement to PLAN tests (user-driven).
 
 ### V. Role-Based Access Control (RBAC)
 
@@ -112,7 +115,7 @@ Database schema changes MUST be managed through automated migration with appropr
 - Framework: Micronaut 4.4
 - ORM: Hibernate JPA
 - Database: MariaDB 11.4
-- File Processing: Apache POI 5.3 (Excel)
+- File Processing: Apache POI 5.3 (Excel), Apache Commons CSV 1.11.0 (CSV)
 - Testing: JUnit 5 + MockK
 
 **Frontend**:
@@ -126,10 +129,6 @@ Database schema changes MUST be managed through automated migration with appropr
 - Libraries: falconpy (CrowdStrike), openpyxl (Excel), argparse (CLI)
 - Testing: pytest
 
-**Infrastructure**:
-- Deployment: Docker Compose
-- Multi-arch: AMD64 + ARM64
-
 ## Development Workflow
 
 ### Git Workflow
@@ -141,7 +140,6 @@ Database schema changes MUST be managed through automated migration with appropr
 - **Pull Requests**: MUST pass all gates before merge:
   - All tests passing (backend + frontend + helper)
   - Linting passing
-  - Docker build successful
   - Code review approved
 
 ### Testing Gates
@@ -171,7 +169,7 @@ Database schema changes MUST be managed through automated migration with appropr
 1. Proposal MUST be documented with rationale
 2. Team discussion REQUIRED before approval
 3. Version MUST be incremented per semantic versioning:
-   - MAJOR: Backward incompatible governance changes
+   - MAJOR: Backward incompatible governance changes (e.g., removing principles)
    - MINOR: New principles or substantial expansions
    - PATCH: Clarifications, typos, non-semantic refinements
 4. Migration plan REQUIRED for breaking changes
@@ -188,4 +186,4 @@ Database schema changes MUST be managed through automated migration with appropr
 
 For detailed implementation patterns and examples, see `CLAUDE.md`.
 
-**Version**: 1.0.0 | **Ratified**: 2025-10-07 | **Last Amended**: 2025-10-07
+**Version**: 2.0.0 | **Ratified**: 2025-10-07 | **Last Amended**: 2025-10-19
