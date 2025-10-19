@@ -1,9 +1,10 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { csrfPost } from '../utils/csrf';
 import { authenticatedPost } from '../utils/auth';
 import VulnerabilityImportForm from './VulnerabilityImportForm';
+import { importAssets, type ImportResult } from '../services/assetService';
 
-type ImportType = 'requirements' | 'nmap' | 'masscan' | 'vulnerabilities';
+type ImportType = 'requirements' | 'nmap' | 'masscan' | 'vulnerabilities' | 'assets';
 
 interface ScanSummary {
     scanId: number;
@@ -24,17 +25,30 @@ interface MasscanImportResponse {
 }
 
 const Import = () => {
-    const [importType, setImportType] = useState<ImportType>('requirements');
+    // Initialize importType from URL parameter if present
+    const getInitialImportType = (): ImportType => {
+        if (typeof window !== 'undefined') {
+            const params = new URLSearchParams(window.location.search);
+            const typeParam = params.get('type');
+            if (typeParam && ['requirements', 'nmap', 'masscan', 'vulnerabilities', 'assets'].includes(typeParam)) {
+                return typeParam as ImportType;
+            }
+        }
+        return 'requirements';
+    };
+
+    const [importType, setImportType] = useState<ImportType>(getInitialImportType());
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [uploadStatus, setUploadStatus] = useState<string>('');
     const [isUploading, setIsUploading] = useState<boolean>(false);
     const [isDragOver, setIsDragOver] = useState<boolean>(false);
     const [scanSummary, setScanSummary] = useState<ScanSummary | null>(null);
     const [masscanSummary, setMasscanSummary] = useState<MasscanImportResponse | null>(null);
+    const [assetImportResult, setAssetImportResult] = useState<ImportResult | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const validateFile = (file: File): boolean => {
-        if (importType === 'requirements') {
+        if (importType === 'requirements' || importType === 'assets') {
             const validTypes = [
                 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                 'application/vnd.ms-excel'
@@ -59,9 +73,12 @@ const Import = () => {
             setUploadStatus('');
             setScanSummary(null);
             setMasscanSummary(null);
+            setAssetImportResult(null);
         } else {
             setSelectedFile(null);
             const fileTypeMsg = importType === 'requirements'
+                ? 'Excel file (.xlsx or .xls)'
+                : importType === 'assets'
                 ? 'Excel file (.xlsx or .xls)'
                 : importType === 'nmap'
                 ? 'nmap XML file (.xml)'
@@ -76,10 +93,27 @@ const Import = () => {
         setUploadStatus('');
         setScanSummary(null);
         setMasscanSummary(null);
+        setAssetImportResult(null);
         if (fileInputRef.current) {
             fileInputRef.current.value = '';
         }
     };
+
+    // Handle URL parameter changes (e.g., when navigating from sidebar)
+    useEffect(() => {
+        const handleUrlChange = () => {
+            const params = new URLSearchParams(window.location.search);
+            const typeParam = params.get('type');
+            if (typeParam && ['requirements', 'nmap', 'masscan', 'vulnerabilities', 'assets'].includes(typeParam)) {
+                setImportType(typeParam as ImportType);
+            }
+        };
+
+        // Listen for popstate events (browser back/forward)
+        window.addEventListener('popstate', handleUrlChange);
+
+        return () => window.removeEventListener('popstate', handleUrlChange);
+    }, []);
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         if (event.target.files && event.target.files[0]) {
@@ -204,6 +238,23 @@ const Import = () => {
         }
     };
 
+    const handleUploadAssets = async () => {
+        if (!selectedFile) return;
+
+        try {
+            const result = await importAssets(selectedFile);
+            setAssetImportResult(result);
+            setUploadStatus(`Success: ${result.message}`);
+            setSelectedFile(null);
+            if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+            }
+        } catch (error: any) {
+            console.error('Upload error:', error);
+            setUploadStatus(`Error: ${error.message || 'Upload failed. Please try again.'}`);
+        }
+    };
+
     const handleUpload = async () => {
         if (!selectedFile) {
             setUploadStatus('Error: No file selected.');
@@ -214,6 +265,7 @@ const Import = () => {
         setUploadStatus('Uploading...');
         setScanSummary(null);
         setMasscanSummary(null);
+        setAssetImportResult(null);
 
         try {
             if (importType === 'requirements') {
@@ -222,6 +274,8 @@ const Import = () => {
                 await handleUploadNmap();
             } else if (importType === 'masscan') {
                 await handleUploadMasscan();
+            } else if (importType === 'assets') {
+                await handleUploadAssets();
             }
         } finally {
             setIsUploading(false);
@@ -284,6 +338,16 @@ const Import = () => {
                                         Vulnerabilities
                                     </button>
                                 </li>
+                                <li className="nav-item" role="presentation">
+                                    <button
+                                        className={`nav-link ${importType === 'assets' ? 'active' : ''}`}
+                                        type="button"
+                                        onClick={() => handleImportTypeChange('assets')}
+                                    >
+                                        <i className="bi bi-hdd-rack me-2"></i>
+                                        Assets
+                                    </button>
+                                </li>
                             </ul>
 
                             <div className="p-5">
@@ -292,7 +356,7 @@ const Import = () => {
                                 <VulnerabilityImportForm />
                             )}
 
-                            {/* Requirements and Nmap Tab Content */}
+                            {/* Requirements, Nmap, Masscan, and Assets Tab Content */}
                             {importType !== 'vulnerabilities' && (
                                 <>
                             {/* File Upload Area */}
@@ -312,7 +376,7 @@ const Import = () => {
                                     ref={fileInputRef}
                                     type="file"
                                     className="d-none"
-                                    accept={importType === 'requirements'
+                                    accept={importType === 'requirements' || importType === 'assets'
                                         ? ".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
                                         : importType === 'nmap' || importType === 'masscan'
                                         ? ".xml,text/xml,application/xml"
@@ -359,11 +423,12 @@ const Import = () => {
                                         <h4 className={isDragOver ? 'text-primary' : 'text-dark'}>
                                             {isDragOver ? 'Drop your file here' :
                                                 importType === 'requirements' ? 'Choose Excel file or drag & drop' :
+                                                importType === 'assets' ? 'Choose Excel file or drag & drop' :
                                                 importType === 'nmap' ? 'Choose nmap XML file or drag & drop' :
                                                 'Choose masscan XML file or drag & drop'}
                                         </h4>
                                         <p className="text-muted mb-4">
-                                            {importType === 'requirements'
+                                            {importType === 'requirements' || importType === 'assets'
                                                 ? 'Supports .xlsx and .xls files up to 10MB'
                                                 : 'Supports .xml files up to 10MB'}
                                         </p>
@@ -470,6 +535,57 @@ const Import = () => {
                                 </div>
                             )}
 
+                            {/* Import Summary (for assets) */}
+                            {importType === 'assets' && assetImportResult && (
+                                <div className="mt-4">
+                                    <div className="card border-success">
+                                        <div className="card-header bg-success text-white">
+                                            <h6 className="mb-0">
+                                                <i className="bi bi-check-circle me-2"></i>
+                                                Import Summary
+                                            </h6>
+                                        </div>
+                                        <div className="card-body">
+                                            <div className="row">
+                                                <div className="col-md-4">
+                                                    <p className="mb-2">
+                                                        <strong>Assets Created:</strong>
+                                                        <span className="badge bg-success ms-2">{assetImportResult.assetsCreated}</span>
+                                                    </p>
+                                                </div>
+                                                <div className="col-md-4">
+                                                    <p className="mb-2">
+                                                        <strong>Assets Updated:</strong>
+                                                        <span className="badge bg-info ms-2">{assetImportResult.assetsUpdated}</span>
+                                                    </p>
+                                                </div>
+                                                <div className="col-md-4">
+                                                    <p className="mb-2">
+                                                        <strong>Rows Skipped:</strong>
+                                                        <span className="badge bg-warning ms-2">{assetImportResult.skipped}</span>
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            {assetImportResult.errors && assetImportResult.errors.length > 0 && (
+                                                <div className="mt-3">
+                                                    <strong>Errors:</strong>
+                                                    <ul className="mb-0 mt-2">
+                                                        {assetImportResult.errors.map((error, index) => (
+                                                            <li key={index} className="text-danger">{error}</li>
+                                                        ))}
+                                                    </ul>
+                                                    {assetImportResult.errors.length >= 20 && (
+                                                        <p className="text-muted mt-2 mb-0">
+                                                            <em>Showing first 20 errors only</em>
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Upload Button */}
                             <div className="mt-5 d-grid">
                                 <button
@@ -491,6 +607,8 @@ const Import = () => {
                                                 ? 'Upload and Import Nmap Scan'
                                                 : importType === 'masscan'
                                                 ? 'Upload and Import Masscan Results'
+                                                : importType === 'assets'
+                                                ? 'Upload and Import Assets'
                                                 : 'Upload and Import Scan'}
                                         </>
                                     )}

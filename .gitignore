@@ -11,6 +11,9 @@ out/
 # Gradle
 .gradle/
 **/build/
+*.jar
+*.class
+*.iml
 
 # Testing
 test-results/
@@ -68,3 +71,6 @@ src/.claude/settings.local.json
 src/helper/.env
 src/helper/venv/
 src/helper/.venv/
+.env
+.env.*
+!.env.example

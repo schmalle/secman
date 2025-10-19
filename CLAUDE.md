@@ -41,9 +41,107 @@
 - **Structure**: models/, services/, cli/, exporters/, lib/
 
 ## Recent Changes
+- 029-asset-bulk-operations: Asset Bulk Operations (2025-10-19) - Bulk delete, export, and import for assets
 - 028-user-profile-page: User Profile Page (2025-10-19) - Profile page showing user email and roles
 - 027-admin-user-notifications: Admin User Notification System (2025-10-19) - Email notifications to ADMIN users for new user registrations
 - 025-role-based-access-control: Added Kotlin 2.1.0 / Java 21 (backend), TypeScript/JavaScript (frontend - Astro 5.14 + React 19) + Micronaut 4.4, Hibernate JPA, Apache POI 5.3, Astro, React 19, Bootstrap 5.3
+
+### Feature 029: Asset Bulk Operations (2025-10-19)
+
+Comprehensive asset management operations including bulk delete, Excel export with workgroup filtering, and Excel import with validation.
+
+**Backend Components** (`src/backendng/`):
+  - **BulkDeleteResult.kt** - Response DTO for bulk delete with deleted counts
+  - **AssetExportDto.kt** - Flattened DTO for Excel export with comma-separated workgroup names
+  - **AssetImportDto.kt** - Temporary DTO for parsing Excel rows before entity creation
+  - **ImportResult.kt** - Standardized import response (imported/skipped counts, errors)
+  - **AssetBulkDeleteService.kt** - Transactional bulk delete service:
+    - AtomicBoolean semaphore for concurrency control (first-request-wins pattern)
+    - Manual cascade delete order: asset_workgroups → vulnerabilities → scan_results → assets
+    - EntityManager.clear() after delete to prevent stale data
+  - **AssetExportService.kt** - Streaming Excel export service:
+    - SXSSFWorkbook with 100-row memory window for large datasets
+    - Styles created once and reused (prevents 64K style limit)
+    - Fixed column widths (no auto-sizing for performance)
+    - workbook.dispose() for temp file cleanup
+  - **AssetImportService.kt** - Excel import service with validation:
+    - Case-insensitive header mapping
+    - Required field validation (name, type, owner)
+    - Duplicate detection by name (skip without updating)
+    - Workgroup name resolution (case-insensitive)
+    - Multiple date format parsing support
+    - Error collection (limited to 20) with row numbers
+  - **AssetController.kt** - Added endpoints:
+    - `DELETE /api/assets/bulk` - Bulk delete all assets (ADMIN only, returns BulkDeleteResult)
+    - `GET /api/assets/export` - Export assets to Excel (authenticated, workgroup-filtered)
+  - **ImportController.kt** - Added endpoint:
+    - `POST /api/import/upload-assets-xlsx` - Import assets from Excel (authenticated)
+    - File validation: 10MB max, .xlsx extension, empty file check
+    - Returns ImportResult with imported/skipped counts and error list
+
+**Frontend Components** (`src/frontend/src/components/`):
+  - **BulkDeleteConfirmModal.tsx** - Confirmation modal:
+    - Checkbox acknowledgment pattern (not text input)
+    - ESC key handling (disabled during deletion)
+    - Loading spinner and warning UI
+  - **assetService.ts** - Frontend service:
+    - bulkDeleteAssets() - DELETE request with conflict handling
+    - exportAssets() - Blob download with date-stamped filename
+    - importAssets() - Multipart form upload
+  - **AssetManagement.tsx** - Updated with bulk delete:
+    - ADMIN-only "Delete All Assets" button
+    - Modal integration with confirmation flow
+    - Success message with auto-dismiss
+  - **Export.tsx** - Added Assets export card with handleExportAssets()
+  - **Import.tsx** - Added Assets import tab:
+    - URL parameter pre-selection (?type=assets)
+    - File validation for .xlsx
+    - ImportResult display with created/updated/skipped counts
+    - Error list display (up to 20 errors)
+  - **Sidebar.tsx** - Expandable I/O menu:
+    - Import → Requirements, Assets
+    - Export → Requirements, Assets
+    - Navigation links with URL parameters (/import?type=assets, /export?type=assets)
+
+**API Endpoints**:
+  - `DELETE /api/assets/bulk` - Bulk delete all assets (ADMIN only)
+  - `GET /api/assets/export` - Export assets to Excel (authenticated)
+  - `POST /api/import/upload-assets-xlsx` - Import assets from Excel (authenticated)
+
+**Features Implemented** (4 User Stories):
+1. **US1 (P1 - MVP)**: Bulk Delete All Assets - ADMIN-only button with checkbox confirmation modal
+2. **US2 (P1 - MVP)**: Export Assets to Excel - Workgroup-filtered export with SXSSFWorkbook streaming
+3. **US3 (P1 - MVP)**: Import Assets from Excel - Validation, duplicate handling, workgroup resolution
+4. **US4 (P2)**: Sidebar Navigation - Expandable Import/Export menus with asset links
+
+**Access Control**:
+- Bulk delete: ADMIN role only (returns 403 Forbidden otherwise)
+- Export: All authenticated users (workgroup-filtered: ADMIN sees all, users see their workgroups + owned assets)
+- Import: All authenticated users (tracks importing user as creator)
+
+**Performance Targets**:
+- Bulk delete: <30s for 10K+ assets (target from SC-001)
+- Export: <15s for 10K assets (SXSSFWorkbook streaming, SC-002)
+- Import: <60s for 5K assets (XSSFWorkbook in-memory, SC-003)
+
+**Excel Format** (Import/Export):
+- Required columns: Name, Type, Owner
+- Optional columns: IP Address, Description, Groups, Cloud Account ID, Cloud Instance ID, OS Version, AD Domain, Workgroups, Created At, Updated At, Last Seen
+- Case-insensitive headers
+- Workgroups: Comma-separated workgroup names (export and import)
+
+**Technical Implementation**:
+- **Concurrency Control**: AtomicBoolean semaphore returns 409 Conflict if bulk delete in progress
+- **Transaction Safety**: @Transactional with manual cascade delete order
+- **Memory Optimization**: SXSSFWorkbook for export, XSSFWorkbook for import
+- **Error Handling**: Per-row error collection with structured messages
+- **Workgroup Integration**: AssetFilterService.getAccessibleAssets() for export filtering
+
+**Statistics**:
+- Backend files: 4 new DTOs, 3 new services, 2 modified controllers
+- Frontend files: 1 new component, 1 new service, 4 modified components
+- API endpoints: 3 new (1 DELETE, 1 GET, 1 POST)
+- No database schema changes required
 
 ### Feature 028: User Profile Page (2025-10-19)
 
