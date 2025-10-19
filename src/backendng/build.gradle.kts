@@ -152,11 +152,11 @@ tasks {
     test {
         enabled = false
     }
-    
+
     named<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>("compileTestKotlin") {
         enabled = false
     }
-    
+
     processTestResources {
         enabled = false
     }

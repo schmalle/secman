@@ -59,6 +59,7 @@ htmlcov/
 
 # Project specific
 .claude/
+./codex/
 .serena/
 src/backendng/.kotlin/sessions/*
 src/backendng/.claude/settings.local.json

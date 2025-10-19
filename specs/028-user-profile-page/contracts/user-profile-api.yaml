@@ -1,0 +1,184 @@
+openapi: 3.0.0
+info:
+  title: User Profile API
+  version: 1.0.0
+  description: |
+    API for retrieving the authenticated user's profile information.
+    Feature 028: User Profile Page
+  contact:
+    name: Secman Development Team
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+  - url: https://api.secman.example.com
+    description: Production server
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/users/profile:
+    get:
+      summary: Get current user profile
+      description: |
+        Retrieves the profile information (username, email, roles) for the currently
+        authenticated user. The user is identified from the JWT token in the
+        Authorization header.
+      operationId: getCurrentUserProfile
+      tags:
+        - Users
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User profile retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfileDto'
+              examples:
+                adminUser:
+                  summary: Admin user with multiple roles
+                  value:
+                    username: adminuser
+                    email: secmanadmin@schmall.io
+                    roles:
+                      - ADMIN
+                      - USER
+                regularUser:
+                  summary: Regular user with single role
+                  value:
+                    username: johndoe
+                    email: john.doe@example.com
+                    roles:
+                      - USER
+                vulnUser:
+                  summary: User with vulnerability management role
+                  value:
+                    username: security_analyst
+                    email: analyst@example.com
+                    roles:
+                      - USER
+                      - VULN
+        '401':
+          description: Unauthorized - User is not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                noToken:
+                  summary: Missing authentication token
+                  value:
+                    message: Unauthorized
+                    _links:
+                      self:
+                        href: /api/users/profile
+                invalidToken:
+                  summary: Invalid or expired token
+                  value:
+                    message: Unauthorized
+                    _links:
+                      self:
+                        href: /api/users/profile
+        '404':
+          description: Not Found - User account not found in database
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                userNotFound:
+                  summary: User not found
+                  value:
+                    message: User not found
+                    _links:
+                      self:
+                        href: /api/users/profile
+        '500':
+          description: Internal Server Error - Unexpected error occurred
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                genericError:
+                  summary: Generic server error
+                  value:
+                    message: An error occurred while processing your request
+                    _links:
+                      self:
+                        href: /api/users/profile
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from /api/auth/login
+
+  schemas:
+    UserProfileDto:
+      type: object
+      required:
+        - username
+        - email
+        - roles
+      properties:
+        username:
+          type: string
+          description: The user's unique username (login identifier)
+          minLength: 1
+          maxLength: 100
+          example: adminuser
+        email:
+          type: string
+          format: email
+          description: The user's email address
+          example: secmanadmin@schmall.io
+        roles:
+          type: array
+          description: The roles assigned to the user
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            enum:
+              - USER
+              - ADMIN
+              - VULN
+              - RELEASE_MANAGER
+          example:
+            - ADMIN
+            - USER
+      description: |
+        User profile data transfer object. Contains only non-sensitive information
+        about the authenticated user. Excludes passwordHash, id, createdAt, updatedAt,
+        and workgroups for security and scope reasons.
+
+    ErrorResponse:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          description: Human-readable error message
+          example: Unauthorized
+        _links:
+          type: object
+          description: HATEOAS links for API navigation
+          properties:
+            self:
+              type: object
+              properties:
+                href:
+                  type: string
+                  description: The URI of the current resource
+                  example: /api/users/profile
+
+tags:
+  - name: Users
+    description: User profile and account management endpoints

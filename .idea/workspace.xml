@@ -5,11 +5,32 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="94ada8b3-9f4e-473c-9fea-3bc9651b5bdd" name="Changes" comment="test change">
+      <change beforePath="$PROJECT_DIR$/.dockerignore" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/CLAUDE.md" beforeDir="false" afterPath="$PROJECT_DIR$/CLAUDE.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/HISTORY.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/db/rollback/V2__rollback_secchampion_to_champion.sql" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docker-compose.dev.yml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docker-compose.yml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docker/README.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docker/backend/Dockerfile" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docker/backend/Dockerfile.dev" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docker/database/Dockerfile" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docker/database/init/01-init-database.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docker/database/init/02-sample-data.sql" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docker/database/my.cnf" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docker/frontend/Dockerfile" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docker/frontend/Dockerfile.dev" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docker/frontend/nginx.conf" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docker/scripts/build-local.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docker/scripts/build-multiarch.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docker/scripts/deploy.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docker/scripts/dev.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/docker/scripts/test-setup.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/fix-email-config.sh" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/src/backendng/build.gradle.kts" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/build.gradle.kts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/cli/build.gradle.kts" beforeDir="false" afterPath="$PROJECT_DIR$/src/cli/build.gradle.kts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/SecmanCli.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/SecmanCli.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/shared/build.gradle.kts" beforeDir="false" afterPath="$PROJECT_DIR$/src/shared/build.gradle.kts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/src/components/Header.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/components/Header.tsx" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -66,6 +87,7 @@
   </component>
   <component name="PropertiesComponent"><![CDATA[{
   "keyToString": {
+    "ASKED_MARK_IGNORED_FILES_AS_EXCLUDED": "true",
     "Gradle.OAuthServiceTest.executor": "Run",
     "Gradle.backendng [build].executor": "Run",
     "ModuleVcsDetector.initialDetectionPerformed": "true",
@@ -73,7 +95,7 @@
     "RunOnceActivity.git.unshallow": "true",
     "SHARE_PROJECT_CONFIGURATION_FILES": "true",
     "SHELLCHECK.PATH": "/Users/flake/Library/Application Support/JetBrains/IntelliJIdea2025.1/plugins/Shell Script/shellcheck",
-    "git-widget-placeholder": "main",
+    "git-widget-placeholder": "028-user-profile-page",
     "junie.onboarding.icon.badge.shown": "true",
     "kotlin-language-version-configured": "true",
     "last_opened_file_path": "/Users/flake/sources/misc/secman",
