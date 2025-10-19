@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete } from '../utils/auth';
+import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete, getUser } from '../utils/auth';
+import { isAdmin } from '../utils/permissions';
 import PortHistory from './PortHistory';
 import VulnerabilityHistory from './VulnerabilityHistory';
+import { BulkDeleteConfirmModal } from './BulkDeleteConfirmModal';
+import { bulkDeleteAssets, type BulkDeleteResult } from '../services/assetService';
 
 interface WorkgroupSummary {
   id: number;
@@ -56,6 +59,11 @@ const AssetManagement: React.FC = () => {
   const [ipFilter, setIpFilter] = useState<string>('');
   const [ownerFilter, setOwnerFilter] = useState<string>('');
   const [workgroupFilter, setWorkgroupFilter] = useState<string>('');
+
+  // Bulk delete states (Feature 029 - User Story 1)
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [isDeletingBulk, setIsDeletingBulk] = useState(false);
+  const [bulkDeleteSuccess, setBulkDeleteSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     fetchAssets();
@@ -124,7 +132,7 @@ const AssetManagement: React.FC = () => {
 
     try {
       const response = await authenticatedDelete(`/api/assets/${id}`);
-      
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
         throw new Error(errorData.error || `Failed to delete asset: ${response.status}`);
@@ -134,6 +142,38 @@ const AssetManagement: React.FC = () => {
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred while deleting the asset');
+    }
+  };
+
+  /**
+   * Handle bulk delete of all assets
+   * Feature 029: User Story 1 - Bulk Delete Assets
+   */
+  const handleBulkDelete = async () => {
+    setIsDeletingBulk(true);
+    setError(null);
+    setBulkDeleteSuccess(null);
+
+    try {
+      const result: BulkDeleteResult = await bulkDeleteAssets();
+
+      // Show success message
+      setBulkDeleteSuccess(result.message);
+
+      // Close modal
+      setShowBulkDeleteModal(false);
+
+      // Refresh asset list
+      await fetchAssets();
+
+      // Clear success message after 5 seconds
+      setTimeout(() => setBulkDeleteSuccess(null), 5000);
+
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred during bulk delete');
+      setShowBulkDeleteModal(false);
+    } finally {
+      setIsDeletingBulk(false);
     }
   };
 
@@ -228,18 +268,31 @@ const AssetManagement: React.FC = () => {
         <div className="col-12">
           <div className="d-flex justify-content-between align-items-center mb-4">
             <h2>Asset Management</h2>
-            <button
-              className="btn btn-primary"
-              onClick={() => {
-                if (showForm) {
-                  resetForm();
-                } else {
-                  setShowForm(true);
-                }
-              }}
-            >
-              {showForm ? 'Cancel' : 'Add New Asset'}
-            </button>
+            <div className="btn-group" role="group">
+              <button
+                className="btn btn-primary"
+                onClick={() => {
+                  if (showForm) {
+                    resetForm();
+                  } else {
+                    setShowForm(true);
+                  }
+                }}
+              >
+                {showForm ? 'Cancel' : 'Add New Asset'}
+              </button>
+              {/* Feature 029: Bulk Delete Button (ADMIN only, hidden when no assets) */}
+              {isAdmin(getUser()?.roles) && getFilteredAssets().length > 0 && (
+                <button
+                  className="btn btn-danger"
+                  onClick={() => setShowBulkDeleteModal(true)}
+                  disabled={isDeletingBulk}
+                >
+                  <i className="bi bi-trash3-fill me-2"></i>
+                  Delete All Assets
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -550,6 +603,31 @@ const AssetManagement: React.FC = () => {
           onClose={handleCloseVulnerabilities}
         />
       )}
+
+      {/* Bulk Delete Success Message (Feature 029) */}
+      {bulkDeleteSuccess && (
+        <div className="position-fixed top-0 start-50 translate-middle-x mt-3" style={{ zIndex: 9999 }}>
+          <div className="alert alert-success alert-dismissible fade show" role="alert">
+            <i className="bi bi-check-circle-fill me-2"></i>
+            {bulkDeleteSuccess}
+            <button
+              type="button"
+              className="btn-close"
+              onClick={() => setBulkDeleteSuccess(null)}
+              aria-label="Close"
+            ></button>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Delete Confirmation Modal (Feature 029) */}
+      <BulkDeleteConfirmModal
+        isOpen={showBulkDeleteModal}
+        onClose={() => setShowBulkDeleteModal(false)}
+        onConfirm={handleBulkDelete}
+        isDeleting={isDeletingBulk}
+        assetCount={getFilteredAssets().length}
+      />
 
     </div>
   );

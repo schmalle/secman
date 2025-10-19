@@ -15,6 +15,8 @@ const Sidebar = () => {
     const [riskManagementExpanded, setRiskManagementExpanded] = useState(false);
     const [vulnMenuOpen, setVulnMenuOpen] = useState(false);
     const [ioMenuOpen, setIoMenuOpen] = useState(false);
+    const [importMenuOpen, setImportMenuOpen] = useState(false);
+    const [exportMenuOpen, setExportMenuOpen] = useState(false);
     const [adminMenuOpen, setAdminMenuOpen] = useState(false);
     const [isAdmin, setIsAdmin] = useState(false);
     const [hasVuln, setHasVuln] = useState(false);
@@ -184,15 +186,57 @@ const Sidebar = () => {
                     </div>
                     {ioMenuOpen && (
                         <ul className="list-unstyled ps-4">
+                            {/* Import sub-menu */}
                             <li>
-                                <a href="/import" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                    <i className="bi bi-cloud-upload me-2"></i> Import
-                                </a>
+                                <div
+                                    onClick={() => setImportMenuOpen(!importMenuOpen)}
+                                    className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary cursor-pointer"
+                                    style={{ cursor: 'pointer' }}
+                                >
+                                    <i className="bi bi-cloud-upload me-2"></i>
+                                    Import
+                                    <i className={`bi ${importMenuOpen ? 'bi-chevron-down' : 'bi-chevron-right'} ms-auto`}></i>
+                                </div>
+                                {importMenuOpen && (
+                                    <ul className="list-unstyled ps-4">
+                                        <li>
+                                            <a href="/import" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                                <i className="bi bi-file-earmark-excel me-2"></i> Requirements
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a href="/import?type=assets" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                                <i className="bi bi-hdd-rack me-2"></i> Assets
+                                            </a>
+                                        </li>
+                                    </ul>
+                                )}
                             </li>
+                            {/* Export sub-menu */}
                             <li>
-                                <a href="/export" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                    <i className="bi bi-download me-2"></i> Export
-                                </a>
+                                <div
+                                    onClick={() => setExportMenuOpen(!exportMenuOpen)}
+                                    className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary cursor-pointer"
+                                    style={{ cursor: 'pointer' }}
+                                >
+                                    <i className="bi bi-download me-2"></i>
+                                    Export
+                                    <i className={`bi ${exportMenuOpen ? 'bi-chevron-down' : 'bi-chevron-right'} ms-auto`}></i>
+                                </div>
+                                {exportMenuOpen && (
+                                    <ul className="list-unstyled ps-4">
+                                        <li>
+                                            <a href="/export" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                                <i className="bi bi-file-earmark-excel me-2"></i> Requirements
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a href="/export?type=assets" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                                <i className="bi bi-hdd-rack me-2"></i> Assets
+                                            </a>
+                                        </li>
+                                    </ul>
+                                )}
                             </li>
                         </ul>
                     )}

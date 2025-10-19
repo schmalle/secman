@@ -45,7 +45,9 @@ open class AssetController(
     private val vulnerabilityRepository: VulnerabilityRepository,
     private val assetFilterService: AssetFilterService,
     private val userRepository: UserRepository,
-    private val workgroupRepository: com.secman.repository.WorkgroupRepository
+    private val workgroupRepository: com.secman.repository.WorkgroupRepository,
+    private val assetBulkDeleteService: com.secman.service.AssetBulkDeleteService,
+    private val assetExportService: com.secman.service.AssetExportService
 ) {
     
     private val log = LoggerFactory.getLogger(AssetController::class.java)
@@ -400,6 +402,104 @@ open class AssetController(
         } catch (e: Exception) {
             log.error("Error fetching vulnerabilities for asset id: {}", assetId, e)
             HttpResponse.serverError<ErrorResponse>().body(ErrorResponse("Error fetching vulnerabilities: ${e.message}"))
+        }
+    }
+
+    /**
+     * Export assets to Excel file
+     * Feature: 029-asset-bulk-operations (User Story 2 - Export Assets to File)
+     *
+     * GET /api/assets/export
+     * Auth: Any authenticated user
+     * Response: Binary Excel file (.xlsx)
+     *
+     * Related Requirements:
+     * - FR-010: Export assets to Excel with all fields
+     * - FR-011: Apply workgroup-based access control (ADMIN sees all, non-ADMIN sees workgroup+owned)
+     * - FR-012: Format export file with clear column headers
+     * - FR-014: Provide user feedback during export (loading indicators handled by frontend)
+     * - FR-015: Display error when no assets available
+     *
+     * Error Responses:
+     * - 400: No assets available to export
+     * - 401: User not authenticated
+     * - 500: Export failed
+     */
+    @Get("/export")
+    open fun exportAssets(authentication: Authentication): HttpResponse<*> {
+        return try {
+            log.info("Asset export request from user: {}", authentication.name)
+
+            // Get assets with workgroup filtering
+            val dtos = assetExportService.exportAssets(authentication)
+
+            // Check if any assets are available
+            if (dtos.isEmpty()) {
+                log.warn("No assets available to export for user: {}", authentication.name)
+                return HttpResponse.badRequest(ErrorResponse("No assets available to export"))
+            }
+
+            // Write to Excel
+            val outputStream = assetExportService.writeToExcel(dtos)
+
+            // Generate filename with current date
+            val dateStr = java.time.LocalDate.now().toString()
+            val filename = "assets_export_$dateStr.xlsx"
+
+            log.info("Asset export successful: {} assets exported for user {}", dtos.size, authentication.name)
+
+            // Return binary Excel file with proper headers
+            HttpResponse.ok(outputStream.toByteArray())
+                .header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                .header("Content-Disposition", "attachment; filename=\"$filename\"")
+
+        } catch (e: Exception) {
+            log.error("Asset export failed for user: {}", authentication.name, e)
+            HttpResponse.serverError<ErrorResponse>()
+                .body(ErrorResponse("Failed to export assets: ${e.message}"))
+        }
+    }
+
+    /**
+     * Bulk delete all assets (ADMIN only)
+     * Feature: 029-asset-bulk-operations (User Story 1 - Bulk Delete Assets)
+     *
+     * DELETE /api/assets/bulk
+     * Auth: ADMIN role required
+     * Response: BulkDeleteResult
+     *
+     * Related Requirements:
+     * - FR-001: Delete All Assets button visible only to ADMIN users
+     * - FR-003: Delete all assets when ADMIN confirms
+     * - FR-006: Prevent non-ADMIN users from accessing bulk delete
+     * - FR-007: Handle cascade deletion (vulnerabilities, scan results)
+     * - FR-008: Execute within transaction with rollback on failure
+     *
+     * Error Responses:
+     * - 403: User does not have ADMIN role
+     * - 409: Another bulk delete operation is in progress
+     * - 500: Transaction failed and was rolled back
+     */
+    @Delete("/bulk")
+    @Secured("ADMIN")
+    open fun bulkDeleteAssets(authentication: Authentication): HttpResponse<*> {
+        return try {
+            log.info("Bulk delete request received from user: {}", authentication.name)
+
+            val result = assetBulkDeleteService.deleteAllAssets()
+
+            log.info("Bulk delete successful: {}", result.message)
+            HttpResponse.ok(result)
+
+        } catch (e: com.secman.service.AssetBulkDeleteService.ConcurrentOperationException) {
+            log.warn("Concurrent bulk delete attempt rejected: {}", e.message)
+            HttpResponse.status<ErrorResponse>(HttpStatus.CONFLICT)
+                .body(ErrorResponse(e.message ?: "Bulk asset deletion already in progress"))
+
+        } catch (e: Exception) {
+            log.error("Bulk delete failed", e)
+            HttpResponse.serverError<ErrorResponse>()
+                .body(ErrorResponse("Bulk delete failed. No assets were deleted."))
         }
     }
 }

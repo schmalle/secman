@@ -1,0 +1,126 @@
+openapi: 3.0.3
+info:
+  title: Asset Export API
+  description: API endpoint for exporting assets to Excel format with workgroup-based access control
+  version: 1.0.0
+  contact:
+    name: Secman API Team
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+  - url: https://secman.example.com
+    description: Production server
+
+paths:
+  /api/assets/export:
+    get:
+      summary: Export assets to Excel
+      description: |
+        Exports assets to an Excel (.xlsx) file with all asset fields. Access control
+        applies based on user role:
+
+        **ADMIN users**: Export all assets in the system
+        **Non-ADMIN users**: Export only assets from assigned workgroups + personally created/uploaded assets
+
+        **Performance**: Expected to complete in <15 seconds for 10,000 assets.
+
+        **File Format**: Excel 2007+ (.xlsx) with the following columns:
+        - Name, Type, IP Address, Owner, Description
+        - Groups, Cloud Account ID, Cloud Instance ID, OS Version, AD Domain
+        - Workgroups (comma-separated names)
+        - Created At, Updated At, Last Seen (formatted as "yyyy-MM-dd HH:mm:ss")
+      operationId: exportAssets
+      tags:
+        - Assets
+        - Export
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Successfully exported assets to Excel file
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+                description: Excel (.xlsx) file containing asset data
+          headers:
+            Content-Disposition:
+              description: Attachment filename
+              schema:
+                type: string
+                example: 'attachment; filename="assets_export_2025-10-19.xlsx"'
+            Content-Type:
+              description: MIME type
+              schema:
+                type: string
+                example: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        '400':
+          description: Bad request - No assets available to export
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                noAssets:
+                  value:
+                    error: "No assets available to export"
+                    code: "NO_DATA"
+        '401':
+          description: Unauthorized - Missing or invalid authentication token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                unauthorized:
+                  value:
+                    error: "Unauthorized"
+                    message: "Authentication required"
+        '500':
+          description: Internal server error - Export failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                exportFailed:
+                  value:
+                    error: "Failed to export assets"
+                    code: "EXPORT_ERROR"
+                    details: "Unable to create Excel file"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from /api/auth/login
+
+  schemas:
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Error message
+          example: "No assets available to export"
+        code:
+          type: string
+          description: Error code for programmatic handling
+          enum:
+            - NO_DATA
+            - EXPORT_ERROR
+          example: "NO_DATA"
+        details:
+          type: string
+          description: Additional error details (optional)
+          example: "Unable to create Excel file"
+        message:
+          type: string
+          description: Human-readable message (optional, for backward compatibility)
+          example: "Authentication required"

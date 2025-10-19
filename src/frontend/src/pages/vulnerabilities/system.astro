@@ -8,20 +8,9 @@
  * Task: T037 [US1-Impl]
  */
 import Layout from '../../layouts/Layout.astro';
+import CrowdStrikeVulnerabilityLookup from '../../components/CrowdStrikeVulnerabilityLookup';
 ---
 
 <Layout title="System Vulnerabilities - CrowdStrike Lookup">
-    <div id="crowdstrike-root"></div>
+    <CrowdStrikeVulnerabilityLookup client:load />
 </Layout>
-
-<script>
-    import('../../components/CrowdStrikeVulnerabilityLookup.tsx').then(module => {
-        const CrowdStrikeVulnerabilityLookup = module.default;
-        import('react').then(React => {
-            import('react-dom/client').then(ReactDOM => {
-                const root = ReactDOM.createRoot(document.getElementById('crowdstrike-root'));
-                root.render(React.createElement(CrowdStrikeVulnerabilityLookup));
-            });
-        });
-    });
-</script>

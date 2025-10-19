@@ -42,7 +42,8 @@ open class ImportController(
     private val scanRepository: com.secman.repository.ScanRepository,
     private val scanResultRepository: com.secman.repository.ScanResultRepository,
     private val userMappingImportService: com.secman.service.UserMappingImportService,
-    private val csvUserMappingParser: com.secman.service.CSVUserMappingParser
+    private val csvUserMappingParser: com.secman.service.CSVUserMappingParser,
+    private val assetImportService: com.secman.service.AssetImportService
 ) {
     
     private val log = LoggerFactory.getLogger(ImportController::class.java)
@@ -855,4 +856,90 @@ open class ImportController(
         val assetsUpdated: Int,
         val portsImported: Int
     )
+
+    /**
+     * Import assets from Excel file
+     * Feature: 029-asset-bulk-operations (User Story 3 - Import Assets from File)
+     *
+     * POST /api/import/upload-assets-xlsx
+     * Auth: Any authenticated user
+     * Request: multipart/form-data with xlsxFile
+     * Response: ImportResult
+     *
+     * Related Requirements:
+     * - FR-017: Accept Excel files with validation for file size, format, required fields
+     * - FR-018: Validate required fields (name, type, owner)
+     * - FR-019: Validate data formats (IP address, type values)
+     * - FR-020: Handle duplicate asset names by skipping
+     * - FR-021: Associate imported assets with workgroups
+     * - FR-022: Track importing user as creator
+     * - FR-023: Provide import summary
+     *
+     * Error Responses:
+     * - 400: Invalid file format, validation errors, missing headers
+     * - 401: User not authenticated
+     * - 500: Import failed
+     */
+    @Post("/upload-assets-xlsx")
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    open fun uploadAssetsExcel(
+        @Part xlsxFile: CompletedFileUpload,
+        authentication: Authentication
+    ): HttpResponse<*> {
+        return try {
+            log.info("Asset import request from user: {} with file: {}", authentication.name, xlsxFile.filename)
+
+            // Validate file size
+            if (xlsxFile.size > MAX_FILE_SIZE) {
+                log.warn("File size exceeds maximum limit: {} bytes", xlsxFile.size)
+                return HttpResponse.badRequest(ErrorResponse("File size exceeds maximum limit of 10MB"))
+            }
+
+            // Validate file extension
+            if (!xlsxFile.filename.endsWith(".xlsx", ignoreCase = true)) {
+                log.warn("Invalid file format: {}", xlsxFile.filename)
+                return HttpResponse.badRequest(ErrorResponse("Invalid file format. Please upload a valid Excel file (.xlsx)."))
+            }
+
+            // Validate file is not empty
+            if (xlsxFile.size == 0L) {
+                log.warn("Empty file uploaded: {}", xlsxFile.filename)
+                return HttpResponse.badRequest(ErrorResponse("File is empty"))
+            }
+
+            // Validate content type
+            val contentType = xlsxFile.contentType.orElse(null)
+            if (contentType != null &&
+                !contentType.name.contains("spreadsheet") &&
+                !contentType.name.contains("excel") &&
+                !contentType.name.contains("application/vnd.openxmlformats")) {
+                log.warn("Invalid content type: {}", contentType.name)
+                return HttpResponse.badRequest(ErrorResponse("Invalid file format. Please upload an Excel file."))
+            }
+
+            // Import assets
+            val result = xlsxFile.inputStream.use { stream ->
+                assetImportService.importFromExcel(stream, authentication)
+            }
+
+            log.info("Asset import complete for user {}: {} imported, {} skipped",
+                authentication.name, result.imported, result.skipped)
+
+            HttpResponse.ok(result)
+
+        } catch (e: IllegalArgumentException) {
+            log.warn("Asset import validation error: {}", e.message)
+            HttpResponse.badRequest(ErrorResponse(e.message ?: "Validation error"))
+
+        } catch (e: IOException) {
+            log.error("Asset import IO error", e)
+            HttpResponse.serverError<ErrorResponse>()
+                .body(ErrorResponse("Failed to read file: ${e.message}"))
+
+        } catch (e: Exception) {
+            log.error("Asset import failed for user: {}", authentication.name, e)
+            HttpResponse.serverError<ErrorResponse>()
+                .body(ErrorResponse("Failed to import assets: ${e.message}"))
+        }
+    }
 }
