@@ -29,6 +29,7 @@ open class OAuthService(
     private val tokenGenerator: TokenGenerator,
     private val objectMapper: ObjectMapper,
     private val microsoftErrorMapper: MicrosoftErrorMapper,
+    private val adminNotificationService: AdminNotificationService,
     @Client("\${oauth.http-client.url:https://api.github.com}") private val githubApiClient: HttpClient,
     @Client private val genericHttpClient: HttpClient
 ) {
@@ -197,10 +198,21 @@ open class OAuthService(
             }
 
             // Find or create user
-            val user = findOrCreateUser(provider, userInfo)
-            if (user == null) {
+            val userResult = findOrCreateUser(provider, userInfo)
+            if (userResult == null) {
                 oauthStateRepository.deleteByStateToken(state)
                 return CallbackResult.Error("Unable to create user account. Please contact support if this persists.")
+            }
+            val user = userResult.user
+
+            // Send notification if user was newly created via OAuth (Feature 027)
+            if (userResult.isNewUser) {
+                try {
+                    adminNotificationService.sendNewUserNotificationForOAuth(user, provider.name)
+                } catch (e: Exception) {
+                    // Log but don't fail OAuth flow if notification fails
+                    logger.error("Failed to send OAuth user notification: ${e.message}", e)
+                }
             }
 
             // Generate JWT token
@@ -426,13 +438,13 @@ open class OAuthService(
         return null
     }
 
-    private fun findOrCreateUser(provider: IdentityProvider, userInfo: UserInfoResponse): User? {
+    private fun findOrCreateUser(provider: IdentityProvider, userInfo: UserInfoResponse): UserCreationResult? {
         val email = userInfo.email ?: return null
-        
+
         // Try to find existing user by email
         val existingUserOpt = userRepository.findByEmail(email)
         if (existingUserOpt.isPresent) {
-            return existingUserOpt.get()
+            return UserCreationResult(user = existingUserOpt.get(), isNewUser = false)
         }
 
         // Auto-provision user if enabled
@@ -453,12 +465,24 @@ open class OAuthService(
         )
 
         return try {
-            userRepository.save(newUser)
+            val savedUser = userRepository.save(newUser)
+            logger.info("Created new user via OAuth: username={}, email={}, provider={}",
+                savedUser.username, savedUser.email, provider.name)
+            UserCreationResult(user = savedUser, isNewUser = true)
         } catch (e: Exception) {
             logger.error("Failed to create user: {}", e.message, e)
             null
         }
     }
+
+    /**
+     * Result of user lookup/creation during OAuth flow
+     * Feature: 027-admin-user-notifications
+     */
+    private data class UserCreationResult(
+        val user: User,
+        val isNewUser: Boolean
+    )
 
     data class TokenResponse(
         val accessToken: String,

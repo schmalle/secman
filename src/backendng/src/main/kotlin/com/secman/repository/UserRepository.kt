@@ -45,4 +45,8 @@ interface UserRepository : JpaRepository<User, Long> {
     // Note: User deletion validation requires service-level logic
     // since Asset has manualCreator/scanUploader FKs but User doesn't have reverse relationships.
     // Validation moved to UserDeletionValidator service.
+
+    // Note: For admin user queries, use findAll() and filter in service layer
+    // (e.g., users.filter { it.hasRole(Role.ADMIN) })
+    // Micronaut Data doesn't support querying on ElementCollection easily
 }

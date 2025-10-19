@@ -1,0 +1,187 @@
+openapi: 3.0.3
+info:
+  title: Notification Settings API
+  description: API endpoints for managing admin user notification settings
+  version: 1.0.0
+  contact:
+    name: Secman Development Team
+
+servers:
+  - url: http://localhost:8080/api
+    description: Local development server
+
+paths:
+  /settings/notifications:
+    get:
+      summary: Get notification settings
+      description: Retrieve current notification configuration settings (enabled status and sender email)
+      operationId: getNotificationSettings
+      tags:
+        - Notification Settings
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Successfully retrieved notification settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationSettingsDto'
+              examples:
+                enabled:
+                  summary: Notifications enabled with custom sender
+                  value:
+                    enabled: true
+                    senderEmail: noreply@secman.company.com
+                disabled:
+                  summary: Notifications disabled with default sender
+                  value:
+                    enabled: false
+                    senderEmail: noreply@secman.local
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    put:
+      summary: Update notification settings
+      description: Update notification configuration (enable/disable notifications and/or change sender email). Only ADMIN users can modify settings.
+      operationId: updateNotificationSettings
+      tags:
+        - Notification Settings
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationSettingsDto'
+            examples:
+              enable-with-custom-sender:
+                summary: Enable notifications with custom sender
+                value:
+                  enabled: true
+                  senderEmail: admin@secman.company.com
+              disable:
+                summary: Disable notifications
+                value:
+                  enabled: false
+                  senderEmail: noreply@secman.local
+      responses:
+        '200':
+          description: Successfully updated notification settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationSettingsDto'
+        '400':
+          description: Invalid request body (e.g., invalid email format)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalid-email:
+                  summary: Invalid sender email format
+                  value:
+                    status: 400
+                    message: Invalid sender email format
+                    timestamp: '2025-10-19T12:34:56Z'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from /api/auth/login
+
+  schemas:
+    NotificationSettingsDto:
+      type: object
+      description: Notification settings configuration
+      required:
+        - enabled
+        - senderEmail
+      properties:
+        enabled:
+          type: boolean
+          description: Whether admin notification emails are enabled for new user registrations
+          example: true
+        senderEmail:
+          type: string
+          format: email
+          description: Email address used as sender (From field) for notification emails
+          minLength: 5
+          maxLength: 255
+          example: noreply@secman.company.com
+          pattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+
+    ErrorResponse:
+      type: object
+      description: Standard error response format
+      required:
+        - status
+        - message
+        - timestamp
+      properties:
+        status:
+          type: integer
+          description: HTTP status code
+          example: 400
+        message:
+          type: string
+          description: Human-readable error message
+          example: Invalid sender email format
+        timestamp:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when error occurred
+          example: '2025-10-19T12:34:56Z'
+
+  responses:
+    Unauthorized:
+      description: Authentication required - missing or invalid JWT token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            status: 401
+            message: Unauthorized - authentication required
+            timestamp: '2025-10-19T12:34:56Z'
+
+    Forbidden:
+      description: Access denied - user does not have ADMIN role
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            status: 403
+            message: Forbidden - ADMIN role required
+            timestamp: '2025-10-19T12:34:56Z'
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            status: 500
+            message: Internal server error
+            timestamp: '2025-10-19T12:34:56Z'
+
+tags:
+  - name: Notification Settings
+    description: Endpoints for managing admin user notification configuration

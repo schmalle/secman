@@ -22,9 +22,10 @@ open class UserController(
     private val userRepository: UserRepository,
     private val userDeletionValidator: com.secman.service.UserDeletionValidator,
     private val workgroupRepository: com.secman.repository.WorkgroupRepository,
-    private val userMappingService: UserMappingService
+    private val userMappingService: UserMappingService,
+    private val adminNotificationService: com.secman.service.AdminNotificationService
 ) {
-    
+
     private val passwordEncoder = BCryptPasswordEncoder()
 
     @Serdeable
@@ -95,7 +96,7 @@ open class UserController(
 
     @Post
     @Transactional
-    open fun create(@Body request: CreateUserRequest): HttpResponse<*> {
+    open fun create(@Body request: CreateUserRequest, authentication: io.micronaut.security.authentication.Authentication): HttpResponse<*> {
         // Validation
         if (request.username.isBlank() || request.email.isBlank() || request.password.isBlank()) {
             return HttpResponse.badRequest(mapOf("error" to "Username, email, and password are required"))
@@ -148,6 +149,16 @@ open class UserController(
                 savedUser.workgroups.clear()
                 savedUser.workgroups.addAll(workgroups)
                 userRepository.update(savedUser)
+            }
+
+            // Send email notification to ADMIN users (async, non-blocking)
+            // Feature: 027-admin-user-notifications
+            try {
+                val createdByUsername = authentication.name
+                adminNotificationService.sendNewUserNotificationForManualCreation(savedUser, createdByUsername)
+            } catch (e: Exception) {
+                // Log but don't fail user creation if notification fails
+                // Notification failures are already logged in AdminNotificationService
             }
 
             return HttpResponse.ok(UserResponse.from(savedUser, includeWorkgroups = true))
