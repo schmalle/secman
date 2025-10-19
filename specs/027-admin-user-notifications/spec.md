@@ -14,7 +14,7 @@
 - Q: What email address should appear in the "From:" field of notification emails sent to admins? → A: Configurable "noreply@" address - e.g., noreply@secman.company.com
 - Q: How long should notification audit records be retained before automatic cleanup? → A: 30 days retention - Minimal retention for recent troubleshooting
 - Q: Should the system provide both HTML and plain-text versions of notification emails? → A: HTML only - Modern email clients only, simpler implementation
-- Q: Should SMTP configuration be in application.yml or database? → A: Database-driven - Email configuration stored in SystemSetting entity, retrieved at runtime, no static YAML config
+- Q: Should SMTP configuration be in application.yml or database? → A: Database-driven - Use existing EmailConfig table (emails_configs) that already stores SMTP settings, no new configuration needed
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -146,13 +146,23 @@ As an administrator, I want notification email failures to be logged clearly so 
 
 ### Key Entities
 
-- **SystemSetting**: Represents a configuration key-value pair stored in database. Settings include:
-  - Notification enabled/disabled: `notify_admins_on_new_user: true/false`
-  - Sender email address: `notification_sender_email: noreply@secman.company.com`
-  - SMTP configuration: `smtp_host`, `smtp_port`, `smtp_auth`, `smtp_starttls`, `smtp_username`, `smtp_password`
-  - All settings are persisted in database and cached in-memory for performance. No static YAML configuration.
+- **EmailConfig** (existing): Database table `emails_configs` stores SMTP configuration including:
+  - SMTP host, port, username, password (encrypted)
+  - TLS/SSL settings
+  - Sender email address and name
+  - Active/inactive status
+  - Used directly by EmailService for sending notifications
 
-- **EmailNotificationEvent**: Represents a sent notification email attempt. Contains recipient email, subject, body content, user context (new user details), send status (sent/failed), failure reason (if failed), and timestamp. Used for audit trail and monitoring. Records are automatically deleted after 30 days.
+- **EmailNotificationLog** (existing): Database table `email_notification_logs` logs all notification attempts with:
+  - Recipient email, subject, status (sent/failed)
+  - Failure reason if delivery failed
+  - Timestamps for audit trail
+  - Risk assessment ID for linking to originating event
+
+- **Feature-Specific Configuration** (new): A simple toggle (UI setting) to enable/disable notifications for new users:
+  - Stored as feature flag or admin UI preference
+  - When enabled, triggers email notifications to all ADMIN users
+  - Uses existing EmailConfig for sender details
 
 - **User** (existing, extended): Already contains username, email, roles. No structural changes needed, but user creation events will trigger notification logic.
 
