@@ -41,9 +41,78 @@
 - **Structure**: models/, services/, cli/, exporters/, lib/
 
 ## Recent Changes
+- 028-user-profile-page: User Profile Page (2025-10-19) - Profile page showing user email and roles
 - 027-admin-user-notifications: Admin User Notification System (2025-10-19) - Email notifications to ADMIN users for new user registrations
 - 025-role-based-access-control: Added Kotlin 2.1.0 / Java 21 (backend), TypeScript/JavaScript (frontend - Astro 5.14 + React 19) + Micronaut 4.4, Hibernate JPA, Apache POI 5.3, Astro, React 19, Bootstrap 5.3
-- 020-i-want-to: Added Kotlin 2.1.0 / Java 21 (backend), TypeScript/JavaScript (frontend - Astro 5.14 + React 19) + Micronaut 4.4, Hibernate JPA, Apache POI 5.3 (Excel), Apache Commons CSV 1.11.0 (CSV), Astro, React 19, Bootstrap 5.3
+
+### Feature 028: User Profile Page (2025-10-19)
+
+User profile page accessible from header dropdown menu showing username, email, and role badges.
+
+**Backend Components** (`src/backendng/`):
+  - **UserProfileDto.kt** - Data transfer object for user profile (username, email, roles)
+  - **UserProfileController.kt** - REST controller with:
+    - `GET /api/users/profile` - Get current user's profile (authenticated)
+    - Returns: UserProfileDto with username, email, roles array
+    - Security: @Secured(SecurityRule.IS_AUTHENTICATED) - requires valid JWT token
+    - Error handling: 404 Not Found if user deleted after login, 401 Unauthorized if not authenticated
+    - Excludes sensitive fields: passwordHash, id, createdAt, updatedAt
+  - **UserProfileContractTest.kt** - Contract tests:
+    - 200 success case with authenticated request
+    - 401 unauthorized case without authentication
+    - 404 not found case when user doesn't exist
+    - Verification that passwordHash is excluded from response
+
+**Frontend Components** (`src/frontend/src/components/`):
+  - **UserProfile.tsx** - React component with:
+    - Loading state UI with Bootstrap spinner
+    - Error state UI with Bootstrap alert and retry button
+    - Success state UI displaying username, email, and colored role badges
+    - getRoleBadgeClass() - Role-specific badge colors (ADMIN=danger/red, RELEASE_MANAGER=warning/yellow, VULN=info/blue, USER=secondary/gray)
+    - Bootstrap card structure with responsive layout
+  - **Header.tsx** - Updated user dropdown menu with:
+    - "Profile" menu item with person-circle icon
+    - Link to /profile page
+
+**Frontend Services** (`src/frontend/src/services/`):
+  - **userProfileService.ts** - API client:
+    - `getProfile()` - Fetch current user's profile data
+    - UserProfileData interface with username, email, roles fields
+
+**Frontend Pages** (`src/frontend/src/pages/`):
+  - **profile.astro** - Profile page with Layout wrapper and UserProfile component (client:load)
+
+**API Endpoints**:
+  - `GET /api/users/profile` - Get current user's profile (authenticated users only)
+
+**Features Implemented** (4 User Stories):
+1. **US1 (P1 - MVP)**: View Own Profile Information - Username, email, and roles with loading/error states
+2. **US2 (P1 - MVP)**: Navigate to Profile from User Menu - "Profile" menu item in header dropdown
+3. **US3 (P2)**: View Username on Profile - Username displayed prominently with "User Profile" heading
+4. **US4 (P2)**: Profile Page Layout and Design - Bootstrap card structure, responsive layout, colored role badges
+
+**Access Control**:
+- All authenticated users can view their own profile
+- No admin privileges required
+- User identified from JWT token in Authorization header
+
+**Data Model**:
+- Uses existing User entity (no schema changes required)
+- DTO pattern for safe data exposure
+- Excludes: passwordHash, id, timestamps, workgroups
+
+**Technical Implementation**:
+- **Authentication**: JWT-based with @Secured annotation
+- **Error Handling**: HttpResponse.notFound() pattern for missing users
+- **State Management**: React hooks (useState, useEffect) for loading/error/success states
+- **Styling**: Bootstrap 5.3 with colored badge pills, responsive container, card layout
+- **Security**: Factory method pattern in DTO (fromUser companion object) ensures safe field exposure
+
+**Statistics**:
+- Backend files: 2 new (DTO, controller), 1 test file
+- Frontend files: 3 new (component, service, page), 1 modified (Header.tsx)
+- API endpoints: 1 new (GET /api/users/profile)
+- Contract tests: 4 test scenarios
 
 ### Feature 027: Admin User Notification System (2025-10-19)
 
@@ -97,47 +166,18 @@ Automated email notifications sent to all ADMIN users when new users are created
 5. **US5 (P3)**: Email Delivery Monitoring - Comprehensive logging of all send attempts (success/failure)
 
 **Email Content**:
-- Subject: "New User Registered: {username}"
-- Manual Creation: Username, email, roles, registration method (Manual), creator username, timestamp
-- OAuth Registration: Username, email, roles, registration method (OAuth), provider name, timestamp
-- Professional HTML with tables, responsive design, branding
 
 **Access Control**:
-- Notification settings: ADMIN role only
-- Email recipients: ALL users with ADMIN role (filtered at runtime)
-- Non-admin users cannot see or modify notification settings
 
 **Data Model**:
-- **admin_notification_settings** table:
   - `id` (PK), `notifications_enabled` (boolean, default true), `sender_email` (varchar), `updated_by` (varchar), `created_at`, `updated_at`
   - Single-row table (only one settings record exists)
-- Uses existing `email_configs` table for SMTP configuration (database-driven, no application.yml changes)
-- Uses existing EmailService for email delivery
 
 **Technical Implementation**:
-- **Async/Non-blocking**: @Async methods with CompletableFuture - user creation never fails due to email errors
-- **Caching**: In-memory atomic cache for enabled state - no database query per notification check
-- **Fire-and-forget**: Email sending runs asynchronously, exceptions caught and logged
-- **Email Validation**: Skips ADMIN users with invalid/missing email addresses
-- **Graceful Degradation**: Works even if no ADMIN users exist, email config inactive, or SMTP fails
-- **No Retries**: Single-attempt delivery per user requirement (fail fast)
-- **Provider Detection**: OAuth flow tracks new vs existing users, only notifies for new registrations
 
 **Edge Cases Handled**:
-- No ADMIN users in system (logs warning, continues)
-- ADMIN user has invalid/missing email (skips that user, continues with others)
-- Email configuration not active (EmailService handles gracefully)
-- EmailService fails (logged, user creation succeeds)
-- Settings retrieved before database ready (safe defaults)
-- Notifications disabled (check skips sending)
-- Multiple ADMIN users (all receive identical emails)
 
 **Statistics**:
-- Database tables: 1 new (admin_notification_settings)
-- Backend files: 6 new (entity, repo, DTO, service, email generator, controller)
-- Frontend files: 3 new (component, service, page), 1 modified (AdminPage.tsx)
-- API endpoints: 2 new (GET/PUT /api/settings/notifications)
-- Email templates: 2 (manual creation, OAuth registration)
 
 ### Feature 018: Account Vulns - AWS Account-Based Vulnerability Overview (2025-10-14)
 

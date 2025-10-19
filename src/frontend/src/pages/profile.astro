@@ -1,0 +1,18 @@
+---
+import Layout from '../layouts/Layout.astro';
+import UserProfile from '../components/UserProfile';
+
+/**
+ * User Profile Page
+ * Feature 028: User Profile Page
+ *
+ * Route: /profile
+ * Access: Authenticated users only (enforced by Astro middleware)
+ *
+ * Displays user's profile information using UserProfile React component
+ */
+---
+
+<Layout title="User Profile">
+  <UserProfile client:load />
+</Layout>

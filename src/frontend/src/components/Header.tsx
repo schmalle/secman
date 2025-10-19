@@ -105,7 +105,7 @@ const Header = () => {
                                     <i className="bi bi-person-circle me-1"></i> {user.username}
                                 </a>
                                 <ul className="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdownMenuLink">
-                                    <li><a className="dropdown-item" href="#">Profile</a></li> {/* Placeholder */}
+                                    <li><a className="dropdown-item" href="/profile"><i className="bi bi-person-circle me-2"></i>Profile</a></li>
                                     <li><a className="dropdown-item" href="#">Settings</a></li> {/* Placeholder */}
                                     <li><hr className="dropdown-divider" /></li>
                                     <li>
