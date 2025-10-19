@@ -41,9 +41,103 @@
 - **Structure**: models/, services/, cli/, exporters/, lib/
 
 ## Recent Changes
-- 027-admin-user-notifications: Added Kotlin 2.1.0 / Java 21 (backend), TypeScript/JavaScript (frontend - Astro 5.14 + React 19) + Micronaut 4.4, Hibernate JPA, Micronaut Email (for SMTP), Astro, React 19, Bootstrap 5.3
+- 027-admin-user-notifications: Admin User Notification System (2025-10-19) - Email notifications to ADMIN users for new user registrations
 - 025-role-based-access-control: Added Kotlin 2.1.0 / Java 21 (backend), TypeScript/JavaScript (frontend - Astro 5.14 + React 19) + Micronaut 4.4, Hibernate JPA, Apache POI 5.3, Astro, React 19, Bootstrap 5.3
 - 020-i-want-to: Added Kotlin 2.1.0 / Java 21 (backend), TypeScript/JavaScript (frontend - Astro 5.14 + React 19) + Micronaut 4.4, Hibernate JPA, Apache POI 5.3 (Excel), Apache Commons CSV 1.11.0 (CSV), Astro, React 19, Bootstrap 5.3
+
+### Feature 027: Admin User Notification System (2025-10-19)
+
+Automated email notifications sent to all ADMIN users when new users are created (manual creation or OAuth registration).
+
+**Backend Components** (`src/backendng/`):
+  - **AdminNotificationSettings.kt** - Entity storing notification preferences (enabled/disabled, sender email)
+  - **AdminNotificationSettingsRepository.kt** - JPA repository for settings persistence
+  - **AdminNotificationConfigDto.kt** - DTO for API requests/responses with validation
+  - **AdminNotificationService.kt** - Service layer with:
+    - In-memory caching (AtomicBoolean/AtomicReference) for performance
+    - `isNotificationEnabled()` - Fast cached check
+    - `sendNewUserNotificationForManualCreation()` - @Async notification for manual user creation
+    - `sendNewUserNotificationForOAuth()` - @Async notification for OAuth registration
+    - Email validation, duplicate prevention, graceful error handling
+  - **AdminNotificationEmailGenerator.kt** - Professional HTML email templates:
+    - `generateManualCreationEmail()` - Template for admin-created users (includes creator name)
+    - `generateOAuthRegistrationEmail()` - Template for OAuth users (includes provider name)
+    - Responsive HTML with tables, branding, formatted timestamps
+  - **NotificationSettingsController.kt** - REST controller (ADMIN-only):
+    - `GET /api/settings/notifications` - Retrieve current settings
+    - `PUT /api/settings/notifications` - Update settings (enabled, senderEmail)
+  - **UserController.kt** - Enhanced to call notification service after user creation
+  - **OAuthService.kt** - Enhanced to call notification service for new OAuth registrations
+
+**Frontend Components** (`src/frontend/src/components/`):
+  - **AdminNotificationSettings.tsx** - React component with:
+    - Enable/disable toggle for notifications
+    - Sender email configuration input
+    - Loading states, success/error messages
+    - Auto-refresh on page reload
+  - **AdminPage.tsx** - Updated with "Notification Settings" card
+
+**Frontend Services** (`src/frontend/src/services/`):
+  - **adminNotificationSettingsService.ts** - API client:
+    - `getNotificationSettings()` - Fetch current settings
+    - `updateNotificationSettings()` - Update settings
+
+**Frontend Pages** (`src/frontend/src/pages/admin/`):
+  - **notification-settings.astro** - Dedicated admin settings page
+
+**API Endpoints**:
+  - `GET /api/settings/notifications` - Get notification settings (ADMIN only)
+  - `PUT /api/settings/notifications` - Update settings (ADMIN only)
+
+**Features Implemented** (5 User Stories):
+1. **US1 (P1 - MVP)**: Enable/Disable Email Notifications - Toggle in Admin UI with persistence
+2. **US2 (P1)**: Receive Notifications for Manual User Creation - All ADMIN users emailed when user created via "Manage Users" UI
+3. **US3 (P2)**: Receive Notifications for OAuth Registration - All ADMIN users emailed for new OAuth registrations (GitHub, Google, Microsoft)
+4. **US4 (P2)**: Professional Email Formatting - HTML templates with user details, creator/provider info, timestamps
+5. **US5 (P3)**: Email Delivery Monitoring - Comprehensive logging of all send attempts (success/failure)
+
+**Email Content**:
+- Subject: "New User Registered: {username}"
+- Manual Creation: Username, email, roles, registration method (Manual), creator username, timestamp
+- OAuth Registration: Username, email, roles, registration method (OAuth), provider name, timestamp
+- Professional HTML with tables, responsive design, branding
+
+**Access Control**:
+- Notification settings: ADMIN role only
+- Email recipients: ALL users with ADMIN role (filtered at runtime)
+- Non-admin users cannot see or modify notification settings
+
+**Data Model**:
+- **admin_notification_settings** table:
+  - `id` (PK), `notifications_enabled` (boolean, default true), `sender_email` (varchar), `updated_by` (varchar), `created_at`, `updated_at`
+  - Single-row table (only one settings record exists)
+- Uses existing `email_configs` table for SMTP configuration (database-driven, no application.yml changes)
+- Uses existing EmailService for email delivery
+
+**Technical Implementation**:
+- **Async/Non-blocking**: @Async methods with CompletableFuture - user creation never fails due to email errors
+- **Caching**: In-memory atomic cache for enabled state - no database query per notification check
+- **Fire-and-forget**: Email sending runs asynchronously, exceptions caught and logged
+- **Email Validation**: Skips ADMIN users with invalid/missing email addresses
+- **Graceful Degradation**: Works even if no ADMIN users exist, email config inactive, or SMTP fails
+- **No Retries**: Single-attempt delivery per user requirement (fail fast)
+- **Provider Detection**: OAuth flow tracks new vs existing users, only notifies for new registrations
+
+**Edge Cases Handled**:
+- No ADMIN users in system (logs warning, continues)
+- ADMIN user has invalid/missing email (skips that user, continues with others)
+- Email configuration not active (EmailService handles gracefully)
+- EmailService fails (logged, user creation succeeds)
+- Settings retrieved before database ready (safe defaults)
+- Notifications disabled (check skips sending)
+- Multiple ADMIN users (all receive identical emails)
+
+**Statistics**:
+- Database tables: 1 new (admin_notification_settings)
+- Backend files: 6 new (entity, repo, DTO, service, email generator, controller)
+- Frontend files: 3 new (component, service, page), 1 modified (AdminPage.tsx)
+- API endpoints: 2 new (GET/PUT /api/settings/notifications)
+- Email templates: 2 (manual creation, OAuth registration)
 
 ### Feature 018: Account Vulns - AWS Account-Based Vulnerability Overview (2025-10-14)
 
@@ -195,6 +289,15 @@ Complete user interface for release management with 8 major components:
 ### Feature 001: Admin Role Management (2024-10-01)
 
 ## Key Entities
+
+### AdminNotificationSettings (NEW - Feature 027)
+- **Fields**: id, notificationsEnabled (boolean, default true), senderEmail (varchar 255), updatedBy (varchar 100), createdAt, updatedAt
+- **Purpose**: Store configuration for admin user notifications when new users are created
+- **Table**: admin_notification_settings
+- **Validation**: Sender email format validation
+- **Access**: ADMIN role only for read/write
+- **Behavior**: Single-row table (only one settings record), cached in-memory for performance
+- **Methods**: createDefault(), update(), validateSenderEmail()
 
 ### Release (NEW - Feature 011)
 - **Fields**: id, version (semantic versioning), name, description, status (DRAFT/PUBLISHED/ARCHIVED), releaseDate, createdBy, createdAt, updatedAt

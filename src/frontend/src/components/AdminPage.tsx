@@ -216,13 +216,13 @@ const AdminPage = () => {
                     <div className="card">
                         <div className="card-body">
                             <h5 className="card-title">
-                                <i className="bi bi-gear-fill me-2"></i>
-                                System Settings
+                                <i className="bi bi-bell-fill me-2"></i>
+                                Notification Settings
                             </h5>
-                            <p className="card-text">Configure system-wide settings and preferences.</p>
-                            <button className="btn btn-secondary" disabled>
-                                Coming Soon
-                            </button>
+                            <p className="card-text">Configure email notifications for new user registrations.</p>
+                            <a href="/admin/notification-settings" className="btn btn-primary">
+                                Configure Notifications
+                            </a>
                         </div>
                     </div>
                 </div>
