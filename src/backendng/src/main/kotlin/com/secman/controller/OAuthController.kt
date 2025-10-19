@@ -106,7 +106,8 @@ class OAuthController(
             // Find provider ID from state
             val stateOpt = oauthService.findStateByValue(state)
             if (!stateOpt.isPresent) {
-                logger.error("Invalid OAuth state")
+                logger.error("Invalid OAuth state: state token not found in database (first 10 chars: {})", state.take(10) + "...")
+                logger.error("Possible causes: transaction not committed, state expired, or state already used")
                 return HttpResponse.redirect<Any>(URI.create("$frontendBaseUrl/login?error=${java.net.URLEncoder.encode("Invalid or expired state parameter", "UTF-8")}"))
             }
 
@@ -154,7 +155,8 @@ class OAuthController(
             // Find provider ID from state
             val stateOpt = oauthService.findStateByValue(callbackRequest.state)
             if (!stateOpt.isPresent) {
-                logger.error("Invalid OAuth state")
+                logger.error("Invalid OAuth state in API callback: state token not found (first 10 chars: {})",
+                    callbackRequest.state.take(10) + "...")
                 return HttpResponse.badRequest(ErrorResponse("Invalid or expired state parameter"))
             }
 

@@ -45,8 +45,11 @@ open class OAuthService(
 
     /**
      * Build authorization URL for OAuth provider
+     *
+     * Note: This method is NOT @Transactional to ensure the OAuth state is committed
+     * to the database immediately before redirecting to the OAuth provider. This prevents
+     * race conditions where the callback arrives before the transaction commits.
      */
-    @Transactional
     open fun buildAuthorizationUrl(providerId: Long, baseUrl: String): String? {
         val providerOpt = identityProviderRepository.findById(providerId)
         if (!providerOpt.isPresent) {
@@ -67,20 +70,23 @@ open class OAuthService(
         val state = generateState()
         val redirectUri = "$baseUrl/oauth/callback"
 
-        // Save state
+        // Save state (this will commit immediately since method is not @Transactional)
         val oauthState = OAuthState(
             stateToken = state,
             providerId = providerId,
             redirectUri = redirectUri
         )
         val savedState = oauthStateRepository.save(oauthState)
-        
+        logger.info("Saved OAuth state with token {} (first 10 chars) for provider {}, expires at {}",
+            state.take(10) + "...", providerId, savedState.expiresAt)
+
         // Verify state was actually saved
         val verificationState = oauthStateRepository.findByStateToken(state)
         if (!verificationState.isPresent) {
-            logger.error("Failed to verify saved OAuth state")
+            logger.error("Failed to verify saved OAuth state - state not found after save!")
             return null
         }
+        logger.debug("Verified OAuth state exists in database before redirect")
 
         // Build authorization URL - replace {tenantId} placeholder for Microsoft providers
         var authUrl = provider.authorizationUrl ?: return null
@@ -105,18 +111,20 @@ open class OAuthService(
         // Validate state
         val stateOpt = oauthStateRepository.findByStateToken(state)
         if (!stateOpt.isPresent) {
-            logger.error("OAuth state not found in database")
+            logger.error("OAuth state not found in database for state token: {}", state.take(10) + "...")
+            logger.error("This may indicate: 1) State was never saved (transaction timing issue), 2) State was already used/deleted, 3) State expired and was cleaned up")
             return CallbackResult.Error("Invalid or expired state parameter")
         }
 
         val oauthState = stateOpt.get()
         if (oauthState.providerId != providerId) {
-            logger.error("State provider mismatch: expected {}, got {}", oauthState.providerId, providerId)
+            logger.error("State provider mismatch: state belongs to provider {}, but callback is for provider {}", oauthState.providerId, providerId)
             return CallbackResult.Error("State provider mismatch")
         }
 
         if (oauthState.expiresAt.isBefore(LocalDateTime.now())) {
-            logger.error("Expired OAuth state")
+            logger.error("Expired OAuth state: created at {}, expired at {}, current time {}",
+                oauthState.createdAt, oauthState.expiresAt, LocalDateTime.now())
             oauthStateRepository.deleteByStateToken(state)
             return CallbackResult.Error("Expired state parameter")
         }
