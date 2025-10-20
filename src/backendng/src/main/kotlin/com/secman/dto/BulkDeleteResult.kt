@@ -1,5 +1,7 @@
 package com.secman.dto
 
+import io.micronaut.serde.annotation.Serdeable
+
 /**
  * Response DTO for bulk delete operation with counts
  * Feature: 029-asset-bulk-operations (User Story 1 - Bulk Delete Assets)
@@ -12,6 +14,7 @@ package com.secman.dto
  * - FR-007: Handle cascade deletion of related data (vulnerabilities, scan results)
  * - Contract: contracts/bulk-delete.yaml
  */
+@Serdeable
 data class BulkDeleteResult(
     val deletedAssets: Int,
     val deletedVulnerabilities: Int,

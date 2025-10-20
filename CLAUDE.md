@@ -41,10 +41,9 @@
 - **Structure**: models/, services/, cli/, exporters/, lib/
 
 ## Recent Changes
+- 030-crowdstrike-asset-auto-create: Added Kotlin 2.1.0 / Java 21 (backend), TypeScript/JavaScript (frontend - Astro 5.14 + React 19) + Micronaut 4.4, Hibernate JPA, React 19, Bootstrap 5.3, Axios
 - 029-asset-bulk-operations: Asset Bulk Operations (2025-10-19) - Bulk delete, export, and import for assets
 - 028-user-profile-page: User Profile Page (2025-10-19) - Profile page showing user email and roles
-- 027-admin-user-notifications: Admin User Notification System (2025-10-19) - Email notifications to ADMIN users for new user registrations
-- 025-role-based-access-control: Added Kotlin 2.1.0 / Java 21 (backend), TypeScript/JavaScript (frontend - Astro 5.14 + React 19) + Micronaut 4.4, Hibernate JPA, Apache POI 5.3, Astro, React 19, Bootstrap 5.3
 
 ### Feature 029: Asset Bulk Operations (2025-10-19)
 
@@ -115,33 +114,14 @@ Comprehensive asset management operations including bulk delete, Excel export wi
 4. **US4 (P2)**: Sidebar Navigation - Expandable Import/Export menus with asset links
 
 **Access Control**:
-- Bulk delete: ADMIN role only (returns 403 Forbidden otherwise)
-- Export: All authenticated users (workgroup-filtered: ADMIN sees all, users see their workgroups + owned assets)
-- Import: All authenticated users (tracks importing user as creator)
 
 **Performance Targets**:
-- Bulk delete: <30s for 10K+ assets (target from SC-001)
-- Export: <15s for 10K assets (SXSSFWorkbook streaming, SC-002)
-- Import: <60s for 5K assets (XSSFWorkbook in-memory, SC-003)
 
 **Excel Format** (Import/Export):
-- Required columns: Name, Type, Owner
-- Optional columns: IP Address, Description, Groups, Cloud Account ID, Cloud Instance ID, OS Version, AD Domain, Workgroups, Created At, Updated At, Last Seen
-- Case-insensitive headers
-- Workgroups: Comma-separated workgroup names (export and import)
 
 **Technical Implementation**:
-- **Concurrency Control**: AtomicBoolean semaphore returns 409 Conflict if bulk delete in progress
-- **Transaction Safety**: @Transactional with manual cascade delete order
-- **Memory Optimization**: SXSSFWorkbook for export, XSSFWorkbook for import
-- **Error Handling**: Per-row error collection with structured messages
-- **Workgroup Integration**: AssetFilterService.getAccessibleAssets() for export filtering
 
 **Statistics**:
-- Backend files: 4 new DTOs, 3 new services, 2 modified controllers
-- Frontend files: 1 new component, 1 new service, 4 modified components
-- API endpoints: 3 new (1 DELETE, 1 GET, 1 POST)
-- No database schema changes required
 
 ### Feature 028: User Profile Page (2025-10-19)
 
@@ -190,27 +170,12 @@ User profile page accessible from header dropdown menu showing username, email, 
 4. **US4 (P2)**: Profile Page Layout and Design - Bootstrap card structure, responsive layout, colored role badges
 
 **Access Control**:
-- All authenticated users can view their own profile
-- No admin privileges required
-- User identified from JWT token in Authorization header
 
 **Data Model**:
-- Uses existing User entity (no schema changes required)
-- DTO pattern for safe data exposure
-- Excludes: passwordHash, id, timestamps, workgroups
 
 **Technical Implementation**:
-- **Authentication**: JWT-based with @Secured annotation
-- **Error Handling**: HttpResponse.notFound() pattern for missing users
-- **State Management**: React hooks (useState, useEffect) for loading/error/success states
-- **Styling**: Bootstrap 5.3 with colored badge pills, responsive container, card layout
-- **Security**: Factory method pattern in DTO (fromUser companion object) ensures safe field exposure
 
 **Statistics**:
-- Backend files: 2 new (DTO, controller), 1 test file
-- Frontend files: 3 new (component, service, page), 1 modified (Header.tsx)
-- API endpoints: 1 new (GET /api/users/profile)
-- Contract tests: 4 test scenarios
 
 ### Feature 027: Admin User Notification System (2025-10-19)
 

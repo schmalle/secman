@@ -30,6 +30,16 @@ interface AssetRepository : JpaRepository<Asset, Long> {
      */
     fun findByName(name: String): Optional<Asset>
 
+    /**
+     * Find asset by case-insensitive name match
+     * Prevents duplicate asset creation with different casing (e.g., "SERVER1" vs "server1")
+     * Related to: Feature 030 (CrowdStrike Asset Auto-Creation) - FR-006
+     *
+     * @param name The asset name (hostname, case-insensitive)
+     * @return The asset if found, null otherwise
+     */
+    fun findByNameIgnoreCase(name: String): Asset?
+
     // MCP Tool Support - Feature 006: Asset inventory queries with pagination
 
     /**
