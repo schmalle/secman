@@ -4,6 +4,7 @@ import com.secman.dto.BulkDeleteResult
 import com.secman.repository.AssetRepository
 import com.secman.repository.VulnerabilityRepository
 import com.secman.repository.ScanResultRepository
+import com.secman.repository.ScanPortRepository
 import io.micronaut.transaction.annotation.Transactional
 import jakarta.inject.Singleton
 import jakarta.persistence.EntityManager
@@ -31,6 +32,7 @@ open class AssetBulkDeleteService(
     private val assetRepository: AssetRepository,
     private val vulnerabilityRepository: VulnerabilityRepository,
     private val scanResultRepository: ScanResultRepository,
+    private val scanPortRepository: ScanPortRepository,
     private val entityManager: EntityManager
 ) {
 
@@ -66,25 +68,36 @@ open class AssetBulkDeleteService(
             val assetCount = assetRepository.count().toInt()
             val vulnCount = vulnerabilityRepository.count().toInt()
             val scanResultCount = scanResultRepository.count().toInt()
+            val scanPortCount = scanPortRepository.count().toInt()
 
-            log.info("Entities to delete: $assetCount assets, $vulnCount vulnerabilities, $scanResultCount scan results")
+            log.info("Entities to delete: $assetCount assets, $vulnCount vulnerabilities, $scanResultCount scan results, $scanPortCount scan ports")
 
             // Manual cascade delete in correct order (children first)
-            // Step 1: Clear asset-workgroup join table (native SQL)
+            // Step 1: Nullify demand.existing_asset_id references (preserves demand records)
+            val nullifiedDemands = entityManager
+                .createNativeQuery("UPDATE demand SET existing_asset_id = NULL WHERE existing_asset_id IS NOT NULL")
+                .executeUpdate()
+            log.info("Nullified $nullifiedDemands demand asset references")
+
+            // Step 2: Clear asset-workgroup join table (native SQL)
             val deletedWorkgroupLinks = entityManager
                 .createNativeQuery("DELETE FROM asset_workgroups")
                 .executeUpdate()
             log.info("Deleted $deletedWorkgroupLinks asset-workgroup links")
 
-            // Step 2: Delete all vulnerabilities
+            // Step 3: Delete all vulnerabilities
             vulnerabilityRepository.deleteAll()
             log.info("Deleted $vulnCount vulnerabilities")
 
-            // Step 3: Delete all scan results
+            // Step 4: Delete all scan ports (children of scan results)
+            scanPortRepository.deleteAll()
+            log.info("Deleted $scanPortCount scan ports")
+
+            // Step 5: Delete all scan results
             scanResultRepository.deleteAll()
             log.info("Deleted $scanResultCount scan results")
 
-            // Step 4: Delete all assets
+            // Step 6: Delete all assets
             assetRepository.deleteAll()
             log.info("Deleted $assetCount assets")
 

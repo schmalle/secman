@@ -12,6 +12,7 @@ import io.micronaut.http.annotation.*
 import io.micronaut.scheduling.TaskExecutors
 import io.micronaut.scheduling.annotation.ExecuteOn
 import io.micronaut.security.annotation.Secured
+import io.micronaut.security.authentication.Authentication
 import io.micronaut.security.rules.SecurityRule
 import jakarta.validation.Valid
 import jakarta.validation.constraints.NotBlank
@@ -176,29 +177,43 @@ open class CrowdStrikeController(
     }
 
     /**
-     * Save CrowdStrike vulnerabilities to database
+     * Save CrowdStrike vulnerabilities to database with asset auto-creation
+     *
+     * Feature 030 - CrowdStrike Asset Auto-Creation
+     * Tasks: T012, T013
      *
      * @param request Save request with hostname and vulnerabilities
+     * @param authentication Current authenticated user
      * @return CrowdStrikeSaveResponse with save results
      */
     @Post("/crowdstrike/vulnerabilities/save")
     open fun saveVulnerabilities(
-        @Body @Valid request: CrowdStrikeSaveRequest
+        @Body @Valid request: CrowdStrikeSaveRequest,
+        authentication: Authentication  // T012: Pass authentication to service
     ): HttpResponse<*> {
-        log.info("Received CrowdStrike save request: hostname={}, count={}", request.hostname, request.vulnerabilities.size)
+        val username = authentication.name
+        log.info("Received CrowdStrike save request: hostname={}, count={}, user={}", request.hostname, request.vulnerabilities.size, username)
 
         return try {
-            val response = crowdStrikeService.saveToDatabase(request.hostname, request.vulnerabilities)
+            val response = crowdStrikeService.saveToDatabase(request, authentication)  // T012: Pass both parameters
 
-            log.info("CrowdStrike save successful: {}", response.message)
+            log.info("CrowdStrike save successful: {}, user={}", response.message, username)
             HttpResponse.ok(response)
         } catch (e: IllegalArgumentException) {
-            log.warn("Invalid save request", e)
+            log.warn("Invalid save request: user={}", username, e)
             HttpResponse.badRequest(mapOf("error" to (e.message ?: "Invalid request")))
         } catch (e: Exception) {
-            log.error("Database error saving vulnerabilities", e)
+            // T013: Role-based error messages
+            val isAdmin = authentication.roles.contains("ADMIN")
+            val errorMessage = if (isAdmin) {
+                "Database error: ${e.message ?: "Unable to save vulnerabilities"}"
+            } else {
+                "Database error: Unable to save vulnerabilities"
+            }
+
+            log.error("Database error saving vulnerabilities: user={}", username, e)
             HttpResponse.status<Map<String, String>>(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(mapOf("error" to "Database error: Unable to save vulnerabilities"))
+                .body(mapOf("error" to errorMessage))
         }
     }
 

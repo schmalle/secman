@@ -49,10 +49,12 @@ export interface CrowdStrikeSaveRequest {
 /**
  * Save Response
  * Matches backend CrowdStrikeSaveResponse
+ * Feature 030 - CrowdStrike Asset Auto-Creation
  */
 export interface CrowdStrikeSaveResponse {
     message: string;
     vulnerabilitiesSaved: number;
+    vulnerabilitiesSkipped: number;  // Feature 030: Added for T014
     assetsCreated: number;
     errors: string[];
 }
