@@ -15,17 +15,23 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { 
-    getCurrentVulnerabilities, 
-    type CurrentVulnerability, 
-    type PaginatedVulnerabilitiesResponse 
+import {
+    getCurrentVulnerabilities,
+    type CurrentVulnerability,
+    type PaginatedVulnerabilitiesResponse
 } from '../services/vulnerabilityManagementService';
 import OverdueStatusBadge from './OverdueStatusBadge';
+import ExceptionRequestModal from './ExceptionRequestModal';
 
 const CurrentVulnerabilitiesTable: React.FC = () => {
     const [paginatedResponse, setPaginatedResponse] = useState<PaginatedVulnerabilitiesResponse | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+    // Exception request modal state
+    const [showRequestModal, setShowRequestModal] = useState(false);
+    const [selectedVulnerability, setSelectedVulnerability] = useState<CurrentVulnerability | null>(null);
 
     // Filter states
     const [severityFilter, setSeverityFilter] = useState<string>('');
@@ -68,6 +74,28 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
     const handleFilterChange = () => {
         // Reset to first page when filters change
         setCurrentPage(0);
+    };
+
+    const handleRequestException = (vuln: CurrentVulnerability) => {
+        setSelectedVulnerability(vuln);
+        setShowRequestModal(true);
+    };
+
+    const handleModalClose = () => {
+        setShowRequestModal(false);
+        setSelectedVulnerability(null);
+    };
+
+    const handleRequestSuccess = () => {
+        setSuccessMessage('Exception request submitted successfully! Your request is pending review.');
+
+        // Auto-dismiss success message after 5 seconds
+        setTimeout(() => {
+            setSuccessMessage(null);
+        }, 5000);
+
+        // Refresh the vulnerability list
+        fetchVulnerabilities();
     };
 
     const handleSort = (field: keyof CurrentVulnerability) => {
@@ -280,6 +308,24 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                 </div>
             </div>
 
+            {/* Success Message */}
+            {successMessage && (
+                <div className="row mb-3">
+                    <div className="col-12">
+                        <div className="alert alert-success alert-dismissible fade show" role="alert">
+                            <i className="bi bi-check-circle me-2"></i>
+                            {successMessage}
+                            <button
+                                type="button"
+                                className="btn-close"
+                                onClick={() => setSuccessMessage(null)}
+                                aria-label="Close"
+                            ></button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Filters */}
             <div className="row mb-4">
                 <div className="col-md-3">
@@ -427,6 +473,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                                                         Overdue Status
                                                         <SortIcon field="overdueStatus" />
                                                     </th>
+                                                    <th>Actions</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -459,6 +506,28 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                                                                 exceptionEndDate={vuln.exceptionEndDate}
                                                             />
                                                         </td>
+                                                        <td>
+                                                            {vuln.overdueStatus === 'OVERDUE' ? (
+                                                                <button
+                                                                    className="btn btn-sm btn-outline-primary"
+                                                                    onClick={() => handleRequestException(vuln)}
+                                                                    disabled={vuln.hasException}
+                                                                    title={vuln.hasException ? 'Exception already exists' : 'Request an exception for this vulnerability'}
+                                                                >
+                                                                    <i className="bi bi-shield-plus me-1"></i>
+                                                                    Request Exception
+                                                                </button>
+                                                            ) : (
+                                                                <button
+                                                                    className="btn btn-sm btn-outline-secondary"
+                                                                    disabled={true}
+                                                                    title="Exceptions can only be requested for overdue vulnerabilities"
+                                                                >
+                                                                    <i className="bi bi-shield-plus me-1"></i>
+                                                                    Request Exception
+                                                                </button>
+                                                            )}
+                                                        </td>
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -483,6 +552,18 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                     </a>
                 </div>
             </div>
+
+            {/* Exception Request Modal */}
+            {selectedVulnerability && (
+                <ExceptionRequestModal
+                    isOpen={showRequestModal}
+                    vulnerabilityId={selectedVulnerability.id}
+                    vulnerabilityCveId={selectedVulnerability.vulnerabilityId}
+                    assetName={selectedVulnerability.assetName}
+                    onClose={handleModalClose}
+                    onSuccess={handleRequestSuccess}
+                />
+            )}
         </div>
     );
 };

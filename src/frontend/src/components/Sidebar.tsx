@@ -9,6 +9,7 @@ import {
     hasRiskAccess,
     hasReqAccess
 } from '../utils/permissions';
+import { connectToBadgeUpdates } from '../services/exceptionBadgeService';
 
 const Sidebar = () => {
     const [requirementsExpanded, setRequirementsExpanded] = useState(false);
@@ -23,6 +24,7 @@ const Sidebar = () => {
     const [hasRisk, setHasRisk] = useState(false);
     const [hasReq, setHasReq] = useState(false);
     const [userRoles, setUserRoles] = useState<string[]>([]);
+    const [pendingExceptionCount, setPendingExceptionCount] = useState<number>(0);
 
     const toggleRequirements = () => {
         setRequirementsExpanded(!requirementsExpanded);
@@ -55,6 +57,24 @@ const Sidebar = () => {
         // Cleanup listener on unmount
         return () => window.removeEventListener('userLoaded', checkRoles);
     }, []);
+
+    // Connect to real-time SSE updates for exception approval badge
+    // Feature: 031-vuln-exception-approval, Phase 6: Real-Time Badge Updates
+    useEffect(() => {
+        // Only connect if user has ADMIN or SECCHAMPION role (can approve exceptions)
+        const canApprove = userRoles.includes('ADMIN') || userRoles.includes('SECCHAMPION');
+        if (!canApprove) {
+            return;
+        }
+
+        // Connect to SSE endpoint for real-time count updates
+        const disconnect = connectToBadgeUpdates((count) => {
+            setPendingExceptionCount(count);
+        });
+
+        // Cleanup on unmount
+        return () => disconnect();
+    }, [userRoles]); // Re-connect if user roles change
 
     return (
         <nav id="sidebar" className="bg-light border-end">
@@ -296,6 +316,23 @@ const Sidebar = () => {
                                         <i className="bi bi-x-circle me-2"></i> Exceptions
                                     </a>
                                 </li>
+                                <li>
+                                    <a href="/my-exception-requests" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-clipboard-check me-2"></i> My Exception Requests
+                                    </a>
+                                </li>
+                                {(userRoles.includes('ADMIN') || userRoles.includes('SECCHAMPION')) && (
+                                    <li>
+                                        <a href="/exception-approvals" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                            <i className="bi bi-shield-check me-2"></i> Approve Exceptions
+                                            {pendingExceptionCount > 0 && (
+                                                <span className="badge bg-danger ms-auto" title={`${pendingExceptionCount} pending approval${pendingExceptionCount > 1 ? 's' : ''}`}>
+                                                    {pendingExceptionCount}
+                                                </span>
+                                            )}
+                                        </a>
+                                    </li>
+                                )}
                                 {isAdmin && (
                                     <li>
                                         <a href="/scans" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">

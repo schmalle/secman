@@ -393,23 +393,3 @@ data class McpAuditLog(
                "operation=$operation, toolName=$toolName, severity=$severity)"
     }
 }
-
-/**
- * Severity levels for audit events.
- */
-enum class AuditSeverity {
-    /**
-     * Informational events - normal operations.
-     */
-    INFO,
-
-    /**
-     * Warning events - unusual but not necessarily problematic.
-     */
-    WARN,
-
-    /**
-     * Error events - failed operations or security issues.
-     */
-    ERROR
-}
