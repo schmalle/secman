@@ -1,0 +1,25 @@
+---
+import Layout from '../layouts/Layout.astro';
+import ExceptionApprovalDashboard from '../components/ExceptionApprovalDashboard';
+
+/**
+ * Exception Approvals Page
+ * Feature 031: Vulnerability Exception Request & Approval Workflow
+ * User Story 3: ADMIN Approval Dashboard (P1)
+ *
+ * Route: /exception-approvals
+ * Access: ADMIN and SECCHAMPION roles only (enforced by Astro middleware)
+ *
+ * Displays approval dashboard with:
+ * - Pending requests summary statistics
+ * - Paginated table of pending requests (oldest first)
+ * - Approve/reject actions with comment support
+ * - Concurrent approval detection
+ *
+ * Reference: spec.md FR-018, FR-032
+ */
+---
+
+<Layout title="Exception Approvals">
+  <ExceptionApprovalDashboard client:load />
+</Layout>

@@ -1,0 +1,736 @@
+openapi: 3.0.3
+info:
+  title: Vulnerability Exception Request API
+  description: |
+    API for managing vulnerability exception requests with role-based approval workflow.
+
+    **Roles**:
+    - USER: Can create requests, view own requests, cancel own pending requests
+    - ADMIN: All USER capabilities + approve/reject any request + auto-approved requests
+    - SECCHAMPION: Same as ADMIN
+  version: 1.0.0
+  contact:
+    name: Secman Team
+
+servers:
+  - url: http://localhost:8080/api
+    description: Local development server
+  - url: https://secman.example.com/api
+    description: Production server
+
+tags:
+  - name: Exception Requests
+    description: Create and manage exception requests
+  - name: Approval Workflow
+    description: Approve or reject pending requests (ADMIN/SECCHAMPION only)
+  - name: History & Audit
+    description: View request history and audit trails
+
+paths:
+  /vulnerability-exception-requests:
+    post:
+      tags:
+        - Exception Requests
+      summary: Create a new exception request
+      description: |
+        Create an exception request for an overdue vulnerability.
+
+        **Auto-Approval**: If requester has ADMIN or SECCHAMPION role, request is auto-approved.
+        **Regular Users**: Request created with PENDING status, requires approval.
+      operationId: createExceptionRequest
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateExceptionRequestDto'
+            examples:
+              singleVulnerability:
+                summary: Exception for single vulnerability
+                value:
+                  vulnerabilityId: 12345
+                  scope: "SINGLE_VULNERABILITY"
+                  reason: "Legacy system cannot be patched until Q2 2026 migration"
+                  expirationDate: "2026-06-30T23:59:59"
+              cvePattern:
+                summary: Exception for CVE pattern across all assets
+                value:
+                  vulnerabilityId: 12345
+                  scope: "CVE_PATTERN"
+                  reason: "CVE-2022-0001 affects end-of-life software with accepted risk"
+                  expirationDate: "2025-12-31T23:59:59"
+      responses:
+        '201':
+          description: Exception request created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExceptionRequestDto'
+              examples:
+                pendingRequest:
+                  summary: Regular user - pending approval
+                  value:
+                    id: 1
+                    vulnerabilityId: 12345
+                    vulnerabilityCve: "CVE-2022-0001"
+                    assetName: "web-server-01"
+                    assetIp: "192.168.1.100"
+                    requestedByUsername: "john.doe"
+                    scope: "SINGLE_VULNERABILITY"
+                    reason: "Legacy system cannot be patched"
+                    expirationDate: "2026-06-30T23:59:59"
+                    status: "PENDING"
+                    autoApproved: false
+                    createdAt: "2025-10-20T10:30:00"
+                autoApprovedRequest:
+                  summary: ADMIN user - auto-approved
+                  value:
+                    id: 2
+                    vulnerabilityId: 12346
+                    vulnerabilityCve: "CVE-2023-1234"
+                    assetName: "db-server-02"
+                    assetIp: "10.0.1.50"
+                    requestedByUsername: "admin.user"
+                    scope: "CVE_PATTERN"
+                    reason: "Accepted risk for EOL software"
+                    expirationDate: "2025-12-31T23:59:59"
+                    status: "APPROVED"
+                    autoApproved: true
+                    reviewedByUsername: "admin.user"
+                    reviewDate: "2025-10-20T10:30:00"
+                    createdAt: "2025-10-20T10:30:00"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Conflict - Vulnerability already has active exception
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                message: "This vulnerability already has an active exception"
+                details: "Active exception expires on 2026-01-15. Cannot create duplicate request."
+
+    get:
+      tags:
+        - Exception Requests
+      summary: List exception requests
+      description: |
+        **Regular Users**: Returns only their own requests
+        **ADMIN/SECCHAMPION**: Returns all requests (with filtering)
+      operationId: listExceptionRequests
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          description: Filter by status
+          required: false
+          schema:
+            type: string
+            enum: [PENDING, APPROVED, REJECTED, EXPIRED, CANCELLED]
+        - name: page
+          in: query
+          description: Page number (0-indexed)
+          required: false
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+        - name: size
+          in: query
+          description: Page size
+          required: false
+          schema:
+            type: integer
+            default: 20
+            enum: [20, 50, 100]
+      responses:
+        '200':
+          description: List of exception requests (paginated)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedExceptionRequests'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /vulnerability-exception-requests/my-requests:
+    get:
+      tags:
+        - Exception Requests
+      summary: Get my exception requests
+      description: Returns all requests created by the authenticated user
+      operationId: getMyExceptionRequests
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+            enum: [20, 50, 100]
+      responses:
+        '200':
+          description: User's exception requests (paginated)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedExceptionRequests'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /vulnerability-exception-requests/pending:
+    get:
+      tags:
+        - Approval Workflow
+      summary: Get pending exception requests
+      description: Returns all PENDING requests for approval dashboard
+      operationId: getPendingExceptionRequests
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of pending requests (sorted by oldest first)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ExceptionRequestDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Forbidden - Requires ADMIN or SECCHAMPION role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                message: "Access denied"
+                details: "This endpoint requires ADMIN or SECCHAMPION role"
+
+  /vulnerability-exception-requests/{id}:
+    get:
+      tags:
+        - Exception Requests
+      summary: Get exception request by ID
+      description: |
+        **Regular Users**: Can only view own requests
+        **ADMIN/SECCHAMPION**: Can view any request
+      operationId: getExceptionRequestById
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Exception request ID
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Exception request details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExceptionRequestDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags:
+        - Exception Requests
+      summary: Cancel own pending exception request
+      description: |
+        Users can cancel their own PENDING requests.
+        **Cannot cancel**: APPROVED, REJECTED, EXPIRED, or CANCELLED requests
+      operationId: cancelExceptionRequest
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '204':
+          description: Request cancelled successfully
+        '400':
+          description: Cannot cancel request (not in PENDING status)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                message: "Cannot cancel this request"
+                details: "Only PENDING requests can be cancelled. Current status: APPROVED"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Forbidden - Can only cancel own requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /vulnerability-exception-requests/{id}/approve:
+    post:
+      tags:
+        - Approval Workflow
+      summary: Approve a pending exception request
+      description: |
+        **Access**: ADMIN or SECCHAMPION only
+        **Concurrency**: First-approver-wins (optimistic locking)
+      operationId: approveExceptionRequest
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewExceptionRequestDto'
+            example:
+              reviewComment: "Approved due to compensating controls in place"
+      responses:
+        '200':
+          description: Request approved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExceptionRequestDto'
+              example:
+                id: 1
+                status: "APPROVED"
+                reviewedByUsername: "admin.user"
+                reviewDate: "2025-10-20T14:30:00"
+                reviewComment: "Approved due to compensating controls"
+        '400':
+          description: Request not in PENDING status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                message: "Cannot approve this request"
+                details: "Request is not pending. Current status: APPROVED"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Forbidden - Requires ADMIN or SECCHAMPION role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Conflict - Another user already reviewed this request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                message: "This request was already reviewed"
+                details: "Reviewed by jane.admin at 2025-10-20T14:29:55. Current status: APPROVED"
+
+  /vulnerability-exception-requests/{id}/reject:
+    post:
+      tags:
+        - Approval Workflow
+      summary: Reject a pending exception request
+      description: |
+        **Access**: ADMIN or SECCHAMPION only
+        **Review comment required**: Must provide reason for rejection
+      operationId: rejectExceptionRequest
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewExceptionRequestDto'
+            example:
+              reviewComment: "Insufficient business justification. Please provide more details on compensating controls."
+      responses:
+        '200':
+          description: Request rejected successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExceptionRequestDto'
+        '400':
+          description: Request not in PENDING status or missing review comment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalidStatus:
+                  value:
+                    message: "Cannot reject this request"
+                    details: "Request is not pending. Current status: APPROVED"
+                missingComment:
+                  value:
+                    message: "Review comment is required for rejections"
+                    details: "Review comment must be 10-1024 characters"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Conflict - Another user already reviewed this request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /vulnerability-exception-requests/{id}/audit-trail:
+    get:
+      tags:
+        - History & Audit
+      summary: Get complete audit trail for a request
+      description: Returns all state transitions and actions for this request
+      operationId: getExceptionRequestAuditTrail
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Complete audit trail (ordered by timestamp DESC)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditEntryDto'
+              example:
+                - timestamp: "2025-10-20T14:30:00"
+                  eventType: "APPROVED"
+                  oldState: "PENDING"
+                  newState: "APPROVED"
+                  actorUsername: "admin.user"
+                  context:
+                    reviewComment: "Approved with compensating controls"
+                - timestamp: "2025-10-20T10:30:00"
+                  eventType: "REQUEST_CREATED"
+                  oldState: null
+                  newState: "PENDING"
+                  actorUsername: "john.doe"
+                  context:
+                    reason: "Legacy system cannot be patched"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /notifications/badge-count:
+    get:
+      tags:
+        - Real-Time Updates
+      summary: SSE stream for pending request count
+      description: |
+        Server-Sent Events (SSE) endpoint for real-time badge updates.
+        Streams pending request count every 5 seconds.
+
+        **Connection**: EventSource API
+        **Reconnection**: Automatic with exponential backoff
+        **Fallback**: Use `/notifications/badge-count-sync` with 30-second polling
+      operationId: streamBadgeCount
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: SSE stream established
+          content:
+            text/event-stream:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                    description: Number of pending exception requests
+              example: |
+                data: {"count": 5}
+
+                data: {"count": 4}
+
+                data: {"count": 6}
+
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /notifications/badge-count-sync:
+    get:
+      tags:
+        - Real-Time Updates
+      summary: Synchronous pending count (polling fallback)
+      description: Returns current pending request count (for polling fallback when SSE unavailable)
+      operationId: getBadgeCountSync
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current pending count
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+              example:
+                count: 5
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from `/api/auth/login`
+
+  schemas:
+    CreateExceptionRequestDto:
+      type: object
+      required:
+        - vulnerabilityId
+        - scope
+        - reason
+        - expirationDate
+      properties:
+        vulnerabilityId:
+          type: integer
+          format: int64
+          description: ID of the vulnerability to request exception for
+          example: 12345
+        scope:
+          type: string
+          enum: [SINGLE_VULNERABILITY, CVE_PATTERN]
+          description: |
+            - SINGLE_VULNERABILITY: Exception for this vuln on this asset only
+            - CVE_PATTERN: Exception for all vulns with this CVE across all assets
+          example: "SINGLE_VULNERABILITY"
+        reason:
+          type: string
+          minLength: 50
+          maxLength: 2048
+          description: Business justification for the exception
+          example: "Legacy system scheduled for decommission in Q2 2026. Patching not feasible."
+        expirationDate:
+          type: string
+          format: date-time
+          description: When this exception should expire (must be future date)
+          example: "2026-06-30T23:59:59"
+
+    ExceptionRequestDto:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        vulnerabilityId:
+          type: integer
+          format: int64
+        vulnerabilityCve:
+          type: string
+          example: "CVE-2022-0001"
+        assetName:
+          type: string
+          example: "web-server-01"
+        assetIp:
+          type: string
+          example: "192.168.1.100"
+        requestedByUsername:
+          type: string
+          example: "john.doe"
+        scope:
+          type: string
+          enum: [SINGLE_VULNERABILITY, CVE_PATTERN]
+        reason:
+          type: string
+        expirationDate:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [PENDING, APPROVED, REJECTED, EXPIRED, CANCELLED]
+        autoApproved:
+          type: boolean
+          description: True if request was auto-approved (ADMIN/SECCHAMPION requester)
+        reviewedByUsername:
+          type: string
+          nullable: true
+        reviewDate:
+          type: string
+          format: date-time
+          nullable: true
+        reviewComment:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ReviewExceptionRequestDto:
+      type: object
+      properties:
+        reviewComment:
+          type: string
+          minLength: 10
+          maxLength: 1024
+          description: |
+            Optional for approvals, required for rejections.
+            Min 10 characters when provided.
+          example: "Approved with compensating controls in place"
+
+    PagedExceptionRequests:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExceptionRequestDto'
+        totalElements:
+          type: integer
+          format: int64
+          example: 150
+        totalPages:
+          type: integer
+          example: 8
+        size:
+          type: integer
+          example: 20
+        number:
+          type: integer
+          description: Current page number (0-indexed)
+          example: 0
+
+    AuditEntryDto:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        eventType:
+          type: string
+          enum: [REQUEST_CREATED, APPROVED, REJECTED, CANCELLED, EXPIRED, STATUS_CHANGED]
+        oldState:
+          type: string
+          nullable: true
+        newState:
+          type: string
+        actorUsername:
+          type: string
+        context:
+          type: object
+          description: Additional context (reason, review comment, etc.)
+          example:
+            reviewComment: "Approved with compensating controls"
+
+    ErrorResponse:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          description: Human-readable error message
+          example: "This request was already reviewed"
+        details:
+          type: string
+          description: Additional error details
+          example: "Reviewed by jane.admin at 2025-10-20T14:29:55"
+
+  responses:
+    BadRequest:
+      description: Bad request - Invalid input
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            message: "Validation failed"
+            details: "Reason must be between 50 and 2048 characters"
+
+    Unauthorized:
+      description: Unauthorized - Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            message: "Authentication required"
+            details: "Please provide a valid JWT token in Authorization header"
+
+    Forbidden:
+      description: Forbidden - Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            message: "Access denied"
+            details: "This action requires ADMIN or SECCHAMPION role"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            message: "Request not found"
+            details: "Exception request with ID 12345 does not exist"

@@ -1,0 +1,24 @@
+---
+import Layout from '../layouts/Layout.astro';
+import MyExceptionRequests from '../components/MyExceptionRequests';
+
+/**
+ * My Exception Requests Page
+ * Feature 031: Vulnerability Exception Request & Approval Workflow
+ * User Story 1: Regular User Requests Exception (P1)
+ *
+ * Route: /my-exception-requests
+ * Access: Authenticated users only (enforced by Astro middleware)
+ *
+ * Displays user's exception requests dashboard with:
+ * - Summary statistics (Total, Approved, Pending, Rejected)
+ * - Filterable and paginated list of requests
+ * - View details and cancel functionality
+ *
+ * Reference: spec.md FR-010, FR-029
+ */
+---
+
+<Layout title="My Exception Requests">
+  <MyExceptionRequests client:load />
+</Layout>

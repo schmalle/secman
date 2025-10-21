@@ -41,9 +41,202 @@
 - **Structure**: models/, services/, cli/, exporters/, lib/
 
 ## Recent Changes
+- 031-vuln-exception-approval: Vulnerability Exception Request & Approval Workflow (2025-10-21) - Complete exception request system with auto-approval, real-time notifications, and governance analytics
 - 030-crowdstrike-asset-auto-create: Added Kotlin 2.1.0 / Java 21 (backend), TypeScript/JavaScript (frontend - Astro 5.14 + React 19) + Micronaut 4.4, Hibernate JPA, React 19, Bootstrap 5.3, Axios
 - 029-asset-bulk-operations: Asset Bulk Operations (2025-10-19) - Bulk delete, export, and import for assets
-- 028-user-profile-page: User Profile Page (2025-10-19) - Profile page showing user email and roles
+
+### Feature 031: Vulnerability Exception Request & Approval Workflow (2025-10-21)
+
+Complete workflow system allowing users to request temporary exceptions for overdue vulnerabilities, with automated approval for privileged users and comprehensive governance features.
+
+**Backend Components** (`src/backendng/`):
+  - **VulnerabilityExceptionRequest.kt** - Core entity with fields:
+    - Request data: vulnerability (FK), scope (SINGLE_VULNERABILITY/CVE_PATTERN), reason (50-2048 chars), expirationDate
+    - Status tracking: status (PENDING/APPROVED/REJECTED/EXPIRED/CANCELLED), autoApproved boolean
+    - User tracking: requestedByUser (FK), reviewedByUser (FK nullable), usernames preserved on deletion
+    - Audit: createdAt, updatedAt, version (optimistic locking)
+    - Indexes: vulnerability_id, status, requested_by_user_id, reviewed_by_user_id, created_at, expiration_date
+  - **ExceptionRequestStatus.kt** - State machine enum with transition validation:
+    - PENDING → APPROVED, REJECTED, CANCELLED
+    - APPROVED → EXPIRED, CANCELLED (auto-approved only)
+    - Terminal states: REJECTED, EXPIRED, CANCELLED
+  - **ExceptionScope.kt** - Scope enum (SINGLE_VULNERABILITY, CVE_PATTERN)
+  - **ExceptionRequestAuditLog.kt** - Immutable audit trail entity:
+    - Fields: request_id (FK), event_type, timestamp, old_state, new_state, actor_username, context_data (JSON), severity, client_ip
+    - Indexes: request_id, timestamp, event_type, actor_user_id, composite (request_id + timestamp + event_type)
+  - **ExceptionCountChangedEvent.kt** - Application event for real-time badge updates
+  - **VulnerabilityExceptionRequestService.kt** - Core business logic (600+ lines):
+    - `createRequest()` - Auto-approval for ADMIN/SECCHAMPION, duplicate prevention, input sanitization
+    - `approveRequest()` - Creates VulnerabilityException (ASSET or PRODUCT type), optimistic locking, email notification
+    - `rejectRequest()` - Requires comment (10-1024 chars), audit logging
+    - `cancelRequest()` - PENDING requests + auto-approved APPROVED requests, deletes associated exception
+    - `createExceptionFromRequest()` - SINGLE_VULNERABILITY → ASSET-type, CVE_PATTERN → PRODUCT-type
+    - `deleteExceptionForRequest()` - Auto-approval revocation, removes exception by matching expiration + reason
+    - Input sanitization: HTML tag stripping, whitespace normalization
+  - **ExceptionRequestAuditService.kt** - Async audit logging (@Async):
+    - Methods: logRequestCreated, logApproval, logRejection, logCancellation, logExpiration
+    - JSON context data with detailed event information
+  - **ExceptionRequestNotificationService.kt** - Email notifications (Phase 10):
+    - `notifyAdminsOfNewRequest()` - Email all ADMIN/SECCHAMPION users
+    - `notifyRequesterOfApproval()` - Success email with reviewer info, expiration warning
+    - `notifyRequesterOfRejection()` - Rejection email with review comment, next steps
+    - `notifyRequesterOfExpiration()` - Reminder emails 7 days before expiration
+    - Professional HTML templates with responsive design
+  - **ExceptionRequestStatisticsService.kt** - Analytics (Phase 11):
+    - `getApprovalRate()` - (APPROVED / (APPROVED + REJECTED)) * 100
+    - `getAverageApprovalTime()` - Median time (not mean) from creation to approval
+    - `getRequestsByStatus()` - Count breakdown by status
+    - `getTopRequesters()` - Most frequent requesters
+    - `getTopCVEs()` - Most frequently excepted CVEs
+    - Date range filtering: 7days, 30days, 90days, alltime
+  - **ExceptionRequestExportService.kt** - Excel export with Apache POI:
+    - SXSSFWorkbook streaming (100-row memory window)
+    - Columns: Request ID, CVE, Asset, Requester, Status, Reviewer, Dates, Reason, Comment, Auto-Approved
+    - Filtering: status, dateRange, requesterId, reviewerId
+  - **VulnerabilityExceptionRequestController.kt** - 11 REST endpoints:
+    - `POST /api/vulnerability-exception-requests` - Create request (authenticated)
+    - `GET /api/vulnerability-exception-requests/my` - User's requests with pagination (20/50/100)
+    - `GET /api/vulnerability-exception-requests/my/summary` - Status count summary
+    - `GET /api/vulnerability-exception-requests/{id}` - Request details (owner or ADMIN)
+    - `POST /api/vulnerability-exception-requests/{id}/approve` - Approve (ADMIN/SECCHAMPION)
+    - `POST /api/vulnerability-exception-requests/{id}/reject` - Reject with comment (ADMIN/SECCHAMPION)
+    - `DELETE /api/vulnerability-exception-requests/{id}` - Cancel (owner only)
+    - `GET /api/vulnerability-exception-requests/pending` - Pending list (ADMIN/SECCHAMPION)
+    - `GET /api/vulnerability-exception-requests/pending/count` - Badge count (ADMIN/SECCHAMPION)
+    - `GET /api/vulnerability-exception-requests/statistics` - Analytics (ADMIN/SECCHAMPION)
+    - `GET /api/vulnerability-exception-requests/export` - Excel export (ADMIN/SECCHAMPION)
+  - **ExceptionBadgeUpdateHandler.kt** - SSE endpoint for real-time updates:
+    - `GET /api/exception-badge-updates` - text/event-stream (authenticated)
+    - Multicast Sink with replay(1) for latest count
+    - Event format: `{"pendingCount": number}`
+    - Listens to ExceptionCountChangedEvent
+  - **ExceptionExpirationScheduler.kt** - Daily scheduled jobs:
+    - `processExpirations()` - Daily at midnight: APPROVED → EXPIRED, deactivate exceptions, send notifications
+    - `sendExpirationReminders()` - Daily at 8am: 7-day expiration warnings
+  - **DTOs**: CreateExceptionRequestDto, VulnerabilityExceptionRequestDto, ReviewExceptionRequestDto, ExceptionRequestSummaryDto, ExceptionStatisticsDto
+
+**Frontend Components** (`src/frontend/src/components/`):
+  - **ExceptionRequestModal.tsx** - Create request modal:
+    - Scope selector: Single Vulnerability / CVE Pattern with descriptions
+    - Reason textarea: 50-2048 chars with counter, validation
+    - Expiration date picker: Future dates only, >365 days warning modal
+    - Duplicate detection: Disabled button if active exception exists
+  - **ExceptionStatusBadge.tsx** - Color-coded status badges:
+    - PENDING: Yellow (hourglass icon)
+    - APPROVED: Green (shield-check icon) + "Auto-Approved" variant
+    - REJECTED: Red (x-circle icon)
+    - EXPIRED: Gray (clock icon)
+    - CANCELLED: Gray (slash-circle icon)
+  - **MyExceptionRequests.tsx** - User dashboard page:
+    - Summary cards: Total, Approved (green), Pending (yellow), Rejected (red)
+    - Status filter dropdown: All, Pending, Approved, Rejected, Expired, Cancelled
+    - Table columns: Status badge, CVE ID, Asset, Scope, Submission date, Actions
+    - Pagination: 20/50/100 items per page
+    - Cancel button: PENDING requests + auto-approved APPROVED requests
+    - Empty state: Link to vulnerabilities page
+    - Remediation indicator: "Remediated" badge when vulnerability deleted
+  - **ExceptionRequestDetailModal.tsx** - Request detail modal:
+    - Vulnerability info: CVE, severity, asset, product versions, days open
+    - Request info: Scope with description, full reason, expiration date, submission date
+    - Status info: Badge, reviewer name, review date, review comment, auto-approved indicator
+    - Cancel button: PENDING requests + "Revoke Exception" for auto-approved
+    - Deleted entity handling: "Vulnerability No Longer Exists", "Account Inactive" badges
+  - **ExceptionApprovalDashboard.tsx** - Admin approval page (ADMIN/SECCHAMPION):
+    - Pending requests table: CVE, Asset, Requester, Reason (100 chars), Days pending, Actions
+    - Sort: Oldest first (created_at ASC)
+    - Statistics section (collapsible):
+      - Metrics cards: Total requests, Approval rate (%), Average approval time (hours), By status breakdown
+      - Top requesters table
+      - Top CVEs table
+      - Date range selector: 7/30/90 days, all time
+    - Export button: Download Excel with all data
+    - Empty state: "No pending requests" success message
+  - **ApprovalDetailModal.tsx** - Approve/reject modal (ADMIN/SECCHAMPION):
+    - Approve section: Optional comment (0-1024 chars), confirmation modal
+    - Reject section: Required comment (10-1024 chars with counter), confirmation modal
+    - Concurrent approval handling: 409 error shows reviewer/timestamp
+    - Loading states: Spinners during approve/reject
+  - **CurrentVulnerabilitiesTable.tsx** - Updated vulnerability table:
+    - "Request Exception" button: Enabled for OVERDUE vulnerabilities only
+    - Disabled button with tooltip: "Exceptions can only be requested for overdue vulnerabilities"
+    - Button disabled if active exception exists
+  - **Sidebar.tsx** - Navigation with real-time badge:
+    - "My Exception Requests" menu item (all users)
+    - "Approve Exceptions" menu item (ADMIN/SECCHAMPION only)
+    - Real-time pending count badge (red, SSE-powered)
+  - **exceptionRequestService.ts** - Frontend API client:
+    - Methods: createRequest, getMyRequests, getMySummary, getRequestById, cancelRequest, approveRequest, rejectRequest, getPendingRequests, getPendingCount, getStatistics, exportToExcel
+  - **exceptionBadgeService.ts** - SSE client for real-time updates:
+    - `connectToBadgeUpdates(callback)` - EventSource connection with automatic reconnection
+    - Listens to 'count-update' events, parses JSON, invokes callback
+
+**API Endpoints** (11 total):
+  - `POST /api/vulnerability-exception-requests` - Create request (authenticated)
+  - `GET /api/vulnerability-exception-requests/my` - User's requests (authenticated, paginated)
+  - `GET /api/vulnerability-exception-requests/my/summary` - User's summary stats (authenticated)
+  - `GET /api/vulnerability-exception-requests/{id}` - Request details (authenticated)
+  - `POST /api/vulnerability-exception-requests/{id}/approve` - Approve (ADMIN/SECCHAMPION)
+  - `POST /api/vulnerability-exception-requests/{id}/reject` - Reject (ADMIN/SECCHAMPION, comment required)
+  - `DELETE /api/vulnerability-exception-requests/{id}` - Cancel/revoke (owner only)
+  - `GET /api/vulnerability-exception-requests/pending` - Pending list (ADMIN/SECCHAMPION, paginated)
+  - `GET /api/vulnerability-exception-requests/pending/count` - Pending count (ADMIN/SECCHAMPION)
+  - `GET /api/vulnerability-exception-requests/statistics` - Analytics (ADMIN/SECCHAMPION)
+  - `GET /api/vulnerability-exception-requests/export` - Excel export (ADMIN/SECCHAMPION)
+  - `GET /api/exception-badge-updates` - SSE for real-time badge (authenticated, text/event-stream)
+
+**Features Implemented** (8 User Stories):
+1. **US1 (P1)**: Regular User Requests Single Vulnerability Exception - Request modal, my requests dashboard, cancellation
+2. **US2 (P1)**: ADMIN/SECCHAMPION Auto-Approved Requests - Instant approval, auto-approved badge, immediate exception creation
+3. **US3 (P1)**: ADMIN Approval Dashboard - Pending requests table, approve/reject modals, concurrent approval handling
+4. **US4 (P2)**: Flexible Exception Scope - Single vulnerability vs CVE pattern, ASSET vs PRODUCT exceptions
+5. **US5 (P2)**: User Cancellation - Cancel PENDING + revoke auto-approved APPROVED requests
+6. **US6 (P3)**: Email Notifications - Admin alerts, approval/rejection emails, expiration reminders
+7. **US7 (P2)**: Enhanced User Dashboard - Summary stats, status filtering, complete request details
+8. **US8 (P3)**: Analytics & Reporting - Approval rate, average time, top requesters/CVEs, Excel export
+
+**Access Control**:
+  - Create request: All authenticated users
+  - View own requests: Owner only (users see their own requests)
+  - View request details: Owner OR ADMIN/SECCHAMPION
+  - Approve/Reject: ADMIN, SECCHAMPION roles only
+  - Cancel: Owner only (PENDING + auto-approved APPROVED)
+  - Analytics/Export: ADMIN, SECCHAMPION only
+  - SSE badge: All authenticated users
+
+**Key Patterns**:
+  - **Auto-Approval**: ADMIN/SECCHAMPION requests instantly approved with autoApproved=true flag
+  - **Optimistic Locking**: @Version field prevents concurrent approval conflicts (409 Conflict)
+  - **SSE Real-Time Updates**: Server-Sent Events for live badge count updates via ApplicationEventPublisher
+  - **State Machine**: ExceptionRequestStatus.canTransitionTo() enforces valid transitions
+  - **Input Sanitization**: HTML tag stripping, whitespace normalization (XSS prevention)
+  - **Audit Trail**: Immutable ExceptionRequestAuditLog for all state transitions
+  - **Graceful Degradation**: Null handling for deleted vulnerabilities/users (FK ON DELETE SET NULL)
+  - **Email Failures**: Non-blocking async notifications (failures logged, workflow continues)
+
+**Data Model**:
+  - `vulnerability_exception_request` table: 20 columns, 6 indexes, optimistic locking
+  - `exception_request_audit_log` table: 10 columns, 5 indexes (immutable, append-only)
+  - State transitions: PENDING → {APPROVED, REJECTED, CANCELLED}, APPROVED → {EXPIRED, CANCELLED}
+  - Scope mapping: SINGLE_VULNERABILITY → ASSET exception, CVE_PATTERN → PRODUCT exception
+  - Retention: Audit logs permanent (manual cleanup after 7 years per compliance)
+
+**Technical Implementation**:
+  - Median calculation for approval time (not mean) per spec Assumption 8
+  - Apache POI SXSSFWorkbook streaming for Excel export (100-row memory window)
+  - Database indexes on status, created_at for query performance
+  - CompletableFuture.runAsync for async audit logging (non-blocking)
+  - Micronaut Data query derivation: countByStatus, findByStatusAndCreatedAtAfter
+  - Bootstrap modals with keyboard navigation (Escape to close)
+  - React.memo for performance optimization
+
+**Statistics**:
+  - 120 implementation tasks across 12 phases
+  - 4 new entities (VulnerabilityExceptionRequest, ExceptionRequestAuditLog, ExceptionCountChangedEvent, enums)
+  - 11 REST API endpoints
+  - 8 backend services (600+ lines core service)
+  - 12 frontend components
+  - Date range: 2025-10-21
+  - Development time: 7 sprints (14 weeks estimated)
 
 ### Feature 029: Asset Bulk Operations (2025-10-19)
 
