@@ -48,9 +48,8 @@ kotlin {
 
 tasks {
     compileKotlin {
-        kotlinOptions {
-            jvmTarget = "21"
-        }
+        // jvmTarget is automatically set by jvmToolchain(21) above
+        // No need for kotlinOptions block
     }
     
     // Disable all test tasks

@@ -41,9 +41,9 @@
 - **Structure**: models/, services/, cli/, exporters/, lib/
 
 ## Recent Changes
+- 032-servers-query-import: Added Kotlin 2.1.0 / Java 21 (backend + CLI), TypeScript/JavaScript (frontend - minimal involvement) + Micronaut 4.4, Hibernate JPA, CrowdStrike shared module (existing), Picocli CLI framework
 - 031-vuln-exception-approval: Vulnerability Exception Request & Approval Workflow (2025-10-21) - Complete exception request system with auto-approval, real-time notifications, and governance analytics
 - 030-crowdstrike-asset-auto-create: Added Kotlin 2.1.0 / Java 21 (backend), TypeScript/JavaScript (frontend - Astro 5.14 + React 19) + Micronaut 4.4, Hibernate JPA, React 19, Bootstrap 5.3, Axios
-- 029-asset-bulk-operations: Asset Bulk Operations (2025-10-19) - Bulk delete, export, and import for assets
 
 ### Feature 031: Vulnerability Exception Request & Approval Workflow (2025-10-21)
 
