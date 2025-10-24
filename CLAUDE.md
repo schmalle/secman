@@ -2,864 +2,173 @@
 
 ## Project Overview
 **secman** - Security requirement and risk assessment management tool
-- Full-stack web application (Kotlin/Micronaut backend + Astro/React frontend)
-- Python helper utilities for external integrations
+- Full-stack: Kotlin/Micronaut backend + Astro/React frontend + Python helpers
+- Tech: Micronaut 4.10, Kotlin 2.1, Astro 5.14, React 19, MariaDB 11.4
 - Purpose: Manage security requirements, norms, use cases, assets, and vulnerabilities
-- Tech stack: Micronaut 4.4, Kotlin 2.1, Astro 5.14, React 19, MariaDB 11.4, Python 3.11+
-
-## Tech Stack
-- **Language**: Kotlin 2.1.0 / Java 21, TypeScript/JavaScript (Astro 5.14, React 19), Python 3.11+
-- **Framework**: Micronaut 4.4, Hibernate JPA, Apache POI 5.3 (Excel), Apache Commons CSV 1.11.0 (CSV), Astro, React, Bootstrap 5.3
-- **Database**: MariaDB 11.4 via Hibernate JPA with auto-migration
-- **Helper Tools**: falconpy (CrowdStrike Falcon API), openpyxl (XLSX export), argparse (CLI)
-- **Testing**: JUnit 5 + MockK (backend), Playwright (frontend E2E), pytest (helper tools)
-- **Deployment**: Docker Compose (multi-arch: AMD64/ARM64)
 
 ## Architecture
 **Project Type**: web - frontend (Astro/React) + backend (Micronaut/Kotlin)
 
 ### Backend (`src/backendng/`)
-- **Domain**: JPA entities (Requirement, Norm, UseCase, Asset, Vulnerability, Release, RequirementSnapshot)
-- **Repository**: Micronaut Data repositories
-- **Service**: Business logic layer
-- **Controller**: RESTful APIs (@Controller, @Secured)
-- **Security**: JWT authentication, OAuth2, RBAC (USER, ADMIN, VULN, RELEASE_MANAGER roles)
+- **Layers**: Domain (JPA entities) → Repository (Micronaut Data) → Service → Controller (REST)
+- **Security**: JWT auth, OAuth2, RBAC roles: USER, ADMIN, VULN, RELEASE_MANAGER, SECCHAMPION
+- **Testing**: JUnit 5 + MockK, TDD mandatory
 
 ### Frontend (`src/frontend/`)
-- **Framework**: Astro with React islands
-- **Components**: React .tsx components with Bootstrap 5
-- **Routing**: Astro file-based routing
-- **API Client**: Axios for backend communication
+- **Framework**: Astro with React islands, Bootstrap 5
+- **API**: Axios client, sessionStorage for JWT
+- **Testing**: Playwright E2E
 
 ### Helper Tools (`src/helper/`)
-- **Purpose**: CLI utilities for external integrations
-- **Falcon Vulnerability Tool**: Query CrowdStrike Falcon API for vulnerability data
-  - Filters: Device type (CLIENT/SERVER/BOTH), severity levels, days open, AD domain, hostname
-  - Export formats: XLSX, CSV, TXT
-  - Authentication: Environment-based (FALCON_CLIENT_ID, FALCON_CLIENT_SECRET, FALCON_CLOUD_REGION)
-  - CLI command: `falcon-vulns`
-- **Structure**: models/, services/, cli/, exporters/, lib/
-
-## Recent Changes
-- 032-servers-query-import: Added Kotlin 2.1.0 / Java 21 (backend + CLI), TypeScript/JavaScript (frontend - minimal involvement) + Micronaut 4.4, Hibernate JPA, CrowdStrike shared module (existing), Picocli CLI framework
-- 031-vuln-exception-approval: Vulnerability Exception Request & Approval Workflow (2025-10-21) - Complete exception request system with auto-approval, real-time notifications, and governance analytics
-- 030-crowdstrike-asset-auto-create: Added Kotlin 2.1.0 / Java 21 (backend), TypeScript/JavaScript (frontend - Astro 5.14 + React 19) + Micronaut 4.4, Hibernate JPA, React 19, Bootstrap 5.3, Axios
-
-### Feature 031: Vulnerability Exception Request & Approval Workflow (2025-10-21)
-
-Complete workflow system allowing users to request temporary exceptions for overdue vulnerabilities, with automated approval for privileged users and comprehensive governance features.
-
-**Backend Components** (`src/backendng/`):
-  - **VulnerabilityExceptionRequest.kt** - Core entity with fields:
-    - Request data: vulnerability (FK), scope (SINGLE_VULNERABILITY/CVE_PATTERN), reason (50-2048 chars), expirationDate
-    - Status tracking: status (PENDING/APPROVED/REJECTED/EXPIRED/CANCELLED), autoApproved boolean
-    - User tracking: requestedByUser (FK), reviewedByUser (FK nullable), usernames preserved on deletion
-    - Audit: createdAt, updatedAt, version (optimistic locking)
-    - Indexes: vulnerability_id, status, requested_by_user_id, reviewed_by_user_id, created_at, expiration_date
-  - **ExceptionRequestStatus.kt** - State machine enum with transition validation:
-    - PENDING → APPROVED, REJECTED, CANCELLED
-    - APPROVED → EXPIRED, CANCELLED (auto-approved only)
-    - Terminal states: REJECTED, EXPIRED, CANCELLED
-  - **ExceptionScope.kt** - Scope enum (SINGLE_VULNERABILITY, CVE_PATTERN)
-  - **ExceptionRequestAuditLog.kt** - Immutable audit trail entity:
-    - Fields: request_id (FK), event_type, timestamp, old_state, new_state, actor_username, context_data (JSON), severity, client_ip
-    - Indexes: request_id, timestamp, event_type, actor_user_id, composite (request_id + timestamp + event_type)
-  - **ExceptionCountChangedEvent.kt** - Application event for real-time badge updates
-  - **VulnerabilityExceptionRequestService.kt** - Core business logic (600+ lines):
-    - `createRequest()` - Auto-approval for ADMIN/SECCHAMPION, duplicate prevention, input sanitization
-    - `approveRequest()` - Creates VulnerabilityException (ASSET or PRODUCT type), optimistic locking, email notification
-    - `rejectRequest()` - Requires comment (10-1024 chars), audit logging
-    - `cancelRequest()` - PENDING requests + auto-approved APPROVED requests, deletes associated exception
-    - `createExceptionFromRequest()` - SINGLE_VULNERABILITY → ASSET-type, CVE_PATTERN → PRODUCT-type
-    - `deleteExceptionForRequest()` - Auto-approval revocation, removes exception by matching expiration + reason
-    - Input sanitization: HTML tag stripping, whitespace normalization
-  - **ExceptionRequestAuditService.kt** - Async audit logging (@Async):
-    - Methods: logRequestCreated, logApproval, logRejection, logCancellation, logExpiration
-    - JSON context data with detailed event information
-  - **ExceptionRequestNotificationService.kt** - Email notifications (Phase 10):
-    - `notifyAdminsOfNewRequest()` - Email all ADMIN/SECCHAMPION users
-    - `notifyRequesterOfApproval()` - Success email with reviewer info, expiration warning
-    - `notifyRequesterOfRejection()` - Rejection email with review comment, next steps
-    - `notifyRequesterOfExpiration()` - Reminder emails 7 days before expiration
-    - Professional HTML templates with responsive design
-  - **ExceptionRequestStatisticsService.kt** - Analytics (Phase 11):
-    - `getApprovalRate()` - (APPROVED / (APPROVED + REJECTED)) * 100
-    - `getAverageApprovalTime()` - Median time (not mean) from creation to approval
-    - `getRequestsByStatus()` - Count breakdown by status
-    - `getTopRequesters()` - Most frequent requesters
-    - `getTopCVEs()` - Most frequently excepted CVEs
-    - Date range filtering: 7days, 30days, 90days, alltime
-  - **ExceptionRequestExportService.kt** - Excel export with Apache POI:
-    - SXSSFWorkbook streaming (100-row memory window)
-    - Columns: Request ID, CVE, Asset, Requester, Status, Reviewer, Dates, Reason, Comment, Auto-Approved
-    - Filtering: status, dateRange, requesterId, reviewerId
-  - **VulnerabilityExceptionRequestController.kt** - 11 REST endpoints:
-    - `POST /api/vulnerability-exception-requests` - Create request (authenticated)
-    - `GET /api/vulnerability-exception-requests/my` - User's requests with pagination (20/50/100)
-    - `GET /api/vulnerability-exception-requests/my/summary` - Status count summary
-    - `GET /api/vulnerability-exception-requests/{id}` - Request details (owner or ADMIN)
-    - `POST /api/vulnerability-exception-requests/{id}/approve` - Approve (ADMIN/SECCHAMPION)
-    - `POST /api/vulnerability-exception-requests/{id}/reject` - Reject with comment (ADMIN/SECCHAMPION)
-    - `DELETE /api/vulnerability-exception-requests/{id}` - Cancel (owner only)
-    - `GET /api/vulnerability-exception-requests/pending` - Pending list (ADMIN/SECCHAMPION)
-    - `GET /api/vulnerability-exception-requests/pending/count` - Badge count (ADMIN/SECCHAMPION)
-    - `GET /api/vulnerability-exception-requests/statistics` - Analytics (ADMIN/SECCHAMPION)
-    - `GET /api/vulnerability-exception-requests/export` - Excel export (ADMIN/SECCHAMPION)
-  - **ExceptionBadgeUpdateHandler.kt** - SSE endpoint for real-time updates:
-    - `GET /api/exception-badge-updates` - text/event-stream (authenticated)
-    - Multicast Sink with replay(1) for latest count
-    - Event format: `{"pendingCount": number}`
-    - Listens to ExceptionCountChangedEvent
-  - **ExceptionExpirationScheduler.kt** - Daily scheduled jobs:
-    - `processExpirations()` - Daily at midnight: APPROVED → EXPIRED, deactivate exceptions, send notifications
-    - `sendExpirationReminders()` - Daily at 8am: 7-day expiration warnings
-  - **DTOs**: CreateExceptionRequestDto, VulnerabilityExceptionRequestDto, ReviewExceptionRequestDto, ExceptionRequestSummaryDto, ExceptionStatisticsDto
-
-**Frontend Components** (`src/frontend/src/components/`):
-  - **ExceptionRequestModal.tsx** - Create request modal:
-    - Scope selector: Single Vulnerability / CVE Pattern with descriptions
-    - Reason textarea: 50-2048 chars with counter, validation
-    - Expiration date picker: Future dates only, >365 days warning modal
-    - Duplicate detection: Disabled button if active exception exists
-  - **ExceptionStatusBadge.tsx** - Color-coded status badges:
-    - PENDING: Yellow (hourglass icon)
-    - APPROVED: Green (shield-check icon) + "Auto-Approved" variant
-    - REJECTED: Red (x-circle icon)
-    - EXPIRED: Gray (clock icon)
-    - CANCELLED: Gray (slash-circle icon)
-  - **MyExceptionRequests.tsx** - User dashboard page:
-    - Summary cards: Total, Approved (green), Pending (yellow), Rejected (red)
-    - Status filter dropdown: All, Pending, Approved, Rejected, Expired, Cancelled
-    - Table columns: Status badge, CVE ID, Asset, Scope, Submission date, Actions
-    - Pagination: 20/50/100 items per page
-    - Cancel button: PENDING requests + auto-approved APPROVED requests
-    - Empty state: Link to vulnerabilities page
-    - Remediation indicator: "Remediated" badge when vulnerability deleted
-  - **ExceptionRequestDetailModal.tsx** - Request detail modal:
-    - Vulnerability info: CVE, severity, asset, product versions, days open
-    - Request info: Scope with description, full reason, expiration date, submission date
-    - Status info: Badge, reviewer name, review date, review comment, auto-approved indicator
-    - Cancel button: PENDING requests + "Revoke Exception" for auto-approved
-    - Deleted entity handling: "Vulnerability No Longer Exists", "Account Inactive" badges
-  - **ExceptionApprovalDashboard.tsx** - Admin approval page (ADMIN/SECCHAMPION):
-    - Pending requests table: CVE, Asset, Requester, Reason (100 chars), Days pending, Actions
-    - Sort: Oldest first (created_at ASC)
-    - Statistics section (collapsible):
-      - Metrics cards: Total requests, Approval rate (%), Average approval time (hours), By status breakdown
-      - Top requesters table
-      - Top CVEs table
-      - Date range selector: 7/30/90 days, all time
-    - Export button: Download Excel with all data
-    - Empty state: "No pending requests" success message
-  - **ApprovalDetailModal.tsx** - Approve/reject modal (ADMIN/SECCHAMPION):
-    - Approve section: Optional comment (0-1024 chars), confirmation modal
-    - Reject section: Required comment (10-1024 chars with counter), confirmation modal
-    - Concurrent approval handling: 409 error shows reviewer/timestamp
-    - Loading states: Spinners during approve/reject
-  - **CurrentVulnerabilitiesTable.tsx** - Updated vulnerability table:
-    - "Request Exception" button: Enabled for OVERDUE vulnerabilities only
-    - Disabled button with tooltip: "Exceptions can only be requested for overdue vulnerabilities"
-    - Button disabled if active exception exists
-  - **Sidebar.tsx** - Navigation with real-time badge:
-    - "My Exception Requests" menu item (all users)
-    - "Approve Exceptions" menu item (ADMIN/SECCHAMPION only)
-    - Real-time pending count badge (red, SSE-powered)
-  - **exceptionRequestService.ts** - Frontend API client:
-    - Methods: createRequest, getMyRequests, getMySummary, getRequestById, cancelRequest, approveRequest, rejectRequest, getPendingRequests, getPendingCount, getStatistics, exportToExcel
-  - **exceptionBadgeService.ts** - SSE client for real-time updates:
-    - `connectToBadgeUpdates(callback)` - EventSource connection with automatic reconnection
-    - Listens to 'count-update' events, parses JSON, invokes callback
-
-**API Endpoints** (11 total):
-  - `POST /api/vulnerability-exception-requests` - Create request (authenticated)
-  - `GET /api/vulnerability-exception-requests/my` - User's requests (authenticated, paginated)
-  - `GET /api/vulnerability-exception-requests/my/summary` - User's summary stats (authenticated)
-  - `GET /api/vulnerability-exception-requests/{id}` - Request details (authenticated)
-  - `POST /api/vulnerability-exception-requests/{id}/approve` - Approve (ADMIN/SECCHAMPION)
-  - `POST /api/vulnerability-exception-requests/{id}/reject` - Reject (ADMIN/SECCHAMPION, comment required)
-  - `DELETE /api/vulnerability-exception-requests/{id}` - Cancel/revoke (owner only)
-  - `GET /api/vulnerability-exception-requests/pending` - Pending list (ADMIN/SECCHAMPION, paginated)
-  - `GET /api/vulnerability-exception-requests/pending/count` - Pending count (ADMIN/SECCHAMPION)
-  - `GET /api/vulnerability-exception-requests/statistics` - Analytics (ADMIN/SECCHAMPION)
-  - `GET /api/vulnerability-exception-requests/export` - Excel export (ADMIN/SECCHAMPION)
-  - `GET /api/exception-badge-updates` - SSE for real-time badge (authenticated, text/event-stream)
-
-**Features Implemented** (8 User Stories):
-1. **US1 (P1)**: Regular User Requests Single Vulnerability Exception - Request modal, my requests dashboard, cancellation
-2. **US2 (P1)**: ADMIN/SECCHAMPION Auto-Approved Requests - Instant approval, auto-approved badge, immediate exception creation
-3. **US3 (P1)**: ADMIN Approval Dashboard - Pending requests table, approve/reject modals, concurrent approval handling
-4. **US4 (P2)**: Flexible Exception Scope - Single vulnerability vs CVE pattern, ASSET vs PRODUCT exceptions
-5. **US5 (P2)**: User Cancellation - Cancel PENDING + revoke auto-approved APPROVED requests
-6. **US6 (P3)**: Email Notifications - Admin alerts, approval/rejection emails, expiration reminders
-7. **US7 (P2)**: Enhanced User Dashboard - Summary stats, status filtering, complete request details
-8. **US8 (P3)**: Analytics & Reporting - Approval rate, average time, top requesters/CVEs, Excel export
-
-**Access Control**:
-  - Create request: All authenticated users
-  - View own requests: Owner only (users see their own requests)
-  - View request details: Owner OR ADMIN/SECCHAMPION
-  - Approve/Reject: ADMIN, SECCHAMPION roles only
-  - Cancel: Owner only (PENDING + auto-approved APPROVED)
-  - Analytics/Export: ADMIN, SECCHAMPION only
-  - SSE badge: All authenticated users
-
-**Key Patterns**:
-  - **Auto-Approval**: ADMIN/SECCHAMPION requests instantly approved with autoApproved=true flag
-  - **Optimistic Locking**: @Version field prevents concurrent approval conflicts (409 Conflict)
-  - **SSE Real-Time Updates**: Server-Sent Events for live badge count updates via ApplicationEventPublisher
-  - **State Machine**: ExceptionRequestStatus.canTransitionTo() enforces valid transitions
-  - **Input Sanitization**: HTML tag stripping, whitespace normalization (XSS prevention)
-  - **Audit Trail**: Immutable ExceptionRequestAuditLog for all state transitions
-  - **Graceful Degradation**: Null handling for deleted vulnerabilities/users (FK ON DELETE SET NULL)
-  - **Email Failures**: Non-blocking async notifications (failures logged, workflow continues)
-
-**Data Model**:
-  - `vulnerability_exception_request` table: 20 columns, 6 indexes, optimistic locking
-  - `exception_request_audit_log` table: 10 columns, 5 indexes (immutable, append-only)
-  - State transitions: PENDING → {APPROVED, REJECTED, CANCELLED}, APPROVED → {EXPIRED, CANCELLED}
-  - Scope mapping: SINGLE_VULNERABILITY → ASSET exception, CVE_PATTERN → PRODUCT exception
-  - Retention: Audit logs permanent (manual cleanup after 7 years per compliance)
-
-**Technical Implementation**:
-  - Median calculation for approval time (not mean) per spec Assumption 8
-  - Apache POI SXSSFWorkbook streaming for Excel export (100-row memory window)
-  - Database indexes on status, created_at for query performance
-  - CompletableFuture.runAsync for async audit logging (non-blocking)
-  - Micronaut Data query derivation: countByStatus, findByStatusAndCreatedAtAfter
-  - Bootstrap modals with keyboard navigation (Escape to close)
-  - React.memo for performance optimization
-
-**Statistics**:
-  - 120 implementation tasks across 12 phases
-  - 4 new entities (VulnerabilityExceptionRequest, ExceptionRequestAuditLog, ExceptionCountChangedEvent, enums)
-  - 11 REST API endpoints
-  - 8 backend services (600+ lines core service)
-  - 12 frontend components
-  - Date range: 2025-10-21
-  - Development time: 7 sprints (14 weeks estimated)
-
-### Feature 029: Asset Bulk Operations (2025-10-19)
-
-Comprehensive asset management operations including bulk delete, Excel export with workgroup filtering, and Excel import with validation.
-
-**Backend Components** (`src/backendng/`):
-  - **BulkDeleteResult.kt** - Response DTO for bulk delete with deleted counts
-  - **AssetExportDto.kt** - Flattened DTO for Excel export with comma-separated workgroup names
-  - **AssetImportDto.kt** - Temporary DTO for parsing Excel rows before entity creation
-  - **ImportResult.kt** - Standardized import response (imported/skipped counts, errors)
-  - **AssetBulkDeleteService.kt** - Transactional bulk delete service:
-    - AtomicBoolean semaphore for concurrency control (first-request-wins pattern)
-    - Manual cascade delete order: asset_workgroups → vulnerabilities → scan_results → assets
-    - EntityManager.clear() after delete to prevent stale data
-  - **AssetExportService.kt** - Streaming Excel export service:
-    - SXSSFWorkbook with 100-row memory window for large datasets
-    - Styles created once and reused (prevents 64K style limit)
-    - Fixed column widths (no auto-sizing for performance)
-    - workbook.dispose() for temp file cleanup
-  - **AssetImportService.kt** - Excel import service with validation:
-    - Case-insensitive header mapping
-    - Required field validation (name, type, owner)
-    - Duplicate detection by name (skip without updating)
-    - Workgroup name resolution (case-insensitive)
-    - Multiple date format parsing support
-    - Error collection (limited to 20) with row numbers
-  - **AssetController.kt** - Added endpoints:
-    - `DELETE /api/assets/bulk` - Bulk delete all assets (ADMIN only, returns BulkDeleteResult)
-    - `GET /api/assets/export` - Export assets to Excel (authenticated, workgroup-filtered)
-  - **ImportController.kt** - Added endpoint:
-    - `POST /api/import/upload-assets-xlsx` - Import assets from Excel (authenticated)
-    - File validation: 10MB max, .xlsx extension, empty file check
-    - Returns ImportResult with imported/skipped counts and error list
-
-**Frontend Components** (`src/frontend/src/components/`):
-  - **BulkDeleteConfirmModal.tsx** - Confirmation modal:
-    - Checkbox acknowledgment pattern (not text input)
-    - ESC key handling (disabled during deletion)
-    - Loading spinner and warning UI
-  - **assetService.ts** - Frontend service:
-    - bulkDeleteAssets() - DELETE request with conflict handling
-    - exportAssets() - Blob download with date-stamped filename
-    - importAssets() - Multipart form upload
-  - **AssetManagement.tsx** - Updated with bulk delete:
-    - ADMIN-only "Delete All Assets" button
-    - Modal integration with confirmation flow
-    - Success message with auto-dismiss
-  - **Export.tsx** - Added Assets export card with handleExportAssets()
-  - **Import.tsx** - Added Assets import tab:
-    - URL parameter pre-selection (?type=assets)
-    - File validation for .xlsx
-    - ImportResult display with created/updated/skipped counts
-    - Error list display (up to 20 errors)
-  - **Sidebar.tsx** - Expandable I/O menu:
-    - Import → Requirements, Assets
-    - Export → Requirements, Assets
-    - Navigation links with URL parameters (/import?type=assets, /export?type=assets)
-
-**API Endpoints**:
-  - `DELETE /api/assets/bulk` - Bulk delete all assets (ADMIN only)
-  - `GET /api/assets/export` - Export assets to Excel (authenticated)
-  - `POST /api/import/upload-assets-xlsx` - Import assets from Excel (authenticated)
-
-**Features Implemented** (4 User Stories):
-1. **US1 (P1 - MVP)**: Bulk Delete All Assets - ADMIN-only button with checkbox confirmation modal
-2. **US2 (P1 - MVP)**: Export Assets to Excel - Workgroup-filtered export with SXSSFWorkbook streaming
-3. **US3 (P1 - MVP)**: Import Assets from Excel - Validation, duplicate handling, workgroup resolution
-4. **US4 (P2)**: Sidebar Navigation - Expandable Import/Export menus with asset links
-
-**Access Control**:
-
-**Performance Targets**:
-
-**Excel Format** (Import/Export):
-
-**Technical Implementation**:
-
-**Statistics**:
-
-### Feature 028: User Profile Page (2025-10-19)
-
-User profile page accessible from header dropdown menu showing username, email, and role badges.
-
-**Backend Components** (`src/backendng/`):
-  - **UserProfileDto.kt** - Data transfer object for user profile (username, email, roles)
-  - **UserProfileController.kt** - REST controller with:
-    - `GET /api/users/profile` - Get current user's profile (authenticated)
-    - Returns: UserProfileDto with username, email, roles array
-    - Security: @Secured(SecurityRule.IS_AUTHENTICATED) - requires valid JWT token
-    - Error handling: 404 Not Found if user deleted after login, 401 Unauthorized if not authenticated
-    - Excludes sensitive fields: passwordHash, id, createdAt, updatedAt
-  - **UserProfileContractTest.kt** - Contract tests:
-    - 200 success case with authenticated request
-    - 401 unauthorized case without authentication
-    - 404 not found case when user doesn't exist
-    - Verification that passwordHash is excluded from response
-
-**Frontend Components** (`src/frontend/src/components/`):
-  - **UserProfile.tsx** - React component with:
-    - Loading state UI with Bootstrap spinner
-    - Error state UI with Bootstrap alert and retry button
-    - Success state UI displaying username, email, and colored role badges
-    - getRoleBadgeClass() - Role-specific badge colors (ADMIN=danger/red, RELEASE_MANAGER=warning/yellow, VULN=info/blue, USER=secondary/gray)
-    - Bootstrap card structure with responsive layout
-  - **Header.tsx** - Updated user dropdown menu with:
-    - "Profile" menu item with person-circle icon
-    - Link to /profile page
-
-**Frontend Services** (`src/frontend/src/services/`):
-  - **userProfileService.ts** - API client:
-    - `getProfile()` - Fetch current user's profile data
-    - UserProfileData interface with username, email, roles fields
-
-**Frontend Pages** (`src/frontend/src/pages/`):
-  - **profile.astro** - Profile page with Layout wrapper and UserProfile component (client:load)
-
-**API Endpoints**:
-  - `GET /api/users/profile` - Get current user's profile (authenticated users only)
-
-**Features Implemented** (4 User Stories):
-1. **US1 (P1 - MVP)**: View Own Profile Information - Username, email, and roles with loading/error states
-2. **US2 (P1 - MVP)**: Navigate to Profile from User Menu - "Profile" menu item in header dropdown
-3. **US3 (P2)**: View Username on Profile - Username displayed prominently with "User Profile" heading
-4. **US4 (P2)**: Profile Page Layout and Design - Bootstrap card structure, responsive layout, colored role badges
-
-**Access Control**:
-
-**Data Model**:
-
-**Technical Implementation**:
-
-**Statistics**:
-
-### Feature 027: Admin User Notification System (2025-10-19)
-
-Automated email notifications sent to all ADMIN users when new users are created (manual creation or OAuth registration).
-
-**Backend Components** (`src/backendng/`):
-  - **AdminNotificationSettings.kt** - Entity storing notification preferences (enabled/disabled, sender email)
-  - **AdminNotificationSettingsRepository.kt** - JPA repository for settings persistence
-  - **AdminNotificationConfigDto.kt** - DTO for API requests/responses with validation
-  - **AdminNotificationService.kt** - Service layer with:
-    - In-memory caching (AtomicBoolean/AtomicReference) for performance
-    - `isNotificationEnabled()` - Fast cached check
-    - `sendNewUserNotificationForManualCreation()` - @Async notification for manual user creation
-    - `sendNewUserNotificationForOAuth()` - @Async notification for OAuth registration
-    - Email validation, duplicate prevention, graceful error handling
-  - **AdminNotificationEmailGenerator.kt** - Professional HTML email templates:
-    - `generateManualCreationEmail()` - Template for admin-created users (includes creator name)
-    - `generateOAuthRegistrationEmail()` - Template for OAuth users (includes provider name)
-    - Responsive HTML with tables, branding, formatted timestamps
-  - **NotificationSettingsController.kt** - REST controller (ADMIN-only):
-    - `GET /api/settings/notifications` - Retrieve current settings
-    - `PUT /api/settings/notifications` - Update settings (enabled, senderEmail)
-  - **UserController.kt** - Enhanced to call notification service after user creation
-  - **OAuthService.kt** - Enhanced to call notification service for new OAuth registrations
-
-**Frontend Components** (`src/frontend/src/components/`):
-  - **AdminNotificationSettings.tsx** - React component with:
-    - Enable/disable toggle for notifications
-    - Sender email configuration input
-    - Loading states, success/error messages
-    - Auto-refresh on page reload
-  - **AdminPage.tsx** - Updated with "Notification Settings" card
-
-**Frontend Services** (`src/frontend/src/services/`):
-  - **adminNotificationSettingsService.ts** - API client:
-    - `getNotificationSettings()` - Fetch current settings
-    - `updateNotificationSettings()` - Update settings
-
-**Frontend Pages** (`src/frontend/src/pages/admin/`):
-  - **notification-settings.astro** - Dedicated admin settings page
-
-**API Endpoints**:
-  - `GET /api/settings/notifications` - Get notification settings (ADMIN only)
-  - `PUT /api/settings/notifications` - Update settings (ADMIN only)
-
-**Features Implemented** (5 User Stories):
-1. **US1 (P1 - MVP)**: Enable/Disable Email Notifications - Toggle in Admin UI with persistence
-2. **US2 (P1)**: Receive Notifications for Manual User Creation - All ADMIN users emailed when user created via "Manage Users" UI
-3. **US3 (P2)**: Receive Notifications for OAuth Registration - All ADMIN users emailed for new OAuth registrations (GitHub, Google, Microsoft)
-4. **US4 (P2)**: Professional Email Formatting - HTML templates with user details, creator/provider info, timestamps
-5. **US5 (P3)**: Email Delivery Monitoring - Comprehensive logging of all send attempts (success/failure)
-
-**Email Content**:
-
-**Access Control**:
-
-**Data Model**:
-  - `id` (PK), `notifications_enabled` (boolean, default true), `sender_email` (varchar), `updated_by` (varchar), `created_at`, `updated_at`
-  - Single-row table (only one settings record exists)
-
-**Technical Implementation**:
-
-**Edge Cases Handled**:
-
-**Statistics**:
-
-### Feature 018: Account Vulns - AWS Account-Based Vulnerability Overview (2025-10-14)
-
-New vulnerability view for non-admin users to see assets and vulnerabilities in their mapped AWS accounts:
-
-**Backend Components** (`src/backendng/`):
-  - AWS account lookup from user_mapping table
-  - Asset filtering by cloudAccountId
-  - Vulnerability counting per asset
-  - Grouping by AWS account, sorting by vulnerability count
-  - Admin role rejection, no mapping error handling
-  - `GET /api/account-vulns` - Get account vulnerability summary (authenticated, non-admin only)
-  - Returns: AccountVulnsSummaryDto with account groups, assets, vulnerability counts
-  - Error responses: 401 (unauthorized), 403 (admin redirect), 404 (no mappings), 500 (server error)
-
-**Frontend Components** (`src/frontend/src/components/`):
-  - Fetches data from /api/account-vulns endpoint
-  - Displays summary stats (accounts, assets, vulnerabilities)
-  - Renders account groups with asset tables
-  - Error handling: Loading state, admin redirect, no mappings, general errors
-  - Refresh button for manual data reload
-  - Displays assets with name, type, vulnerability count
-  - Sortable by vulnerability count (descending)
-  - Clickable asset names for navigation
-  - Color-coded vulnerability badges (green/info/warning/danger)
-
-**Frontend Services** (`src/frontend/src/services/`):
-  - `getAccountVulns()` - Fetch account vulnerability summary
-  - TypeScript interfaces for request/response types
-
-**Navigation** (`src/frontend/src/components/Sidebar.tsx`):
-
-**Features Implemented** (5 User Stories):
-1. **US1 (P1 - MVP)**: View Vulnerabilities for Single AWS Account - Assets displayed with vuln counts, sorted by count
-2. **US2 (P2)**: Multi-Account Grouping - Multiple AWS accounts displayed in separate groups with summary stats
-3. **US3 (P1)**: Error Handling for Missing Mappings - Clear error message when user has no AWS account mappings
-4. **US4 (P1)**: Admin Role Redirect - Admin users get 403 error with redirect guidance to System Vulns view
-5. **US5 (P3)**: Asset Navigation - Clickable asset names navigate to asset detail page
-
-**Access Control**:
-
-**Data Model**:
-
-**Statistics**:
-
-### Feature 016: CSV-Based User Mapping Upload (2025-10-13)
-
-Complete CSV upload support for user mappings, parallel to existing Excel upload (Feature 013):
-
-**Backend Components** (`src/backendng/`):
-  - Encoding detection: UTF-8 BOM detection + ISO-8859-1 fallback (no heavy dependencies)
-  - Delimiter auto-detection: Comma, semicolon, tab (counts occurrences in first line)
-  - Scientific notation parsing: BigDecimal for AWS account IDs (9.98987E+11 → 998987000000)
-  - Header validation: Case-insensitive matching (account_id, Account_ID, ACCOUNT_ID all work)
-  - Field validation: Email format, 12-digit AWS account ID, domain format
-  - Duplicate detection: Within file (HashSet) + database (repository query)
-  - Batch persistence: Repository.saveAll() for efficiency
-  - Error handling: Skip invalid rows, continue with valid ones, return structured errors
-
-  - `POST /api/import/upload-user-mappings-csv` - Upload CSV file (ADMIN only)
-  - `GET /api/import/user-mapping-template-csv` - Download CSV template (ADMIN only)
-  - File validation: 10MB max, .csv extension, empty file check
-  - Response: ImportResult { message, imported, skipped, errors[] }
-
-**Frontend Components** (`src/frontend/src/components/`):
-  - Side-by-side cards: Excel upload (left) + CSV upload (right)
-  - Separate file inputs with proper accept filters (.xlsx vs .csv)
-  - Client-side validation: Extension, size (10MB), empty file
-  - Loading states: Spinner during upload, disabled buttons
-  - Result display: Imported/skipped counts, error details with line numbers
-  - Template downloads: Excel and CSV template buttons
-
-**Frontend Services** (`src/frontend/src/services/`):
-  - `uploadUserMappingsCSV(file)` - Upload CSV with validation
-  - `downloadCSVTemplate()` - Download CSV template with blob handling
-
-**Test Coverage** (Feature 016):
-  - 20 contract tests (CSVUploadContractTest.kt) - API compliance
-  - 26 unit tests (CSVUserMappingParserTest.kt) - Parser logic
-  - Delimiter detection (comma, semicolon, tab)
-  - Scientific notation parsing (Excel exports)
-  - Encoding detection (UTF-8 BOM, ISO-8859-1)
-  - Email validation (valid/invalid formats)
-  - Account ID validation (12 digits, non-numeric, scientific notation)
-  - Domain validation (format, default to "-NONE-")
-  - Duplicate detection (within file, existing in DB)
-  - Row skipping with structured error reporting
-  - Format flexibility (reversed columns, case variations, extra columns)
-  - Authentication/authorization (401, 403)
-  - File validation (empty, wrong extension, oversized)
-
-**Features Implemented** (3 User Stories):
-1. **US1 (P1 - MVP)**: Upload CSV user mappings with validation and duplicate detection
-2. **US2 (P2)**: Handle CSV format variations (column order, case-insensitive headers, extra columns)
-3. **US3 (P3)**: Download CSV template with example data
-
-**CSV Format Requirements**:
-
-**Statistics**:
-
-### Feature 012: Release Management UI Enhancement (2025-10-07)
-
-Complete user interface for release management with 8 major components:
-
-**Pages**:
-
-**Components** (`src/frontend/src/components/`):
-
-**Services** (`src/frontend/src/services/`):
-  - Methods: list(), getById(), create(), updateStatus(), delete(), getSnapshots(), compare()
-  - Pagination support, error handling, TypeScript interfaces
-
-**Utilities** (`src/frontend/src/utils/`):
-  - canDeleteRelease() - ADMIN deletes any, RELEASE_MANAGER deletes own only
-  - canCreateRelease(), canUpdateReleaseStatus(), canViewReleases()
-  - getPermissionErrorMessage()
-  - Multiple sheets: Summary, Added, Deleted, Modified, Unchanged
-  - Color-coded rows, formatted columns, auto-width
-
-**Features Implemented**:
-1. **Browse & Search** (P1): List view with status filtering, version/name search, pagination (20/page)
-2. **Create Release** (P1): Modal with semantic versioning validation, duplicate detection, RBAC enforcement (ADMIN/RELEASE_MANAGER)
-3. **View Details** (P2): Complete metadata display, paginated snapshots (50/page), snapshot detail modal, export buttons
-4. **Compare Releases** (P2): Dropdown selectors, summary stats, color-coded sections (Added/Deleted/Modified/Unchanged), field-by-field diff, Excel export
-5. **Status Lifecycle** (P2): Publish DRAFT → PUBLISHED, Archive PUBLISHED → ARCHIVED, confirmation modals, RBAC enforcement
-6. **Export Integration** (P2): Release selector on export pages, default to "Current", historical exports with releaseId parameter
-7. **Delete Release** (P3): RBAC-enforced delete (ADMIN: any release, RELEASE_MANAGER: own releases only), confirmation modal, cascade warning
-
-**Accessibility & Polish** (Phase 8):
-
-**Test Coverage**:
-
-**Statistics**:
-
-### Feature 011: Release-Based Requirement Version Management (2025-10-05)
-
-### Feature 008: Workgroup-Based Access Control (2025-10-04)
-
-### Feature 006: MCP Tools for Security Data (2025-10-04)
-
-### Feature 005: Masscan XML Import (2025-10-04)
-
-### Feature 004: VULN Role & Vulnerability Management UI (2025-10-03)
-
-### Feature 003: Vulnerability Management (2025-10-03)
-
-### Feature 002: Nmap Scan Import (2024-10-03)
-
-### Feature 001: Admin Role Management (2024-10-01)
+- **Falcon Tool**: Query CrowdStrike API for vulnerabilities
+- **CLI**: `falcon-vulns` with device type/severity filters
+- **Auth**: FALCON_CLIENT_ID, FALCON_CLIENT_SECRET, FALCON_CLOUD_REGION
+
+## Command Line Interface (`src/cli/`)
+- **Falcon Tool**: Query CrowdStrike API for vulnerabilities
 
 ## Key Entities
 
-### AdminNotificationSettings (NEW - Feature 027)
-- **Fields**: id, notificationsEnabled (boolean, default true), senderEmail (varchar 255), updatedBy (varchar 100), createdAt, updatedAt
-- **Purpose**: Store configuration for admin user notifications when new users are created
-- **Table**: admin_notification_settings
-- **Validation**: Sender email format validation
-- **Access**: ADMIN role only for read/write
-- **Behavior**: Single-row table (only one settings record), cached in-memory for performance
-- **Methods**: createDefault(), update(), validateSenderEmail()
+### VulnerabilityExceptionRequest (Feature 031)
+- **Fields**: vulnerability(FK), scope(SINGLE_VULNERABILITY/CVE_PATTERN), status(PENDING/APPROVED/REJECTED/EXPIRED/CANCELLED), autoApproved, reason(50-2048), expirationDate, requestedByUser(FK), reviewedByUser(FK)
+- **State**: PENDING → {APPROVED,REJECTED,CANCELLED}; APPROVED → {EXPIRED,CANCELLED}
+- **Services**: VulnerabilityExceptionRequestService (auto-approval, optimistic locking), ExceptionRequestAuditService (async), ExceptionRequestStatisticsService (analytics)
+- **API**: 11 endpoints (/api/vulnerability-exception-requests/*)
+- **Frontend**: ExceptionRequestModal, MyExceptionRequests, ExceptionApprovalDashboard, SSE badge updates
 
-### Release (NEW - Feature 011)
-- **Fields**: id, version (semantic versioning), name, description, status (DRAFT/PUBLISHED/ARCHIVED), releaseDate, createdBy, createdAt, updatedAt
-- **Validation**: Unique version, semantic versioning format (MAJOR.MINOR.PATCH)
-- **Relationships**: OneToMany RequirementSnapshot (cascade delete)
-- **Access**: ADMIN, RELEASE_MANAGER roles for create/delete; all authenticated users for read
+### UserMapping (Feature 013/016)
+- **Fields**: email, awsAccountId(12 digits), domain
+- **Validation**: Email format, 12-digit AWS account, domain format
+- **Import**: Excel (.xlsx) + CSV (.csv) with auto-delimiter detection, scientific notation parsing
+- **Access**: ADMIN only
 
-### RequirementSnapshot (NEW - Feature 011)
-- **Fields**: id, release (FK), originalRequirementId, all requirement fields (shortreq, chapter, norm, details, motivation, example, usecase), usecaseIdsSnapshot (JSON), normIdsSnapshot (JSON), snapshotTimestamp
-- **Purpose**: Immutable point-in-time copy of requirement state
-- **Relationships**: ManyToOne Release (cascade delete)
-- **Indexes**: release_id, original_requirement_id
-- **Factory**: Companion object method `fromRequirement(requirement, release)` for snapshot creation
+### Workgroup (Feature 008)
+- **Fields**: name, description, users(ManyToMany), assets(ManyToMany)
+- **Access Control**: Users see assets from their workgroups + personally created/uploaded
+- **CRUD**: ADMIN role only
 
-### UserMapping (NEW - Feature 013)
-- **Fields**: id, email, awsAccountId (12 digits), domain, createdAt, updatedAt
-- **Validation**: Email format (contains @), AWS account format (exactly 12 digits), domain format (alphanumeric + dots + hyphens)
-- **Relationships**: Independent (no FK to User entity - may reference future users)
-- **Indexes**: Unique composite (email, awsAccountId, domain), individual indexes on email, awsAccountId, domain, (email + awsAccountId)
-- **Access**: ADMIN role only for upload and view
-- **Purpose**: Foundation for multi-tenant RBAC across AWS accounts and domains
-- **Normalization**: Email and domain stored lowercase for case-insensitive matching
+### Release (Feature 011)
+- **Fields**: version(semantic), name, status(DRAFT/PUBLISHED/ARCHIVED), createdBy
+- **Snapshots**: RequirementSnapshot entities (immutable point-in-time copies)
+- **Access**: ADMIN/RELEASE_MANAGER create/delete; all read
 
-### Workgroup (NEW - Feature 008)
-- **Fields**: id, name, description, users (ManyToMany), assets (ManyToMany), createdAt, updatedAt
-- **Validation**: Name 1-100 chars, alphanumeric + spaces + hyphens, case-insensitive unique
-- **Relationships**: ManyToMany User (bidirectional), ManyToMany Asset (bidirectional)
-- **Join Tables**: user_workgroups, asset_workgroups
-- **Access**: ADMIN role only for CRUD operations
-
-### VulnerabilityException (NEW - Feature 004)
-- **Fields**: id, exceptionType (IP/PRODUCT), targetValue, expirationDate, reason, createdBy, createdAt, updatedAt
+### VulnerabilityException (Feature 004)
+- **Fields**: exceptionType(IP/PRODUCT), targetValue, expirationDate, reason
 - **Methods**: isActive(), matches(vulnerability, asset)
-- **Indexes**: exception_type, expiration_date
-- **Access**: ADMIN, VULN roles only
+- **Access**: ADMIN, VULN roles
 
-### Vulnerability (Feature 003)
-- **Fields**: id, asset (FK), vulnerabilityId (CVE), cvssSeverity, vulnerableProductVersions, daysOpen, scanTimestamp, createdAt
-- **Relationships**: ManyToOne Asset (bidirectional, cascade delete)
-- **Indexes**: asset_id, (asset_id, scan_timestamp)
+### Asset (Extended)
+- **Core**: id, name, type, ip, owner, description, lastSeen
+- **Metadata**: groups, cloudAccountId, cloudInstanceId, adDomain, osVersion
+- **Relations**: vulnerabilities(OneToMany), scanResults(OneToMany), workgroups(ManyToMany), manualCreator(FK), scanUploader(FK)
 
-### Asset (EXTENDED - Feature 003, 008)
-- **Workgroup Fields** (Feature 008): workgroups (ManyToMany), manualCreator (FK nullable), scanUploader (FK nullable)
-- **Metadata Fields**: groups (comma-separated), cloudAccountId, cloudInstanceId, adDomain, osVersion
-- **Core Fields**: id, name, type, ip, owner, description, lastSeen
-- **Relationships**: vulnerabilities (OneToMany), scanResults (OneToMany), workgroups (ManyToMany), manualCreator (ManyToOne User), scanUploader (ManyToOne User)
-- **Key Methods**: addScanResult(), mergeVulnerabilityData() (planned)
-- **Access Control**: Users see assets from their workgroups + assets they created/uploaded (Feature 008)
+### Vulnerability
+- **Fields**: asset(FK), vulnerabilityId(CVE), cvssSeverity, vulnerableProductVersions, daysOpen, scanTimestamp
+- **Relations**: ManyToOne Asset (cascade delete)
 
-### Requirement (EXTENDED - Feature 011)
-- **Fields**: id, shortreq, chapter, norm, details, motivation, example, usecase
-- **Relationships**: ManyToMany Norm, ManyToMany UseCase
-- **Import**: Excel import via /api/import/upload-xlsx
-- **Deletion**: Prevented if requirement is frozen in any release (Feature 011)
+### User
+- **Fields**: username, email, passwordHash, roles(collection), workgroups(ManyToMany)
+- **Roles**: USER, ADMIN, VULN, RELEASE_MANAGER, SECCHAMPION
 
-### ScanResult (Feature 002)
-- **Fields**: id, asset (FK), port, service, product, version, discoveredAt
-- **Relationships**: ManyToOne Asset
-- **Source**: Nmap XML import
-
-### User (EXTENDED - Feature 008, 011)
-- **Fields**: id, username, email, passwordHash, roles (ElementCollection), workgroups (ManyToMany), createdAt, updatedAt
-- **Roles**: USER, ADMIN, VULN, RELEASE_MANAGER (Feature 011)
-- **Relationships**: workgroups (ManyToMany bidirectional)
-- **Access Control**: Users see resources from their workgroups + personally created/uploaded items
-
-## API Endpoints
+## API Endpoints (Critical Only)
 
 ### Import
-- `POST /api/import/upload-xlsx` - Requirements import
-- `POST /api/import/upload-nmap-xml` - Nmap scan import (Feature 002)
-- `POST /api/import/upload-masscan-xml` - Masscan scan import (Feature 005)
-- `POST /api/import/upload-vulnerability-xlsx` - Vulnerability import (Feature 003)
-- `POST /api/import/upload-user-mappings` - User mapping Excel upload (Feature 013, ADMIN only)
-  - Request: multipart/form-data with xlsxFile
-  - Response: ImportResult { message, imported, skipped, errors[] }
-  - Validation: Email format, AWS account (12 digits), domain format
-  - Behavior: Skip invalid/duplicate rows, continue with valid ones
-- `POST /api/import/upload-user-mappings-csv` - User mapping CSV upload (Feature 016, ADMIN only)
-  - Request: multipart/form-data with csvFile
-  - Response: ImportResult { message, imported, skipped, errors[] }
-  - Validation: Same as Excel upload (email, AWS account, domain)
-  - CSV Format: RFC 4180, auto-detects delimiter (comma/semicolon/tab), UTF-8/ISO-8859-1
-  - Scientific Notation: Handles AWS account IDs in format 9.98987E+11
-  - Behavior: Skip invalid/duplicate rows, continue with valid ones, domain defaults to "-NONE-"
+- `POST /api/import/upload-xlsx` - Requirements
+- `POST /api/import/upload-nmap-xml` - Nmap scans
+- `POST /api/import/upload-vulnerability-xlsx` - Vulnerabilities
+- `POST /api/import/upload-user-mappings` - Excel user mappings (ADMIN)
+- `POST /api/import/upload-user-mappings-csv` - CSV user mappings (ADMIN)
+- `POST /api/import/upload-assets-xlsx` - Assets import
 
-### Assets (UPDATED - Feature 008)
-- `GET /api/assets` - List assets (workgroup-filtered: users see their workgroup assets + owned assets)
-- `GET /api/assets/{id}` - Asset detail (workgroup access control)
-- `POST /api/assets` - Create asset (tracks manual creator for ownership)
-- `GET /api/assets/{id}/vulnerabilities` - Asset vulnerabilities (workgroup-filtered)
+### Assets
+- `GET /api/assets` - List (workgroup-filtered)
+- `POST /api/assets` - Create
+- `DELETE /api/assets/bulk` - Bulk delete (ADMIN)
+- `GET /api/assets/export` - Excel export
 
-### Workgroup Management (NEW - Feature 008)
-- `POST /api/workgroups` - Create workgroup (ADMIN only)
-- `GET /api/workgroups` - List all workgroups (ADMIN only)
-- `GET /api/workgroups/{id}` - Get workgroup details (ADMIN only)
-- `PUT /api/workgroups/{id}` - Update workgroup (ADMIN only)
-- `DELETE /api/workgroups/{id}` - Delete workgroup (ADMIN only)
-- `POST /api/workgroups/{id}/users` - Assign users to workgroup (ADMIN only)
-- `DELETE /api/workgroups/{workgroupId}/users/{userId}` - Remove user from workgroup (ADMIN only)
-- `POST /api/workgroups/{id}/assets` - Assign assets to workgroup (ADMIN only)
-- `DELETE /api/workgroups/{workgroupId}/assets/{assetId}` - Remove asset from workgroup (ADMIN only)
-
-### Vulnerability Management (UPDATED - Feature 004, 008)
-- `GET /api/vulnerabilities/current` - Current vulnerabilities (ADMIN sees all, VULN respects workgroups)
+### Vulnerabilities
+- `GET /api/vulnerabilities/current` - Current vulns (workgroup-filtered for VULN)
 - `GET /api/vulnerability-exceptions` - List exceptions (ADMIN, VULN)
-- `POST /api/vulnerability-exceptions` - Create exception (ADMIN, VULN)
-- `PUT /api/vulnerability-exceptions/{id}` - Update exception (ADMIN, VULN)
-- `DELETE /api/vulnerability-exceptions/{id}` - Delete exception (ADMIN, VULN)
+- `POST /api/vulnerability-exception-requests` - Create exception request
+- `GET /api/vulnerability-exception-requests/pending/count` - Badge count
+- `GET /api/exception-badge-updates` - SSE real-time updates
 
-### Scans (UPDATED - Feature 008)
-- `GET /api/scans` - List scans (workgroup-filtered: users see scans from workgroup members)
+### Workgroups
+- `POST /api/workgroups` - Create (ADMIN)
+- `GET /api/workgroups` - List (ADMIN)
+- `POST /api/workgroups/{id}/users` - Assign users (ADMIN)
+- `POST /api/workgroups/{id}/assets` - Assign assets (ADMIN)
 
-### Release Management (NEW - Feature 011)
-- `POST /api/releases` - Create release (ADMIN, RELEASE_MANAGER)
-- `GET /api/releases?status=PUBLISHED` - List releases with optional status filter (authenticated)
-- `GET /api/releases/{id}` - Get release details (authenticated)
-- `DELETE /api/releases/{id}` - Delete release (ADMIN, RELEASE_MANAGER)
-- `GET /api/releases/{id}/requirements` - Get release snapshots (authenticated)
-- `GET /api/releases/compare?fromReleaseId={id}&toReleaseId={id}` - Compare two releases (authenticated)
+### Releases
+- `POST /api/releases` - Create (ADMIN, RELEASE_MANAGER)
+- `GET /api/releases` - List with status filter
+- `GET /api/releases/compare` - Compare releases
 
-### Requirements Export (UPDATED - Feature 011)
-- `GET /api/requirements/export/xlsx?releaseId={id}` - Export to Excel (optional release parameter)
-- `GET /api/requirements/export/docx?releaseId={id}` - Export to Word (optional release parameter)
-- `GET /api/requirements/export/xlsx/translated/{lang}?releaseId={id}` - Export translated Excel
-- `GET /api/requirements/export/docx/translated/{lang}?releaseId={id}` - Export translated Word
-
-### Authentication
+### Auth
 - `POST /api/auth/login` - JWT login
-- OAuth2 endpoints for SSO
-
-### MCP Tools (Feature 006)
-Model Context Protocol tools for AI assistant integration:
-- `get_assets` - Retrieve asset inventory with filtering (name, type, ip, owner, group) and pagination
-- `get_scans` - Retrieve scan history with filtering (scanType, uploadedBy, dateRange) and pagination
-- `get_vulnerabilities` - Retrieve vulnerabilities with filtering (cveId, severity, assetId, dateRange) and pagination
-- `search_products` - Search products/services discovered in scans, grouped by service+version
-- `get_asset_profile` - Get comprehensive asset profile (details, vulnerabilities, scan history, ports)
-
-**Limits**: Max 500 items/page, 50K total results per query
-**Rate Limits**: 1000 requests/minute, 50K requests/hour per API key
-**Permissions**: ASSETS_READ, SCANS_READ, VULNERABILITIES_READ
+- OAuth2 SSO endpoints
 
 ## Development Workflow
 
 ### TDD (NON-NEGOTIABLE)
-1. Write contract tests (failing)
-2. Write unit tests (failing)
-3. Implement to make tests pass
+1. Contract tests (failing)
+2. Unit tests (failing)
+3. Implement
 4. Refactor
-5. Coverage target: e80%
+5. Target: ≥80% coverage
 
-### Git Workflow
-- Conventional commits: `type(scope): description`
-- Feature branches: `###-feature-name` pattern
-- PR requires: tests pass, lint pass, Docker build success
+### Git
+- Commits: `type(scope): description`
+- Branches: `###-feature-name`
+- PR gates: tests, lint, Docker build
 
-### Testing
-- **Backend**: `./gradlew test` (JUnit 5 + MockK)
-- **Frontend**: `npm test` (Playwright E2E)
-- **E2E**: `npm run test:e2e`
+### Commands
+```bash
+# Backend
+./gradlew test build
 
-## Constitutional Principles (v1.0.0)
+# Frontend
+npm test; npm run dev
 
-**Full Constitution**: See `.specify/memory/constitution.md` for complete details, rationale, and governance.
+```
 
-1. **Security-First**: File validation, input sanitization, RBAC enforced
-2. **TDD**: Tests before implementation (Red-Green-Refactor)
-3. **API-First**: RESTful with OpenAPI, backward compatibility
-4. **Docker-First**: Containerized, .env config, multi-arch
-5. **RBAC**: @Secured on endpoints, role checks in UI
-6. **Schema Evolution**: Hibernate auto-migration, DB constraints
+## Constitutional Principles
+1. **Security-First**: File validation, input sanitization, RBAC
+2. **TDD**: Tests before implementation
+3. **API-First**: RESTful, backward compatible
+4. **RBAC**: @Secured on endpoints, role checks in UI
+5. **Schema Evolution**: Hibernate auto-migration
 
 ## Common Patterns
 
-### Excel Import Pattern
-1. Validate file (size, format, content-type)
-2. Parse with Apache POI XSSFWorkbook
-3. Validate headers, map columns
-4. Parse rows in try-catch (skip invalid, continue valid)
-5. Return counts: imported, skipped, assetsCreated
+### CSV/Excel Import
+1. Validate file (size ≤10MB, extension, content-type)
+2. Parse (Apache POI for Excel, Commons CSV for CSV)
+3. Detect delimiter/encoding for CSV (UTF-8 BOM, ISO-8859-1 fallback)
+4. Validate headers (case-insensitive)
+5. Parse rows (skip invalid, continue valid, handle scientific notation)
+6. Check duplicates (DB + file)
+7. Batch save
+8. Return ImportResult: imported, skipped, errors[]
 
-### CSV Import Pattern (Feature 016)
-1. Validate file (size ≤10MB, .csv extension, content-type)
-2. Detect encoding (UTF-8 BOM or default UTF-8 with ISO-8859-1 fallback)
-3. Detect delimiter (comma/semicolon/tab from first line)
-4. Parse with Apache Commons CSV (RFC 4180 compliant)
-5. Validate headers (case-insensitive: account_id, owner_email, optional domain)
-6. For each row:
-   - Parse account ID (handle scientific notation with BigDecimal)
-   - Validate fields (email format, 12-digit account ID, domain format)
-   - Normalize (lowercase email/domain, trim whitespace)
-   - Check for duplicates (database + within file)
-   - Create entity or skip with reason
-7. Batch save valid entities
-8. Return ImportResult: imported count, skipped count, errors[]
-
-### Entity Merge Pattern (Asset)
-1. Find existing by hostname: `assetRepository.findByName(hostname)`
-2. If exists: Merge (append groups, update IP, preserve owner/type/description)
-3. If not exists: Create with defaults
-4. Save and return
+### Entity Merge (Asset)
+1. Find by name
+2. Merge if exists (append groups, update IP, preserve owner)
+3. Create if new
+4. Save
 
 ### Authentication
-- All API endpoints: `@Secured(SecurityRule.IS_AUTHENTICATED)`
-- Admin-only: Check `authentication.roles.contains("ADMIN")`
-- VULN role: Check `authentication.roles.contains("VULN")` or `authentication.roles.contains("ADMIN")`
-- Frontend: Store JWT in sessionStorage, add to Axios headers
+- Endpoints: `@Secured(SecurityRule.IS_AUTHENTICATED)`
+- Admin: `authentication.roles.contains("ADMIN")`
+- VULN: Check "VULN" or "ADMIN"
+- Frontend: JWT in sessionStorage → Axios headers
 
 ## File Locations
-
-### Backend
-- **Domain**: `src/backendng/src/main/kotlin/com/secman/domain/`
-- **Controllers**: `src/backendng/src/main/kotlin/com/secman/controller/`
-  - `ImportController.kt` - Data import endpoints (xlsx, nmap, masscan, vulnerabilities, user mappings)
-- **Services**: `src/backendng/src/main/kotlin/com/secman/service/`
-  - `CSVUserMappingParser.kt` - CSV parsing for user mappings (Feature 016)
-- **Tests**: `src/backendng/src/test/kotlin/com/secman/`
-  - `contract/CSVUploadContractTest.kt` - Contract tests for CSV upload endpoint (Feature 016)
-  - `service/CSVUserMappingParserTest.kt` - Unit tests for CSV parser (Feature 016)
-
-### Frontend
-- **Components**: `src/frontend/src/components/`
-- **Pages**: `src/frontend/src/pages/`
-- **Services**: `src/frontend/src/services/`
-- **Tests**: `src/frontend/tests/e2e/`
-
-### Helper Tools
-- **Root**: `src/helper/`
-- **Models**: `src/helper/src/models/`
-- **Services**: `src/helper/src/services/`
-- **CLI**: `src/helper/src/cli/`
-- **Exporters**: `src/helper/src/exporters/`
-- **Utilities**: `src/helper/src/lib/`
-- **Tests**: `src/helper/tests/` (contract/, integration/, unit/)
-
-### Config
-- **Docker**: `docker-compose.yml`
-- **Env**: `.env` (not committed)
-- **Backend Config**: `src/backendng/src/main/resources/application.yml`
-
-## Quick Commands
-```bash
-# Backend
-./gradlew build          # Build backend
-./gradlew test           # Run tests
-./gradlew run            # Run locally
-
-# Frontend
-npm run dev              # Dev server (port 4321)
-npm run build            # Production build
-npm test                 # E2E tests
-
-# Helper Tools (Falcon API)
-cd src/helper
-pip install -r requirements.txt  # Install dependencies
-pip install -e .                 # Install in editable mode
-falcon-vulns --device-type SERVER --severity CRITICAL --min-days-open 30  # Query vulnerabilities
-pytest tests/                    # Run tests
-ruff check .                     # Run linter
-
-# Docker
-docker-compose up -d     # Start all services
-docker-compose logs -f   # View logs
-docker-compose down      # Stop all services
-```
+- **Backend**: `src/backendng/src/main/kotlin/com/secman/{domain,controller,service,repository}/`
+- **Frontend**: `src/frontend/src/{components,pages,services}/`
+- **Helper**: `src/helper/src/{models,services,cli,exporters,lib}/`
+- **Tests**: `src/backendng/src/test/kotlin/com/secman/{contract,service,integration}/`
+- **Config**: `docker-compose.yml`, `.env`, `src/backendng/src/main/resources/application.yml`
 
 ---
-*Auto-generated from feature specifications. Last updated: 2025-10-13*
+*Optimized for performance. See git history for detailed feature specs. Last updated: 2025-10-24*
