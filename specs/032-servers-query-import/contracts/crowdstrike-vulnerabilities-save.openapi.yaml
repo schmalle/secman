@@ -1,0 +1,358 @@
+openapi: 3.0.3
+info:
+  title: CrowdStrike Vulnerability Import API
+  version: 1.0.0
+  description: |
+    API endpoint for importing server vulnerabilities from CrowdStrike Falcon API.
+    Supports batch import with transactional guarantees per server.
+
+    Feature: 032-servers-query-import
+
+servers:
+  - url: http://localhost:8080/api
+    description: Local development
+  - url: https://secman.company.com/api
+    description: Production
+
+paths:
+  /crowdstrike/vulnerabilities/save:
+    post:
+      summary: Import server vulnerabilities from CrowdStrike
+      description: |
+        Imports vulnerability data for multiple servers from CrowdStrike Falcon API.
+
+        Behavior:
+        - Creates new Asset records for unknown servers (type=SERVER, owner="CrowdStrike Import")
+        - Updates metadata for existing servers (groups, cloudAccountId, etc.)
+        - Replaces ALL existing vulnerabilities for each server (delete old + insert new)
+        - Uses transaction per server for atomicity
+        - Partial failures allowed (some servers succeed, others fail)
+
+        Requirements (from spec.md):
+        - FR-015: Create endpoint accepting batch vulnerability data
+        - FR-015a: Accept JSON payload with server hostname, vulnerabilities array, metadata
+        - FR-015b: Implement transaction-per-server logic (atomic delete+insert)
+        - FR-015c: Return import statistics (servers processed, vulnerabilities created, errors)
+
+      operationId: importCrowdStrikeVulnerabilities
+      tags:
+        - CrowdStrike
+        - Vulnerability Import
+
+      security:
+        - bearerAuth: []
+
+      requestBody:
+        required: true
+        description: Batch of servers with their vulnerabilities and metadata
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrowdStrikeVulnerabilityBatchRequest'
+            examples:
+              singleServer:
+                summary: Single server with 3 vulnerabilities
+                value:
+                  servers:
+                    - hostname: "prod-web-01"
+                      groups: "Production,DMZ"
+                      cloudAccountId: "123456789012"
+                      cloudInstanceId: "i-0123456789abcdef0"
+                      adDomain: "MS.HOME"
+                      osVersion: "Windows Server 2019"
+                      ip: "192.168.1.100"
+                      vulnerabilities:
+                        - cveId: "CVE-2024-1234"
+                          severity: "CRITICAL"
+                          affectedProduct: "Microsoft Windows Server 2019"
+                          daysOpen: 45
+                        - cveId: "CVE-2024-5678"
+                          severity: "HIGH"
+                          affectedProduct: "OpenSSL 1.1.1"
+                          daysOpen: 60
+                        - cveId: "CVE-2024-9012"
+                          severity: "CRITICAL"
+                          affectedProduct: "Apache HTTP Server 2.4"
+                          daysOpen: 35
+
+              multipleServers:
+                summary: Multiple servers (batch import)
+                value:
+                  servers:
+                    - hostname: "prod-web-01"
+                      groups: "Production,Web"
+                      vulnerabilities:
+                        - cveId: "CVE-2024-1234"
+                          severity: "CRITICAL"
+                          affectedProduct: "nginx 1.18"
+                          daysOpen: 45
+                    - hostname: "prod-db-01"
+                      groups: "Production,Database"
+                      vulnerabilities:
+                        - cveId: "CVE-2024-5678"
+                          severity: "HIGH"
+                          affectedProduct: "PostgreSQL 13"
+                          daysOpen: 32
+
+      responses:
+        '200':
+          description: Import completed (may include partial failures)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportStatisticsResponse'
+              examples:
+                fullSuccess:
+                  summary: All servers imported successfully
+                  value:
+                    serversProcessed: 5
+                    serversCreated: 3
+                    serversUpdated: 2
+                    vulnerabilitiesImported: 25
+                    vulnerabilitiesSkipped: 0
+                    errors: []
+
+                partialSuccess:
+                  summary: Some servers failed
+                  value:
+                    serversProcessed: 5
+                    serversCreated: 2
+                    serversUpdated: 1
+                    vulnerabilitiesImported: 18
+                    vulnerabilitiesSkipped: 0
+                    errors:
+                      - "Failed to import vulnerabilities for server 'prod-db-02': Database constraint violation"
+                      - "Failed to import vulnerabilities for server 'prod-app-01': Transaction timeout"
+
+        '400':
+          description: Validation error (invalid request payload)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missingHostname:
+                  summary: Missing required field
+                  value:
+                    error: "Validation failed"
+                    message: "hostname: must not be blank"
+                    status: 400
+
+                invalidSeverity:
+                  summary: Invalid severity value
+                  value:
+                    error: "Validation failed"
+                    message: "severity: must be HIGH or CRITICAL"
+                    status: 400
+
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Unauthorized"
+                message: "Authentication required"
+                status: 401
+
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Internal Server Error"
+                message: "Database connection failed"
+                status: 500
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from /api/auth/login
+
+  schemas:
+    CrowdStrikeVulnerabilityBatchRequest:
+      type: object
+      required:
+        - servers
+      properties:
+        servers:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            $ref: '#/components/schemas/ServerVulnerabilityData'
+          description: Array of servers with their vulnerabilities (max 500 servers per request)
+
+    ServerVulnerabilityData:
+      type: object
+      required:
+        - hostname
+        - vulnerabilities
+      properties:
+        hostname:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Server hostname (unique identifier, used for Asset.name)
+          example: "prod-web-01"
+
+        groups:
+          type: string
+          maxLength: 512
+          nullable: true
+          description: Comma-separated group names from CrowdStrike
+          example: "Production,DMZ,Web"
+
+        cloudAccountId:
+          type: string
+          maxLength: 255
+          nullable: true
+          description: AWS/cloud account ID
+          example: "123456789012"
+
+        cloudInstanceId:
+          type: string
+          maxLength: 255
+          nullable: true
+          description: Cloud instance identifier
+          example: "i-0123456789abcdef0"
+
+        adDomain:
+          type: string
+          maxLength: 255
+          nullable: true
+          description: Active Directory domain
+          example: "MS.HOME"
+
+        osVersion:
+          type: string
+          maxLength: 255
+          nullable: true
+          description: Operating system version
+          example: "Windows Server 2019"
+
+        ip:
+          type: string
+          maxLength: 255
+          nullable: true
+          description: IP address
+          example: "192.168.1.100"
+
+        vulnerabilities:
+          type: array
+          minItems: 0
+          items:
+            $ref: '#/components/schemas/VulnerabilityData'
+          description: |
+            Array of vulnerabilities for this server.
+            Note: Empty array is valid (server has no HIGH/CRITICAL vulnerabilities open >30 days)
+
+    VulnerabilityData:
+      type: object
+      required:
+        - cveId
+        - severity
+        - daysOpen
+      properties:
+        cveId:
+          type: string
+          minLength: 1
+          maxLength: 255
+          pattern: '^CVE-\d{4}-\d{4,}$'
+          description: CVE identifier (e.g., CVE-2024-1234)
+          example: "CVE-2024-1234"
+
+        severity:
+          type: string
+          enum: [HIGH, CRITICAL]
+          description: CVSS severity level (only HIGH and CRITICAL per FR-003)
+          example: "CRITICAL"
+
+        affectedProduct:
+          type: string
+          maxLength: 512
+          nullable: true
+          description: Affected product and version information
+          example: "Microsoft Windows Server 2019"
+
+        daysOpen:
+          type: integer
+          minimum: 30
+          description: Number of days vulnerability has been open (minimum 30 per FR-004)
+          example: 45
+
+    ImportStatisticsResponse:
+      type: object
+      required:
+        - serversProcessed
+        - serversCreated
+        - serversUpdated
+        - vulnerabilitiesImported
+        - vulnerabilitiesSkipped
+        - errors
+      properties:
+        serversProcessed:
+          type: integer
+          minimum: 0
+          description: Total servers in request (created + updated + errors)
+          example: 5
+
+        serversCreated:
+          type: integer
+          minimum: 0
+          description: New Asset records created
+          example: 3
+
+        serversUpdated:
+          type: integer
+          minimum: 0
+          description: Existing Asset records updated
+          example: 2
+
+        vulnerabilitiesImported:
+          type: integer
+          minimum: 0
+          description: Total Vulnerability records created (across all successful servers)
+          example: 25
+
+        vulnerabilitiesSkipped:
+          type: integer
+          minimum: 0
+          description: Vulnerabilities without CVE ID (filtered before import)
+          example: 0
+
+        errors:
+          type: array
+          items:
+            type: string
+          description: Error messages for failed server imports (transaction rollbacks)
+          example:
+            - "Failed to import vulnerabilities for server 'prod-db-02': Database constraint violation"
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+        - status
+      properties:
+        error:
+          type: string
+          description: Error type/category
+          example: "Validation failed"
+
+        message:
+          type: string
+          description: Detailed error message
+          example: "hostname: must not be blank"
+
+        status:
+          type: integer
+          description: HTTP status code
+          example: 400

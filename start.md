@@ -11,18 +11,17 @@ secman config --show
 
 # Query vulnerabilities
 
-secman query --hostname server.example.com 
---severity critical 
---limit 50 
---format json 
+secman query --hostname server.example.com
+--severity critical
+--limit 50
+--format json
 --output /tmp/results.json
 
 # Get help
 
 secman help
 
-java -jar src/cli/build/libs/cli-0.1.0-all.jar query --hostname EC2AMAZ-6167U5R
-
+java -jar src/cli/build/libs/cli-0.1.0-all.jar query --hostname SERVERNAME
 
 ```
 Development Configuration (localhost)

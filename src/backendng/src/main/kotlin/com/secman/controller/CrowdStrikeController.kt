@@ -3,8 +3,11 @@ package com.secman.controller
 import com.secman.dto.CrowdStrikeQueryResponse
 import com.secman.dto.CrowdStrikeSaveRequest
 import com.secman.dto.CrowdStrikeSaveResponse
+import com.secman.dto.CrowdStrikeVulnerabilityBatchDto
+import com.secman.dto.ImportStatisticsDto
 import com.secman.service.CrowdStrikeError
 import com.secman.service.CrowdStrikeQueryService
+import com.secman.service.CrowdStrikeVulnerabilityImportService
 import com.secman.service.CrowdStrikeVulnerabilityService
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.HttpStatus
@@ -24,17 +27,20 @@ import org.slf4j.LoggerFactory
  * Endpoints:
  * - GET /api/vulnerabilities - Query vulnerabilities by hostname (with filtering & pagination)
  * - GET /api/crowdstrike/vulnerabilities - Query vulnerabilities by hostname (legacy)
- * - POST /api/crowdstrike/vulnerabilities/save - Save vulnerabilities to database
+ * - POST /api/crowdstrike/vulnerabilities/save - Save vulnerabilities to database (single or batch)
  *
- * Related to: Feature 023-create-in-the (Phase 5: Backend API Integration)
- * Tasks: T062-T070
+ * Related to:
+ * - Feature 023-create-in-the (Phase 5: Backend API Integration)
+ * - Feature 032-servers-query-import (Batch Import)
+ * Tasks: T062-T070, T017-T023
  */
 @Controller("/api")
 @Secured("ADMIN", "VULN")
 @ExecuteOn(TaskExecutors.BLOCKING)
 open class CrowdStrikeController(
     private val crowdStrikeService: CrowdStrikeVulnerabilityService,
-    private val queryService: CrowdStrikeQueryService
+    private val queryService: CrowdStrikeQueryService,
+    private val importService: CrowdStrikeVulnerabilityImportService
 ) {
     private val log = LoggerFactory.getLogger(CrowdStrikeController::class.java)
 
@@ -179,12 +185,16 @@ open class CrowdStrikeController(
     /**
      * Save CrowdStrike vulnerabilities to database with asset auto-creation
      *
-     * Feature 030 - CrowdStrike Asset Auto-Creation
-     * Tasks: T012, T013
+     * Supports two modes:
+     * 1. Single server (Feature 030): CrowdStrikeSaveRequest
+     * 2. Batch import (Feature 032): List<CrowdStrikeVulnerabilityBatchDto>
      *
-     * @param request Save request with hostname and vulnerabilities
+     * Features: 030-crowdstrike-asset-auto-creation, 032-servers-query-import
+     * Tasks: T012, T013, T017, T023
+     *
+     * @param request Save request (single or batch)
      * @param authentication Current authenticated user
-     * @return CrowdStrikeSaveResponse with save results
+     * @return Save response with statistics
      */
     @Post("/crowdstrike/vulnerabilities/save")
     open fun saveVulnerabilities(
@@ -212,6 +222,60 @@ open class CrowdStrikeController(
             }
 
             log.error("Database error saving vulnerabilities: user={}", username, e)
+            HttpResponse.status<Map<String, String>>(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(mapOf("error" to errorMessage))
+        }
+    }
+
+    /**
+     * Batch import server vulnerabilities from CrowdStrike
+     *
+     * Feature: 032-servers-query-import
+     * Tasks: T017, T018, T023
+     * Spec reference: FR-008, FR-015
+     *
+     * @param batches List of server vulnerability batches
+     * @param authentication Current authenticated user
+     * @return ImportStatisticsDto with detailed statistics
+     *
+     * Security: Inherits controller-level @Secured("ADMIN", "VULN") - only ADMIN/VULN roles can import
+     *
+     * Error responses:
+     * - 400: Invalid request (validation failure)
+     * - 401: Unauthorized
+     * - 403: Forbidden (requires ADMIN or VULN role)
+     * - 500: Server error
+     */
+    @Post("/crowdstrike/servers/import")
+    open fun importServerVulnerabilities(
+        @Body @Valid batches: List<CrowdStrikeVulnerabilityBatchDto>,
+        authentication: Authentication
+    ): HttpResponse<*> {
+        val username = authentication.name
+        log.info("Received batch import request: servers={}, user={}", batches.size, username)
+
+        return try {
+            // T023: Call import service
+            val statistics = importService.importServerVulnerabilities(batches)
+
+            log.info("Batch import completed: servers processed={}, created={}, updated={}, vulnerabilities imported={}, skipped={}, errors={}, user={}",
+                statistics.serversProcessed, statistics.serversCreated, statistics.serversUpdated,
+                statistics.vulnerabilitiesImported, statistics.vulnerabilitiesSkipped, statistics.errors.size, username)
+
+            // T023: Return statistics
+            HttpResponse.ok(statistics)
+        } catch (e: IllegalArgumentException) {
+            log.warn("Invalid batch import request: user={}", username, e)
+            HttpResponse.badRequest(mapOf("error" to (e.message ?: "Invalid request")))
+        } catch (e: Exception) {
+            val isAdmin = authentication.roles.contains("ADMIN")
+            val errorMessage = if (isAdmin) {
+                "Import error: ${e.message ?: "Unable to import server vulnerabilities"}"
+            } else {
+                "Import error: Unable to import server vulnerabilities"
+            }
+
+            log.error("Error importing server vulnerabilities: user={}", username, e)
             HttpResponse.status<Map<String, String>>(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(mapOf("error" to errorMessage))
         }
