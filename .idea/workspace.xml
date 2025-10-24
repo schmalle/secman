@@ -5,79 +5,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="94ada8b3-9f4e-473c-9fea-3bc9651b5bdd" name="Changes" comment="test change">
-      <change beforePath="$PROJECT_DIR$/.idea/compiler.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/compiler.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/dataSources.local.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/dataSources.local.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/gradle.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/gradle.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/kotlinc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/kotlinc.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/modules.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/secman.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/secman.iml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/CLAUDE.md" beforeDir="false" afterPath="$PROJECT_DIR$/CLAUDE.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/build.gradle.kts" beforeDir="false" afterPath="$PROJECT_DIR$/build.gradle.kts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/gradle/wrapper/gradle-wrapper.properties" beforeDir="false" afterPath="$PROJECT_DIR$/gradle/wrapper/gradle-wrapper.properties" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/settings.gradle.kts" beforeDir="false" afterPath="$PROJECT_DIR$/settings.gradle.kts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/CrowdStrikeController.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/CrowdStrikeController.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/domain/VulnerabilityExceptionRequest.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/domain/VulnerabilityExceptionRequest.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/repository/VulnerabilityRepository.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/repository/VulnerabilityRepository.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/cli/build.gradle.kts" beforeDir="false" afterPath="$PROJECT_DIR$/src/cli/build.gradle.kts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/SecmanCli.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/SecmanCli.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/commands/QueryCommand.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/commands/QueryCommand.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/service/VulnerabilityStorageService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/service/VulnerabilityStorageService.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/cli/src/main/resources/application.yml" beforeDir="false" afterPath="$PROJECT_DIR$/src/cli/src/main/resources/application.yml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/frontend/package-lock.json" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/package-lock.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/CLAUDE.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/mypy.ini" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/pyproject.toml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/requirements.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/ruff.toml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/src/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/src/cli/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/src/cli/args.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/src/cli/env.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/src/cli/main.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/src/exporters/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/src/exporters/csv_exporter.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/src/exporters/txt_exporter.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/src/exporters/xlsx_exporter.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/src/lib/error_handling.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/src/lib/file_utils.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/src/lib/logging_config.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/src/models/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/src/models/auth_context.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/src/models/device.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/src/models/enums.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/src/models/export_config.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/src/models/filter_criteria.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/src/models/vulnerability.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/src/models/vulnerability_record.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/src/services/falcon_client.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/src/services/progress.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/tests/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/tests/contract/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/tests/contract/test_cli_args.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/tests/contract/test_cli_env.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/tests/contract/test_cli_help.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/tests/contract/test_falcon_auth.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/tests/contract/test_falcon_pagination.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/tests/contract/test_falcon_query.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/tests/contract/test_falcon_retry.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/tests/integration/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/tests/integration/test_scenario_1.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/tests/integration/test_scenario_2.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/tests/integration/test_scenario_3.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/tests/integration/test_scenario_4.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/tests/integration/test_scenario_5.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/tests/unit/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/tests/unit/test_exporters.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/tests/unit/test_filter_criteria.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/tests/unit/test_logging.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/helper/tests/unit/test_models_validation.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/shared/build.gradle.kts" beforeDir="false" afterPath="$PROJECT_DIR$/src/shared/build.gradle.kts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/shared/src/main/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClient.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/shared/src/main/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClient.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/shared/src/main/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClientImpl.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/shared/src/main/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClientImpl.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/start.md" beforeDir="false" afterPath="$PROJECT_DIR$/start.md" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -122,7 +50,7 @@
     &quot;accountId&quot;: &quot;cdeac9ce-5c06-4f60-bbec-d488629280ee&quot;
   }
 }</component>
-  <component name="GradleScriptDefinitionsStorage" workingDir="$PROJECT_DIR$" gradleHome="$USER_HOME$/.gradle/wrapper/dists/gradle-8.14.3-bin/cv11ve7ro1n3o1j4so8xd9n66/gradle-8.14.3" javaHome="$USER_HOME$/.sdkman/candidates/java/current" gradleVersion="8.14.3" />
+  <component name="GradleScriptDefinitionsStorage" workingDir="$PROJECT_DIR$" gradleHome="$USER_HOME$/.gradle/wrapper/dists/gradle-9.1.0-bin/9agqghryom9wkf8r80qlhnts3/gradle-9.1.0" javaHome="$USER_HOME$/.sdkman/candidates/java/current" gradleVersion="9.1.0" />
   <component name="ProjectCodeStyleSettingsMigration">
     <option name="version" value="2" />
   </component>
@@ -145,7 +73,7 @@
     &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
     &quot;SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
     &quot;SHELLCHECK.PATH&quot;: &quot;/Users/flake/Library/Application Support/JetBrains/IntelliJIdea2025.1/plugins/Shell Script/shellcheck&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;032-servers-query-import&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
     &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,
     &quot;kotlin-language-version-configured&quot;: &quot;true&quot;,
     &quot;last_opened_file_path&quot;: &quot;/Users/flake/sources/misc/secman&quot;,
