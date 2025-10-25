@@ -1,0 +1,426 @@
+openapi: 3.0.3
+info:
+  title: Asset Cascade Deletion API
+  description: API endpoints for cascade deletion of assets with related data
+  version: 1.0.0
+  contact:
+    name: Secman Development Team
+
+servers:
+  - url: http://localhost:8080/api
+    description: Local development server
+  - url: https://secman.example.com/api
+    description: Production server
+
+tags:
+  - name: Assets
+    description: Asset management and cascade deletion operations
+
+security:
+  - bearerAuth: []
+
+paths:
+  /assets/{id}/cascade-summary:
+    get:
+      tags:
+        - Assets
+      summary: Get cascade deletion summary
+      description: Returns pre-flight count of related records and estimated deletion time
+      operationId: getCascadeDeletionSummary
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Asset ID
+          schema:
+            type: integer
+            format: int64
+            example: 12345
+      responses:
+        '200':
+          description: Cascade deletion summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CascadeDeleteSummaryDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /assets/{id}:
+    delete:
+      tags:
+        - Assets
+      summary: Delete asset with cascade
+      description: Deletes asset and all related vulnerabilities, ASSET-type exceptions, and exception requests
+      operationId: deleteAssetWithCascade
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Asset ID
+          schema:
+            type: integer
+            format: int64
+            example: 12345
+        - name: forceTimeout
+          in: query
+          required: false
+          description: Force deletion even if estimated time exceeds timeout (requires explicit confirmation)
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Asset deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CascadeDeletionResultDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Conflict - Asset locked by another user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeletionErrorDto'
+              example:
+                errorType: "LOCKED"
+                assetId: 12345
+                assetName: "web-server-01"
+                cause: "Asset is currently being deleted by user 'admin2'"
+                suggestedAction: "Wait a few moments and try again"
+                technicalDetails: "PessimisticLockException: Row locked by transaction 98765"
+        '422':
+          description: Unprocessable Entity - Deletion would exceed timeout
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeletionErrorDto'
+              example:
+                errorType: "TIMEOUT_WARNING"
+                assetId: 12345
+                assetName: "web-server-01"
+                cause: "Estimated deletion time (75 seconds) exceeds transaction timeout (60 seconds)"
+                suggestedAction: "Contact system administrator to delete in smaller batches or increase timeout"
+        '500':
+          description: Internal Server Error - Deletion failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeletionErrorDto'
+
+  /assets/bulk:
+    delete:
+      tags:
+        - Assets
+      summary: Bulk delete assets with cascade
+      description: Deletes multiple assets in single transaction with all related data
+      operationId: bulkDeleteAssetsWithCascade
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - assetIds
+              properties:
+                assetIds:
+                  type: array
+                  items:
+                    type: integer
+                    format: int64
+                  minItems: 1
+                  maxItems: 100
+                  example: [12345, 12346, 12347]
+      responses:
+        '200':
+          description: All assets deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  totalAssets:
+                    type: integer
+                    example: 3
+                  deletedVulnerabilities:
+                    type: integer
+                    example: 15
+                  deletedExceptions:
+                    type: integer
+                    example: 3
+                  deletedRequests:
+                    type: integer
+                    example: 7
+                  bulkOperationId:
+                    type: string
+                    format: uuid
+                    example: "550e8400-e29b-41d4-a716-446655440000"
+                  auditLogIds:
+                    type: array
+                    items:
+                      type: integer
+                      format: int64
+                    example: [1001, 1002, 1003]
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Conflict - Transaction rolled back
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeletionErrorDto'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /assets/bulk/stream:
+    delete:
+      tags:
+        - Assets
+      summary: Bulk delete with real-time progress (SSE)
+      description: Deletes multiple assets with Server-Sent Events streaming progress updates
+      operationId: bulkDeleteWithProgress
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: assetIds
+          in: query
+          required: true
+          description: Comma-separated list of asset IDs
+          schema:
+            type: string
+            example: "12345,12346,12347"
+      responses:
+        '200':
+          description: Server-Sent Events stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: SSE events with BulkDeleteProgressDto JSON payloads
+              example: |
+                data: {"total":3,"completed":1,"currentAssetId":12345,"currentAssetName":"web-server-01","status":"SUCCESS","error":null}
+
+                data: {"total":3,"completed":2,"currentAssetId":12346,"currentAssetName":"web-server-02","status":"SUCCESS","error":null}
+
+                data: {"total":3,"completed":3,"currentAssetId":12347,"currentAssetName":"web-server-03","status":"SUCCESS","error":null}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    CascadeDeleteSummaryDto:
+      type: object
+      required:
+        - assetId
+        - assetName
+        - vulnerabilitiesCount
+        - assetExceptionsCount
+        - exceptionRequestsCount
+        - estimatedDurationSeconds
+        - exceedsTimeout
+      properties:
+        assetId:
+          type: integer
+          format: int64
+          example: 12345
+        assetName:
+          type: string
+          example: "web-server-01"
+        vulnerabilitiesCount:
+          type: integer
+          example: 15
+          description: Number of vulnerabilities that will be deleted
+        assetExceptionsCount:
+          type: integer
+          example: 3
+          description: Number of ASSET-type exceptions that will be deleted
+        exceptionRequestsCount:
+          type: integer
+          example: 7
+          description: Number of exception requests that will be deleted
+        estimatedDurationSeconds:
+          type: integer
+          example: 25
+          description: Estimated time to complete deletion (in seconds)
+        exceedsTimeout:
+          type: boolean
+          example: false
+          description: True if estimated duration exceeds 60-second timeout
+
+    CascadeDeletionResultDto:
+      type: object
+      required:
+        - assetId
+        - assetName
+        - deletedVulnerabilities
+        - deletedExceptions
+        - deletedRequests
+        - auditLogId
+      properties:
+        assetId:
+          type: integer
+          format: int64
+          example: 12345
+        assetName:
+          type: string
+          example: "web-server-01"
+        deletedVulnerabilities:
+          type: integer
+          example: 15
+        deletedExceptions:
+          type: integer
+          example: 3
+        deletedRequests:
+          type: integer
+          example: 7
+        auditLogId:
+          type: integer
+          format: int64
+          example: 1001
+          description: ID of created audit log entry
+
+    DeletionErrorDto:
+      type: object
+      required:
+        - errorType
+        - assetId
+        - assetName
+        - cause
+        - suggestedAction
+      properties:
+        errorType:
+          type: string
+          enum: [LOCKED, TIMEOUT, TIMEOUT_WARNING, CONSTRAINT_VIOLATION, INTERNAL_ERROR]
+          example: "LOCKED"
+        assetId:
+          type: integer
+          format: int64
+          example: 12345
+        assetName:
+          type: string
+          example: "web-server-01"
+        cause:
+          type: string
+          example: "Asset is currently being deleted by another user"
+          description: User-friendly description of what went wrong
+        suggestedAction:
+          type: string
+          example: "Wait a few moments and try again"
+          description: What the user should do next
+        technicalDetails:
+          type: string
+          nullable: true
+          example: "PessimisticLockException: Row locked by transaction 98765"
+          description: Technical error details (only for ADMIN users)
+
+    BulkDeleteProgressDto:
+      type: object
+      required:
+        - total
+        - completed
+        - currentAssetId
+        - currentAssetName
+        - status
+      properties:
+        total:
+          type: integer
+          example: 100
+          description: Total number of assets to delete
+        completed:
+          type: integer
+          example: 15
+          description: Number of assets deleted so far
+        currentAssetId:
+          type: integer
+          format: int64
+          example: 12345
+          description: Asset currently being processed
+        currentAssetName:
+          type: string
+          example: "web-server-01"
+        status:
+          type: string
+          enum: [PROCESSING, SUCCESS, FAILED]
+          example: "SUCCESS"
+        error:
+          type: string
+          nullable: true
+          example: null
+          description: Error message if status is FAILED
+
+  responses:
+    Unauthorized:
+      description: Unauthorized - Invalid or missing JWT token
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: "Unauthorized"
+              status:
+                type: integer
+                example: 401
+
+    Forbidden:
+      description: Forbidden - Insufficient permissions (ADMIN role required)
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: "Access denied. ADMIN role required for asset deletion."
+              status:
+                type: integer
+                example: 403
+
+    NotFound:
+      description: Not Found - Asset does not exist
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: "Asset with ID 12345 not found"
+              status:
+                type: integer
+                example: 404
+
+    InternalServerError:
+      description: Internal Server Error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/DeletionErrorDto'

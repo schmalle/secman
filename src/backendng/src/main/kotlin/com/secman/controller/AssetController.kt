@@ -2,11 +2,9 @@ package com.secman.controller
 
 import com.secman.domain.Asset
 import com.secman.domain.Vulnerability
+import com.secman.dto.*
 import io.micronaut.data.model.Page
 import io.micronaut.data.model.Pageable
-import com.secman.dto.PortDTO
-import com.secman.dto.PortHistoryDTO
-import com.secman.dto.ScanPortsDTO
 import com.secman.repository.AssetRepository
 import com.secman.repository.DemandRepository
 import com.secman.repository.RiskAssessmentRepository
@@ -15,6 +13,7 @@ import com.secman.repository.ScanResultRepository
 import com.secman.repository.UserRepository
 import com.secman.repository.VulnerabilityRepository
 import com.secman.service.AssetFilterService
+import com.secman.service.AssetCascadeDeleteService
 import io.micronaut.core.annotation.Nullable
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.HttpStatus
@@ -27,6 +26,7 @@ import io.micronaut.security.rules.SecurityRule
 import io.micronaut.serde.annotation.Serdeable
 import io.micronaut.transaction.annotation.Transactional
 import jakarta.persistence.EntityManager
+import jakarta.persistence.PessimisticLockException
 import jakarta.validation.Valid
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
@@ -47,7 +47,8 @@ open class AssetController(
     private val userRepository: UserRepository,
     private val workgroupRepository: com.secman.repository.WorkgroupRepository,
     private val assetBulkDeleteService: com.secman.service.AssetBulkDeleteService,
-    private val assetExportService: com.secman.service.AssetExportService
+    private val assetExportService: com.secman.service.AssetExportService,
+    private val assetCascadeDeleteService: com.secman.service.AssetCascadeDeleteService
 ) {
     
     private val log = LoggerFactory.getLogger(AssetController::class.java)
@@ -257,48 +258,157 @@ open class AssetController(
         }
     }
 
-    @Delete("/{id}")
-    @Transactional
-    open fun delete(id: Long): HttpResponse<*> {
+    /**
+     * Get cascade deletion summary for pre-flight validation
+     * Feature: 033-cascade-asset-deletion (User Story 4 - UI Warning Before Cascade Deletion)
+     *
+     * GET /api/assets/{id}/cascade-summary
+     * Auth: Any authenticated user (ADMIN recommended)
+     * Response: CascadeDeleteSummaryDto
+     *
+     * Related Requirements:
+     * - FR-012: System MUST perform a pre-flight count of related records
+     * - Contract: contracts/cascade-delete-api.yaml
+     *
+     * Error Responses:
+     * - 404: Asset not found
+     * - 500: Internal server error
+     */
+    @Get("/{id}/cascade-summary")
+    @Secured("ADMIN")
+    @Transactional(readOnly = true)
+    open fun getCascadeSummary(id: Long): HttpResponse<*> {
         return try {
-            log.debug("Deleting asset with id: {}", id)
-            
-            val asset = assetRepository.findById(id).orElse(null)
-                ?: return HttpResponse.notFound(ErrorResponse("Asset not found"))
-            
-            // Check for references before deletion
+            log.debug("Getting cascade summary for asset id: {}", id)
+
+            val summary = assetCascadeDeleteService.getCascadeSummary(id)
+
+            log.info("Cascade summary for asset {}: {} vulns, {} exceptions, {} requests, estimated {}s",
+                id, summary.vulnerabilitiesCount, summary.assetExceptionsCount,
+                summary.exceptionRequestsCount, summary.estimatedDurationSeconds)
+
+            HttpResponse.ok(summary)
+
+        } catch (e: AssetCascadeDeleteService.AssetNotFoundException) {
+            log.warn("Asset not found for cascade summary: {}", id)
+            HttpResponse.notFound(ErrorResponse(e.message ?: "Asset not found"))
+
+        } catch (e: Exception) {
+            log.error("Error getting cascade summary for asset: {}", id, e)
+            HttpResponse.serverError<ErrorResponse>()
+                .body(ErrorResponse("Failed to get cascade summary: ${e.message}"))
+        }
+    }
+
+    /**
+     * Delete asset with cascade deletion of all related data
+     * Feature: 033-cascade-asset-deletion (User Story 1 - Delete Asset with All Related Data)
+     *
+     * DELETE /api/assets/{id}
+     * Auth: ADMIN role required
+     * Response: CascadeDeletionResultDto
+     *
+     * Related Requirements:
+     * - FR-001: System MUST cascade delete vulnerabilities when asset is deleted
+     * - FR-002: System MUST cascade delete ASSET-type exceptions
+     * - FR-003: System MUST cascade delete vulnerability exception requests
+     * - FR-011: Use pessimistic row-level locking to prevent concurrent deletion
+     * - FR-013: Provide detailed structured error messages
+     * - Contract: contracts/cascade-delete-api.yaml
+     *
+     * Error Responses:
+     * - 403: User does not have ADMIN role
+     * - 404: Asset not found
+     * - 409: Asset is locked by another transaction (concurrent deletion)
+     * - 422: Deletion would exceed timeout (forceTimeout parameter can override)
+     * - 500: Internal server error or transaction timeout
+     */
+    @Delete("/{id}")
+    @Secured("ADMIN")
+    open fun delete(
+        id: Long,
+        @QueryValue(defaultValue = "false") forceTimeout: Boolean,
+        authentication: Authentication
+    ): HttpResponse<*> {
+        return try {
+            log.info("Cascade delete request for asset {} by user {} (forceTimeout={})",
+                id, authentication.name, forceTimeout)
+
+            // Check for non-cascade references before deletion (demands, risk assessments, risks)
             val referencingDemands = demandRepository.findByExistingAssetId(id)
             val referencingRiskAssessments = riskAssessmentRepository.findAllByInvolvedAssetId(id)
             val referencingRisks = riskRepository.findByAssetId(id)
-            
+
             if (referencingDemands.isNotEmpty() || referencingRiskAssessments.isNotEmpty() || referencingRisks.isNotEmpty()) {
                 val errorMessages = mutableListOf<String>()
-                
+
                 if (referencingDemands.isNotEmpty()) {
                     errorMessages.add("${referencingDemands.size} demand(s) reference this asset")
                 }
-                
+
                 if (referencingRiskAssessments.isNotEmpty()) {
                     errorMessages.add("${referencingRiskAssessments.size} risk assessment(s) reference this asset")
                 }
-                
+
                 if (referencingRisks.isNotEmpty()) {
                     errorMessages.add("${referencingRisks.size} risk(s) reference this asset")
                 }
-                
-                val detailedMessage = "Cannot delete asset '${asset.name}' - it is referenced by: ${errorMessages.joinToString(" and ")}. Please handle these references first."
-                
+
+                // Get asset name for error message
+                val asset = assetRepository.findById(id).orElse(null)
+                val assetName = asset?.name ?: "Asset #$id"
+
+                val detailedMessage = "Cannot delete asset '$assetName' - it is referenced by: ${errorMessages.joinToString(" and ")}. Please handle these references first."
+
                 log.warn("Asset deletion blocked for id: {} - {}", id, detailedMessage)
                 return HttpResponse.badRequest(ErrorResponse(detailedMessage))
             }
-            
-            assetRepository.delete(asset)
 
-            log.info("Deleted asset: {} with id: {}", asset.name, id)
-            HttpResponse.ok(mapOf("message" to "Asset deleted successfully"))
+            // Perform cascade deletion
+            val result = assetCascadeDeleteService.deleteAsset(
+                assetId = id,
+                username = authentication.name,
+                forceTimeout = forceTimeout
+            )
+
+            log.info("Cascade delete successful for asset {}: {} vulns, {} exceptions, {} requests deleted",
+                id, result.deletedVulnerabilities, result.deletedExceptions, result.deletedRequests)
+
+            HttpResponse.ok(result)
+
+        } catch (e: AssetCascadeDeleteService.AssetNotFoundException) {
+            log.warn("Asset not found for deletion: {}", id)
+            HttpResponse.notFound(ErrorResponse(e.message ?: "Asset not found"))
+
+        } catch (e: PessimisticLockException) {
+            log.warn("Asset {} is locked by another transaction", id)
+            val asset = assetRepository.findById(id).orElse(null)
+            val errorDto = assetCascadeDeleteService.buildLockedErrorDto(
+                assetId = id,
+                assetName = asset?.name ?: "Asset #$id",
+                cause = "Asset is currently being deleted by another user"
+            )
+            HttpResponse.status<DeletionErrorDto>(HttpStatus.CONFLICT).body(errorDto)
+
+        } catch (e: AssetCascadeDeleteService.TimeoutWarningException) {
+            log.warn("Asset {} deletion would exceed timeout: {}s", id, e.estimatedSeconds)
+            val errorDto = assetCascadeDeleteService.buildTimeoutWarningDto(
+                assetId = e.assetId,
+                assetName = e.assetName,
+                estimatedSeconds = e.estimatedSeconds
+            )
+            HttpResponse.status<DeletionErrorDto>(HttpStatus.UNPROCESSABLE_ENTITY).body(errorDto)
+
         } catch (e: Exception) {
-            log.error("Error deleting asset with id: {}", id, e)
-            HttpResponse.serverError<ErrorResponse>().body(ErrorResponse("Error deleting asset: ${e.message}"))
+            log.error("Failed to delete asset {}", id, e)
+            val asset = assetRepository.findById(id).orElse(null)
+            val errorDto = assetCascadeDeleteService.buildInternalErrorDto(
+                assetId = id,
+                assetName = asset?.name ?: "Asset #$id",
+                cause = "Deletion failed due to internal error",
+                technicalDetails = e.message
+            )
+            HttpResponse.serverError<DeletionErrorDto>().body(errorDto)
         }
     }
 
