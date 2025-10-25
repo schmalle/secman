@@ -193,6 +193,8 @@ open class CrowdStrikeApiClientImpl(
                 val uri = UriBuilder.of("/spotlight/combined/vulnerabilities/v1")
                     .queryParam("filter", fqlFilter)
                     .queryParam("limit", limit.coerceAtMost(5000))
+                    // Request CVE facet so severity/CVSS fields are present in the response
+                    .queryParam("facet", "cve")
                     .apply {
                         if (afterToken != null) {
                             queryParam("after", afterToken)
@@ -770,6 +772,8 @@ open class CrowdStrikeApiClientImpl(
                         val uri = UriBuilder.of("/spotlight/combined/vulnerabilities/v1")
                             .queryParam("filter", fqlFilter)
                             .queryParam("limit", limit.coerceAtMost(5000))
+                            // Request CVE facet so severity/CVSS fields are present in the response
+                            .queryParam("facet", "cve")
                             .apply {
                                 if (afterToken != null) {
                                     queryParam("after", afterToken)
@@ -1093,6 +1097,8 @@ open class CrowdStrikeApiClientImpl(
             val uri = UriBuilder.of("/spotlight/combined/vulnerabilities/v1")
                 .queryParam("filter", filter)
                 .queryParam("limit", "5000")
+                // Request CVE facet so severity/CVSS fields are present in the response
+                .queryParam("facet", "cve")
                 .build()
 
             val request = HttpRequest.GET<Any>(uri.toString())
@@ -1157,12 +1163,31 @@ open class CrowdStrikeApiClientImpl(
      */
     private fun mapResponseToDtos(resources: List<*>): List<CrowdStrikeVulnerabilityDto> {
         return resources.mapNotNull { resource ->
+            val vuln = resource as? Map<*, *> ?: return@mapNotNull null
             try {
-                val vuln = resource as? Map<*, *> ?: return@mapNotNull null
 
                 val id = vuln["id"]?.toString() ?: "cs-${System.currentTimeMillis()}"
-                val hostname = vuln["hostname"]?.toString() ?: vuln["aid"]?.toString() ?: ""
+                val hostInfo = vuln["host_info"] as? Map<*, *>
+                val deviceInfo = vuln["device"] as? Map<*, *>
+
+                // Try to get hostname from the API response first
+                // CrowdStrike Spotlight API returns hostname in the host_info object
+                val hostname = hostInfo?.get("hostname")?.toString()
+                    ?: hostInfo?.get("host_name")?.toString()
+                    ?: vuln["hostname"]?.toString()
+                    ?: deviceInfo?.get("hostname")?.toString()
+                    ?: deviceInfo?.get("host_name")?.toString()
+                    // Last resort: use device ID as placeholder (will be shown in logs)
+                    // This indicates CrowdStrike isn't returning hostname info
+                    ?: vuln["aid"]?.toString()?.let { aid ->
+                        log.warn("No hostname in CrowdStrike response for device ID: {}. Using device ID as placeholder.", aid)
+                        "[DEVICE:$aid]"
+                    }
+                    ?: "[UNKNOWN]"
+
                 val ip = vuln["local_ip"]?.toString()
+                    ?: hostInfo?.get("local_ip")?.toString()
+                    ?: deviceInfo?.get("local_ip")?.toString()
 
                 // Extract CVE object for multiple field access
                 val cveObject = vuln["cve"] as? Map<*, *>
@@ -1170,14 +1195,24 @@ open class CrowdStrikeApiClientImpl(
                 val cvssScore = (vuln["score"] as? Number)?.toDouble()
                     ?: (cveObject?.get("base_score") as? Number)?.toDouble()
 
-                // Get severity directly from CrowdStrike API (primary source)
+                // Get severity from multiple possible locations in CrowdStrike API response
+                // Priority: cve.severity > vuln.severity > derived from CVSS score
                 val apiSeverity = cveObject?.get("severity")?.toString()
+                    ?: vuln["severity"]?.toString()
+                    ?: vuln["cve_severity"]?.toString()
+
                 val severity = if (!apiSeverity.isNullOrBlank()) {
                     // Normalize API severity to standard format (CRITICAL -> Critical)
                     normalizeSeverity(apiSeverity)
-                } else {
+                } else if (cvssScore != null) {
                     // Fallback: derive from CVSS score
-                    mapCvssToSeverity(cvssScore)
+                    val derivedSeverity = mapCvssToSeverity(cvssScore)
+                    log.debug("Derived severity '{}' from CVSS score {} for CVE {}", derivedSeverity, cvssScore, cveId)
+                    derivedSeverity
+                } else {
+                    // Last resort: default to "Medium" to satisfy @NotBlank validation
+                    log.warn("No severity or CVSS score found for vulnerability {}, defaulting to 'Medium'", cveId ?: id)
+                    "Medium"
                 }
 
                 val apps = vuln["apps"] as? List<*>
@@ -1205,7 +1240,7 @@ open class CrowdStrikeApiClientImpl(
                     LocalDateTime.now()
                 }
 
-                CrowdStrikeVulnerabilityDto(
+                val dto = CrowdStrikeVulnerabilityDto(
                     id = id,
                     hostname = hostname,
                     ip = ip,
@@ -1219,8 +1254,16 @@ open class CrowdStrikeApiClientImpl(
                     hasException = false,
                     exceptionReason = null
                 )
+
+                log.trace("Mapped vulnerability: CVE={}, severity={}, cvssScore={}, hostname={}",
+                    cveId, severity, cvssScore, hostname)
+
+                dto
             } catch (e: Exception) {
-                log.warn("Failed to map vulnerability: {}", e.message)
+                log.error("Failed to map vulnerability from CrowdStrike response. Error: {}", e.message, e)
+                log.error("Problematic vulnerability data: id={}, cveId={}, hostname={}",
+                    vuln["id"], (vuln["cve"] as? Map<*, *>)?.get("id"), vuln["hostname"])
+                log.error("Raw CVE object: {}", vuln["cve"])
                 null
             }
         }
