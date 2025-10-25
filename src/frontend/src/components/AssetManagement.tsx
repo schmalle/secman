@@ -126,7 +126,7 @@ const AssetManagement: React.FC = () => {
   };
 
   const handleDelete = async (id: number) => {
-    if (!window.confirm('Are you sure you want to delete this asset?')) {
+    if (!window.confirm('Are you sure you want to delete this asset? This will also delete all related vulnerabilities and exceptions.')) {
       return;
     }
 
@@ -134,8 +134,25 @@ const AssetManagement: React.FC = () => {
       const response = await authenticatedDelete(`/api/assets/${id}`);
 
       if (!response.ok) {
+        // Handle different error response formats
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+
+        // Check for new DeletionErrorDto format (cascade deletion errors)
+        if (errorData.errorType) {
+          const errorMessage = `${errorData.cause}\n\nSuggested action: ${errorData.suggestedAction}`;
+          throw new Error(errorMessage);
+        }
+
+        // Handle old ErrorResponse format
         throw new Error(errorData.error || `Failed to delete asset: ${response.status}`);
+      }
+
+      // Handle success - can be either old format (message) or new format (CascadeDeletionResultDto)
+      const result = await response.json().catch(() => null);
+
+      if (result && result.deletedVulnerabilities !== undefined) {
+        // New cascade deletion result format
+        console.log(`Deleted asset ${result.assetId}: ${result.deletedVulnerabilities} vulnerabilities, ${result.deletedExceptions} exceptions, ${result.deletedRequests} requests`);
       }
 
       await fetchAssets();
@@ -555,17 +572,16 @@ const AssetManagement: React.FC = () => {
                               >
                                 <i className="bi bi-shield-exclamation"></i> Vulnerabilities
                               </button>
-                              <button
-                                onClick={() => {
-                                  if (asset.id !== undefined && asset.id !== null) {
-                                    handleDelete(asset.id);
-                                  }
-                                }}
-                                className="btn btn-sm btn-outline-danger"
-                                disabled={asset.id === undefined || asset.id === null}
-                              >
-                                <i className="bi bi-trash"></i> Delete
-                              </button>
+                              {/* Delete button only visible to ADMIN users (Feature 033) */}
+                              {isAdmin(getUser()?.roles) && (
+                                <button
+                                  onClick={() => handleDelete(asset.id!)}
+                                  className="btn btn-sm btn-outline-danger"
+                                  title="Delete asset with all related data (cascade deletion)"
+                                >
+                                  <i className="bi bi-trash"></i> Delete
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
