@@ -9,6 +9,14 @@
       "path": "./src/backend"
     },
         {
+          "name": "CLI",
+          "path": "./src/cli"
+        },
+                {
+                  "name": "Shared",
+                  "path": "./src/shared"
+                },
+        {
       "name": "Secman", 
       "path": "./"
     }
