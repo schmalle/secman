@@ -742,6 +742,8 @@ open class CrowdStrikeApiClientImpl(
                         batchIndex + 1, batches.size, token.expiresAt)
                 }
 
+                val metadataByDeviceId = resolveDeviceMetadata(batch, token)
+
                 // Build FQL filter for this batch
                 val severityList = severity.split(",").map { it.trim().uppercase() }
                 val severityFilter = if (severityList.size == 1) {
@@ -804,7 +806,7 @@ open class CrowdStrikeApiClientImpl(
                                     ?: throw CrowdStrikeException("Empty response from Spotlight API")
 
                                 val resources = responseBody["resources"] as? List<*> ?: emptyList<Any>()
-                                val vulns = mapResponseToDtos(resources)
+                                val vulns = mapResponseToDtos(resources, metadataByDeviceId)
 
                                 // Apply client-side filtering (days open)
                                 val filtered = vulns.filter { vuln ->
@@ -1302,6 +1304,107 @@ open class CrowdStrikeApiClientImpl(
         return if (days == 1L) "1 day" else "$days days"
     }
 
+    private data class DeviceMetadata(
+        val hostname: String?,
+        val ip: String?
+    )
+
+    private fun resolveDeviceMetadata(
+        deviceIds: List<String>,
+        token: AuthToken
+    ): Map<String, DeviceMetadata> {
+        if (deviceIds.isEmpty()) {
+            return emptyMap()
+        }
+
+        val metadataByDeviceId = mutableMapOf<String, DeviceMetadata>()
+        val chunkSize = 100
+
+        deviceIds.chunked(chunkSize).forEach { chunk ->
+            try {
+                var uriBuilder = UriBuilder.of("/devices/entities/devices/v2")
+                chunk.forEach { id ->
+                    uriBuilder = uriBuilder.queryParam("ids", id)
+                }
+                val uri = uriBuilder.build()
+
+                val request = HttpRequest.GET<Any>(uri.toString())
+                    .header("Authorization", "Bearer ${token.accessToken}")
+                    .header("Accept", "application/json")
+
+                val response = httpClient.toBlocking().exchange(request, Map::class.java)
+
+                if (response.status.code != 200) {
+                    log.warn("Device metadata request returned status {} for {} device IDs", response.status.code, chunk.size)
+                    return@forEach
+                }
+
+                @Suppress("UNCHECKED_CAST")
+                val responseBody = response.body() as? Map<String, Any> ?: return@forEach
+                val resources = responseBody["resources"] as? List<*> ?: emptyList<Any>()
+
+                resources.forEach { resource ->
+                    val device = resource as? Map<*, *> ?: return@forEach
+                    val nestedDevice = device["device"] as? Map<*, *>
+
+                    val deviceId = firstNonBlank(
+                        device["device_id"]?.toString(),
+                        nestedDevice?.get("device_id")?.toString(),
+                        device["id"]?.toString(),
+                        device["aid"]?.toString()
+                    )
+
+                    if (deviceId.isNullOrBlank()) {
+                        return@forEach
+                    }
+
+                    val hostname = firstNonBlank(
+                        device["hostname"]?.toString(),
+                        device["host_name"]?.toString(),
+                        nestedDevice?.get("hostname")?.toString(),
+                        (device["system"] as? Map<*, *>)?.get("hostname")?.toString()
+                    )
+
+                    val ip = firstNonBlank(
+                        device["local_ip"]?.toString(),
+                        nestedDevice?.get("local_ip")?.toString(),
+                        (device["ip"] as? List<*>)?.firstOrNull()?.toString(),
+                        (device["external_ip"] as? List<*>)?.firstOrNull()?.toString()
+                    )
+
+                    metadataByDeviceId[deviceId] = DeviceMetadata(
+                        hostname = hostname,
+                        ip = ip
+                    )
+                }
+            } catch (e: io.micronaut.http.client.exceptions.HttpClientResponseException) {
+                when (e.status.code) {
+                    404 -> log.warn("Device metadata endpoint returned 404 for chunk of {} devices", chunk.size)
+                    429 -> {
+                        val retryAfter = e.response.headers.get("Retry-After")?.toLongOrNull() ?: 30L
+                        log.warn("Rate limit retrieving device metadata for {} device IDs (retry after {}s)", chunk.size, retryAfter)
+                    }
+                    in 500..599 -> log.warn("CrowdStrike metadata endpoint server error {} for {} device IDs", e.status.code, chunk.size)
+                    else -> log.warn("CrowdStrike metadata endpoint error {} retrieving device metadata: {}", e.status.code, e.message)
+                }
+            } catch (e: Exception) {
+                log.warn("Unexpected error retrieving device metadata for {} device IDs: {}", chunk.size, e.message)
+            }
+        }
+
+        if (metadataByDeviceId.isEmpty()) {
+            log.debug("No hostname metadata resolved for {} device IDs", deviceIds.size)
+        } else {
+            log.debug("Resolved hostname metadata for {}/{} device IDs", metadataByDeviceId.size, deviceIds.size)
+        }
+
+        return metadataByDeviceId
+    }
+
+    private fun firstNonBlank(vararg values: String?): String? {
+        return values.firstOrNull { !it.isNullOrBlank() }
+    }
+
     /**
      * Map CrowdStrike API response to DTOs (bulk query version)
      * For bulk queries, we need to extract hostname from the API response
@@ -1309,7 +1412,10 @@ open class CrowdStrikeApiClientImpl(
      * @param resources Raw vulnerability resources from API
      * @return List of CrowdStrikeVulnerabilityDto
      */
-    private fun mapResponseToDtos(resources: List<*>): List<CrowdStrikeVulnerabilityDto> {
+    private fun mapResponseToDtos(
+        resources: List<*>,
+        metadataByDeviceId: Map<String, DeviceMetadata> = emptyMap()
+    ): List<CrowdStrikeVulnerabilityDto> {
         return resources.mapNotNull { resource ->
             val vuln = resource as? Map<*, *> ?: return@mapNotNull null
             try {
@@ -1317,18 +1423,30 @@ open class CrowdStrikeApiClientImpl(
                 val hostInfo = vuln["host_info"] as? Map<*, *>
                 val deviceInfo = vuln["device"] as? Map<*, *>
 
-                // For bulk queries, try to extract hostname from API response
-                val hostname = hostInfo?.get("hostname")?.toString()
-                    ?: hostInfo?.get("host_name")?.toString()
-                    ?: vuln["hostname"]?.toString()
-                    ?: deviceInfo?.get("hostname")?.toString()
-                    ?: deviceInfo?.get("host_name")?.toString()
-                    ?: vuln["aid"]?.toString()?.let { "[DEVICE:$it]" }
-                    ?: "[UNKNOWN]"
+                val deviceId = firstNonBlank(
+                    vuln["aid"]?.toString(),
+                    vuln["device_id"]?.toString(),
+                    deviceInfo?.get("device_id")?.toString(),
+                    hostInfo?.get("device_id")?.toString()
+                )
 
-                val ip = vuln["local_ip"]?.toString()
-                    ?: hostInfo?.get("local_ip")?.toString()
-                    ?: deviceInfo?.get("local_ip")?.toString()
+                val metadata = deviceId?.let { metadataByDeviceId[it] }
+
+                val hostname = firstNonBlank(
+                    metadata?.hostname,
+                    hostInfo?.get("hostname")?.toString(),
+                    hostInfo?.get("host_name")?.toString(),
+                    vuln["hostname"]?.toString(),
+                    deviceInfo?.get("hostname")?.toString(),
+                    deviceInfo?.get("host_name")?.toString()
+                ) ?: deviceId?.let { "[DEVICE:$it]" } ?: "[UNKNOWN]"
+
+                val ip = firstNonBlank(
+                    metadata?.ip,
+                    vuln["local_ip"]?.toString(),
+                    hostInfo?.get("local_ip")?.toString(),
+                    deviceInfo?.get("local_ip")?.toString()
+                )
 
                 val cveObject = vuln["cve"] as? Map<*, *>
                 val cveId = cveObject?.get("id")?.toString()
