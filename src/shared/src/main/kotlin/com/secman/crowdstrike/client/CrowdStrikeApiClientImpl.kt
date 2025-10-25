@@ -70,8 +70,8 @@ open class CrowdStrikeApiClientImpl(
 
             log.info("Using device ID '{}' for hostname '{}'", deviceId, hostname)
 
-            // Query Spotlight API
-            val vulnerabilityDtos = querySpotlightApi(deviceId, token)
+            // Query Spotlight API - pass hostname so it can be included in results
+            val vulnerabilityDtos = querySpotlightApi(deviceId, hostname, token)
 
             log.info("Successfully queried CrowdStrike: hostname={}, count={}", hostname, vulnerabilityDtos.size)
 
@@ -1075,6 +1075,7 @@ open class CrowdStrikeApiClientImpl(
      * Task: T030, T031 (with retry logic)
      *
      * @param deviceId Device ID (aid) from Hosts API
+     * @param hostname Hostname for this device (to include in results)
      * @param token OAuth2 access token
      * @return List of CrowdStrikeVulnerabilityDto
      * @throws RateLimitException if rate limit exceeded (will retry)
@@ -1087,7 +1088,7 @@ open class CrowdStrikeApiClientImpl(
         multiplier = "2.0",
         maxDelay = "60s"
     )
-    open fun querySpotlightApi(deviceId: String, token: AuthToken): List<CrowdStrikeVulnerabilityDto> {
+    open fun querySpotlightApi(deviceId: String, hostname: String, token: AuthToken): List<CrowdStrikeVulnerabilityDto> {
         log.debug("Querying Spotlight API for device ID: {}", deviceId)
 
         return try {
@@ -1118,8 +1119,8 @@ open class CrowdStrikeApiClientImpl(
                     val resources = responseBody["resources"] as? List<*> ?: emptyList<Any>()
                     log.info("Spotlight API returned {} vulnerabilities for device {}", resources.size, deviceId)
 
-                    // Task T033: Map responses to shared DTOs
-                    mapResponseToDtos(resources)
+                    // Task T033: Map responses to shared DTOs with hostname
+                    mapResponseToDtos(resources, hostname)
                 }
                 404 -> {
                     log.info("Spotlight API returned 404 for device {}. Treating as no vulnerabilities.", deviceId)
@@ -1159,9 +1160,10 @@ open class CrowdStrikeApiClientImpl(
      * Task: T033
      *
      * @param resources Raw vulnerability resources from API
+     * @param hostname Hostname for the device (from query context)
      * @return List of CrowdStrikeVulnerabilityDto
      */
-    private fun mapResponseToDtos(resources: List<*>): List<CrowdStrikeVulnerabilityDto> {
+    private fun mapResponseToDtos(resources: List<*>, hostname: String): List<CrowdStrikeVulnerabilityDto> {
         return resources.mapNotNull { resource ->
             val vuln = resource as? Map<*, *> ?: return@mapNotNull null
             try {
@@ -1170,20 +1172,9 @@ open class CrowdStrikeApiClientImpl(
                 val hostInfo = vuln["host_info"] as? Map<*, *>
                 val deviceInfo = vuln["device"] as? Map<*, *>
 
-                // Try to get hostname from the API response first
-                // CrowdStrike Spotlight API returns hostname in the host_info object
-                val hostname = hostInfo?.get("hostname")?.toString()
-                    ?: hostInfo?.get("host_name")?.toString()
-                    ?: vuln["hostname"]?.toString()
-                    ?: deviceInfo?.get("hostname")?.toString()
-                    ?: deviceInfo?.get("host_name")?.toString()
-                    // Last resort: use device ID as placeholder (will be shown in logs)
-                    // This indicates CrowdStrike isn't returning hostname info
-                    ?: vuln["aid"]?.toString()?.let { aid ->
-                        log.warn("No hostname in CrowdStrike response for device ID: {}. Using device ID as placeholder.", aid)
-                        "[DEVICE:$aid]"
-                    }
-                    ?: "[UNKNOWN]"
+                // Use the hostname from query context (we already know it!)
+                // The CrowdStrike Spotlight API doesn't reliably return hostname in responses
+                // but we have it from the original query
 
                 val ip = vuln["local_ip"]?.toString()
                     ?: hostInfo?.get("local_ip")?.toString()
@@ -1309,5 +1300,93 @@ open class CrowdStrikeApiClientImpl(
     private fun calculateDaysOpen(detectedAt: LocalDateTime): String {
         val days = java.time.temporal.ChronoUnit.DAYS.between(detectedAt, LocalDateTime.now())
         return if (days == 1L) "1 day" else "$days days"
+    }
+
+    /**
+     * Map CrowdStrike API response to DTOs (bulk query version)
+     * For bulk queries, we need to extract hostname from the API response
+     *
+     * @param resources Raw vulnerability resources from API
+     * @return List of CrowdStrikeVulnerabilityDto
+     */
+    private fun mapResponseToDtos(resources: List<*>): List<CrowdStrikeVulnerabilityDto> {
+        return resources.mapNotNull { resource ->
+            val vuln = resource as? Map<*, *> ?: return@mapNotNull null
+            try {
+                val id = vuln["id"]?.toString() ?: "cs-${System.currentTimeMillis()}"
+                val hostInfo = vuln["host_info"] as? Map<*, *>
+                val deviceInfo = vuln["device"] as? Map<*, *>
+
+                // For bulk queries, try to extract hostname from API response
+                val hostname = hostInfo?.get("hostname")?.toString()
+                    ?: hostInfo?.get("host_name")?.toString()
+                    ?: vuln["hostname"]?.toString()
+                    ?: deviceInfo?.get("hostname")?.toString()
+                    ?: deviceInfo?.get("host_name")?.toString()
+                    ?: vuln["aid"]?.toString()?.let { "[DEVICE:$it]" }
+                    ?: "[UNKNOWN]"
+
+                val ip = vuln["local_ip"]?.toString()
+                    ?: hostInfo?.get("local_ip")?.toString()
+                    ?: deviceInfo?.get("local_ip")?.toString()
+
+                val cveObject = vuln["cve"] as? Map<*, *>
+                val cveId = cveObject?.get("id")?.toString()
+                val cvssScore = (vuln["score"] as? Number)?.toDouble()
+                    ?: (cveObject?.get("base_score") as? Number)?.toDouble()
+
+                val apiSeverity = cveObject?.get("severity")?.toString()
+                    ?: vuln["severity"]?.toString()
+                    ?: vuln["cve_severity"]?.toString()
+
+                val severity = if (!apiSeverity.isNullOrBlank()) {
+                    normalizeSeverity(apiSeverity)
+                } else if (cvssScore != null) {
+                    mapCvssToSeverity(cvssScore)
+                } else {
+                    "Medium"
+                }
+
+                val apps = vuln["apps"] as? List<*>
+                val affectedProduct = apps?.mapNotNull { app ->
+                    (app as? Map<*, *>)?.get("product_name_version")?.toString()
+                }?.joinToString(", ")
+
+                val createdTimestamp = vuln["created_timestamp"]?.toString()
+                    ?: vuln["created_on"]?.toString()
+                val detectedAt = if (createdTimestamp != null) {
+                    try {
+                        val instant = Instant.parse(createdTimestamp)
+                        LocalDateTime.ofInstant(instant, ZoneId.systemDefault())
+                    } catch (e: Exception) {
+                        try {
+                            LocalDateTime.parse(createdTimestamp.replace(" ", "T").replace("Z", ""))
+                        } catch (e2: Exception) {
+                            LocalDateTime.now()
+                        }
+                    }
+                } else {
+                    LocalDateTime.now()
+                }
+
+                CrowdStrikeVulnerabilityDto(
+                    id = id,
+                    hostname = hostname,
+                    ip = ip,
+                    cveId = cveId,
+                    severity = severity,
+                    cvssScore = cvssScore,
+                    affectedProduct = affectedProduct,
+                    daysOpen = calculateDaysOpen(detectedAt),
+                    detectedAt = detectedAt,
+                    status = vuln["status"]?.toString() ?: "open",
+                    hasException = false,
+                    exceptionReason = null
+                )
+            } catch (e: Exception) {
+                log.error("Failed to map vulnerability: {}", e.message, e)
+                null
+            }
+        }
     }
 }
