@@ -108,8 +108,10 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
     };
 
     const getSortedVulnerabilities = () => {
-        if (!paginatedResponse) return [];
-        
+        if (!paginatedResponse || !paginatedResponse.content || !Array.isArray(paginatedResponse.content)) {
+            return [];
+        }
+
         return [...paginatedResponse.content].sort((a, b) => {
             const aVal = a[sortField];
             const bVal = b[sortField];
@@ -407,10 +409,12 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                     <div className="card">
                         <div className="card-body">
                             <h5 className="card-title">
-                                Vulnerabilities ({totalCount} total)
+                                Vulnerabilities ({totalCount})
                             </h5>
                             {sortedVulnerabilities.length === 0 ? (
-                                <p className="text-muted">No vulnerabilities found.</p>
+                                <p className="text-muted">
+                                    No vulnerabilities found. Upload vulnerability scan results to see them here.
+                                </p>
                             ) : (
                                 <>
                                     <div className="table-responsive">
