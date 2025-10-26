@@ -47,8 +47,8 @@ const OutdatedAssetsList: React.FC = () => {
   // Filter/search state
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [minSeverity, setMinSeverity] = useState<string>('');
-  const [sortField, setSortField] = useState<string>('oldestVulnDays');
-  const [sortDirection, setSortDirection] = useState<string>('desc');
+  const [sortField, setSortField] = useState<string>('assetName');
+  const [sortDirection, setSortDirection] = useState<string>('asc');
 
   /**
    * Fetch outdated assets from API

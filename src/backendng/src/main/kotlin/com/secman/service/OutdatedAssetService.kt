@@ -65,11 +65,14 @@ class OutdatedAssetService(
         }
 
         // Query repository with filters
+        // Create pageable without sorting to avoid JPQL query issues
+        val unsortedPageable = Pageable.from(pageable.number, pageable.size)
+
         return outdatedAssetRepository.findOutdatedAssets(
             workgroupId = workgroupFilter,
             searchTerm = searchTerm,
             minSeverity = minSeverity,
-            pageable = pageable
+            pageable = unsortedPageable
         )
     }
 

@@ -41,7 +41,8 @@ open class MaterializedViewRefreshService(
     private val assetRepository: AssetRepository,
     private val vulnerabilityRepository: VulnerabilityRepository,
     private val vulnerabilityConfigService: VulnerabilityConfigService,
-    private val eventPublisher: ApplicationEventPublisher<RefreshProgressEvent>
+    private val eventPublisher: ApplicationEventPublisher<RefreshProgressEvent>,
+    private val vulnerabilityExceptionService: VulnerabilityExceptionService  // For checking active exceptions
 ) {
     private val log = LoggerFactory.getLogger(MaterializedViewRefreshService::class.java)
 
@@ -169,12 +170,14 @@ open class MaterializedViewRefreshService(
      *
      * Task: T011
      * Spec reference: FR-002
+     *
+     * Note: Excludes vulnerabilities with active exceptions
      */
     private fun findAssetsWithOverdueVulnerabilities(thresholdDays: Int): List<com.secman.domain.Asset> {
         // Query all assets
         val allAssets = assetRepository.findAll()
 
-        // Filter to those with overdue vulnerabilities
+        // Filter to those with overdue vulnerabilities (excluding excepted vulnerabilities)
         return allAssets.filter { asset ->
             val vulnerabilities = vulnerabilityRepository.findByAssetId(
                 asset.id!!,
@@ -182,7 +185,11 @@ open class MaterializedViewRefreshService(
             ).content
             vulnerabilities.any { vuln ->
                 val daysOpen = ChronoUnit.DAYS.between(vuln.scanTimestamp, LocalDateTime.now())
-                daysOpen > thresholdDays
+                val isOverdue = daysOpen > thresholdDays
+                val isExcepted = vulnerabilityExceptionService.isVulnerabilityExcepted(vuln, asset)
+
+                // Only count as overdue if it exceeds threshold AND is not excepted
+                isOverdue && !isExcepted
             }
         }
     }
@@ -192,6 +199,8 @@ open class MaterializedViewRefreshService(
      *
      * Task: T011
      * Spec reference: data-model.md
+     *
+     * Note: Excludes vulnerabilities with active exceptions from counts
      */
     private fun createMaterializedRecord(
         asset: com.secman.domain.Asset,
@@ -202,10 +211,14 @@ open class MaterializedViewRefreshService(
             Pageable.UNPAGED
         ).content
 
-        // Filter to overdue vulnerabilities only
+        // Filter to overdue vulnerabilities only (excluding excepted vulnerabilities)
         val overdueVulns = vulnerabilities.filter { vuln ->
             val daysOpen = ChronoUnit.DAYS.between(vuln.scanTimestamp, LocalDateTime.now())
-            daysOpen > thresholdDays
+            val isOverdue = daysOpen > thresholdDays
+            val isExcepted = vulnerabilityExceptionService.isVulnerabilityExcepted(vuln, asset)
+
+            // Only count as overdue if it exceeds threshold AND is not excepted
+            isOverdue && !isExcepted
         }
 
         // Calculate severity counts
