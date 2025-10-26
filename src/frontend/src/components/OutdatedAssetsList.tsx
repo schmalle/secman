@@ -442,7 +442,11 @@ const OutdatedAssetsList: React.FC = () => {
               </thead>
               <tbody>
                 {assets.map((asset) => (
-                  <tr key={asset.id}>
+                  <tr
+                    key={asset.id}
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => window.location.href = `/outdated-assets/${asset.id}`}
+                  >
                     <td>
                       <strong>{asset.assetName}</strong>
                       <br />

@@ -117,6 +117,72 @@ export async function getOutdatedAssetsCount(): Promise<number> {
 }
 
 // ============================================================================
+// User Story 2: View Asset Details
+// ============================================================================
+
+/**
+ * Get single outdated asset by ID
+ *
+ * @param id Outdated asset materialized view ID
+ * @returns Outdated asset details
+ */
+export async function getOutdatedAssetById(id: number): Promise<OutdatedAsset> {
+  const response = await authenticatedGet(`/api/outdated-assets/${id}`);
+  return await response.json();
+}
+
+/**
+ * Vulnerability entity from backend
+ */
+export interface Vulnerability {
+  id: number;
+  vulnerabilityId: string;
+  cvssSeverity: string;
+  cvssscore: number | null;
+  cvePublishedDate: string | null;
+  vulnerableProductVersions: string | null;
+  daysOpen: number;
+  scanTimestamp: string;
+  assetId: number;
+}
+
+/**
+ * Page of vulnerabilities
+ */
+export interface VulnerabilitiesPage {
+  content: Vulnerability[];
+  totalElements: number;
+  totalPages: number;
+  size: number;
+  number: number;
+}
+
+/**
+ * Get vulnerabilities for an outdated asset
+ *
+ * @param id Outdated asset materialized view ID
+ * @param page Page number (0-indexed)
+ * @param size Page size
+ * @param sort Sort string (e.g., "daysOpen,desc")
+ * @returns Page of vulnerabilities for the asset
+ */
+export async function getAssetVulnerabilities(
+  id: number,
+  page: number = 0,
+  size: number = 20,
+  sort: string = 'daysOpen,desc'
+): Promise<VulnerabilitiesPage> {
+  const queryParams = new URLSearchParams();
+  queryParams.append('page', page.toString());
+  queryParams.append('size', size.toString());
+  queryParams.append('sort', sort);
+
+  const url = `/api/outdated-assets/${id}/vulnerabilities?${queryParams.toString()}`;
+  const response = await authenticatedGet(url);
+  return await response.json();
+}
+
+// ============================================================================
 // User Story 3: Manual Refresh
 // ============================================================================
 
