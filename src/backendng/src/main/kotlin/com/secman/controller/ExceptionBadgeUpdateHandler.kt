@@ -10,6 +10,7 @@ import io.micronaut.http.annotation.Get
 import io.micronaut.http.sse.Event
 import io.micronaut.security.annotation.Secured
 import io.micronaut.security.rules.SecurityRule
+import io.micronaut.serde.annotation.Serdeable
 import jakarta.inject.Singleton
 import org.reactivestreams.Publisher
 import reactor.core.publisher.Flux
@@ -143,7 +144,10 @@ class ExceptionBadgeUpdateHandler(
      * ```json
      * {"pendingCount": 5}
      * ```
+     *
+     * @Serdeable Required for Micronaut serialization to JSON
      */
+    @Serdeable
     data class CountUpdateData(
         val pendingCount: Long
     )
