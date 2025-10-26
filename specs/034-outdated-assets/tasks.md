@@ -71,9 +71,9 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T013 [P] [US1] Contract test for GET /api/outdated-assets endpoint in src/backendng/src/test/kotlin/com/secman/contract/OutdatedAssetControllerContractTest.kt
-- [ ] T014 [P] [US1] Integration test for workgroup-based access control in src/backendng/src/test/kotlin/com/secman/integration/OutdatedAssetAccessControlTest.kt
-- [ ] T015 [P] [US1] Playwright E2E test for outdated assets page navigation in src/frontend/tests/e2e/outdated-assets-navigation.spec.ts
+- [X] T013 [P] [US1] Contract test for GET /api/outdated-assets endpoint in src/backendng/src/test/kotlin/com/secman/contract/OutdatedAssetControllerContractTest.kt
+- [X] T014 [P] [US1] Integration test for workgroup-based access control in src/backendng/src/test/kotlin/com/secman/integration/OutdatedAssetAccessControlTest.kt
+- [X] T015 [P] [US1] Playwright E2E test for outdated assets page navigation in src/frontend/tests/e2e/outdated-assets-navigation.spec.ts
 
 ### Implementation for User Story 1
 
