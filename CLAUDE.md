@@ -85,6 +85,24 @@
 - **Fields**: username, email, passwordHash, roles(collection), workgroups(ManyToMany)
 - **Roles**: USER, ADMIN, VULN, RELEASE_MANAGER, SECCHAMPION
 
+### OutdatedAssetMaterializedView (Feature 034)
+
+- **Purpose**: Fast-loading view of assets with overdue vulnerabilities (>reminder_one_days threshold)
+- **Fields**: assetId(FK), assetName, assetType, totalOverdueCount, criticalCount, highCount, mediumCount, lowCount, oldestVulnDays, oldestVulnId, workgroupIds(denormalized), lastCalculatedAt
+- **Pattern**: Materialized view - pre-calculated denormalized table refreshed async
+- **Performance**: <2s page load for 10,000+ assets via indexed queries
+- **Access Control**: ADMIN sees all; VULN sees only workgroup-assigned assets
+- **Refresh**: Manual (UI button) + automatic (after CLI imports)
+
+### MaterializedViewRefreshJob (Feature 034)
+
+- **Purpose**: Track async refresh operations with progress monitoring
+- **Fields**: status(RUNNING/COMPLETED/FAILED), triggeredBy, assetsProcessed, totalAssets, progressPercentage, startedAt, completedAt, durationMs, errorMessage
+- **Pattern**: Background job with @Async execution
+- **Progress**: SSE streaming for real-time updates (every 1000 assets)
+- **Triggers**: Manual refresh button, CLI vulnerability imports
+- **Concurrency**: Single job at a time (prevents concurrent refreshes)
+
 ## API Endpoints (Critical Only)
 
 ### Import
@@ -110,6 +128,18 @@
 - `POST /api/vulnerability-exception-requests` - Create exception request
 - `GET /api/vulnerability-exception-requests/pending/count` - Badge count
 - `GET /api/exception-badge-updates` - SSE real-time updates
+
+### Outdated Assets (Feature 034)
+
+- `GET /api/outdated-assets` - List outdated assets (pagination, sorting, filtering by severity/search)
+- `GET /api/outdated-assets/{id}` - Single asset details (workgroup access control)
+- `GET /api/outdated-assets/{id}/vulnerabilities` - Paginated vulnerabilities for asset
+- `GET /api/outdated-assets/last-refresh` - Timestamp of last materialized view refresh
+- `GET /api/outdated-assets/count` - Count of outdated assets (workgroup-filtered)
+- `POST /api/materialized-view-refresh/trigger` - Trigger async refresh (ADMIN only)
+- `GET /api/materialized-view-refresh/progress` - SSE stream of refresh progress
+- `GET /api/materialized-view-refresh/status` - Current refresh job status
+- `GET /api/materialized-view-refresh/history` - Recent refresh job history (last 10)
 
 ### Workgroups
 
@@ -190,6 +220,21 @@ npm test; npm run dev
 - Admin: `authentication.roles.contains("ADMIN")`
 - VULN: Check "VULN" or "ADMIN"
 - Frontend: JWT in sessionStorage → Axios headers
+
+### Materialized View Refresh (Feature 034)
+
+1. Create MaterializedViewRefreshJob with status=RUNNING
+2. Execute @Async refresh method (non-blocking)
+3. Delete old materialized view data (truncate table)
+4. Query source data with business logic (e.g., overdue threshold)
+5. Batch process in chunks (1000 records)
+6. Publish progress events via ApplicationEventPublisher
+7. Emit SSE events via Sinks.Many.multicast() for real-time UI updates
+8. Mark job COMPLETED/FAILED with metrics (duration, processed count)
+9. Auto-trigger: After CLI imports (if data changed)
+10. Manual trigger: UI refresh button (ADMIN only)
+
+**Performance**: <30s for 10,000 assets, <2s query time via indexed materialized table
 
 ## File Locations
 
