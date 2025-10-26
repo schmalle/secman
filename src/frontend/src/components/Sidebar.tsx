@@ -321,6 +321,11 @@ const Sidebar = () => {
                                         <i className="bi bi-clipboard-check me-2"></i> My Exception Requests
                                     </a>
                                 </li>
+                                <li>
+                                    <a href="/outdated-assets" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-hourglass-split me-2"></i> Outdated Assets
+                                    </a>
+                                </li>
                                 {(userRoles.includes('ADMIN') || userRoles.includes('SECCHAMPION')) && (
                                     <li>
                                         <a href="/exception-approvals" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">

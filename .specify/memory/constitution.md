@@ -111,8 +111,8 @@ Database schema changes MUST be managed through automated migration with appropr
 ## Technology Stack
 
 **Backend**:
-- Language: Kotlin 2.1.0 / Java 21
-- Framework: Micronaut 4.4
+- Language: Kotlin 2.2.21 / Java 21
+- Framework: Micronaut 4.10
 - ORM: Hibernate JPA
 - Database: MariaDB 11.4
 - File Processing: Apache POI 5.3 (Excel), Apache Commons CSV 1.11.0 (CSV)
