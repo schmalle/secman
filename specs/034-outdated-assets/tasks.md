@@ -49,13 +49,13 @@
 
 ### Contract Tests for Entities
 
-- [ ] T009 [P] Contract test for OutdatedAssetMaterializedView entity schema in src/backendng/src/test/kotlin/com/secman/contract/OutdatedAssetMaterializedViewContractTest.kt
-- [ ] T010 [P] Contract test for MaterializedViewRefreshJob entity schema in src/backendng/src/test/kotlin/com/secman/contract/MaterializedViewRefreshJobContractTest.kt
+- [X] T009 [P] Contract test for OutdatedAssetMaterializedView entity schema in src/backendng/src/test/kotlin/com/secman/contract/OutdatedAssetMaterializedViewContractTest.kt
+- [X] T010 [P] Contract test for MaterializedViewRefreshJob entity schema in src/backendng/src/test/kotlin/com/secman/contract/MaterializedViewRefreshJobContractTest.kt
 
 ### Core Services (Shared)
 
-- [ ] T011 Create MaterializedViewRefreshService with async refresh logic in src/backendng/src/main/kotlin/com/secman/service/MaterializedViewRefreshService.kt
-- [ ] T012 Unit test for MaterializedViewRefreshService in src/backendng/src/test/kotlin/com/secman/service/MaterializedViewRefreshServiceTest.kt
+- [X] T011 Create MaterializedViewRefreshService with async refresh logic in src/backendng/src/main/kotlin/com/secman/service/MaterializedViewRefreshService.kt
+- [X] T012 Unit test for MaterializedViewRefreshService in src/backendng/src/test/kotlin/com/secman/service/MaterializedViewRefreshServiceTest.kt
 
 **Checkpoint**: Foundation ready - user story implementation can now begin in parallel
 
