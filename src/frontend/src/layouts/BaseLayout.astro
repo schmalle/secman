@@ -30,12 +30,12 @@ const csrfToken = "placeholder-token"; // This would actually come from the serv
         
         <!-- Initialize CSRF protection -->
         <script>
-            // This script sets up axios to include CSRF tokens in all requests
+            // This script sets up axios to include CSRF tokens and JWT auth in all requests
+            // IMPORTANT: This must run immediately (not on DOMContentLoaded) to ensure
+            // the axios interceptor is ready before React components make API calls
             import { setupCSRFProtection } from '../utils/csrf';
-            
-            document.addEventListener('DOMContentLoaded', () => {
-                setupCSRFProtection();
-            });
+
+            setupCSRFProtection();
         </script>
 	</body>
 </html>

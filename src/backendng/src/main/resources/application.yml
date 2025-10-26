@@ -45,6 +45,25 @@ micronaut:
           issuer: secman-backend-ng
     oauth2:
       enabled: true
+    intercept-url-map:
+      - pattern: /api/auth/login
+        access:
+          - isAnonymous()
+      - pattern: /api/identity-providers/enabled
+        access:
+          - isAnonymous()
+      - pattern: /oauth/**
+        access:
+          - isAnonymous()
+      - pattern: /health
+        access:
+          - isAnonymous()
+      - pattern: /api/auth/status
+        access:
+          - isAuthenticated()
+      - pattern: "/api/**"
+        access:
+          - isAuthenticated()
 
 # Email functionality configuration
 secman:
@@ -68,25 +87,6 @@ secman:
     notifications:
       batch-size: 50
       async-processing: true
-    intercept-url-map:
-      - pattern: /api/auth/login
-        access:
-          - isAnonymous()
-      - pattern: /api/identity-providers/enabled
-        access:
-          - isAnonymous()
-      - pattern: /oauth/**
-        access:
-          - isAnonymous()
-      - pattern: /health
-        access:
-          - isAnonymous()
-      - pattern: /api/auth/status
-        access:
-          - isAuthenticated()
-      - pattern: "/api/**"
-        access:
-          - isAuthenticated()
   http:
     services:
       translation:
