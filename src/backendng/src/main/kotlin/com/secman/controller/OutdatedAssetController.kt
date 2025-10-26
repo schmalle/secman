@@ -1,5 +1,6 @@
 package com.secman.controller
 
+import com.secman.domain.Vulnerability
 import com.secman.dto.OutdatedAssetDto
 import com.secman.service.OutdatedAssetService
 import io.micronaut.data.model.Page
@@ -137,5 +138,91 @@ class OutdatedAssetController(
         val count = outdatedAssetService.countOutdatedAssets(authentication)
 
         return HttpResponse.ok(mapOf("count" to count))
+    }
+
+    /**
+     * GET /api/outdated-assets/{id}
+     *
+     * Get single outdated asset by ID with workgroup-based access control
+     *
+     * Access Control:
+     * - ADMIN role: can access any outdated asset
+     * - VULN role: can only access assets from assigned workgroups
+     *
+     * Response:
+     * - 200 OK: OutdatedAssetDto
+     * - 404 Not Found: Asset not found or user lacks access
+     * - 403 Forbidden: User lacks ADMIN or VULN role
+     *
+     * Task: T035-T036
+     * User Story: US2 - View Asset Details
+     * Spec reference: contracts/02-get-outdated-asset-by-id.md
+     */
+    @Get("/{id}")
+    @Secured("ADMIN", "VULN")
+    fun getOutdatedAssetById(
+        id: Long,
+        authentication: Authentication
+    ): HttpResponse<OutdatedAssetDto> {
+        // Validate user has required role
+        val hasRequiredRole = authentication.roles.any { it == "ADMIN" || it == "VULN" }
+        if (!hasRequiredRole) {
+            return HttpResponse.status(HttpStatus.FORBIDDEN)
+        }
+
+        // Get asset with access control
+        val asset = outdatedAssetService.getOutdatedAssetById(id, authentication)
+            ?: return HttpResponse.notFound()
+
+        // Map to DTO
+        val dto = OutdatedAssetDto.from(asset)
+
+        return HttpResponse.ok(dto)
+    }
+
+    /**
+     * GET /api/outdated-assets/{id}/vulnerabilities
+     *
+     * Get paginated list of vulnerabilities for an outdated asset
+     *
+     * Access Control:
+     * - Requires user to have access to the outdated asset (checked via getOutdatedAssetById)
+     *
+     * Query Parameters:
+     * - page, size, sort (standard pagination)
+     *
+     * Response:
+     * - 200 OK: Page of vulnerabilities
+     * - 404 Not Found: Asset not found or user lacks access
+     * - 403 Forbidden: User lacks ADMIN or VULN role
+     *
+     * Task: T037-T038
+     * User Story: US2 - View Asset Details
+     * Spec reference: contracts/03-get-asset-vulnerabilities.md
+     */
+    @Get("/{id}/vulnerabilities")
+    @Secured("ADMIN", "VULN")
+    fun getAssetVulnerabilities(
+        id: Long,
+        authentication: Authentication,
+        pageable: Pageable
+    ): HttpResponse<Page<Vulnerability>> {
+        // Validate user has required role
+        val hasRequiredRole = authentication.roles.any { it == "ADMIN" || it == "VULN" }
+        if (!hasRequiredRole) {
+            return HttpResponse.status(HttpStatus.FORBIDDEN)
+        }
+
+        // First check if user has access to the outdated asset
+        val outdatedAsset = outdatedAssetService.getOutdatedAssetById(id, authentication)
+            ?: return HttpResponse.notFound()
+
+        // Get vulnerabilities for the asset
+        val vulnerabilities = outdatedAssetService.getVulnerabilitiesForAsset(
+            outdatedAsset.assetId,
+            pageable
+        )
+
+        return HttpResponse.ok(vulnerabilities)
     }
 }

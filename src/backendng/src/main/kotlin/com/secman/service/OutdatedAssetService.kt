@@ -1,7 +1,9 @@
 package com.secman.service
 
 import com.secman.domain.OutdatedAssetMaterializedView
+import com.secman.domain.Vulnerability
 import com.secman.repository.OutdatedAssetMaterializedViewRepository
+import com.secman.repository.VulnerabilityRepository
 import io.micronaut.data.model.Page
 import io.micronaut.data.model.Pageable
 import io.micronaut.security.authentication.Authentication
@@ -22,7 +24,8 @@ import jakarta.inject.Singleton
  */
 @Singleton
 class OutdatedAssetService(
-    private val outdatedAssetRepository: OutdatedAssetMaterializedViewRepository
+    private val outdatedAssetRepository: OutdatedAssetMaterializedViewRepository,
+    private val vulnerabilityRepository: VulnerabilityRepository
 ) {
 
     /**
@@ -117,5 +120,63 @@ class OutdatedAssetService(
                 workgroupId = workgroupFilter
             )
         }
+    }
+
+    /**
+     * Get single outdated asset by ID with access control
+     *
+     * Task: T032-T034
+     * User Story: US2 - View Asset Details
+     *
+     * @param id Outdated asset materialized view ID
+     * @param authentication Current user authentication context
+     * @return Outdated asset or null if not found or unauthorized
+     */
+    fun getOutdatedAssetById(
+        id: Long,
+        authentication: Authentication
+    ): OutdatedAssetMaterializedView? {
+        val asset = outdatedAssetRepository.findById(id).orElse(null) ?: return null
+
+        // Check access control
+        val isAdmin = authentication.roles.contains("ADMIN")
+        if (isAdmin) {
+            // ADMIN sees all
+            return asset
+        }
+
+        // VULN user - check workgroup access
+        val userWorkgroupIds = extractWorkgroupIds(authentication) ?: emptyList()
+
+        // If asset has no workgroups, allow access (backward compatibility)
+        if (asset.workgroupIds.isNullOrBlank()) {
+            return asset
+        }
+
+        // Parse asset's workgroup IDs
+        val workgroupIdsStr = asset.workgroupIds ?: ""
+        val assetWorkgroupIds = workgroupIdsStr.split(",").mapNotNull { it.toLongOrNull() }
+
+        // Check if user has access to any of the asset's workgroups
+        val hasAccess = assetWorkgroupIds.any { it in userWorkgroupIds }
+
+        return if (hasAccess) asset else null
+    }
+
+    /**
+     * Get vulnerabilities for an outdated asset
+     *
+     * Task: T037-T038
+     * User Story: US2 - View Asset Details
+     *
+     * @param assetId The actual asset ID (not materialized view ID)
+     * @param pageable Pagination parameters
+     * @return Page of vulnerabilities for the asset
+     */
+    fun getVulnerabilitiesForAsset(
+        assetId: Long,
+        pageable: Pageable
+    ): Page<Vulnerability> {
+        return vulnerabilityRepository.findByAssetId(assetId, pageable)
     }
 }
