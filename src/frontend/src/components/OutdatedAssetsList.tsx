@@ -20,9 +20,12 @@ import React, { useState, useEffect } from 'react';
 import {
   getOutdatedAssets,
   getLastRefreshTimestamp,
+  triggerRefresh,
+  getRefreshStatus,
   type OutdatedAsset,
   type OutdatedAssetsPage,
-  type OutdatedAssetsParams
+  type OutdatedAssetsParams,
+  type RefreshJob
 } from '../services/outdatedAssetsApi';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -31,6 +34,9 @@ const OutdatedAssetsList: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [refreshJob, setRefreshJob] = useState<RefreshJob | null>(null);
+  const [pollIntervalId, setPollIntervalId] = useState<NodeJS.Timeout | null>(null);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState<number>(0);
@@ -93,7 +99,83 @@ const OutdatedAssetsList: React.FC = () => {
   };
 
   /**
-   * Handle refresh button click
+   * Handle manual refresh trigger (async materialized view refresh)
+   */
+  const handleManualRefresh = async () => {
+    try {
+      setRefreshing(true);
+      setError(null);
+
+      // Trigger async refresh
+      const job = await triggerRefresh();
+      setRefreshJob(job);
+
+      // Start polling for job status and progress
+      pollRefreshStatus();
+
+    } catch (err: any) {
+      console.error('Failed to trigger refresh:', err);
+      setError(err.response?.data?.message || 'Failed to trigger refresh');
+      setRefreshing(false);
+    }
+  };
+
+  /**
+   * Poll refresh status until completion
+   */
+  const pollRefreshStatus = async () => {
+    // Clear any existing poll interval
+    if (pollIntervalId) {
+      clearInterval(pollIntervalId);
+    }
+
+    const interval = setInterval(async () => {
+      try {
+        const status = await getRefreshStatus();
+
+        if (!status) {
+          // No job running - refresh completed or failed
+          clearInterval(interval);
+          setPollIntervalId(null);
+          setRefreshing(false);
+          setRefreshJob(null);
+
+          // Reload assets and timestamp
+          fetchAssets();
+          fetchLastRefresh();
+          return;
+        }
+
+        setRefreshJob(status);
+
+        if (status.status === 'COMPLETED') {
+          clearInterval(interval);
+          setPollIntervalId(null);
+          setRefreshing(false);
+
+          // Reload assets and timestamp
+          fetchAssets();
+          fetchLastRefresh();
+        } else if (status.status === 'FAILED') {
+          clearInterval(interval);
+          setPollIntervalId(null);
+          setRefreshing(false);
+          setError(status.errorMessage || 'Refresh failed');
+        }
+
+      } catch (err) {
+        console.error('Failed to poll refresh status:', err);
+        clearInterval(interval);
+        setPollIntervalId(null);
+        setRefreshing(false);
+      }
+    }, 2000); // Poll every 2 seconds
+
+    setPollIntervalId(interval);
+  };
+
+  /**
+   * Handle refresh button click (simple reload)
    */
   const handleRefresh = () => {
     fetchAssets();
@@ -180,6 +262,15 @@ const OutdatedAssetsList: React.FC = () => {
     fetchLastRefresh();
   }, []);
 
+  // Cleanup poll interval on unmount
+  useEffect(() => {
+    return () => {
+      if (pollIntervalId) {
+        clearInterval(pollIntervalId);
+      }
+    };
+  }, [pollIntervalId]);
+
   return (
     <div className="container mt-4">
       <div className="d-flex justify-content-between align-items-center mb-3">
@@ -190,12 +281,56 @@ const OutdatedAssetsList: React.FC = () => {
               Last updated {formatTimeAgo(lastRefresh)}
             </small>
           )}
-          <button className="btn btn-primary" onClick={handleRefresh} disabled={loading}>
+          <button className="btn btn-outline-secondary me-2" onClick={handleRefresh} disabled={loading || refreshing}>
             <i className="bi bi-arrow-clockwise me-1"></i>
-            Refresh
+            Reload
+          </button>
+          <button
+            className="btn btn-primary"
+            onClick={handleManualRefresh}
+            disabled={loading || refreshing}
+          >
+            {refreshing ? (
+              <>
+                <span className="spinner-border spinner-border-sm me-1"></span>
+                Refreshing...
+              </>
+            ) : (
+              <>
+                <i className="bi bi-database me-1"></i>
+                Manual Refresh
+              </>
+            )}
           </button>
         </div>
       </div>
+
+      {/* Refresh Progress Bar */}
+      {refreshing && refreshJob && (
+        <div className="alert alert-info mb-3">
+          <div className="d-flex justify-content-between align-items-center mb-2">
+            <span>
+              <i className="bi bi-hourglass-split me-2"></i>
+              Recalculating outdated assets...
+            </span>
+            <span className="badge bg-info">
+              {refreshJob.assetsProcessed} / {refreshJob.totalAssets}
+            </span>
+          </div>
+          <div className="progress" style={{ height: '20px' }}>
+            <div
+              className="progress-bar progress-bar-striped progress-bar-animated"
+              role="progressbar"
+              style={{ width: `${refreshJob.progressPercentage}%` }}
+              aria-valuenow={refreshJob.progressPercentage}
+              aria-valuemin={0}
+              aria-valuemax={100}
+            >
+              {refreshJob.progressPercentage}%
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Search and Filters */}
       <div className="card mb-3">

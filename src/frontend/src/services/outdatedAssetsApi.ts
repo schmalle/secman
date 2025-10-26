@@ -10,7 +10,7 @@
  * Spec reference: contracts/01-get-outdated-assets.md
  */
 
-import { authenticatedGet } from '../utils/auth';
+import { authenticatedGet, authenticatedPost } from '../utils/auth';
 
 export interface OutdatedAsset {
   id: number;
@@ -79,7 +79,8 @@ export async function getOutdatedAssets(
   }
 
   const url = `/api/outdated-assets${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
-  return await authenticatedGet<OutdatedAssetsPage>(url);
+  const response = await authenticatedGet(url);
+  return await response.json();
 }
 
 /**
@@ -89,7 +90,11 @@ export async function getOutdatedAssets(
  */
 export async function getLastRefreshTimestamp(): Promise<string | null> {
   try {
-    const data = await authenticatedGet<LastRefreshResponse>('/api/outdated-assets/last-refresh');
+    const response = await authenticatedGet('/api/outdated-assets/last-refresh');
+    if (response.status === 204) {
+      return null;
+    }
+    const data: LastRefreshResponse = await response.json();
     return data.lastRefreshTimestamp;
   } catch (error: any) {
     // 204 No Content means no refresh has occurred yet
@@ -106,6 +111,75 @@ export async function getLastRefreshTimestamp(): Promise<string | null> {
  * @returns Count of outdated assets
  */
 export async function getOutdatedAssetsCount(): Promise<number> {
-  const data = await authenticatedGet<CountResponse>('/api/outdated-assets/count');
+  const response = await authenticatedGet('/api/outdated-assets/count');
+  const data: CountResponse = await response.json();
   return data.count;
+}
+
+// ============================================================================
+// User Story 3: Manual Refresh
+// ============================================================================
+
+export interface RefreshJob {
+  id: number;
+  status: 'RUNNING' | 'COMPLETED' | 'FAILED';
+  triggeredBy: string;
+  assetsProcessed: number;
+  totalAssets: number;
+  progressPercentage: number;
+  startedAt: string;
+  completedAt?: string;
+  durationMs?: number;
+  errorMessage?: string;
+}
+
+export interface RefreshProgressEvent {
+  jobId: number;
+  status: 'RUNNING' | 'COMPLETED' | 'FAILED';
+  progressPercentage: number;
+  assetsProcessed: number;
+  totalAssets: number;
+  message?: string;
+}
+
+/**
+ * Trigger manual refresh of outdated assets materialized view
+ * Returns immediately with job details
+ *
+ * @returns Refresh job details
+ */
+export async function triggerRefresh(): Promise<RefreshJob> {
+  const response = await authenticatedPost('/api/materialized-view-refresh/trigger', {});
+  return await response.json();
+}
+
+/**
+ * Get current refresh job status
+ *
+ * @returns Current job or null if no refresh running
+ */
+export async function getRefreshStatus(): Promise<RefreshJob | null> {
+  try {
+    const response = await authenticatedGet('/api/materialized-view-refresh/status');
+    if (response.status === 204) {
+      return null;
+    }
+    return await response.json();
+  } catch (error: any) {
+    // 204 No Content means no refresh running
+    if (error.response?.status === 204) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+/**
+ * Get recent refresh job history
+ *
+ * @returns List of recent refresh jobs
+ */
+export async function getRefreshHistory(): Promise<RefreshJob[]> {
+  const response = await authenticatedGet('/api/materialized-view-refresh/history');
+  return await response.json();
 }
