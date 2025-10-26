@@ -5,6 +5,14 @@
 **Status**: Draft
 **Input**: User description: "i want to get an additional UI as sub item below Vuln management named Outdated assets, which shows all assets, which have vulnerabilities longer open than the day number configured in [Image #1]. I Want to have a performance optimized solution, meaning the UI should query from a precalculated table, but there must be also a button to update the state. At best the precalculated table will be generated as part of the import from the command line, when the cli is asked to save the data. For the view please ensure the same role based access requirements as for the Vuln overview. Take complexity and speed into account. It must be possible to store more than 10000 assets."
 
+## Clarifications
+
+### Session 2025-10-26
+
+- Q: Should the materialized view refresh happen synchronously (CLI import waits) or asynchronously (CLI import completes immediately, refresh happens in background)? â†’ A: Asynchronous - CLI import triggers refresh job in background and returns immediately for better performance
+- Q: What observability signals should the system expose for monitoring materialized view health and performance? â†’ A: Basic metrics + logs - Expose refresh duration, success/failure rate, queue depth, last refresh timestamp with structured logs for debugging
+- Q: Should users see detailed progress during long-running refresh operations? â†’ A: Progress percentage - Show "Refreshing... 35%" based on assets processed for better user feedback
+
 ## User Scenarios & Testing
 
 ### User Story 1 - View Outdated Assets (Priority: P1)
@@ -53,7 +61,7 @@ As a security manager, I need to manually refresh the outdated assets list after
 **Acceptance Scenarios**:
 
 1. **Given** I am viewing the Outdated Assets page, **When** I look at the top of the page, **Then** I see a "Refresh" button
-2. **Given** I click the "Refresh" button, **When** the refresh completes, **Then** I see a loading indicator during processing and then the updated list
+2. **Given** I click the "Refresh" button, **When** the refresh is in progress, **Then** I see a progress indicator showing percentage completed (e.g., "Refreshing... 35%") and the refresh button is disabled
 3. **Given** new vulnerability data was imported via CLI that creates new outdated assets, **When** I click "Refresh" and wait for completion, **Then** the newly outdated assets appear in the list
 4. **Given** vulnerabilities were remediated making an asset no longer outdated, **When** I click "Refresh", **Then** that asset is removed from the list
 5. **Given** I click "Refresh" while a previous refresh is still processing, **When** the button is clicked, **Then** the button is disabled with message "Updating..." until refresh completes
@@ -112,9 +120,9 @@ As a workgroup member with VULN role, I need to see only outdated assets from my
 - **FR-002**: System MUST display assets that have at least one vulnerability with age (days since scan timestamp) exceeding the configured threshold from vulnerability configuration (reminder_one_days)
 - **FR-003**: System MUST show for each outdated asset: asset name, total count of overdue vulnerabilities, severity breakdown (Critical/High/Medium/Low counts), and oldest vulnerability age in days
 - **FR-004**: System MUST retrieve outdated assets data from a pre-calculated materialized table for sub-2-second query performance even with 10,000+ assets
-- **FR-005**: System MUST automatically update the materialized view whenever vulnerability data is imported via the CrowdStrike CLI save operation
+- **FR-005**: System MUST automatically trigger asynchronous materialized view refresh whenever vulnerability data is imported via the CrowdStrike CLI save operation (CLI returns immediately, refresh runs in background)
 - **FR-006**: System MUST provide a "Refresh" button that allows users to manually trigger recalculation of the materialized view
-- **FR-007**: System MUST show a loading indicator during materialized view refresh operations and disable the refresh button to prevent duplicate requests
+- **FR-007**: System MUST show a progress indicator with percentage (e.g., "Refreshing... 35%") during materialized view refresh operations and disable the refresh button to prevent duplicate requests
 - **FR-008**: System MUST restrict access to Outdated Assets view to users with ADMIN or VULN roles (consistent with vulnerability management access control)
 - **FR-009**: System MUST apply workgroup-based access control: VULN users see only assets from their assigned workgroups, while ADMIN users see all assets
 - **FR-010**: System MUST recalculate the materialized view whenever the vulnerability threshold configuration (reminder_one_days) is changed
@@ -128,6 +136,8 @@ As a workgroup member with VULN role, I need to see only outdated assets from my
 - **FR-018**: System MUST limit concurrent refresh operations to one at a time using database-level locking or application-level queuing
 - **FR-019**: System MUST allow users to click on an asset to view detailed information about all its overdue vulnerabilities
 - **FR-020**: System MUST support pagination for assets list when viewing more than 100 outdated assets per page
+- **FR-021**: System MUST expose observability metrics including: refresh operation duration, success/failure rate, current queue depth, and last successful refresh timestamp
+- **FR-022**: System MUST emit structured logs for materialized view refresh operations including start time, completion time, number of assets processed, and any error details
 
 ### Key Entities
 
@@ -146,6 +156,8 @@ As a workgroup member with VULN role, I need to see only outdated assets from my
   - Triggered by (CLI import, manual refresh, config change)
   - Error details if failed
   - Number of assets processed
+  - Total assets to process (for progress calculation)
+  - Current progress percentage (0-100)
 
 ## Success Criteria
 
@@ -153,7 +165,7 @@ As a workgroup member with VULN role, I need to see only outdated assets from my
 
 - **SC-001**: Outdated Assets page loads and displays results in under 2 seconds for datasets up to 10,000 assets
 - **SC-002**: Manual refresh completes in under 30 seconds for datasets up to 10,000 assets
-- **SC-003**: Security managers can identify all assets with overdue vulnerabilities in under 10 seconds (3 clicks: Vuln Management ’ Outdated Assets ’ view list)
+- **SC-003**: Security managers can identify all assets with overdue vulnerabilities in under 10 seconds (3 clicks: Vuln Management ï¿½ Outdated Assets ï¿½ view list)
 - **SC-004**: System maintains 99.9% uptime for materialized view refresh operations during CLI imports
 - **SC-005**: Users can successfully filter, search, and sort through 10,000+ outdated assets with sub-1-second response times
 - **SC-006**: 95% of security team members successfully complete the task "Find all Critical overdue vulnerabilities older than 90 days" in under 1 minute
@@ -170,7 +182,7 @@ As a workgroup member with VULN role, I need to see only outdated assets from my
 - The existing Asset and Vulnerability entities have all necessary fields (scan timestamp, severity, etc.) for calculations
 - Page load performance requirements (2 seconds) assume reasonable database configuration and indexing
 - Users will primarily access this view for monitoring and reporting, not for real-time continuous watching
-- Refresh operations can be asynchronous (users don't need to wait for completion before continuing other work)
+- Both CLI-triggered and manual refresh operations are asynchronous (users and CLI don't wait for completion before continuing other work)
 - The system can handle temporary inconsistency between materialized view and live data (eventual consistency acceptable)
 
 ## Constraints
