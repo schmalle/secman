@@ -34,21 +34,38 @@ interface OutdatedAssetMaterializedViewRepository : JpaRepository<OutdatedAssetM
      * Task: T007, T079 (filter queries)
      * Spec reference: FR-011, FR-012, FR-013
      */
-    @Query("""
-        SELECT v FROM OutdatedAssetMaterializedView v
-        WHERE (:workgroupId IS NULL
-            OR :workgroupId = ''
-            OR v.workgroupIds IS NULL
-            OR v.workgroupIds LIKE CONCAT('%', :workgroupId, '%'))
-        AND (:searchTerm IS NULL OR LOWER(v.assetName) LIKE LOWER(CONCAT('%', :searchTerm, '%')))
-        AND (:minSeverity IS NULL OR
-            (CASE
-                WHEN :minSeverity = 'CRITICAL' THEN v.criticalCount > 0
-                WHEN :minSeverity = 'HIGH' THEN (v.criticalCount > 0 OR v.highCount > 0)
-                WHEN :minSeverity = 'MEDIUM' THEN (v.criticalCount > 0 OR v.highCount > 0 OR v.mediumCount > 0)
-                ELSE true
-            END))
-    """)
+    @Query(
+        value = """
+            SELECT v FROM OutdatedAssetMaterializedView v
+            WHERE (:workgroupId IS NULL
+                OR :workgroupId = ''
+                OR v.workgroupIds IS NULL
+                OR v.workgroupIds LIKE CONCAT('%', :workgroupId, '%'))
+            AND (:searchTerm IS NULL OR LOWER(v.assetName) LIKE LOWER(CONCAT('%', :searchTerm, '%')))
+            AND (:minSeverity IS NULL OR
+                (CASE
+                    WHEN :minSeverity = 'CRITICAL' THEN v.criticalCount > 0
+                    WHEN :minSeverity = 'HIGH' THEN (v.criticalCount > 0 OR v.highCount > 0)
+                    WHEN :minSeverity = 'MEDIUM' THEN (v.criticalCount > 0 OR v.highCount > 0 OR v.mediumCount > 0)
+                    ELSE true
+                END))
+        """,
+        countQuery = """
+            SELECT COUNT(v) FROM OutdatedAssetMaterializedView v
+            WHERE (:workgroupId IS NULL
+                OR :workgroupId = ''
+                OR v.workgroupIds IS NULL
+                OR v.workgroupIds LIKE CONCAT('%', :workgroupId, '%'))
+            AND (:searchTerm IS NULL OR LOWER(v.assetName) LIKE LOWER(CONCAT('%', :searchTerm, '%')))
+            AND (:minSeverity IS NULL OR
+                (CASE
+                    WHEN :minSeverity = 'CRITICAL' THEN v.criticalCount > 0
+                    WHEN :minSeverity = 'HIGH' THEN (v.criticalCount > 0 OR v.highCount > 0)
+                    WHEN :minSeverity = 'MEDIUM' THEN (v.criticalCount > 0 OR v.highCount > 0 OR v.mediumCount > 0)
+                    ELSE true
+                END))
+        """
+    )
     fun findOutdatedAssets(
         workgroupId: String?,
         searchTerm: String?,
@@ -66,10 +83,32 @@ interface OutdatedAssetMaterializedViewRepository : JpaRepository<OutdatedAssetM
     fun getLastRefreshTimestamp(): Optional<LocalDateTime>
 
     /**
+     * Find latest calculated timestamp (nullable for service)
+     *
+     * Task: T016
+     */
+    @Query("SELECT MAX(v.lastCalculatedAt) FROM OutdatedAssetMaterializedView v")
+    fun findLatestCalculatedAt(): LocalDateTime?
+
+    /**
+     * Count outdated assets with workgroup filtering
+     *
+     * Task: T016
+     */
+    @Query("""
+        SELECT COUNT(v) FROM OutdatedAssetMaterializedView v
+        WHERE (:workgroupId IS NULL
+            OR :workgroupId = ''
+            OR v.workgroupIds IS NULL
+            OR v.workgroupIds LIKE CONCAT('%', :workgroupId, '%'))
+    """)
+    fun countOutdatedAssets(workgroupId: String?): Long
+
+    /**
      * Delete all rows (used during refresh to clear old data)
      *
      * Task: T007
      * Spec reference: data-model.md (refresh process)
      */
-    fun deleteAll()
+    override fun deleteAll()
 }

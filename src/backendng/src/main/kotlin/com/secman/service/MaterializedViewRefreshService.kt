@@ -9,6 +9,7 @@ import com.secman.repository.MaterializedViewRefreshJobRepository
 import com.secman.repository.OutdatedAssetMaterializedViewRepository
 import com.secman.repository.VulnerabilityRepository
 import io.micronaut.context.event.ApplicationEventPublisher
+import io.micronaut.data.model.Pageable
 import io.micronaut.scheduling.annotation.Async
 import jakarta.inject.Singleton
 import jakarta.transaction.Transactional
@@ -132,7 +133,7 @@ open class MaterializedViewRefreshService(
             }
 
             // Save batch
-            outdatedAssetMaterializedViewRepository.saveAll(materializedRecords)
+            outdatedAssetRepository.saveAll(materializedRecords)
 
             // Update progress
             val processed = (batchIndex + 1) * BATCH_SIZE.coerceAtMost(outdatedAssets.size)
@@ -168,7 +169,10 @@ open class MaterializedViewRefreshService(
 
         // Filter to those with overdue vulnerabilities
         return allAssets.filter { asset ->
-            val vulnerabilities = vulnerabilityRepository.findByAssetId(asset.id!!)
+            val vulnerabilities = vulnerabilityRepository.findByAssetId(
+                asset.id!!,
+                Pageable.UNPAGED
+            ).content
             vulnerabilities.any { vuln ->
                 val daysOpen = ChronoUnit.DAYS.between(vuln.scanTimestamp, LocalDateTime.now())
                 daysOpen > thresholdDays
@@ -186,7 +190,10 @@ open class MaterializedViewRefreshService(
         asset: com.secman.domain.Asset,
         thresholdDays: Int
     ): OutdatedAssetMaterializedView {
-        val vulnerabilities = vulnerabilityRepository.findByAssetId(asset.id!!)
+        val vulnerabilities = vulnerabilityRepository.findByAssetId(
+            asset.id!!,
+            Pageable.UNPAGED
+        ).content
 
         // Filter to overdue vulnerabilities only
         val overdueVulns = vulnerabilities.filter { vuln ->
