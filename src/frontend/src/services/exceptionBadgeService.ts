@@ -33,6 +33,12 @@
  */
 export type BadgeCountCallback = (count: number) => void;
 
+// Track connection state to prevent reconnection storms
+let connectionState: 'disconnected' | 'connecting' | 'connected' | 'error' = 'disconnected';
+let errorCount = 0;
+const MAX_ERRORS = 5;
+const ERROR_RESET_TIMEOUT = 60000; // Reset error count after 1 minute
+
 /**
  * Connect to SSE endpoint for real-time badge count updates.
  *
@@ -50,7 +56,8 @@ export type BadgeCountCallback = (count: number) => void;
  *
  * **Error Handling**:
  * - Logs connection errors to console
- * - Browser automatically attempts reconnection (EventSource default behavior)
+ * - Prevents reconnection storms by tracking error count
+ * - After 5 consecutive errors, stops reconnection attempts
  * - Callback receives 0 on connection errors (safe fallback)
  *
  * **Authentication**:
@@ -73,12 +80,28 @@ export type BadgeCountCallback = (count: number) => void;
  * ```
  */
 export function connectToBadgeUpdates(onUpdate: BadgeCountCallback): () => void {
+  // Prevent multiple simultaneous connection attempts
+  if (connectionState === 'connecting' || connectionState === 'connected') {
+    console.warn('[ExceptionBadge] Connection already in progress or established');
+    return () => {}; // No-op cleanup
+  }
+
+  // Stop reconnection attempts after too many errors
+  if (errorCount >= MAX_ERRORS) {
+    console.error('[ExceptionBadge] Too many connection errors, stopping reconnection attempts. Please refresh the page to retry.');
+    onUpdate(0);
+    return () => {};
+  }
+
+  connectionState = 'connecting';
   console.log('[ExceptionBadge] Connecting to SSE endpoint for real-time updates');
 
   // Create EventSource connection
   const eventSource = new EventSource('/api/exception-badge-updates', {
     withCredentials: true // Include session cookies for authentication
   });
+
+  let isCleaningUp = false;
 
   // Handle count-update events
   eventSource.addEventListener('count-update', (event: MessageEvent) => {
@@ -88,6 +111,11 @@ export function connectToBadgeUpdates(onUpdate: BadgeCountCallback): () => void 
 
       console.log('[ExceptionBadge] Received count update:', newCount);
       onUpdate(newCount);
+
+      // Reset error count on successful message
+      if (errorCount > 0) {
+        errorCount = 0;
+      }
     } catch (error) {
       console.error('[ExceptionBadge] Failed to parse count update event:', error, event.data);
     }
@@ -96,26 +124,51 @@ export function connectToBadgeUpdates(onUpdate: BadgeCountCallback): () => void 
   // Handle connection opened
   eventSource.addEventListener('open', () => {
     console.log('[ExceptionBadge] SSE connection established');
+    connectionState = 'connected';
+    // Reset error count on successful connection
+    errorCount = 0;
   });
 
   // Handle connection errors
   eventSource.addEventListener('error', (error) => {
-    console.error('[ExceptionBadge] SSE connection error:', error);
+    if (isCleaningUp) {
+      return; // Ignore errors during cleanup
+    }
+
+    errorCount++;
+    connectionState = 'error';
+
+    console.error(`[ExceptionBadge] SSE connection error (${errorCount}/${MAX_ERRORS}):`, error);
 
     // Check if connection is closed (readyState 2 = CLOSED)
     if (eventSource.readyState === EventSource.CLOSED) {
       console.warn('[ExceptionBadge] SSE connection closed by server');
-      // EventSource will attempt automatic reconnection
+
+      // Force close if too many errors to prevent reconnection
+      if (errorCount >= MAX_ERRORS) {
+        console.error('[ExceptionBadge] Maximum errors reached, closing connection permanently');
+        eventSource.close();
+        connectionState = 'disconnected';
+      }
     }
 
     // Fallback to 0 count on error (safe default)
     onUpdate(0);
+
+    // Reset error count after timeout to allow future reconnections
+    setTimeout(() => {
+      if (errorCount > 0) {
+        errorCount = Math.max(0, errorCount - 1);
+      }
+    }, ERROR_RESET_TIMEOUT);
   });
 
   // Return cleanup function
   return () => {
+    isCleaningUp = true;
     console.log('[ExceptionBadge] Disconnecting from SSE endpoint');
     eventSource.close();
+    connectionState = 'disconnected';
   };
 }
 

@@ -64,6 +64,8 @@ const Sidebar = () => {
         // Only connect if user has ADMIN or SECCHAMPION role (can approve exceptions)
         const canApprove = userRoles.includes('ADMIN') || userRoles.includes('SECCHAMPION');
         if (!canApprove) {
+            // Reset count if user doesn't have permission
+            setPendingExceptionCount(0);
             return;
         }
 
@@ -72,9 +74,11 @@ const Sidebar = () => {
             setPendingExceptionCount(count);
         });
 
-        // Cleanup on unmount
-        return () => disconnect();
-    }, [userRoles]); // Re-connect if user roles change
+        // Cleanup on unmount or when roles change
+        return () => {
+            disconnect();
+        };
+    }, [userRoles.join(',')]); // Re-connect only when actual role membership changes
 
     return (
         <nav id="sidebar" className="bg-light border-end">

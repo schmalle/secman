@@ -17,28 +17,28 @@
     "test:all": "npm run test:checkin && npm run test:e2e"
   },
   "dependencies": {
-    "@astrojs/node": "^9.4.4",
+    "@astrojs/node": "^9.5.0",
     "@astrojs/react": "^4.4.0",
     "@popperjs/core": "^2.11.8",
-    "@types/react": "^19.1.12",
-    "@types/react-dom": "^19.1.9",
-    "astro": "^5.14.4",
-    "axios": "^1.12.0",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "astro": "^5.15.1",
+    "axios": "^1.12.2",
     "bootstrap": "^5.3.8",
     "bootstrap-icons": "^1.13.1",
     "date-fns": "^4.1.0",
     "exceljs": "^4.4.0",
-    "react": "^19.1.1",
-    "react-dom": "^19.1.1",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
     "react-markdown": "^10.1.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.56.1",
-    "@types/node": "^24.3.1",
-    "@typescript-eslint/eslint-plugin": "^8.31.0",
-    "@typescript-eslint/parser": "^8.31.0",
-    "eslint": "^9.21.0",
-    "eslint-plugin-react": "^7.37.4",
-    "eslint-plugin-react-hooks": "^5.1.0"
+    "@types/node": "^24.9.1",
+    "@typescript-eslint/eslint-plugin": "^8.46.2",
+    "@typescript-eslint/parser": "^8.46.2",
+    "eslint": "^9.38.0",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.0.1"
   }
 }

@@ -5,7 +5,7 @@
 **secman** - Security requirement and risk assessment management tool
 
 - Full-stack: Kotlin/Micronaut backend + Astro/React frontend
-- Tech: Micronaut 4.10, Kotlin 2.1, Astro 5.14, React 19, MariaDB 12
+- Tech: Micronaut 4.10, Kotlin 2.2, Astro 5.15, React 19, MariaDB 12
 - Purpose: Manage security requirements, norms, use cases, assets, and vulnerabilities
 
 ## Architecture
