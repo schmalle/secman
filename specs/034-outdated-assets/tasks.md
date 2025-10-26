@@ -24,9 +24,9 @@
 
 **Purpose**: Project initialization and basic structure verification
 
-- [ ] T001 Verify Micronaut dependencies for async execution in src/backendng/build.gradle.kts
-- [ ] T002 [P] Verify Reactor dependencies for SSE in src/backendng/build.gradle.kts
-- [ ] T003 [P] Verify frontend dependencies (Axios, EventSource polyfill) in src/frontend/package.json
+- [X] T001 Verify Micronaut dependencies for async execution in src/backendng/build.gradle.kts
+- [X] T002 [P] Verify Reactor dependencies for SSE in src/backendng/build.gradle.kts
+- [X] T003 [P] Verify frontend dependencies (Axios, EventSource polyfill) in src/frontend/package.json
 
 ---
 
@@ -38,14 +38,14 @@
 
 ### Domain Entities
 
-- [ ] T004 [P] Create OutdatedAssetMaterializedView entity in src/backendng/src/main/kotlin/com/secman/domain/OutdatedAssetMaterializedView.kt
-- [ ] T005 [P] Create MaterializedViewRefreshJob entity with RefreshJobStatus enum in src/backendng/src/main/kotlin/com/secman/domain/MaterializedViewRefreshJob.kt
-- [ ] T006 [P] Create RefreshProgressEvent domain event in src/backendng/src/main/kotlin/com/secman/domain/RefreshProgressEvent.kt
+- [X] T004 [P] Create OutdatedAssetMaterializedView entity in src/backendng/src/main/kotlin/com/secman/domain/OutdatedAssetMaterializedView.kt
+- [X] T005 [P] Create MaterializedViewRefreshJob entity with RefreshJobStatus enum in src/backendng/src/main/kotlin/com/secman/domain/MaterializedViewRefreshJob.kt
+- [X] T006 [P] Create RefreshProgressEvent domain event in src/backendng/src/main/kotlin/com/secman/domain/RefreshProgressEvent.kt
 
 ### Repositories
 
-- [ ] T007 [P] Create OutdatedAssetMaterializedViewRepository interface in src/backendng/src/main/kotlin/com/secman/repository/OutdatedAssetMaterializedViewRepository.kt
-- [ ] T008 [P] Create MaterializedViewRefreshJobRepository interface in src/backendng/src/main/kotlin/com/secman/repository/MaterializedViewRefreshJobRepository.kt
+- [X] T007 [P] Create OutdatedAssetMaterializedViewRepository interface in src/backendng/src/main/kotlin/com/secman/repository/OutdatedAssetMaterializedViewRepository.kt
+- [X] T008 [P] Create MaterializedViewRefreshJobRepository interface in src/backendng/src/main/kotlin/com/secman/repository/MaterializedViewRefreshJobRepository.kt
 
 ### Contract Tests for Entities
 
