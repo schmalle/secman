@@ -10,10 +10,13 @@ import com.secman.repository.OutdatedAssetMaterializedViewRepository
 import com.secman.repository.VulnerabilityRepository
 import io.micronaut.context.event.ApplicationEventPublisher
 import io.micronaut.data.model.Pageable
+import io.micronaut.data.model.Sort
 import io.micronaut.scheduling.annotation.Async
 import jakarta.inject.Singleton
 import jakarta.transaction.Transactional
 import org.slf4j.LoggerFactory
+import reactor.core.publisher.Flux
+import reactor.core.publisher.Sinks
 import java.time.LocalDateTime
 import java.time.temporal.ChronoUnit
 
@@ -41,6 +44,10 @@ open class MaterializedViewRefreshService(
     private val eventPublisher: ApplicationEventPublisher<RefreshProgressEvent>
 ) {
     private val log = LoggerFactory.getLogger(MaterializedViewRefreshService::class.java)
+
+    // SSE sink for broadcasting refresh progress to all connected clients
+    // Many().multicast() allows multiple subscribers
+    private val progressSink: Sinks.Many<RefreshProgressEvent> = Sinks.many().multicast().onBackpressureBuffer()
 
     companion object {
         private const val BATCH_SIZE = 1000
@@ -252,7 +259,48 @@ open class MaterializedViewRefreshService(
 
         eventPublisher.publishEvent(event)
 
+        // Also emit to SSE stream for real-time updates
+        progressSink.tryEmitNext(event)
+
         log.debug("Published progress event: jobId={}, status={}, progress={}%",
             job.id, job.status, job.progressPercentage)
+    }
+
+    /**
+     * Get SSE stream of refresh progress events
+     *
+     * Task: T050-T053
+     * User Story: US3 - Manual Refresh
+     *
+     * @return Flux of progress events
+     */
+    fun getProgressStream(): Flux<RefreshProgressEvent> {
+        return progressSink.asFlux()
+    }
+
+    /**
+     * Get currently running refresh job (if any)
+     *
+     * Task: T054-T055
+     * User Story: US3 - Manual Refresh
+     *
+     * @return Running job or null
+     */
+    fun getCurrentRunningJob(): MaterializedViewRefreshJob? {
+        return refreshJobRepository.findRunningJob().orElse(null)
+    }
+
+    /**
+     * Get recent refresh job history
+     *
+     * Task: T056-T057
+     * User Story: US3 - Manual Refresh
+     *
+     * @param limit Maximum number of jobs to return
+     * @return List of recent jobs, newest first
+     */
+    fun getRecentJobs(limit: Int = 10): List<MaterializedViewRefreshJob> {
+        val pageable = Pageable.from(0, limit, Sort.of(Sort.Order.desc("startedAt")))
+        return refreshJobRepository.findAll(pageable).content
     }
 }
