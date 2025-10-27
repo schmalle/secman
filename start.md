@@ -85,3 +85,11 @@ Development Configuration (localhost)
             openid:
               issuer: http://localhost:8080/realms/<your-realm-name>
 ```
+# Send notifications (production)
+  ./gradlew cli:run --args='send-notifications'
+
+  # Dry run with verbose logging
+  ./gradlew cli:run --args='send-notifications --dry-run --verbose'
+
+  # Only process outdated assets
+  ./gradlew cli:run --args='send-notifications --outdated-only'

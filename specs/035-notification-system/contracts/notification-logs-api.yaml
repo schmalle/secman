@@ -1,0 +1,334 @@
+openapi: 3.0.3
+info:
+  title: Notification Logs API
+  description: API for ADMIN users to view notification audit logs
+  version: 1.0.0
+  contact:
+    name: Secman Development Team
+
+servers:
+  - url: http://localhost:8080/api
+    description: Development server
+  - url: https://api.secman.example.com/api
+    description: Production server
+
+tags:
+  - name: notification-logs
+    description: Notification audit log management (ADMIN only)
+
+paths:
+  /notification-logs:
+    get:
+      summary: List notification logs
+      description: Retrieves paginated list of notification logs with optional filtering. ADMIN role required.
+      operationId: listNotificationLogs
+      tags:
+        - notification-logs
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          description: Page number (0-indexed)
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+        - name: size
+          in: query
+          description: Page size
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: notificationType
+          in: query
+          description: Filter by notification type
+          required: false
+          schema:
+            type: string
+            enum:
+              - OUTDATED_LEVEL1
+              - OUTDATED_LEVEL2
+              - NEW_VULNERABILITY
+        - name: status
+          in: query
+          description: Filter by delivery status
+          required: false
+          schema:
+            type: string
+            enum:
+              - SENT
+              - FAILED
+              - PENDING
+        - name: ownerEmail
+          in: query
+          description: Filter by owner email address
+          required: false
+          schema:
+            type: string
+            format: email
+        - name: startDate
+          in: query
+          description: Filter logs sent on or after this date (ISO 8601 format)
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: endDate
+          in: query
+          description: Filter logs sent on or before this date (ISO 8601 format)
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: sort
+          in: query
+          description: Sort field and direction
+          required: false
+          schema:
+            type: string
+            default: "sentAt,desc"
+            example: "sentAt,desc"
+      responses:
+        '200':
+          description: Logs retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationLogPageResponse'
+        '400':
+          description: Bad request - invalid query parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized - user not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - user does not have ADMIN role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /notification-logs/export:
+    get:
+      summary: Export notification logs to CSV
+      description: Exports filtered notification logs to CSV file. ADMIN role required.
+      operationId: exportNotificationLogs
+      tags:
+        - notification-logs
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: notificationType
+          in: query
+          description: Filter by notification type
+          required: false
+          schema:
+            type: string
+            enum:
+              - OUTDATED_LEVEL1
+              - OUTDATED_LEVEL2
+              - NEW_VULNERABILITY
+        - name: status
+          in: query
+          description: Filter by delivery status
+          required: false
+          schema:
+            type: string
+            enum:
+              - SENT
+              - FAILED
+              - PENDING
+        - name: ownerEmail
+          in: query
+          description: Filter by owner email address
+          required: false
+          schema:
+            type: string
+            format: email
+        - name: startDate
+          in: query
+          description: Filter logs sent on or after this date (ISO 8601 format)
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: endDate
+          in: query
+          description: Filter logs sent on or before this date (ISO 8601 format)
+          required: false
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: CSV file generated successfully
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+          headers:
+            Content-Disposition:
+              description: Filename for downloaded CSV
+              schema:
+                type: string
+                example: 'attachment; filename="notification-logs-2025-10-26.csv"'
+        '400':
+          description: Bad request - invalid query parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized - user not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - user does not have ADMIN role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from /api/auth/login (must have ADMIN role)
+
+  schemas:
+    NotificationLogPageResponse:
+      type: object
+      required:
+        - content
+        - totalElements
+        - totalPages
+        - currentPage
+        - pageSize
+      properties:
+        content:
+          type: array
+          description: Page of notification log entries
+          items:
+            $ref: '#/components/schemas/NotificationLogResponse'
+        totalElements:
+          type: integer
+          format: int64
+          description: Total number of logs matching filters
+          example: 150
+        totalPages:
+          type: integer
+          description: Total number of pages
+          example: 8
+        currentPage:
+          type: integer
+          description: Current page number (0-indexed)
+          example: 0
+        pageSize:
+          type: integer
+          description: Number of items per page
+          example: 20
+
+    NotificationLogResponse:
+      type: object
+      required:
+        - id
+        - assetName
+        - ownerEmail
+        - notificationType
+        - sentAt
+        - status
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Log entry ID
+          example: 1
+        assetId:
+          type: integer
+          format: int64
+          nullable: true
+          description: Asset ID (nullable if asset deleted)
+          example: 42
+        assetName:
+          type: string
+          description: Asset name at time of notification
+          example: "web-server-01"
+        ownerEmail:
+          type: string
+          format: email
+          description: Owner email at time of notification
+          example: "john.doe@example.com"
+        notificationType:
+          type: string
+          enum:
+            - OUTDATED_LEVEL1
+            - OUTDATED_LEVEL2
+            - NEW_VULNERABILITY
+          description: Type of notification sent
+          example: "OUTDATED_LEVEL1"
+        sentAt:
+          type: string
+          format: date-time
+          description: Timestamp when notification was sent
+          example: "2025-10-26T09:00:00Z"
+        status:
+          type: string
+          enum:
+            - SENT
+            - FAILED
+            - PENDING
+          description: Delivery status
+          example: "SENT"
+        errorMessage:
+          type: string
+          nullable: true
+          description: Error message if status is FAILED
+          example: "SMTP timeout: connection refused"
+
+    ErrorResponse:
+      type: object
+      required:
+        - message
+        - timestamp
+      properties:
+        message:
+          type: string
+          description: Human-readable error message
+          example: "Forbidden: ADMIN role required"
+        timestamp:
+          type: string
+          format: date-time
+          description: Timestamp when error occurred
+          example: "2025-10-26T10:30:00Z"
+        details:
+          type: string
+          description: Additional error details (optional)
+          example: "User has roles: [USER], required: [ADMIN]"

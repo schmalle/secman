@@ -49,6 +49,10 @@ dependencies {
     // Email
     implementation("io.micronaut.email:micronaut-email-javamail")
     implementation("org.eclipse.angus:angus-mail:2.0.5")
+
+    // Email templates (Thymeleaf) - Feature 035
+    implementation("io.micronaut.views:micronaut-views-thymeleaf")
+    implementation("org.thymeleaf:thymeleaf:3.1.3.RELEASE")
     
     // Serialization
     implementation("io.micronaut.serde:micronaut-serde-jackson")

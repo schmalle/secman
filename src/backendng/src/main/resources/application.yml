@@ -73,16 +73,26 @@ secman:
     # Encryption salt - MUST be overridden in production
     salt: ${SECMAN_ENCRYPTION_SALT:5c0744940b5c369b}
   email:
-    # Email delivery configuration
+    # SMTP configuration is stored in the database (email_config table)
+    # and managed via ADMIN UI. The following settings apply to all email operations.
+
+    # SMTP server settings (override via environment or database)
+    smtp-host: ${SMTP_HOST:smtp.example.com}
+    smtp-port: ${SMTP_PORT:587}
+    username: ${SMTP_USERNAME:noreply@secman.example.com}
+    password: ${SMTP_PASSWORD:changeme}
+    from-address: ${SMTP_FROM_ADDRESS:noreply@secman.example.com}
+    from-name: ${SMTP_FROM_NAME:Security Management System}
+    enable-tls: ${SMTP_ENABLE_TLS:true}
+
+    # Email delivery configuration (Feature 035: Notification System)
     retry:
-      max-attempts: 3
-      initial-delay: 30000  # 30 seconds
-      max-delay: 300000     # 5 minutes
-      backoff-multiplier: 2.0
+      max-retries: 3              # Number of retry attempts on failure
+      delay-between-retries-ms: 1000  # 1 second delay between retries
     # Email performance settings
     performance:
-      delivery-timeout: 30000  # 30 seconds
-      connection-timeout: 10000  # 10 seconds
+      connection-timeout-ms: 10000  # 10 seconds
+      read-timeout-ms: 30000        # 30 seconds
     # Notification settings
     notifications:
       batch-size: 50
