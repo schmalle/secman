@@ -28,10 +28,47 @@ const Sidebar = () => {
 
     const toggleRequirements = () => {
         setRequirementsExpanded(!requirementsExpanded);
+        // Collapse all other sections
+        setRiskManagementExpanded(false);
+        setVulnMenuOpen(false);
+        setIoMenuOpen(false);
+        setAdminMenuOpen(false);
     };
 
     const toggleRiskManagement = () => {
         setRiskManagementExpanded(!riskManagementExpanded);
+        // Collapse all other sections
+        setRequirementsExpanded(false);
+        setVulnMenuOpen(false);
+        setIoMenuOpen(false);
+        setAdminMenuOpen(false);
+    };
+
+    const toggleVulnManagement = () => {
+        setVulnMenuOpen(!vulnMenuOpen);
+        // Collapse all other sections
+        setRequirementsExpanded(false);
+        setRiskManagementExpanded(false);
+        setIoMenuOpen(false);
+        setAdminMenuOpen(false);
+    };
+
+    const toggleIoMenu = () => {
+        setIoMenuOpen(!ioMenuOpen);
+        // Collapse all other sections
+        setRequirementsExpanded(false);
+        setRiskManagementExpanded(false);
+        setVulnMenuOpen(false);
+        setAdminMenuOpen(false);
+    };
+
+    const toggleAdminMenu = () => {
+        setAdminMenuOpen(!adminMenuOpen);
+        // Collapse all other sections
+        setRequirementsExpanded(false);
+        setRiskManagementExpanded(false);
+        setVulnMenuOpen(false);
+        setIoMenuOpen(false);
     };
 
     // Check if user has admin role and access permissions
@@ -148,20 +185,6 @@ const Sidebar = () => {
                                         </a>
                                     </li>
                                 )}
-                                {canAccessReleases(userRoles) && (
-                                    <li>
-                                        <a href="/releases" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                            <i className="bi bi-archive me-2"></i> Releases
-                                        </a>
-                                    </li>
-                                )}
-                                {canAccessCompareReleases(userRoles) && (
-                                    <li>
-                                        <a href="/releases/compare" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                            <i className="bi bi-columns-gap me-2"></i> Compare Releases
-                                        </a>
-                                    </li>
-                                )}
                             </ul>
                         )}
                     </li>
@@ -213,7 +236,7 @@ const Sidebar = () => {
                 {hasVuln && (
                     <li>
                         <div
-                            onClick={() => setVulnMenuOpen(!vulnMenuOpen)}
+                            onClick={toggleVulnManagement}
                             className="sidebar-section-header-clickable d-flex align-items-center cursor-pointer"
                             style={{ cursor: 'pointer' }}
                         >
@@ -293,7 +316,7 @@ const Sidebar = () => {
                 {/* I/O Section */}
                 <li>
                     <div
-                        onClick={() => setIoMenuOpen(!ioMenuOpen)}
+                        onClick={toggleIoMenu}
                         className="sidebar-section-header-clickable d-flex align-items-center cursor-pointer"
                         style={{ cursor: 'pointer' }}
                     >
@@ -371,7 +394,7 @@ const Sidebar = () => {
                 {isAdmin && (
                     <li>
                         <div
-                            onClick={() => setAdminMenuOpen(!adminMenuOpen)}
+                            onClick={toggleAdminMenu}
                             className="sidebar-section-header-clickable d-flex align-items-center cursor-pointer"
                             style={{ cursor: 'pointer' }}
                         >
@@ -401,6 +424,20 @@ const Sidebar = () => {
                                         <i className="bi bi-diagram-3 me-2"></i> Scans
                                     </a>
                                 </li>
+                                {canAccessReleases(userRoles) && (
+                                    <li>
+                                        <a href="/releases" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                            <i className="bi bi-archive me-2"></i> Releases
+                                        </a>
+                                    </li>
+                                )}
+                                {canAccessCompareReleases(userRoles) && (
+                                    <li>
+                                        <a href="/releases/compare" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                            <i className="bi bi-columns-gap me-2"></i> Compare Releases
+                                        </a>
+                                    </li>
+                                )}
                                 <li>
                                     <a href="/notification-logs" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
                                         <i className="bi bi-envelope-paper me-2"></i> Notification Logs
