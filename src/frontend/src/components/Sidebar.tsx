@@ -358,7 +358,12 @@ const Sidebar = () => {
                         <i className="bi bi-funnel me-2"></i> Classification Tool
                     </a>
                 </li>
-                
+                <li>
+                    <a href="/notification-preferences" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                        <i className="bi bi-bell me-2"></i> Notifications
+                    </a>
+                </li>
+
                 {/* Admin section - expandable menu (only visible to admin users) */}
                 {isAdmin && (
                     <li>
@@ -386,6 +391,11 @@ const Sidebar = () => {
                                 <li>
                                     <a href="/workgroups" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
                                         <i className="bi bi-people-fill me-2"></i> Workgroups
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="/notification-logs" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-envelope-paper me-2"></i> Notification Logs
                                     </a>
                                 </li>
                             </ul>

@@ -1,0 +1,166 @@
+openapi: 3.0.3
+info:
+  title: Notification Preferences API
+  description: API for managing user notification preferences
+  version: 1.0.0
+  contact:
+    name: Secman Development Team
+
+servers:
+  - url: http://localhost:8080/api
+    description: Development server
+  - url: https://api.secman.example.com/api
+    description: Production server
+
+tags:
+  - name: notification-preferences
+    description: User notification preference management
+
+paths:
+  /notification-preferences:
+    get:
+      summary: Get current user's notification preferences
+      description: Retrieves the authenticated user's notification preferences. If no preferences exist, returns default values.
+      operationId: getUserPreferences
+      tags:
+        - notification-preferences
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Preferences retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPreferenceResponse'
+        '401':
+          description: Unauthorized - user not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      summary: Update current user's notification preferences
+      description: Updates the authenticated user's notification preferences. Creates preferences if they don't exist.
+      operationId: updateUserPreferences
+      tags:
+        - notification-preferences
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePreferenceRequest'
+      responses:
+        '200':
+          description: Preferences updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPreferenceResponse'
+        '400':
+          description: Bad request - invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized - user not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from /api/auth/login
+
+  schemas:
+    NotificationPreferenceResponse:
+      type: object
+      required:
+        - id
+        - userId
+        - enableNewVulnNotifications
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Preference record ID
+          example: 1
+        userId:
+          type: integer
+          format: int64
+          description: User ID this preference belongs to
+          example: 42
+        enableNewVulnNotifications:
+          type: boolean
+          description: Whether user wants to receive notifications for new vulnerabilities on their assets
+          example: true
+        lastVulnNotificationSentAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp of last new vulnerability notification sent to this user
+          example: "2025-10-25T14:30:00Z"
+        createdAt:
+          type: string
+          format: date-time
+          description: Preference creation timestamp
+          example: "2025-10-01T10:00:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          description: Preference last update timestamp
+          example: "2025-10-26T08:15:00Z"
+
+    UpdatePreferenceRequest:
+      type: object
+      required:
+        - enableNewVulnNotifications
+      properties:
+        enableNewVulnNotifications:
+          type: boolean
+          description: Whether user wants to receive notifications for new vulnerabilities on their assets
+          example: true
+
+    ErrorResponse:
+      type: object
+      required:
+        - message
+        - timestamp
+      properties:
+        message:
+          type: string
+          description: Human-readable error message
+          example: "Unauthorized access"
+        timestamp:
+          type: string
+          format: date-time
+          description: Timestamp when error occurred
+          example: "2025-10-26T10:30:00Z"
+        details:
+          type: string
+          description: Additional error details (optional)
+          example: "JWT token expired"

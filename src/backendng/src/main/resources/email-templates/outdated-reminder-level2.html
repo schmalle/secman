@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>URGENT: Immediate Action Required</title>
+    <style>
+        body { font-family: Arial, sans-serif; color: #333; background-color: #f5f5f5; margin: 0; padding: 0; }
+        .container { max-width: 600px; margin: 20px auto; background: #fff; padding: 20px; border-radius: 8px; }
+        .header { background-color: #dc3545; color: white; padding: 15px; border-radius: 4px; text-align: center; }
+        .severity-badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; margin-right: 5px; }
+        .critical { background-color: #dc3545; color: white; }
+        .high { background-color: #fd7e14; color: white; }
+        .medium { background-color: #ffc107; color: black; }
+        .low { background-color: #28a745; color: white; }
+        table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #f8f9fa; font-weight: bold; }
+        .cta-button { display: inline-block; padding: 12px 24px; background-color: #dc3545; color: white; text-decoration: none; border-radius: 4px; margin: 15px 0; }
+        .escalation-box { background-color: #f8d7da; border-left: 4px solid #dc3545; padding: 15px; margin: 15px 0; }
+        .consequences-box { background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 15px 0; }
+        .footer { color: #666; font-size: 12px; margin-top: 20px; border-top: 1px solid #ddd; padding-top: 15px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2>⚠️ URGENT: Immediate Action Required - Outdated Assets</h2>
+        </div>
+
+        <div class="escalation-box">
+            <h4 style="color: #721c24;">⚠️ This is an Escalated Reminder</h4>
+            <p style="color: #721c24;">
+                These <strong th:text="${totalCount}">5</strong> assets have been outdated for <strong>7+ days</strong> without remediation.
+                Immediate action is required to maintain security compliance and reduce organizational risk.
+            </p>
+        </div>
+
+        <p>Hello <span th:text="${recipientName} ?: 'Asset Owner'">Asset Owner</span>,</p>
+
+        <p>
+            This is a second reminder for <strong th:text="${totalCount}">5</strong> asset(s) that remain outdated.
+            These vulnerabilities pose continued risk to the organization.
+        </p>
+
+        <div style="background-color: #f8f9fa; padding: 15px; border-radius: 4px; margin: 15px 0;">
+            <h3>Severity Breakdown</h3>
+            <p>
+                <span class="severity-badge critical" th:if="${criticalCount > 0}">
+                    <span th:text="${criticalCount}">2</span> Critical
+                </span>
+                <span class="severity-badge high" th:if="${highCount > 0}">
+                    <span th:text="${highCount}">3</span> High
+                </span>
+                <span class="severity-badge medium" th:if="${mediumCount > 0}">
+                    <span th:text="${mediumCount}">5</span> Medium
+                </span>
+                <span class="severity-badge low" th:if="${lowCount > 0}">
+                    <span th:text="${lowCount}">1</span> Low
+                </span>
+            </p>
+        </div>
+
+        <h3>Affected Assets</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Asset Name</th>
+                    <th>Type</th>
+                    <th>Vulnerabilities</th>
+                    <th>Oldest Vuln Age</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr th:each="asset : ${assets}">
+                    <td th:text="${asset.name}">web-server-01</td>
+                    <td th:text="${asset.type}">SERVER</td>
+                    <td th:text="${asset.vulnerabilityCount}">8</td>
+                    <td>
+                        <span th:text="${asset.oldestVulnDays}">45</span> days
+                        <span style="color: #666; font-size: 12px;" th:text="'(' + ${asset.oldestVulnId} + ')'">(CVE-2024-1234)</span>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div style="text-align: center; margin: 25px 0;">
+            <a th:href="${dashboardUrl}" class="cta-button">Take Action Now →</a>
+        </div>
+
+        <div class="consequences-box">
+            <h4 style="color: #856404;">Potential Consequences</h4>
+            <ul>
+                <li>Increased risk of security breach or data compromise</li>
+                <li>Non-compliance with security policies and regulatory requirements</li>
+                <li>Possible escalation to senior management and security leadership</li>
+                <li>Audit findings and remediation mandates</li>
+            </ul>
+        </div>
+
+        <p style="color: #dc3545; font-weight: bold; font-size: 14px;">
+            IMPORTANT: Continued delays in addressing these vulnerabilities may result in formal
+            escalation and mandatory remediation actions.
+        </p>
+
+        <div class="footer">
+            <p>
+                This is an automated notification from the Security Management System.<br>
+                If you have questions, please contact the security team immediately.<br>
+                <em>Do not reply to this email.</em>
+            </p>
+        </div>
+    </div>
+</body>
+</html>

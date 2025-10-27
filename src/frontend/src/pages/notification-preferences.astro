@@ -1,0 +1,28 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Notification Preferences">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-12">
+                <h1 class="mt-4 mb-4">Notification Preferences</h1>
+
+                <div id="notification-preferences-container"></div>
+            </div>
+        </div>
+    </div>
+</Layout>
+
+<script>
+    import { createRoot } from 'react-dom/client';
+    import { createElement } from 'react';
+    import NotificationPreferences from '../components/NotificationPreferences';
+
+    // Mount React component
+    const container = document.getElementById('notification-preferences-container');
+    if (container) {
+        const root = createRoot(container);
+        root.render(createElement(NotificationPreferences));
+    }
+</script>

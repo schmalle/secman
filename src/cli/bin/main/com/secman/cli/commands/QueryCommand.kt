@@ -2,6 +2,7 @@ package com.secman.cli.commands
 
 import com.secman.cli.config.ConfigLoader
 import com.secman.cli.export.ExportService
+import com.secman.cli.service.VulnerabilityStorageService
 import com.secman.crowdstrike.auth.CrowdStrikeAuthService
 import com.secman.crowdstrike.client.CrowdStrikeApiClient
 import com.secman.crowdstrike.client.CrowdStrikeApiClientImpl
@@ -14,16 +15,17 @@ import java.io.File
 /**
  * Query command for CrowdStrike vulnerabilities
  *
- * Usage (future with Picocli):
- *   secman query <hostname> [options]
+ * Usage:
+ *   secman query --hostname <hostname> [options]
  *
  * Functionality:
  * - Query CrowdStrike Falcon API for vulnerabilities
  * - Filter by severity and product
  * - Support pagination
  * - Export to JSON or CSV
+ * - Optionally save to database (--save flag)
  *
- * Related to: Feature 023-create-in-the
+ * Related to: Feature 023-create-in-the, 032-servers-query-import
  * Task: T049, T057-T060
  */
 class QueryCommand {
@@ -32,6 +34,7 @@ class QueryCommand {
     private val exportService = ExportService()
     private val appContext = ApplicationContext.run()
     private val apiClient: CrowdStrikeApiClient = appContext.getBean(CrowdStrikeApiClient::class.java)
+    private val storageService: VulnerabilityStorageService = appContext.getBean(VulnerabilityStorageService::class.java)
 
     var hostname: String = ""
     var outputPath: String? = null
@@ -43,6 +46,10 @@ class QueryCommand {
     var clientId: String? = null
     var clientSecret: String? = null
     var verbose: Boolean = false
+    var save: Boolean = false  // New: save to database flag
+    var backendUrl: String = "http://localhost:8080"  // New: backend API URL
+    var username: String? = null  // Backend username for authentication
+    var password: String? = null  // Backend password for authentication
 
     fun execute(): Int {
         return try {
@@ -72,11 +79,15 @@ class QueryCommand {
 
             val response = apiClient.queryAllVulnerabilities(hostname, config, limit)
 
-            // Filter by severity if specified
+            // Filter by severity if specified (supports comma-separated values)
             val filteredByServerity = if (severity != null) {
+                val severityLevels = severity!!.split(",").map { it.trim().lowercase() }
+                if (verbose) {
+                    System.out.println("Filtering by severity: ${severityLevels.joinToString(", ")}")
+                }
                 response.copy(
                     vulnerabilities = response.vulnerabilities.filter {
-                        it.severity.lowercase() == severity!!.lowercase()
+                        severityLevels.contains(it.severity.lowercase())
                     }
                 )
             } else {
@@ -98,6 +109,64 @@ class QueryCommand {
             val finalResponse = filteredByProduct
 
             System.out.println("Total vulnerabilities found: ${finalResponse.vulnerabilities.size}")
+
+            // Show severity breakdown if verbose
+            if (verbose && finalResponse.vulnerabilities.isNotEmpty()) {
+                val severityCount = finalResponse.vulnerabilities
+                    .groupBy { it.severity }
+                    .mapValues { it.value.size }
+                    .toList()
+                    .sortedByDescending { it.second }
+
+                System.out.println("\nSeverity breakdown:")
+                severityCount.forEach { (sev, count) ->
+                    System.out.println("  - $sev: $count")
+                }
+            }
+
+            // Save to database if --save flag is specified
+            if (save && finalResponse.vulnerabilities.isNotEmpty()) {
+                System.out.println("\nSaving to database: $backendUrl")
+
+                // Authenticate with backend if credentials provided
+                var authToken: String? = null
+                if (username != null && password != null) {
+                    System.out.println("Authenticating as: $username")
+                    authToken = storageService.authenticate(username!!, password!!, backendUrl)
+
+                    if (authToken == null) {
+                        System.err.println("❌ Authentication failed. Please check your credentials.")
+                        return 1
+                    }
+                    System.out.println("✅ Authentication successful")
+                } else {
+                    System.out.println("⚠️  No credentials provided. Attempting unauthenticated save...")
+                    System.out.println("   Use --username and --password to authenticate")
+                }
+
+                val saveResult = storageService.storeVulnerabilities(
+                    hostname = hostname,
+                    vulnerabilities = finalResponse.vulnerabilities,
+                    backendUrl = backendUrl,
+                    authToken = authToken
+                )
+
+                if (saveResult.errors.isNotEmpty()) {
+                    System.err.println("❌ Save failed:")
+                    saveResult.errors.forEach { error ->
+                        System.err.println("   - $error")
+                    }
+                    return 1
+                }
+
+                System.out.println("✅ Save successful!")
+                System.out.println("  - Asset: ${if (saveResult.assetsCreated > 0) "CREATED" else "UPDATED"}")
+                System.out.println("  - Vulnerabilities saved: ${saveResult.stored}")
+                System.out.println("  - Vulnerabilities skipped: ${saveResult.skipped}")
+                System.out.println("  - Message: ${saveResult.message}")
+            } else if (save && finalResponse.vulnerabilities.isEmpty()) {
+                System.out.println("\n⚠️  No vulnerabilities to save")
+            }
 
             // Export results if output file is specified
             if (outputFile != null && finalResponse.vulnerabilities.isNotEmpty()) {

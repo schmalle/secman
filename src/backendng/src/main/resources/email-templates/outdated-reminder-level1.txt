@@ -1,0 +1,37 @@
+ACTION REQUESTED: OUTDATED ASSETS DETECTED
+===========================================
+
+Hello [(${recipientName} ?: 'Asset Owner')],
+
+We have identified [(${totalCount})] asset(s) under your ownership that have vulnerabilities
+exceeding the acceptable remediation timeframe. Please review and address these vulnerabilities
+at your earliest convenience.
+
+SEVERITY BREAKDOWN
+------------------
+Critical: [(${criticalCount})]
+High: [(${highCount})]
+Medium: [(${mediumCount})]
+Low: [(${lowCount})]
+
+AFFECTED ASSETS
+---------------
+[# th:each="asset : ${assets}"]
+- [(${asset.name})] ([(${asset.type})]) - [(${asset.vulnerabilityCount})] vulnerabilities,
+  oldest: [(${asset.oldestVulnDays})] days ([(${asset.oldestVulnId})])
+[/]
+
+RECOMMENDED ACTIONS
+-------------------
+1. Review the vulnerabilities for each asset in the dashboard: [(${dashboardUrl})]
+2. Prioritize remediation based on severity and exploitability
+3. Apply patches or implement mitigations within 7 days
+4. Document any exceptions if remediation is not feasible
+
+NOTE: If these assets remain outdated after 7 days, you will receive an escalated reminder.
+Please address these vulnerabilities promptly to maintain compliance.
+
+---
+This is an automated notification from the Security Management System.
+If you have questions, please contact the security team.
+Do not reply to this email.
