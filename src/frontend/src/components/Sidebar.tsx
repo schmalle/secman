@@ -145,6 +145,15 @@ const Sidebar = () => {
                     </a>
                 </li>
 
+                {/* Vulnerability Statistics Lense - Quick access for VULN/ADMIN users */}
+                {hasVuln && (
+                    <li>
+                        <a href="/vulnerability-statistics" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                            <i className="bi bi-bar-chart-line me-2"></i> Vuln Statistics
+                        </a>
+                    </li>
+                )}
+
                 {/* REQUIREMENTS Section - ADMIN, REQ, or SECCHAMPION only (Feature: 025-role-based-access-control) */}
                 {hasReq && (
                     <li>
@@ -284,6 +293,11 @@ const Sidebar = () => {
                                 <li>
                                     <a href="/outdated-assets" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
                                         <i className="bi bi-hourglass-split me-2"></i> Outdated Assets
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="/vulnerability-statistics" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-bar-chart-line me-2"></i> Lense
                                     </a>
                                 </li>
                                 <li>
