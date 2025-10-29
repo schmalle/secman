@@ -62,6 +62,10 @@ micronaut:
         access:
           - isAuthenticated()
       - pattern: "/api/**"
+        http-method: OPTIONS
+        access:
+          - isAnonymous()
+      - pattern: "/api/**"
         access:
           - isAuthenticated()
 

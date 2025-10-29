@@ -308,6 +308,8 @@ npm test; npm run dev
 ## Active Technologies
 - Kotlin 2.2.21 / Java 21 (backend), Python 3.11+ (CLI), Astro 5.14 + React 19 (frontend) + Micronaut 4.10, Hibernate JPA, MariaDB 11.4, Apache POI 5.3, JavaMail API (SMTP), Bootstrap 5.3, Axios (035-notification-system)
 - MariaDB 11.4 (3 new tables: notification_preference, notification_log, asset_reminder_state) (035-notification-system)
+- Backend: Kotlin 2.2.21 / Java 21; Frontend: Astro 5.14 + React 19 + Backend: Micronaut 4.10, Hibernate JPA; Frontend: React 19, Chart.js (or Recharts) for visualizations, Axios (036-vuln-stats-lense)
+- MariaDB 11.4 (existing Vulnerability and Asset tables; no new tables required) (036-vuln-stats-lense)
 
 ## Recent Changes
 - 035-notification-system: Added Kotlin 2.2.21 / Java 21 (backend), Python 3.11+ (CLI), Astro 5.14 + React 19 (frontend) + Micronaut 4.10, Hibernate JPA, MariaDB 11.4, Apache POI 5.3, JavaMail API (SMTP), Bootstrap 5.3, Axios
