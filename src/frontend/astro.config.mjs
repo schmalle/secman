@@ -16,6 +16,9 @@ export default defineConfig({
   },
   vite: {
     server: {
+        allowedHosts: [
+            '*'
+        ],
       proxy: {
         "/api": {
           target: "http://localhost:8080",
