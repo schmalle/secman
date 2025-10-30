@@ -129,13 +129,6 @@ data class ExceptionRequestAuditLog(
     @Size(max = 45)
     var clientIp: String? = null
 ) {
-    @PrePersist
-    fun onCreate() {
-        if (timestamp == null) {
-            timestamp = LocalDateTime.now()
-        }
-    }
-
     override fun toString(): String {
         return "ExceptionRequestAuditLog(id=$id, requestId=$requestId, eventType=$eventType, " +
                 "actor='$actorUsername', oldState='$oldState', newState='$newState', " +

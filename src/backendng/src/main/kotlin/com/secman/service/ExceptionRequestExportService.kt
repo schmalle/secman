@@ -95,9 +95,9 @@ open class ExceptionRequestExportService(
             return outputStream
 
         } finally {
-            // CRITICAL: Dispose workbook to clean up temp files
-            workbook.dispose()
-            logger.debug("SXSSFWorkbook disposed, temp files cleaned")
+            // CRITICAL: Close workbook to clean up temp files
+            workbook.close()
+            logger.debug("SXSSFWorkbook closed, temp files cleaned")
         }
     }
 

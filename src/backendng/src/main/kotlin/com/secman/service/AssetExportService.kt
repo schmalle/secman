@@ -108,9 +108,9 @@ class AssetExportService(
             return outputStream
 
         } finally {
-            // CRITICAL: Dispose workbook to clean up temp files
-            workbook.dispose()
-            log.debug("SXSSFWorkbook disposed, temp files cleaned")
+            // CRITICAL: Close workbook to clean up temp files
+            workbook.close()
+            log.debug("SXSSFWorkbook closed, temp files cleaned")
         }
     }
 

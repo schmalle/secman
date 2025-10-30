@@ -34,7 +34,6 @@ class ValidationExceptionHandler : ExceptionHandler<ConstraintViolationException
                 when {
                     value is String && value.length > 100 -> "${value.take(100)}... (${value.length} chars)"
                     value is String && value.isBlank() -> "\"\" (blank string)"
-                    value == null -> "null"
                     else -> value.toString()
                 }
             } ?: "null"

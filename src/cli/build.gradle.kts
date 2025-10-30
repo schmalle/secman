@@ -12,13 +12,19 @@ group = "com.secman.cli"
 dependencies {
     // Shared CrowdStrike Module
     implementation(project(":shared"))
-    
+
+    // Backend Module (for NotificationService, repositories)
+    implementation(project(":backendng"))
+
     // Micronaut Core
     implementation("io.micronaut:micronaut-runtime")
     implementation("io.micronaut.kotlin:micronaut-kotlin-runtime")
     implementation("io.micronaut:micronaut-http-client")
     implementation("io.micronaut:micronaut-context")
-    
+
+    // Micronaut Data (required for Pageable and repository interfaces)
+    implementation("io.micronaut.data:micronaut-data-hibernate-jpa")
+
     // Picocli for CLI
     implementation("info.picocli:picocli:4.7.5")
     implementation("io.micronaut.picocli:micronaut-picocli")
