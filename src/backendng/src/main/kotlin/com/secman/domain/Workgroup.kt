@@ -38,6 +38,17 @@ data class Workgroup(
     var description: String? = null,
 
     /**
+     * Criticality classification level for this workgroup
+     * Feature 039: Asset and Workgroup Criticality Classification
+     * - NOT NULL with default MEDIUM
+     * - Assets inherit this criticality unless they have an explicit override
+     * - Higher criticality workgroups take precedence when asset belongs to multiple workgroups
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "criticality", nullable = false, length = 20)
+    var criticality: Criticality = Criticality.MEDIUM,
+
+    /**
      * Many-to-many relationship with User
      * Users can belong to 0..n workgroups
      * Workgroups can have 0..n users

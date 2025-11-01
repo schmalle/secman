@@ -5,6 +5,7 @@ interface Workgroup {
   id: number;
   name: string;
   description?: string;
+  criticality: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'NA';
   userCount: number;
   assetCount: number;
   createdAt: string;
@@ -31,9 +32,10 @@ const WorkgroupManagement: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingWorkgroup, setEditingWorkgroup] = useState<Workgroup | null>(null);
-  const [formData, setFormData] = useState<{ name: string; description: string }>({
+  const [formData, setFormData] = useState<{ name: string; description: string; criticality: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'NA' }>({
     name: '',
-    description: ''
+    description: '',
+    criticality: 'MEDIUM'
   });
   const [showAssignUsers, setShowAssignUsers] = useState(false);
   const [showAssignAssets, setShowAssignAssets] = useState(false);
@@ -115,7 +117,11 @@ const WorkgroupManagement: React.FC = () => {
 
   const handleEdit = (workgroup: Workgroup) => {
     setEditingWorkgroup(workgroup);
-    setFormData({ name: workgroup.name, description: workgroup.description || '' });
+    setFormData({
+      name: workgroup.name,
+      description: workgroup.description || '',
+      criticality: workgroup.criticality
+    });
     setShowForm(true);
   };
 
@@ -216,7 +222,7 @@ const WorkgroupManagement: React.FC = () => {
   };
 
   const resetForm = () => {
-    setFormData({ name: '', description: '' });
+    setFormData({ name: '', description: '', criticality: 'MEDIUM' });
     setEditingWorkgroup(null);
     setShowForm(false);
   };
@@ -276,6 +282,22 @@ const WorkgroupManagement: React.FC = () => {
                       maxLength={512}
                     />
                     <small className="text-muted">Optional, max 512 characters</small>
+                  </div>
+                  <div className="mb-3">
+                    <label className="form-label">Criticality *</label>
+                    <select
+                      className="form-select"
+                      value={formData.criticality}
+                      onChange={(e) => setFormData({ ...formData, criticality: e.target.value as 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'NA' })}
+                      required
+                    >
+                      <option value="CRITICAL">CRITICAL</option>
+                      <option value="HIGH">HIGH</option>
+                      <option value="MEDIUM">MEDIUM</option>
+                      <option value="LOW">LOW</option>
+                      <option value="NA">N/A</option>
+                    </select>
+                    <small className="text-muted">Security criticality classification for this workgroup</small>
                   </div>
                 </div>
                 <div className="modal-footer">
@@ -377,6 +399,7 @@ const WorkgroupManagement: React.FC = () => {
             <tr>
               <th>Name</th>
               <th>Description</th>
+              <th>Criticality</th>
               <th>Users</th>
               <th>Assets</th>
               <th>Created</th>
@@ -386,22 +409,31 @@ const WorkgroupManagement: React.FC = () => {
           <tbody>
             {workgroups.length === 0 ? (
               <tr>
-                <td colSpan={6} className="text-center text-muted">
+                <td colSpan={7} className="text-center text-muted">
                   No workgroups found. Create one to get started.
                 </td>
               </tr>
             ) : (
-              workgroups.map(workgroup => (
-                <tr key={workgroup.id}>
-                  <td><strong>{workgroup.name}</strong></td>
-                  <td>{workgroup.description || <span className="text-muted">-</span>}</td>
-                  <td>
-                    <span className="badge bg-info">{workgroup.userCount}</span>
-                  </td>
-                  <td>
-                    <span className="badge bg-success">{workgroup.assetCount}</span>
-                  </td>
-                  <td>{new Date(workgroup.createdAt).toLocaleDateString()}</td>
+              workgroups.map(workgroup => {
+                const criticalityColor = workgroup.criticality === 'CRITICAL' ? 'danger' :
+                                        workgroup.criticality === 'HIGH' ? 'warning' :
+                                        workgroup.criticality === 'MEDIUM' ? 'info' :
+                                        workgroup.criticality === 'LOW' ? 'secondary' : 'light';
+                const criticalityText = workgroup.criticality === 'NA' ? 'N/A' : workgroup.criticality;
+                return (
+                  <tr key={workgroup.id}>
+                    <td><strong>{workgroup.name}</strong></td>
+                    <td>{workgroup.description || <span className="text-muted">-</span>}</td>
+                    <td>
+                      <span className={`badge bg-${criticalityColor} ${criticalityColor === 'light' ? 'text-dark' : ''}`}>{criticalityText}</span>
+                    </td>
+                    <td>
+                      <span className="badge bg-info">{workgroup.userCount}</span>
+                    </td>
+                    <td>
+                      <span className="badge bg-success">{workgroup.assetCount}</span>
+                    </td>
+                    <td>{new Date(workgroup.createdAt).toLocaleDateString()}</td>
                   <td>
                     <div className="btn-group btn-group-sm">
                       <button
@@ -435,7 +467,8 @@ const WorkgroupManagement: React.FC = () => {
                     </div>
                   </td>
                 </tr>
-              ))
+                );
+              })
             )}
           </tbody>
         </table>

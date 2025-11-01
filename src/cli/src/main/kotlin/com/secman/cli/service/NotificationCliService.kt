@@ -106,6 +106,9 @@ class NotificationCliService(
                 else -> "LOW"
             }
 
+            // Feature 039: Get asset criticality (effective criticality includes inheritance)
+            val criticality = asset.getEffectiveCriticality().name
+
             results.add(
                 NotificationService.OutdatedAssetData(
                     assetId = view.assetId,
@@ -115,7 +118,8 @@ class NotificationCliService(
                     vulnerabilityCount = view.totalOverdueCount,
                     oldestVulnDays = view.oldestVulnDays,
                     oldestVulnId = view.oldestVulnId ?: "unknown",
-                    severity = severity
+                    severity = severity,
+                    criticality = criticality
                 )
             )
         }

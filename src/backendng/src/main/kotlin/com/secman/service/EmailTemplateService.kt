@@ -35,13 +35,17 @@ class EmailTemplateService(
         val preferencesUrl: String? = null
     )
 
+    /**
+     * Feature 039: Added criticality field for asset classification display
+     */
     data class AssetEmailData(
         val id: Long,
         val name: String,
         val type: String,
         val vulnerabilityCount: Int,
         val oldestVulnDays: Int,
-        val oldestVulnId: String
+        val oldestVulnId: String,
+        val criticality: String // CRITICAL, HIGH, MEDIUM, LOW (Feature 039)
     )
 
     /**
@@ -121,10 +125,18 @@ class EmailTemplateService(
         if (context.lowCount > 0) sb.appendLine("Low: ${context.lowCount}")
 
         sb.appendLine()
-        sb.appendLine("AFFECTED ASSETS")
+        sb.appendLine("AFFECTED ASSETS (sorted by criticality)")
         sb.appendLine("-" .repeat(20))
         context.assets.take(10).forEach { asset ->
-            sb.appendLine("- ${asset.name} (${asset.type}) - ${asset.vulnerabilityCount} vulnerabilities, oldest: ${asset.oldestVulnDays} days (${asset.oldestVulnId})")
+            // Feature 039: Display asset criticality
+            val criticalityLabel = when(asset.criticality) {
+                "CRITICAL" -> "[🔴 CRITICAL]"
+                "HIGH" -> "[🟠 HIGH]"
+                "MEDIUM" -> "[🔵 MEDIUM]"
+                "LOW" -> "[⚪ LOW]"
+                else -> ""
+            }
+            sb.appendLine("- $criticalityLabel ${asset.name} (${asset.type}) - ${asset.vulnerabilityCount} vulnerabilities, oldest: ${asset.oldestVulnDays} days (${asset.oldestVulnId})")
         }
         if (context.assets.size > 10) {
             sb.appendLine("... and ${context.assets.size - 10} more assets")
