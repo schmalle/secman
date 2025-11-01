@@ -34,7 +34,8 @@ open class UserController(
         val email: String,
         val password: String,
         val roles: List<String>? = null,
-        val workgroupIds: List<Long>? = null
+        val workgroupIds: List<Long>? = null,
+        val mfaEnabled: Boolean? = null
     )
 
     @Serdeable
@@ -43,7 +44,8 @@ open class UserController(
         val email: String? = null,
         val password: String? = null,
         val roles: List<String>? = null,
-        val workgroupIds: List<Long>? = null
+        val workgroupIds: List<Long>? = null,
+        val mfaEnabled: Boolean? = null
     )
 
     @Serdeable
@@ -52,6 +54,7 @@ open class UserController(
         val username: String,
         val email: String,
         val roles: List<String>,
+        val mfaEnabled: Boolean,
         val createdAt: String?,
         val updatedAt: String?,
         val workgroups: List<WorkgroupSummary>? = null,
@@ -64,6 +67,7 @@ open class UserController(
                     username = user.username,
                     email = user.email,
                     roles = user.roles.map { it.name },
+                    mfaEnabled = user.mfaEnabled,
                     createdAt = user.createdAt?.toString(),
                     updatedAt = user.updatedAt?.toString(),
                     workgroups = if (includeWorkgroups) {
@@ -131,7 +135,8 @@ open class UserController(
                 username = request.username,
                 email = request.email,
                 passwordHash = passwordEncoder.encode(request.password),
-                roles = roles
+                roles = roles,
+                mfaEnabled = request.mfaEnabled ?: false
             )
 
             val savedUser = userRepository.save(user)
@@ -218,10 +223,14 @@ open class UserController(
                 }
             }
 
-            request.password?.let { 
+            request.password?.let {
                 if (it.isNotBlank()) {
                     user.passwordHash = passwordEncoder.encode(it)
                 }
+            }
+
+            request.mfaEnabled?.let {
+                user.mfaEnabled = it
             }
 
             request.roles?.let { roleStrings ->
