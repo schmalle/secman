@@ -102,6 +102,17 @@ data class Asset(
     var osVersion: String? = null,
 
     /**
+     * Explicit criticality override for this asset
+     * Feature 039: Asset and Workgroup Criticality Classification
+     * - nullable: null means inherit from workgroups
+     * - non-null: explicit override takes precedence over workgroup criticality
+     * - See effectiveCriticality for computed value
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "criticality", nullable = true, length = 20)
+    var criticality: Criticality? = null,
+
+    /**
      * Many-to-many relationship with Workgroup
      * Feature: 008-create-an-additional (Workgroup-Based Access Control)
      * Assets can belong to 0..n workgroups
@@ -163,6 +174,23 @@ data class Asset(
     @OneToMany(mappedBy = "asset", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
     var vulnerabilities: MutableList<Vulnerability> = mutableListOf()
 ) {
+    /**
+     * Computed effective criticality for this asset
+     * Feature 039: Asset and Workgroup Criticality Classification
+     *
+     * Calculation logic:
+     * 1. If asset has explicit criticality override -> return it
+     * 2. If asset belongs to 1+ workgroups -> return highest workgroup criticality (excluding N/A)
+     * 3. If all workgroups are N/A or asset has no workgroups -> default to MEDIUM
+     *
+     * Not persisted to database, computed on-demand
+     */
+    fun getEffectiveCriticality(): Criticality {
+        return criticality ?: workgroups
+            .filter { it.criticality != Criticality.NA }  // Filter out N/A workgroups
+            .maxByOrNull { it.criticality }?.criticality ?: Criticality.MEDIUM
+    }
+
     @PrePersist
     fun onCreate() {
         val now = LocalDateTime.now()

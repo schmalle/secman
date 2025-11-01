@@ -1,6 +1,7 @@
 package com.secman.service
 
 import com.secman.domain.Asset
+import com.secman.domain.Criticality
 import com.secman.domain.User
 import com.secman.domain.Workgroup
 import com.secman.repository.AssetRepository
@@ -25,14 +26,20 @@ open class WorkgroupService(
     /**
      * Create a new workgroup with validation
      * FR-001, FR-004, FR-006: Create with unique name (case-insensitive)
+     * Feature 039: Accept criticality parameter (defaults to MEDIUM if not provided)
      *
      * @param name Workgroup name (1-100 chars, alphanumeric + spaces + hyphens)
      * @param description Optional description (max 512 chars)
+     * @param criticality Criticality level (defaults to MEDIUM)
      * @return Created workgroup
      * @throws IllegalArgumentException if name already exists or validation fails
      */
     @Transactional
-    open fun createWorkgroup(name: String, description: String? = null): Workgroup {
+    open fun createWorkgroup(
+        name: String,
+        description: String? = null,
+        criticality: Criticality = Criticality.MEDIUM
+    ): Workgroup {
         // Validate name uniqueness (case-insensitive)
         if (workgroupRepository.existsByNameIgnoreCase(name)) {
             throw IllegalArgumentException("Workgroup name already exists (case-insensitive): $name")
@@ -43,24 +50,32 @@ open class WorkgroupService(
 
         val workgroup = Workgroup(
             name = name,
-            description = description
+            description = description,
+            criticality = criticality
         )
 
         return workgroupRepository.save(workgroup)
     }
 
     /**
-     * Update workgroup name and/or description
+     * Update workgroup name and/or description and/or criticality
      * FR-002: Allow administrators to edit workgroups
+     * Feature 039: Accept criticality parameter
      *
      * @param id Workgroup ID
      * @param name New name (optional, must be unique if provided)
      * @param description New description (optional)
+     * @param criticality New criticality level (optional)
      * @return Updated workgroup
      * @throws IllegalArgumentException if workgroup not found or name already exists
      */
     @Transactional
-    open fun updateWorkgroup(id: Long, name: String? = null, description: String? = null): Workgroup {
+    open fun updateWorkgroup(
+        id: Long,
+        name: String? = null,
+        description: String? = null,
+        criticality: Criticality? = null
+    ): Workgroup {
         val workgroup = workgroupRepository.findById(id).orElseThrow {
             IllegalArgumentException("Workgroup not found: $id")
         }
@@ -75,6 +90,10 @@ open class WorkgroupService(
 
         if (description != null) {
             workgroup.description = description
+        }
+
+        if (criticality != null) {
+            workgroup.criticality = criticality
         }
 
         return workgroupRepository.update(workgroup)

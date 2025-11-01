@@ -120,6 +120,7 @@ class NotificationService(
 
     /**
      * Send outdated reminder email to an asset owner
+     * Feature 039: Sort assets by criticality (CRITICAL first) for prioritized display
      */
     private fun sendOutdatedReminder(
         ownerEmail: String,
@@ -129,18 +130,23 @@ class NotificationService(
         // Calculate severity breakdown
         val severityCounts = assets.groupingBy { it.severity }.eachCount()
 
+        // Feature 039: Sort assets by criticality (CRITICAL > HIGH > MEDIUM > LOW)
+        val criticalityOrder = mapOf("CRITICAL" to 0, "HIGH" to 1, "MEDIUM" to 2, "LOW" to 3)
+        val sortedAssets = assets.sortedBy { criticalityOrder[it.criticality] ?: 999 }
+
         // Build email context
         val context = EmailTemplateService.EmailContext(
             recipientEmail = ownerEmail,
             recipientName = null, // TODO: Look up from User table
-            assets = assets.map { asset ->
+            assets = sortedAssets.map { asset ->
                 EmailTemplateService.AssetEmailData(
                     id = asset.assetId,
                     name = asset.assetName,
                     type = asset.assetType,
                     vulnerabilityCount = asset.vulnerabilityCount,
                     oldestVulnDays = asset.oldestVulnDays,
-                    oldestVulnId = asset.oldestVulnId
+                    oldestVulnId = asset.oldestVulnId,
+                    criticality = asset.criticality // Feature 039: Include criticality
                 )
             },
             notificationType = notificationType,
@@ -201,6 +207,7 @@ class NotificationService(
 
     /**
      * Data class representing an outdated asset with owner information
+     * Feature 039: Added criticality field for asset prioritization
      */
     data class OutdatedAssetData(
         val assetId: Long,
@@ -210,7 +217,8 @@ class NotificationService(
         val vulnerabilityCount: Int,
         val oldestVulnDays: Int,
         val oldestVulnId: String,
-        val severity: String // CRITICAL, HIGH, MEDIUM, LOW
+        val severity: String, // Vulnerability severity: CRITICAL, HIGH, MEDIUM, LOW
+        val criticality: String // Asset criticality: CRITICAL, HIGH, MEDIUM, LOW (Feature 039)
     )
 
     /**

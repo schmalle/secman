@@ -1,6 +1,7 @@
 package com.secman.controller
 
 import com.secman.domain.Asset
+import com.secman.domain.Criticality
 import com.secman.domain.Vulnerability
 import com.secman.dto.*
 import io.micronaut.data.model.Page
@@ -59,7 +60,8 @@ open class AssetController(
         @NotBlank val type: String,
         @Nullable val ip: String? = null,
         @NotBlank @Size(max = 255) val owner: String,
-        @Nullable val description: String? = null
+        @Nullable val description: String? = null,
+        @Nullable val criticality: Criticality? = null
     )
 
     @Serdeable
@@ -69,7 +71,8 @@ open class AssetController(
         @Nullable val ip: String? = null,
         @Nullable val owner: String? = null,
         @Nullable val description: String? = null,
-        @Nullable val workgroupIds: List<Long>? = null
+        @Nullable val workgroupIds: List<Long>? = null,
+        @Nullable val criticality: Criticality? = null
     )
 
     @Serdeable
@@ -179,6 +182,7 @@ open class AssetController(
                 ip = request.ip?.trim()?.takeIf { it.isNotBlank() },
                 owner = trimmedOwner,
                 description = request.description?.trim()?.takeIf { it.isNotBlank() },
+                criticality = request.criticality,
                 manualCreator = manualCreator
             )
 
@@ -232,6 +236,11 @@ open class AssetController(
             
             request.description?.let { newDescription ->
                 asset.description = newDescription.trim().takeIf { it.isNotBlank() }
+            }
+
+            // Feature 039: Handle criticality update (null explicitly allowed to revert to inheritance)
+            if (request.criticality !== null) {
+                asset.criticality = request.criticality
             }
 
             request.workgroupIds?.let { workgroupIds ->

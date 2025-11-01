@@ -347,6 +347,8 @@ npm test; npm run dev
 - MariaDB 11.4 (existing Vulnerability and Asset tables; no new tables required) (036-vuln-stats-lense)
 - Kotlin 2.2.21 / Java 21 + Micronaut 4.10, Hibernate JPA, MariaDB 11.4 (037-last-admin-protection)
 - MariaDB 11.4 (existing `users` and `user_roles` tables, no schema changes required) (037-last-admin-protection)
+- Kotlin 2.2.21 / Java 21 (backend), JavaScript ES2022 (frontend - Astro 5.14 + React 19) + Micronaut 4.10, Hibernate JPA, MariaDB 11.4, Astro 5.14, React 19, Bootstrap 5.3, Axios (039-asset-workgroup-criticality)
+- MariaDB 11.4 (2 new columns: workgroup.criticality, asset.criticality) (039-asset-workgroup-criticality)
 
 ## Recent Changes
 - 035-notification-system: Added Kotlin 2.2.21 / Java 21 (backend), Python 3.11+ (CLI), Astro 5.14 + React 19 (frontend) + Micronaut 4.10, Hibernate JPA, MariaDB 11.4, Apache POI 5.3, JavaMail API (SMTP), Bootstrap 5.3, Axios

@@ -1,0 +1,393 @@
+openapi: 3.0.3
+info:
+  title: Workgroup Criticality API
+  description: API endpoints for managing workgroup criticality classification
+  version: 1.0.0
+  contact:
+    name: Secman API Team
+
+servers:
+  - url: http://localhost:8080/api
+    description: Local development server
+
+tags:
+  - name: workgroups
+    description: Workgroup management operations with criticality support
+
+paths:
+  /workgroups:
+    get:
+      tags:
+        - workgroups
+      summary: List all workgroups
+      description: Retrieve all workgroups with criticality information. ADMIN role required.
+      operationId: listWorkgroups
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: criticality
+          in: query
+          description: Filter by criticality level
+          required: false
+          schema:
+            $ref: '#/components/schemas/Criticality'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WorkgroupListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags:
+        - workgroups
+      summary: Create a new workgroup
+      description: Create a new workgroup with specified criticality. ADMIN role required.
+      operationId: createWorkgroup
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWorkgroupRequest'
+      responses:
+        '201':
+          description: Workgroup created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Workgroup'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /workgroups/{id}:
+    get:
+      tags:
+        - workgroups
+      summary: Get workgroup by ID
+      description: Retrieve a single workgroup with criticality information. ADMIN role required.
+      operationId: getWorkgroup
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Workgroup ID
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkgroupDetailResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags:
+        - workgroups
+      summary: Update workgroup
+      description: Update workgroup properties including criticality. ADMIN role required. Criticality changes affect all inheriting assets.
+      operationId: updateWorkgroup
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Workgroup ID
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateWorkgroupRequest'
+      responses:
+        '200':
+          description: Workgroup updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Workgroup'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+    delete:
+      tags:
+        - workgroups
+      summary: Delete workgroup
+      description: Delete a workgroup. Assets in this workgroup will default to MEDIUM criticality if no override is set. ADMIN role required.
+      operationId: deleteWorkgroup
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Workgroup ID
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '204':
+          description: Workgroup deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Criticality:
+      type: string
+      enum:
+        - CRITICAL
+        - HIGH
+        - MEDIUM
+        - LOW
+      description: Security criticality classification level
+
+    CreateWorkgroupRequest:
+      type: object
+      required:
+        - name
+        - criticality
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          pattern: '^[a-zA-Z0-9 -]+$'
+          description: Workgroup name (alphanumeric, spaces, hyphens only)
+          example: "Production Servers"
+        description:
+          type: string
+          maxLength: 512
+          nullable: true
+          description: Optional workgroup description
+          example: "Critical production infrastructure"
+        criticality:
+          $ref: '#/components/schemas/Criticality'
+          default: MEDIUM
+          description: Criticality level for all assets in this workgroup (unless overridden)
+          example: CRITICAL
+
+    UpdateWorkgroupRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          pattern: '^[a-zA-Z0-9 -]+$'
+          description: Updated workgroup name
+          example: "Production Servers"
+        description:
+          type: string
+          maxLength: 512
+          nullable: true
+          description: Updated description
+          example: "Mission-critical production systems"
+        criticality:
+          $ref: '#/components/schemas/Criticality'
+          description: Updated criticality level (affects all inheriting assets)
+          example: HIGH
+
+    Workgroup:
+      type: object
+      required:
+        - id
+        - name
+        - criticality
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Workgroup ID
+          example: 1
+        name:
+          type: string
+          description: Workgroup name
+          example: "Production Servers"
+        description:
+          type: string
+          nullable: true
+          description: Workgroup description
+          example: "Critical production infrastructure"
+        criticality:
+          $ref: '#/components/schemas/Criticality'
+          description: Criticality level inherited by assets
+          example: CRITICAL
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+          example: "2025-01-01T00:00:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+          example: "2025-11-01T12:00:00Z"
+
+    WorkgroupListResponse:
+      allOf:
+        - $ref: '#/components/schemas/Workgroup'
+        - type: object
+          required:
+            - userCount
+            - assetCount
+          properties:
+            userCount:
+              type: integer
+              description: Number of users assigned to this workgroup
+              example: 5
+            assetCount:
+              type: integer
+              description: Number of assets assigned to this workgroup
+              example: 42
+
+    WorkgroupDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/Workgroup'
+        - type: object
+          required:
+            - users
+            - assets
+          properties:
+            users:
+              type: array
+              description: Users assigned to this workgroup
+              items:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                    format: int64
+                  username:
+                    type: string
+                  email:
+                    type: string
+            assets:
+              type: array
+              description: Assets assigned to this workgroup
+              items:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                    format: int64
+                  name:
+                    type: string
+                  criticality:
+                    allOf:
+                      - $ref: '#/components/schemas/Criticality'
+                    nullable: true
+                  effectiveCriticality:
+                    $ref: '#/components/schemas/Criticality'
+
+    ErrorResponse:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          description: Human-readable error message
+          example: "Invalid criticality value"
+        details:
+          type: array
+          description: Detailed error information
+          items:
+            type: string
+          example: ["criticality must be one of: CRITICAL, HIGH, MEDIUM, LOW"]
+
+  responses:
+    BadRequest:
+      description: Invalid request parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            message: "Validation failed"
+            details: ["criticality must be one of: CRITICAL, HIGH, MEDIUM, LOW"]
+
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            message: "Unauthorized"
+
+    Forbidden:
+      description: Insufficient permissions (ADMIN role required)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            message: "Forbidden: ADMIN role required"
+
+    NotFound:
+      description: Workgroup not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            message: "Workgroup not found"
+
+    Conflict:
+      description: Concurrent modification conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            message: "Conflict: Workgroup was modified by another user. Please refresh and try again."

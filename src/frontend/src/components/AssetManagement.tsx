@@ -29,6 +29,7 @@ interface Asset {
   cloudInstanceId?: string;
   osVersion?: string;
   adDomain?: string;
+  criticality?: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'NA' | null;
   createdAt?: string;
   updatedAt?: string;
   workgroups?: WorkgroupSummary[];
@@ -47,6 +48,7 @@ const AssetManagement: React.FC = () => {
     ip: '',
     owner: '',
     description: '',
+    criticality: undefined,
     workgroupIds: []
   });
   const [showPortHistory, setShowPortHistory] = useState(false);
@@ -201,6 +203,7 @@ const AssetManagement: React.FC = () => {
       ip: '',
       owner: '',
       description: '',
+      criticality: undefined,
       workgroupIds: []
     });
     setEditingAsset(null);
@@ -210,6 +213,14 @@ const AssetManagement: React.FC = () => {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleCriticalityChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = e.target.value;
+    setFormData(prev => ({
+      ...prev,
+      criticality: value === '' ? undefined : (value as 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'NA')
+    }));
   };
 
   const handleWorkgroupChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -391,6 +402,26 @@ const AssetManagement: React.FC = () => {
                     />
                   </div>
                   <div className="mb-3">
+                    <label htmlFor="criticality" className="form-label">Criticality</label>
+                    <select
+                      className="form-select"
+                      id="criticality"
+                      name="criticality"
+                      value={formData.criticality || ''}
+                      onChange={handleCriticalityChange}
+                    >
+                      <option value="">Inherit from workgroup</option>
+                      <option value="CRITICAL">🔴 CRITICAL</option>
+                      <option value="HIGH">🟠 HIGH</option>
+                      <option value="MEDIUM">🔵 MEDIUM</option>
+                      <option value="LOW">⚪ LOW</option>
+                      <option value="NA">➖ N/A</option>
+                    </select>
+                    <small className="text-muted">
+                      Leave as "Inherit from workgroup" to use the highest criticality from assigned workgroups (excluding N/A). Default is MEDIUM if no workgroups assigned or all are N/A.
+                    </small>
+                  </div>
+                  <div className="mb-3">
                     <label className="form-label">Workgroups</label>
                     <div>
                       {workgroups.length > 0 ? (
@@ -519,6 +550,7 @@ const AssetManagement: React.FC = () => {
                       <tr>
                         <th>Name</th>
                         <th>Type</th>
+                        <th>Criticality</th>
                         <th>IP Address</th>
                         <th>Owner</th>
                         <th>Description</th>
@@ -528,12 +560,45 @@ const AssetManagement: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {getFilteredAssets().map((asset) => (
+                      {getFilteredAssets().map((asset) => {
+                        const getCriticalityBadge = (criticality?: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'NA' | null) => {
+                          if (!criticality) {
+                            return (
+                              <span className="badge bg-secondary" title="Inherited from workgroup or default (MEDIUM)">
+                                <i className="bi bi-arrow-down-circle me-1"></i>Inherited
+                              </span>
+                            );
+                          }
+                          const colorMap = {
+                            'CRITICAL': 'danger',
+                            'HIGH': 'warning',
+                            'MEDIUM': 'info',
+                            'LOW': 'secondary',
+                            'NA': 'light'
+                          };
+                          const iconMap = {
+                            'CRITICAL': '🔴',
+                            'HIGH': '🟠',
+                            'MEDIUM': '🔵',
+                            'LOW': '⚪',
+                            'NA': '➖'
+                          };
+                          const displayText = criticality === 'NA' ? 'N/A' : criticality;
+                          const isLight = colorMap[criticality] === 'light';
+                          return (
+                            <span className={`badge bg-${colorMap[criticality]} ${isLight ? 'text-dark' : ''}`} title="Explicit criticality override">
+                              {iconMap[criticality]} {displayText}
+                            </span>
+                          );
+                        };
+
+                        return (
                         <tr key={asset.id}>
                           <td>{asset.name}</td>
                           <td>
                             <span className="badge bg-info">{asset.type}</span>
                           </td>
+                          <td>{getCriticalityBadge(asset.criticality)}</td>
                           <td>{asset.ip || '-'}</td>
                           <td>{asset.owner}</td>
                           <td>{asset.description || '-'}</td>
@@ -585,7 +650,8 @@ const AssetManagement: React.FC = () => {
                             </div>
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

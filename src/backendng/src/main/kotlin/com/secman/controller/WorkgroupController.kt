@@ -1,5 +1,6 @@
 package com.secman.controller
 
+import com.secman.domain.Criticality
 import com.secman.domain.Workgroup
 import com.secman.service.WorkgroupService
 import io.micronaut.http.HttpResponse
@@ -50,7 +51,8 @@ open class WorkgroupController(
         return try {
             val workgroup = workgroupService.createWorkgroup(
                 name = request.name,
-                description = request.description
+                description = request.description,
+                criticality = request.criticality ?: Criticality.MEDIUM
             )
             HttpResponse.created(workgroup)
         } catch (e: IllegalArgumentException) {
@@ -75,6 +77,7 @@ open class WorkgroupController(
                 id = wg.id!!,
                 name = wg.name,
                 description = wg.description,
+                criticality = wg.criticality,
                 userCount = wg.users.size,
                 assetCount = wg.assets.size,
                 createdAt = wg.createdAt!!,
@@ -101,6 +104,7 @@ open class WorkgroupController(
                 id = workgroup.id!!,
                 name = workgroup.name,
                 description = workgroup.description,
+                criticality = workgroup.criticality,
                 userCount = workgroup.users.size,
                 assetCount = workgroup.assets.size,
                 createdAt = workgroup.createdAt!!,
@@ -130,7 +134,8 @@ open class WorkgroupController(
             val workgroup = workgroupService.updateWorkgroup(
                 id = id,
                 name = request.name,
-                description = request.description
+                description = request.description,
+                criticality = request.criticality
             )
             HttpResponse.ok(workgroup)
         } catch (e: IllegalArgumentException) {
@@ -268,6 +273,7 @@ open class WorkgroupController(
 /**
  * Request to create a workgroup
  * FR-006: Validates name format and length
+ * Feature 039: Criticality field added (defaults to MEDIUM if not provided)
  */
 @Serdeable
 data class CreateWorkgroupRequest(
@@ -276,12 +282,15 @@ data class CreateWorkgroupRequest(
     val name: String,
 
     @field:Size(max = 512, message = "Description must not exceed 512 characters")
-    val description: String? = null
+    val description: String? = null,
+
+    val criticality: Criticality? = null
 )
 
 /**
  * Request to update a workgroup
- * Both fields optional, at least one should be provided
+ * All fields optional, at least one should be provided
+ * Feature 039: Criticality field added
  */
 @Serdeable
 data class UpdateWorkgroupRequest(
@@ -289,7 +298,9 @@ data class UpdateWorkgroupRequest(
     val name: String? = null,
 
     @field:Size(max = 512, message = "Description must not exceed 512 characters")
-    val description: String? = null
+    val description: String? = null,
+
+    val criticality: Criticality? = null
 )
 
 /**
@@ -313,12 +324,14 @@ data class AssignAssetsRequest(
 /**
  * Response for workgroup list view
  * FR-005: Returns summary with counts
+ * Feature 039: Criticality field added
  */
 @Serdeable
 data class WorkgroupListResponse(
     val id: Long,
     val name: String,
     val description: String?,
+    val criticality: Criticality,
     val userCount: Int,
     val assetCount: Int,
     val createdAt: java.time.Instant,
@@ -328,12 +341,14 @@ data class WorkgroupListResponse(
 /**
  * Response for workgroup detail view
  * FR-003: Returns detailed information with counts
+ * Feature 039: Criticality field added
  */
 @Serdeable
 data class WorkgroupDetailResponse(
     val id: Long,
     val name: String,
     val description: String?,
+    val criticality: Criticality,
     val userCount: Int,
     val assetCount: Int,
     val createdAt: java.time.Instant,
