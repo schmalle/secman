@@ -49,6 +49,9 @@ data class User(
     )
     var workgroups: MutableSet<Workgroup> = mutableSetOf(),
 
+    @Column(name = "mfa_enabled", nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")
+    var mfaEnabled: Boolean = false,
+
     @Column(name = "created_at", updatable = false)
     var createdAt: Instant? = null,
 
