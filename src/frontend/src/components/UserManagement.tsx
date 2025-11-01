@@ -260,11 +260,28 @@ const UserManagement = () => {
 
         setDeletingUserId(userId);
         try {
-            await authenticatedDelete(`/api/users/${userId}`);
+            const response = await authenticatedDelete(`/api/users/${userId}`);
+
+            // Feature 037: Handle last admin protection (HTTP 409 Conflict)
+            if (response.status === 409) {
+                const errorData = await response.json().catch(() => ({ message: 'Cannot delete the last administrator' }));
+                alert(
+                    errorData.message || 'Cannot delete the last administrator. At least one ADMIN user must remain in the system.\n\n' +
+                    'Please create another admin user before deleting this one.'
+                );
+                setDeletingUserId(null);
+                return;
+            }
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                throw new Error(errorData.error || errorData.message || `Failed to delete user: ${response.status}`);
+            }
+
             setUsers(prevUsers => prevUsers.filter(user => user.id !== userId));
-        } catch (err) {
+        } catch (err: any) {
             console.error('Delete user request failed:', err);
-            alert('An error occurred while deleting the user. Please try again.');
+            alert(err.message || 'An error occurred while deleting the user. Please try again.');
         } finally {
             setDeletingUserId(null);
         }
@@ -348,6 +365,18 @@ const UserManagement = () => {
             }
 
             const response = await authenticatedPut(`/api/users/${editingUser.id}`, updatePayload);
+
+            // Feature 037: Handle last admin role protection (HTTP 409 Conflict)
+            if (response.status === 409) {
+                const errorData = await response.json().catch(() => ({ message: 'Cannot remove ADMIN role from the last administrator' }));
+                setEditUserError(
+                    errorData.message || 'Cannot remove ADMIN role from the last administrator. At least one ADMIN user must remain in the system.\n\n' +
+                    'Please assign the ADMIN role to another user before removing it from this one.'
+                );
+                setIsSubmittingEdit(false);
+                return;
+            }
+
             if (response.ok) {
                 const data = await response.json();
                 setUsers(prevUsers => prevUsers.map(u => u.id === editingUser.id ? data : u));

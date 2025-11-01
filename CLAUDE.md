@@ -291,6 +291,41 @@ npm test; npm run dev
 **Retry**: 3 attempts with 1s delay, configurable in application.yml
 **Performance**: JavaMail API with connection pooling, 30s delivery timeout
 
+### Last Admin Protection (Feature 037)
+
+**Purpose**: Prevent deletion or role removal of the last ADMIN user to ensure system operability
+
+1. **Service-Layer Validation**: UserDeletionValidator provides pre-operation checks
+2. **Admin Count Query**: Use `findAll().count { it.roles.contains(User.Role.ADMIN) }` (O(n) acceptable for <1000 users)
+3. **Validation Points**:
+   - User deletion: Check if user is ADMIN and last one before delete
+   - Role update: Check if removing ADMIN role from last admin
+4. **Blocking Reference Pattern**:
+   ```kotlin
+   BlockingReference(
+       entityType = "SystemConstraint",
+       count = 1,
+       role = "last_admin",
+       details = "Cannot delete the last administrator. At least one ADMIN user must remain in the system."
+   )
+   ```
+5. **HTTP Status Codes**:
+   - 409 Conflict: SystemConstraint violations (last admin protection)
+   - 400 Bad Request: Other blocking references (demands, risk assessments, etc.)
+6. **Frontend Error Handling**: Detect 409 status and display actionable guidance
+7. **Transaction Safety**: Validation inside @Transactional methods, relies on transaction isolation for concurrent operations
+
+**Validation Methods**:
+- `UserDeletionValidator.validateUserDeletion(userId)` - Full deletion validation
+- `UserDeletionValidator.validateAdminRoleRemoval(userId, newRoles)` - Role change validation
+- `UserService.countAdminUsers()` - Count users with ADMIN role
+
+**Error Message Pattern**: Include clear explanation + actionable next steps (e.g., "Please create another admin user before deleting this one")
+
+**Concurrency Edge Case**: Two simultaneous deletions of last 2 admins theoretically possible; acceptable risk with transaction isolation, documented as low-probability scenario
+
+**Implementation**: UserController.kt:282-323 (delete), UserController.kt:227-258 (update), UserDeletionValidator.kt:32-211
+
 ## File Locations
 
 - **Backend**: `src/backendng/src/main/kotlin/com/secman/{domain,controller,service,repository}/`
@@ -310,6 +345,8 @@ npm test; npm run dev
 - MariaDB 11.4 (3 new tables: notification_preference, notification_log, asset_reminder_state) (035-notification-system)
 - Backend: Kotlin 2.2.21 / Java 21; Frontend: Astro 5.14 + React 19 + Backend: Micronaut 4.10, Hibernate JPA; Frontend: React 19, Chart.js (or Recharts) for visualizations, Axios (036-vuln-stats-lense)
 - MariaDB 11.4 (existing Vulnerability and Asset tables; no new tables required) (036-vuln-stats-lense)
+- Kotlin 2.2.21 / Java 21 + Micronaut 4.10, Hibernate JPA, MariaDB 11.4 (037-last-admin-protection)
+- MariaDB 11.4 (existing `users` and `user_roles` tables, no schema changes required) (037-last-admin-protection)
 
 ## Recent Changes
 - 035-notification-system: Added Kotlin 2.2.21 / Java 21 (backend), Python 3.11+ (CLI), Astro 5.14 + React 19 (frontend) + Micronaut 4.10, Hibernate JPA, MariaDB 11.4, Apache POI 5.3, JavaMail API (SMTP), Bootstrap 5.3, Axios

@@ -233,6 +233,25 @@ open class UserController(
                         return HttpResponse.badRequest(mapOf("error" to "Invalid role: $roleString"))
                     }
                 }
+
+                // Feature 037: Validate admin role removal
+                val roleValidation = userDeletionValidator.validateAdminRoleRemoval(id, roles)
+                if (!roleValidation.canDelete) {
+                    val response = mapOf(
+                        "error" to "Cannot update user",
+                        "message" to roleValidation.message,
+                        "blockingReferences" to roleValidation.blockingReferences.map { ref ->
+                            mapOf(
+                                "entityType" to ref.entityType,
+                                "count" to ref.count,
+                                "role" to ref.role,
+                                "details" to ref.details
+                            )
+                        }
+                    )
+                    return HttpResponse.status<Any>(HttpStatus.CONFLICT).body(response)
+                }
+
                 // Properly manage the collection instead of replacing it
                 user.roles.clear()
                 user.roles.addAll(roles)
@@ -286,7 +305,14 @@ open class UserController(
                     )
                 }
             )
-            return HttpResponse.badRequest<Any>().body(response)
+            // Feature 037: Return 409 Conflict for last admin protection (SystemConstraint)
+            // Return 400 Bad Request for other blocking references (demands, risk assessments, etc.)
+            val isLastAdminProtection = validationResult.blockingReferences.any { it.entityType == "SystemConstraint" }
+            return if (isLastAdminProtection) {
+                HttpResponse.status<Any>(HttpStatus.CONFLICT).body(response)
+            } else {
+                HttpResponse.badRequest<Any>().body(response)
+            }
         }
 
         try {
