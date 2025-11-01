@@ -83,4 +83,17 @@ class UserService(
             user.roles.any { it.name.equals(role, ignoreCase = true) }
         }
     }
+
+    /**
+     * Count the number of users with ADMIN role
+     * Feature: 037-last-admin-protection
+     * Used to determine if a user is the last administrator
+     *
+     * @return count of users with ADMIN role
+     */
+    fun countAdminUsers(): Int {
+        return userRepository.findAll().count { user ->
+            user.roles.contains(User.Role.ADMIN)
+        }
+    }
 }

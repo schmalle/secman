@@ -6,6 +6,7 @@ import jakarta.inject.Singleton
 
 @Singleton
 class UserDeletionValidator(
+    private val userRepository: UserRepository,
     private val demandRepository: DemandRepository,
     private val riskAssessmentRepository: RiskAssessmentRepository,
     private val releaseRepository: ReleaseRepository,
@@ -30,6 +31,22 @@ class UserDeletionValidator(
 
     fun validateUserDeletion(userId: Long): ValidationResult {
         val blockingReferences = mutableListOf<BlockingReference>()
+
+        // Feature 037: Check last admin protection
+        val user = userRepository.findById(userId).orElse(null)
+        if (user != null && user.isAdmin()) {
+            val adminCount = userRepository.findAll().count { it.roles.contains(com.secman.domain.User.Role.ADMIN) }
+            if (adminCount <= 1) {
+                blockingReferences.add(
+                    BlockingReference(
+                        entityType = "SystemConstraint",
+                        count = 1,
+                        role = "last_admin",
+                        details = "Cannot delete the last administrator. At least one ADMIN user must remain in the system."
+                    )
+                )
+            }
+        }
 
         // Check Demands where user is requestor (non-nullable)
         val demandsAsRequestor = demandRepository.findByRequestorId(userId)
@@ -150,5 +167,46 @@ class UserDeletionValidator(
             blockingReferences = blockingReferences,
             message = message
         )
+    }
+
+    /**
+     * Validate admin role removal for last admin protection
+     * Feature: 037-last-admin-protection (User Story 3)
+     *
+     * Prevents removing the ADMIN role from the last administrator in the system.
+     *
+     * @param userId The ID of the user whose roles are being updated
+     * @param newRoles The new set of roles to be assigned to the user
+     * @return ValidationResult indicating if role change is allowed
+     */
+    fun validateAdminRoleRemoval(userId: Long, newRoles: Set<com.secman.domain.User.Role>): ValidationResult {
+        val user = userRepository.findById(userId).orElse(null)
+            ?: return ValidationResult(canDelete = true, blockingReferences = emptyList(), message = "User not found")
+
+        // Check if removing ADMIN role
+        val hasAdminNow = user.roles.contains(com.secman.domain.User.Role.ADMIN)
+        val willHaveAdmin = newRoles.contains(com.secman.domain.User.Role.ADMIN)
+
+        if (hasAdminNow && !willHaveAdmin) {
+            // Count total admins
+            val adminCount = userRepository.findAll().count { it.roles.contains(com.secman.domain.User.Role.ADMIN) }
+
+            if (adminCount <= 1) {
+                return ValidationResult(
+                    canDelete = false,
+                    blockingReferences = listOf(
+                        BlockingReference(
+                            entityType = "SystemConstraint",
+                            count = 1,
+                            role = "last_admin",
+                            details = "Cannot remove ADMIN role from the last administrator. At least one ADMIN user must remain in the system."
+                        )
+                    ),
+                    message = "Cannot remove ADMIN role from the last administrator. At least one ADMIN user must remain in the system."
+                )
+            }
+        }
+
+        return ValidationResult(canDelete = true, blockingReferences = emptyList(), message = "Role change allowed")
     }
 }
