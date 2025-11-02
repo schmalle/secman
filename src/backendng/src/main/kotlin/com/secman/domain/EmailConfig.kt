@@ -11,6 +11,14 @@ import org.hibernate.annotations.CreationTimestamp
 import org.hibernate.annotations.UpdateTimestamp
 import java.time.LocalDateTime
 
+/**
+ * Email provider type
+ */
+enum class EmailProvider {
+    SMTP,
+    AMAZON_SES
+}
+
 @Entity
 @Table(name = "email_configs")
 @Serdeable
@@ -23,13 +31,17 @@ data class EmailConfig(
     @NotBlank
     val name: String,
 
-    @Column(name = "smtp_host", nullable = false, length = 255)
-    @NotBlank
-    val smtpHost: String,
+    @Enumerated(EnumType.STRING)
+    @Column(name = "provider", nullable = false, length = 20)
+    val provider: EmailProvider = EmailProvider.SMTP,
 
-    @Column(name = "smtp_port", nullable = false)
+    // SMTP Configuration
+    @Column(name = "smtp_host", length = 255)
+    val smtpHost: String? = null,
+
+    @Column(name = "smtp_port")
     @Min(1) @Max(65535)
-    val smtpPort: Int = 587,
+    val smtpPort: Int? = 587,
 
     @Column(name = "smtp_username", length = 255)
     @Convert(converter = EncryptedStringConverter::class)
@@ -39,11 +51,23 @@ data class EmailConfig(
     @Convert(converter = EncryptedStringConverter::class)
     val smtpPassword: String? = null,
 
-    @Column(name = "smtp_tls", nullable = false)
-    val smtpTls: Boolean = true,
+    @Column(name = "smtp_tls")
+    val smtpTls: Boolean? = true,
 
-    @Column(name = "smtp_ssl", nullable = false)
-    val smtpSsl: Boolean = false,
+    @Column(name = "smtp_ssl")
+    val smtpSsl: Boolean? = false,
+
+    // Amazon SES Configuration
+    @Column(name = "ses_access_key", length = 255)
+    @Convert(converter = EncryptedStringConverter::class)
+    val sesAccessKey: String? = null,
+
+    @Column(name = "ses_secret_key", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter::class)
+    val sesSecretKey: String? = null,
+
+    @Column(name = "ses_region", length = 50)
+    val sesRegion: String? = null,
 
     @Column(name = "from_email", nullable = false, length = 255)
     @NotBlank
@@ -79,11 +103,13 @@ data class EmailConfig(
     companion object {
         const val PASSWORD_MASK = "***HIDDEN***"
         const val USERNAME_MASK = "***HIDDEN***"
+        const val ACCESS_KEY_MASK = "***HIDDEN***"
+        const val SECRET_KEY_MASK = "***HIDDEN***"
 
         /**
-         * Create new email configuration with encrypted credentials
+         * Create new SMTP email configuration
          */
-        fun create(
+        fun createSmtp(
             name: String,
             smtpHost: String,
             smtpPort: Int,
@@ -99,6 +125,7 @@ data class EmailConfig(
         ): EmailConfig {
             return EmailConfig(
                 name = name,
+                provider = EmailProvider.SMTP,
                 smtpHost = smtpHost,
                 smtpPort = smtpPort,
                 smtpUsername = smtpUsername,
@@ -113,13 +140,39 @@ data class EmailConfig(
                 isActive = false
             )
         }
+
+        /**
+         * Create new Amazon SES email configuration
+         */
+        fun createSes(
+            name: String,
+            sesAccessKey: String,
+            sesSecretKey: String,
+            sesRegion: String,
+            fromEmail: String,
+            fromName: String
+        ): EmailConfig {
+            return EmailConfig(
+                name = name,
+                provider = EmailProvider.AMAZON_SES,
+                sesAccessKey = sesAccessKey,
+                sesSecretKey = sesSecretKey,
+                sesRegion = sesRegion,
+                fromEmail = fromEmail,
+                fromName = fromName,
+                isActive = false
+            )
+        }
     }
 
     /**
      * Check if this configuration has authentication credentials
      */
     fun hasAuthentication(): Boolean {
-        return !smtpUsername.isNullOrBlank() && !smtpPassword.isNullOrBlank()
+        return when (provider) {
+            EmailProvider.SMTP -> !smtpUsername.isNullOrBlank() && !smtpPassword.isNullOrBlank()
+            EmailProvider.AMAZON_SES -> !sesAccessKey.isNullOrBlank() && !sesSecretKey.isNullOrBlank()
+        }
     }
 
     /**
@@ -128,17 +181,26 @@ data class EmailConfig(
     fun toSafeResponse(): EmailConfig {
         return copy(
             smtpUsername = if (!smtpUsername.isNullOrBlank()) USERNAME_MASK else null,
-            smtpPassword = if (!smtpPassword.isNullOrBlank()) PASSWORD_MASK else null
+            smtpPassword = if (!smtpPassword.isNullOrBlank()) PASSWORD_MASK else null,
+            sesAccessKey = if (!sesAccessKey.isNullOrBlank()) ACCESS_KEY_MASK else null,
+            sesSecretKey = if (!sesSecretKey.isNullOrBlank()) SECRET_KEY_MASK else null
         )
     }
 
     /**
      * Check if credential update is needed (not the masked values)
      */
-    fun shouldUpdateCredentials(newUsername: String?, newPassword: String?): Boolean {
+    fun shouldUpdateCredentials(
+        newUsername: String? = null,
+        newPassword: String? = null,
+        newAccessKey: String? = null,
+        newSecretKey: String? = null
+    ): Boolean {
         val shouldUpdateUsername = newUsername != null && newUsername != USERNAME_MASK
         val shouldUpdatePassword = newPassword != null && newPassword != PASSWORD_MASK
-        return shouldUpdateUsername || shouldUpdatePassword
+        val shouldUpdateAccessKey = newAccessKey != null && newAccessKey != ACCESS_KEY_MASK
+        val shouldUpdateSecretKey = newSecretKey != null && newSecretKey != SECRET_KEY_MASK
+        return shouldUpdateUsername || shouldUpdatePassword || shouldUpdateAccessKey || shouldUpdateSecretKey
     }
 
     /**
@@ -158,10 +220,17 @@ data class EmailConfig(
     /**
      * Update with new credentials
      */
-    fun withUpdatedCredentials(newUsername: String?, newPassword: String?): EmailConfig {
+    fun withUpdatedCredentials(
+        newUsername: String? = null,
+        newPassword: String? = null,
+        newAccessKey: String? = null,
+        newSecretKey: String? = null
+    ): EmailConfig {
         return copy(
-            smtpUsername = if (shouldUpdateCredentials(newUsername, null)) newUsername else smtpUsername,
-            smtpPassword = if (shouldUpdateCredentials(null, newPassword)) newPassword else smtpPassword
+            smtpUsername = if (newUsername != null && newUsername != USERNAME_MASK) newUsername else smtpUsername,
+            smtpPassword = if (newPassword != null && newPassword != PASSWORD_MASK) newPassword else smtpPassword,
+            sesAccessKey = if (newAccessKey != null && newAccessKey != ACCESS_KEY_MASK) newAccessKey else sesAccessKey,
+            sesSecretKey = if (newSecretKey != null && newSecretKey != SECRET_KEY_MASK) newSecretKey else sesSecretKey
         )
     }
 
@@ -232,14 +301,6 @@ data class EmailConfig(
             errors.add("Configuration name cannot be empty")
         }
 
-        if (smtpHost.isBlank()) {
-            errors.add("SMTP host cannot be empty")
-        }
-
-        if (smtpPort !in 1..65535) {
-            errors.add("SMTP port must be between 1 and 65535")
-        }
-
         if (fromEmail.isBlank()) {
             errors.add("From email cannot be empty")
         }
@@ -248,12 +309,38 @@ data class EmailConfig(
             errors.add("From name cannot be empty")
         }
 
-        if (imapEnabled) {
-            if (imapHost.isNullOrBlank()) {
-                errors.add("IMAP host is required when IMAP is enabled")
+        // Provider-specific validation
+        when (provider) {
+            EmailProvider.SMTP -> {
+                if (smtpHost.isNullOrBlank()) {
+                    errors.add("SMTP host cannot be empty for SMTP provider")
+                }
+
+                if (smtpPort == null || smtpPort !in 1..65535) {
+                    errors.add("SMTP port must be between 1 and 65535")
+                }
+
+                if (imapEnabled) {
+                    if (imapHost.isNullOrBlank()) {
+                        errors.add("IMAP host is required when IMAP is enabled")
+                    }
+                    if (imapPort == null || imapPort !in 1..65535) {
+                        errors.add("Valid IMAP port is required when IMAP is enabled")
+                    }
+                }
             }
-            if (imapPort == null || imapPort !in 1..65535) {
-                errors.add("Valid IMAP port is required when IMAP is enabled")
+            EmailProvider.AMAZON_SES -> {
+                if (sesAccessKey.isNullOrBlank()) {
+                    errors.add("SES access key cannot be empty for Amazon SES provider")
+                }
+
+                if (sesSecretKey.isNullOrBlank()) {
+                    errors.add("SES secret key cannot be empty for Amazon SES provider")
+                }
+
+                if (sesRegion.isNullOrBlank()) {
+                    errors.add("SES region cannot be empty for Amazon SES provider")
+                }
             }
         }
 
@@ -261,6 +348,6 @@ data class EmailConfig(
     }
 
     override fun toString(): String {
-        return "EmailConfig(id=$id, name='$name', smtpHost='$smtpHost', smtpPort=$smtpPort, fromEmail='$fromEmail', isActive=$isActive)"
+        return "EmailConfig(id=$id, name='$name', provider=$provider, fromEmail='$fromEmail', isActive=$isActive)"
     }
 }

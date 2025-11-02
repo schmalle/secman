@@ -1,6 +1,8 @@
 package com.secman.service
 
-import com.secman.config.EmailConfig
+import com.secman.config.EmailConfig as YamlEmailConfig
+import com.secman.domain.EmailProvider
+import com.secman.repository.EmailConfigRepository
 import jakarta.inject.Singleton
 import jakarta.mail.*
 import jakarta.mail.internet.InternetAddress
@@ -11,12 +13,16 @@ import org.slf4j.LoggerFactory
 import java.util.*
 
 /**
- * Low-level SMTP email sending service with retry logic
+ * Email sending service with support for SMTP and Amazon SES
+ * Supports multiple providers with retry logic
  * Feature 035: Outdated Asset Notification System
+ * Extended: Amazon SES support
  */
 @Singleton
 class EmailSender(
-    private val emailConfig: EmailConfig
+    private val yamlEmailConfig: YamlEmailConfig,
+    private val emailConfigRepository: EmailConfigRepository,
+    private val sesEmailService: SesEmailService
 ) {
     private val logger = LoggerFactory.getLogger(EmailSender::class.java)
 
@@ -35,11 +41,97 @@ class EmailSender(
 
     /**
      * Send email with automatic retry on failure
+     * Uses active email configuration from database, falls back to YAML config
      * Returns SendResult with success status and error details
      */
     fun sendEmail(message: EmailMessage): SendResult {
-        val maxRetries = emailConfig.retry.maxRetries
-        val delayMs = emailConfig.retry.delayBetweenRetriesMs
+        // Get active email configuration from database
+        val dbConfig = emailConfigRepository.findActiveConfig().orElse(null)
+
+        if (dbConfig != null) {
+            // Use database configuration with provider-specific sending
+            return when (dbConfig.provider) {
+                EmailProvider.SMTP -> sendEmailViaSmtp(message, dbConfig)
+                EmailProvider.AMAZON_SES -> sendEmailViaSes(message, dbConfig)
+            }
+        } else {
+            // Fallback to YAML configuration (SMTP only)
+            logger.warn("No active email configuration in database, using YAML config")
+            return sendEmailViaSmtpYaml(message)
+        }
+    }
+
+    /**
+     * Send email via Amazon SES
+     */
+    private fun sendEmailViaSes(message: EmailMessage, config: com.secman.domain.EmailConfig): SendResult {
+        val maxRetries = yamlEmailConfig.retry.maxRetries
+        val delayMs = yamlEmailConfig.retry.delayBetweenRetriesMs
+
+        var lastError: String? = null
+
+        for (attempt in 1..maxRetries) {
+            val result = sesEmailService.sendEmail(
+                config = config,
+                to = message.to,
+                subject = message.subject,
+                htmlBody = message.htmlBody,
+                plainTextBody = message.plainTextBody
+            )
+
+            if (result.success) {
+                logger.info("Email sent successfully via SES to ${message.to} on attempt $attempt")
+                return SendResult(success = true, attemptCount = attempt)
+            } else {
+                lastError = result.errorMessage
+                logger.warn("SES email send attempt $attempt/$maxRetries failed for ${message.to}: ${result.errorMessage}")
+
+                if (attempt < maxRetries) {
+                    Thread.sleep(delayMs)
+                }
+            }
+        }
+
+        val errorMsg = "Failed to send email via SES after $maxRetries attempts: $lastError"
+        logger.error(errorMsg)
+        return SendResult(success = false, errorMessage = errorMsg, attemptCount = maxRetries)
+    }
+
+    /**
+     * Send email via SMTP using database configuration
+     */
+    private fun sendEmailViaSmtp(message: EmailMessage, config: com.secman.domain.EmailConfig): SendResult {
+        val maxRetries = yamlEmailConfig.retry.maxRetries
+        val delayMs = yamlEmailConfig.retry.delayBetweenRetriesMs
+
+        var lastException: Exception? = null
+
+        for (attempt in 1..maxRetries) {
+            try {
+                sendEmailInternalWithDbConfig(message, config)
+                logger.info("Email sent successfully via SMTP to ${message.to} on attempt $attempt")
+                return SendResult(success = true, attemptCount = attempt)
+            } catch (e: Exception) {
+                lastException = e
+                logger.warn("SMTP email send attempt $attempt/$maxRetries failed for ${message.to}: ${e.message}")
+
+                if (attempt < maxRetries) {
+                    Thread.sleep(delayMs)
+                }
+            }
+        }
+
+        val errorMsg = "Failed to send email via SMTP after $maxRetries attempts: ${lastException?.message}"
+        logger.error(errorMsg, lastException)
+        return SendResult(success = false, errorMessage = errorMsg, attemptCount = maxRetries)
+    }
+
+    /**
+     * Send email via SMTP using YAML configuration (fallback)
+     */
+    private fun sendEmailViaSmtpYaml(message: EmailMessage): SendResult {
+        val maxRetries = yamlEmailConfig.retry.maxRetries
+        val delayMs = yamlEmailConfig.retry.delayBetweenRetriesMs
 
         var lastException: Exception? = null
 
@@ -64,34 +156,79 @@ class EmailSender(
     }
 
     /**
-     * Internal method to send email via SMTP
+     * Internal method to send email via SMTP using database configuration
+     * Throws exception on failure for retry logic
+     */
+    private fun sendEmailInternalWithDbConfig(message: EmailMessage, config: com.secman.domain.EmailConfig) {
+        val props = config.getSmtpProperties()
+        val javaProps = Properties()
+        props.forEach { (key, value) -> javaProps[key] = value }
+
+        val authenticator = if (config.hasAuthentication()) {
+            object : Authenticator() {
+                override fun getPasswordAuthentication(): PasswordAuthentication {
+                    return PasswordAuthentication(config.smtpUsername, config.smtpPassword)
+                }
+            }
+        } else {
+            null
+        }
+
+        val session = Session.getInstance(javaProps, authenticator)
+
+        val mimeMessage = MimeMessage(session).apply {
+            setFrom(InternetAddress(config.fromEmail, config.fromName))
+            addRecipient(Message.RecipientType.TO, InternetAddress(message.to))
+            subject = sanitizeEmailHeader(message.subject)
+
+            // Create multipart message with HTML and plain-text alternatives
+            val multipart = MimeMultipart("alternative")
+
+            // Plain text part (first, lowest priority)
+            val textPart = MimeBodyPart().apply {
+                setText(message.plainTextBody, "UTF-8")
+            }
+            multipart.addBodyPart(textPart)
+
+            // HTML part (second, higher priority)
+            val htmlPart = MimeBodyPart().apply {
+                setContent(message.htmlBody, "text/html; charset=UTF-8")
+            }
+            multipart.addBodyPart(htmlPart)
+
+            setContent(multipart)
+            sentDate = Date()
+        }
+
+        // Send the email
+        Transport.send(mimeMessage)
+    }
+
+    /**
+     * Internal method to send email via SMTP using YAML configuration
      * Throws exception on failure for retry logic
      */
     private fun sendEmailInternal(message: EmailMessage) {
-        // Get SMTP configuration from database (via EmailConfig which reads from application.yml)
-        // TODO: In production, this should query the email configuration from the database table
-        // For now, using configuration from application.yml as specified by email config pattern
-
         val props = Properties().apply {
-            put("mail.smtp.host", emailConfig.smtpHost)
-            put("mail.smtp.port", emailConfig.smtpPort)
+            put("mail.smtp.host", yamlEmailConfig.smtpHost)
+            put("mail.smtp.port", yamlEmailConfig.smtpPort)
             put("mail.smtp.auth", "true")
-            put("mail.smtp.starttls.enable", emailConfig.enableTls)
+            put("mail.smtp.starttls.enable", yamlEmailConfig.enableTls)
             put("mail.smtp.ssl.protocols", "TLSv1.2")
-            put("mail.smtp.connectiontimeout", emailConfig.performance.connectionTimeoutMs)
-            put("mail.smtp.timeout", emailConfig.performance.readTimeoutMs)
+            put("mail.smtp.connectiontimeout", yamlEmailConfig.performance.connectionTimeoutMs)
+            put("mail.smtp.timeout", yamlEmailConfig.performance.readTimeoutMs)
         }
 
         val authenticator = object : Authenticator() {
             override fun getPasswordAuthentication(): PasswordAuthentication {
-                return PasswordAuthentication(emailConfig.username, emailConfig.password)
+                return PasswordAuthentication(yamlEmailConfig.username, yamlEmailConfig.password)
             }
         }
 
         val session = Session.getInstance(props, authenticator)
 
         val mimeMessage = MimeMessage(session).apply {
-            setFrom(InternetAddress(emailConfig.fromAddress, emailConfig.fromName))
+            setFrom(InternetAddress(yamlEmailConfig.fromAddress, yamlEmailConfig.fromName))
             addRecipient(Message.RecipientType.TO, InternetAddress(message.to))
             subject = sanitizeEmailHeader(message.subject)
 
