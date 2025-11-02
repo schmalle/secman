@@ -247,16 +247,16 @@ data class EmailConfig(
     fun getSmtpProperties(): Map<String, String> {
         val props = mutableMapOf<String, String>()
 
-        props["mail.smtp.host"] = smtpHost
+        props["mail.smtp.host"] = smtpHost ?: ""
         props["mail.smtp.port"] = smtpPort.toString()
         props["mail.smtp.auth"] = hasAuthentication().toString()
 
-        if (smtpTls) {
+        if (smtpTls == true) {
             props["mail.smtp.starttls.enable"] = "true"
             props["mail.smtp.starttls.required"] = "true"
         }
 
-        if (smtpSsl) {
+        if (smtpSsl == true) {
             props["mail.smtp.ssl.enable"] = "true"
             props["mail.smtp.socketFactory.class"] = "javax.net.ssl.SSLSocketFactory"
             props["mail.smtp.socketFactory.port"] = smtpPort.toString()
@@ -264,7 +264,7 @@ data class EmailConfig(
         }
 
         // Security properties
-        props["mail.smtp.ssl.trust"] = smtpHost
+        props["mail.smtp.ssl.trust"] = smtpHost ?: ""
         props["mail.smtp.ssl.protocols"] = "TLSv1.2 TLSv1.3"
 
         // Timeout properties

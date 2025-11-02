@@ -12,7 +12,7 @@ import org.slf4j.LoggerFactory
  * Handles SMTP and Amazon SES provider settings
  */
 @Singleton
-class EmailProviderConfigService(
+open class EmailProviderConfigService(
     private val emailConfigRepository: EmailConfigRepository,
     private val sesEmailService: SesEmailService
 ) {
@@ -43,7 +43,7 @@ class EmailProviderConfigService(
      * Create new SMTP email configuration
      */
     @Transactional
-    fun createSmtpConfig(
+    open fun createSmtpConfig(
         name: String,
         smtpHost: String,
         smtpPort: Int,
@@ -88,7 +88,7 @@ class EmailProviderConfigService(
      * Create new Amazon SES email configuration
      */
     @Transactional
-    fun createSesConfig(
+    open fun createSesConfig(
         name: String,
         sesAccessKey: String,
         sesSecretKey: String,
@@ -121,7 +121,7 @@ class EmailProviderConfigService(
      * Update email configuration
      */
     @Transactional
-    fun updateConfig(
+    open fun updateConfig(
         id: Long,
         name: String?,
         smtpHost: String? = null,
@@ -177,7 +177,7 @@ class EmailProviderConfigService(
      * Delete email configuration
      */
     @Transactional
-    fun deleteConfig(id: Long): Result<Unit> {
+    open fun deleteConfig(id: Long): Result<Unit> {
         val config = emailConfigRepository.findById(id).orElse(null)
             ?: return Result.failure(IllegalArgumentException("Email configuration not found"))
 
@@ -196,7 +196,7 @@ class EmailProviderConfigService(
      * Deactivates all other configurations
      */
     @Transactional
-    fun activateConfig(id: Long): Result<EmailConfig> {
+    open fun activateConfig(id: Long): Result<EmailConfig> {
         val config = emailConfigRepository.findById(id).orElse(null)
             ?: return Result.failure(IllegalArgumentException("Email configuration not found"))
 
@@ -214,7 +214,7 @@ class EmailProviderConfigService(
      * Deactivate email configuration
      */
     @Transactional
-    fun deactivateConfig(id: Long): Result<EmailConfig> {
+    open fun deactivateConfig(id: Long): Result<EmailConfig> {
         val config = emailConfigRepository.findById(id).orElse(null)
             ?: return Result.failure(IllegalArgumentException("Email configuration not found"))
 
