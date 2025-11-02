@@ -52,10 +52,87 @@ interface WorkgroupRepository : JpaRepository<Workgroup, Long> {
      * @return List of workgroups the user is a member of (empty list if none)
      */
     @io.micronaut.data.annotation.Query("""
-        SELECT DISTINCT w FROM Workgroup w 
-        JOIN w.users u 
+        SELECT DISTINCT w FROM Workgroup w
+        JOIN w.users u
         WHERE u.email = :email
         ORDER BY w.name ASC
     """)
     fun findWorkgroupsByUserEmail(email: String): List<Workgroup>
+
+    // Feature 040: Nested Workgroups - Hierarchy Query Methods
+
+    /**
+     * Find all children of a parent workgroup.
+     * Feature 040: Nested Workgroups
+     */
+    fun findByParent(parent: Workgroup): List<Workgroup>
+
+    /**
+     * Find all root-level workgroups (no parent).
+     * Feature 040: Nested Workgroups
+     */
+    @io.micronaut.data.annotation.Query("SELECT w FROM Workgroup w WHERE w.parent IS NULL")
+    fun findRootLevelWorkgroups(): List<Workgroup>
+
+    /**
+     * Find all descendants of a workgroup using recursive CTE.
+     * Returns all workgroups in the subtree, including the root.
+     * Feature 040: Nested Workgroups
+     */
+    @io.micronaut.data.annotation.Query(value = """
+        WITH RECURSIVE descendants AS (
+            SELECT id, parent_id, name, 1 AS depth
+            FROM workgroup
+            WHERE id = :workgroupId
+
+            UNION ALL
+
+            SELECT w.id, w.parent_id, w.name, d.depth + 1
+            FROM workgroup w
+            INNER JOIN descendants d ON w.parent_id = d.id
+            WHERE d.depth < 10
+        )
+        SELECT w.* FROM workgroup w
+        WHERE w.id IN (SELECT id FROM descendants)
+    """, nativeQuery = true)
+    fun findAllDescendants(workgroupId: Long): List<Workgroup>
+
+    /**
+     * Find all ancestors of a workgroup using recursive CTE.
+     * Returns all workgroups from root to immediate parent, ordered from root.
+     * Feature 040: Nested Workgroups
+     */
+    @io.micronaut.data.annotation.Query(value = """
+        WITH RECURSIVE ancestors AS (
+            SELECT id, parent_id, name, 1 AS depth
+            FROM workgroup
+            WHERE id = :workgroupId
+
+            UNION ALL
+
+            SELECT w.id, w.parent_id, w.name, a.depth + 1
+            FROM workgroup w
+            INNER JOIN ancestors a ON a.parent_id = w.id
+            WHERE a.depth < 10
+        )
+        SELECT w.* FROM workgroup w
+        WHERE w.id IN (SELECT id FROM ancestors) AND w.id != :workgroupId
+        ORDER BY w.id
+    """, nativeQuery = true)
+    fun findAllAncestors(workgroupId: Long): List<Workgroup>
+
+    /**
+     * Count total number of descendants (for admin dashboards).
+     * Feature 040: Nested Workgroups
+     */
+    @io.micronaut.data.annotation.Query(value = """
+        WITH RECURSIVE descendants AS (
+            SELECT id FROM workgroup WHERE id = :workgroupId
+            UNION ALL
+            SELECT w.id FROM workgroup w
+            INNER JOIN descendants d ON w.parent_id = d.id
+        )
+        SELECT COUNT(*) - 1 FROM descendants
+    """, nativeQuery = true)
+    fun countDescendants(workgroupId: Long): Long
 }

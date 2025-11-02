@@ -20,7 +20,8 @@ import jakarta.transaction.Transactional
 open class WorkgroupService(
     private val workgroupRepository: WorkgroupRepository,
     private val userRepository: UserRepository,
-    private val assetRepository: AssetRepository
+    private val assetRepository: AssetRepository,
+    private val validationService: WorkgroupValidationService
 ) {
 
     /**
@@ -236,5 +237,148 @@ open class WorkgroupService(
         return workgroupRepository.findById(id).orElseThrow {
             IllegalArgumentException("Workgroup not found: $id")
         }
+    }
+
+    // Feature 040: Nested Workgroups - Hierarchy Operations
+
+    /**
+     * Create a child workgroup under a parent
+     * Feature 040: Nested Workgroups (User Story 1)
+     *
+     * @param parentId ID of parent workgroup
+     * @param name Child workgroup name (must be unique among siblings)
+     * @param description Optional description
+     * @return Created child workgroup
+     * @throws IllegalArgumentException if parent not found
+     * @throws ValidationException if depth limit exceeded or name conflict
+     */
+    @Transactional
+    open fun createChildWorkgroup(
+        parentId: Long,
+        name: String,
+        description: String? = null
+    ): Workgroup {
+        val parent = workgroupRepository.findById(parentId).orElseThrow {
+            IllegalArgumentException("Parent workgroup not found: $parentId")
+        }
+
+        // Validate depth limit
+        validationService.validateDepthLimit(parent)
+
+        // Validate sibling uniqueness
+        validationService.validateSiblingUniqueness(name, parent)
+
+        val child = Workgroup(
+            name = name,
+            description = description,
+            parent = parent
+        )
+
+        return workgroupRepository.save(child)
+    }
+
+    /**
+     * Move a workgroup to a new parent
+     * Feature 040: Nested Workgroups (User Story 3)
+     *
+     * @param workgroupId ID of workgroup to move
+     * @param newParentId ID of new parent (null to move to root level)
+     * @return Updated workgroup
+     * @throws IllegalArgumentException if workgroup or parent not found
+     * @throws ValidationException if move would violate constraints
+     */
+    @Transactional
+    open fun moveWorkgroup(workgroupId: Long, newParentId: Long?): Workgroup {
+        val workgroup = workgroupRepository.findById(workgroupId).orElseThrow {
+            IllegalArgumentException("Workgroup not found: $workgroupId")
+        }
+
+        val newParent = if (newParentId != null) {
+            workgroupRepository.findById(newParentId).orElseThrow {
+                IllegalArgumentException("New parent workgroup not found: $newParentId")
+            }
+        } else {
+            null
+        }
+
+        // Validate move operation
+        validationService.validateMove(workgroup, newParent)
+
+        workgroup.parent = newParent
+        return workgroupRepository.update(workgroup)
+    }
+
+    /**
+     * Delete a workgroup and promote its children to grandparent
+     * Feature 040: Nested Workgroups (User Story 4)
+     *
+     * @param workgroupId ID of workgroup to delete
+     * @throws IllegalArgumentException if workgroup not found
+     */
+    @Transactional
+    open fun deleteWorkgroupWithPromotion(workgroupId: Long) {
+        val workgroup = workgroupRepository.findById(workgroupId).orElseThrow {
+            IllegalArgumentException("Workgroup not found: $workgroupId")
+        }
+
+        val grandparent = workgroup.parent
+
+        // Promote all children to grandparent level
+        workgroup.children.forEach { child ->
+            child.parent = grandparent
+            workgroupRepository.update(child)
+        }
+
+        // Now delete the workgroup
+        workgroupRepository.delete(workgroup)
+    }
+
+    /**
+     * Get all direct children of a workgroup
+     * Feature 040: Nested Workgroups (User Story 2)
+     *
+     * @param parentId ID of parent workgroup
+     * @return List of direct children
+     */
+    open fun getChildren(parentId: Long): List<Workgroup> {
+        val parent = workgroupRepository.findById(parentId).orElseThrow {
+            IllegalArgumentException("Parent workgroup not found: $parentId")
+        }
+        return workgroupRepository.findByParent(parent)
+    }
+
+    /**
+     * Get all root-level workgroups (no parent)
+     * Feature 040: Nested Workgroups (User Story 2)
+     *
+     * @return List of root-level workgroups
+     */
+    open fun getRootWorkgroups(): List<Workgroup> {
+        return workgroupRepository.findRootLevelWorkgroups()
+    }
+
+    /**
+     * Get all ancestors from root to immediate parent
+     * Feature 040: Nested Workgroups (User Story 5)
+     *
+     * @param workgroupId ID of workgroup
+     * @return List of ancestors (root first, immediate parent last)
+     */
+    open fun getAncestors(workgroupId: Long): List<Workgroup> {
+        val workgroup = workgroupRepository.findById(workgroupId).orElseThrow {
+            IllegalArgumentException("Workgroup not found: $workgroupId")
+        }
+        return workgroup.getAncestors()
+    }
+
+    /**
+     * Get all descendants (entire subtree)
+     * Feature 040: Nested Workgroups (User Story 2)
+     *
+     * @param workgroupId ID of root workgroup
+     * @return List of all descendants
+     */
+    open fun getDescendants(workgroupId: Long): List<Workgroup> {
+        return workgroupRepository.findAllDescendants(workgroupId)
     }
 }
