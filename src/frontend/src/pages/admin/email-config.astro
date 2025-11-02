@@ -23,21 +23,32 @@ import Layout from '../../layouts/Layout.astro';
                 <h5 class="card-title" id="form-title">Add New Email Configuration</h5>
                 <form id="email-config-form">
                   <div class="row">
-                    <div class="col-md-12">
+                    <div class="col-md-6">
                       <div class="mb-3">
                         <label for="name" class="form-label">Configuration Name *</label>
                         <input type="text" class="form-control" id="name" name="name" required placeholder="Gmail Configuration">
                       </div>
                     </div>
-                  </div>
-
-                  <div class="row">
                     <div class="col-md-6">
                       <div class="mb-3">
-                        <label for="smtpHost" class="form-label">SMTP Host *</label>
-                        <input type="text" class="form-control" id="smtpHost" name="smtpHost" required placeholder="smtp.gmail.com">
+                        <label for="provider" class="form-label">Email Provider *</label>
+                        <select class="form-select" id="provider" name="provider" required onchange="toggleProviderFields()">
+                          <option value="SMTP">SMTP</option>
+                          <option value="AMAZON_SES">Amazon SES</option>
+                        </select>
                       </div>
                     </div>
+                  </div>
+
+                  <!-- SMTP Configuration Fields -->
+                  <div id="smtp-fields">
+                    <div class="row">
+                      <div class="col-md-6">
+                        <div class="mb-3">
+                          <label for="smtpHost" class="form-label">SMTP Host *</label>
+                          <input type="text" class="form-control" id="smtpHost" name="smtpHost" placeholder="smtp.gmail.com">
+                        </div>
+                      </div>
                     <div class="col-md-6">
                       <div class="mb-3">
                         <label for="smtpPort" class="form-label">SMTP Port *</label>
@@ -46,21 +57,81 @@ import Layout from '../../layouts/Layout.astro';
                     </div>
                   </div>
 
-                  <div class="row">
-                    <div class="col-md-6">
-                      <div class="mb-3">
-                        <label for="smtpUsername" class="form-label">SMTP Username</label>
-                        <input type="text" class="form-control" id="smtpUsername" name="smtpUsername" placeholder="your-email@gmail.com">
+                      <div class="col-md-6">
+                        <div class="mb-3">
+                          <label for="smtpUsername" class="form-label">SMTP Username</label>
+                          <input type="text" class="form-control" id="smtpUsername" name="smtpUsername" placeholder="your-email@gmail.com">
+                        </div>
+                      </div>
+                      <div class="col-md-6">
+                        <div class="mb-3">
+                          <label for="smtpPassword" class="form-label">SMTP Password</label>
+                          <input type="password" class="form-control" id="smtpPassword" name="smtpPassword">
+                        </div>
                       </div>
                     </div>
-                    <div class="col-md-6">
-                      <div class="mb-3">
-                        <label for="smtpPassword" class="form-label">SMTP Password</label>
-                        <input type="password" class="form-control" id="smtpPassword" name="smtpPassword">
+
+                    <div class="row">
+                      <div class="col-md-4">
+                        <div class="mb-3 form-check">
+                          <input type="checkbox" class="form-check-input" id="smtpTls" name="smtpTls" checked>
+                          <label class="form-check-label" for="smtpTls">Enable TLS</label>
+                        </div>
+                      </div>
+                      <div class="col-md-4">
+                        <div class="mb-3 form-check">
+                          <input type="checkbox" class="form-check-input" id="smtpSsl" name="smtpSsl">
+                          <label class="form-check-label" for="smtpSsl">Enable SSL</label>
+                        </div>
                       </div>
                     </div>
                   </div>
 
+                  <!-- Amazon SES Configuration Fields -->
+                  <div id="ses-fields" style="display: none;">
+                    <div class="row">
+                      <div class="col-md-6">
+                        <div class="mb-3">
+                          <label for="sesAccessKey" class="form-label">AWS Access Key ID *</label>
+                          <input type="text" class="form-control" id="sesAccessKey" name="sesAccessKey" placeholder="AKIAIOSFODNN7EXAMPLE">
+                        </div>
+                      </div>
+                      <div class="col-md-6">
+                        <div class="mb-3">
+                          <label for="sesSecretKey" class="form-label">AWS Secret Access Key *</label>
+                          <input type="password" class="form-control" id="sesSecretKey" name="sesSecretKey" placeholder="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY">
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="row">
+                      <div class="col-md-6">
+                        <div class="mb-3">
+                          <label for="sesRegion" class="form-label">AWS Region *</label>
+                          <select class="form-select" id="sesRegion" name="sesRegion">
+                            <option value="">Select Region...</option>
+                            <option value="us-east-1">US East (N. Virginia) - us-east-1</option>
+                            <option value="us-east-2">US East (Ohio) - us-east-2</option>
+                            <option value="us-west-1">US West (N. California) - us-west-1</option>
+                            <option value="us-west-2">US West (Oregon) - us-west-2</option>
+                            <option value="eu-west-1">Europe (Ireland) - eu-west-1</option>
+                            <option value="eu-west-2">Europe (London) - eu-west-2</option>
+                            <option value="eu-west-3">Europe (Paris) - eu-west-3</option>
+                            <option value="eu-central-1">Europe (Frankfurt) - eu-central-1</option>
+                            <option value="ap-south-1">Asia Pacific (Mumbai) - ap-south-1</option>
+                            <option value="ap-northeast-1">Asia Pacific (Tokyo) - ap-northeast-1</option>
+                            <option value="ap-northeast-2">Asia Pacific (Seoul) - ap-northeast-2</option>
+                            <option value="ap-southeast-1">Asia Pacific (Singapore) - ap-southeast-1</option>
+                            <option value="ap-southeast-2">Asia Pacific (Sydney) - ap-southeast-2</option>
+                            <option value="ca-central-1">Canada (Central) - ca-central-1</option>
+                            <option value="sa-east-1">South America (São Paulo) - sa-east-1</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Common Fields -->
                   <div class="row">
                     <div class="col-md-6">
                       <div class="mb-3">
@@ -77,19 +148,7 @@ import Layout from '../../layouts/Layout.astro';
                   </div>
 
                   <div class="row">
-                    <div class="col-md-4">
-                      <div class="mb-3 form-check">
-                        <input type="checkbox" class="form-check-input" id="smtpTls" name="smtpTls" checked>
-                        <label class="form-check-label" for="smtpTls">Enable TLS</label>
-                      </div>
-                    </div>
-                    <div class="col-md-4">
-                      <div class="mb-3 form-check">
-                        <input type="checkbox" class="form-check-input" id="smtpSsl" name="smtpSsl">
-                        <label class="form-check-label" for="smtpSsl">Enable SSL</label>
-                      </div>
-                    </div>
-                    <div class="col-md-4">
+                    <div class="col-md-12">
                       <div class="mb-3 form-check">
                         <input type="checkbox" class="form-check-input" id="isActive" name="isActive" checked>
                         <label class="form-check-label" for="isActive">Set as Active Configuration</label>
@@ -272,11 +331,10 @@ import Layout from '../../layouts/Layout.astro';
                 <tr>
                   <th>Status</th>
                   <th>Name</th>
-                  <th>SMTP Host</th>
-                  <th>Port</th>
+                  <th>Provider</th>
+                  <th>Configuration</th>
                   <th>From Email</th>
                   <th>From Name</th>
-                  <th>Security</th>
                   <th>Updated</th>
                   <th>Actions</th>
                 </tr>
@@ -286,10 +344,19 @@ import Layout from '../../layouts/Layout.astro';
 
         configs.forEach(config => {
           const isActive = config.isActive;
-          const securityBadges = [];
-          if (config.smtpTls) securityBadges.push('<span class="badge bg-info me-1">TLS</span>');
-          if (config.smtpSsl) securityBadges.push('<span class="badge bg-info me-1">SSL</span>');
-          if (config.smtpUsername) securityBadges.push('<span class="badge bg-success">Auth</span>');
+          const provider = config.provider || 'SMTP';
+
+          // Build configuration details based on provider
+          let configDetails = '';
+          if (provider === 'SMTP') {
+            const securityBadges = [];
+            if (config.smtpTls) securityBadges.push('<span class="badge bg-info me-1">TLS</span>');
+            if (config.smtpSsl) securityBadges.push('<span class="badge bg-info me-1">SSL</span>');
+            if (config.smtpUsername) securityBadges.push('<span class="badge bg-success me-1">Auth</span>');
+            configDetails = `${config.smtpHost || ''}:${config.smtpPort || ''}<br/>${securityBadges.join('')}`;
+          } else if (provider === 'AMAZON_SES') {
+            configDetails = `Region: ${config.sesRegion || 'N/A'}`;
+          }
 
           // Ensure we have a valid numeric ID
           const configId = config.id;
@@ -307,11 +374,10 @@ import Layout from '../../layouts/Layout.astro';
                 </span>
               </td>
               <td>${config.name || ''}</td>
-              <td>${config.smtpHost || ''}</td>
-              <td>${config.smtpPort || ''}</td>
+              <td><span class="badge ${provider === 'SMTP' ? 'bg-primary' : 'bg-warning'}">${provider}</span></td>
+              <td>${configDetails}</td>
               <td>${config.fromEmail || ''}</td>
               <td>${config.fromName || ''}</td>
-              <td>${securityBadges.join('')}</td>
               <td>${config.updatedAt ? new Date(config.updatedAt).toLocaleDateString() : '-'}</td>
               <td>
                 <div class="btn-group-vertical btn-group-sm" role="group">
@@ -356,6 +422,39 @@ import Layout from '../../layouts/Layout.astro';
         }
       }
 
+      // Toggle provider-specific fields
+      window.toggleProviderFields = function() {
+        const provider = document.getElementById('provider').value;
+        const smtpFields = document.getElementById('smtp-fields');
+        const sesFields = document.getElementById('ses-fields');
+
+        if (provider === 'SMTP') {
+          smtpFields.style.display = 'block';
+          sesFields.style.display = 'none';
+
+          // Make SMTP fields required
+          document.getElementById('smtpHost').required = true;
+          document.getElementById('smtpPort').required = true;
+
+          // Make SES fields not required
+          document.getElementById('sesAccessKey').required = false;
+          document.getElementById('sesSecretKey').required = false;
+          document.getElementById('sesRegion').required = false;
+        } else if (provider === 'AMAZON_SES') {
+          smtpFields.style.display = 'none';
+          sesFields.style.display = 'block';
+
+          // Make SMTP fields not required
+          document.getElementById('smtpHost').required = false;
+          document.getElementById('smtpPort').required = false;
+
+          // Make SES fields required
+          document.getElementById('sesAccessKey').required = true;
+          document.getElementById('sesSecretKey').required = true;
+          document.getElementById('sesRegion').required = true;
+        }
+      }
+
       // Make resetForm globally accessible
       window.resetForm = function() {
         document.getElementById('email-config-form').reset();
@@ -363,11 +462,15 @@ import Layout from '../../layouts/Layout.astro';
         document.getElementById('toggle-btn-text').textContent = 'Add New Configuration';
         document.getElementById('form-title').textContent = 'Add New Email Configuration';
         document.getElementById('name').value = '';
+        document.getElementById('provider').value = 'SMTP';
         document.getElementById('smtpPort').value = '587';
         document.getElementById('fromName').value = 'SecMan Risk Assessment';
         document.getElementById('smtpTls').checked = true;
         document.getElementById('isActive').checked = true;
         editingConfig = null;
+
+        // Reset field visibility
+        toggleProviderFields();
       }
 
       function editConfig(id) {
@@ -390,29 +493,44 @@ import Layout from '../../layouts/Layout.astro';
 
         console.log('Found config:', config);
         editingConfig = config;
-        
+
         try {
           // Fill form with config data
           document.getElementById('name').value = config.name || '';
-          document.getElementById('smtpHost').value = config.smtpHost || '';
-          document.getElementById('smtpPort').value = config.smtpPort || 587;
-          document.getElementById('smtpUsername').value = config.smtpUsername || '';
-          document.getElementById('smtpPassword').value = ''; // Don't show password
-          document.getElementById('smtpPassword').placeholder = config.smtpPassword && config.smtpPassword !== '***HIDDEN***' ? '***HIDDEN***' : '';
+          document.getElementById('provider').value = config.provider || 'SMTP';
+
+          // Toggle fields based on provider
+          toggleProviderFields();
+
+          if (config.provider === 'SMTP') {
+            // SMTP configuration
+            document.getElementById('smtpHost').value = config.smtpHost || '';
+            document.getElementById('smtpPort').value = config.smtpPort || 587;
+            document.getElementById('smtpUsername').value = config.smtpUsername || '';
+            document.getElementById('smtpPassword').value = ''; // Don't show password
+            document.getElementById('smtpPassword').placeholder = config.smtpPassword && config.smtpPassword !== '***HIDDEN***' ? '***HIDDEN***' : '';
+            document.getElementById('smtpTls').checked = Boolean(config.smtpTls);
+            document.getElementById('smtpSsl').checked = Boolean(config.smtpSsl);
+          } else if (config.provider === 'AMAZON_SES') {
+            // Amazon SES configuration
+            document.getElementById('sesAccessKey').value = config.sesAccessKey || '';
+            document.getElementById('sesSecretKey').value = ''; // Don't show secret
+            document.getElementById('sesSecretKey').placeholder = config.sesSecretKey && config.sesSecretKey !== '***HIDDEN***' ? '***HIDDEN***' : '';
+            document.getElementById('sesRegion').value = config.sesRegion || '';
+          }
+
+          // Common fields
           document.getElementById('fromEmail').value = config.fromEmail || '';
           document.getElementById('fromName').value = config.fromName || '';
-          document.getElementById('smtpTls').checked = Boolean(config.smtpTls);
-          document.getElementById('smtpSsl').checked = Boolean(config.smtpSsl);
           document.getElementById('isActive').checked = Boolean(config.isActive);
-          
+
           document.getElementById('form-title').textContent = 'Edit Email Configuration';
           document.getElementById('toggle-btn-text').textContent = 'Cancel';
           document.getElementById('config-form').style.display = 'block';
-          
+
           console.log('Form should now be visible with data:', {
             name: config.name,
-            smtpHost: config.smtpHost,
-            smtpPort: config.smtpPort,
+            provider: config.provider,
             fromEmail: config.fromEmail,
             fromName: config.fromName
           });
@@ -485,29 +603,47 @@ import Layout from '../../layouts/Layout.astro';
       // Form submission
       document.getElementById('email-config-form').addEventListener('submit', function(e) {
         e.preventDefault();
-        
+
         console.log('Form submission started...');
-        
+
         const formData = new FormData(e.target);
+        const provider = formData.get('provider');
+
+        // Build data based on provider type
         const data = {
           name: formData.get('name'),
-          smtpHost: formData.get('smtpHost'),
-          smtpPort: parseInt(formData.get('smtpPort')),
-          smtpUsername: formData.get('smtpUsername'),
-          smtpPassword: formData.get('smtpPassword'),
-          smtpTls: formData.has('smtpTls'),
-          smtpSsl: formData.has('smtpSsl'),
+          provider: provider,
           fromEmail: formData.get('fromEmail'),
           fromName: formData.get('fromName'),
           isActive: formData.has('isActive')
         };
 
-        console.log('Form data:', data);
+        if (provider === 'SMTP') {
+          // Add SMTP-specific fields
+          data.smtpHost = formData.get('smtpHost');
+          data.smtpPort = parseInt(formData.get('smtpPort'));
+          data.smtpUsername = formData.get('smtpUsername');
+          data.smtpPassword = formData.get('smtpPassword');
+          data.smtpTls = formData.has('smtpTls');
+          data.smtpSsl = formData.has('smtpSsl');
 
-        // Don't send empty password for edits
-        if (editingConfig && !data.smtpPassword) {
-          data.smtpPassword = '***HIDDEN***';
+          // Don't send empty password for edits
+          if (editingConfig && !data.smtpPassword) {
+            data.smtpPassword = '***HIDDEN***';
+          }
+        } else if (provider === 'AMAZON_SES') {
+          // Add SES-specific fields
+          data.sesAccessKey = formData.get('sesAccessKey');
+          data.sesSecretKey = formData.get('sesSecretKey');
+          data.sesRegion = formData.get('sesRegion');
+
+          // Don't send empty secret for edits
+          if (editingConfig && !data.sesSecretKey) {
+            data.sesSecretKey = '***HIDDEN***';
+          }
         }
+
+        console.log('Form data:', data);
 
         const url = editingConfig ? `/api/email-config/${editingConfig.id}` : '/api/email-config';
         const method = editingConfig ? 'PUT' : 'POST';

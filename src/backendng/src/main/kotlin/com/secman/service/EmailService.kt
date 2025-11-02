@@ -200,16 +200,16 @@ open class EmailService(
      */
     private fun createMailProperties(config: EmailConfig): Properties {
         return Properties().apply {
-            put("mail.smtp.host", config.smtpHost)
+            put("mail.smtp.host", config.smtpHost ?: "")
             put("mail.smtp.port", config.smtpPort.toString())
             put("mail.smtp.auth", config.hasAuthentication().toString())
 
-            if (config.smtpTls) {
+            if (config.smtpTls == true) {
                 put("mail.smtp.starttls.enable", "true")
                 put("mail.smtp.starttls.required", "true")
             }
 
-            if (config.smtpSsl) {
+            if (config.smtpSsl == true) {
                 put("mail.smtp.ssl.enable", "true")
                 put("mail.smtp.socketFactory.class", "javax.net.ssl.SSLSocketFactory")
                 put("mail.smtp.socketFactory.port", config.smtpPort.toString())
@@ -217,7 +217,7 @@ open class EmailService(
             }
 
             // Additional security properties
-            put("mail.smtp.ssl.trust", config.smtpHost)
+            put("mail.smtp.ssl.trust", config.smtpHost ?: "")
             put("mail.smtp.ssl.protocols", "TLSv1.2 TLSv1.3")
 
             // Debug properties for troubleshooting
