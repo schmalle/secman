@@ -5,19 +5,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="94ada8b3-9f4e-473c-9fea-3bc9651b5bdd" name="Changes" comment="test change">
-      <change beforePath="$PROJECT_DIR$/.idea/compiler.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/compiler.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/CLAUDE.md" beforeDir="false" afterPath="$PROJECT_DIR$/CLAUDE.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/AssetController.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/AssetController.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/WorkgroupController.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/WorkgroupController.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/domain/Asset.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/domain/Asset.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/domain/Workgroup.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/domain/Workgroup.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/EmailTemplateService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/EmailTemplateService.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/NotificationService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/NotificationService.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/WorkgroupService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/WorkgroupService.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/service/NotificationCliService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/service/NotificationCliService.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/frontend/src/components/AssetManagement.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/components/AssetManagement.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/frontend/src/components/WorkgroupManagement.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/components/WorkgroupManagement.tsx" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -85,7 +73,7 @@
     "RunOnceActivity.git.unshallow": "true",
     "SHARE_PROJECT_CONFIGURATION_FILES": "true",
     "SHELLCHECK.PATH": "/Users/flake/Library/Application Support/JetBrains/IntelliJIdea2025.1/plugins/Shell Script/shellcheck",
-    "git-widget-placeholder": "039-asset-workgroup-criticality",
+    "git-widget-placeholder": "main",
     "junie.onboarding.icon.badge.shown": "true",
     "kotlin-language-version-configured": "true",
     "last_opened_file_path": "/Users/flake/sources/misc/secman",

@@ -16,7 +16,6 @@ const Sidebar = () => {
     const [riskManagementExpanded, setRiskManagementExpanded] = useState(false);
     const [vulnMenuOpen, setVulnMenuOpen] = useState(false);
     const [ioMenuOpen, setIoMenuOpen] = useState(false);
-    const [importMenuOpen, setImportMenuOpen] = useState(false);
     const [exportMenuOpen, setExportMenuOpen] = useState(false);
     const [adminMenuOpen, setAdminMenuOpen] = useState(false);
     const [isAdmin, setIsAdmin] = useState(false);
@@ -233,13 +232,17 @@ const Sidebar = () => {
                     </li>
                 )}
 
-                {/* DEMAND MANAGEMENT Section */}
-                <li className="sidebar-section-header">DEMAND MANAGEMENT</li>
-                <li>
-                    <a href="/demands" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                        <i className="bi bi-clipboard-plus me-2"></i> Demand Management
-                    </a>
-                </li>
+                {/* DEMAND MANAGEMENT Section - ADMIN, RISK, or SECCHAMPION only (Feature: 025-role-based-access-control) */}
+                {hasRisk && (
+                    <>
+                        <li className="sidebar-section-header">DEMAND MANAGEMENT</li>
+                        <li>
+                            <a href="/demands" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                <i className="bi bi-clipboard-plus me-2"></i> Demand Management
+                            </a>
+                        </li>
+                    </>
+                )}
 
                 {/* VULNERABILITY MANAGEMENT Section - ADMIN or VULN role (Feature: 004-i-want-to) */}
                 {hasVuln && (
@@ -340,69 +343,55 @@ const Sidebar = () => {
                     </div>
                     {ioMenuOpen && (
                         <ul className="list-unstyled ps-4">
-                            {/* Import sub-menu */}
+                            {/* Import - direct link to /import page with tabs */}
                             <li>
-                                <div
-                                    onClick={() => setImportMenuOpen(!importMenuOpen)}
-                                    className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary cursor-pointer"
-                                    style={{ cursor: 'pointer' }}
-                                >
-                                    <i className="bi bi-cloud-upload me-2"></i>
-                                    Import
-                                    <i className={`bi ${importMenuOpen ? 'bi-chevron-down' : 'bi-chevron-right'} ms-auto`}></i>
-                                </div>
-                                {importMenuOpen && (
-                                    <ul className="list-unstyled ps-4">
-                                        <li>
-                                            <a href="/import" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                                <i className="bi bi-file-earmark-excel me-2"></i> Requirements
-                                            </a>
-                                        </li>
-                                        <li>
-                                            <a href="/import?type=assets" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                                <i className="bi bi-hdd-rack me-2"></i> Assets
-                                            </a>
-                                        </li>
-                                    </ul>
-                                )}
+                                <a href="/import" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                    <i className="bi bi-cloud-upload me-2"></i> Import
+                                </a>
                             </li>
-                            {/* Export sub-menu */}
-                            <li>
-                                <div
-                                    onClick={() => setExportMenuOpen(!exportMenuOpen)}
-                                    className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary cursor-pointer"
-                                    style={{ cursor: 'pointer' }}
-                                >
-                                    <i className="bi bi-download me-2"></i>
-                                    Export
-                                    <i className={`bi ${exportMenuOpen ? 'bi-chevron-down' : 'bi-chevron-right'} ms-auto`}></i>
-                                </div>
-                                {exportMenuOpen && (
-                                    <ul className="list-unstyled ps-4">
-                                        <li>
-                                            <a href="/export" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                                <i className="bi bi-file-earmark-excel me-2"></i> Requirements
-                                            </a>
-                                        </li>
-                                        <li>
-                                            <a href="/export?type=assets" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                                <i className="bi bi-hdd-rack me-2"></i> Assets
-                                            </a>
-                                        </li>
-                                    </ul>
-                                )}
-                            </li>
+                            {/* Export sub-menu - ADMIN, REQ, or SECCHAMPION only */}
+                            {hasReq && (
+                                <li>
+                                    <div
+                                        onClick={() => setExportMenuOpen(!exportMenuOpen)}
+                                        className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary cursor-pointer"
+                                        style={{ cursor: 'pointer' }}
+                                    >
+                                        <i className="bi bi-download me-2"></i>
+                                        Export
+                                        <i className={`bi ${exportMenuOpen ? 'bi-chevron-down' : 'bi-chevron-right'} ms-auto`}></i>
+                                    </div>
+                                    {exportMenuOpen && (
+                                        <ul className="list-unstyled ps-4">
+                                            <li>
+                                                <a href="/export" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                                    <i className="bi bi-file-earmark-excel me-2"></i> Requirements
+                                                </a>
+                                            </li>
+                                            <li>
+                                                <a href="/export?type=assets" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                                    <i className="bi bi-hdd-rack me-2"></i> Assets
+                                                </a>
+                                            </li>
+                                        </ul>
+                                    )}
+                                </li>
+                            )}
                         </ul>
                     )}
                 </li>
 
-                {/* TOOLS Section */}
-                <li className="sidebar-section-header">TOOLS</li>
-                <li>
-                    <a href="/public-classification" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                        <i className="bi bi-funnel me-2"></i> Classification Tool
-                    </a>
-                </li>
+                {/* TOOLS Section - ADMIN, RISK, or SECCHAMPION only (Feature: 025-role-based-access-control) */}
+                {hasRisk && (
+                    <>
+                        <li className="sidebar-section-header">TOOLS</li>
+                        <li>
+                            <a href="/public-classification" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                <i className="bi bi-funnel me-2"></i> Classification Tool
+                            </a>
+                        </li>
+                    </>
+                )}
 
                 {/* ADMIN Section - expandable menu (only visible to admin users) */}
                 {isAdmin && (

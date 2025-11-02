@@ -110,43 +110,45 @@ open class MaterializedViewRefreshService(
      *
      * Task: T011, T060 (progress publishing), T061 (batch processing)
      * Spec reference: FR-005, FR-007
+     *
+     * Note: NOT @Transactional - uses separate short transactions for each operation
+     * to avoid holding database locks during long-running refresh process
      */
-    @Transactional
     open fun executeRefresh(job: MaterializedViewRefreshJob) {
         val threshold = vulnerabilityConfigService.getReminderOneDays()
         log.info("Executing refresh with threshold: {} days", threshold)
 
-        // Step 1: Clear old materialized view data
+        // Step 1: Clear old materialized view data in separate short transaction
         log.debug("Deleting old materialized view data")
-        outdatedAssetRepository.deleteAll()
+        clearMaterializedView()
 
         // Step 2: Find all assets with overdue vulnerabilities
         val outdatedAssets = findAssetsWithOverdueVulnerabilities(threshold)
         job.totalAssets = outdatedAssets.size
-        refreshJobRepository.update(job)
+        updateJob(job)
 
         log.info("Found {} assets with overdue vulnerabilities", outdatedAssets.size)
 
         if (outdatedAssets.isEmpty()) {
             job.markCompleted()
-            refreshJobRepository.update(job)
+            updateJob(job)
             publishProgressEvent(job, "Refresh completed: no outdated assets")
             return
         }
 
-        // Step 3: Process in batches with progress updates
+        // Step 3: Process in batches with progress updates (each batch in separate transaction)
         outdatedAssets.chunked(BATCH_SIZE).forEachIndexed { batchIndex, batch ->
             val materializedRecords = batch.map { asset ->
                 createMaterializedRecord(asset, threshold)
             }
 
-            // Save batch
-            outdatedAssetRepository.saveAll(materializedRecords)
+            // Save batch in separate transaction
+            saveMaterializedRecordsBatch(materializedRecords)
 
             // Update progress
             val processed = (batchIndex + 1) * BATCH_SIZE.coerceAtMost(outdatedAssets.size)
             job.updateProgress(processed.coerceAtMost(outdatedAssets.size))
-            refreshJobRepository.update(job)
+            updateJob(job)
 
             // Publish progress event
             publishProgressEvent(job, "Processing assets...")
@@ -156,13 +158,41 @@ open class MaterializedViewRefreshService(
 
         // Step 4: Mark job as completed
         job.markCompleted()
-        refreshJobRepository.update(job)
+        updateJob(job)
 
         // Publish completion event
         publishProgressEvent(job, "Refresh completed successfully")
 
         log.info("Refresh completed: jobId={}, assetsProcessed={}, durationMs={}",
             job.id, job.assetsProcessed, job.durationMs)
+    }
+
+    /**
+     * Clear materialized view data in a separate short transaction
+     *
+     * This ensures the DELETE doesn't hold locks during the entire refresh process
+     */
+    @Transactional
+    open fun clearMaterializedView() {
+        outdatedAssetRepository.deleteAll()
+    }
+
+    /**
+     * Save batch of materialized records in a separate transaction
+     *
+     * Each batch commits independently to avoid long-running transactions
+     */
+    @Transactional
+    open fun saveMaterializedRecordsBatch(records: List<OutdatedAssetMaterializedView>) {
+        outdatedAssetRepository.saveAll(records)
+    }
+
+    /**
+     * Update job status in a separate transaction
+     */
+    @Transactional
+    open fun updateJob(job: MaterializedViewRefreshJob) {
+        refreshJobRepository.update(job)
     }
 
     /**

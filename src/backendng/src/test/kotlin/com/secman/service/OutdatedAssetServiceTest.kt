@@ -30,11 +30,13 @@ class OutdatedAssetServiceTest {
 
     private lateinit var service: OutdatedAssetService
     private lateinit var repository: OutdatedAssetMaterializedViewRepository
+    private lateinit var vulnerabilityRepository: com.secman.repository.VulnerabilityRepository
 
     @BeforeEach
     fun setup() {
         repository = mockk()
-        service = OutdatedAssetService(repository)
+        vulnerabilityRepository = mockk()
+        service = OutdatedAssetService(repository, vulnerabilityRepository)
     }
 
     @Test

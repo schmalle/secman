@@ -119,12 +119,18 @@ const AssetManagement: React.FC = () => {
   };
 
   const handleEdit = (asset: Asset) => {
+    console.log('Edit button clicked for asset:', asset.name, asset);
     setEditingAsset(asset);
     setFormData({
       ...asset,
       workgroupIds: asset.workgroups?.map(wg => wg.id) || []
     });
     setShowForm(true);
+
+    // Scroll to top to show the form
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, 100);
   };
 
   const handleDelete = async (id: number) => {
@@ -298,6 +304,7 @@ const AssetManagement: React.FC = () => {
             <h2>Asset Management</h2>
             <div className="btn-group" role="group">
               <button
+                type="button"
                 className="btn btn-primary"
                 onClick={() => {
                   if (showForm) {
@@ -312,6 +319,7 @@ const AssetManagement: React.FC = () => {
               {/* Feature 029: Bulk Delete Button (ADMIN only, hidden when no assets) */}
               {isAdmin(getUser()?.roles) && getFilteredAssets().length > 0 && (
                 <button
+                  type="button"
                   className="btn btn-danger"
                   onClick={() => setShowBulkDeleteModal(true)}
                   disabled={isDeletingBulk}
@@ -618,11 +626,17 @@ const AssetManagement: React.FC = () => {
                           </td>
                           <td>
                             <div className="btn-group" role="group">
-                              <button onClick={() => handleEdit(asset)} className="btn btn-sm btn-outline-primary">
+                              <button
+                                type="button"
+                                onClick={() => handleEdit(asset)}
+                                className="btn btn-sm btn-outline-primary"
+                                title="Edit asset"
+                              >
                                 <i className="bi bi-pencil"></i> Edit
                               </button>
                               {asset.ip && (
                                 <button
+                                  type="button"
                                   onClick={() => handleShowPorts(asset)}
                                   className="btn btn-sm btn-outline-info"
                                   title="Show port history"
@@ -631,6 +645,7 @@ const AssetManagement: React.FC = () => {
                                 </button>
                               )}
                               <button
+                                type="button"
                                 onClick={() => handleShowVulnerabilities(asset)}
                                 className="btn btn-sm btn-outline-danger"
                                 title="Show vulnerabilities"
@@ -640,6 +655,7 @@ const AssetManagement: React.FC = () => {
                               {/* Delete button only visible to ADMIN users (Feature 033) */}
                               {isAdmin(getUser()?.roles) && (
                                 <button
+                                  type="button"
                                   onClick={() => handleDelete(asset.id!)}
                                   className="btn btn-sm btn-outline-danger"
                                   title="Delete asset with all related data (cascade deletion)"

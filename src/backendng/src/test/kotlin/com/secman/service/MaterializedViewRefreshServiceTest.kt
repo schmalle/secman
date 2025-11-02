@@ -35,6 +35,7 @@ class MaterializedViewRefreshServiceTest {
     private lateinit var vulnerabilityRepository: VulnerabilityRepository
     private lateinit var vulnerabilityConfigService: VulnerabilityConfigService
     private lateinit var eventPublisher: ApplicationEventPublisher<RefreshProgressEvent>
+    private lateinit var vulnerabilityExceptionService: VulnerabilityExceptionService
 
     @BeforeEach
     fun setup() {
@@ -44,6 +45,7 @@ class MaterializedViewRefreshServiceTest {
         vulnerabilityRepository = mockk()
         vulnerabilityConfigService = mockk()
         eventPublisher = mockk()
+        vulnerabilityExceptionService = mockk()
 
         service = MaterializedViewRefreshService(
             refreshJobRepository,
@@ -51,7 +53,8 @@ class MaterializedViewRefreshServiceTest {
             assetRepository,
             vulnerabilityRepository,
             vulnerabilityConfigService,
-            eventPublisher
+            eventPublisher,
+            vulnerabilityExceptionService
         )
     }
 
@@ -105,8 +108,9 @@ class MaterializedViewRefreshServiceTest {
         every { vulnerabilityConfigService.getReminderOneDays() } returns threshold
         every { outdatedAssetRepository.deleteAll() } just Runs
         every { assetRepository.findAll() } returns listOf(asset)
-        every { vulnerabilityRepository.findByAssetId(100L) } returns listOf(oldVuln)
-        every { outdatedAssetMaterializedViewRepository.saveAll(any<List<OutdatedAssetMaterializedView>>()) } returns listOf()
+        every { vulnerabilityRepository.findByAssetId(100L, any()) } returns io.micronaut.data.model.Page.of(listOf(oldVuln), io.micronaut.data.model.Pageable.UNPAGED, 1)
+        every { vulnerabilityExceptionService.isVulnerabilityExcepted(any(), any()) } returns false
+        every { outdatedAssetRepository.saveAll(any<List<OutdatedAssetMaterializedView>>()) } returns listOf()
         every { refreshJobRepository.update(any()) } returns job
         every { eventPublisher.publishEvent(any()) } just Runs
 
@@ -117,7 +121,7 @@ class MaterializedViewRefreshServiceTest {
         verify(exactly = 1) { outdatedAssetRepository.deleteAll() }
 
         // Then: New records created
-        verify(exactly = 1) { outdatedAssetMaterializedViewRepository.saveAll(any<List<OutdatedAssetMaterializedView>>()) }
+        verify(exactly = 1) { outdatedAssetRepository.saveAll(any<List<OutdatedAssetMaterializedView>>()) }
 
         // Then: Job marked as completed
         assertEquals(RefreshJobStatus.COMPLETED, job.status)
@@ -146,7 +150,7 @@ class MaterializedViewRefreshServiceTest {
         // Then: Job completed with 0 assets
         assertEquals(0, job.totalAssets)
         assertEquals(RefreshJobStatus.COMPLETED, job.status)
-        verify(exactly = 0) { outdatedAssetMaterializedViewRepository.saveAll(any<List<OutdatedAssetMaterializedView>>()) }
+        verify(exactly = 0) { outdatedAssetRepository.saveAll(any<List<OutdatedAssetMaterializedView>>()) }
     }
 
     @Test
@@ -192,9 +196,10 @@ class MaterializedViewRefreshServiceTest {
         every { vulnerabilityConfigService.getReminderOneDays() } returns threshold
         every { outdatedAssetRepository.deleteAll() } just Runs
         every { assetRepository.findAll() } returns listOf(assetWithOverdue, assetWithoutOverdue)
-        every { vulnerabilityRepository.findByAssetId(1L) } returns listOf(overdueVuln)
-        every { vulnerabilityRepository.findByAssetId(2L) } returns listOf(recentVuln)
-        every { outdatedAssetMaterializedViewRepository.saveAll(any<List<OutdatedAssetMaterializedView>>()) } returns listOf()
+        every { vulnerabilityRepository.findByAssetId(1L, any()) } returns io.micronaut.data.model.Page.of(listOf(overdueVuln), io.micronaut.data.model.Pageable.UNPAGED, 1)
+        every { vulnerabilityRepository.findByAssetId(2L, any()) } returns io.micronaut.data.model.Page.of(listOf(recentVuln), io.micronaut.data.model.Pageable.UNPAGED, 1)
+        every { vulnerabilityExceptionService.isVulnerabilityExcepted(any(), any()) } returns false
+        every { outdatedAssetRepository.saveAll(any<List<OutdatedAssetMaterializedView>>()) } returns listOf()
         every { refreshJobRepository.update(any()) } returns job
         every { eventPublisher.publishEvent(any()) } just Runs
 
@@ -206,7 +211,7 @@ class MaterializedViewRefreshServiceTest {
 
         // Verify saveAll was called with 1 record
         verify(exactly = 1) {
-            outdatedAssetMaterializedViewRepository.saveAll(
+            outdatedAssetRepository.saveAll(
                 match { list -> list.size == 1 && list[0].assetName == "asset-overdue" }
             )
         }
@@ -265,8 +270,13 @@ class MaterializedViewRefreshServiceTest {
         every { vulnerabilityConfigService.getReminderOneDays() } returns threshold
         every { outdatedAssetRepository.deleteAll() } just Runs
         every { assetRepository.findAll() } returns listOf(asset)
-        every { vulnerabilityRepository.findByAssetId(1L) } returns listOf(criticalVuln, highVuln1, highVuln2, mediumVuln)
-        every { outdatedAssetMaterializedViewRepository.saveAll(any<List<OutdatedAssetMaterializedView>>()) } returns listOf()
+        every { vulnerabilityRepository.findByAssetId(1L, any()) } returns io.micronaut.data.model.Page.of(
+            listOf(criticalVuln, highVuln1, highVuln2, mediumVuln),
+            io.micronaut.data.model.Pageable.UNPAGED,
+            4
+        )
+        every { vulnerabilityExceptionService.isVulnerabilityExcepted(any(), any()) } returns false
+        every { outdatedAssetRepository.saveAll(any<List<OutdatedAssetMaterializedView>>()) } returns listOf()
         every { refreshJobRepository.update(any()) } returns job
         every { eventPublisher.publishEvent(any()) } just Runs
 
@@ -275,7 +285,7 @@ class MaterializedViewRefreshServiceTest {
 
         // Then: Severity counts should be correct
         verify(exactly = 1) {
-            outdatedAssetMaterializedViewRepository.saveAll(
+            outdatedAssetRepository.saveAll(
                 match { list ->
                     val record = list[0]
                     record.criticalCount == 1 &&
@@ -317,8 +327,9 @@ class MaterializedViewRefreshServiceTest {
         every { vulnerabilityConfigService.getReminderOneDays() } returns threshold
         every { outdatedAssetRepository.deleteAll() } just Runs
         every { assetRepository.findAll() } returns listOf(asset)
-        every { vulnerabilityRepository.findByAssetId(1L) } returns listOf(vuln)
-        every { outdatedAssetMaterializedViewRepository.saveAll(any<List<OutdatedAssetMaterializedView>>()) } returns listOf()
+        every { vulnerabilityRepository.findByAssetId(1L, any()) } returns io.micronaut.data.model.Page.of(listOf(vuln), io.micronaut.data.model.Pageable.UNPAGED, 1)
+        every { vulnerabilityExceptionService.isVulnerabilityExcepted(any(), any()) } returns false
+        every { outdatedAssetRepository.saveAll(any<List<OutdatedAssetMaterializedView>>()) } returns listOf()
         every { refreshJobRepository.update(any()) } returns job
         every { eventPublisher.publishEvent(any()) } just Runs
 

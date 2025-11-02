@@ -17,11 +17,14 @@
 import React, { useState, useEffect } from 'react';
 import {
     getCurrentVulnerabilities,
+    cleanupDuplicateVulnerabilities,
     type CurrentVulnerability,
-    type PaginatedVulnerabilitiesResponse
+    type PaginatedVulnerabilitiesResponse,
+    type VulnerabilityCleanupResult
 } from '../services/vulnerabilityManagementService';
 import OverdueStatusBadge from './OverdueStatusBadge';
 import ExceptionRequestModal from './ExceptionRequestModal';
+import { isAdmin } from '../utils/auth';
 
 const CurrentVulnerabilitiesTable: React.FC = () => {
     const [paginatedResponse, setPaginatedResponse] = useState<PaginatedVulnerabilitiesResponse | null>(null);
@@ -32,6 +35,11 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
     // Exception request modal state
     const [showRequestModal, setShowRequestModal] = useState(false);
     const [selectedVulnerability, setSelectedVulnerability] = useState<CurrentVulnerability | null>(null);
+
+    // Cleanup modal state
+    const [showCleanupModal, setShowCleanupModal] = useState(false);
+    const [cleanupResult, setCleanupResult] = useState<VulnerabilityCleanupResult | null>(null);
+    const [cleanupLoading, setCleanupLoading] = useState(false);
 
     // Filter states
     const [severityFilter, setSeverityFilter] = useState<string>('');
@@ -96,6 +104,27 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
 
         // Refresh the vulnerability list
         fetchVulnerabilities();
+    };
+
+    const handleCleanupDuplicates = async () => {
+        try {
+            setCleanupLoading(true);
+            const result = await cleanupDuplicateVulnerabilities();
+            setCleanupResult(result);
+            setShowCleanupModal(true);
+
+            // Refresh the vulnerability list after cleanup
+            fetchVulnerabilities();
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to cleanup duplicates');
+        } finally {
+            setCleanupLoading(false);
+        }
+    };
+
+    const handleCloseCleanupModal = () => {
+        setShowCleanupModal(false);
+        setCleanupResult(null);
     };
 
     const handleSort = (field: keyof CurrentVulnerability) => {
@@ -299,13 +328,34 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                             <i className="bi bi-shield-exclamation me-2"></i>
                             Current Vulnerabilities
                         </h2>
-                        <button
-                            className="btn btn-outline-primary"
-                            onClick={fetchVulnerabilities}
-                        >
-                            <i className="bi bi-arrow-clockwise me-2"></i>
-                            Refresh
-                        </button>
+                        <div className="d-flex gap-2">
+                            {isAdmin() && (
+                                <button
+                                    className="btn btn-warning"
+                                    onClick={handleCleanupDuplicates}
+                                    disabled={cleanupLoading}
+                                >
+                                    {cleanupLoading ? (
+                                        <>
+                                            <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                            Cleaning...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <i className="bi bi-trash3 me-2"></i>
+                                            Cleanup Duplicates
+                                        </>
+                                    )}
+                                </button>
+                            )}
+                            <button
+                                className="btn btn-outline-primary"
+                                onClick={fetchVulnerabilities}
+                            >
+                                <i className="bi bi-arrow-clockwise me-2"></i>
+                                Refresh
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -567,6 +617,84 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                     onClose={handleModalClose}
                     onSuccess={handleRequestSuccess}
                 />
+            )}
+
+            {/* Cleanup Results Modal */}
+            {showCleanupModal && cleanupResult && (
+                <div className="modal show d-block" tabIndex={-1} role="dialog" style={{backgroundColor: 'rgba(0,0,0,0.5)'}}>
+                    <div className="modal-dialog modal-dialog-centered">
+                        <div className="modal-content">
+                            <div className="modal-header bg-success text-white">
+                                <h5 className="modal-title">
+                                    <i className="bi bi-check-circle me-2"></i>
+                                    Cleanup Complete
+                                </h5>
+                                <button
+                                    type="button"
+                                    className="btn-close btn-close-white"
+                                    onClick={handleCloseCleanupModal}
+                                    aria-label="Close"
+                                ></button>
+                            </div>
+                            <div className="modal-body">
+                                <div className="alert alert-info mb-3">
+                                    <i className="bi bi-info-circle me-2"></i>
+                                    {cleanupResult.message}
+                                </div>
+
+                                <h6 className="mb-3">Statistics:</h6>
+                                <table className="table table-sm">
+                                    <tbody>
+                                        <tr>
+                                            <td><strong>Total Scanned:</strong></td>
+                                            <td className="text-end">{cleanupResult.totalScanned.toLocaleString()}</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Duplicates Found:</strong></td>
+                                            <td className="text-end">
+                                                <span className={cleanupResult.duplicatesFound > 0 ? 'text-warning' : 'text-success'}>
+                                                    {cleanupResult.duplicatesFound.toLocaleString()}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Duplicates Removed:</strong></td>
+                                            <td className="text-end">
+                                                <span className={cleanupResult.duplicatesRemoved > 0 ? 'text-danger' : 'text-muted'}>
+                                                    {cleanupResult.duplicatesRemoved.toLocaleString()}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                        <tr className="table-active">
+                                            <td><strong>Unique Remaining:</strong></td>
+                                            <td className="text-end">
+                                                <strong className="text-success">
+                                                    {cleanupResult.uniqueVulnerabilitiesRemaining.toLocaleString()}
+                                                </strong>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+
+                                {cleanupResult.duplicatesRemoved > 0 && (
+                                    <div className="alert alert-success mb-0 mt-3">
+                                        <i className="bi bi-check2 me-2"></i>
+                                        Successfully removed {cleanupResult.duplicatesRemoved} duplicate{cleanupResult.duplicatesRemoved !== 1 ? 's' : ''}!
+                                    </div>
+                                )}
+                            </div>
+                            <div className="modal-footer">
+                                <button
+                                    type="button"
+                                    className="btn btn-primary"
+                                    onClick={handleCloseCleanupModal}
+                                >
+                                    Close
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

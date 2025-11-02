@@ -6,19 +6,21 @@ import com.secman.domain.User
 import com.secman.domain.Vulnerability
 import com.secman.repository.AssetRepository
 import com.secman.repository.ScanRepository
+import com.secman.repository.UserMappingRepository
 import com.secman.repository.UserRepository
 import com.secman.repository.VulnerabilityRepository
 import io.micronaut.security.authentication.Authentication
 import jakarta.inject.Singleton
 
 /**
- * Centralized service for workgroup-based access control filtering
+ * Centralized service for unified access control filtering
  * Feature: 008-create-an-additional (Workgroup-Based Access Control)
+ * Feature: 013-user-mapping-upload (AWS Account Mapping)
  *
  * Implements filtering logic for assets, vulnerabilities, and scans based on:
  * - ADMIN role: Full access to all resources
  * - VULN role: Respects workgroup restrictions like regular users
- * - USER role: Access to resources from their workgroups + personally created/uploaded items
+ * - USER role: Access to resources from their workgroups + personally created/uploaded items + AWS account mappings
  *
  * Related Requirements:
  * - FR-013: Filter assets by workgroup membership + ownership
@@ -26,21 +28,30 @@ import jakarta.inject.Singleton
  * - FR-015: Filter scans by uploader workgroup membership
  * - FR-016: ADMIN has universal access
  * - FR-017-019: Workgroup-based filtering for regular users and VULN role
+ * - AWS Account Mapping: Users can access assets based on UserMapping.awsAccountId
  */
 @Singleton
 open class AssetFilterService(
     private val assetRepository: AssetRepository,
     private val vulnerabilityRepository: VulnerabilityRepository,
     private val scanRepository: ScanRepository,
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val userMappingRepository: UserMappingRepository
 ) {
 
     /**
      * Get assets accessible to the authenticated user
-     * FR-013, FR-016, FR-017: Filter by workgroup + ownership, ADMIN has full access
+     * FR-013, FR-016, FR-017: Filter by workgroup + ownership + AWS account mapping, ADMIN has full access
+     *
+     * Users can access assets if ANY of the following is true:
+     * 1. User is ADMIN (universal access)
+     * 2. Asset belongs to a workgroup the user is a member of
+     * 3. Asset was manually created by the user
+     * 4. Asset was discovered via a scan uploaded by the user
+     * 5. Asset's cloudAccountId matches any of the user's AWS account mappings
      *
      * @param authentication Current user authentication
-     * @return List of accessible assets
+     * @return List of accessible assets (deduplicated and sorted by name)
      */
     fun getAccessibleAssets(authentication: Authentication): List<Asset> {
         // ADMIN has universal access
@@ -50,11 +61,29 @@ open class AssetFilterService(
 
         // Regular users and VULN: filter by workgroup membership + ownership
         val userId = getUserId(authentication)
-        return assetRepository.findByWorkgroupsUsersIdOrManualCreatorIdOrScanUploaderIdOrderByNameAsc(
+        val workgroupAssets = assetRepository.findByWorkgroupsUsersIdOrManualCreatorIdOrScanUploaderIdOrderByNameAsc(
             userId = userId,
             manualCreatorId = userId,
             scanUploaderId = userId
         )
+
+        // Also get assets accessible via AWS account mapping
+        val userEmail = getUserEmail(authentication)
+        val awsAccountAssets = if (userEmail != null) {
+            val awsAccountIds = userMappingRepository.findDistinctAwsAccountIdByEmail(userEmail)
+            if (awsAccountIds.isNotEmpty()) {
+                assetRepository.findByCloudAccountIdIn(awsAccountIds)
+            } else {
+                emptyList()
+            }
+        } else {
+            emptyList()
+        }
+
+        // Combine and deduplicate by asset ID, then sort by name
+        return (workgroupAssets + awsAccountAssets)
+            .distinctBy { it.id }
+            .sortedBy { it.name }
     }
 
     /**
@@ -174,6 +203,17 @@ open class AssetFilterService(
     private fun getUserId(authentication: Authentication): Long {
         return authentication.attributes["userId"]?.toString()?.toLongOrNull()
             ?: throw IllegalStateException("User ID not found in authentication")
+    }
+
+    /**
+     * Extract user email from authentication
+     * Used for AWS account mapping lookups
+     *
+     * @param authentication Current user authentication
+     * @return User email as String, or null if not found
+     */
+    private fun getUserEmail(authentication: Authentication): String? {
+        return authentication.attributes["email"]?.toString()
     }
 
     /**

@@ -50,12 +50,24 @@
 - **Validation**: Email format, 12-digit AWS account, domain format
 - **Import**: Excel (.xlsx) + CSV (.csv) with auto-delimiter detection, scientific notation parsing
 - **Access**: ADMIN only
+- **Access Control Impact**: AWS account mappings grant asset access (see Unified Access Control below)
 
 ### Workgroup (Feature 008)
 
 - **Fields**: name, description, users(ManyToMany), assets(ManyToMany)
-- **Access Control**: Users see assets from their workgroups + personally created/uploaded
+- **Access Control**: See Unified Access Control below
 - **CRUD**: ADMIN role only
+
+## Unified Access Control
+
+Users can access assets if **ANY** of the following is true:
+1. User has ADMIN role (universal access)
+2. Asset belongs to a workgroup the user is a member of
+3. Asset was manually created by the user
+4. Asset was discovered via a scan uploaded by the user
+5. **Asset's cloudAccountId matches any of the user's AWS account mappings (UserMapping table)**
+
+This unified model ensures consistent access across all views (Asset Management, Asset Detail, Account Vulnerabilities, etc.)
 
 ### Release (Feature 011)
 
