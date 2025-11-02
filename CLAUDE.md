@@ -50,7 +50,7 @@
 - **Validation**: Email format, 12-digit AWS account, domain format
 - **Import**: Excel (.xlsx) + CSV (.csv) with auto-delimiter detection, scientific notation parsing
 - **Access**: ADMIN only
-- **Access Control Impact**: AWS account mappings grant asset access (see Unified Access Control below)
+- **Access Control Impact**: AWS account mappings and AD domain mappings grant asset access (see Unified Access Control below)
 
 ### Workgroup (Feature 008)
 
@@ -66,8 +66,15 @@ Users can access assets if **ANY** of the following is true:
 3. Asset was manually created by the user
 4. Asset was discovered via a scan uploaded by the user
 5. **Asset's cloudAccountId matches any of the user's AWS account mappings (UserMapping table)**
+6. **Asset's adDomain matches any of the user's domain mappings (UserMapping table, case-insensitive)**
 
 This unified model ensures consistent access across all views (Asset Management, Asset Detail, Account Vulnerabilities, etc.)
+
+**Implementation Details:**
+- Domain matching is case-insensitive (e.g., "CONTOSO", "contoso", "ConTosO" all match)
+- Assets with null adDomain are excluded from domain-based filtering
+- Domain filtering applies to all roles including VULN (not just ADMIN)
+- Access control is implemented in `AssetFilterService.getAccessibleAssets()` at src/backendng/src/main/kotlin/com/secman/service/AssetFilterService.kt:84-101
 
 ### Release (Feature 011)
 

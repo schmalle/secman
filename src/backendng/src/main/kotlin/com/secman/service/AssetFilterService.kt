@@ -41,7 +41,7 @@ open class AssetFilterService(
 
     /**
      * Get assets accessible to the authenticated user
-     * FR-013, FR-016, FR-017: Filter by workgroup + ownership + AWS account mapping, ADMIN has full access
+     * FR-013, FR-016, FR-017: Filter by workgroup + ownership + AWS account mapping + AD domain mapping, ADMIN has full access
      *
      * Users can access assets if ANY of the following is true:
      * 1. User is ADMIN (universal access)
@@ -49,6 +49,7 @@ open class AssetFilterService(
      * 3. Asset was manually created by the user
      * 4. Asset was discovered via a scan uploaded by the user
      * 5. Asset's cloudAccountId matches any of the user's AWS account mappings
+     * 6. Asset's adDomain matches any of the user's domain mappings (case-insensitive)
      *
      * @param authentication Current user authentication
      * @return List of accessible assets (deduplicated and sorted by name)
@@ -67,7 +68,7 @@ open class AssetFilterService(
             scanUploaderId = userId
         )
 
-        // Also get assets accessible via AWS account mapping
+        // Get assets accessible via AWS account mapping
         val userEmail = getUserEmail(authentication)
         val awsAccountAssets = if (userEmail != null) {
             val awsAccountIds = userMappingRepository.findDistinctAwsAccountIdByEmail(userEmail)
@@ -80,8 +81,27 @@ open class AssetFilterService(
             emptyList()
         }
 
+        // Get assets accessible via AD domain mapping (case-insensitive)
+        val domainAssets = if (userEmail != null) {
+            val userDomains = userMappingRepository.findDistinctDomainByEmail(userEmail)
+            if (userDomains.isNotEmpty()) {
+                // Get all assets with non-null adDomain
+                val allAssetsWithDomain = assetRepository.findAll().filter { it.adDomain != null }
+
+                // Filter assets whose adDomain matches any user domain (case-insensitive)
+                val userDomainsLowercase = userDomains.map { it.lowercase() }.toSet()
+                allAssetsWithDomain.filter { asset ->
+                    asset.adDomain?.lowercase() in userDomainsLowercase
+                }
+            } else {
+                emptyList()
+            }
+        } else {
+            emptyList()
+        }
+
         // Combine and deduplicate by asset ID, then sort by name
-        return (workgroupAssets + awsAccountAssets)
+        return (workgroupAssets + awsAccountAssets + domainAssets)
             .distinctBy { it.id }
             .sortedBy { it.name }
     }

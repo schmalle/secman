@@ -46,6 +46,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
     const [systemFilter, setSystemFilter] = useState<string>('');
     const [exceptionFilter, setExceptionFilter] = useState<string>('');
     const [productFilter, setProductFilter] = useState<string>('');
+    const [adDomainFilter, setAdDomainFilter] = useState<string>('');
 
     // Pagination states
     const [currentPage, setCurrentPage] = useState<number>(0);
@@ -57,7 +58,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
 
     useEffect(() => {
         fetchVulnerabilities();
-    }, [severityFilter, systemFilter, exceptionFilter, productFilter, currentPage]);
+    }, [severityFilter, systemFilter, exceptionFilter, productFilter, adDomainFilter, currentPage]);
 
     const fetchVulnerabilities = async () => {
         try {
@@ -67,6 +68,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                 systemFilter || undefined,
                 exceptionFilter || undefined,
                 productFilter || undefined,
+                adDomainFilter || undefined,
                 currentPage,
                 pageSize
             );
@@ -447,6 +449,27 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                         value={productFilter}
                         onChange={(e) => {
                             setProductFilter(e.target.value);
+                            handleFilterChange();
+                        }}
+                    />
+                </div>
+            </div>
+
+            {/* Second row of filters */}
+            <div className="row mb-4">
+                <div className="col-md-3">
+                    <label htmlFor="adDomainFilter" className="form-label">
+                        <i className="bi bi-building me-2"></i>
+                        AD Domain
+                    </label>
+                    <input
+                        type="text"
+                        id="adDomainFilter"
+                        className="form-control"
+                        placeholder="Filter by AD domain..."
+                        value={adDomainFilter}
+                        onChange={(e) => {
+                            setAdDomainFilter(e.target.value);
                             handleFilterChange();
                         }}
                     />

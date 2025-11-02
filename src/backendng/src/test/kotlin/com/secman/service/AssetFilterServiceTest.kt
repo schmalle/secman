@@ -20,14 +20,15 @@ import java.util.*
 
 /**
  * Unit tests for AssetFilterService
- * Feature: Unified Access Control (Workgroup + AWS Account Mapping)
+ * Feature: Unified Access Control (Workgroup + AWS Account Mapping + AD Domain Mapping)
  *
- * Tests the integration of workgroup-based and AWS account-based access control
+ * Tests the integration of workgroup-based, AWS account-based, and AD domain-based access control
  * to ensure users can access assets via:
  * 1. Workgroup membership
  * 2. Manual creation
  * 3. Scan upload
  * 4. AWS account mapping
+ * 5. AD domain mapping (case-insensitive)
  */
 @MicronautTest
 class AssetFilterServiceTest {
@@ -115,6 +116,8 @@ class AssetFilterServiceTest {
             awsAsset2
         )
 
+        every { userMappingRepository.findDistinctDomainByEmail(userEmail) } returns emptyList()
+
         // When
         val result = assetFilterService.getAccessibleAssets(authentication)
 
@@ -165,6 +168,8 @@ class AssetFilterServiceTest {
             awsOnlyAsset
         )
 
+        every { userMappingRepository.findDistinctDomainByEmail(userEmail) } returns emptyList()
+
         // When
         val result = assetFilterService.getAccessibleAssets(authentication)
 
@@ -195,6 +200,7 @@ class AssetFilterServiceTest {
         } returns listOf(workgroupAsset)
 
         every { userMappingRepository.findDistinctAwsAccountIdByEmail(userEmail) } returns emptyList()
+        every { userMappingRepository.findDistinctDomainByEmail(userEmail) } returns emptyList()
 
         // When
         val result = assetFilterService.getAccessibleAssets(authentication)
@@ -226,8 +232,8 @@ class AssetFilterServiceTest {
         } returns emptyList()
 
         every { userMappingRepository.findDistinctAwsAccountIdByEmail(userEmail) } returns listOf("123456789012")
-
         every { assetRepository.findByCloudAccountIdIn(listOf("123456789012")) } returns listOf(awsAsset)
+        every { userMappingRepository.findDistinctDomainByEmail(userEmail) } returns emptyList()
 
         // When
         val result = assetFilterService.getAccessibleAssets(authentication)
@@ -288,6 +294,7 @@ class AssetFilterServiceTest {
         every { userMappingRepository.findDistinctAwsAccountIdByEmail(userEmail) } returns listOf("123456789012")
 
         every { assetRepository.findByCloudAccountIdIn(listOf("123456789012")) } returns listOf(assetA)
+        every { userMappingRepository.findDistinctDomainByEmail(userEmail) } returns emptyList()
 
         // When
         val result = assetFilterService.getAccessibleAssets(authentication)
@@ -336,6 +343,7 @@ class AssetFilterServiceTest {
         } returns listOf(accessibleAsset)
 
         every { userMappingRepository.findDistinctAwsAccountIdByEmail(userEmail) } returns emptyList()
+        every { userMappingRepository.findDistinctDomainByEmail(userEmail) } returns emptyList()
 
         // When
         val result = assetFilterService.canAccessAsset(assetId, authentication)
@@ -367,6 +375,7 @@ class AssetFilterServiceTest {
         every { userMappingRepository.findDistinctAwsAccountIdByEmail(userEmail) } returns listOf("123456789012")
 
         every { assetRepository.findByCloudAccountIdIn(listOf("123456789012")) } returns listOf(awsAsset)
+        every { userMappingRepository.findDistinctDomainByEmail(userEmail) } returns emptyList()
 
         // When
         val result = assetFilterService.canAccessAsset(assetId, authentication)
@@ -396,12 +405,222 @@ class AssetFilterServiceTest {
         } returns listOf(otherAsset)
 
         every { userMappingRepository.findDistinctAwsAccountIdByEmail(userEmail) } returns emptyList()
+        every { userMappingRepository.findDistinctDomainByEmail(userEmail) } returns emptyList()
 
         // When
         val result = assetFilterService.canAccessAsset(assetId, authentication)
 
         // Then
         assertFalse(result)
+    }
+
+    @Test
+    fun `getAccessibleAssets includes assets matching user's domain (case-insensitive)`() {
+        // Given
+        val userId = 2L
+        val userEmail = "user@contoso.com"
+        val authentication = createMockAuthentication(
+            userId = userId,
+            email = userEmail,
+            roles = setOf("VULN")
+        )
+
+        // Assets with matching domains (different cases)
+        val domainAsset1 = createAsset(1L, "DomainAsset1", adDomain = "CONTOSO")
+        val domainAsset2 = createAsset(2L, "DomainAsset2", adDomain = "contoso")
+        val domainAsset3 = createAsset(3L, "DomainAsset3", adDomain = "ConTosO")
+
+        // Asset with different domain
+        val otherDomainAsset = createAsset(4L, "OtherDomainAsset", adDomain = "FABRIKAM")
+
+        // Asset with no domain
+        val noDomainAsset = createAsset(5L, "NoDomainAsset")
+
+        every {
+            assetRepository.findByWorkgroupsUsersIdOrManualCreatorIdOrScanUploaderIdOrderByNameAsc(
+                userId, userId, userId
+            )
+        } returns emptyList()
+
+        every { userMappingRepository.findDistinctAwsAccountIdByEmail(userEmail) } returns emptyList()
+        every { userMappingRepository.findDistinctDomainByEmail(userEmail) } returns listOf("CONTOSO")
+        every { assetRepository.findAll() } returns listOf(
+            domainAsset1,
+            domainAsset2,
+            domainAsset3,
+            otherDomainAsset,
+            noDomainAsset
+        )
+
+        // When
+        val result = assetFilterService.getAccessibleAssets(authentication)
+
+        // Then
+        assertEquals(3, result.size, "Should match all CONTOSO assets regardless of case")
+        assertTrue(result.any { it.id == 1L }, "Should include CONTOSO (uppercase)")
+        assertTrue(result.any { it.id == 2L }, "Should include contoso (lowercase)")
+        assertTrue(result.any { it.id == 3L }, "Should include ConTosO (mixed case)")
+        assertFalse(result.any { it.id == 4L }, "Should not include FABRIKAM")
+        assertFalse(result.any { it.id == 5L }, "Should not include assets without domain")
+
+        verify { userMappingRepository.findDistinctDomainByEmail(userEmail) }
+        verify { assetRepository.findAll() }
+    }
+
+    @Test
+    fun `getAccessibleAssets combines workgroup, AWS account, and domain assets`() {
+        // Given
+        val userId = 2L
+        val userEmail = "user@contoso.com"
+        val authentication = createMockAuthentication(
+            userId = userId,
+            email = userEmail,
+            roles = setOf("VULN")
+        )
+
+        // Assets from different sources
+        val workgroupAsset = createAsset(1L, "WorkgroupAsset")
+        val awsAsset = createAsset(2L, "AWSAsset", cloudAccountId = "123456789012")
+        val domainAsset = createAsset(3L, "DomainAsset", adDomain = "CONTOSO")
+
+        every {
+            assetRepository.findByWorkgroupsUsersIdOrManualCreatorIdOrScanUploaderIdOrderByNameAsc(
+                userId, userId, userId
+            )
+        } returns listOf(workgroupAsset)
+
+        every { userMappingRepository.findDistinctAwsAccountIdByEmail(userEmail) } returns listOf("123456789012")
+        every { assetRepository.findByCloudAccountIdIn(listOf("123456789012")) } returns listOf(awsAsset)
+
+        every { userMappingRepository.findDistinctDomainByEmail(userEmail) } returns listOf("CONTOSO")
+        every { assetRepository.findAll() } returns listOf(workgroupAsset, awsAsset, domainAsset)
+
+        // When
+        val result = assetFilterService.getAccessibleAssets(authentication)
+
+        // Then
+        assertEquals(3, result.size, "Should combine all three sources")
+        assertTrue(result.any { it.id == 1L }, "Should include workgroup asset")
+        assertTrue(result.any { it.id == 2L }, "Should include AWS asset")
+        assertTrue(result.any { it.id == 3L }, "Should include domain asset")
+
+        verify { userMappingRepository.findDistinctAwsAccountIdByEmail(userEmail) }
+        verify { userMappingRepository.findDistinctDomainByEmail(userEmail) }
+    }
+
+    @Test
+    fun `getAccessibleAssets handles multiple user domains`() {
+        // Given
+        val userId = 2L
+        val userEmail = "user@contoso.com"
+        val authentication = createMockAuthentication(
+            userId = userId,
+            email = userEmail,
+            roles = setOf("VULN")
+        )
+
+        val contosoAsset = createAsset(1L, "ContosoAsset", adDomain = "CONTOSO")
+        val fabrikamAsset = createAsset(2L, "FabrikamAsset", adDomain = "FABRIKAM")
+        val acmeAsset = createAsset(3L, "AcmeAsset", adDomain = "ACME")
+
+        every {
+            assetRepository.findByWorkgroupsUsersIdOrManualCreatorIdOrScanUploaderIdOrderByNameAsc(
+                userId, userId, userId
+            )
+        } returns emptyList()
+
+        every { userMappingRepository.findDistinctAwsAccountIdByEmail(userEmail) } returns emptyList()
+        every { userMappingRepository.findDistinctDomainByEmail(userEmail) } returns listOf("CONTOSO", "FABRIKAM")
+        every { assetRepository.findAll() } returns listOf(contosoAsset, fabrikamAsset, acmeAsset)
+
+        // When
+        val result = assetFilterService.getAccessibleAssets(authentication)
+
+        // Then
+        assertEquals(2, result.size, "Should match both CONTOSO and FABRIKAM assets")
+        assertTrue(result.any { it.id == 1L }, "Should include CONTOSO asset")
+        assertTrue(result.any { it.id == 2L }, "Should include FABRIKAM asset")
+        assertFalse(result.any { it.id == 3L }, "Should not include ACME asset")
+    }
+
+    @Test
+    fun `getAccessibleAssets returns only domain assets when user has no workgroup or AWS access`() {
+        // Given
+        val userId = 2L
+        val userEmail = "user@contoso.com"
+        val authentication = createMockAuthentication(
+            userId = userId,
+            email = userEmail,
+            roles = setOf("VULN")
+        )
+
+        val domainAsset = createAsset(1L, "DomainAsset", adDomain = "CONTOSO")
+
+        every {
+            assetRepository.findByWorkgroupsUsersIdOrManualCreatorIdOrScanUploaderIdOrderByNameAsc(
+                userId, userId, userId
+            )
+        } returns emptyList()
+
+        every { userMappingRepository.findDistinctAwsAccountIdByEmail(userEmail) } returns emptyList()
+        every { userMappingRepository.findDistinctDomainByEmail(userEmail) } returns listOf("CONTOSO")
+        every { assetRepository.findAll() } returns listOf(domainAsset)
+
+        // When
+        val result = assetFilterService.getAccessibleAssets(authentication)
+
+        // Then
+        assertEquals(1, result.size)
+        assertEquals(1L, result[0].id)
+        verify { userMappingRepository.findDistinctDomainByEmail(userEmail) }
+    }
+
+    @Test
+    fun `getAccessibleAssets deduplicates assets that appear in workgroup, AWS, and domain lists`() {
+        // Given
+        val userId = 2L
+        val userEmail = "user@contoso.com"
+        val authentication = createMockAuthentication(
+            userId = userId,
+            email = userEmail,
+            roles = setOf("VULN")
+        )
+
+        // Same asset appears in all three sources
+        val duplicateAsset = createAsset(1L, "DuplicateAsset", cloudAccountId = "123456789012", adDomain = "CONTOSO")
+        val uniqueWorkgroupAsset = createAsset(2L, "UniqueWorkgroup")
+        val uniqueAwsAsset = createAsset(3L, "UniqueAWS", cloudAccountId = "123456789012")
+        val uniqueDomainAsset = createAsset(4L, "UniqueDomain", adDomain = "CONTOSO")
+
+        every {
+            assetRepository.findByWorkgroupsUsersIdOrManualCreatorIdOrScanUploaderIdOrderByNameAsc(
+                userId, userId, userId
+            )
+        } returns listOf(duplicateAsset, uniqueWorkgroupAsset)
+
+        every { userMappingRepository.findDistinctAwsAccountIdByEmail(userEmail) } returns listOf("123456789012")
+        every { assetRepository.findByCloudAccountIdIn(listOf("123456789012")) } returns listOf(
+            duplicateAsset,
+            uniqueAwsAsset
+        )
+
+        every { userMappingRepository.findDistinctDomainByEmail(userEmail) } returns listOf("CONTOSO")
+        every { assetRepository.findAll() } returns listOf(
+            duplicateAsset,
+            uniqueWorkgroupAsset,
+            uniqueAwsAsset,
+            uniqueDomainAsset
+        )
+
+        // When
+        val result = assetFilterService.getAccessibleAssets(authentication)
+
+        // Then
+        assertEquals(4, result.size, "Should deduplicate asset appearing in all lists")
+        assertEquals(1, result.count { it.id == 1L }, "Duplicate asset should appear only once")
+        assertTrue(result.any { it.id == 2L })
+        assertTrue(result.any { it.id == 3L })
+        assertTrue(result.any { it.id == 4L })
     }
 
     // Helper methods
@@ -417,14 +636,20 @@ class AssetFilterServiceTest {
         }
     }
 
-    private fun createAsset(id: Long, name: String, cloudAccountId: String? = null): Asset {
+    private fun createAsset(
+        id: Long,
+        name: String,
+        cloudAccountId: String? = null,
+        adDomain: String? = null
+    ): Asset {
         return Asset(
             name = name,
             type = "Server",
             ip = "192.168.1.$id",
             owner = "owner@example.com",
             description = "Test asset",
-            cloudAccountId = cloudAccountId
+            cloudAccountId = cloudAccountId,
+            adDomain = adDomain
         ).apply {
             this.id = id
         }
