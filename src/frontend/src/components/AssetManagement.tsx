@@ -209,6 +209,7 @@ const AssetManagement: React.FC = () => {
       ip: '',
       owner: '',
       description: '',
+      adDomain: '',
       criticality: undefined,
       workgroupIds: []
     });
@@ -398,6 +399,19 @@ const AssetManagement: React.FC = () => {
                     />
                   </div>
                   <div className="mb-3">
+                    <label htmlFor="adDomain" className="form-label">AD Domain</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      id="adDomain"
+                      name="adDomain"
+                      value={formData.adDomain || ''}
+                      onChange={handleInputChange}
+                      placeholder="e.g., CONTOSO, corp.example.com"
+                    />
+                    <small className="text-muted">Active Directory domain if applicable</small>
+                  </div>
+                  <div className="mb-3">
                     <label htmlFor="description" className="form-label">Description</label>
                     <textarea
                       className="form-control"
@@ -560,6 +574,7 @@ const AssetManagement: React.FC = () => {
                         <th>Type</th>
                         <th>Criticality</th>
                         <th>IP Address</th>
+                        <th>AD Domain</th>
                         <th>Owner</th>
                         <th>Description</th>
                         <th>Workgroups</th>
