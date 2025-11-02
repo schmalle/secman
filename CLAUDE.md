@@ -5,7 +5,7 @@
 **secman** - Security requirement and risk assessment management tool
 
 - Full-stack: Kotlin/Micronaut backend + Astro/React frontend
-- Tech: Micronaut 4.10, Kotlin 2.2, Astro 5.15, React 19, MariaDB 12, Gradle 9 build system
+- Tech: Micronaut 4.10, Kotlin 2.2, Astro 5.15, React 19, MariaDB 12, Gradle 9.2 build system
 - Purpose: Manage security requirements, norms, use cases, assets, and vulnerabilities
 
 ## Architecture
@@ -16,13 +16,11 @@
 
 - **Layers**: Domain (JPA entities) → Repository (Micronaut Data) → Service → Controller (REST)
 - **Security**: JWT auth, OAuth2, RBAC roles: USER, ADMIN, VULN, RELEASE_MANAGER, SECCHAMPION
-- **Testing**: JUnit 5 + MockK, TDD mandatory
 
 ### Frontend (`src/frontend/`)
 
 - **Framework**: Astro with React islands, Bootstrap 5
 - **API**: Axios client, sessionStorage for JWT
-- **Testing**: Playwright E2E
 
 ### Helper Tools (`src/helper/`)
 
@@ -212,28 +210,20 @@ This unified model ensures consistent access across all views (Asset Management,
 
 ## Development Workflow
 
-### TDD (NON-NEGOTIABLE)
-
-1. Contract tests (failing)
-2. Unit tests (failing)
-3. Implement
-4. Refactor
-5. Target: ≥80% coverage
-
 ### Git
 
 - Commits: `type(scope): description`
 - Branches: `###-feature-name`
-- PR gates: tests, lint, Docker build
+- PR gates: lint, Docker build
 
 ### Commands
 
 ```bash
 # Backend
-./gradlew test build
+./gradlew build
 
 # Frontend
-npm test; npm run dev
+npm run dev
 
 # CLI - Send Notifications (Feature 035)
 ./gradlew cli:run --args='send-notifications'
@@ -245,10 +235,9 @@ npm test; npm run dev
 ## Constitutional Principles
 
 1. **Security-First**: File validation, input sanitization, RBAC, always do a security review before completing a feature
-2. **TDD**: Tests before implementation
-3. **API-First**: RESTful, backward compatible
-4. **RBAC**: @Secured on endpoints, role checks in UI
-5. **Schema Evolution**: Hibernate auto-migration
+2. **API-First**: RESTful, backward compatible
+3. **RBAC**: @Secured on endpoints, role checks in UI
+4. **Schema Evolution**: Hibernate auto-migration
 
 ## Common Patterns
 
@@ -352,7 +341,6 @@ npm test; npm run dev
 - **Helper**: `src/helper/src/{models,services,cli,exporters,lib}/`
 - **CLI**: `src/cli/src/main/kotlin/com/secman/cli/{commands,service}/`
 - **Email Templates**: `src/backendng/src/main/resources/email-templates/`
-- **Tests**: `src/backendng/src/test/kotlin/com/secman/{contract,service,integration}/`
 - **Config**: `docker-compose.yml`, `.env`, `src/backendng/src/main/resources/application.yml`
 
 ---
@@ -360,16 +348,16 @@ npm test; npm run dev
 *Optimized for performance. See git history for detailed feature specs. Last updated: 2025-10-26*
 
 ## Active Technologies
-- Kotlin 2.2.21 / Java 21 (backend), Python 3.11+ (CLI), Astro 5.14 + React 19 (frontend) + Micronaut 4.10, Hibernate JPA, MariaDB 11.4, Apache POI 5.3, JavaMail API (SMTP), Bootstrap 5.3, Axios (035-notification-system)
-- MariaDB 11.4 (3 new tables: notification_preference, notification_log, asset_reminder_state) (035-notification-system)
+- Kotlin 2.2.21 / Java 21 (backend), Python 3.11+ (CLI), Astro 5.14 + React 19 (frontend) + Micronaut 4.10, Hibernate JPA, MariaDB 12, Apache POI 5.3, JavaMail API (SMTP), Bootstrap 5.3, Axios (035-notification-system)
+- MariaDB 12 (3 new tables: notification_preference, notification_log, asset_reminder_state) (035-notification-system)
 - Backend: Kotlin 2.2.21 / Java 21; Frontend: Astro 5.14 + React 19 + Backend: Micronaut 4.10, Hibernate JPA; Frontend: React 19, Chart.js (or Recharts) for visualizations, Axios (036-vuln-stats-lense)
-- MariaDB 11.4 (existing Vulnerability and Asset tables; no new tables required) (036-vuln-stats-lense)
-- Kotlin 2.2.21 / Java 21 + Micronaut 4.10, Hibernate JPA, MariaDB 11.4 (037-last-admin-protection)
-- MariaDB 11.4 (existing `users` and `user_roles` tables, no schema changes required) (037-last-admin-protection)
-- Kotlin 2.2.21 / Java 21 (backend), JavaScript ES2022 (frontend - Astro 5.14 + React 19) + Micronaut 4.10, Hibernate JPA, MariaDB 11.4, Astro 5.14, React 19, Bootstrap 5.3, Axios (039-asset-workgroup-criticality)
-- MariaDB 11.4 (2 new columns: workgroup.criticality, asset.criticality) (039-asset-workgroup-criticality)
-- Kotlin 2.2.21 / Java 21 (backend), JavaScript ES2022 (frontend - Astro 5.14 + React 19) + Micronaut 4.10, Hibernate JPA, MariaDB 11.4 (backend); Astro 5.14, React 19, Bootstrap 5.3, Axios (frontend) (040-nested-workgroups)
-- MariaDB 11.4 with self-referential foreign key on `workgroup` table (`parent_id` column) (040-nested-workgroups)
+- MariaDB 12 (existing Vulnerability and Asset tables; no new tables required) (036-vuln-stats-lense)
+- Kotlin 2.2.21 / Java 21 + Micronaut 4.10, Hibernate JPA, MariaDB 12 (037-last-admin-protection)
+- MariaDB 12 (existing `users` and `user_roles` tables, no schema changes required) (037-last-admin-protection)
+- Kotlin 2.2.21 / Java 21 (backend), JavaScript ES2022 (frontend - Astro 5.14 + React 19) + Micronaut 4.10, Hibernate JPA, MariaDB 12, Astro 5.14, React 19, Bootstrap 5.3, Axios (039-asset-workgroup-criticality)
+- MariaDB 12 (2 new columns: workgroup.criticality, asset.criticality) (039-asset-workgroup-criticality)
+- Kotlin 2.2.21 / Java 21 (backend), JavaScript ES2022 (frontend - Astro 5.14 + React 19) + Micronaut 4.10, Hibernate JPA, MariaDB 12 (backend); Astro 5.14, React 19, Bootstrap 5.3, Axios (frontend) (040-nested-workgroups)
+- MariaDB 12 with self-referential foreign key on `workgroup` table (`parent_id` column) (040-nested-workgroups)
 
 ## Recent Changes
-- 035-notification-system: Added Kotlin 2.2.21 / Java 21 (backend), Python 3.11+ (CLI), Astro 5.14 + React 19 (frontend) + Micronaut 4.10, Hibernate JPA, MariaDB 11.4, Apache POI 5.3, JavaMail API (SMTP), Bootstrap 5.3, Axios
+- 035-notification-system: Added Kotlin 2.2.21 / Java 21 (backend), Python 3.11+ (CLI), Astro 5.14 + React 19 (frontend) + Micronaut 4.10, Hibernate JPA, MariaDB 12, Apache POI 5.3, JavaMail API (SMTP), Bootstrap 5.3, Axios
