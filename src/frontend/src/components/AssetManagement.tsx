@@ -623,6 +623,15 @@ const AssetManagement: React.FC = () => {
                           </td>
                           <td>{getCriticalityBadge(asset.criticality)}</td>
                           <td>{asset.ip || '-'}</td>
+                          <td>
+                            {asset.adDomain ? (
+                              <span className="badge bg-secondary" title="Active Directory Domain">
+                                <i className="bi bi-building me-1"></i>{asset.adDomain}
+                              </span>
+                            ) : (
+                              <span className="text-muted">-</span>
+                            )}
+                          </td>
                           <td>{asset.owner}</td>
                           <td>{asset.description || '-'}</td>
                           <td>
