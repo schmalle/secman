@@ -100,6 +100,14 @@ dependencies {
     ksp("io.micronaut.data:micronaut-data-processor")
     ksp("io.micronaut.serde:micronaut-serde-processor")
     ksp("io.micronaut.security:micronaut-security-annotations")
+
+    // Testing dependencies
+    testImplementation("io.micronaut.test:micronaut-test-junit5")
+    testImplementation("io.mockk:mockk:1.13.17")
+    testImplementation("org.junit.jupiter:junit-jupiter-api")
+    testImplementation("org.junit.jupiter:junit-jupiter-params")
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
+    testImplementation("io.micronaut:micronaut-http-client")
 }
 
 application {
@@ -151,17 +159,14 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
     }
 }
 
-// Disable all test tasks
+// Configure test tasks for TDD workflow
 tasks {
     test {
-        enabled = false
-    }
-
-    named<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>("compileTestKotlin") {
-        enabled = false
-    }
-
-    processTestResources {
-        enabled = false
+        useJUnitPlatform()
+        testLogging {
+            events("passed", "skipped", "failed")
+            exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+            showStandardStreams = false
+        }
     }
 }

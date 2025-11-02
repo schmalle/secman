@@ -17,7 +17,15 @@ import java.time.Instant
  * - FR-006: Workgroup names MUST be 1-100 characters, alphanumeric + spaces + hyphens, unique (case-insensitive)
  */
 @Entity
-@Table(name = "workgroup")
+@Table(
+    name = "workgroup",
+    uniqueConstraints = [
+        UniqueConstraint(columnNames = ["parent_id", "name"])
+    ],
+    indexes = [
+        Index(name = "idx_workgroup_parent", columnList = "parent_id")
+    ]
+)
 @Serdeable
 data class Workgroup(
     @Id
@@ -47,6 +55,35 @@ data class Workgroup(
     @Enumerated(EnumType.STRING)
     @Column(name = "criticality", nullable = false, length = 20)
     var criticality: Criticality = Criticality.MEDIUM,
+
+    /**
+     * Parent workgroup in the hierarchy
+     * Feature 040: Nested Workgroups
+     * - NULL indicates root-level workgroup
+     * - Self-referential relationship for hierarchy
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parent_id")
+    var parent: Workgroup? = null,
+
+    /**
+     * Child workgroups in the hierarchy
+     * Feature 040: Nested Workgroups
+     * - One-to-many relationship (inverse of parent)
+     * - CascadeType.PERSIST and MERGE for child management
+     */
+    @JsonIgnore
+    @OneToMany(mappedBy = "parent", cascade = [CascadeType.PERSIST, CascadeType.MERGE], fetch = FetchType.LAZY)
+    var children: MutableSet<Workgroup> = mutableSetOf(),
+
+    /**
+     * Optimistic locking version
+     * Feature 040: Nested Workgroups
+     * - Automatically incremented by Hibernate on updates
+     * - Prevents concurrent modification conflicts
+     */
+    @Version
+    var version: Long = 0,
 
     /**
      * Many-to-many relationship with User
@@ -86,8 +123,53 @@ data class Workgroup(
         updatedAt = Instant.now()
     }
 
+    /**
+     * Calculate the depth of this workgroup in the hierarchy.
+     * Root-level workgroups have depth 1.
+     * Feature 040: Nested Workgroups
+     */
+    fun calculateDepth(): Int {
+        var depth = 1
+        var current = this.parent
+        while (current != null) {
+            depth++
+            current = current.parent
+            if (depth > 10) break  // Safety limit to prevent infinite loops
+        }
+        return depth
+    }
+
+    /**
+     * Get all ancestors from root to immediate parent.
+     * Returns empty list for root-level workgroups.
+     * Feature 040: Nested Workgroups
+     */
+    fun getAncestors(): List<Workgroup> {
+        val ancestors = mutableListOf<Workgroup>()
+        var current = this.parent
+        while (current != null) {
+            ancestors.add(0, current)  // Prepend to maintain root-to-parent order
+            current = current.parent
+            if (ancestors.size > 10) break  // Safety limit
+        }
+        return ancestors
+    }
+
+    /**
+     * Check if this workgroup is a descendant of the given workgroup.
+     * Feature 040: Nested Workgroups
+     */
+    fun isDescendantOf(potentialAncestor: Workgroup): Boolean {
+        var current = this.parent
+        while (current != null) {
+            if (current.id == potentialAncestor.id) return true
+            current = current.parent
+        }
+        return false
+    }
+
     override fun toString(): String {
-        return "Workgroup(id=$id, name='$name', description='$description')"
+        return "Workgroup(id=$id, name='$name', parentId=${parent?.id})"
     }
 
     override fun equals(other: Any?): Boolean {

@@ -10,6 +10,10 @@ interface Workgroup {
   assetCount: number;
   createdAt: string;
   updatedAt: string;
+  parentId?: number;
+  parentName?: string;
+  depth?: number;
+  ancestors?: Array<{ id: number; name: string }>;
 }
 
 interface User {
@@ -258,6 +262,52 @@ const WorkgroupManagement: React.FC = () => {
               </div>
               <form onSubmit={handleSubmit}>
                 <div className="modal-body">
+                  {/* Parent Workgroup Info (read-only, only shown when editing) */}
+                  {editingWorkgroup && (
+                    <div className="mb-3 pb-3 border-bottom">
+                      <div className="alert alert-info mb-0">
+                        <h6 className="alert-heading mb-2">
+                          <i className="bi bi-diagram-3 me-2"></i>
+                          Hierarchy Information
+                        </h6>
+                        {editingWorkgroup.parentId ? (
+                          <>
+                            <div className="mb-1">
+                              <strong>Parent Workgroup:</strong>{' '}
+                              {editingWorkgroup.parentName || `ID ${editingWorkgroup.parentId}`}
+                            </div>
+                            {editingWorkgroup.ancestors && editingWorkgroup.ancestors.length > 0 && (
+                              <div>
+                                <strong>Full Path:</strong>{' '}
+                                <span className="text-muted">
+                                  {editingWorkgroup.ancestors.map(a => a.name).join(' > ')} &gt; {editingWorkgroup.name}
+                                </span>
+                              </div>
+                            )}
+                            {editingWorkgroup.depth && (
+                              <div className="mt-1">
+                                <span className="badge bg-secondary">Level {editingWorkgroup.depth}</span>
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <div>
+                            <strong>Location:</strong> Root level (no parent)
+                            {editingWorkgroup.depth && (
+                              <span className="badge bg-secondary ms-2">Level {editingWorkgroup.depth}</span>
+                            )}
+                          </div>
+                        )}
+                        <div className="mt-2">
+                          <small className="text-muted">
+                            <i className="bi bi-info-circle me-1"></i>
+                            To move this workgroup to a different parent, use the Tree View and click "Move"
+                          </small>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="mb-3">
                     <label className="form-label">Name *</label>
                     <input
