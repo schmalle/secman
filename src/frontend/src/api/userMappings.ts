@@ -14,12 +14,14 @@ export interface UserMapping {
 }
 
 export interface CreateMappingRequest {
+  email: string;
   awsAccountId: string | null;
   domain: string | null;
   ipAddress?: string | null;
 }
 
 export interface UpdateMappingRequest {
+  email: string;
   awsAccountId: string | null;
   domain: string | null;
   ipAddress?: string | null;

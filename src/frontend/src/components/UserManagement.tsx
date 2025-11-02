@@ -253,6 +253,20 @@ const UserManagement = () => {
         }
     };
 
+    const handleCloseEditModal = () => {
+        setShowEditUserModal(false);
+        setEditingUser(null);
+        setEditUser({ username: '', email: '', password: '', roles: [], workgroupIds: [] });
+
+        // Reset mapping form states to prevent data leaking between users
+        setNewMapping({ awsAccountId: '', domain: '', ipAddress: '' });
+        setEditMappingData({ awsAccountId: '', domain: '', ipAddress: '' });
+        setIsAddingMapping(false);
+        setEditingMappingId(null);
+        setMappingsError(null);
+        setMappingsSuccess(null);
+    };
+
     const handleDeleteUser = async (userId: number, username: string) => {
         if (!confirm(`Are you sure you want to delete user "${username}"?`)) {
             return;
@@ -297,6 +311,15 @@ const UserManagement = () => {
             workgroupIds: user.workgroups?.map(wg => wg.id) || [],
         });
         setEditUserError(null);
+
+        // Reset mapping form states to prevent data leaking between users
+        setNewMapping({ awsAccountId: '', domain: '', ipAddress: '' });
+        setEditMappingData({ awsAccountId: '', domain: '', ipAddress: '' });
+        setIsAddingMapping(false);
+        setEditingMappingId(null);
+        setMappingsError(null);
+        setMappingsSuccess(null);
+
         setShowEditUserModal(true);
         // Load mappings for this user (Feature 017)
         loadUserMappings(user.id);
@@ -380,9 +403,7 @@ const UserManagement = () => {
             if (response.ok) {
                 const data = await response.json();
                 setUsers(prevUsers => prevUsers.map(u => u.id === editingUser.id ? data : u));
-                setShowEditUserModal(false);
-                setEditingUser(null);
-                setEditUser({ username: '', email: '', password: '', roles: [], workgroupIds: [] }); // Reset form
+                handleCloseEditModal();
             } else {
                 const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
                 throw new Error(errorData.error || `Failed to update user: ${response.status}`);
@@ -427,6 +448,7 @@ const UserManagement = () => {
         setIsLoadingMappings(true);
         try {
             const mappingData: CreateMappingRequest = {
+                email: editingUser.email,
                 awsAccountId: hasAwsId ? newMapping.awsAccountId : null,
                 domain: hasDomain ? newMapping.domain : null,
                 ipAddress: hasIpAddress ? newMapping.ipAddress : null
@@ -494,6 +516,7 @@ const UserManagement = () => {
         setIsLoadingMappings(true);
         try {
             const updateData: UpdateMappingRequest = {
+                email: editingUser.email,
                 awsAccountId: hasAwsId ? editMappingData.awsAccountId : null,
                 domain: hasDomain ? editMappingData.domain : null,
                 ipAddress: hasIpAddress ? editMappingData.ipAddress : null
@@ -637,12 +660,12 @@ const UserManagement = () => {
             {/* Edit User Modal */}
             {showEditUserModal && editingUser && (
                 <div className="modal fade show d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-                    <div className="modal-dialog modal-dialog-centered">
+                    <div className="modal-dialog modal-dialog-centered modal-xl">
                         <div className="modal-content">
                             <form onSubmit={handleEditUserSubmit}>
                                 <div className="modal-header">
                                     <h5 className="modal-title">Edit User: {editingUser.username}</h5>
-                                    <button type="button" className="btn-close" onClick={() => setShowEditUserModal(false)} aria-label="Close" disabled={isSubmittingEdit}></button>
+                                    <button type="button" className="btn-close" onClick={handleCloseEditModal} aria-label="Close" disabled={isSubmittingEdit}></button>
                                 </div>
                                 <div className="modal-body">
                                     {editUserError && <div className="alert alert-danger">{editUserError}</div>}
@@ -999,7 +1022,7 @@ const UserManagement = () => {
                                     </div>
                                 </div>
                                 <div className="modal-footer">
-                                    <button type="button" className="btn btn-secondary" onClick={() => setShowEditUserModal(false)} disabled={isSubmittingEdit}>Close</button>
+                                    <button type="button" className="btn btn-secondary" onClick={handleCloseEditModal} disabled={isSubmittingEdit}>Close</button>
                                     <button type="submit" className="btn btn-primary" disabled={isSubmittingEdit}>
                                         {isSubmittingEdit ? 'Updating...' : 'Update User'}
                                     </button>
