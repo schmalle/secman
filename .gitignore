@@ -7,6 +7,7 @@ mcp/package-lock.json
 build/
 dist/
 out/
+.kotlin/
 
 # Gradle
 .gradle/
