@@ -1507,4 +1507,215 @@ open class CrowdStrikeApiClientImpl(
             }
         }
     }
+
+    /**
+     * Query vulnerabilities by AWS EC2 Instance ID
+     *
+     * Feature: 041-falcon-instance-lookup
+     * Tasks: T011, T012, T013
+     *
+     * Three-step workflow:
+     * 1. Query devices by instance_id filter
+     * 2. Get device details (hostname, metadata)
+     * 3. Query vulnerabilities for each device
+     *
+     * @param instanceId AWS EC2 Instance ID (format: i-XXXXXXXXX...)
+     * @param config CrowdStrike Falcon configuration
+     * @return CrowdStrikeQueryResponse with aggregated vulnerabilities
+     * @throws NotFoundException if instance ID not found
+     * @throws RateLimitException if rate limit exceeded
+     * @throws CrowdStrikeException for other API errors
+     */
+    override fun queryVulnerabilitiesByInstanceId(instanceId: String, config: FalconConfigDto): CrowdStrikeQueryResponse {
+        require(instanceId.isNotBlank()) { "Instance ID cannot be blank" }
+        require(instanceId.startsWith("i-", ignoreCase = true)) { "Instance ID must start with 'i-'" }
+
+        log.info("Querying CrowdStrike by AWS instance ID: instanceId={}", instanceId)
+
+        return try {
+            // Step 1: Authenticate
+            val token = getAuthToken(config)
+
+            // Step 2: Query devices by instance ID
+            val deviceIds = queryDeviceIdsByInstanceId(instanceId, token)
+
+            if (deviceIds.isEmpty()) {
+                throw NotFoundException("System not found with instance ID: $instanceId")
+            }
+
+            log.info("Found {} device(s) with instance ID '{}'", deviceIds.size, instanceId)
+
+            // Step 3: Get device details to extract hostnames
+            val deviceDetails = getDeviceDetailsByIds(deviceIds, token)
+
+            val hostnames = deviceDetails.mapNotNull { it["hostname"]?.toString() }
+            val primaryHostname = hostnames.firstOrNull() ?: instanceId
+
+            log.info("Device hostnames: {}", hostnames.joinToString(", "))
+
+            // Step 4: Query vulnerabilities for each device
+            val allVulnerabilities = mutableListOf<CrowdStrikeVulnerabilityDto>()
+
+            deviceIds.forEach { deviceId ->
+                try {
+                    val hostname = deviceDetails.find { it["device_id"] == deviceId }
+                        ?.get("hostname")?.toString() ?: instanceId
+
+                    val vulns = querySpotlightApi(deviceId, hostname, token)
+                    allVulnerabilities.addAll(vulns)
+                } catch (e: Exception) {
+                    log.warn("Failed to query vulnerabilities for device {}: {}", deviceId, e.message)
+                }
+            }
+
+            log.info("Successfully queried CrowdStrike: instanceId={}, devices={}, vulnerabilities={}",
+                instanceId, deviceIds.size, allVulnerabilities.size)
+
+            CrowdStrikeQueryResponse(
+                hostname = if (hostnames.size > 1) hostnames.joinToString(", ") else primaryHostname,
+                instanceId = instanceId,
+                deviceCount = deviceIds.size,
+                vulnerabilities = allVulnerabilities,
+                totalCount = allVulnerabilities.size,
+                queriedAt = LocalDateTime.now()
+            )
+        } catch (e: CrowdStrikeException) {
+            log.error("CrowdStrike query failed: instanceId={}, error={}", instanceId, e.message)
+            throw e
+        } catch (e: Exception) {
+            log.error("Unexpected error querying CrowdStrike by instance ID: instanceId={}", instanceId, e)
+            throw CrowdStrikeException("Failed to query vulnerabilities for instance ID $instanceId: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Query device IDs by AWS instance ID filter
+     *
+     * Feature: 041-falcon-instance-lookup
+     * Task: T011
+     *
+     * @param instanceId AWS EC2 Instance ID
+     * @param token OAuth2 access token
+     * @return List of device IDs (AIDs) with this instance ID
+     */
+    private fun queryDeviceIdsByInstanceId(instanceId: String, token: AuthToken): List<String> {
+        log.debug("Querying devices by instance ID: {}", instanceId)
+
+        // Use FQL filter: instance_id:'i-xxx'
+        val filter = "instance_id:'$instanceId'"
+
+        val uri = UriBuilder.of("/devices/queries/devices/v1")
+            .queryParam("filter", filter)
+            .queryParam("limit", "100")
+            .build()
+
+        val request = HttpRequest.GET<Any>(uri.toString())
+            .header("Authorization", "Bearer ${token.accessToken}")
+            .header("Accept", "application/json")
+
+        log.debug("Querying devices: filter={}", filter)
+
+        return try {
+            val response = httpClient.toBlocking().exchange(request, Map::class.java)
+
+            when (response.status.code) {
+                200 -> {
+                    @Suppress("UNCHECKED_CAST")
+                    val responseBody = response.body() as? Map<String, Any>
+                        ?: throw CrowdStrikeException("Empty response from CrowdStrike Hosts API")
+
+                    val resources = responseBody["resources"] as? List<*> ?: emptyList<Any>()
+                    val deviceIds = resources.mapNotNull { it?.toString() }
+
+                    log.info("Found {} device(s) with instance ID '{}'", deviceIds.size, instanceId)
+                    deviceIds
+                }
+                404 -> {
+                    log.debug("No devices found with instance ID: {}", instanceId)
+                    emptyList()
+                }
+                429 -> {
+                    val retryAfter = response.headers.get("Retry-After")?.toLongOrNull() ?: 30L
+                    throw RateLimitException("Rate limit during instance ID lookup", retryAfter)
+                }
+                in 500..599 -> throw CrowdStrikeException("CrowdStrike server error: ${response.status}")
+                else -> {
+                    log.warn("Unexpected response for instance ID query: status={}", response.status)
+                    emptyList()
+                }
+            }
+        } catch (e: io.micronaut.http.client.exceptions.HttpClientResponseException) {
+            when (e.status.code) {
+                429 -> {
+                    val retryAfter = e.response.headers.get("Retry-After")?.toLongOrNull() ?: 30L
+                    throw RateLimitException("Rate limit during instance ID lookup", retryAfter, e)
+                }
+                404 -> {
+                    log.debug("No devices found with instance ID: {}", instanceId)
+                    emptyList()
+                }
+                else -> throw CrowdStrikeException("Failed to query devices by instance ID: ${e.message}", e)
+            }
+        }
+    }
+
+    /**
+     * Get device details by device IDs
+     *
+     * Feature: 041-falcon-instance-lookup
+     * Task: T012
+     *
+     * @param deviceIds List of device IDs (AIDs)
+     * @param token OAuth2 access token
+     * @return List of device detail maps with hostname, instance_id, etc.
+     */
+    private fun getDeviceDetailsByIds(deviceIds: List<String>, token: AuthToken): List<Map<String, Any>> {
+        if (deviceIds.isEmpty()) {
+            return emptyList()
+        }
+
+        log.debug("Getting device details for {} device(s)", deviceIds.size)
+
+        val uri = UriBuilder.of("/devices/entities/devices/v1")
+            .queryParam("ids", deviceIds.joinToString(","))
+            .build()
+
+        val request = HttpRequest.GET<Any>(uri.toString())
+            .header("Authorization", "Bearer ${token.accessToken}")
+            .header("Accept", "application/json")
+
+        return try {
+            val response = httpClient.toBlocking().exchange(request, Map::class.java)
+
+            when (response.status.code) {
+                200 -> {
+                    @Suppress("UNCHECKED_CAST")
+                    val responseBody = response.body() as? Map<String, Any>
+                        ?: throw CrowdStrikeException("Empty response from CrowdStrike Device Details API")
+
+                    val resources = responseBody["resources"] as? List<*> ?: emptyList<Any>()
+
+                    @Suppress("UNCHECKED_CAST")
+                    resources.mapNotNull { it as? Map<String, Any> }
+                }
+                429 -> {
+                    val retryAfter = response.headers.get("Retry-After")?.toLongOrNull() ?: 30L
+                    throw RateLimitException("Rate limit during device details lookup", retryAfter)
+                }
+                in 500..599 -> throw CrowdStrikeException("CrowdStrike server error: ${response.status}")
+                else -> {
+                    log.warn("Unexpected response for device details: status={}", response.status)
+                    emptyList()
+                }
+            }
+        } catch (e: io.micronaut.http.client.exceptions.HttpClientResponseException) {
+            when (e.status.code) {
+                429 -> {
+                    val retryAfter = e.response.headers.get("Retry-After")?.toLongOrNull() ?: 30L
+                    throw RateLimitException("Rate limit during device details lookup", retryAfter, e)
+                }
+                else -> throw CrowdStrikeException("Failed to get device details: ${e.message}", e)
+            }
+        }
+    }
 }

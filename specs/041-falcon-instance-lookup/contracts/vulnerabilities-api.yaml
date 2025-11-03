@@ -1,0 +1,434 @@
+openapi: 3.0.3
+info:
+  title: CrowdStrike Vulnerability Query API
+  description: |
+    API for querying CrowdStrike Falcon vulnerability data by hostname or AWS EC2 Instance ID.
+
+    **Feature**: 041-falcon-instance-lookup
+
+    **Backward Compatibility**: This API extends the existing `/api/vulnerabilities` endpoint
+    to support AWS instance ID queries while maintaining full compatibility with hostname queries.
+  version: 1.1.0
+  contact:
+    name: SecMan Development Team
+
+servers:
+  - url: http://localhost:4321/api
+    description: Development server
+  - url: https://secman.example.com/api
+    description: Production server
+
+security:
+  - bearerAuth: []
+
+paths:
+  /vulnerabilities:
+    get:
+      summary: Query vulnerabilities by hostname or AWS instance ID
+      description: |
+        Query CrowdStrike Falcon API for vulnerability data. Supports two query modes:
+
+        1. **Hostname Query**: Traditional hostname-based lookup (existing functionality)
+        2. **Instance ID Query**: AWS EC2 Instance ID-based lookup (Feature 041)
+
+        The API automatically detects the query type based on input format:
+        - Input matching `i-[0-9a-fA-F]{8,17}` → Instance ID query
+        - All other inputs → Hostname query
+
+        Results are cached for 15 minutes to optimize performance and prevent excessive API calls.
+      operationId: queryVulnerabilities
+      tags:
+        - CrowdStrike
+        - Vulnerabilities
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: hostname
+          in: query
+          required: true
+          description: |
+            System identifier - either a hostname or AWS EC2 instance ID.
+
+            **Hostname Format**: Alphanumeric with dots/hyphens (e.g., `web-server-01`)
+            **Instance ID Format**: `i-` followed by 8 or 17 hexadecimal characters (e.g., `i-0048f94221fe110cf`)
+
+            The API auto-detects which type based on format pattern.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
+            examples:
+              - web-server-01
+              - i-0048f94221fe110cf
+              - i-1234567a
+          example: "i-0048f94221fe110cf"
+
+        - name: severity
+          in: query
+          required: false
+          description: Filter results by CVSS severity level (case-insensitive)
+          schema:
+            type: string
+            enum:
+              - critical
+              - high
+              - medium
+              - low
+          example: "critical"
+
+        - name: product
+          in: query
+          required: false
+          description: Filter results by affected product (substring match, case-insensitive)
+          schema:
+            type: string
+            maxLength: 255
+          example: "apache"
+
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of results to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+          example: 100
+
+      responses:
+        '200':
+          description: Successful query - vulnerabilities retrieved from CrowdStrike API
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CrowdStrikeQueryResponse'
+              examples:
+                hostnameQuery:
+                  summary: Hostname query result
+                  value:
+                    hostname: "web-server-01"
+                    instanceId: null
+                    deviceCount: null
+                    vulnerabilities:
+                      - id: "vuln_12345"
+                        hostname: "web-server-01"
+                        ip: "10.0.1.100"
+                        cveId: "CVE-2024-1234"
+                        severity: "Critical"
+                        cvssScore: 9.8
+                        affectedProduct: "Apache HTTP Server 2.4.58"
+                        daysOpen: "15 days"
+                        detectedAt: "2024-10-15T10:30:00Z"
+                        status: "OPEN"
+                        hasException: false
+                        exceptionReason: null
+                    totalCount: 1
+                    queriedAt: "2025-11-03T14:30:00Z"
+
+                instanceIdQuery:
+                  summary: Instance ID query result (single device)
+                  value:
+                    hostname: "web-server-01"
+                    instanceId: "i-0048f94221fe110cf"
+                    deviceCount: 1
+                    vulnerabilities:
+                      - id: "vuln_12345"
+                        hostname: "web-server-01"
+                        ip: "10.0.1.100"
+                        cveId: "CVE-2024-1234"
+                        severity: "Critical"
+                        cvssScore: 9.8
+                        affectedProduct: "Apache HTTP Server 2.4.58"
+                        daysOpen: "15 days"
+                        detectedAt: "2024-10-15T10:30:00Z"
+                        status: "OPEN"
+                        hasException: false
+                        exceptionReason: null
+                    totalCount: 1
+                    queriedAt: "2025-11-03T14:30:00Z"
+
+                multipleDevices:
+                  summary: Instance ID query with multiple devices
+                  value:
+                    hostname: "web-server-01, web-server-02"
+                    instanceId: "i-0048f94221fe110cf"
+                    deviceCount: 2
+                    vulnerabilities:
+                      - id: "vuln_12345"
+                        hostname: "web-server-01"
+                        ip: "10.0.1.100"
+                        cveId: "CVE-2024-1234"
+                        severity: "Critical"
+                        cvssScore: 9.8
+                        affectedProduct: "Apache HTTP Server 2.4.58"
+                        daysOpen: "15 days"
+                        detectedAt: "2024-10-15T10:30:00Z"
+                        status: "OPEN"
+                        hasException: false
+                        exceptionReason: null
+                      - id: "vuln_67890"
+                        hostname: "web-server-02"
+                        ip: "10.0.1.101"
+                        cveId: "CVE-2024-5678"
+                        severity: "High"
+                        cvssScore: 7.5
+                        affectedProduct: "OpenSSL 3.0.10"
+                        daysOpen: "5 days"
+                        detectedAt: "2024-10-25T08:15:00Z"
+                        status: "OPEN"
+                        hasException: true
+                        exceptionReason: "Compensating controls in place"
+                    totalCount: 2
+                    queriedAt: "2025-11-03T14:30:00Z"
+
+        '400':
+          description: Bad Request - Invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalidInstanceId:
+                  summary: Invalid AWS instance ID format
+                  value:
+                    error: "Invalid instance ID format. Expected 'i-' followed by 8 or 17 hexadecimal characters (e.g., i-0048f94221fe110cf)"
+                invalidLimit:
+                  summary: Limit out of range
+                  value:
+                    error: "Limit must be between 1 and 1000"
+
+        '401':
+          description: Unauthorized - Missing or invalid JWT token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Unauthorized. Please provide a valid authentication token."
+
+        '403':
+          description: Forbidden - Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Forbidden. Requires ADMIN or VULN role."
+
+        '404':
+          description: Not Found - Hostname/Instance ID not found in CrowdStrike
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                hostnameNotFound:
+                  summary: Hostname not found
+                  value:
+                    error: "System 'web-server-01' not found in CrowdStrike"
+                instanceIdNotFound:
+                  summary: Instance ID not found
+                  value:
+                    error: "System not found with instance ID: i-0048f94221fe110cf"
+
+        '429':
+          description: Too Many Requests - CrowdStrike API rate limit exceeded
+          headers:
+            Retry-After:
+              description: Number of seconds to wait before retrying
+              schema:
+                type: integer
+              example: 60
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "CrowdStrike API rate limit exceeded. Try again in 60 seconds."
+
+        '500':
+          description: Internal Server Error - CrowdStrike API error or configuration issue
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                apiError:
+                  summary: CrowdStrike API error
+                  value:
+                    error: "CrowdStrike service temporarily unavailable. Please try again later."
+                configError:
+                  summary: Configuration error
+                  value:
+                    error: "CrowdStrike API credentials not configured. Contact administrator."
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token stored in sessionStorage (obtained via `/api/auth/login`)
+
+  schemas:
+    CrowdStrikeQueryResponse:
+      type: object
+      required:
+        - hostname
+        - vulnerabilities
+        - totalCount
+        - queriedAt
+      properties:
+        hostname:
+          type: string
+          description: |
+            Primary hostname of the system(s) found.
+
+            - **Single device**: Hostname from CrowdStrike (e.g., "web-server-01")
+            - **Multiple devices**: Comma-separated hostnames (e.g., "web-01, web-02")
+            - **No hostname**: Instance ID used as fallback (e.g., "i-0048f94221fe110cf")
+          example: "web-server-01"
+
+        instanceId:
+          type: string
+          nullable: true
+          pattern: '^i-[0-9a-fA-F]{8,17}$'
+          description: |
+            AWS EC2 Instance ID (only populated for instance ID queries).
+
+            **Format**: `i-` + 8 or 17 hexadecimal characters
+            **Example**: `i-0048f94221fe110cf`
+          example: "i-0048f94221fe110cf"
+
+        deviceCount:
+          type: integer
+          nullable: true
+          minimum: 1
+          description: |
+            Number of CrowdStrike devices found with this instance ID.
+
+            **Typical**: 1 device per instance ID
+            **Edge case**: 2+ devices (rare - during instance lifecycle transitions)
+          example: 1
+
+        vulnerabilities:
+          type: array
+          items:
+            $ref: '#/components/schemas/CrowdStrikeVulnerabilityDto'
+          description: List of vulnerabilities found on the system(s)
+
+        totalCount:
+          type: integer
+          minimum: 0
+          description: Total number of vulnerabilities returned (after filtering)
+          example: 5
+
+        queriedAt:
+          type: string
+          format: date-time
+          description: Timestamp when data was fetched from CrowdStrike API
+          example: "2025-11-03T14:30:00Z"
+
+    CrowdStrikeVulnerabilityDto:
+      type: object
+      required:
+        - id
+        - hostname
+        - severity
+        - detectedAt
+        - status
+        - hasException
+      properties:
+        id:
+          type: string
+          description: Unique vulnerability identifier from CrowdStrike
+          example: "vuln_12345abc"
+
+        hostname:
+          type: string
+          description: Hostname of the affected system
+          example: "web-server-01"
+
+        ip:
+          type: string
+          nullable: true
+          description: IP address of the affected system
+          example: "10.0.1.100"
+
+        cveId:
+          type: string
+          nullable: true
+          pattern: '^CVE-\d{4}-\d{4,}$'
+          description: CVE identifier (if available)
+          example: "CVE-2024-1234"
+
+        severity:
+          type: string
+          enum:
+            - Critical
+            - High
+            - Medium
+            - Low
+            - Informational
+          description: CVSS severity level
+          example: "Critical"
+
+        cvssScore:
+          type: number
+          format: double
+          nullable: true
+          minimum: 0.0
+          maximum: 10.0
+          description: CVSS base score
+          example: 9.8
+
+        affectedProduct:
+          type: string
+          nullable: true
+          description: Affected software product and version
+          example: "Apache HTTP Server 2.4.58"
+
+        daysOpen:
+          type: string
+          nullable: true
+          description: Human-readable duration the vulnerability has been open
+          example: "15 days"
+
+        detectedAt:
+          type: string
+          format: date-time
+          description: When the vulnerability was first detected
+          example: "2024-10-15T10:30:00Z"
+
+        status:
+          type: string
+          description: Vulnerability status
+          example: "OPEN"
+
+        hasException:
+          type: boolean
+          description: Whether an active exception exists for this vulnerability
+          example: false
+
+        exceptionReason:
+          type: string
+          nullable: true
+          description: Reason for exception (if hasException is true)
+          example: "Compensating controls in place"
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Human-readable error message
+          example: "Invalid instance ID format"
+
+tags:
+  - name: CrowdStrike
+    description: CrowdStrike Falcon API integration
+  - name: Vulnerabilities
+    description: Vulnerability query and management

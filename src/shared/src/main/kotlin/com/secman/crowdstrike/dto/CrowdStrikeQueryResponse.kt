@@ -8,7 +8,9 @@ import java.time.LocalDateTime
 /**
  * Response DTO for CrowdStrike vulnerability query
  *
- * Related to: Feature 015-we-have-currently (CrowdStrike System Vulnerability Lookup)
+ * Related to:
+ * - Feature 015-we-have-currently (CrowdStrike System Vulnerability Lookup)
+ * - Feature 041-falcon-instance-lookup (AWS Instance ID queries)
  */
 @Serdeable
 data class CrowdStrikeQueryResponse(
@@ -17,6 +19,22 @@ data class CrowdStrikeQueryResponse(
      */
     @field:NotBlank
     val hostname: String,
+
+    /**
+     * AWS EC2 Instance ID (Feature 041)
+     *
+     * Populated when querying by instance ID
+     * Null for hostname queries
+     */
+    val instanceId: String? = null,
+
+    /**
+     * Number of CrowdStrike devices found with this instance ID (Feature 041)
+     *
+     * Typically 1, rarely 2+ (during instance lifecycle transitions)
+     * Null for hostname queries
+     */
+    val deviceCount: Int? = null,
 
     /**
      * List of vulnerabilities found (empty if none)
