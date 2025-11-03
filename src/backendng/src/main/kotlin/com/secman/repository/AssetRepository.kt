@@ -148,10 +148,25 @@ interface AssetRepository : JpaRepository<Asset, Long> {
      * @return List of distinct assets in the specified workgroups (empty list if none)
      */
     @io.micronaut.data.annotation.Query("""
-        SELECT DISTINCT a FROM Asset a 
-        JOIN a.workgroups w 
+        SELECT DISTINCT a FROM Asset a
+        JOIN a.workgroups w
         WHERE w.id IN :workgroupIds
         ORDER BY a.name ASC
     """)
     fun findByWorkgroupIdIn(workgroupIds: List<Long>): List<Asset>
+
+    /**
+     * Find distinct AD domains from all assets
+     * Used for filter dropdown population in Current Vulnerabilities view
+     *
+     * @return List of distinct AD domain names (non-null, non-empty), ordered alphabetically
+     */
+    @io.micronaut.data.annotation.Query("""
+        SELECT DISTINCT a.adDomain
+        FROM Asset a
+        WHERE a.adDomain IS NOT NULL
+        AND a.adDomain != ''
+        ORDER BY a.adDomain
+    """)
+    fun findDistinctAdDomains(): List<String>
 }

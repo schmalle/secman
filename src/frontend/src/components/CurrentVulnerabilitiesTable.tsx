@@ -18,6 +18,8 @@ import React, { useState, useEffect } from 'react';
 import {
     getCurrentVulnerabilities,
     cleanupDuplicateVulnerabilities,
+    getDistinctProducts,
+    getDistinctAdDomains,
     type CurrentVulnerability,
     type PaginatedVulnerabilitiesResponse,
     type VulnerabilityCleanupResult
@@ -48,6 +50,10 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
     const [productFilter, setProductFilter] = useState<string>('');
     const [adDomainFilter, setAdDomainFilter] = useState<string>('');
 
+    // Available filter options
+    const [availableProducts, setAvailableProducts] = useState<string[]>([]);
+    const [availableAdDomains, setAvailableAdDomains] = useState<string[]>([]);
+
     // Pagination states
     const [currentPage, setCurrentPage] = useState<number>(0);
     const [pageSize] = useState<number>(50);
@@ -59,6 +65,23 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
     useEffect(() => {
         fetchVulnerabilities();
     }, [severityFilter, systemFilter, exceptionFilter, productFilter, adDomainFilter, currentPage]);
+
+    useEffect(() => {
+        // Fetch available filter options on mount
+        const fetchFilterOptions = async () => {
+            try {
+                const [products, domains] = await Promise.all([
+                    getDistinctProducts(undefined, 100),
+                    getDistinctAdDomains()
+                ]);
+                setAvailableProducts(products);
+                setAvailableAdDomains(domains);
+            } catch (err) {
+                console.error('Failed to fetch filter options:', err);
+            }
+        };
+        fetchFilterOptions();
+    }, []);
 
     const fetchVulnerabilities = async () => {
         try {
@@ -441,17 +464,22 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                 </div>
                 <div className="col-md-3">
                     <label htmlFor="productFilter" className="form-label">Product</label>
-                    <input
-                        type="text"
+                    <select
                         id="productFilter"
-                        className="form-control"
-                        placeholder="Filter by product..."
+                        className="form-select"
                         value={productFilter}
                         onChange={(e) => {
                             setProductFilter(e.target.value);
                             handleFilterChange();
                         }}
-                    />
+                    >
+                        <option value="">All Products</option>
+                        {availableProducts.map((product) => (
+                            <option key={product} value={product}>
+                                {product}
+                            </option>
+                        ))}
+                    </select>
                 </div>
             </div>
 
@@ -462,17 +490,22 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                         <i className="bi bi-building me-2"></i>
                         AD Domain
                     </label>
-                    <input
-                        type="text"
+                    <select
                         id="adDomainFilter"
-                        className="form-control"
-                        placeholder="Filter by AD domain..."
+                        className="form-select"
                         value={adDomainFilter}
                         onChange={(e) => {
                             setAdDomainFilter(e.target.value);
                             handleFilterChange();
                         }}
-                    />
+                    >
+                        <option value="">All Domains</option>
+                        {availableAdDomains.map((domain) => (
+                            <option key={domain} value={domain}>
+                                {domain}
+                            </option>
+                        ))}
+                    </select>
                 </div>
             </div>
 
