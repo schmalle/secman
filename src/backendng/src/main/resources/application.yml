@@ -68,6 +68,13 @@ micronaut:
       - pattern: "/api/**"
         access:
           - isAuthenticated()
+  # Cache configuration
+  # Feature: 041-falcon-instance-lookup
+  # Task: T034
+  caches:
+    vulnerability_queries:
+      maximum-size: 1000
+      expire-after-write: 15m
 
 # Email functionality configuration
 secman:

@@ -29,9 +29,12 @@ export interface CrowdStrikeVulnerabilityDto {
 /**
  * Query Response
  * Matches backend CrowdStrikeQueryResponse
+ * Feature: 041-falcon-instance-lookup
  */
 export interface CrowdStrikeQueryResponse {
     hostname: string;
+    instanceId?: string | null;
+    deviceCount?: number | null;
     vulnerabilities: CrowdStrikeVulnerabilityDto[];
     totalCount: number;
     queriedAt: string;
@@ -40,10 +43,12 @@ export interface CrowdStrikeQueryResponse {
 /**
  * Save Request
  * Matches backend CrowdStrikeSaveRequest
+ * Feature: 041-falcon-instance-lookup
  */
 export interface CrowdStrikeSaveRequest {
     hostname: string;
     vulnerabilities: CrowdStrikeVulnerabilityDto[];
+    instanceId?: string; // T050: Optional instance ID for asset enrichment
 }
 
 /**
@@ -62,17 +67,21 @@ export interface CrowdStrikeSaveResponse {
 /**
  * Query CrowdStrike for system vulnerabilities
  *
- * Task: T030 [US1-Impl]
+ * Feature: 041-falcon-instance-lookup
+ * Task: T030 [US1-Impl], T036 [US3-Impl]
  *
- * @param hostname System hostname to query
+ * @param hostname System hostname or AWS instance ID to query
+ * @param force If true, bypass cache and fetch fresh data (Feature 041, Task T035)
  * @returns Query response with vulnerabilities
  * @throws Error if authentication fails, hostname not found, rate limit exceeded, or API error
  */
 export async function queryVulnerabilities(
-    hostname: string
+    hostname: string,
+    force: boolean = false
 ): Promise<CrowdStrikeQueryResponse> {
     console.log('[CrowdStrikeService] queryVulnerabilities called');
     console.log('[CrowdStrikeService] Hostname:', hostname);
+    console.log('[CrowdStrikeService] Force refresh:', force);
 
     // Get JWT token from localStorage
     const token = localStorage.getItem('authToken');
@@ -83,7 +92,9 @@ export async function queryVulnerabilities(
         throw new Error('Not authenticated. Please log in.');
     }
 
-    const url = `/api/crowdstrike/vulnerabilities?hostname=${encodeURIComponent(hostname)}`;
+    // Use new endpoint that supports both hostname and instance ID (Feature 041)
+    const forceParam = force ? '&force=true' : '';
+    const url = `/api/vulnerabilities?hostname=${encodeURIComponent(hostname)}${forceParam}`;
     console.log('[CrowdStrikeService] Calling API:', url);
 
     try {
@@ -114,7 +125,10 @@ export async function queryVulnerabilities(
                 } else if (response.status === 403) {
                     throw new Error('Insufficient permissions. ADMIN or VULN role required.');
                 } else if (response.status === 404) {
-                    throw new Error(`System '${hostname}' not found in CrowdStrike`);
+                    // Feature 041: Handle both hostname and instance ID in error message
+                    const isInstanceId = hostname.trim().toLowerCase().startsWith('i-');
+                    const identifier = isInstanceId ? 'instance ID' : 'hostname';
+                    throw new Error(`System not found with ${identifier}: ${hostname}`);
                 } else if (response.status === 429) {
                     const retryAfter = response.headers.get('Retry-After') || '30';
                     throw new Error(`Rate limit exceeded. Try again in ${retryAfter} seconds.`);

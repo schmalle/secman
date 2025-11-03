@@ -14,6 +14,19 @@ import org.slf4j.LoggerFactory
 import java.time.LocalDateTime
 
 /**
+ * Query type enum for cache key discrimination
+ *
+ * Feature: 041-falcon-instance-lookup
+ * Task: T004
+ *
+ * Enables different cache keys for hostname vs AWS instance ID queries
+ */
+enum class QueryType {
+    HOSTNAME,
+    INSTANCE_ID
+}
+
+/**
  * Service for querying CrowdStrike using the shared API client
  *
  * Provides:
@@ -159,6 +172,82 @@ open class CrowdStrikeQueryService(
     }
 
     /**
+     * Query vulnerabilities by AWS EC2 Instance ID with caching
+     *
+     * Feature: 041-falcon-instance-lookup
+     * Task: T014
+     *
+     * Results are cached for 15 minutes per instanceId+severity+product combination
+     *
+     * @param instanceId AWS EC2 Instance ID (format: i-XXXXXXXXX...)
+     * @param severity Optional severity filter
+     * @param product Optional product filter
+     * @param limit Page size (default: 100)
+     * @return CrowdStrikeQueryResponse
+     * @throws CrowdStrikeError on API errors
+     */
+    @Cacheable("vulnerability_queries")
+    open fun queryByInstanceId(
+        instanceId: String,
+        severity: String? = null,
+        product: String? = null,
+        limit: Int = 100
+    ): CrowdStrikeQueryResponse {
+        require(instanceId.isNotBlank()) { "Instance ID cannot be blank" }
+
+        log.info(
+            "Querying vulnerabilities by instance ID: instanceId={}, severity={}, product={}, limit={}",
+            instanceId, severity, product, limit
+        )
+
+        try {
+            // Get config from database
+            val config = getConfiguration()
+
+            // Query API by instance ID (returns shared module's CrowdStrikeQueryResponse)
+            val sharedResponse = apiClient.queryVulnerabilitiesByInstanceId(instanceId, config)
+
+            // Convert shared response to backend response, then apply filters
+            val backendResponse = sharedResponse.toBackendResponse()
+            val filtered = applyFilters(backendResponse, severity, product)
+
+            log.info(
+                "Query successful: instanceId={}, devices={}, found={}, filtered={}",
+                instanceId, sharedResponse.deviceCount, sharedResponse.vulnerabilities.size, filtered.vulnerabilities.size
+            )
+
+            return filtered
+        } catch (e: NotFoundException) {
+            log.warn("Instance ID not found: {}", instanceId)
+            throw CrowdStrikeError.NotFoundError(
+                hostname = instanceId,
+                cause = e
+            )
+        } catch (e: RateLimitException) {
+            log.warn("Rate limit exceeded: {}", e.message)
+            throw CrowdStrikeError.RateLimitError(
+                retryAfterSeconds = 60,
+                cause = e
+            )
+        } catch (e: CrowdStrikeException) {
+            log.error("CrowdStrike API error: {}", e.message, e)
+            throw CrowdStrikeError.ServerError(
+                message = "CrowdStrike API error: ${e.message}",
+                cause = e
+            )
+        } catch (e: CrowdStrikeError) {
+            // Re-throw internal errors
+            throw e
+        } catch (e: Exception) {
+            log.error("Unexpected error querying CrowdStrike by instance ID", e)
+            throw CrowdStrikeError.ServerError(
+                message = "Unexpected error: ${e.message}",
+                cause = e
+            )
+        }
+    }
+
+    /**
      * Apply filters to vulnerability results
      *
      * @param response Original response from API
@@ -197,11 +286,14 @@ open class CrowdStrikeQueryService(
 
 /**
  * Extension function to convert shared module's CrowdStrikeQueryResponse to backend DTO
- * Both have identical structure, so this is just a direct mapping
+ *
+ * Feature 041: Now includes instanceId and deviceCount fields
  */
 private fun com.secman.crowdstrike.dto.CrowdStrikeQueryResponse.toBackendResponse(): CrowdStrikeQueryResponse {
     return CrowdStrikeQueryResponse(
         hostname = this.hostname,
+        instanceId = this.instanceId,
+        deviceCount = this.deviceCount,
         vulnerabilities = this.vulnerabilities.map { shared ->
             com.secman.dto.CrowdStrikeVulnerabilityDto(
                 id = shared.id,

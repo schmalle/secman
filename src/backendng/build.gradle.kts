@@ -28,6 +28,7 @@ dependencies {
     implementation("io.micronaut.kotlin:micronaut-kotlin-runtime")
     implementation("io.micronaut.kotlin:micronaut-kotlin-extension-functions")
     implementation("io.micronaut:micronaut-retry")
+    implementation("io.micronaut.cache:micronaut-cache-caffeine")
     
     // Database
     implementation("io.micronaut.data:micronaut-data-hibernate-jpa")

@@ -69,4 +69,16 @@ interface CrowdStrikeApiClient {
      * @return AuthToken for API requests
      */
     fun getAuthToken(config: FalconConfigDto): AuthToken
+
+    /**
+     * Query vulnerabilities by AWS EC2 Instance ID
+     *
+     * Feature: 041-falcon-instance-lookup
+     * Task: T011
+     *
+     * @param instanceId AWS EC2 Instance ID (format: i-XXXXXXXXX...)
+     * @param config CrowdStrike Falcon configuration
+     * @return CrowdStrikeQueryResponse with vulnerabilities from all devices with this instance ID
+     */
+    fun queryVulnerabilitiesByInstanceId(instanceId: String, config: FalconConfigDto): CrowdStrikeQueryResponse
 }

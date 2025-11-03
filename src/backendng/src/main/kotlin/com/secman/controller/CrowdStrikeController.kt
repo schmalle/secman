@@ -9,6 +9,9 @@ import com.secman.service.CrowdStrikeError
 import com.secman.service.CrowdStrikeQueryService
 import com.secman.service.CrowdStrikeVulnerabilityImportService
 import com.secman.service.CrowdStrikeVulnerabilityService
+import com.secman.util.InputDetectionUtils
+import com.secman.util.ValidationUtils
+import io.micronaut.cache.annotation.CacheInvalidate
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.HttpStatus
 import io.micronaut.http.annotation.*
@@ -47,37 +50,45 @@ open class CrowdStrikeController(
     /**
      * Query CrowdStrike for vulnerabilities with filtering and pagination
      *
-     * Task: T062-T065
+     * Supports both hostname and AWS EC2 Instance ID queries (Feature 041)
      *
-     * @param hostname System hostname to query
+     * Tasks: T062-T065, T016, T017, T018, T035
+     *
+     * @param hostname System hostname or AWS instance ID to query
      * @param severity Optional severity filter (critical, high, medium, low)
      * @param product Optional product filter (substring match)
      * @param limit Result limit (default: 100, max: 1000)
+     * @param force If true, bypasses cache and fetches fresh data (Feature 041, Task T035)
      * @return CrowdStrikeQueryResponse with vulnerabilities
      *
      * Error responses:
-     * - 400: Invalid parameters
+     * - 400: Invalid parameters (including invalid instance ID format)
      * - 401: Unauthorized
      * - 403: Forbidden
-     * - 404: Hostname not found
+     * - 404: Hostname/Instance ID not found
      * - 429: Rate limit exceeded
      * - 500: Server error
      */
     @Get("/vulnerabilities")
     open fun queryVulnerabilities(
-        @QueryValue @NotBlank hostname: String,
+        @QueryValue hostname: String?,
         @QueryValue severity: String? = null,
         @QueryValue product: String? = null,
-        @QueryValue limit: Int? = null
+        @QueryValue limit: Int? = null,
+        @QueryValue(defaultValue = "false") force: Boolean = false
     ): HttpResponse<*> {
         log.info(
-            "Received vulnerability query: hostname={}, severity={}, product={}, limit={}",
-            hostname, severity, product, limit
+            "Received vulnerability query: input={}, severity={}, product={}, limit={}, force={}",
+            hostname, severity, product, limit, force
         )
 
         return try {
-            // Sanitize hostname
-            val sanitizedHostname = sanitizeHostname(hostname)
+            // Validate hostname is not null or blank
+            if (hostname.isNullOrBlank()) {
+                throw IllegalArgumentException("Hostname or instance ID is required")
+            }
+
+            val trimmedInput = hostname.trim()
 
             // Validate limit
             val pageSize = when {
@@ -91,25 +102,68 @@ open class CrowdStrikeController(
                 else -> limit
             }
 
-            // Query with filtering
-            val response = queryService.queryVulnerabilities(
-                hostname = sanitizedHostname,
-                severity = severity,
-                product = product,
-                limit = pageSize
-            )
+            // T035: If force=true, invalidate cache before querying
+            if (force) {
+                log.info("Force refresh requested - invalidating cache for input: {}", trimmedInput)
+                if (InputDetectionUtils.isAwsInstanceId(trimmedInput)) {
+                    val normalizedInstanceId = ValidationUtils.validateAndNormalizeAwsInstanceId(trimmedInput)
+                    invalidateCacheForInstanceId(normalizedInstanceId, severity, product, pageSize)
+                } else {
+                    val sanitizedHostname = sanitizeHostname(trimmedInput)
+                    invalidateCacheForHostname(sanitizedHostname, severity, product, pageSize)
+                }
+            }
+
+            // Detect query type and route to appropriate service method
+            val response: CrowdStrikeQueryResponse = if (InputDetectionUtils.isAwsInstanceId(trimmedInput)) {
+                // Instance ID query (Feature 041)
+                // T017: Validate instance ID format
+                try {
+                    val normalizedInstanceId = ValidationUtils.validateAndNormalizeAwsInstanceId(trimmedInput)
+                    log.info("Detected AWS instance ID query: instanceId={}", normalizedInstanceId)
+
+                    queryService.queryByInstanceId(
+                        instanceId = normalizedInstanceId,
+                        severity = severity,
+                        product = product,
+                        limit = pageSize
+                    )
+                } catch (e: IllegalArgumentException) {
+                    // T017: Clear error message for invalid instance ID format
+                    throw IllegalArgumentException(ValidationUtils.getInstanceIdValidationError(trimmedInput))
+                }
+            } else {
+                // Hostname query (existing functionality)
+                val sanitizedHostname = sanitizeHostname(trimmedInput)
+                log.info("Detected hostname query: hostname={}", sanitizedHostname)
+
+                queryService.queryVulnerabilities(
+                    hostname = sanitizedHostname,
+                    severity = severity,
+                    product = product,
+                    limit = pageSize
+                )
+            }
 
             log.info(
-                "Query successful: hostname={}, severity={}, product={}, found={}",
-                sanitizedHostname, severity, product, response.vulnerabilities.size
+                "Query successful: input={}, severity={}, product={}, found={}",
+                trimmedInput, severity, product, response.vulnerabilities.size
             )
             HttpResponse.ok(response)
         } catch (e: IllegalArgumentException) {
+            // T017: Validation errors (including instance ID format errors)
             log.warn("Invalid query parameters: {}", e.message)
             HttpResponse.badRequest(mapOf("error" to (e.message ?: "Invalid parameters")))
         } catch (e: CrowdStrikeError.NotFoundError) {
-            log.warn("Hostname not found: {}", hostname)
-            HttpResponse.notFound(mapOf("error" to e.message))
+            // T018: Instance ID or hostname not found
+            val identifier = hostname?.trim() ?: "unknown"
+            val errorMessage = if (InputDetectionUtils.isAwsInstanceId(identifier)) {
+                "System not found with instance ID: $identifier"
+            } else {
+                e.message
+            }
+            log.warn("System not found: {}", identifier)
+            HttpResponse.notFound(mapOf("error" to errorMessage))
         } catch (e: CrowdStrikeError.RateLimitError) {
             log.warn("Rate limit exceeded")
             val retryAfter = e.retryAfterSeconds ?: 60
@@ -301,5 +355,49 @@ open class CrowdStrikeController(
         }
 
         return trimmed
+    }
+
+    /**
+     * Invalidate cache for hostname query
+     *
+     * Feature: 041-falcon-instance-lookup
+     * Task: T035
+     *
+     * @param hostname System hostname
+     * @param severity Optional severity filter
+     * @param product Optional product filter
+     * @param limit Page size
+     */
+    @CacheInvalidate("vulnerability_queries")
+    open fun invalidateCacheForHostname(
+        hostname: String,
+        severity: String? = null,
+        product: String? = null,
+        limit: Int = 100
+    ) {
+        log.debug("Invalidating cache for hostname query: hostname={}, severity={}, product={}, limit={}",
+            hostname, severity, product, limit)
+    }
+
+    /**
+     * Invalidate cache for instance ID query
+     *
+     * Feature: 041-falcon-instance-lookup
+     * Task: T035
+     *
+     * @param instanceId AWS EC2 Instance ID
+     * @param severity Optional severity filter
+     * @param product Optional product filter
+     * @param limit Page size
+     */
+    @CacheInvalidate("vulnerability_queries")
+    open fun invalidateCacheForInstanceId(
+        instanceId: String,
+        severity: String? = null,
+        product: String? = null,
+        limit: Int = 100
+    ) {
+        log.debug("Invalidating cache for instance ID query: instanceId={}, severity={}, product={}, limit={}",
+            instanceId, severity, product, limit)
     }
 }
