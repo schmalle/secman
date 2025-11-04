@@ -3,9 +3,11 @@ package com.secman.service
 import com.secman.dto.AccountGroupDto
 import com.secman.dto.AccountVulnsSummaryDto
 import com.secman.dto.AssetVulnCountDto
+import com.secman.dto.CrowdStrikeImportStatusDto
 import com.secman.repository.AssetRepository
 import com.secman.repository.UserMappingRepository
 import com.secman.repository.VulnerabilityRepository
+import com.secman.repository.CrowdStrikeImportHistoryRepository
 import io.micronaut.security.authentication.Authentication
 import jakarta.inject.Singleton
 import jakarta.persistence.EntityManager
@@ -30,7 +32,8 @@ class AccountVulnsService(
     private val userMappingRepository: UserMappingRepository,
     private val assetRepository: AssetRepository,
     private val vulnerabilityRepository: VulnerabilityRepository,
-    private val entityManager: EntityManager
+    private val entityManager: EntityManager,
+    private val importHistoryRepository: CrowdStrikeImportHistoryRepository
 ) {
 
     private val logger = LoggerFactory.getLogger(AccountVulnsService::class.java)
@@ -248,6 +251,9 @@ class AccountVulnsService(
             accountGroups.size, awsAccountIds.size, totalAssets, totalVulnerabilities, 
             globalCritical, globalHigh, globalMedium)
 
+        val latestImport = importHistoryRepository.findLatest()
+            ?.let { CrowdStrikeImportStatusDto.fromEntity(it) }
+
         return AccountVulnsSummaryDto(
             accountGroups = accountGroups,
             totalAssets = totalAssets,
@@ -255,7 +261,8 @@ class AccountVulnsService(
             // Feature 019: Add global severity totals
             globalCritical = globalCritical,
             globalHigh = globalHigh,
-            globalMedium = globalMedium
+            globalMedium = globalMedium,
+            lastImport = latestImport
         )
     }
 }

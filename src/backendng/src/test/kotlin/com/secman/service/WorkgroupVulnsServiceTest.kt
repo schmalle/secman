@@ -8,6 +8,7 @@ import com.secman.fixtures.WorkgroupVulnsTestFixtures
 import com.secman.repository.AssetRepository
 import com.secman.repository.VulnerabilityRepository
 import com.secman.repository.WorkgroupRepository
+import com.secman.repository.CrowdStrikeImportHistoryRepository
 import io.micronaut.security.authentication.Authentication
 import io.micronaut.test.extensions.junit5.annotation.MicronautTest
 import io.mockk.every
@@ -50,6 +51,9 @@ class WorkgroupVulnsServiceTest {
     lateinit var vulnerabilityRepository: VulnerabilityRepository
 
     @Inject
+    lateinit var importHistoryRepository: CrowdStrikeImportHistoryRepository
+
+    @Inject
     lateinit var entityManager: EntityManager
 
     lateinit var service: WorkgroupVulnsService
@@ -60,7 +64,8 @@ class WorkgroupVulnsServiceTest {
             workgroupRepository = workgroupRepository,
             assetRepository = assetRepository,
             vulnerabilityRepository = vulnerabilityRepository,
-            entityManager = entityManager
+            entityManager = entityManager,
+            importHistoryRepository = importHistoryRepository
         )
     }
 

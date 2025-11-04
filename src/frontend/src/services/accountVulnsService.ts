@@ -1,4 +1,5 @@
 import { authenticatedGet } from '../utils/auth';
+import type { CrowdStrikeImportStatus } from '../types/crowdstrike';
 
 /**
  * Service for Account Vulns API operations
@@ -50,6 +51,9 @@ export interface AccountVulnsSummary {
   globalCritical?: number;
   globalHigh?: number;
   globalMedium?: number;
+
+  // Metadata about the most recent CrowdStrike import
+  lastImport?: CrowdStrikeImportStatus | null;
 }
 
 /**

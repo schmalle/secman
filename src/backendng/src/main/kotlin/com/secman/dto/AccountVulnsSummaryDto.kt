@@ -24,5 +24,8 @@ data class AccountVulnsSummaryDto(
     // Global severity totals (Feature 019 - nullable for backward compatibility)
     val globalCritical: Int? = null,
     val globalHigh: Int? = null,
-    val globalMedium: Int? = null
+    val globalMedium: Int? = null,
+
+    // Metadata about the latest CrowdStrike import (nullable for backward compatibility)
+    val lastImport: CrowdStrikeImportStatusDto? = null
 )

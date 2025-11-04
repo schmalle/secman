@@ -1,5 +1,6 @@
 package com.secman.controller
 
+import com.secman.dto.CrowdStrikeImportStatusDto
 import com.secman.dto.CrowdStrikeQueryResponse
 import com.secman.dto.CrowdStrikeSaveRequest
 import com.secman.dto.CrowdStrikeSaveResponse
@@ -310,7 +311,7 @@ open class CrowdStrikeController(
 
         return try {
             // T023: Call import service
-            val statistics = importService.importServerVulnerabilities(batches)
+            val statistics = importService.importServerVulnerabilities(batches, username)
 
             log.info("Batch import completed: servers processed={}, created={}, updated={}, vulnerabilities imported={}, skipped={}, errors={}, user={}",
                 statistics.serversProcessed, statistics.serversCreated, statistics.serversUpdated,
@@ -333,6 +334,17 @@ open class CrowdStrikeController(
             HttpResponse.status<Map<String, String>>(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(mapOf("error" to errorMessage))
         }
+    }
+
+    /**
+     * Retrieve metadata for the most recent CrowdStrike import.
+     *
+     * Allows UI to display data freshness indicators.
+     */
+    @Get("/crowdstrike/servers/import/latest")
+    open fun getLatestImportStatus(): HttpResponse<*> {
+        val status: CrowdStrikeImportStatusDto? = importService.getLatestImportStatus()
+        return status?.let { HttpResponse.ok(it) } ?: HttpResponse.noContent<CrowdStrikeImportStatusDto>()
     }
 
     /**

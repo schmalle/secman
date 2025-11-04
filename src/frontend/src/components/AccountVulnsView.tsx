@@ -31,6 +31,21 @@ const AccountVulnsView: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [isAdminRedirect, setIsAdminRedirect] = useState(false);
 
+    const formatImportTimestamp = (timestamp: string): string => {
+        const date = new Date(timestamp);
+        if (Number.isNaN(date.getTime())) {
+            return timestamp;
+        }
+
+        return date.toLocaleString(undefined, {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    };
+
     useEffect(() => {
         console.log('[AccountVulnsView] useEffect triggered, calling fetchAccountVulns...');
         fetchAccountVulns();
@@ -167,6 +182,8 @@ const AccountVulnsView: React.FC = () => {
         );
     }
 
+    const lastImport = summary.lastImport ?? null;
+
     // Success state - display account groups
     return (
         <div className="container-fluid p-4">
@@ -231,6 +248,43 @@ const AccountVulnsView: React.FC = () => {
                     </div>
                 </div>
             </div>
+
+            {lastImport && (
+                <div className="row mb-4">
+                    <div className="col-12">
+                        <div className="card border-0 shadow-sm bg-light">
+                            <div className="card-body d-flex flex-column flex-lg-row align-items-start align-items-lg-center gap-3">
+                                <div>
+                                    <h6 className="text-muted mb-1">Last CrowdStrike Import</h6>
+                                    <div className="fw-semibold">{formatImportTimestamp(lastImport.importedAt)}</div>
+                                    <small className="text-muted">
+                                        Imported by {lastImport.importedBy || 'system automation'}
+                                    </small>
+                                </div>
+                                <div className="d-flex flex-wrap gap-2 ms-lg-auto">
+                                    <span className="badge bg-primary bg-opacity-10 text-primary border border-primary">
+                                        {lastImport.serversProcessed} servers processed
+                                    </span>
+                                    <span className="badge bg-success bg-opacity-10 text-success border border-success">
+                                        {lastImport.vulnerabilitiesImported} vulnerabilities imported
+                                    </span>
+                                    <span className="badge bg-secondary bg-opacity-10 text-secondary border border-secondary">
+                                        {lastImport.vulnerabilitiesSkipped} skipped
+                                    </span>
+                                    <span className="badge bg-info bg-opacity-10 text-info border border-info">
+                                        {lastImport.serversCreated} created / {lastImport.serversUpdated} updated
+                                    </span>
+                                    {lastImport.errorCount > 0 && (
+                                        <span className="badge bg-danger bg-opacity-10 text-danger border border-danger">
+                                            {lastImport.errorCount} error{lastImport.errorCount !== 1 ? 's' : ''}
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Account Groups */}
             {summary.accountGroups.map((group) => {

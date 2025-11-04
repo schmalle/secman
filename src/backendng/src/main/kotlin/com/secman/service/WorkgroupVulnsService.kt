@@ -1,11 +1,13 @@
 package com.secman.service
 
 import com.secman.dto.AssetVulnCountDto
+import com.secman.dto.CrowdStrikeImportStatusDto
 import com.secman.dto.WorkgroupGroupDto
 import com.secman.dto.WorkgroupVulnsSummaryDto
 import com.secman.repository.AssetRepository
 import com.secman.repository.VulnerabilityRepository
 import com.secman.repository.WorkgroupRepository
+import com.secman.repository.CrowdStrikeImportHistoryRepository
 import io.micronaut.security.authentication.Authentication
 import jakarta.inject.Singleton
 import jakarta.persistence.EntityManager
@@ -32,7 +34,8 @@ class WorkgroupVulnsService(
     private val workgroupRepository: WorkgroupRepository,
     private val assetRepository: AssetRepository,
     private val vulnerabilityRepository: VulnerabilityRepository,
-    private val entityManager: EntityManager
+    private val entityManager: EntityManager,
+    private val importHistoryRepository: CrowdStrikeImportHistoryRepository
 ) {
 
     private val logger = LoggerFactory.getLogger(WorkgroupVulnsService::class.java)
@@ -262,13 +265,17 @@ class WorkgroupVulnsService(
             globalCritical, globalHigh, globalMedium
         )
 
+        val latestImport = importHistoryRepository.findLatest()
+            ?.let { CrowdStrikeImportStatusDto.fromEntity(it) }
+
         return WorkgroupVulnsSummaryDto(
             workgroupGroups = workgroupGroups,
             totalAssets = totalAssets,
             totalVulnerabilities = totalVulnerabilities,
             globalCritical = globalCritical,
             globalHigh = globalHigh,
-            globalMedium = globalMedium
+            globalMedium = globalMedium,
+            lastImport = latestImport
         )
     }
 }
