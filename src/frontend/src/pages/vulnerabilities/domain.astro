@@ -1,24 +1,27 @@
 ---
+/**
+ * Domain Vulnerabilities Page
+ *
+ * Feature: 042-domain-vulnerabilities-view
+ *
+ * Page route: /vulnerabilities/domain
+ *
+ * Purpose:
+ * - Displays vulnerabilities from CrowdStrike Falcon API grouped by AD domain
+ * - Real-time data queried directly from Falcon API (not local database)
+ * - Based on user's domain mappings in UserMapping table
+ * - Similar to /account-vulns but for domain-based filtering
+ *
+ * Access:
+ * - Authenticated users only (non-admin)
+ * - Admin users redirected to System Vulns view
+ * - User must have domain mappings
+ */
+
 import Layout from '../../layouts/Layout.astro';
+import DomainVulnsView from '../../components/DomainVulnsView';
 ---
+
 <Layout title="Domain Vulnerabilities">
-    <div class="container mt-5">
-        <div class="row justify-content-center">
-            <div class="col-md-8 text-center">
-                <div class="card shadow-sm">
-                    <div class="card-body py-5">
-                        <i class="bi bi-globe" style="font-size: 4rem; color: #6c757d;"></i>
-                        <h1 class="mt-4 mb-3">Domain Vulnerabilities</h1>
-                        <div class="alert alert-info" role="alert">
-                            <i class="bi bi-info-circle me-2"></i>
-                            <strong>Under development</strong>
-                        </div>
-                        <p class="text-muted">
-                            This feature is currently being developed and will be available soon.
-                        </p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
+    <DomainVulnsView client:load />
 </Layout>
