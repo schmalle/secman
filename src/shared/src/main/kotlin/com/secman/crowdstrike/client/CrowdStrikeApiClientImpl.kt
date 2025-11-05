@@ -1233,6 +1233,9 @@ open class CrowdStrikeApiClientImpl(
                     LocalDateTime.now()
                 }
 
+                // Extract patch publication date
+                val patchPublicationDate = extractPatchPublicationDate(vuln)
+
                 val dto = CrowdStrikeVulnerabilityDto(
                     id = id,
                     hostname = hostname,
@@ -1243,6 +1246,7 @@ open class CrowdStrikeApiClientImpl(
                     affectedProduct = affectedProduct,
                     daysOpen = calculateDaysOpen(detectedAt),
                     detectedAt = detectedAt,
+                    patchPublicationDate = patchPublicationDate,
                     status = vuln["status"]?.toString() ?: "open",
                     hasException = false,
                     exceptionReason = null
@@ -1302,6 +1306,53 @@ open class CrowdStrikeApiClientImpl(
     private fun calculateDaysOpen(detectedAt: LocalDateTime): String {
         val days = java.time.temporal.ChronoUnit.DAYS.between(detectedAt, LocalDateTime.now())
         return if (days == 1L) "1 day" else "$days days"
+    }
+
+    /**
+     * Extract patch publication date from CrowdStrike API response.
+     * Tries multiple possible field locations:
+     * - cve.published_date
+     * - cve.published
+     * - remediation.published_date
+     * - patch_published_date
+     *
+     * @param vuln The vulnerability response object
+     * @return Parsed LocalDateTime or null if not found/parseable
+     */
+    private fun extractPatchPublicationDate(vuln: Map<*, *>): LocalDateTime? {
+        val cveObject = vuln["cve"] as? Map<*, *>
+        val remediationObject = vuln["remediation"] as? Map<*, *>
+
+        // Try multiple possible field locations
+        val dateString = cveObject?.get("published_date")?.toString()
+            ?: cveObject?.get("published")?.toString()
+            ?: remediationObject?.get("published_date")?.toString()
+            ?: remediationObject?.get("vendor_release_date")?.toString()
+            ?: vuln["patch_published_date"]?.toString()
+            ?: vuln["patch_publication_date"]?.toString()
+
+        if (dateString == null) {
+            return null
+        }
+
+        return try {
+            // Try parsing as ISO-8601 timestamp (e.g., "2024-05-15T22:18:26Z")
+            val instant = Instant.parse(dateString)
+            LocalDateTime.ofInstant(instant, ZoneId.systemDefault())
+        } catch (e: Exception) {
+            try {
+                // Fallback: try parsing as date-only (e.g., "2024-05-15")
+                LocalDateTime.parse(dateString + "T00:00:00")
+            } catch (e2: Exception) {
+                try {
+                    // Fallback: try parsing without timezone
+                    LocalDateTime.parse(dateString.replace(" ", "T").replace("Z", ""))
+                } catch (e3: Exception) {
+                    log.debug("Failed to parse patch publication date '{}': {}", dateString, e3.message)
+                    null
+                }
+            }
+        }
     }
 
     private data class DeviceMetadata(
@@ -1487,6 +1538,9 @@ open class CrowdStrikeApiClientImpl(
                     LocalDateTime.now()
                 }
 
+                // Extract patch publication date
+                val patchPublicationDate = extractPatchPublicationDate(vuln)
+
                 CrowdStrikeVulnerabilityDto(
                     id = id,
                     hostname = hostname,
@@ -1497,6 +1551,7 @@ open class CrowdStrikeApiClientImpl(
                     affectedProduct = affectedProduct,
                     daysOpen = calculateDaysOpen(detectedAt),
                     detectedAt = detectedAt,
+                    patchPublicationDate = patchPublicationDate,
                     status = vuln["status"]?.toString() ?: "open",
                     hasException = false,
                     exceptionReason = null
