@@ -81,4 +81,24 @@ interface CrowdStrikeApiClient {
      * @return CrowdStrikeQueryResponse with vulnerabilities from all devices with this instance ID
      */
     fun queryVulnerabilitiesByInstanceId(instanceId: String, config: FalconConfigDto): CrowdStrikeQueryResponse
+
+    /**
+     * Query vulnerabilities by Active Directory domains
+     *
+     * Feature: 042-domain-vulnerabilities-view
+     *
+     * @param domains List of AD domain names (e.g., ["CONTOSO", "EXAMPLE"])
+     * @param severity Severity filter (e.g., "HIGH,CRITICAL")
+     * @param minDaysOpen Minimum days open filter
+     * @param config CrowdStrike Falcon configuration
+     * @param limit Page size for pagination
+     * @return CrowdStrikeQueryResponse with vulnerabilities from all devices in these domains
+     */
+    fun queryVulnerabilitiesByDomains(
+        domains: List<String>,
+        severity: String = "HIGH,CRITICAL",
+        minDaysOpen: Int = 0,
+        config: FalconConfigDto,
+        limit: Int = 1000
+    ): CrowdStrikeQueryResponse
 }
