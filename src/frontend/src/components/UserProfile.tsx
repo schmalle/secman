@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import userProfileService, { UserProfileData } from '../services/userProfileService';
+import PasskeyManagement from './PasskeyManagement';
 
 /**
  * User Profile Component
@@ -19,6 +20,9 @@ export default function UserProfile() {
   const [profile, setProfile] = useState<UserProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [mfaEnabled, setMfaEnabled] = useState(false);
+  const [mfaLoading, setMfaLoading] = useState(false);
+  const [mfaError, setMfaError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchProfile();
@@ -30,11 +34,35 @@ export default function UserProfile() {
       setError(null);
       const data = await userProfileService.getProfile();
       setProfile(data);
+      await fetchMfaStatus();
     } catch (err: any) {
       const errorMessage = err.response?.data?.message || 'Failed to load profile. Please try again.';
       setError(errorMessage);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchMfaStatus = async () => {
+    try {
+      const status = await userProfileService.getMfaStatus();
+      setMfaEnabled(status.enabled);
+    } catch (err: any) {
+      console.error('Failed to fetch MFA status', err);
+    }
+  };
+
+  const handleMfaToggle = async () => {
+    try {
+      setMfaLoading(true);
+      setMfaError(null);
+      const result = await userProfileService.toggleMfa(!mfaEnabled);
+      setMfaEnabled(result.mfaEnabled);
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.error || err.response?.data?.message || 'Failed to toggle MFA';
+      setMfaError(errorMessage);
+    } finally {
+      setMfaLoading(false);
     }
   };
 
@@ -109,6 +137,55 @@ export default function UserProfile() {
                 </span>
               ))}
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Security Settings Card */}
+      <div className="card mt-3">
+        <div className="card-body">
+          <h5 className="card-title">Security Settings</h5>
+
+          {/* MFA Toggle */}
+          <div className="mb-4">
+            <div className="d-flex align-items-center justify-content-between">
+              <div>
+                <h6>Multi-Factor Authentication (MFA)</h6>
+                <p className="text-muted small mb-0">
+                  Enhance your account security with passkey-based MFA
+                </p>
+              </div>
+              <div className="form-check form-switch">
+                <input
+                  className="form-check-input"
+                  type="checkbox"
+                  role="switch"
+                  id="mfaToggle"
+                  checked={mfaEnabled}
+                  onChange={handleMfaToggle}
+                  disabled={mfaLoading}
+                  style={{ cursor: mfaLoading ? 'wait' : 'pointer', width: '3rem', height: '1.5rem' }}
+                />
+                <label className="form-check-label" htmlFor="mfaToggle" style={{ marginLeft: '0.5rem' }}>
+                  {mfaEnabled ? 'Enabled' : 'Disabled'}
+                </label>
+              </div>
+            </div>
+            {mfaError && (
+              <div className="alert alert-danger mt-2 mb-0" role="alert">
+                <i className="bi bi-exclamation-triangle-fill me-2"></i>
+                {mfaError}
+              </div>
+            )}
+          </div>
+
+          {/* Passkey Management */}
+          <div className="border-top pt-3">
+            <h6>Passkeys</h6>
+            <p className="text-muted small">
+              Manage your registered passkeys for passwordless authentication
+            </p>
+            <PasskeyManagement client:load />
           </div>
         </div>
       </div>
