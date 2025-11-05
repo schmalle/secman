@@ -108,6 +108,15 @@ secman:
     notifications:
       batch-size: 50
       async-processing: true
+  vulnerability:
+    # Use patch publication date for calculating days open
+    # When true: days_open = scan_timestamp - patch_publication_date
+    # When false: days_open = current_time - detection_time (current behavior)
+    use-patch-publication-date: ${VULN_USE_PATCH_PUBLICATION_DATE:false}
+    # Filter to import only vulnerabilities with patch publication date set
+    # When true: vulnerabilities without patch_publication_date are skipped during import
+    # When false: all vulnerabilities are imported (current behavior)
+    require-patch-publication-date: ${VULN_REQUIRE_PATCH_PUBLICATION_DATE:false}
   http:
     services:
       translation:
