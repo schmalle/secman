@@ -11,6 +11,27 @@ export interface UserProfileData {
 }
 
 /**
+ * MFA status response
+ * Feature: Passkey MFA Support
+ */
+export interface MfaStatusResponse {
+  enabled: boolean;
+  passkeyCount: number;
+  canDisable: boolean;
+  message?: string;
+}
+
+/**
+ * MFA toggle response
+ * Feature: Passkey MFA Support
+ */
+export interface MfaToggleResponse {
+  success: boolean;
+  mfaEnabled: boolean;
+  message: string;
+}
+
+/**
  * Service for user profile API operations
  * Feature 028: User Profile Page
  */
@@ -28,6 +49,31 @@ class UserProfileService {
    */
   async getProfile(): Promise<UserProfileData> {
     const response = await axios.get<UserProfileData>(`${this.baseUrl}/profile`);
+    return response.data;
+  }
+
+  /**
+   * Get MFA status for current user
+   * Feature: Passkey MFA Support
+   *
+   * @returns Promise<MfaStatusResponse> MFA status information
+   * @throws Error if request fails
+   */
+  async getMfaStatus(): Promise<MfaStatusResponse> {
+    const response = await axios.get<MfaStatusResponse>(`${this.baseUrl}/profile/mfa-status`);
+    return response.data;
+  }
+
+  /**
+   * Toggle MFA on/off for current user
+   * Feature: Passkey MFA Support
+   *
+   * @param enabled - Whether to enable or disable MFA
+   * @returns Promise<MfaToggleResponse> Toggle result
+   * @throws Error if request fails
+   */
+  async toggleMfa(enabled: boolean): Promise<MfaToggleResponse> {
+    const response = await axios.put<MfaToggleResponse>(`${this.baseUrl}/profile/mfa-toggle`, { enabled });
     return response.data;
   }
 }
