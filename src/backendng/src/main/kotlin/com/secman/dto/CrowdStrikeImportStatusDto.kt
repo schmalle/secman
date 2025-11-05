@@ -18,6 +18,7 @@ data class CrowdStrikeImportStatusDto(
     val serversUpdated: Int,
     val vulnerabilitiesImported: Int,
     val vulnerabilitiesSkipped: Int,
+    val vulnerabilitiesWithPatchDate: Int,
     val errorCount: Int
 ) {
     companion object {
@@ -30,6 +31,7 @@ data class CrowdStrikeImportStatusDto(
                 serversUpdated = entity.serversUpdated,
                 vulnerabilitiesImported = entity.vulnerabilitiesImported,
                 vulnerabilitiesSkipped = entity.vulnerabilitiesSkipped,
+                vulnerabilitiesWithPatchDate = entity.vulnerabilitiesWithPatchDate,
                 errorCount = entity.errorCount
             )
         }

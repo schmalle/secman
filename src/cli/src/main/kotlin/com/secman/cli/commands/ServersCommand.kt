@@ -169,6 +169,7 @@ class ServersCommand {
             System.out.println("  - New servers created: ${result.serversCreated}")
             System.out.println("  - Existing servers updated: ${result.serversUpdated}")
             System.out.println("Vulnerabilities imported: ${result.vulnerabilitiesImported}")
+            System.out.println("  - With patch publication date: ${result.vulnerabilitiesWithPatchDate}")
             System.out.println("Vulnerabilities skipped: ${result.vulnerabilitiesSkipped}")
 
             if (result.errors.isNotEmpty()) {

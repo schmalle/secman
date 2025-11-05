@@ -45,6 +45,9 @@ data class CrowdStrikeImportHistory(
     @Column(name = "vulns_skipped", nullable = false)
     var vulnerabilitiesSkipped: Int = 0,
 
+    @Column(name = "vulns_with_patch_date", nullable = false)
+    var vulnerabilitiesWithPatchDate: Int = 0,
+
     @Column(name = "error_count", nullable = false)
     var errorCount: Int = 0
 ) {
