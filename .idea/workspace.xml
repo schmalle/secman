@@ -6,34 +6,6 @@
   <component name="ChangeListManager">
     <list default="true" id="94ada8b3-9f4e-473c-9fea-3bc9651b5bdd" name="Changes" comment="test change">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SSE_vs_WebSocket_Research.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/diagnose-requirements.sh" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/BOTH_EMAIL_FIXES_SUMMARY.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/BUGFIX_EMAIL_CONFIG.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/DEMAND_CLASSIFICATION.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/DEPLOYMENT-CHECKLIST.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/DEVELOPMENT.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/DOCKER.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/DOCKER_IMPLEMENTATION_SUMMARY.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/INSTALL.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/MCP_README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/QUICK_START_TEST_EMAIL.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/README_EMAIL_FIX.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/admin/vulnerability-configuration.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/user/understanding-overdue-status.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/gradle/wrapper/gradle-wrapper.properties" beforeDir="false" afterPath="$PROJECT_DIR$/gradle/wrapper/gradle-wrapper.properties" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/USER_MAPPING_SCHEMA_FIX.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/fix-user-mapping-nullable-columns.sql" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/fix-user-mapping-schema.sh" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/screenshot.sh" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/screenshots.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/serena.sh" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/start-both-backends.sh" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/start-kotlin-backend.sh" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/test-backend-connection.sh" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/test-vulnerability-feature.sh" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/update_task_status.sh" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/testdata/user-mapping-template.example.xlsx" beforeDir="false" afterPath="$PROJECT_DIR$/testdata/user-mapping-template.example.xlsx" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

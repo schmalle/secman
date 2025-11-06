@@ -198,11 +198,22 @@ class DomainVulnsService(
         }
 
         val config = configs.first()
+
+        // Map cloudRegion to baseUrl
+        val baseUrl = when (config.cloudRegion) {
+            "us-1" -> "https://api.crowdstrike.com"
+            "us-2" -> "https://api.us-2.crowdstrike.com"
+            "eu-1" -> "https://api.eu-1.crowdstrike.com"
+            "us-gov-1" -> "https://api.laggar.gcw.crowdstrike.com"
+            "us-gov-2" -> "https://api.us-gov-2.crowdstrike.com"
+            else -> "https://api.crowdstrike.com"
+        }
+
         return FalconConfigDto(
             clientId = config.clientId,
             clientSecret = config.clientSecret,
-            baseUrl = config.baseUrl ?: "https://api.crowdstrike.com",
-            name = config.name
+            baseUrl = baseUrl,
+            name = "Falcon Config ${config.id ?: ""}"
         )
     }
 }

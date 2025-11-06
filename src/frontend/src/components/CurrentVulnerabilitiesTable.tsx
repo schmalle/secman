@@ -570,13 +570,6 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                                                         <SortIcon field="daysOpen" />
                                                     </th>
                                                     <th
-                                                        onClick={() => handleSort('scanTimestamp')}
-                                                        style={{ cursor: 'pointer' }}
-                                                    >
-                                                        Scan Date
-                                                        <SortIcon field="scanTimestamp" />
-                                                    </th>
-                                                    <th
                                                         onClick={() => handleSort('overdueStatus')}
                                                         style={{ cursor: 'pointer' }}
                                                     >
@@ -603,10 +596,6 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                                                             {vuln.vulnerableProductVersions || '-'}
                                                         </td>
                                                         <td>{vuln.daysOpen || '-'}</td>
-                                                        <td>
-                                                            {vuln.scanTimestamp ?
-                                                                new Date(vuln.scanTimestamp).toLocaleDateString() : '-'}
-                                                        </td>
                                                         <td>
                                                             <OverdueStatusBadge
                                                                 status={vuln.overdueStatus || 'OK'}

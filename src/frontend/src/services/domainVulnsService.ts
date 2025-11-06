@@ -9,7 +9,7 @@
  * Similar to accountVulnsService but for domain-based queries.
  */
 
-import { authenticatedGet } from './api';
+import { authenticatedGet } from '../utils/auth';
 
 /**
  * Device vulnerability count

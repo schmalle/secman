@@ -41,8 +41,8 @@ dependencies {
     implementation("io.micronaut.security:micronaut-security-oauth2")
 
     // WebAuthn/Passkey support
-    implementation("com.webauthn4j:webauthn4j-core:0.23.3.RELEASE")
-    implementation("com.webauthn4j:webauthn4j-metadata:0.23.3.RELEASE")
+    implementation("com.webauthn4j:webauthn4j-core:0.30.0.RELEASE")
+    implementation("com.webauthn4j:webauthn4j-metadata:0.30.0.RELEASE")
 
     // Redis (for rate limiting in Feature 009)
     implementation("io.micronaut.redis:micronaut-redis-lettuce")

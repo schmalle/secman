@@ -4,17 +4,16 @@ import com.secman.domain.PasskeyCredential
 import com.secman.domain.User
 import com.secman.repository.PasskeyCredentialRepository
 import com.webauthn4j.WebAuthnManager
-import com.webauthn4j.authenticator.Authenticator
-import com.webauthn4j.authenticator.AuthenticatorImpl
+import com.webauthn4j.converter.AttestedCredentialDataConverter
 import com.webauthn4j.converter.util.ObjectConverter
+import com.webauthn4j.credential.CredentialRecord
+import com.webauthn4j.credential.CredentialRecordImpl
 import com.webauthn4j.data.*
-import com.webauthn4j.data.attestation.statement.COSEAlgorithmIdentifier
+import com.webauthn4j.data.attestation.authenticator.AttestedCredentialData
 import com.webauthn4j.data.client.Origin
 import com.webauthn4j.data.client.challenge.Challenge
 import com.webauthn4j.data.client.challenge.DefaultChallenge
 import com.webauthn4j.server.ServerProperty
-import com.webauthn4j.validator.WebAuthnRegistrationContextValidator
-import com.webauthn4j.validator.WebAuthnAuthenticationContextValidator
 import jakarta.inject.Singleton
 import org.slf4j.LoggerFactory
 import java.security.SecureRandom
@@ -25,7 +24,7 @@ import java.util.*
  * Service for WebAuthn/FIDO2 operations
  * Feature: Passkey MFA Support
  *
- * Handles passkey registration and authentication using WebAuthn4J
+ * Handles passkey registration and authentication using WebAuthn4J 0.30.0
  */
 @Singleton
 class WebAuthnService(
@@ -34,6 +33,7 @@ class WebAuthnService(
     private val logger = LoggerFactory.getLogger(WebAuthnService::class.java)
     private val webAuthnManager = WebAuthnManager.createNonStrictWebAuthnManager()
     private val objectConverter = ObjectConverter()
+    private val attestedCredentialDataConverter = AttestedCredentialDataConverter(objectConverter)
     private val secureRandom = SecureRandom()
 
     // Store challenges temporarily (in production, use Redis or cache)
@@ -99,55 +99,48 @@ class WebAuthnService(
             val challenge = challengeStore.remove(user.id.toString())
                 ?: throw IllegalArgumentException("Challenge not found or expired")
 
-            // Decode the registration response
-            val attestationObjectBytes = Base64.getUrlDecoder().decode(registrationResponse.response.attestationObject)
-            val clientDataJSONBytes = Base64.getUrlDecoder().decode(registrationResponse.response.clientDataJSON)
+            // Parse the registration response JSON
+            val registrationDataJson = buildRegistrationResponseJson(registrationResponse)
+            val registrationData = webAuthnManager.parseRegistrationResponseJSON(registrationDataJson)
 
-            // Create WebAuthn registration context
-            val registrationData = RegistrationData(
-                attestationObjectBytes,
-                clientDataJSONBytes,
-                registrationResponse.response.transports,
-                registrationResponse.response.clientExtensionResults
-            )
+            // Setup server property
+            val serverProperty = ServerProperty.builder()
+                .origin(Origin.create(ORIGIN))
+                .rpId(RP_ID)
+                .challenge(challenge)
+                .build()
 
+            // Define registration parameters
             val registrationParameters = RegistrationParameters(
-                ServerProperty(Origin.create(ORIGIN), RP_ID, challenge, null),
-                null, // pubKeyCredParams
+                serverProperty,
+                null, // pubKeyCredParams - null means accept any
                 false, // userVerificationRequired
-                false // userPresenceRequired
+                true  // userPresenceRequired
             )
 
-            // Validate registration
-            val registrationContext = com.webauthn4j.data.RegistrationRequest(
-                attestationObjectBytes,
-                clientDataJSONBytes
-            )
+            // Verify registration
+            webAuthnManager.verify(registrationData, registrationParameters)
 
-            val validator = WebAuthnRegistrationContextValidator()
-            val validationData = validator.validate(
-                com.webauthn4j.data.RegistrationContext(
-                    registrationContext,
-                    registrationParameters.serverProperty,
-                    registrationParameters.pubKeyCredParams != null
-                )
-            )
+            // Extract credential information
+            val attestationObject = registrationData.attestationObject
+            val authenticatorData = attestationObject?.authenticatorData
+            val attestedCredentialData = authenticatorData?.attestedCredentialData
+                ?: throw IllegalArgumentException("Attested credential data not found")
 
-            // Create and save credential
             val credentialIdBase64 = Base64.getUrlEncoder().withoutPadding()
-                .encodeToString(validationData.attestationObject.authenticatorData.attestedCredentialData?.credentialId)
+                .encodeToString(attestedCredentialData.credentialId)
 
-            val publicKeyBytes = validationData.attestationObject.authenticatorData.attestedCredentialData?.coseKey?.encode()
-                ?: throw IllegalArgumentException("Public key not found")
-            val publicKeyBase64 = Base64.getEncoder().encodeToString(publicKeyBytes)
+            // Serialize the entire AttestedCredentialData (includes COSEKey/public key)
+            val attestedCredentialDataBytes = attestedCredentialDataConverter.convert(attestedCredentialData)
+            val attestedCredentialDataBase64 = Base64.getEncoder().encodeToString(attestedCredentialDataBytes)
 
-            val aaguid = validationData.attestationObject.authenticatorData.attestedCredentialData?.aaguid?.toString()
+            val aaguid = attestedCredentialData.aaguid?.toString()
 
             val credential = PasskeyCredential(
                 user = user,
                 credentialId = credentialIdBase64,
-                publicKeyCose = publicKeyBase64,
-                signCount = validationData.attestationObject.authenticatorData.signCount,
+                publicKeyCose = attestedCredentialDataBase64, // Store full attested credential data
+                signCount = authenticatorData.signCount,
                 aaguid = aaguid,
                 credentialName = credentialName,
                 transports = registrationResponse.response.transports?.joinToString(",")
@@ -199,59 +192,51 @@ class WebAuthnService(
             val credential = passkeyCredentialRepository.findByCredentialId(credentialIdBase64)
                 .orElseThrow { IllegalArgumentException("Credential not found") }
 
-            // Decode response
-            val authenticatorDataBytes = Base64.getUrlDecoder().decode(authenticationResponse.response.authenticatorData)
-            val clientDataJSONBytes = Base64.getUrlDecoder().decode(authenticationResponse.response.clientDataJSON)
-            val signatureBytes = Base64.getUrlDecoder().decode(authenticationResponse.response.signature)
+            // Parse authentication response JSON
+            val authenticationDataJson = buildAuthenticationResponseJson(authenticationResponse)
+            val authenticationData = webAuthnManager.parseAuthenticationResponseJSON(authenticationDataJson)
 
-            // Create authenticator
-            val publicKeyBytes = Base64.getDecoder().decode(credential.publicKeyCose)
-            val coseKey = objectConverter.cborConverter.readValue(publicKeyBytes, com.webauthn4j.data.attestation.authenticator.COSEKey::class.java)
+            // Setup server property
+            val serverProperty = ServerProperty.builder()
+                .origin(Origin.create(ORIGIN))
+                .rpId(RP_ID)
+                .challenge(challenge)
+                .build()
 
-            val authenticator = AuthenticatorImpl(
-                coseKey.toAttestedCredentialData(),
+            // Deserialize the stored attested credential data
+            val attestedCredentialDataBytes = Base64.getDecoder().decode(credential.publicKeyCose)
+            val attestedCredentialData = attestedCredentialDataConverter.convert(attestedCredentialDataBytes)
+
+            // Create credential record using CredentialRecordImpl
+            // Using the extended constructor with all parameters
+            val credentialRecord = CredentialRecordImpl(
                 null, // attestationStatement
-                credential.signCount
+                null, // userPresent
+                null, // userVerified
+                null, // backupEligible
+                credential.signCount, // signCount
+                attestedCredentialData, // attestedCredentialData
+                null, // authenticatorExtensions
+                null, // clientData
+                null, // clientExtensions
+                null  // transports
             )
 
-            // Validate authentication
-            val authenticationData = AuthenticationData(
-                credentialIdBytes,
-                null, // userHandle
-                authenticatorDataBytes,
-                clientDataJSONBytes,
-                signatureBytes,
-                authenticationResponse.response.clientExtensionResults
-            )
-
+            // Define authentication parameters
             val authenticationParameters = AuthenticationParameters(
-                ServerProperty(Origin.create(ORIGIN), RP_ID, challenge, null),
-                authenticator,
-                null, // allowCredentials
+                serverProperty,
+                credentialRecord,
+                null, // allowCredentials - null means accept any
                 false, // userVerificationRequired
-                false // userPresenceRequired
+                true  // userPresenceRequired
             )
 
-            val authenticationContext = com.webauthn4j.data.AuthenticationRequest(
-                credentialIdBytes,
-                null, // userHandle
-                authenticatorDataBytes,
-                clientDataJSONBytes,
-                signatureBytes
-            )
-
-            val validator = WebAuthnAuthenticationContextValidator()
-            val validationData = validator.validate(
-                com.webauthn4j.data.AuthenticationContext(
-                    authenticationContext,
-                    authenticationParameters.serverProperty,
-                    authenticationParameters.authenticator,
-                    authenticationParameters.userVerificationRequired
-                )
-            )
+            // Verify authentication
+            webAuthnManager.verify(authenticationData, authenticationParameters)
 
             // Update sign count
-            credential.signCount = validationData.authenticatorData.signCount
+            val newSignCount = authenticationData.authenticatorData?.signCount ?: 0L
+            credential.signCount = newSignCount
             credential.lastUsedAt = Instant.now()
             passkeyCredentialRepository.update(credential)
 
@@ -309,6 +294,43 @@ class WebAuthnService(
                     transports = credential.transports?.split(",")
                 )
             }
+    }
+
+    /**
+     * Build registration response JSON for WebAuthn4J parsing
+     */
+    private fun buildRegistrationResponseJson(response: RegistrationCredentialResponse): String {
+        return """
+        {
+            "id": "${response.id}",
+            "rawId": "${response.rawId}",
+            "response": {
+                "clientDataJSON": "${response.response.clientDataJSON}",
+                "attestationObject": "${response.response.attestationObject}",
+                "transports": ${response.response.transports?.let { "[\"${it.joinToString("\", \"")}\"]" } ?: "[]"}
+            },
+            "type": "${response.type}"
+        }
+        """.trimIndent()
+    }
+
+    /**
+     * Build authentication response JSON for WebAuthn4J parsing
+     */
+    private fun buildAuthenticationResponseJson(response: AuthenticationCredentialResponse): String {
+        return """
+        {
+            "id": "${response.id}",
+            "rawId": "${response.rawId}",
+            "response": {
+                "clientDataJSON": "${response.response.clientDataJSON}",
+                "authenticatorData": "${response.response.authenticatorData}",
+                "signature": "${response.response.signature}",
+                "userHandle": ${response.response.userHandle?.let { "\"$it\"" } ?: "null"}
+            },
+            "type": "${response.type}"
+        }
+        """.trimIndent()
     }
 
     // Data classes for API responses
@@ -394,16 +416,5 @@ class WebAuthnService(
         val credentialName: String,
         val createdAt: String,
         val lastUsedAt: String?
-    )
-}
-
-// Extension function to create AttestedCredentialData from COSEKey
-private fun com.webauthn4j.data.attestation.authenticator.COSEKey.toAttestedCredentialData(): com.webauthn4j.data.attestation.authenticator.AttestedCredentialData {
-    // Create a minimal AttestedCredentialData for authentication
-    // In a real implementation, you'd need to store and retrieve the full AttestedCredentialData
-    return com.webauthn4j.data.attestation.authenticator.AttestedCredentialData(
-        com.webauthn4j.data.attestation.authenticator.AAGUID.ZERO,
-        ByteArray(16), // Placeholder credential ID
-        this
     )
 }

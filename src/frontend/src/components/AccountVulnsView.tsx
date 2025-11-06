@@ -118,7 +118,7 @@ const AccountVulnsView: React.FC = () => {
                     </p>
                     <hr />
                     <div className="mb-0">
-                        <a href="/system-vulns" className="btn btn-primary me-2">
+                        <a href="/vulnerabilities/system" className="btn btn-primary me-2">
                             <i className="bi bi-arrow-right me-2"></i>
                             Go to System Vulns
                         </a>
