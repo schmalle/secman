@@ -212,7 +212,7 @@ class MaterializedViewRefreshServiceTest {
         // Verify saveAll was called with 1 record
         verify(exactly = 1) {
             outdatedAssetRepository.saveAll(
-                match { list -> list.size == 1 && list[0].assetName == "asset-overdue" }
+                match { list: List<OutdatedAssetMaterializedView> -> list.size == 1 && list[0].assetName == "asset-overdue" }
             )
         }
     }
@@ -286,7 +286,7 @@ class MaterializedViewRefreshServiceTest {
         // Then: Severity counts should be correct
         verify(exactly = 1) {
             outdatedAssetRepository.saveAll(
-                match { list ->
+                match { list: List<OutdatedAssetMaterializedView> ->
                     val record = list[0]
                     record.criticalCount == 1 &&
                     record.highCount == 2 &&

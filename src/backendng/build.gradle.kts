@@ -113,9 +113,13 @@ dependencies {
     // Testing dependencies
     testImplementation("io.micronaut.test:micronaut-test-junit5")
     testImplementation("io.mockk:mockk:1.13.17")
+    testImplementation("org.mockito:mockito-core:5.14.2")
+    testImplementation("org.mockito.kotlin:mockito-kotlin:5.4.0")
+    testImplementation("ch.qos.logback:logback-classic:1.5.15")
     testImplementation("org.junit.jupiter:junit-jupiter-api")
     testImplementation("org.junit.jupiter:junit-jupiter-params")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     testImplementation("io.micronaut:micronaut-http-client")
 }
 
