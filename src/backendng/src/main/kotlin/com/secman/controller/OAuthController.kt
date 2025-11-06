@@ -23,13 +23,17 @@ class OAuthController(
 ) {
     
     private val logger = LoggerFactory.getLogger(OAuthController::class.java)
+    private val backendBaseUrl: String = appConfig.backend.baseUrl
     private val frontendBaseUrl: String = appConfig.frontend.baseUrl
-    
+
     init {
-        logger.info("OAuthController initialized with frontendBaseUrl: {}", frontendBaseUrl)
-        // Validate that the URL is properly formatted
+        logger.info("OAuthController initialized with backendBaseUrl: {}, frontendBaseUrl: {}", backendBaseUrl, frontendBaseUrl)
+        // Validate that the URLs are properly formatted
         if (!frontendBaseUrl.startsWith("http://") && !frontendBaseUrl.startsWith("https://")) {
             logger.error("Invalid frontendBaseUrl configuration: {}. Expected format: http://localhost:4321", frontendBaseUrl)
+        }
+        if (!backendBaseUrl.startsWith("http://") && !backendBaseUrl.startsWith("https://")) {
+            logger.error("Invalid backendBaseUrl configuration: {}. Expected format: http://localhost:8080", backendBaseUrl)
         }
     }
 
@@ -197,8 +201,21 @@ class OAuthController(
     )
 
     private fun getBaseUrl(request: HttpRequest<*>): String {
-        val scheme = request.headers.get("X-Forwarded-Proto") ?: "http"
-        val host = request.headers.get("X-Forwarded-Host") ?: request.headers.get("Host") ?: "localhost:8080"
-        return "$scheme://$host"
+        // Check X-Forwarded headers first (for reverse proxy/load balancer scenarios)
+        val forwardedHost = request.headers.get("X-Forwarded-Host")
+        if (forwardedHost != null) {
+            val scheme = request.headers.get("X-Forwarded-Proto") ?: "http"
+            return "$scheme://$forwardedHost"
+        }
+
+        // Fall back to Host header
+        val hostHeader = request.headers.get("Host")
+        if (hostHeader != null) {
+            val scheme = request.headers.get("X-Forwarded-Proto") ?: "http"
+            return "$scheme://$hostHeader"
+        }
+
+        // Finally, use configured backend base URL
+        return backendBaseUrl
     }
 }

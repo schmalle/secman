@@ -188,5 +188,7 @@ logger:
     org.hibernate.orm.incubating: ERROR
 
 app:
+  backend:
+    base-url: ${BACKEND_BASE_URL:http://localhost:8080}
   frontend:
     base-url: ${FRONTEND_URL:http://localhost:4321}
