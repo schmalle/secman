@@ -44,9 +44,6 @@ dependencies {
     implementation("com.webauthn4j:webauthn4j-core:0.30.0.RELEASE")
     implementation("com.webauthn4j:webauthn4j-metadata:0.30.0.RELEASE")
 
-    // Redis (for rate limiting in Feature 009)
-    implementation("io.micronaut.redis:micronaut-redis-lettuce")
-    
     // Validation
     implementation("io.micronaut.validation:micronaut-validation")
     implementation("jakarta.validation:jakarta.validation-api")

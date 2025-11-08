@@ -254,10 +254,6 @@ SMTP_ENABLE_TLS=true
 SECMAN_ENCRYPTION_PASSWORD=CHANGE_THIS_ENCRYPTION_PASSWORD
 SECMAN_ENCRYPTION_SALT=CHANGE_THIS_SALT_16_CHARS
 
-# Redis (if using rate limiting - Feature 009)
-REDIS_URI=redis://localhost:6379
-REDIS_SSL=false
-
 # Frontend URL
 FRONTEND_URL=https://secman.example.com
 

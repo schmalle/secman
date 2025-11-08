@@ -36,7 +36,7 @@ class WebAuthnService(
     private val attestedCredentialDataConverter = AttestedCredentialDataConverter(objectConverter)
     private val secureRandom = SecureRandom()
 
-    // Store challenges temporarily (in production, use Redis or cache)
+    // Store challenges temporarily in-memory (TODO: consider persistent cache for multi-instance deployments)
     private val challengeStore = mutableMapOf<String, Challenge>()
 
     companion object {
