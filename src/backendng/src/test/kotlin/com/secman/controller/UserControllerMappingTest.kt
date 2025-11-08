@@ -38,15 +38,18 @@ class UserControllerMappingTest {
         val userId = 1L
         val mappings = listOf(
             UserMappingResponse(
-                1,
-                "user@example.com",
-                "123456789012",
-                null,  // domain
-                null,  // ipAddress
-                null,  // ipRangeType
-                null,  // ipCount
-                "2025-01-01T00:00:00Z",
-                "2025-01-01T00:00:00Z"
+                id = 1,
+                email = "user@example.com",
+                awsAccountId = "123456789012",
+                domain = null,
+                ipAddress = null,
+                ipRangeType = null,
+                ipCount = null,
+                userId = userId,
+                appliedAt = "2025-01-01T00:00:00",
+                isFutureMapping = false,
+                createdAt = "2025-01-01T00:00:00",
+                updatedAt = "2025-01-01T00:00:00"
             )
         )
         every { userMappingService.getUserMappings(userId) } returns mappings
@@ -101,15 +104,18 @@ class UserControllerMappingTest {
             ipAddress = null
         )
         val createdMapping = UserMappingResponse(
-            1,
-            "user@example.com",
-            "123456789012",
-            null,  // domain
-            null,  // ipAddress
-            null,  // ipRangeType
-            null,  // ipCount
-            "2025-01-01T00:00:00Z",
-            "2025-01-01T00:00:00Z"
+            id = 1,
+            email = "user@example.com",
+            awsAccountId = "123456789012",
+            domain = null,
+            ipAddress = null,
+            ipRangeType = null,
+            ipCount = null,
+            userId = userId,
+            appliedAt = "2025-01-01T00:00:00",
+            isFutureMapping = false,
+            createdAt = "2025-01-01T00:00:00",
+            updatedAt = "2025-01-01T00:00:00"
         )
         every { userMappingService.createMapping(userId, createRequest) } returns createdMapping
         
@@ -157,15 +163,18 @@ class UserControllerMappingTest {
             ipAddress = null
         )
         val updatedMapping = UserMappingResponse(
-            1,
-            "user@example.com",
-            "999999999999",
-            "updated.example.com",
-            null,  // ipAddress
-            null,  // ipRangeType
-            null,  // ipCount
-            "2025-01-01T00:00:00Z",
-            "2025-01-02T00:00:00Z"
+            id = 1,
+            email = "user@example.com",
+            awsAccountId = "999999999999",
+            domain = "updated.example.com",
+            ipAddress = null,
+            ipRangeType = null,
+            ipCount = null,
+            userId = userId,
+            appliedAt = "2025-01-01T00:00:00",
+            isFutureMapping = false,
+            createdAt = "2025-01-01T00:00:00",
+            updatedAt = "2025-01-02T00:00:00"
         )
         every { userMappingService.updateMapping(userId, mappingId, updateRequest) } returns updatedMapping
         

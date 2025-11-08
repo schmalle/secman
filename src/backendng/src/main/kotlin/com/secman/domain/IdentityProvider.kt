@@ -65,6 +65,9 @@ data class IdentityProvider(
     @Column(name = "claim_mappings", columnDefinition = "TEXT")
     var claimMappings: String? = null, // JSON string for claim mappings
 
+    @Column(name = "callback_url", length = 512)
+    var callbackUrl: String? = null, // Custom OAuth callback URL (if null, uses default: ${BACKEND_BASE_URL}/oauth/callback)
+
     @Column(name = "created_at", nullable = false)
     var createdAt: LocalDateTime = LocalDateTime.now(),
 

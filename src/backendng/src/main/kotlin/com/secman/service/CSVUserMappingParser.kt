@@ -266,13 +266,18 @@ open class CSVUserMappingParser(
     }
 
     /**
-     * Parse AWS account ID, handling scientific notation
+     * Parse AWS account ID, handling scientific notation and leading zero padding
      *
-     * Excel exports large numbers in scientific notation (e.g., 9.98987E+11)
-     * This method uses BigDecimal to preserve precision and convert to 12-digit string
+     * Excel/database exports may:
+     * 1. Strip leading zeros (e.g., "041001014175" → "41001014175")
+     * 2. Use scientific notation for large numbers (e.g., "487510000000" → "4.8751E+11")
      *
-     * @param value Raw account ID value (may be numeric string or scientific notation)
-     * @return 12-digit account ID string, or null if invalid
+     * This method:
+     * - Uses BigDecimal to preserve precision and convert scientific notation
+     * - Pads account IDs with leading zeros if they're 1-11 digits (AWS IDs are always 12 digits)
+     *
+     * @param value Raw account ID value (may be numeric string, scientific notation, or missing leading zeros)
+     * @return 12-digit account ID string (padded with leading zeros if needed), or null if invalid
      */
     private fun parseAccountId(value: String): String? {
         val trimmed = value.trim()
@@ -282,20 +287,22 @@ open class CSVUserMappingParser(
             return trimmed
         }
 
-        // Handle scientific notation (e.g., "9.98987E+11")
+        // Handle numeric strings (including those with stripped leading zeros) and scientific notation
         return try {
             val bigDecimal = BigDecimal(trimmed)
             val longValue = bigDecimal.toLong()
             val accountId = longValue.toString()
 
-            // Validate exactly 12 digits
-            if (accountId.matches(Regex("^\\d{12}$"))) {
-                accountId
-            } else {
-                null // Invalid length
+            // AWS account IDs are always 12 digits
+            // If we have 1-11 digits, pad with leading zeros (leading zeros were likely stripped during export)
+            // If we have more than 12 digits or 0 digits, reject as invalid
+            when (accountId.length) {
+                in 1..11 -> accountId.padStart(12, '0') // Pad with leading zeros
+                12 -> accountId // Already correct length
+                else -> null // Invalid length (0 or >12 digits)
             }
         } catch (e: NumberFormatException) {
-            null // Invalid format
+            null // Invalid format (non-numeric)
         }
     }
 

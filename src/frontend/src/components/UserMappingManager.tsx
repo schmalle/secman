@@ -8,10 +8,13 @@ import {
   listUserMappings,
   createUserMapping,
   updateUserMapping,
-  deleteUserMapping
+  deleteUserMapping,
+  listCurrentMappings,
+  listAppliedHistory
 } from '../services/userMappingService';
 
 type ViewMode = 'list' | 'create' | 'edit';
+type MappingViewTab = 'current' | 'applied';
 
 interface Toast {
   id: number;
@@ -21,11 +24,13 @@ interface Toast {
 
 /**
  * Comprehensive User Mapping Management Component
- * Feature: 020-i-want-to (IP Address Mapping)
+ * Features: 020-i-want-to (IP Address Mapping), 042-future-user-mappings
  *
  * Provides:
  * - Tab 1: Bulk upload (Excel/CSV)
  * - Tab 2: CRUD management for individual IP mappings
+ *   - Sub-tab: Current Mappings (future + active, appliedAt IS NULL)
+ *   - Sub-tab: Applied History (historical, appliedAt IS NOT NULL)
  *   - List view with pagination
  *   - Create new mapping
  *   - Edit existing mapping
@@ -34,6 +39,7 @@ interface Toast {
 export default function UserMappingManager() {
   // Tab state
   const [activeTab, setActiveTab] = useState<'upload' | 'manage'>('manage');
+  const [mappingViewTab, setMappingViewTab] = useState<MappingViewTab>('current'); // Feature 042
 
   // View mode state
   const [viewMode, setViewMode] = useState<ViewMode>('list');
@@ -57,25 +63,29 @@ export default function UserMappingManager() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [nextToastId, setNextToastId] = useState(1);
 
-  // Load mappings on mount and when filters/pagination change
+  // Load mappings on mount and when filters/pagination/tabs change
   useEffect(() => {
     if (activeTab === 'manage' && viewMode === 'list') {
       loadMappings();
     }
-  }, [activeTab, viewMode, currentPage, emailFilter, domainFilter]);
+  }, [activeTab, viewMode, currentPage, emailFilter, domainFilter, mappingViewTab]);
 
   /**
-   * Load mappings from backend
+   * Load mappings from backend based on current tab selection
+   * Feature 042: Routes to different endpoints based on mappingViewTab
    */
   const loadMappings = async () => {
     setIsLoading(true);
     try {
-      const response = await listUserMappings(
-        currentPage,
-        pageSize,
-        emailFilter || undefined,
-        domainFilter || undefined
-      );
+      let response;
+
+      if (mappingViewTab === 'current') {
+        // Load current mappings (future + active)
+        response = await listCurrentMappings(currentPage, pageSize);
+      } else {
+        // Load applied history
+        response = await listAppliedHistory(currentPage, pageSize);
+      }
 
       setMappings(response.content);
       setTotalPages(response.totalPages);
@@ -294,61 +304,73 @@ export default function UserMappingManager() {
         {/* Manage Tab */}
         {activeTab === 'manage' && (
           <div className="tab-pane fade show active">
+            {/* Feature 042: Sub-tabs for Current vs Applied History */}
             {viewMode === 'list' && (
               <>
-                {/* Toolbar */}
-                <div className="row mb-3">
-                  <div className="col-md-8">
-                    <div className="row g-2">
-                      <div className="col-md-6">
-                        <input
-                          type="text"
-                          className="form-control"
-                          placeholder="Filter by email..."
-                          value={emailFilter}
-                          onChange={(e) => setEmailFilter(e.target.value)}
-                          onKeyDown={(e) => e.key === 'Enter' && handleFilterChange()}
-                        />
-                      </div>
-                      <div className="col-md-4">
-                        <input
-                          type="text"
-                          className="form-control"
-                          placeholder="Filter by domain..."
-                          value={domainFilter}
-                          onChange={(e) => setDomainFilter(e.target.value)}
-                          onKeyDown={(e) => e.key === 'Enter' && handleFilterChange()}
-                        />
-                      </div>
-                      <div className="col-md-2">
-                        <button
-                          type="button"
-                          className="btn btn-outline-secondary w-100"
-                          onClick={handleFilterChange}
-                        >
-                          <i className="bi bi-search"></i>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-md-4 text-end">
+                {/* Sub-tabs */}
+                <ul className="nav nav-pills mb-3" role="tablist">
+                  <li className="nav-item" role="presentation">
                     <button
+                      className={`nav-link ${mappingViewTab === 'current' ? 'active' : ''}`}
+                      onClick={() => {
+                        setMappingViewTab('current');
+                        setCurrentPage(0);
+                      }}
                       type="button"
-                      className="btn btn-primary"
-                      onClick={handleCreateClick}
+                      role="tab"
                     >
-                      <i className="bi bi-plus-circle me-2"></i>
-                      Create New Mapping
+                      <i className="bi bi-list-ul me-2"></i>
+                      Current Mappings
                     </button>
+                  </li>
+                  <li className="nav-item" role="presentation">
+                    <button
+                      className={`nav-link ${mappingViewTab === 'applied' ? 'active' : ''}`}
+                      onClick={() => {
+                        setMappingViewTab('applied');
+                        setCurrentPage(0);
+                      }}
+                      type="button"
+                      role="tab"
+                    >
+                      <i className="bi bi-clock-history me-2"></i>
+                      Applied History
+                    </button>
+                  </li>
+                </ul>
+
+                {/* Toolbar - Feature 042: Hide create button for Applied History */}
+                <div className="row mb-3">
+                  <div className={mappingViewTab === 'current' ? 'col-md-8' : 'col-md-12'}>
+                    {/* Info banner for Applied History */}
+                    {mappingViewTab === 'applied' && (
+                      <div className="alert alert-info mb-2" role="alert">
+                        <i className="bi bi-info-circle me-2"></i>
+                        This tab shows historical records of future user mappings that were automatically applied when users were created.
+                      </div>
+                    )}
                   </div>
+                  {mappingViewTab === 'current' && (
+                    <div className="col-md-4 text-end">
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        onClick={handleCreateClick}
+                      >
+                        <i className="bi bi-plus-circle me-2"></i>
+                        Create New Mapping
+                      </button>
+                    </div>
+                  )}
                 </div>
 
-                {/* Table */}
+                {/* Table - Feature 042: Pass isAppliedHistory flag */}
                 <IpMappingTable
                   mappings={mappings}
                   onEdit={handleEditClick}
                   onDelete={handleDeleteMapping}
                   isLoading={isLoading}
+                  isAppliedHistory={mappingViewTab === 'applied'}
                 />
 
                 {/* Pagination */}

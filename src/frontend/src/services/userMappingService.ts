@@ -13,7 +13,7 @@ export interface ImportResult {
 }
 
 /**
- * User Mapping DTO (Feature 020: extended with IP address fields)
+ * User Mapping DTO (Feature 020: extended with IP address fields, Feature 042: extended with future user mapping fields)
  */
 export interface UserMapping {
   id: number;
@@ -23,6 +23,9 @@ export interface UserMapping {
   ipAddress?: string;
   ipRangeType?: 'SINGLE' | 'CIDR' | 'DASH_RANGE';
   ipCount?: number;
+  userId?: number;              // Feature 042: Nullable user reference
+  appliedAt?: string;           // Feature 042: Timestamp when mapping was applied
+  isFutureMapping: boolean;     // Feature 042: True if user=null AND appliedAt=null
   createdAt: string;
   updatedAt: string;
 }
@@ -379,4 +382,96 @@ export async function deleteUserMapping(id: number): Promise<void> {
       throw new Error(`Failed to delete user mapping: ${response.status}`);
     }
   }
+}
+
+// ========== Future User Mapping Support (Feature 042) ==========
+
+/**
+ * List current user mappings (future + active)
+ * Feature: 042-future-user-mappings
+ *
+ * Returns mappings that have not been applied yet (appliedAt IS NULL).
+ * Includes both future user mappings and active user mappings.
+ *
+ * @param page Page number (0-indexed)
+ * @param size Page size
+ * @returns Paginated list of current user mappings
+ */
+export async function listCurrentMappings(
+  page: number = 0,
+  size: number = 20
+): Promise<UserMappingListResponse> {
+  const token = sessionStorage.getItem('token');
+  if (!token) {
+    throw new Error('Not authenticated');
+  }
+
+  const params = new URLSearchParams();
+  params.append('page', page.toString());
+  params.append('size', size.toString());
+
+  const response = await fetch(`/api/user-mappings/current?${params.toString()}`, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error('Authentication required');
+    } else if (response.status === 403) {
+      throw new Error('Insufficient permissions (ADMIN role required)');
+    } else {
+      throw new Error(`Failed to list current mappings: ${response.status}`);
+    }
+  }
+
+  return await response.json();
+}
+
+/**
+ * List applied historical user mappings
+ * Feature: 042-future-user-mappings
+ *
+ * Returns mappings that have been applied to users (appliedAt IS NOT NULL).
+ * These are historical records of when future user mappings were applied.
+ *
+ * @param page Page number (0-indexed)
+ * @param size Page size
+ * @returns Paginated list of applied historical user mappings
+ */
+export async function listAppliedHistory(
+  page: number = 0,
+  size: number = 20
+): Promise<UserMappingListResponse> {
+  const token = sessionStorage.getItem('token');
+  if (!token) {
+    throw new Error('Not authenticated');
+  }
+
+  const params = new URLSearchParams();
+  params.append('page', page.toString());
+  params.append('size', size.toString());
+
+  const response = await fetch(`/api/user-mappings/applied-history?${params.toString()}`, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error('Authentication required');
+    } else if (response.status === 403) {
+      throw new Error('Insufficient permissions (ADMIN role required)');
+    } else {
+      throw new Error(`Failed to list applied history: ${response.status}`);
+    }
+  }
+
+  return await response.json();
 }

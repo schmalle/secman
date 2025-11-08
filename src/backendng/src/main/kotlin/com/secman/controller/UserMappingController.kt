@@ -245,6 +245,96 @@ class UserMappingController(
         }
     }
 
+    // Feature 042: Future User Mapping Support
+
+    /**
+     * GET /api/user-mappings/current - List current mappings (future + active)
+     *
+     * Returns mappings that have not been applied yet (appliedAt IS NULL).
+     * Includes both future user mappings and active user mappings.
+     *
+     * Feature: 042-future-user-mappings
+     */
+    @Get("/current")
+    @Secured("ADMIN")
+    fun getCurrentMappings(
+        @QueryValue("page") page: Int?,
+        @QueryValue("size") size: Int?
+    ): HttpResponse<Map<String, Any>> {
+        logger.debug("Listing current mappings (future + active): page=$page, size=$size")
+
+        return try {
+            val pageNumber = page ?: 0
+            val pageSize = size ?: 20
+            val pageable = Pageable.from(pageNumber, pageSize)
+
+            val mappingsPage = userMappingService.getCurrentMappings(pageable)
+            val totalElements = userMappingService.countCurrentMappings()
+
+            val response = mapOf(
+                "content" to mappingsPage.content,
+                "totalElements" to totalElements,
+                "totalPages" to mappingsPage.totalPages,
+                "page" to pageNumber,
+                "size" to pageSize
+            )
+
+            HttpResponse.ok(response)
+        } catch (e: Exception) {
+            logger.error("Failed to list current mappings", e)
+            HttpResponse.serverError(
+                mapOf(
+                    "error" to "Internal Server Error",
+                    "message" to "Failed to list current mappings"
+                )
+            )
+        }
+    }
+
+    /**
+     * GET /api/user-mappings/applied-history - List applied historical mappings
+     *
+     * Returns mappings that have been applied to users (appliedAt IS NOT NULL).
+     * These are historical records of when future user mappings were applied.
+     *
+     * Feature: 042-future-user-mappings
+     */
+    @Get("/applied-history")
+    @Secured("ADMIN")
+    fun getAppliedHistory(
+        @QueryValue("page") page: Int?,
+        @QueryValue("size") size: Int?
+    ): HttpResponse<Map<String, Any>> {
+        logger.debug("Listing applied history mappings: page=$page, size=$size")
+
+        return try {
+            val pageNumber = page ?: 0
+            val pageSize = size ?: 20
+            val pageable = Pageable.from(pageNumber, pageSize)
+
+            val mappingsPage = userMappingService.getAppliedHistory(pageable)
+            val totalElements = userMappingService.countAppliedHistory()
+
+            val response = mapOf(
+                "content" to mappingsPage.content,
+                "totalElements" to totalElements,
+                "totalPages" to mappingsPage.totalPages,
+                "page" to pageNumber,
+                "size" to pageSize
+            )
+
+            HttpResponse.ok(response)
+        } catch (e: Exception) {
+            logger.error("Failed to list applied history", e)
+            HttpResponse.serverError(
+                mapOf(
+                    "error" to "Internal Server Error",
+                    "message" to "Failed to list applied history"
+                )
+            )
+        }
+    }
+
     /**
      * Extract user ID from authentication object
      */

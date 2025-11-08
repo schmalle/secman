@@ -26,6 +26,10 @@ checkin-test-results.json
 # IDE
 .idea/
 .vscode/
+.specify/
+.claude/
+.codex/
+src/backendng/bin/
 *.swp
 *.swo
 *~

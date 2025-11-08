@@ -13,7 +13,7 @@ import java.io.InputStream
 /**
  * Service for importing user mappings from Excel files
  *
- * Feature: 013-user-mapping-upload
+ * Features: 013-user-mapping-upload, 042-future-user-mappings
  *
  * Responsibilities:
  * - Parse Excel files (.xlsx format)
@@ -22,6 +22,7 @@ import java.io.InputStream
  * - Skip invalid rows, continue processing valid rows
  * - Detect and skip duplicate mappings
  * - Return detailed import results
+ * - Support future user mappings (mappings for users who don't exist yet)
  *
  * Excel Format:
  * - Column 1: Email Address (required, must contain @)
@@ -29,7 +30,12 @@ import java.io.InputStream
  * - Column 3: Domain (optional, alphanumeric + dots + hyphens when provided)
  * - At least one of AWS Account ID or Domain must be provided
  *
- * Related to: Feature 013 (User Mapping Upload)
+ * Feature 042: Future User Mappings
+ * - Imported mappings do NOT require users to exist in the system
+ * - When users are later created (manual or OAuth), mappings are automatically applied
+ * - All imported mappings have user=null and appliedAt=null (future mapping state)
+ *
+ * Related to: Feature 013 (User Mapping Upload), Feature 042 (Future User Mappings)
  */
 @Singleton
 open class UserMappingImportService(

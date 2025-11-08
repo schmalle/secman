@@ -4,10 +4,12 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.secman.domain.IdentityProvider
 import com.secman.domain.OAuthState
 import com.secman.domain.User
+import com.secman.event.UserCreatedEvent
 import com.secman.repository.IdentityProviderRepository
 import com.secman.repository.OAuthStateRepository
 import com.secman.repository.UserRepository
 import com.secman.util.MicrosoftErrorMapper
+import io.micronaut.context.event.ApplicationEventPublisher
 import io.micronaut.http.HttpRequest
 import io.micronaut.http.client.HttpClient
 import io.micronaut.http.client.annotation.Client
@@ -30,6 +32,7 @@ open class OAuthService(
     private val objectMapper: ObjectMapper,
     private val microsoftErrorMapper: MicrosoftErrorMapper,
     private val adminNotificationService: AdminNotificationService,
+    private val eventPublisher: ApplicationEventPublisher<UserCreatedEvent>,
     @Client("\${oauth.http-client.url:https://api.github.com}") private val githubApiClient: HttpClient,
     @Client private val genericHttpClient: HttpClient
 ) {
@@ -69,7 +72,10 @@ open class OAuthService(
 
         // Generate state parameter
         val state = generateState()
-        val redirectUri = "$baseUrl/oauth/callback"
+
+        // Use custom callback URL if configured, otherwise fall back to baseUrl
+        val redirectUri = provider.callbackUrl?.takeIf { it.isNotBlank() }
+            ?: "$baseUrl/oauth/callback"
 
         // Save state (this will commit immediately since method is not @Transactional)
         val oauthState = OAuthState(
@@ -468,6 +474,10 @@ open class OAuthService(
             val savedUser = userRepository.save(newUser)
             logger.info("Created new user via OAuth: username={}, email={}, provider={}",
                 savedUser.username, savedUser.email, provider.name)
+
+            // Feature 042: Publish event to trigger automatic application of future user mappings
+            eventPublisher.publishEvent(UserCreatedEvent(user = savedUser, source = "OAUTH"))
+
             UserCreationResult(user = savedUser, isNewUser = true)
         } catch (e: Exception) {
             logger.error("Failed to create user: {}", e.message, e)

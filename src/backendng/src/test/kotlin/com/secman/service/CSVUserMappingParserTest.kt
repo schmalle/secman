@@ -217,11 +217,12 @@ class CSVUserMappingParserTest {
         val result = csvUserMappingParser.parse(csvFile)
 
         // Then
-        assertEquals(1, result.imported, "Should only import 1 valid account ID")
-        assertEquals(3, result.skipped, "Should skip 3 invalid account IDs")
-        assertEquals(3, result.errors.size, "Should report 3 errors")
+        // Note: "12345" (5 digits) is now valid - it gets padded to "000000012345" (12 digits)
+        assertEquals(2, result.imported, "Should import 2 valid account IDs (including padded one)")
+        assertEquals(2, result.skipped, "Should skip 2 invalid account IDs")
+        assertEquals(2, result.errors.size, "Should report 2 errors")
 
-        // Verify error messages mention account ID format
+        // Verify error messages mention account ID format (for the 2 that failed)
         assertTrue(result.errors.any { it.reason!!.contains("12 numeric digits") ||
                    it.reason!!.contains("account_id") })
 
@@ -518,6 +519,62 @@ class CSVUserMappingParserTest {
 
         // Then
         assertEquals(1, result.imported, "Should handle quoted fields")
+
+        // Cleanup
+        csvFile.delete()
+    }
+
+    @Test
+    fun `testLeadingZeroPadding - Pad account IDs with stripped leading zeros`() {
+        // Given - CSV with account IDs missing leading zeros (common in database exports)
+        val csvFile = File.createTempFile("leading_zeros", ".csv")
+        csvFile.writeText("""
+            account_id,owner_email
+            41001014175,user1@example.com
+            1234567890,user2@example.com
+            123,user3@example.com
+            123456789012,user4@example.com
+        """.trimIndent())
+
+        // When
+        val result = csvUserMappingParser.parse(csvFile)
+
+        // Then
+        assertEquals(4, result.imported, "Should pad all account IDs with leading zeros")
+        assertEquals(0, result.skipped, "Should not skip any rows")
+        assertEquals(0, result.errors.size, "Should have no errors")
+        // Expected padding:
+        // - "41001014175" (11 digits) → "041001014175" (12 digits)
+        // - "1234567890" (10 digits) → "001234567890" (12 digits)
+        // - "123" (3 digits) → "000000000123" (12 digits)
+        // - "123456789012" (12 digits) → "123456789012" (unchanged)
+
+        // Cleanup
+        csvFile.delete()
+    }
+
+    @Test
+    fun `testMixedFormats - Handle scientific notation and leading zero padding together`() {
+        // Given - CSV with mix of scientific notation and stripped leading zeros (real-world DynamoDB export)
+        val csvFile = File.createTempFile("mixed_formats", ".csv")
+        csvFile.writeText("""
+            account_id,owner_email
+            41001014175,user1@example.com
+            4.8751E+11,user2@example.com
+            123456789012,user3@example.com
+        """.trimIndent())
+
+        // When
+        val result = csvUserMappingParser.parse(csvFile)
+
+        // Then
+        assertEquals(3, result.imported, "Should handle both scientific notation and leading zero padding")
+        assertEquals(0, result.skipped, "Should not skip any rows")
+        assertEquals(0, result.errors.size, "Should have no errors")
+        // Expected results:
+        // - "41001014175" (11 digits) → "041001014175" (12 digits, padded)
+        // - "4.8751E+11" → 487510000000 → "487510000000" (12 digits, scientific notation)
+        // - "123456789012" → "123456789012" (12 digits, unchanged)
 
         // Cleanup
         csvFile.delete()

@@ -42,12 +42,19 @@
 - **API**: 11 endpoints (/api/vulnerability-exception-requests/*)
 - **Frontend**: ExceptionRequestModal, MyExceptionRequests, ExceptionApprovalDashboard, SSE badge updates
 
-### UserMapping (Feature 013/016)
+### UserMapping (Feature 013/016/020/042)
 
-- **Fields**: email, awsAccountId(12 digits), domain
+- **Fields**: email, awsAccountId(12 digits), domain, ipAddress, user(FK nullable), appliedAt(nullable)
 - **Validation**: Email format, 12-digit AWS account, domain format
 - **Import**: Excel (.xlsx) + CSV (.csv) with auto-delimiter detection, scientific notation parsing
 - **Access**: ADMIN only
+- **Feature 042 - Future User Mappings**:
+  - Support mappings for users who don't exist yet (user=null, appliedAt=null)
+  - Automatic application when users are created (manual or OAuth)
+  - Event-driven architecture (@EventListener @Async)
+  - Conflict resolution: "pre-existing mapping wins" strategy
+  - UI tabs: "Current Mappings" (future + active) | "Applied History" (historical)
+  - Visual indicators: Future User (yellow), Active (blue), Applied (green) status badges
 - **Access Control Impact**: AWS account mappings and AD domain mappings grant asset access (see Unified Access Control below)
 
 ### Workgroup (Feature 008)
@@ -145,6 +152,21 @@ This unified model ensures consistent access across all views (Asset Management,
 - **Features**: Pagination, filtering by type/status/email/date, CSV export
 - **Indexes**: Multiple indexes for efficient filtering
 
+### IdentityProvider (Feature 041)
+
+- **Purpose**: OAuth2/OIDC single sign-on identity provider configuration
+- **Fields**: name, type(OIDC/SAML), clientId, clientSecret, tenantId, discoveryUrl, authorizationUrl, tokenUrl, userInfoUrl, issuer, jwksUri, scopes, enabled, autoProvision, buttonText, buttonColor, roleMapping, claimMappings, **callbackUrl**, createdAt, updatedAt
+- **Callback URL**: Custom OAuth callback URL (optional, nullable)
+  - If null/blank: Uses default `${BACKEND_BASE_URL}/oauth/callback`
+  - If configured: Uses custom URL (e.g., `https://api.yourdomain.com/oauth/callback`)
+  - **Validation**: Must start with `https://` (production) or `http://localhost` (development)
+  - **Max Length**: 512 characters
+  - **Use Case**: Different callback URLs per provider, or when backend URL differs from OAuth endpoint
+- **Access**: Authenticated users can view enabled providers; full CRUD requires authentication
+- **UI**: IdentityProviderManagement.tsx with templates for Google, Microsoft, GitHub
+- **Auto-provisioning**: Create new users automatically on first OAuth login
+- **Tenant Validation**: Microsoft providers require valid UUID tenant ID
+
 ## API Endpoints (Critical Only)
 
 ### Import
@@ -208,6 +230,27 @@ This unified model ensures consistent access across all views (Asset Management,
 - `POST /api/auth/login` - JWT login
 - OAuth2 SSO endpoints
 
+### User Mappings (Feature 042)
+
+- `GET /api/user-mappings/current` - List current mappings (future + active, appliedAt IS NULL) (ADMIN)
+- `GET /api/user-mappings/applied-history` - List applied historical mappings (appliedAt IS NOT NULL) (ADMIN)
+- `POST /api/user-mappings` - Create new mapping (ADMIN)
+- `PUT /api/user-mappings/{id}` - Update mapping (ADMIN)
+- `DELETE /api/user-mappings/{id}` - Delete mapping (ADMIN)
+- `GET /api/user-mappings/{id}` - Get mapping by ID (ADMIN)
+
+### Identity Providers (Feature 041)
+
+- `GET /api/identity-providers` - List all providers (authenticated)
+- `GET /api/identity-providers/enabled` - List enabled providers (public, for login page)
+- `GET /api/identity-providers/{id}` - Get single provider (authenticated)
+- `POST /api/identity-providers` - Create provider (authenticated, validates callbackUrl)
+- `PUT /api/identity-providers/{id}` - Update provider (authenticated, validates callbackUrl)
+- `DELETE /api/identity-providers/{id}` - Delete provider (authenticated)
+- `POST /api/identity-providers/{id}/test` - Test provider configuration (authenticated)
+- `GET /oauth/authorize` - Initiate OAuth flow (uses provider's callbackUrl if configured)
+- `GET /oauth/callback` - Handle OAuth callback (validates against stored redirectUri)
+
 ## Development Workflow
 
 ### Git
@@ -265,6 +308,40 @@ npm run dev
 - Admin: `authentication.roles.contains("ADMIN")`
 - VULN: Check "VULN" or "ADMIN"
 - Frontend: JWT in sessionStorage → Axios headers
+
+### Event-Driven Architecture (Feature 042)
+
+**Pattern**: Async event publishing and listening for cross-service communication
+
+1. **Event Definition**: Create @Serdeable data class with relevant data
+2. **Publisher**: Inject ApplicationEventPublisher<EventType> and call publishEvent()
+3. **Listener**: Create @EventListener @Async method in service
+4. **Non-Blocking**: Event processing happens asynchronously, doesn't block caller
+5. **Error Handling**: Catch exceptions in listener to prevent blocking user operations
+
+**Example - Future User Mapping Application:**
+```kotlin
+// 1. Event definition
+@Serdeable
+data class UserCreatedEvent(val user: User, val source: String)
+
+// 2. Publisher (UserService)
+eventPublisher.publishEvent(UserCreatedEvent(savedUser, "MANUAL"))
+
+// 3. Listener (UserMappingService)
+@EventListener
+@Async
+open fun onUserCreated(event: UserCreatedEvent) {
+    applyFutureUserMapping(event.user)  // Runs async
+}
+```
+
+**Use Cases:**
+- User creation triggers mapping application
+- Asset import triggers materialized view refresh
+- Vulnerability detection triggers notification emails
+
+**Performance**: Event delivery <5ms, async processing doesn't block caller
 
 ### Materialized View Refresh (Feature 034)
 
@@ -345,7 +422,7 @@ npm run dev
 
 ---
 
-*Optimized for performance. See git history for detailed feature specs. Last updated: 2025-10-26*
+*Optimized for performance. See git history for detailed feature specs. Last updated: 2025-11-07*
 
 ## Active Technologies
 - Kotlin 2.2.21 / Java 21 (backend), Python 3.11+ (CLI), Astro 5.14 + React 19 (frontend) + Micronaut 4.10, Hibernate JPA, MariaDB 12, Apache POI 5.3, JavaMail API (SMTP), Bootstrap 5.3, Axios (035-notification-system)
@@ -358,6 +435,9 @@ npm run dev
 - MariaDB 12 (2 new columns: workgroup.criticality, asset.criticality) (039-asset-workgroup-criticality)
 - Kotlin 2.2.21 / Java 21 (backend), JavaScript ES2022 (frontend - Astro 5.14 + React 19) + Micronaut 4.10, Hibernate JPA, MariaDB 12 (backend); Astro 5.14, React 19, Bootstrap 5.3, Axios (frontend) (040-nested-workgroups)
 - MariaDB 12 with self-referential foreign key on `workgroup` table (`parent_id` column) (040-nested-workgroups)
+- Kotlin 2.2.21 / Java 21 (backend), JavaScript ES2022 (frontend - Astro 5.14 + React 19) + Micronaut 4.10, Hibernate JPA, MariaDB 12, Apache POI 5.3, Apache Commons CSV, Astro 5.14, React 19, Bootstrap 5.3, Axios (042-future-user-mappings)
+- MariaDB 12 (existing `user_mapping` table - schema extension required to support nullable user_id and add appliedAt timestamp) (042-future-user-mappings)
 
 ## Recent Changes
+- 042-future-user-mappings: Added Future User Mapping support with event-driven auto-application, UI tabs for Current/Applied History, visual status indicators (yellow/blue/green badges), conflict resolution strategy, @EventListener @Async pattern
 - 035-notification-system: Added Kotlin 2.2.21 / Java 21 (backend), Python 3.11+ (CLI), Astro 5.14 + React 19 (frontend) + Micronaut 4.10, Hibernate JPA, MariaDB 12, Apache POI 5.3, JavaMail API (SMTP), Bootstrap 5.3, Axios
