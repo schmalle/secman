@@ -201,9 +201,9 @@ class OAuthController(
     )
 
     private fun getBaseUrl(request: HttpRequest<*>): String {
-        // Check X-Forwarded headers first (for reverse proxy/load balancer scenarios)
-        val forwardedHost = request.headers.get("X-Forwarded-Host")
-        if (forwardedHost != null) {
+		// Check X-Forwarded headers first (for reverse proxy/load balancer scenarios)
+		val forwardedHost = request.headers.get("X-Forwarded-Host")
+		if (forwardedHost != null) {
             val scheme = request.headers.get("X-Forwarded-Proto") ?: "http"
 			logger.info("getBaseUrl: Found forwarded-host header returning URL from ForwardHost field $scheme://$forwardedHost")
 
@@ -223,4 +223,5 @@ class OAuthController(
         logger.info("getBaseUrl: Found not matching http headers returning configured backend base URL $backendBaseUrl")
 		return backendBaseUrl
     }
+
 }
