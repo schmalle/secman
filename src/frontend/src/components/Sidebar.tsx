@@ -407,24 +407,84 @@ const Sidebar = () => {
                         </div>
                         {adminMenuOpen && (
                             <ul className="list-unstyled ps-4">
+                                {/* Dashboard Overview */}
                                 <li>
                                     <a href="/admin" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                        <i className="bi bi-gear me-2"></i> General
+                                        <i className="bi bi-speedometer me-2"></i> Dashboard
                                     </a>
                                 </li>
+
+                                {/* Users & Access Management */}
+                                <li className="admin-subsection-header">Users & Access</li>
                                 <li>
                                     <a href="/admin/user-management" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                        <i className="bi bi-people-fill me-2"></i> Manage Users
+                                        <i className="bi bi-people-fill me-2"></i> User Management
                                     </a>
                                 </li>
                                 <li>
                                     <a href="/workgroups" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                        <i className="bi bi-people-fill me-2"></i> Workgroups
+                                        <i className="bi bi-diagram-2 me-2"></i> Workgroups
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="/admin/user-mappings" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-diagram-3-fill me-2"></i> User Mappings
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="/admin/identity-providers" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-shield-lock me-2"></i> Identity Providers
+                                    </a>
+                                </li>
+
+                                {/* System Configuration */}
+                                <li className="admin-subsection-header">System Configuration</li>
+                                <li>
+                                    <a href="/admin/email-config" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-envelope-gear me-2"></i> Email Settings
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="/admin/vulnerability-config" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-shield-exclamation me-2"></i> Vulnerability Settings
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="/admin/notification-settings" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-bell-fill me-2"></i> Notification Settings
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="/admin/falcon-config" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-shield-lock me-2"></i> CrowdStrike Falcon
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="/admin/translation-config" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-translate me-2"></i> Translation Config
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="/admin/mcp-api-keys" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-key-fill me-2"></i> MCP API Keys
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="/admin/classification-rules" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-funnel-fill me-2"></i> Classification Rules
+                                    </a>
+                                </li>
+
+                                {/* Content & Data Management */}
+                                <li className="admin-subsection-header">Content & Data</li>
+                                <li>
+                                    <a href="/admin/requirements" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-list-task me-2"></i> Requirements Mgmt
                                     </a>
                                 </li>
                                 <li>
                                     <a href="/scans" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                        <i className="bi bi-diagram-3 me-2"></i> Scans
+                                        <i className="bi bi-radar me-2"></i> Scans
                                     </a>
                                 </li>
                                 {canAccessReleases(userRoles) && (
@@ -441,6 +501,9 @@ const Sidebar = () => {
                                         </a>
                                     </li>
                                 )}
+
+                                {/* Monitoring */}
+                                <li className="admin-subsection-header">Monitoring</li>
                                 <li>
                                     <a href="/notification-logs" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
                                         <i className="bi bi-envelope-paper me-2"></i> Notification Logs
@@ -513,6 +576,17 @@ const styles = `
 .sidebar-section-header-clickable:hover {
     background-color: #e9ecef;
     color: #495057;
+}
+
+.admin-subsection-header {
+    font-size: 0.7rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    color: #868e96;
+    padding: 8px 8px 4px 8px;
+    margin-top: 12px;
+    letter-spacing: 0.3px;
+    border-bottom: 1px solid #dee2e6;
 }
 `;
 
