@@ -257,7 +257,6 @@ This unified model ensures consistent access across all views (Asset Management,
 
 - Commits: `type(scope): description`
 - Branches: `###-feature-name`
-- PR gates: lint, Docker build
 
 ### Commands
 
@@ -418,7 +417,7 @@ open fun onUserCreated(event: UserCreatedEvent) {
 - **Helper**: `src/helper/src/{models,services,cli,exporters,lib}/`
 - **CLI**: `src/cli/src/main/kotlin/com/secman/cli/{commands,service}/`
 - **Email Templates**: `src/backendng/src/main/resources/email-templates/`
-- **Config**: `docker-compose.yml`, `.env`, `src/backendng/src/main/resources/application.yml`
+- **Config**: `src/backendng/src/main/resources/application.yml`
 
 ---
 
