@@ -162,11 +162,6 @@ datasources:
     username: ${DB_USERNAME:secman}
     password: ${DB_PASSWORD:CHANGEME}
 
-# Redis configuration for MCP rate limiting (Feature 009)
-redis:
-  uri: ${REDIS_URI:redis://localhost:6379}
-  ssl: ${REDIS_SSL:false}
-    
 jpa:
   default:
     properties:

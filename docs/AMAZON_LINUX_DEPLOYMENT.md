@@ -184,10 +184,6 @@ SECMAN_ENCRYPTION_PASSWORD=REPLACE_WITH_GENERATED_PASSWORD
 # Generate with: openssl rand -hex 8
 SECMAN_ENCRYPTION_SALT=REPLACE_WITH_GENERATED_SALT
 
-# Redis Configuration (for rate limiting)
-REDIS_URI=redis://localhost:6379
-REDIS_SSL=false
-
 # Optional: Vulnerability Configuration
 VULN_USE_PATCH_PUBLICATION_DATE=false
 VULN_REQUIRE_PATCH_PUBLICATION_DATE=false
@@ -222,17 +218,6 @@ cd /opt/secman/app
 
 # The built JAR will be at:
 # src/backendng/build/libs/backendng-0.1-all.jar
-```
-
-### 4. Install Redis (for rate limiting)
-
-```bash
-# Install Redis
-sudo dnf install redis -y
-
-# Start and enable Redis
-sudo systemctl start redis
-sudo systemctl enable redis
 ```
 
 ---
@@ -333,8 +318,8 @@ Add the following configuration:
 ```ini
 [Unit]
 Description=Secman Backend Service (Micronaut/Kotlin)
-After=network.target mariadb.service redis.service
-Requires=mariadb.service redis.service
+After=network.target mariadb.service
+Requires=mariadb.service
 Documentation=https://github.com/schmalle/secman
 
 [Service]
@@ -812,10 +797,10 @@ sudo systemctl start dnf-automatic.timer
 
 ```bash
 # Check all services
-sudo systemctl status secman-backend secman-frontend nginx mariadb redis
+sudo systemctl status secman-backend secman-frontend nginx mariadb
 
 # Check if services are enabled
-sudo systemctl is-enabled secman-backend secman-frontend nginx mariadb redis
+sudo systemctl is-enabled secman-backend secman-frontend nginx mariadb
 ```
 
 ### 2. Test Backend API
