@@ -130,7 +130,7 @@ class ConfigLoader {
         }
 
         return if (clientId != null && clientSecret != null) {
-            log.debug("Loaded credentials from environment (clientId found: {})", clientId != null)
+            log.debug("Loaded credentials from environment")
             FalconConfigDto(
                 clientId = clientId,
                 clientSecret = clientSecret,

@@ -1,14 +1,17 @@
 package com.secman.service
 
 import com.secman.domain.User
+import com.secman.event.UserCreatedEvent
 import com.secman.repository.UserRepository
+import io.micronaut.context.event.ApplicationEventPublisher
 import jakarta.inject.Inject
 import jakarta.inject.Singleton
 import java.util.*
 
 @Singleton
 class UserService(
-    @Inject private val userRepository: UserRepository
+    @Inject private val userRepository: UserRepository,
+    @Inject private val eventPublisher: ApplicationEventPublisher<UserCreatedEvent>
 ) {
 
     fun getAllUsers(): List<User> {
@@ -32,7 +35,10 @@ class UserService(
     }
 
     fun createUser(user: User): User {
-        return userRepository.save(user)
+        val savedUser = userRepository.save(user)
+        // Feature 042: Publish event to trigger automatic application of future user mappings
+        eventPublisher.publishEvent(UserCreatedEvent(user = savedUser, source = "MANUAL"))
+        return savedUser
     }
 
     fun updateUser(id: Long, updatedUser: User): User? {

@@ -6,11 +6,12 @@ interface IpMappingTableProps {
   onEdit: (mapping: UserMapping) => void;
   onDelete: (mapping: UserMapping) => void;
   isLoading?: boolean;
+  isAppliedHistory?: boolean;  // Feature 042: Disable actions for applied history
 }
 
 /**
  * Table component for displaying IP address mappings
- * Feature: 020-i-want-to (IP Address Mapping)
+ * Features: 020-i-want-to (IP Address Mapping), 042-future-user-mappings
  *
  * Displays:
  * - Email
@@ -19,9 +20,11 @@ interface IpMappingTableProps {
  * - IP Range Type (with badge)
  * - IP Count
  * - Domain
- * - Actions (Edit/Delete)
+ * - Status (Feature 042: Future/Active/Applied)
+ * - Applied At (Feature 042)
+ * - Actions (Edit/Delete, disabled for applied history)
  */
-export default function IpMappingTable({ mappings, onEdit, onDelete, isLoading = false }: IpMappingTableProps) {
+export default function IpMappingTable({ mappings, onEdit, onDelete, isLoading = false, isAppliedHistory = false }: IpMappingTableProps) {
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
 
   const getRangeTypeBadge = (type?: string) => {
@@ -43,6 +46,43 @@ export default function IpMappingTable({ mappings, onEdit, onDelete, isLoading =
     if (count < 1000) return `${count} IPs`;
     if (count < 1000000) return `${(count / 1000).toFixed(1)}K IPs`;
     return `${(count / 1000000).toFixed(1)}M IPs`;
+  };
+
+  // Feature 042: Status badge based on isFutureMapping and appliedAt
+  const getStatusBadge = (mapping: UserMapping) => {
+    if (mapping.isFutureMapping) {
+      return (
+        <span className="badge bg-warning text-dark" title="Waiting for user to be created">
+          <i className="bi bi-hourglass-split me-1"></i>
+          Future User
+        </span>
+      );
+    } else if (mapping.appliedAt) {
+      return (
+        <span className="badge bg-success" title="Mapping was applied to user">
+          <i className="bi bi-check-circle me-1"></i>
+          Applied
+        </span>
+      );
+    } else {
+      return (
+        <span className="badge bg-primary" title="User exists, mapping is active">
+          <i className="bi bi-person-check me-1"></i>
+          Active
+        </span>
+      );
+    }
+  };
+
+  // Feature 042: Format appliedAt timestamp
+  const formatAppliedAt = (timestamp?: string) => {
+    if (!timestamp) return '-';
+    try {
+      const date = new Date(timestamp);
+      return date.toLocaleString();
+    } catch {
+      return timestamp;
+    }
   };
 
   const handleDeleteClick = (mapping: UserMapping) => {
@@ -89,12 +129,14 @@ export default function IpMappingTable({ mappings, onEdit, onDelete, isLoading =
             <th>Type</th>
             <th>IP Count</th>
             <th>Domain</th>
+            <th>Status</th>
+            {isAppliedHistory && <th>Applied At</th>}
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
           {mappings.map((mapping) => (
-            <tr key={mapping.id}>
+            <tr key={mapping.id} className={mapping.isFutureMapping ? 'table-warning' : ''}>
               <td>
                 <small className="text-muted">{mapping.email}</small>
               </td>
@@ -126,42 +168,59 @@ export default function IpMappingTable({ mappings, onEdit, onDelete, isLoading =
                 )}
               </td>
               <td>
-                {deleteConfirmId === mapping.id ? (
-                  <div className="btn-group btn-group-sm" role="group">
-                    <button
-                      type="button"
-                      className="btn btn-danger"
-                      onClick={() => handleDeleteConfirm(mapping)}
-                    >
-                      Confirm
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      onClick={handleDeleteCancel}
-                    >
-                      Cancel
-                    </button>
-                  </div>
+                {getStatusBadge(mapping)}
+              </td>
+              {isAppliedHistory && (
+                <td>
+                  <small className="text-muted">{formatAppliedAt(mapping.appliedAt)}</small>
+                </td>
+              )}
+              <td>
+                {isAppliedHistory ? (
+                  <span className="text-muted small">
+                    <i className="bi bi-lock me-1"></i>
+                    Read-only
+                  </span>
                 ) : (
-                  <div className="btn-group btn-group-sm" role="group">
-                    <button
-                      type="button"
-                      className="btn btn-outline-primary"
-                      onClick={() => onEdit(mapping)}
-                      title="Edit mapping"
-                    >
-                      <i className="bi bi-pencil"></i>
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-outline-danger"
-                      onClick={() => handleDeleteClick(mapping)}
-                      title="Delete mapping"
-                    >
-                      <i className="bi bi-trash"></i>
-                    </button>
-                  </div>
+                  <>
+                    {deleteConfirmId === mapping.id ? (
+                      <div className="btn-group btn-group-sm" role="group">
+                        <button
+                          type="button"
+                          className="btn btn-danger"
+                          onClick={() => handleDeleteConfirm(mapping)}
+                        >
+                          Confirm
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          onClick={handleDeleteCancel}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="btn-group btn-group-sm" role="group">
+                        <button
+                          type="button"
+                          className="btn btn-outline-primary"
+                          onClick={() => onEdit(mapping)}
+                          title="Edit mapping"
+                        >
+                          <i className="bi bi-pencil"></i>
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-outline-danger"
+                          onClick={() => handleDeleteClick(mapping)}
+                          title="Delete mapping"
+                        >
+                          <i className="bi bi-trash"></i>
+                        </button>
+                      </div>
+                    )}
+                  </>
                 )}
               </td>
             </tr>

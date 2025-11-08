@@ -187,4 +187,64 @@ interface UserMappingRepository : JpaRepository<UserMapping, Long> {
      */
     @Query("SELECT COUNT(m) FROM UserMapping m WHERE m.email = :email AND m.ipAddress IS NOT NULL")
     fun countIpMappingsByEmail(email: String): Long
+
+    // Future User Mapping - Feature 042
+
+    /**
+     * Find mapping by email (case-insensitive)
+     *
+     * Use case: Lookup future user mapping during user creation for automatic application
+     *
+     * Related to: Feature 042 (Future User Mappings)
+     *
+     * @param email User's email address (case-insensitive)
+     * @return Optional containing the first matching mapping (if multiple exist, returns first)
+     */
+    fun findByEmailIgnoreCase(email: String): Optional<UserMapping>
+
+    /**
+     * Find all current mappings (future + active, excluding applied history)
+     *
+     * Use case: Display "Current Mappings" tab in UI (paginated)
+     *
+     * Related to: Feature 042 (Future User Mappings)
+     *
+     * @param pageable Pagination parameters (page number, size, sort)
+     * @return Page of current mappings (appliedAt IS NULL)
+     */
+    fun findByAppliedAtIsNull(pageable: io.micronaut.data.model.Pageable): io.micronaut.data.model.Page<UserMapping>
+
+    /**
+     * Find all applied historical mappings
+     *
+     * Use case: Display "Applied History" tab in UI (paginated)
+     *
+     * Related to: Feature 042 (Future User Mappings)
+     *
+     * @param pageable Pagination parameters (page number, size, sort)
+     * @return Page of applied historical mappings (appliedAt IS NOT NULL)
+     */
+    fun findByAppliedAtIsNotNull(pageable: io.micronaut.data.model.Pageable): io.micronaut.data.model.Page<UserMapping>
+
+    /**
+     * Count current mappings (future + active)
+     *
+     * Use case: Display total count for "Current Mappings" tab pagination
+     *
+     * Related to: Feature 042 (Future User Mappings)
+     *
+     * @return Number of current mappings (appliedAt IS NULL)
+     */
+    fun countByAppliedAtIsNull(): Long
+
+    /**
+     * Count applied historical mappings
+     *
+     * Use case: Display total count for "Applied History" tab pagination
+     *
+     * Related to: Feature 042 (Future User Mappings)
+     *
+     * @return Number of applied historical mappings (appliedAt IS NOT NULL)
+     */
+    fun countByAppliedAtIsNotNull(): Long
 }

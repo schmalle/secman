@@ -21,6 +21,7 @@ interface IdentityProvider {
   buttonColor: string;
   roleMapping?: { [key: string]: string };
   claimMappings?: { [key: string]: string };
+  callbackUrl?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -56,7 +57,8 @@ export default function IdentityProviderManagement() {
     buttonText: 'Sign in with Provider',
     buttonColor: '#007bff',
     roleMapping: {},
-    claimMappings: {}
+    claimMappings: {},
+    callbackUrl: ''
   });
 
   // Predefined provider templates
@@ -189,7 +191,8 @@ export default function IdentityProviderManagement() {
       buttonText: 'Sign in with Provider',
       buttonColor: '#007bff',
       roleMapping: {},
-      claimMappings: {}
+      claimMappings: {},
+      callbackUrl: ''
     });
   };
 
@@ -425,6 +428,22 @@ export default function IdentityProviderManagement() {
                           placeholder="openid email profile"
                         />
                       </div>
+                    </div>
+                  </div>
+
+                  <div className="mb-3">
+                    <label className="form-label">OAuth Callback URL (Optional)</label>
+                    <input
+                      type="url"
+                      className="form-control"
+                      value={formData.callbackUrl || ''}
+                      onChange={(e) => handleInputChange('callbackUrl', e.target.value)}
+                      placeholder="https://api.yourdomain.com/oauth/callback"
+                    />
+                    <div className="form-text">
+                      Custom OAuth callback URL. Leave empty to use the default backend URL.
+                      Must start with https:// (production) or http://localhost (development).
+                      Register this URL in your OAuth provider's configuration (e.g., Azure AD App Registration).
                     </div>
                   </div>
 

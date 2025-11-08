@@ -10,8 +10,9 @@ import java.time.Instant
 /**
  * UserMapping entity - stores mappings between user emails, AWS account IDs, domains, and IP addresses
  *
- * Features: 013-user-mapping-upload, 020-i-want-to (IP address mapping)
+ * Features: 013-user-mapping-upload, 020-i-want-to (IP address mapping), 042-future-user-mappings
  * Purpose: Enable role-based access control across multiple AWS accounts, domains, and IP addresses
+ * Now supports future user mappings - mappings for users who don't yet exist in the system
  *
  * Business Rules:
  * - Email is REQUIRED
@@ -23,14 +24,17 @@ import java.time.Instant
  * - Email and domain are normalized to lowercase for case-insensitive matching
  * - AWS account IDs must be exactly 12 numeric digits when provided
  * - IP addresses support three formats: single (192.168.1.100), CIDR (192.168.1.0/24), dash range (192.168.1.1-192.168.1.100)
+ * - User reference is nullable - allows future user mappings (Feature 042)
+ * - AppliedAt tracks when future user mapping was applied to a user (Feature 042)
  *
  * Example Mappings:
  * - john@example.com → 123456789012 → null → null (email + AWS account only)
  * - john@example.com → null → example.com → null (email + domain only)
  * - john@example.com → null → null → 192.168.1.0/24 (email + IP range)
  * - john@example.com → 123456789012 → example.com → 192.168.1.0/24 (email + AWS + domain + IP)
+ * - future@example.com → 123456789012 → null → null + user=null + appliedAt=null (future user mapping)
  *
- * Related to: Feature 013 (User Mapping Upload), Feature 020 (IP Address Mapping)
+ * Related to: Feature 013 (User Mapping Upload), Feature 020 (IP Address Mapping), Feature 042 (Future User Mappings)
  */
 @Entity
 @Table(
@@ -48,7 +52,8 @@ import java.time.Instant
         Index(name = "idx_user_mapping_email_aws", columnList = "email,aws_account_id"),
         Index(name = "idx_user_mapping_ip_address", columnList = "ip_address"),
         Index(name = "idx_user_mapping_ip_range", columnList = "ip_range_start,ip_range_end"),
-        Index(name = "idx_user_mapping_email_ip", columnList = "email,ip_address")
+        Index(name = "idx_user_mapping_email_ip", columnList = "email,ip_address"),
+        Index(name = "idx_user_mapping_applied_at", columnList = "applied_at") // Feature 042: Efficient filtering for Current vs Applied History tabs
     ]
 )
 @Serdeable
@@ -61,6 +66,15 @@ data class UserMapping(
     @Email(message = "Invalid email format")
     @NotBlank(message = "Email address is required")
     var email: String,
+
+    // Feature 042: User reference (nullable for future user mappings)
+    @ManyToOne(fetch = FetchType.LAZY, optional = true)
+    @JoinColumn(name = "user_id", nullable = true)
+    var user: User? = null,
+
+    // Feature 042: Timestamp when mapping was applied to user (null = not yet applied)
+    @Column(name = "applied_at", nullable = true)
+    var appliedAt: Instant? = null,
 
     @Column(name = "aws_account_id", nullable = true, length = 12)
     @Pattern(regexp = "^\\d{12}$", message = "AWS Account ID must be exactly 12 numeric digits")
@@ -112,6 +126,22 @@ data class UserMapping(
     @PreUpdate
     fun onUpdate() {
         updatedAt = Instant.now()
+    }
+
+    /**
+     * Feature 042: Returns true if this is a future user mapping (not yet applied)
+     * A future mapping has no user reference and no appliedAt timestamp
+     */
+    fun isFutureMapping(): Boolean {
+        return user == null && appliedAt == null
+    }
+
+    /**
+     * Feature 042: Returns true if this is an applied historical mapping
+     * An applied mapping has an appliedAt timestamp (regardless of user reference)
+     */
+    fun isAppliedMapping(): Boolean {
+        return appliedAt != null
     }
 
     override fun toString(): String {

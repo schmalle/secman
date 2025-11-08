@@ -49,7 +49,7 @@ class SecmanCli {
                             i++
                         }
                         args[i] == "--limit" && i + 1 < args.size -> {
-                            serversCommand.limit = args[i + 1].toIntOrNull() ?: 100
+                            serversCommand.limit = args[i + 1].toIntOrNull() ?: 400
                             i++
                         }
                         args[i] == "--backend-url" && i + 1 < args.size -> {
@@ -191,7 +191,7 @@ class SecmanCli {
               --device-type <type>     Device type filter (default: SERVER)
               --severity <levels>      Severity filter (default: HIGH,CRITICAL)
               --min-days-open <num>    Minimum days open filter (default: 30)
-              --limit <num>            Page size for pagination (default: 100)
+              --limit <num>            Page size for pagination (default: 400)
               --backend-url <url>      Backend API URL (default: http://localhost:8080)
               --save                   Save to database (requires --username and --password)
               --username <user>        Backend username for authentication (required with --save)

@@ -28,6 +28,36 @@ open class IdentityProviderController(
         val timestamp: LocalDateTime = LocalDateTime.now()
     )
 
+    /**
+     * Validate callback URL format
+     * - Must be a valid URL
+     * - Must start with https:// (production) or http://localhost (development)
+     * - Must not exceed 512 characters
+     */
+    private fun validateCallbackUrl(callbackUrl: String?): String? {
+        if (callbackUrl.isNullOrBlank()) {
+            return null // Valid: null/blank means use default
+        }
+
+        // Check length
+        if (callbackUrl.length > 512) {
+            return "Callback URL must not exceed 512 characters"
+        }
+
+        // Check URL format
+        val urlRegex = Regex("^https?://[^\\s/$.?#].[^\\s]*$")
+        if (!urlRegex.matches(callbackUrl)) {
+            return "Callback URL must be a valid URL"
+        }
+
+        // Check protocol: must be https:// or http://localhost
+        if (!callbackUrl.startsWith("https://") && !callbackUrl.startsWith("http://localhost")) {
+            return "Callback URL must start with https:// (production) or http://localhost (development)"
+        }
+
+        return null // Valid
+    }
+
     @Serdeable
     data class IdentityProviderCreateRequest(
         val name: String,
@@ -47,7 +77,8 @@ open class IdentityProviderController(
         val buttonText: String,
         val buttonColor: String = "#007bff",
         val roleMapping: String? = null,
-        val claimMappings: String? = null
+        val claimMappings: String? = null,
+        val callbackUrl: String? = null
     )
 
     @Serdeable
@@ -69,7 +100,8 @@ open class IdentityProviderController(
         val buttonText: String?,
         val buttonColor: String?,
         val roleMapping: String?,
-        val claimMappings: String?
+        val claimMappings: String?,
+        val callbackUrl: String?
     )
 
     @Serdeable
@@ -161,6 +193,12 @@ open class IdentityProviderController(
                 }
             }
 
+            // Validate callback URL
+            val callbackUrlError = validateCallbackUrl(request.callbackUrl)
+            if (callbackUrlError != null) {
+                return HttpResponse.badRequest(ErrorResponse(callbackUrlError))
+            }
+
             // Parse and validate type
             val providerType = try {
                 IdentityProvider.ProviderType.valueOf(request.type.uppercase())
@@ -186,7 +224,8 @@ open class IdentityProviderController(
                 buttonText = request.buttonText,
                 buttonColor = request.buttonColor,
                 roleMapping = request.roleMapping,
-                claimMappings = request.claimMappings
+                claimMappings = request.claimMappings,
+                callbackUrl = request.callbackUrl
             )
 
             val saved = identityProviderRepository.save(provider)
@@ -229,6 +268,14 @@ open class IdentityProviderController(
                 }
             }
 
+            // Validate callback URL if being updated
+            if (request.callbackUrl != null) {
+                val callbackUrlError = validateCallbackUrl(request.callbackUrl)
+                if (callbackUrlError != null) {
+                    return HttpResponse.badRequest(ErrorResponse(callbackUrlError))
+                }
+            }
+
             // Update fields if provided
             request.name?.let { provider.name = it }
             request.type?.let {
@@ -254,6 +301,7 @@ open class IdentityProviderController(
             request.buttonColor?.let { provider.buttonColor = it }
             request.roleMapping?.let { provider.roleMapping = it }
             request.claimMappings?.let { provider.claimMappings = it }
+            request.callbackUrl?.let { provider.callbackUrl = it }
 
             val saved = identityProviderRepository.update(provider)
             logger.info("Updated identity provider: {}", saved.name)
