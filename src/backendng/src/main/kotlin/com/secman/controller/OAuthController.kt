@@ -205,17 +205,22 @@ class OAuthController(
         val forwardedHost = request.headers.get("X-Forwarded-Host")
         if (forwardedHost != null) {
             val scheme = request.headers.get("X-Forwarded-Proto") ?: "http"
-            return "$scheme://$forwardedHost"
+			logger.info("getBaseUrl: Found forwarded-host header returning URL from ForwardHost field $scheme://$forwardedHost")
+
+			return "$scheme://$forwardedHost"
         }
 
         // Fall back to Host header
         val hostHeader = request.headers.get("Host")
         if (hostHeader != null) {
             val scheme = request.headers.get("X-Forwarded-Proto") ?: "http"
-            return "$scheme://$hostHeader"
+			logger.info("getBaseUrl: Found host header returning URL from hostheader field $scheme://$hostHeader")
+
+			return "$scheme://$hostHeader"
         }
 
         // Finally, use configured backend base URL
-        return backendBaseUrl
+        logger.info("getBaseUrl: Found not matching http headers returning configured backend base URL $backendBaseUrl")
+		return backendBaseUrl
     }
 }
