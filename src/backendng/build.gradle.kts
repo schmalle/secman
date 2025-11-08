@@ -157,9 +157,6 @@ micronaut {
     }
 }
 
-tasks.named<io.micronaut.gradle.docker.NativeImageDockerfile>("dockerfileNative") {
-    jdkVersion.set("21")
-}
 
 // Configure Kotlin compiler options
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {

@@ -30,7 +30,6 @@ SecMan is a full-stack security management platform that helps organizations man
 - **Helper Tools**: Python 3.11+ (CrowdStrike Falcon API integration)
 - **Build System**: Gradle 9.2 (Kotlin DSL)
 - **CLI Tools**: Kotlin-based notification system and data import utilities
-- **Container**: Docker with multi-architecture support (AMD64/ARM64)
 - **Authentication**: JWT with OAuth2 and GitHub SSO
 
 ## Features
@@ -121,42 +120,14 @@ SecMan is a full-stack security management platform that helps organizations man
 
 ### Prerequisites
 
-**Docker (Recommended)**
-- Docker 20.10+
-- Docker Compose 2.0+
-- Git
-
-**Local Development**
 - Java 21 (JDK 21)
 - Node.js 20+
 - MariaDB 12+
 - Gradle 9.2+
 - Python 3.11+ (optional, for helper tools)
+- Git
 
 ### Installation
-
-**Option 1: Docker (Recommended)**
-
-```bash
-# Clone repository
-git clone https://github.com/schmalle/secman.git
-cd secman
-
-# Copy environment template
-cp .env.example .env
-
-# Start all services
-docker-compose up -d
-
-# View logs
-docker-compose logs -f
-
-# Access application
-# Frontend: http://localhost:4321
-# Backend API: http://localhost:8080/api
-```
-
-**Option 2: Local Development**
 
 ```bash
 # Clone repository
@@ -217,7 +188,6 @@ secman/
 │       │   ├── cli/        # Falcon CLI commands
 │       │   ├── services/   # Business logic
 │       │   └── exporters/  # Export utilities
-├── docker/                 # Docker configs
 └── scripts/                # Utility scripts
 ```
 
@@ -244,11 +214,6 @@ cd src/helper
 pip install -e .             # Install in dev mode
 falcon-vulns --help          # CLI help
 ruff check .                 # Lint
-
-# Docker
-docker-compose up -d         # Start all services
-docker-compose logs -f       # View logs
-docker-compose down          # Stop all services
 ```
 
 ### CLI Notification System
@@ -355,9 +320,6 @@ See [CLAUDE.md](CLAUDE.md) for complete API reference.
 
 **Access:**
 ```bash
-# Via Docker
-docker-compose exec database mysql -u secman -pCHANGEME secman
-
 # Local
 mysql -u secman -pCHANGEME secman
 
@@ -369,7 +331,6 @@ mysql -u secman -pCHANGEME secman
 
 **Backend:** `src/backendng/src/main/resources/application.yml`
 **Frontend:** `src/frontend/astro.config.mjs`
-**Docker:** `.env` file (copy from `.env.example`)
 **Helper Tools:** Environment variables (see above)
 
 ### Key Environment Variables
@@ -395,34 +356,6 @@ OPENROUTER_API_KEY=your-openrouter-key
 FALCON_CLIENT_ID=your-falcon-client-id
 FALCON_CLIENT_SECRET=your-falcon-secret
 FALCON_CLOUD_REGION=us-1
-```
-
-## Docker Deployment
-
-### Multi-Architecture Build
-
-```bash
-# Build for AMD64 and ARM64
-./docker/scripts/build-multiarch.sh latest
-
-# Tag and push
-docker tag secman/backend:latest your-registry/secman-backend:latest
-docker push your-registry/secman-backend:latest
-```
-
-### Production Deployment
-
-```bash
-# Configure environment
-cp .env.example .env.production
-# Edit .env.production with production values
-
-# Deploy
-docker-compose -f docker-compose.prod.yml up -d
-
-# Health checks
-curl http://localhost:8080/health  # Backend
-curl http://localhost:4321/health  # Frontend
 ```
 
 ## Development Workflow
