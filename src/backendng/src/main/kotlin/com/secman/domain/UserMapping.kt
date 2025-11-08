@@ -81,7 +81,7 @@ data class UserMapping(
     var awsAccountId: String?,
 
     @Column(nullable = true, length = 255)
-    @Pattern(regexp = "^[a-z0-9.-]+$", message = "Domain must contain only lowercase letters, numbers, dots, and hyphens")
+    @Pattern(regexp = "^[a-zA-Z0-9.-]+$", message = "Domain must contain only letters, numbers, dots, and hyphens")
     var domain: String?,
 
     // IP Address Mapping Fields (Feature 020)

@@ -1,5 +1,5 @@
 import { csrfPost, csrfDelete } from '../utils/csrf';
-import { authenticatedFetch } from '../utils/auth';
+import { authenticatedFetch, authenticatedPut } from '../utils/auth';
 
 export interface UserMapping {
   id: number;
@@ -54,16 +54,9 @@ export async function updateMapping(
   mappingId: number,
   data: UpdateMappingRequest
 ): Promise<UserMapping> {
-  const response = await fetch(`${API_BASE}/users/${userId}/mappings/${mappingId}`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-    },
-    body: JSON.stringify(data)
-  });
+  const response = await authenticatedPut(`${API_BASE}/users/${userId}/mappings/${mappingId}`, data);
   if (!response.ok) {
-    const errorData = await response.json();
+    const errorData = await response.json().catch(() => ({}));
     throw new Error(errorData.error || 'Failed to update mapping');
   }
   return response.json();

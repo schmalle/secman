@@ -1,5 +1,6 @@
 package com.secman.exception
 
+import io.micronaut.context.annotation.Primary
 import io.micronaut.context.annotation.Requires
 import io.micronaut.http.HttpRequest
 import io.micronaut.http.HttpResponse
@@ -17,9 +18,12 @@ import org.slf4j.LoggerFactory
  *
  * Purpose: Diagnose 400 Bad Request errors during CrowdStrike import
  * Feature: 032-servers-query-import (debugging support)
+ *
+ * @Primary annotation resolves bean conflict with Micronaut's built-in ConstraintExceptionHandler
  */
 @Produces
 @Singleton
+@Primary
 @Requires(classes = [ConstraintViolationException::class])
 class ValidationExceptionHandler : ExceptionHandler<ConstraintViolationException, HttpResponse<*>> {
 
