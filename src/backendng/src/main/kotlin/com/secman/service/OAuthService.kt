@@ -77,6 +77,9 @@ open class OAuthService(
         val redirectUri = provider.callbackUrl?.takeIf { it.isNotBlank() }
             ?: "$baseUrl/oauth/callback"
 
+		logger.error("buildAuthorizationUrl: Provider callback URL: {}", provider.callbackUrl)
+		logger.error("buildAuthorizationUrl: Constructed RedirectUri: {}", redirectUri)
+
         // Save state (this will commit immediately since method is not @Transactional)
         val oauthState = OAuthState(
             stateToken = state,
