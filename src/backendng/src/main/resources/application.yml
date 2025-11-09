@@ -142,7 +142,7 @@ secman:
     client:
       read-timeout: 30s
       connect-timeout: 10s
-      max-content-length: 1048576  # 1MB
+      max-content-length: 20971520  # 20MB (aligns with max-request-size)
       translation:
         read-timeout: 30s
         connect-timeout: 10s
