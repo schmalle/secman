@@ -46,7 +46,7 @@ class ServersCommand {
     var password: String? = null         // Backend password for authentication
     var clientId: String? = null         // CrowdStrike client ID (optional override)
     var clientSecret: String? = null     // CrowdStrike client secret (optional override)
-    var limit: Int = 400                 // Page size for pagination
+    var limit: Int = 800                 // Page size for pagination
 
     /**
      * Execute the servers query command
@@ -155,7 +155,7 @@ class ServersCommand {
                     groups = null,  // TODO: Not available from current CrowdStrike API response
                     cloudAccountId = null,  // TODO: Not available from current CrowdStrike API response
                     cloudInstanceId = null,  // TODO: Not available from current CrowdStrike API response
-                    adDomain = null,  // TODO: Not available from current CrowdStrike API response
+                    adDomain = firstVuln?.adDomain,  // Feature 043: Extracted from CrowdStrike API
                     osVersion = null,  // TODO: Not available from current CrowdStrike API response
                     ip = firstVuln?.ip  // IP is available from CrowdStrikeVulnerabilityDto
                 )

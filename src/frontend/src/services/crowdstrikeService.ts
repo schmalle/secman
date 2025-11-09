@@ -55,12 +55,15 @@ export interface CrowdStrikeSaveRequest {
  * Save Response
  * Matches backend CrowdStrikeSaveResponse
  * Feature 030 - CrowdStrike Asset Auto-Creation
+ * Feature 043 - CrowdStrike Domain Import (added domain statistics)
  */
 export interface CrowdStrikeSaveResponse {
     message: string;
     vulnerabilitiesSaved: number;
     vulnerabilitiesSkipped: number;  // Feature 030: Added for T014
     assetsCreated: number;
+    uniqueDomainCount?: number;  // Feature 043: Number of unique domains discovered
+    discoveredDomains?: string[];  // Feature 043: List of unique domain names
     errors: string[];
 }
 
