@@ -5,17 +5,51 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="94ada8b3-9f4e-473c-9fea-3bc9651b5bdd" name="Changes" comment="test change">
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/CLAUDE.md" beforeDir="false" afterPath="$PROJECT_DIR$/CLAUDE.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/domain/Asset.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/domain/Asset.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/dto/ImportStatisticsDto.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/dto/ImportStatisticsDto.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeVulnerabilityImportService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeVulnerabilityImportService.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/commands/ServersCommand.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/commands/ServersCommand.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/frontend/src/components/AssetManagement.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/components/AssetManagement.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/frontend/src/components/CrowdStrikeVulnerabilityLookup.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/components/CrowdStrikeVulnerabilityLookup.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/frontend/src/services/crowdstrikeService.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/services/crowdstrikeService.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/shared/src/main/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClientImpl.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/shared/src/main/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClientImpl.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/shared/src/main/kotlin/com/secman/crowdstrike/dto/CrowdStrikeVulnerabilityDto.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/shared/src/main/kotlin/com/secman/crowdstrike/dto/CrowdStrikeVulnerabilityDto.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/cli/bin/main/application.yml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/cli/bin/main/com/secman/cli/SecmanCli.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/cli/bin/main/com/secman/cli/commands/ConfigCommand.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/cli/bin/main/com/secman/cli/commands/MonitorCommand.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/cli/bin/main/com/secman/cli/commands/QueryCommand.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/cli/bin/main/com/secman/cli/commands/SendNotificationsCommand.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/cli/bin/main/com/secman/cli/commands/ServersCommand.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/cli/bin/main/com/secman/cli/config/ConfigLoader.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/cli/bin/main/com/secman/cli/export/ExportService.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/cli/bin/main/com/secman/cli/service/CrowdStrikePollerService.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/cli/bin/main/com/secman/cli/service/MonitorStatistics.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/cli/bin/main/com/secman/cli/service/NotificationCliService.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/cli/bin/main/com/secman/cli/service/VulnerabilityStorageService.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/cli/bin/main/logback.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/cli/bin/test/com/secman/cli/SecmanCliEndToEndTest.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/cli/bin/test/com/secman/cli/SecmanCliErrorHandlingTest.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/cli/bin/test/com/secman/cli/SecmanCliTest.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/cli/bin/test/com/secman/cli/commands/ConfigCommandTest.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/cli/bin/test/com/secman/cli/commands/MonitorCommandTest.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/cli/bin/test/com/secman/cli/commands/QueryCommandTest.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/cli/bin/test/com/secman/cli/service/MonitorStatisticsTest.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/cli/bin/test/com/secman/cli/unit/ExportServiceTest.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/cli/bin/test/logback-test.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/shared/bin/main/com/secman/crowdstrike/auth/CrowdStrikeAuthService.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/shared/bin/main/com/secman/crowdstrike/client/CrowdStrikeApiClient.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/shared/bin/main/com/secman/crowdstrike/client/CrowdStrikeApiClientImpl.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/shared/bin/main/com/secman/crowdstrike/dto/CrowdStrikeQueryResponse.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/shared/bin/main/com/secman/crowdstrike/dto/CrowdStrikeVulnerabilityDto.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/shared/bin/main/com/secman/crowdstrike/dto/FalconConfigDto.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/shared/bin/main/com/secman/crowdstrike/exception/AuthenticationException.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/shared/bin/main/com/secman/crowdstrike/exception/CrowdStrikeException.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/shared/bin/main/com/secman/crowdstrike/exception/NotFoundException.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/shared/bin/main/com/secman/crowdstrike/exception/RateLimitException.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/shared/bin/main/com/secman/crowdstrike/model/AuthToken.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/shared/bin/main/com/secman/crowdstrike/model/Host.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/shared/bin/main/com/secman/crowdstrike/model/Severity.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/shared/bin/main/com/secman/crowdstrike/model/Vulnerability.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/shared/bin/test/com/secman/crowdstrike/contract/CrowdStrikeApiClientContractTest.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/shared/bin/test/com/secman/crowdstrike/contract/CrowdStrikeAuthServiceContractTest.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/shared/bin/test/com/secman/crowdstrike/unit/AuthTokenTest.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/shared/bin/test/com/secman/crowdstrike/unit/HostTest.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/shared/bin/test/com/secman/crowdstrike/unit/SeverityTest.kt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/shared/bin/test/com/secman/crowdstrike/unit/VulnerabilityTest.kt" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -93,7 +127,7 @@
     "project.structure.last.edited": "Project",
     "project.structure.proportion": "0.12135923",
     "project.structure.side.proportion": "0.409894",
-    "settings.editor.selected.configurable": "preferences.pluginManager",
+    "settings.editor.selected.configurable": "reference.settingsdialog.project.gradle",
     "ts.external.directory.path": "/Users/flake/Applications/IntelliJ IDEA Ultimate.app/Contents/plugins/javascript-plugin/jsLanguageServicesImpl/external",
     "vue.rearranger.settings.migration": "true"
   },

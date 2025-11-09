@@ -30,6 +30,8 @@ checkin-test-results.json
 .claude/
 .codex/
 src/backendng/bin/
+src/cli/bin/
+src/shared/bin/
 *.swp
 *.swo
 *~
