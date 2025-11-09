@@ -205,10 +205,10 @@ cd /opt/secman/app
 # Checkout production branch
 git checkout main  # or your production branch
 
-# Build backend
+# Build backend (IMPORTANT: Use shadowJar task to create executable JAR)
 cd src/backendng
-./gradlew clean build -x test
-# JAR will be created at: build/libs/secman-backend-ng-0.1-all.jar
+./gradlew clean shadowJar -x test
+# JAR will be created at: build/libs/backendng-0.1-all.jar
 
 # Build frontend
 cd ../frontend
@@ -299,6 +299,10 @@ sudo chmod 600 /opt/secman/frontend.env
 
 #### Backend Service
 
+**Important:** If using SDKMAN for Java installation, you need to configure the service differently than system-wide Java installations.
+
+##### Option A: System-wide Java (apt/dnf installed)
+
 ```bash
 sudo nano /etc/systemd/system/secman-backend.service
 ```
@@ -322,7 +326,7 @@ EnvironmentFile=/opt/secman/backend.env
 Environment="JAVA_OPTS=-Xmx2g -Xms512m -XX:+UseG1GC -XX:MaxGCPauseMillis=200"
 
 # Execute JAR
-ExecStart=/usr/bin/java $JAVA_OPTS -jar /opt/secman/app/src/backendng/build/libs/secman-backend-ng-0.1-all.jar
+ExecStart=/usr/bin/java $JAVA_OPTS -jar /opt/secman/app/src/backendng/build/libs/backendng-0.1-all.jar
 
 # Restart policy
 Restart=on-failure
@@ -341,7 +345,76 @@ SyslogIdentifier=secman-backend
 WantedBy=multi-user.target
 ```
 
+##### Option B: SDKMAN Java (Amazon Linux / User-installed Java)
+
+First, find your Java path as the `secman` user:
+
+```bash
+sudo su - secman
+which java
+# Example output: /home/secman/.sdkman/candidates/java/current/bin/java
+exit
+```
+
+Then create the service file:
+
+```bash
+sudo nano /etc/systemd/system/secman-backend.service
+```
+
+Add the following (replace `JAVA_PATH` with the actual path from above):
+
+```ini
+[Unit]
+Description=SecMan Backend API
+After=network.target mariadb.service
+Wants=mariadb.service
+
+[Service]
+Type=simple
+User=secman
+Group=secman
+WorkingDirectory=/opt/secman/app/src/backendng
+EnvironmentFile=/opt/secman/backend.env
+
+# SDKMAN environment variables
+Environment="SDKMAN_DIR=/home/secman/.sdkman"
+Environment="PATH=/home/secman/.sdkman/candidates/java/current/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="JAVA_HOME=/home/secman/.sdkman/candidates/java/current"
+
+# Java options
+Environment="JAVA_OPTS=-Xmx2g -Xms512m -XX:+UseG1GC -XX:MaxGCPauseMillis=200"
+
+# Execute JAR (use explicit path to java)
+ExecStart=/home/secman/.sdkman/candidates/java/current/bin/java $JAVA_OPTS -jar /opt/secman/app/src/backendng/build/libs/backendng-0.1-all.jar
+
+# Restart policy
+Restart=on-failure
+RestartSec=10s
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=secman-backend
+
+[Install]
+WantedBy=multi-user.target
+```
+
+**Note for SDKMAN users:**
+- Replace `/home/secman` with the actual home directory of your `secman` user (could be `/opt/secman` if you used `-d /opt/secman` when creating the user)
+- If using a specific Java version instead of `current`, replace `current` with the version (e.g., `21.0.1-tem`)
+- Verify the paths exist before starting the service: `sudo ls -la /home/secman/.sdkman/candidates/java/current/bin/java`
+
 #### Frontend Service
+
+**Important:** If using Homebrew for Node.js installation, you need to configure the service differently than system-wide Node.js installations.
+
+##### Option A: System-wide Node.js (apt/dnf installed)
 
 ```bash
 sudo nano /etc/systemd/system/secman-frontend.service
@@ -384,6 +457,72 @@ SyslogIdentifier=secman-frontend
 [Install]
 WantedBy=multi-user.target
 ```
+
+##### Option B: Homebrew Node.js (Amazon Linux / Homebrew-installed Node.js)
+
+First, find your Node.js path as the `secman` user:
+
+```bash
+sudo su - secman
+which node
+# Example output: /home/linuxbrew/.linuxbrew/bin/node
+# OR: /home/secman/.linuxbrew/bin/node
+exit
+```
+
+Then create the service file:
+
+```bash
+sudo nano /etc/systemd/system/secman-frontend.service
+```
+
+Add the following (replace paths with actual paths from above):
+
+```ini
+[Unit]
+Description=SecMan Frontend (Astro SSR)
+After=network.target secman-backend.service
+Wants=secman-backend.service
+
+[Service]
+Type=simple
+User=secman
+Group=secman
+WorkingDirectory=/opt/secman/app/src/frontend
+EnvironmentFile=/opt/secman/frontend.env
+
+# Homebrew environment variables
+Environment="HOMEBREW_PREFIX=/home/linuxbrew/.linuxbrew"
+Environment="PATH=/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:/usr/local/bin:/usr/bin:/bin"
+
+# Node.js options
+Environment="NODE_OPTIONS=--max-old-space-size=1024"
+
+# Execute Astro in production mode (use explicit path to node)
+ExecStart=/home/linuxbrew/.linuxbrew/bin/node /opt/secman/app/src/frontend/dist/server/entry.mjs
+
+# Restart policy
+Restart=on-failure
+RestartSec=10s
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=secman-frontend
+
+[Install]
+WantedBy=multi-user.target
+```
+
+**Note for Homebrew users:**
+- The typical Homebrew prefix on Linux is `/home/linuxbrew/.linuxbrew`
+- If you installed Homebrew in the user's home directory, it might be `/home/secman/.linuxbrew`
+- Verify the paths exist before starting the service: `sudo ls -la /home/linuxbrew/.linuxbrew/bin/node`
+- Also verify npm is in the same location: `sudo ls -la /home/linuxbrew/.linuxbrew/bin/npm`
 
 #### Enable and Start Services
 
@@ -706,7 +845,7 @@ git pull origin main
 
 # Rebuild backend
 cd src/backendng
-./gradlew clean build -x test
+./gradlew clean shadowJar -x test
 
 # Rebuild frontend
 cd ../frontend
@@ -949,22 +1088,60 @@ sudo crontab -e
    sudo journalctl -u secman-backend -n 100 --no-pager
    ```
 
-2. Verify database connectivity:
+2. **SDKMAN Users:** If you see "Failed to locate executable /usr/bin/java: No such file or directory":
+
+   This means systemd can't find Java because you're using SDKMAN. You need to use Option B configuration.
+
+   ```bash
+   # First, find the correct Java path as the secman user
+   sudo su - secman
+   which java
+   echo $JAVA_HOME
+   exit
+
+   # Then edit the service file and use the SDKMAN configuration (Option B)
+   sudo nano /etc/systemd/system/secman-backend.service
+
+   # Update the ExecStart line with the actual path:
+   # ExecStart=/home/secman/.sdkman/candidates/java/current/bin/java $JAVA_OPTS -jar ...
+
+   # Also add the SDKMAN environment variables:
+   # Environment="SDKMAN_DIR=/home/secman/.sdkman"
+   # Environment="PATH=/home/secman/.sdkman/candidates/java/current/bin:/usr/local/bin:/usr/bin:/bin"
+   # Environment="JAVA_HOME=/home/secman/.sdkman/candidates/java/current"
+
+   # Reload and restart
+   sudo systemctl daemon-reload
+   sudo systemctl restart secman-backend
+   sudo systemctl status secman-backend
+   ```
+
+3. Verify database connectivity:
    ```bash
    mysql -u secman -p -h localhost secman
    ```
 
-3. Check Java version:
+4. Check Java version (as the secman user):
    ```bash
+   sudo su - secman
    java -version  # Must be 21
+   exit
    ```
 
-4. Verify JAR file exists:
+5. Verify JAR file exists and is executable:
    ```bash
    ls -lh /opt/secman/app/src/backendng/build/libs/
+   # You should see: backendng-0.1-all.jar
+
+   # Verify it's an executable JAR (should show "Main-Class")
+   unzip -p /opt/secman/app/src/backendng/build/libs/backendng-0.1-all.jar META-INF/MANIFEST.MF | grep Main-Class
+
+   # If JAR doesn't exist or has no Main-Class, rebuild with shadowJar:
+   cd /opt/secman/app/src/backendng
+   ./gradlew clean shadowJar -x test
    ```
 
-5. Check port 8080 not in use:
+6. Check port 8080 not in use:
    ```bash
    sudo netstat -tuln | grep 8080
    ```
@@ -980,19 +1157,53 @@ sudo crontab -e
    sudo journalctl -u secman-frontend -n 100 --no-pager
    ```
 
-2. Verify Node.js version:
+2. **Homebrew Users:** If you see "Failed to locate executable /usr/bin/node: No such file or directory":
+
+   This means systemd can't find Node.js because you're using Homebrew. You need to use Option B configuration.
+
    ```bash
-   node -v  # Should be 18.x or 20.x
+   # First, find the correct Node.js path as the secman user
+   sudo su - secman
+   which node
+   echo $HOMEBREW_PREFIX
+   exit
+
+   # Then edit the service file and use the Homebrew configuration (Option B)
+   sudo nano /etc/systemd/system/secman-frontend.service
+
+   # Update the ExecStart line with the actual path:
+   # ExecStart=/home/linuxbrew/.linuxbrew/bin/node /opt/secman/app/src/frontend/dist/server/entry.mjs
+
+   # Also add the Homebrew environment variables:
+   # Environment="HOMEBREW_PREFIX=/home/linuxbrew/.linuxbrew"
+   # Environment="PATH=/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:/usr/local/bin:/usr/bin:/bin"
+
+   # Reload and restart
+   sudo systemctl daemon-reload
+   sudo systemctl restart secman-frontend
+   sudo systemctl status secman-frontend
    ```
 
-3. Check if backend is running:
+3. Verify Node.js version (as the secman user):
+   ```bash
+   sudo su - secman
+   node -v  # Should be 18.x or 20.x
+   exit
+   ```
+
+4. Check if backend is running:
    ```bash
    curl http://localhost:8080/health
    ```
 
-4. Verify build output:
+5. Verify build output exists:
    ```bash
    ls -lh /opt/secman/app/src/frontend/dist/server/
+   # Should show: entry.mjs
+
+   # If dist/ directory doesn't exist, rebuild frontend:
+   cd /opt/secman/app/src/frontend
+   npm run build
    ```
 
 ### Nginx 502 Bad Gateway
