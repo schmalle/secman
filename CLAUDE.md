@@ -436,6 +436,8 @@ open fun onUserCreated(event: UserCreatedEvent) {
 - MariaDB 12 with self-referential foreign key on `workgroup` table (`parent_id` column) (040-nested-workgroups)
 - Kotlin 2.2.21 / Java 21 (backend), JavaScript ES2022 (frontend - Astro 5.14 + React 19) + Micronaut 4.10, Hibernate JPA, MariaDB 12, Apache POI 5.3, Apache Commons CSV, Astro 5.14, React 19, Bootstrap 5.3, Axios (042-future-user-mappings)
 - MariaDB 12 (existing `user_mapping` table - schema extension required to support nullable user_id and add appliedAt timestamp) (042-future-user-mappings)
+- Kotlin 2.2.21 / Java 21 (backend), JavaScript ES2022 (frontend - Astro 5.14 + React 19) + Micronaut 4.10, Hibernate JPA, MariaDB 11.4 (backend); Astro 5.14, React 19, Bootstrap 5.3, Axios (frontend); FalconPy (existing CrowdStrike integration) (043-crowdstrike-domain-import)
+- MariaDB 11.4 with existing `asset` table (existing `ad_domain` column already present from Feature 042) (043-crowdstrike-domain-import)
 
 ## Recent Changes
 - 042-future-user-mappings: Added Future User Mapping support with event-driven auto-application, UI tabs for Current/Applied History, visual status indicators (yellow/blue/green badges), conflict resolution strategy, @EventListener @Async pattern

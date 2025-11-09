@@ -67,6 +67,9 @@ const AssetManagement: React.FC = () => {
   const [isDeletingBulk, setIsDeletingBulk] = useState(false);
   const [bulkDeleteSuccess, setBulkDeleteSuccess] = useState<string | null>(null);
 
+  // Domain validation state (Feature 043 - User Story 2)
+  const [domainError, setDomainError] = useState<string | null>(null);
+
   useEffect(() => {
     fetchAssets();
     fetchWorkgroups();
@@ -100,9 +103,68 @@ const AssetManagement: React.FC = () => {
     }
   };
 
+  /**
+   * Validate Active Directory domain field
+   * Feature 043: User Story 2 - Manual Domain Editing
+   *
+   * Validation rules:
+   * - Pattern: alphanumeric, dots, and hyphens only
+   * - Cannot start or end with a dot
+   * - Max length 255 characters
+   * - Optional field (empty is valid)
+   */
+  const validateDomain = (value: string): boolean => {
+    if (!value || value.trim() === '') {
+      setDomainError(null);
+      return true; // Empty is valid (optional field)
+    }
+
+    const trimmedValue = value.trim();
+
+    // Check length
+    if (trimmedValue.length > 255) {
+      setDomainError('Domain cannot exceed 255 characters');
+      return false;
+    }
+
+    // Check pattern: only alphanumeric, dots, and hyphens
+    const regex = /^[a-zA-Z0-9.-]+$/;
+    if (!regex.test(trimmedValue)) {
+      setDomainError('Domain must contain only letters, numbers, dots, and hyphens');
+      return false;
+    }
+
+    // Cannot start with a dot
+    if (trimmedValue.startsWith('.')) {
+      setDomainError('Domain cannot start with a dot');
+      return false;
+    }
+
+    // Cannot end with a dot
+    if (trimmedValue.endsWith('.')) {
+      setDomainError('Domain cannot end with a dot');
+      return false;
+    }
+
+    // Cannot have consecutive dots
+    if (trimmedValue.includes('..')) {
+      setDomainError('Domain cannot contain consecutive dots');
+      return false;
+    }
+
+    // Valid
+    setDomainError(null);
+    return true;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
+    // Validate domain before submission (Feature 043)
+    if (formData.adDomain && !validateDomain(formData.adDomain)) {
+      return; // Validation error is already set in state
+    }
+
     try {
       if (editingAsset) {
         await authenticatedPut(`/api/assets/${editingAsset.id}`, formData);
@@ -215,6 +277,7 @@ const AssetManagement: React.FC = () => {
     });
     setEditingAsset(null);
     setShowForm(false);
+    setDomainError(null); // Clear domain validation error (Feature 043)
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -399,17 +462,28 @@ const AssetManagement: React.FC = () => {
                     />
                   </div>
                   <div className="mb-3">
-                    <label htmlFor="adDomain" className="form-label">AD Domain</label>
+                    <label htmlFor="adDomain" className="form-label">
+                      AD Domain <span className="text-muted">(optional)</span>
+                    </label>
                     <input
                       type="text"
-                      className="form-control"
+                      className={`form-control ${domainError ? 'is-invalid' : ''}`}
                       id="adDomain"
                       name="adDomain"
                       value={formData.adDomain || ''}
-                      onChange={handleInputChange}
+                      onChange={(e) => {
+                        handleInputChange(e);
+                        validateDomain(e.target.value);
+                      }}
                       placeholder="e.g., CONTOSO, corp.example.com"
+                      maxLength={255}
                     />
-                    <small className="text-muted">Active Directory domain if applicable</small>
+                    {domainError && (
+                      <div className="invalid-feedback">{domainError}</div>
+                    )}
+                    <small className="form-text text-muted">
+                      Active Directory domain (alphanumeric, dots, and hyphens only)
+                    </small>
                   </div>
                   <div className="mb-3">
                     <label htmlFor="description" className="form-label">Description</label>

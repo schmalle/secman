@@ -46,7 +46,7 @@ class ServersCommand {
     var password: String? = null         // Backend password for authentication
     var clientId: String? = null         // CrowdStrike client ID (optional override)
     var clientSecret: String? = null     // CrowdStrike client secret (optional override)
-    var limit: Int = 400                 // Page size for pagination
+    var limit: Int = 800                 // Page size for pagination
 
     /**
      * Execute the servers query command

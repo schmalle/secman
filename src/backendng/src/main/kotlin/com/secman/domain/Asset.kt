@@ -197,12 +197,23 @@ data class Asset(
         createdAt = now
         updatedAt = now
         computeIpNumeric()
+        normalizeDomain()
     }
 
     @PreUpdate
     fun onUpdate() {
         updatedAt = LocalDateTime.now()
         computeIpNumeric()
+        normalizeDomain()
+    }
+
+    /**
+     * Normalize Active Directory domain to lowercase
+     * Feature: 043-crowdstrike-domain-import
+     * Ensures consistent storage and case-insensitive comparison
+     */
+    private fun normalizeDomain() {
+        adDomain = adDomain?.trim()?.lowercase()
     }
 
     /**

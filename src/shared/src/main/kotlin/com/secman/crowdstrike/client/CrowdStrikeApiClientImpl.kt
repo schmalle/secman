@@ -1182,6 +1182,9 @@ open class CrowdStrikeApiClientImpl(
                     ?: hostInfo?.get("local_ip")?.toString()
                     ?: deviceInfo?.get("local_ip")?.toString()
 
+                // Extract Active Directory domain (Feature 043)
+                val adDomain = hostInfo?.get("machine_domain")?.toString()
+
                 // Extract CVE object for multiple field access
                 val cveObject = vuln["cve"] as? Map<*, *>
                 val cveId = cveObject?.get("id")?.toString()
@@ -1240,6 +1243,7 @@ open class CrowdStrikeApiClientImpl(
                     id = id,
                     hostname = hostname,
                     ip = ip,
+                    adDomain = adDomain,  // Feature 043
                     cveId = cveId,
                     severity = severity,
                     cvssScore = cvssScore,
@@ -1357,7 +1361,8 @@ open class CrowdStrikeApiClientImpl(
 
     private data class DeviceMetadata(
         val hostname: String?,
-        val ip: String?
+        val ip: String?,
+        val adDomain: String?  // Feature 043: Active Directory domain
     )
 
     private fun resolveDeviceMetadata(
@@ -1423,9 +1428,16 @@ open class CrowdStrikeApiClientImpl(
                         (device["external_ip"] as? List<*>)?.firstOrNull()?.toString()
                     )
 
+                    // Extract Active Directory domain (Feature 043)
+                    val adDomain = firstNonBlank(
+                        device["machine_domain"]?.toString(),
+                        nestedDevice?.get("machine_domain")?.toString()
+                    )
+
                     metadataByDeviceId[deviceId] = DeviceMetadata(
                         hostname = hostname,
-                        ip = ip
+                        ip = ip,
+                        adDomain = adDomain
                     )
                 }
             } catch (e: io.micronaut.http.client.exceptions.HttpClientResponseException) {
@@ -1499,6 +1511,13 @@ open class CrowdStrikeApiClientImpl(
                     deviceInfo?.get("local_ip")?.toString()
                 )
 
+                // Extract Active Directory domain (Feature 043)
+                val adDomain = firstNonBlank(
+                    metadata?.adDomain,
+                    hostInfo?.get("machine_domain")?.toString(),
+                    vuln["machine_domain"]?.toString()
+                )
+
                 val cveObject = vuln["cve"] as? Map<*, *>
                 val cveId = cveObject?.get("id")?.toString()
                 val cvssScore = (vuln["score"] as? Number)?.toDouble()
@@ -1545,6 +1564,7 @@ open class CrowdStrikeApiClientImpl(
                     id = id,
                     hostname = hostname,
                     ip = ip,
+                    adDomain = adDomain,  // Feature 043
                     cveId = cveId,
                     severity = severity,
                     cvssScore = cvssScore,
