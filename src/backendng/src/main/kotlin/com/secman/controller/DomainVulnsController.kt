@@ -15,19 +15,19 @@ import org.slf4j.LoggerFactory
 /**
  * Domain Vulnerabilities Controller
  *
- * Feature: 042-domain-vulnerabilities-view
+ * Feature: 043-crowdstrike-domain-import
  *
  * Provides REST endpoint for domain-based vulnerability view.
- * Queries CrowdStrike Falcon API directly based on user's domain mappings.
+ * Queries secman database for vulnerabilities based on user's domain mappings.
  *
  * Endpoint: GET /api/domain-vulns
  * Access: Authenticated users only (non-admin)
- * Response: Domain-grouped vulnerabilities from Falcon API
+ * Response: Domain-grouped vulnerabilities from secman database
  *
  * Similar to AccountVulnsController but:
  * - Uses domain mappings instead of AWS account mappings
- * - Queries Falcon API directly (not local database)
- * - Returns real-time data from CrowdStrike
+ * - Queries local database (not CrowdStrike Falcon API)
+ * - Returns data from secman database
  *
  * @see AccountVulnsController
  */
@@ -40,19 +40,20 @@ class DomainVulnsController(
     private val log = LoggerFactory.getLogger(DomainVulnsController::class.java)
 
     /**
-     * Get domain-based vulnerabilities from Falcon API
+     * Get domain-based vulnerabilities from secman database
      *
      * Workflow:
      * 1. Verify user is NOT admin (admins should use System Vulns view)
      * 2. Get user's domain mappings from UserMapping table
-     * 3. Query CrowdStrike Falcon API for each domain
-     * 4. Aggregate and return results grouped by domain
+     * 3. Query secman database for assets matching user's domains
+     * 4. Query vulnerabilities for those assets
+     * 5. Aggregate and return results grouped by domain
      *
      * Response Codes:
      * - 200 OK: Successfully retrieved domain vulnerabilities
      * - 403 Forbidden: User is admin (should use System Vulns view)
      * - 404 Not Found: User has no domain mappings
-     * - 500 Internal Server Error: Falcon API error or service error
+     * - 500 Internal Server Error: Database error or service error
      *
      * @param authentication User authentication context (injected by Micronaut Security)
      * @return DomainVulnsSummaryDto with domain-grouped vulnerabilities

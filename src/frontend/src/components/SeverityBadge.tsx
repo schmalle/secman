@@ -3,14 +3,15 @@ import React from 'react';
 /**
  * Severity levels supported by the badge component.
  * Feature 019: Account Vulns Severity Breakdown
+ * Feature 043: Domain Vulnerabilities View (added LOW)
  */
-export type SeverityLevel = 'CRITICAL' | 'HIGH' | 'MEDIUM';
+export type SeverityLevel = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
 
 /**
  * Props for SeverityBadge component
  */
 interface SeverityBadgeProps {
-  /** Severity level (CRITICAL, HIGH, or MEDIUM) */
+  /** Severity level (CRITICAL, HIGH, MEDIUM, or LOW) */
   severity: SeverityLevel;
   /** Count of vulnerabilities at this severity level */
   count: number;
@@ -45,26 +46,35 @@ const severityConfig = {
     label: 'Medium',
     ariaLabel: 'Medium severity vulnerabilities',
   },
+  LOW: {
+    bgClass: 'bg-secondary bg-opacity-10 border border-secondary',
+    textClass: 'text-secondary',
+    icon: 'bi-arrow-down-circle',
+    label: 'Low',
+    ariaLabel: 'Low severity vulnerabilities',
+  },
 };
 
 /**
  * Severity badge component for displaying vulnerability counts by severity level.
- * 
+ *
  * Features:
- * - Color-coded badges (red/orange/yellow) using Bootstrap contextual colors
+ * - Color-coded badges (red/orange/blue/gray) using Bootstrap contextual colors
  * - Bootstrap Icons for visual distinction (not just color)
  * - Always displays count even if 0 (per spec requirement)
  * - Accessible labels for screen readers
  * - Supports color-blind users through icons + text + patterns
- * 
+ *
  * Related to: Feature 019 - Account Vulns Severity Breakdown
+ * Feature 043 - Domain Vulnerabilities View (added LOW severity)
  * User Story: US1 (P1) - View Severity Breakdown Per Asset
- * 
+ *
  * @example
  * ```tsx
  * <SeverityBadge severity="CRITICAL" count={5} />
  * <SeverityBadge severity="HIGH" count={12} />
- * <SeverityBadge severity="MEDIUM" count={0} />
+ * <SeverityBadge severity="MEDIUM" count={3} />
+ * <SeverityBadge severity="LOW" count={0} />
  * ```
  */
 const SeverityBadge: React.FC<SeverityBadgeProps> = ({ 

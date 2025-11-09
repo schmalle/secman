@@ -130,11 +130,14 @@ const Sidebar = () => {
                         <i className="bi bi-house-door me-2"></i> Dashboard
                     </a>
                 </li>
-                <li>
-                    <a href="/notification-preferences" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                        <i className="bi bi-bell me-2"></i> Notifications
-                    </a>
-                </li>
+                {/* Notifications - ADMIN or SECCHAMPION only (Feature: 035-notification-system) */}
+                {(userRoles.includes('ADMIN') || userRoles.includes('SECCHAMPION')) && (
+                    <li>
+                        <a href="/notification-preferences" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                            <i className="bi bi-bell me-2"></i> Notifications
+                        </a>
+                    </li>
+                )}
 
                 {/* ASSET MANAGEMENT Section */}
                 <li className="sidebar-section-header">ASSET MANAGEMENT</li>
@@ -330,56 +333,58 @@ const Sidebar = () => {
                     </li>
                 )}
 
-                {/* I/O Section */}
-                <li>
-                    <div
-                        onClick={toggleIoMenu}
-                        className="sidebar-section-header-clickable d-flex align-items-center cursor-pointer"
-                        style={{ cursor: 'pointer' }}
-                    >
-                        <i className="bi bi-arrow-down-up me-2"></i>
-                        I/O
-                        <i className={`bi ${ioMenuOpen ? 'bi-chevron-down' : 'bi-chevron-right'} ms-auto`}></i>
-                    </div>
-                    {ioMenuOpen && (
-                        <ul className="list-unstyled ps-4">
-                            {/* Import - direct link to /import page with tabs */}
-                            <li>
-                                <a href="/import" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                    <i className="bi bi-cloud-upload me-2"></i> Import
-                                </a>
-                            </li>
-                            {/* Export sub-menu - ADMIN, REQ, or SECCHAMPION only */}
-                            {hasReq && (
+                {/* I/O Section - ADMIN or SECCHAMPION only */}
+                {(userRoles.includes('ADMIN') || userRoles.includes('SECCHAMPION')) && (
+                    <li>
+                        <div
+                            onClick={toggleIoMenu}
+                            className="sidebar-section-header-clickable d-flex align-items-center cursor-pointer"
+                            style={{ cursor: 'pointer' }}
+                        >
+                            <i className="bi bi-arrow-down-up me-2"></i>
+                            I/O
+                            <i className={`bi ${ioMenuOpen ? 'bi-chevron-down' : 'bi-chevron-right'} ms-auto`}></i>
+                        </div>
+                        {ioMenuOpen && (
+                            <ul className="list-unstyled ps-4">
+                                {/* Import - direct link to /import page with tabs */}
                                 <li>
-                                    <div
-                                        onClick={() => setExportMenuOpen(!exportMenuOpen)}
-                                        className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary cursor-pointer"
-                                        style={{ cursor: 'pointer' }}
-                                    >
-                                        <i className="bi bi-download me-2"></i>
-                                        Export
-                                        <i className={`bi ${exportMenuOpen ? 'bi-chevron-down' : 'bi-chevron-right'} ms-auto`}></i>
-                                    </div>
-                                    {exportMenuOpen && (
-                                        <ul className="list-unstyled ps-4">
-                                            <li>
-                                                <a href="/export" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                                    <i className="bi bi-file-earmark-excel me-2"></i> Requirements
-                                                </a>
-                                            </li>
-                                            <li>
-                                                <a href="/export?type=assets" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                                    <i className="bi bi-hdd-rack me-2"></i> Assets
-                                                </a>
-                                            </li>
-                                        </ul>
-                                    )}
+                                    <a href="/import" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-cloud-upload me-2"></i> Import
+                                    </a>
                                 </li>
-                            )}
-                        </ul>
-                    )}
-                </li>
+                                {/* Export sub-menu - ADMIN, REQ, or SECCHAMPION only */}
+                                {hasReq && (
+                                    <li>
+                                        <div
+                                            onClick={() => setExportMenuOpen(!exportMenuOpen)}
+                                            className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary cursor-pointer"
+                                            style={{ cursor: 'pointer' }}
+                                        >
+                                            <i className="bi bi-download me-2"></i>
+                                            Export
+                                            <i className={`bi ${exportMenuOpen ? 'bi-chevron-down' : 'bi-chevron-right'} ms-auto`}></i>
+                                        </div>
+                                        {exportMenuOpen && (
+                                            <ul className="list-unstyled ps-4">
+                                                <li>
+                                                    <a href="/export" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                                        <i className="bi bi-file-earmark-excel me-2"></i> Requirements
+                                                    </a>
+                                                </li>
+                                                <li>
+                                                    <a href="/export?type=assets" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                                        <i className="bi bi-hdd-rack me-2"></i> Assets
+                                                    </a>
+                                                </li>
+                                            </ul>
+                                        )}
+                                    </li>
+                                )}
+                            </ul>
+                        )}
+                    </li>
+                )}
 
                 {/* TOOLS Section - ADMIN, RISK, or SECCHAMPION only (Feature: 025-role-based-access-control) */}
                 {hasRisk && (

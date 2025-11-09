@@ -1,10 +1,10 @@
 /**
  * Domain Vulnerabilities Service
  *
- * Feature: 042-domain-vulnerabilities-view
+ * Feature: 043-crowdstrike-domain-import
  *
  * Provides client-side service for querying domain-based vulnerabilities
- * from CrowdStrike Falcon API via the backend endpoint.
+ * from secman database via the backend endpoint.
  *
  * Similar to accountVulnsService but for domain-based queries.
  */
@@ -53,9 +53,9 @@ export interface DomainVulnsSummary {
 }
 
 /**
- * Get domain-based vulnerabilities from Falcon API
+ * Get domain-based vulnerabilities from secman database
  *
- * Queries CrowdStrike Falcon API based on user's domain mappings
+ * Queries secman database based on user's domain mappings
  * and returns vulnerabilities grouped by Active Directory domain.
  *
  * @returns Promise resolving to domain vulnerabilities summary
