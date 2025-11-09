@@ -6,6 +6,15 @@
   <component name="ChangeListManager">
     <list default="true" id="94ada8b3-9f4e-473c-9fea-3bc9651b5bdd" name="Changes" comment="test change">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/DomainVulnsController.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/DomainVulnsController.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/repository/VulnerabilityRepository.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/repository/VulnerabilityRepository.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/DomainVulnsService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/DomainVulnsService.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/VulnerabilityStatisticsService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/VulnerabilityStatisticsService.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/src/components/DomainVulnsView.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/components/DomainVulnsView.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/src/components/SeverityBadge.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/components/SeverityBadge.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/src/components/Sidebar.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/components/Sidebar.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/src/pages/vulnerabilities/domain.astro" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/pages/vulnerabilities/domain.astro" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/src/services/domainVulnsService.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/services/domainVulnsService.ts" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

@@ -1,29 +1,28 @@
 package com.secman.service
 
-import com.secman.crowdstrike.client.CrowdStrikeApiClient
-import com.secman.crowdstrike.dto.CrowdStrikeVulnerabilityDto
-import com.secman.crowdstrike.dto.FalconConfigDto
 import com.secman.dto.DeviceVulnCountDto
 import com.secman.dto.DomainGroupDto
 import com.secman.dto.DomainVulnsSummaryDto
-import com.secman.repository.FalconConfigRepository
+import com.secman.repository.AssetRepository
 import com.secman.repository.UserMappingRepository
+import com.secman.repository.VulnerabilityRepository
 import io.micronaut.security.authentication.Authentication
 import jakarta.inject.Singleton
 import org.slf4j.LoggerFactory
+import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
 /**
  * Domain Vulnerabilities Service
  *
- * Feature: 042-domain-vulnerabilities-view
+ * Feature: 043-crowdstrike-domain-import
  *
  * Provides domain-based vulnerability view for non-admin users.
- * Queries CrowdStrike Falcon API directly based on user's domain mappings.
+ * Queries secman database for vulnerabilities based on user's domain mappings.
  *
  * Similar to AccountVulnsService but:
  * - Uses domain mappings instead of AWS account mappings
- * - Queries Falcon API directly (not local database)
+ * - Queries local database (not CrowdStrike Falcon API)
  * - Groups results by AD domain
  *
  * Access Control:
@@ -36,20 +35,21 @@ import java.time.format.DateTimeFormatter
 @Singleton
 class DomainVulnsService(
     private val userMappingRepository: UserMappingRepository,
-    private val falconConfigRepository: FalconConfigRepository,
-    private val crowdStrikeApiClient: CrowdStrikeApiClient
+    private val assetRepository: AssetRepository,
+    private val vulnerabilityRepository: VulnerabilityRepository
 ) {
     private val log = LoggerFactory.getLogger(DomainVulnsService::class.java)
 
     /**
-     * Get domain-based vulnerabilities summary from Falcon API
+     * Get domain-based vulnerabilities summary from secman database
      *
      * Workflow:
      * 1. Extract user email from authentication
      * 2. Verify user is NOT admin (admins use system vulns view)
      * 3. Get user's domain mappings
-     * 4. Query Falcon API for each domain
-     * 5. Aggregate and group results by domain
+     * 4. Query database for assets with matching AD domains
+     * 5. Query vulnerabilities for those assets
+     * 6. Aggregate and group results by domain
      *
      * @param authentication User authentication context
      * @return Domain vulnerabilities summary
@@ -61,7 +61,7 @@ class DomainVulnsService(
         val email = authentication.attributes["email"]?.toString()
             ?: throw IllegalArgumentException("User email not found in authentication context")
 
-        log.info("Getting domain vulnerabilities for user: {}", email)
+        log.info("Getting domain vulnerabilities from database for user: {}", email)
 
         // Check if user is admin
         if (authentication.roles.contains("ADMIN")) {
@@ -76,42 +76,67 @@ class DomainVulnsService(
 
         log.info("User {} has {} domain mapping(s): {}", email, domains.size, domains.joinToString(", "))
 
-        // Get Falcon configuration
-        val falconConfig = getFalconConfig()
-            ?: throw IllegalStateException("CrowdStrike Falcon API is not configured. Please contact administrator.")
+        // Query database for assets matching user's domains (case-insensitive)
+        val allAssets = assetRepository.findAll().toList()
+        val assetsInDomains = allAssets.filter { asset ->
+            asset.adDomain != null && domains.any { domain ->
+                domain.equals(asset.adDomain, ignoreCase = true)
+            }
+        }
 
-        // Query Falcon API for all user's domains
-        val response = crowdStrikeApiClient.queryVulnerabilitiesByDomains(
-            domains = domains,
-            severity = "CRITICAL,HIGH,MEDIUM,LOW",  // Get all severities
-            minDaysOpen = 0,  // Get all vulnerabilities regardless of age
-            config = falconConfig,
-            limit = 1000
-        )
+        log.info("Found {} assets in user's domains", assetsInDomains.size)
 
-        log.info("Falcon API returned {} vulnerabilities from {} domains",
-            response.vulnerabilities.size, domains.size)
+        if (assetsInDomains.isEmpty()) {
+            // No assets found in user's domains - return empty summary
+            return DomainVulnsSummaryDto(
+                domainGroups = domains.map { domain ->
+                    DomainGroupDto(
+                        domain = domain,
+                        devices = emptyList(),
+                        totalDevices = 0,
+                        totalVulnerabilities = 0,
+                        totalCritical = 0,
+                        totalHigh = 0,
+                        totalMedium = 0,
+                        totalLow = 0
+                    )
+                },
+                totalDevices = 0,
+                totalVulnerabilities = 0,
+                globalCritical = 0,
+                globalHigh = 0,
+                globalMedium = 0,
+                globalLow = 0,
+                queriedAt = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+            )
+        }
 
-        // Group vulnerabilities by hostname (device)
-        val vulnsByHostname = response.vulnerabilities.groupBy { it.hostname }
+        // Get vulnerabilities for all assets in user's domains
+        val assetIds = assetsInDomains.mapNotNull { it.id }
+        val allVulnerabilities = vulnerabilityRepository.findAll().toList()
+            .filter { vuln -> assetIds.contains(vuln.asset.id) }
+
+        log.info("Found {} vulnerabilities for assets in user's domains", allVulnerabilities.size)
+
+        // Group vulnerabilities by asset (hostname)
+        val vulnsByAsset = allVulnerabilities.groupBy { it.asset }
 
         // Create device vulnerability counts
-        val deviceVulnCounts = vulnsByHostname.map { (hostname, vulns) ->
+        val deviceVulnCounts = assetsInDomains.map { asset ->
+            val vulns = vulnsByAsset[asset] ?: emptyList()
             DeviceVulnCountDto(
-                hostname = hostname,
-                ip = vulns.firstOrNull()?.ip,
+                hostname = asset.name,
+                ip = asset.ip,
                 vulnerabilityCount = vulns.size,
-                criticalCount = vulns.count { it.severity.equals("Critical", ignoreCase = true) },
-                highCount = vulns.count { it.severity.equals("High", ignoreCase = true) },
-                mediumCount = vulns.count { it.severity.equals("Medium", ignoreCase = true) },
-                lowCount = vulns.count { it.severity.equals("Low", ignoreCase = true) }
+                criticalCount = vulns.count { it.cvssSeverity.equals("Critical", ignoreCase = true) },
+                highCount = vulns.count { it.cvssSeverity.equals("High", ignoreCase = true) },
+                mediumCount = vulns.count { it.cvssSeverity.equals("Medium", ignoreCase = true) },
+                lowCount = vulns.count { it.cvssSeverity.equals("Low", ignoreCase = true) }
             )
         }.sortedByDescending { it.vulnerabilityCount }
 
-        // Group devices by domain (we need to match devices to their domains)
-        // Since Falcon API doesn't return domain in vulnerability response,
-        // we'll create a single group for now or try to infer from hostname
-        val domainGroups = createDomainGroups(domains, deviceVulnCounts, response.vulnerabilities)
+        // Group devices by domain
+        val domainGroups = createDomainGroupsFromDatabase(assetsInDomains, deviceVulnCounts, allVulnerabilities)
 
         // Calculate global totals
         val totalCritical = deviceVulnCounts.sumOf { it.criticalCount ?: 0 }
@@ -122,98 +147,58 @@ class DomainVulnsService(
         return DomainVulnsSummaryDto(
             domainGroups = domainGroups,
             totalDevices = deviceVulnCounts.size,
-            totalVulnerabilities = response.totalCount,
+            totalVulnerabilities = allVulnerabilities.size,
             globalCritical = totalCritical,
             globalHigh = totalHigh,
             globalMedium = totalMedium,
             globalLow = totalLow,
-            queriedAt = response.queriedAt.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+            queriedAt = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
         )
     }
 
     /**
-     * Create domain groups from device list
+     * Create domain groups from database assets
      *
-     * Groups devices by domain. Since we queried by domain initially,
-     * we can distribute devices proportionally or create a combined group.
-     *
-     * For simplicity, we create one group per domain with all devices.
-     * In a real implementation, we might query each domain separately to get proper grouping.
+     * Groups devices by their AD domain field.
+     * Each domain gets its own group with its devices and vulnerability counts.
      */
-    private fun createDomainGroups(
-        domains: List<String>,
-        devices: List<DeviceVulnCountDto>,
-        allVulns: List<CrowdStrikeVulnerabilityDto>
+    private fun createDomainGroupsFromDatabase(
+        assets: List<com.secman.domain.Asset>,
+        deviceVulnCounts: List<DeviceVulnCountDto>,
+        allVulnerabilities: List<com.secman.domain.Vulnerability>
     ): List<DomainGroupDto> {
-        // Since we queried all domains together, we'll create separate groups by re-querying
-        // Or we can create a single combined group
-        // For now, create a single group with all domains listed
+        // Create a map of asset name to device count for quick lookup
+        val deviceCountMap = deviceVulnCounts.associateBy { it.hostname }
 
-        if (devices.isEmpty()) {
-            return domains.map { domain ->
-                DomainGroupDto(
-                    domain = domain,
-                    devices = emptyList(),
-                    totalDevices = 0,
-                    totalVulnerabilities = 0,
-                    totalCritical = 0,
-                    totalHigh = 0,
-                    totalMedium = 0,
-                    totalLow = 0
-                )
+        // Group assets by their AD domain (case-insensitive)
+        val assetsByDomain = assets.groupBy { it.adDomain?.uppercase() ?: "UNKNOWN" }
+
+        // Create domain groups
+        return assetsByDomain.map { (normalizedDomain, domainAssets) ->
+            // Get the original casing from the first asset
+            val displayDomain = domainAssets.firstOrNull()?.adDomain ?: normalizedDomain
+
+            // Get devices for this domain
+            val devicesInDomain = domainAssets.mapNotNull { asset ->
+                deviceCountMap[asset.name]
             }
-        }
 
-        // Create a combined group with all devices
-        val combinedDomain = domains.joinToString(", ")
-        val totalCritical = devices.sumOf { it.criticalCount ?: 0 }
-        val totalHigh = devices.sumOf { it.highCount ?: 0 }
-        val totalMedium = devices.sumOf { it.mediumCount ?: 0 }
-        val totalLow = devices.sumOf { it.lowCount ?: 0 }
+            // Calculate domain-level totals
+            val totalCritical = devicesInDomain.sumOf { it.criticalCount ?: 0 }
+            val totalHigh = devicesInDomain.sumOf { it.highCount ?: 0 }
+            val totalMedium = devicesInDomain.sumOf { it.mediumCount ?: 0 }
+            val totalLow = devicesInDomain.sumOf { it.lowCount ?: 0 }
 
-        return listOf(
             DomainGroupDto(
-                domain = combinedDomain,
-                devices = devices,
-                totalDevices = devices.size,
-                totalVulnerabilities = devices.sumOf { it.vulnerabilityCount },
+                domain = displayDomain,
+                devices = devicesInDomain.sortedByDescending { it.vulnerabilityCount },
+                totalDevices = devicesInDomain.size,
+                totalVulnerabilities = devicesInDomain.sumOf { it.vulnerabilityCount },
                 totalCritical = totalCritical,
                 totalHigh = totalHigh,
                 totalMedium = totalMedium,
                 totalLow = totalLow
             )
-        )
-    }
-
-    /**
-     * Get Falcon configuration from database
-     *
-     * Returns the first active Falcon configuration
-     */
-    private fun getFalconConfig(): FalconConfigDto? {
-        val configs = falconConfigRepository.findAll().toList()
-        if (configs.isEmpty()) {
-            log.warn("No Falcon configurations found in database")
-            return null
-        }
-
-        val config = configs.first()
-
-        // Map cloudRegion to baseUrl
-        val baseUrl = when (config.cloudRegion) {
-            "us-1" -> "https://api.crowdstrike.com"
-            "us-2" -> "https://api.us-2.crowdstrike.com"
-            "eu-1" -> "https://api.eu-1.crowdstrike.com"
-            "us-gov-1" -> "https://api.laggar.gcw.crowdstrike.com"
-            "us-gov-2" -> "https://api.us-gov-2.crowdstrike.com"
-            else -> "https://api.crowdstrike.com"
-        }
-
-        return FalconConfigDto(
-            clientId = config.clientId,
-            clientSecret = config.clientSecret,
-            baseUrl = baseUrl,
-            name = "Falcon Config ${config.id ?: ""}"
-        )
+        }.sortedByDescending { it.totalVulnerabilities }
     }
 }

@@ -1,21 +1,21 @@
 /**
  * Domain Vulns View Component
  *
- * Feature: 042-domain-vulnerabilities-view
+ * Feature: 043-crowdstrike-domain-import
  *
  * Main component for Domain Vulns feature - displays vulnerabilities grouped by AD domain.
- * Queries CrowdStrike Falcon API directly based on user's domain mappings.
+ * Queries secman database based on user's domain mappings.
  *
  * Features:
- * - Fetches domain vulnerability summary from Falcon API via backend
+ * - Fetches domain vulnerability summary from secman database via backend
  * - Displays devices grouped by Active Directory domain
  * - Displays severity breakdown (critical, high, medium, low) at all levels
  * - Handles loading, error, and empty states
  * - Admin redirect handling
  * - No domain mapping error handling
- * - Real-time data from CrowdStrike (not local database)
+ * - Data from secman database (not CrowdStrike Falcon API)
  *
- * Similar to AccountVulnsView but queries Falcon API directly instead of local database.
+ * Similar to AccountVulnsView but uses domain mappings instead of AWS account mappings.
  */
 
 import React, { useState, useEffect } from 'react';
@@ -97,7 +97,7 @@ const DomainVulnsView: React.FC = () => {
                         <div className="spinner-border text-primary mb-3" role="status">
                             <span className="visually-hidden">Loading...</span>
                         </div>
-                        <p className="text-muted">Querying CrowdStrike Falcon API...</p>
+                        <p className="text-muted">Loading domain vulnerabilities...</p>
                         <small className="text-muted">This may take a few moments...</small>
                     </div>
                 </div>
@@ -169,7 +169,7 @@ const DomainVulnsView: React.FC = () => {
                         No Domains Found
                     </h4>
                     <p>
-                        You don't have any AD domains mapped to your user account, or there are no devices in CrowdStrike for your mapped domains.
+                        You don't have any AD domains mapped to your user account, or there are no assets in the database for your mapped domains.
                     </p>
                     <p className="mb-0">
                         Please contact your administrator to set up domain mappings.
@@ -194,7 +194,7 @@ const DomainVulnsView: React.FC = () => {
                 </h2>
                 <button className="btn btn-outline-primary" onClick={fetchDomainVulns}>
                     <i className="bi bi-arrow-clockwise me-2"></i>
-                    Refresh from Falcon API
+                    Refresh
                 </button>
             </div>
 
@@ -202,7 +202,7 @@ const DomainVulnsView: React.FC = () => {
             <div className="alert alert-info d-flex align-items-center mb-4" role="alert">
                 <i className="bi bi-info-circle-fill me-2"></i>
                 <div>
-                    <strong>Live Data from CrowdStrike Falcon</strong> - This view queries the Falcon API directly in real-time based on your domain mappings.
+                    <strong>Database Vulnerabilities</strong> - This view displays vulnerabilities from the secman database based on your domain mappings.
                 </div>
             </div>
 
@@ -265,7 +265,7 @@ const DomainVulnsView: React.FC = () => {
                 <div className="col-12">
                     <div className="card border-0 shadow-sm bg-light">
                         <div className="card-body">
-                            <h6 className="text-muted mb-1">Queried from Falcon API</h6>
+                            <h6 className="text-muted mb-1">Last Refreshed</h6>
                             <div className="fw-semibold">{formatTimestamp(summary.queriedAt)}</div>
                         </div>
                     </div>
