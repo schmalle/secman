@@ -5,15 +5,8 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="94ada8b3-9f4e-473c-9fea-3bc9651b5bdd" name="Changes" comment="test change">
-      <change afterPath="$PROJECT_DIR$/scripts/compile.sh" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/scripts/restartbackend.sh" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/scripts/restartfrontend.sh" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/DOMAIN_NORMALIZATION_DECISION.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/DOMAIN_NORMALIZATION_PATTERNS.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/DOMAIN_NORMALIZATION_RESEARCH.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/PRODUCTION-QUICKSTART.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/NGINX_INSTALLATION.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/NGINX_INSTALLATION.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/AGENTS.md" beforeDir="false" afterPath="$PROJECT_DIR$/AGENTS.md" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
