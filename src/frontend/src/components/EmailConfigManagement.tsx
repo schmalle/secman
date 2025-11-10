@@ -26,6 +26,24 @@ interface EmailConfig {
   updatedAt?: string;
 }
 
+const EMPTY_FORM_STATE: EmailConfig = {
+  name: '',
+  provider: 'SMTP',
+  smtpHost: '',
+  smtpPort: 587,
+  smtpUsername: '',
+  smtpPassword: '',
+  smtpTls: true,
+  smtpSsl: false,
+  sesAccessKey: '',
+  sesSecretKey: '',
+  sesRegion: 'us-east-1',
+  fromEmail: '',
+  fromName: 'SecMan Risk Assessment',
+  isActive: false,
+  imapEnabled: false
+};
+
 const EmailConfigManagement: React.FC = () => {
   const [configs, setConfigs] = useState<EmailConfig[]>([]);
   const [loading, setLoading] = useState(true);
@@ -33,23 +51,9 @@ const EmailConfigManagement: React.FC = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingConfig, setEditingConfig] = useState<EmailConfig | null>(null);
   const [testing, setTesting] = useState<number | null>(null);
-  const [formData, setFormData] = useState<EmailConfig>({
-    name: '',
-    provider: 'SMTP',
-    smtpHost: '',
-    smtpPort: 587,
-    smtpUsername: '',
-    smtpPassword: '',
-    smtpTls: true,
-    smtpSsl: false,
-    sesAccessKey: '',
-    sesSecretKey: '',
-    sesRegion: 'us-east-1',
-    fromEmail: '',
-    fromName: 'SecMan Risk Assessment',
-    isActive: false,
-    imapEnabled: false
-  });
+  const [saving, setSaving] = useState(false);
+  const [activateOnSave, setActivateOnSave] = useState(true);
+  const [formData, setFormData] = useState<EmailConfig>({ ...EMPTY_FORM_STATE });
 
   // Check if user is authenticated and has admin access
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -126,31 +130,99 @@ const EmailConfigManagement: React.FC = () => {
     }
   };
 
+  const buildRequestPayload = (): Record<string, unknown> => {
+    if (formData.provider === 'SMTP') {
+      const payload: Record<string, unknown> = {
+        name: formData.name,
+        smtpHost: formData.smtpHost,
+        smtpPort: formData.smtpPort,
+        smtpTls: formData.smtpTls ?? true,
+        smtpSsl: formData.smtpSsl ?? false,
+        fromEmail: formData.fromEmail,
+        fromName: formData.fromName,
+        smtpUsername: formData.smtpUsername ?? ''
+      };
+
+      const smtpPasswordValue = formData.smtpPassword ?? '';
+      payload.smtpPassword = editingConfig && !smtpPasswordValue ? '***HIDDEN***' : smtpPasswordValue;
+
+      if (formData.imapHost) {
+        payload.imapHost = formData.imapHost;
+      }
+      if (formData.imapPort) {
+        payload.imapPort = formData.imapPort;
+      }
+      if (typeof formData.imapEnabled === 'boolean') {
+        payload.imapEnabled = formData.imapEnabled;
+      }
+
+      return payload;
+    }
+
+    const payload: Record<string, unknown> = {
+      name: formData.name,
+      sesAccessKey: formData.sesAccessKey ?? '',
+      sesSecretKey: formData.sesSecretKey ?? '',
+      sesRegion: formData.sesRegion ?? 'us-east-1',
+      fromEmail: formData.fromEmail,
+      fromName: formData.fromName
+    };
+
+    if (editingConfig && !payload.sesSecretKey) {
+      payload.sesSecretKey = '***HIDDEN***';
+    }
+
+    return payload;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    const payload = buildRequestPayload();
+    setSaving(true);
+
     try {
+      let response: Response;
       if (editingConfig) {
-        await authenticatedPut(`/api/email-provider-configs/${editingConfig.id}`, formData);
+        response = await authenticatedPut(`/api/email-provider-configs/${editingConfig.id}`, payload);
       } else {
         // Use provider-specific endpoint for creation
         const endpoint = formData.provider === 'SMTP'
           ? '/api/email-provider-configs/smtp'
           : '/api/email-provider-configs/ses';
-        await authenticatedPost(endpoint, formData);
+        response = await authenticatedPost(endpoint, payload);
+      }
+
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || 'Failed to save configuration');
+      }
+
+      const savedConfig = await response.json();
+
+      if (activateOnSave && savedConfig.id) {
+        try {
+          await authenticatedPost(`/api/email-provider-configs/${savedConfig.id}/activate`, {});
+        } catch (activationError) {
+          console.warn('Failed to activate configuration', activationError);
+        }
       }
 
       await fetchConfigs();
       resetForm();
-      setError(null);
+      setError('Configuration saved successfully!');
+      setTimeout(() => setError(null), 3000);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleEdit = (config: EmailConfig) => {
     setEditingConfig(config);
     setFormData({ ...config });
+    setActivateOnSave(!!config.isActive);
     setShowForm(true);
   };
 
@@ -196,24 +268,9 @@ const EmailConfigManagement: React.FC = () => {
   };
 
   const resetForm = () => {
-    setFormData({
-      name: '',
-      provider: 'SMTP',
-      smtpHost: '',
-      smtpPort: 587,
-      smtpUsername: '',
-      smtpPassword: '',
-      smtpTls: true,
-      smtpSsl: false,
-      sesAccessKey: '',
-      sesSecretKey: '',
-      sesRegion: 'us-east-1',
-      fromEmail: '',
-      fromName: 'SecMan Risk Assessment',
-      isActive: false,
-      imapEnabled: false
-    });
+    setFormData({ ...EMPTY_FORM_STATE });
     setEditingConfig(null);
+    setActivateOnSave(true);
     setShowForm(false);
   };
 
@@ -271,10 +328,14 @@ const EmailConfigManagement: React.FC = () => {
             <h2>Email Configuration Management</h2>
             <button
               className="btn btn-primary"
+              data-testid="create-config-btn"
               onClick={() => {
                 if (showForm) {
                   resetForm();
                 } else {
+                  setEditingConfig(null);
+                  setFormData({ ...EMPTY_FORM_STATE });
+                  setActivateOnSave(true);
                   setShowForm(true);
                 }
               }}
@@ -539,9 +600,35 @@ const EmailConfigManagement: React.FC = () => {
                     </div>
                   </div>
 
+                  <div className="row">
+                    <div className="col-md-12">
+                      <div className="form-check mb-3">
+                        <input
+                          className="form-check-input"
+                          type="checkbox"
+                          id="isActive"
+                          checked={activateOnSave}
+                          data-testid="set-active-checkbox"
+                          onChange={(e) => setActivateOnSave(e.target.checked)}
+                        />
+                        <label className="form-check-label" htmlFor="isActive">
+                          Set as Active Configuration
+                        </label>
+                        <div className="form-text">
+                          The active configuration will be used for outbound notifications.
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="d-flex justify-content-end">
-                    <button type="submit" className="btn btn-success me-2">
-                      {editingConfig ? 'Update' : 'Save'}
+                    <button
+                      type="submit"
+                      className="btn btn-success me-2"
+                      data-testid="save-config-btn"
+                      disabled={saving}
+                    >
+                      {saving ? 'Saving...' : (editingConfig ? 'Update' : 'Save')}
                     </button>
                     <button type="button" onClick={resetForm} className="btn btn-secondary">
                       Cancel
@@ -562,7 +649,7 @@ const EmailConfigManagement: React.FC = () => {
               {configs.length === 0 ? (
                 <p className="text-muted">No email configurations found. Click "Add New Configuration" to create one.</p>
               ) : (
-                <div className="table-responsive">
+                <div className="table-responsive" data-testid="config-list">
                   <table className="table table-striped table-hover">
                     <thead>
                       <tr>
@@ -658,7 +745,11 @@ const EmailConfigManagement: React.FC = () => {
       {error && (
         <div className="row mt-4">
           <div className="col-12">
-            <div className={`alert ${error.includes('successfully') ? 'alert-success' : 'alert-danger'}`} role="alert">
+            <div
+              className={`alert ${error.includes('successfully') ? 'alert-success' : 'alert-danger'}`}
+              role="alert"
+              data-testid={error.includes('successfully') ? 'success-message' : 'error-message'}
+            >
               {error}
             </div>
           </div>

@@ -7,6 +7,7 @@ import io.micronaut.http.HttpResponse
 import io.micronaut.http.annotation.*
 import io.micronaut.security.annotation.Secured
 import io.micronaut.security.rules.SecurityRule
+import io.micronaut.serde.annotation.Serdeable
 import jakarta.inject.Singleton
 import org.slf4j.LoggerFactory
 
@@ -246,6 +247,7 @@ class EmailProviderConfigController(
     }
 
     // Request/Response DTOs
+    @Serdeable
     data class CreateSmtpConfigRequest(
         val name: String,
         val smtpHost: String,
@@ -261,6 +263,7 @@ class EmailProviderConfigController(
         val imapEnabled: Boolean = false
     )
 
+    @Serdeable
     data class CreateSesConfigRequest(
         val name: String,
         val sesAccessKey: String,
@@ -270,6 +273,7 @@ class EmailProviderConfigController(
         val fromName: String
     )
 
+    @Serdeable
     data class UpdateConfigRequest(
         val name: String? = null,
         val smtpHost: String? = null,
@@ -288,10 +292,12 @@ class EmailProviderConfigController(
         val imapEnabled: Boolean? = null
     )
 
+    @Serdeable
     data class TestEmailRequest(
         val testEmailAddress: String
     )
 
+    @Serdeable
     data class EmailConfigResponse(
         val id: Long?,
         val name: String,
@@ -332,10 +338,12 @@ class EmailProviderConfigController(
         }
     }
 
+    @Serdeable
     data class ErrorResponse(
         val message: String
     )
 
+    @Serdeable
     data class SuccessResponse(
         val message: String
     )
