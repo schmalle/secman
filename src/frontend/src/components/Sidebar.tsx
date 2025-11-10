@@ -381,6 +381,14 @@ const Sidebar = () => {
                                         )}
                                     </li>
                                 )}
+                                {/* Configuration Bundle - ADMIN only */}
+                                {isAdmin && (
+                                    <li>
+                                        <a href="/admin/config-bundle" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                            <i className="bi bi-box-arrow-in-down me-2"></i> Configuration Bundle
+                                        </a>
+                                    </li>
+                                )}
                             </ul>
                         )}
                     </li>
