@@ -26,8 +26,10 @@ class OAuthController(
     private val backendBaseUrl: String = appConfig.backend.baseUrl
     private val frontendBaseUrl: String = appConfig.frontend.baseUrl
 
+
     init {
-        logger.info("OAuthController initialized with backendBaseUrl: {}, frontendBaseUrl: {}", backendBaseUrl, frontendBaseUrl)
+
+		logger.info("OAuthController initialized with backendBaseUrl: {}, frontendBaseUrl: {}", backendBaseUrl, frontendBaseUrl)
         // Validate that the URLs are properly formatted
         if (!frontendBaseUrl.startsWith("http://") && !frontendBaseUrl.startsWith("https://")) {
             logger.error("Invalid frontendBaseUrl configuration: {}. Expected format: http://localhost:4321", frontendBaseUrl)
