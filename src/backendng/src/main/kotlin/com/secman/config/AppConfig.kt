@@ -3,6 +3,8 @@ package com.secman.config
 import io.micronaut.context.annotation.ConfigurationProperties
 import io.micronaut.serde.annotation.Serdeable
 
+
+
 @ConfigurationProperties("app")
 @Serdeable
 data class AppConfig(
@@ -13,7 +15,8 @@ data class AppConfig(
 @ConfigurationProperties("backend")
 @Serdeable
 data class BackendConfig(
-    val baseUrl: String = "http://localhost:8080"
+	val baseUrl: String = System.getenv("BACKEND_BASE_URL")
+		?: "http://localhost:8080"
 )
 
 @ConfigurationProperties("frontend")

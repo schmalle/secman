@@ -8,6 +8,7 @@ import com.secman.crowdstrike.exception.CrowdStrikeException
 import com.secman.crowdstrike.exception.NotFoundException
 import com.secman.crowdstrike.exception.RateLimitException
 import com.secman.crowdstrike.model.AuthToken
+import io.micronaut.context.annotation.Value
 import io.micronaut.http.HttpRequest
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.client.HttpClient
@@ -20,7 +21,11 @@ import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Callable
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * CrowdStrike Falcon API client implementation
@@ -42,6 +47,12 @@ open class CrowdStrikeApiClientImpl(
 ) : CrowdStrikeApiClient {
 
     private val log = LoggerFactory.getLogger(CrowdStrikeApiClientImpl::class.java)
+
+    @field:Value("\${secman.crowdstrike.batch-size:20}")
+    protected var configuredBatchSize: Int = 20
+
+    @field:Value("\${secman.crowdstrike.max-parallel-batches:4}")
+    protected var configuredMaxParallelBatches: Int = 4
 
     /**
      * Query vulnerabilities for a specific hostname
@@ -173,12 +184,7 @@ open class CrowdStrikeApiClientImpl(
         // Build FQL filter - SIMPLIFIED for maximum compatibility
         // Only use status and severity filters (most reliable)
         // All other filtering (days open, device type) done client-side
-        val severityList = severity.split(",").map { it.trim().uppercase() }
-        val severityFilter = if (severityList.size == 1) {
-            "cve.severity:'${severityList[0]}'"
-        } else {
-            "cve.severity:[${severityList.joinToString(",") { "'$it'" }}]"
-        }
+        val severityFilter = buildSeverityFilter(severity)
 
         // Build complete FQL filter - MINIMAL for reliability
         val fqlFilter = "status:'open'+$severityFilter"
@@ -694,239 +700,271 @@ open class CrowdStrikeApiClientImpl(
             return emptyList()
         }
 
-        // Get fresh authentication token for this stage
-        log.info(">>> Stage 2: Getting fresh authentication token for vulnerability queries")
-        var token = getAuthToken(config)
-        log.info(">>> Stage 2: Authentication successful, token obtained")
-        log.info(">>> Stage 2: Token type: {}, expires at: {}",
-            token.tokenType, token.expiresAt)
+        val batchSize = configuredBatchSize.coerceIn(5, 200)
+        val batches = deviceIds.chunked(batchSize)
+        val parallelism = configuredMaxParallelBatches
+            .coerceAtLeast(1)
+            .coerceAtMost(12)
+            .coerceAtMost(batches.size)
 
-        log.info(">>> Stage 2: Querying vulnerabilities (severity={}, minDaysOpen={})",
-            severity, minDaysOpen)
+        log.info(">>> Stage 2: Querying vulnerabilities (severity={}, minDaysOpen={}, batchSize={}, parallelism={})",
+            severity, minDaysOpen, batchSize, parallelism)
+        log.info(">>> Stage 2: Split {} device IDs into {} batches", deviceIds.size, batches.size)
 
         val allVulnerabilities = mutableListOf<CrowdStrikeVulnerabilityDto>()
 
-        // Batch device IDs to avoid URL length limits and API timeouts
-        // Balanced size: 20 devices per batch (was 10, then 50)
-        // 20 devices = reasonable API response time + manageable number of batches
-        val batchSize = 20
-        val batches = deviceIds.chunked(batchSize)
+        if (batches.size == 1) {
+            allVulnerabilities.addAll(
+                queryBatchVulnerabilities(
+                    batchIndex = 0,
+                    totalBatches = 1,
+                    deviceIds = batches.first(),
+                    severity = severity,
+                    minDaysOpen = minDaysOpen,
+                    limit = limit,
+                    config = config
+                )
+            )
+        } else {
+            val executor = createBatchExecutor(parallelism)
+            val futures = batches.mapIndexed { index, batch ->
+                executor.submit(Callable {
+                    queryBatchVulnerabilities(
+                        batchIndex = index,
+                        totalBatches = batches.size,
+                        deviceIds = batch,
+                        severity = severity,
+                        minDaysOpen = minDaysOpen,
+                        limit = limit,
+                        config = config
+                    )
+                })
+            }
 
-        log.info(">>> Stage 2: Split {} device IDs into {} batches of up to {} IDs each",
-            deviceIds.size, batches.size, batchSize)
-
-        // Track API calls for token refresh
-        var apiCallCount = 0
-        val tokenRefreshInterval = 1000  // Refresh token every 1000 API calls
-
-        batches.forEachIndexed { batchIndex, batch ->
             try {
-                // Check if we need to refresh the token
-                // Refresh every 1000 API calls OR if token is expiring within 5 minutes
-                val shouldRefreshByCount = apiCallCount >= tokenRefreshInterval
-                val shouldRefreshByExpiry = token.isExpiringSoon(bufferSeconds = 300)  // 5 minutes buffer
-
-                if (shouldRefreshByCount || shouldRefreshByExpiry) {
-                    val reason = when {
-                        shouldRefreshByCount -> "API call count reached $apiCallCount (limit: $tokenRefreshInterval)"
-                        shouldRefreshByExpiry -> "Token expiring soon (expires at: ${token.expiresAt})"
-                        else -> "Unknown reason"
-                    }
-                    log.info(">>> Batch {}/{}: REFRESHING TOKEN - Reason: {}",
-                        batchIndex + 1, batches.size, reason)
-
-                    token = getAuthToken(config)
-                    apiCallCount = 0  // Reset counter after refresh
-
-                    log.info(">>> Batch {}/{}: New token obtained, expires at: {}",
-                        batchIndex + 1, batches.size, token.expiresAt)
+                futures.forEach { future ->
+                    allVulnerabilities.addAll(future.get())
                 }
-
-                val metadataByDeviceId = resolveDeviceMetadata(batch, token)
-
-                // Build FQL filter for this batch
-                val severityList = severity.split(",").map { it.trim().uppercase() }
-                val severityFilter = if (severityList.size == 1) {
-                    "cve.severity:'${severityList[0]}'"
-                } else {
-                    "cve.severity:[${severityList.joinToString(",") { "'$it'" }}]"
+            } catch (e: ExecutionException) {
+                futures.forEach { it.cancel(true) }
+                executor.shutdownNow()
+                val cause = e.cause
+                if (cause is RuntimeException) {
+                    throw cause
                 }
-
-                // Build device ID filter: aid:['id1','id2','id3']
-                val deviceIdFilter = if (batch.size == 1) {
-                    "aid:'${batch[0]}'"
-                } else {
-                    "aid:[${batch.joinToString(",") { "'$it'" }}]"
-                }
-
-                val fqlFilter = "$deviceIdFilter+status:'open'+$severityFilter"
-
-                // Query vulnerabilities for this batch with pagination
-                var afterToken: String? = null
-                var hasMore = true
-                var pageCount = 0
-                val maxPagesPerBatch = 50  // Safety limit: max 50 pages per batch
-
-                while (hasMore && pageCount < maxPagesPerBatch) {
-                    try {
-                        pageCount++
-
-                        val uri = UriBuilder.of("/spotlight/combined/vulnerabilities/v1")
-                            .queryParam("filter", fqlFilter)
-                            .queryParam("limit", limit.coerceAtMost(5000))
-                            // Request CVE facet so severity/CVSS fields are present in the response
-                            .queryParam("facet", "cve")
-                            .apply {
-                                if (afterToken != null) {
-                                    queryParam("after", afterToken)
-                                }
-                            }
-                            .build()
-
-                        // Log BEFORE making the call so we can see if it hangs
-                        val startTime = System.currentTimeMillis()
-                        log.info(">>> Batch {}/{}: Querying CrowdStrike API...",
-                            batchIndex + 1, batches.size)
-
-                        val request = HttpRequest.GET<Any>(uri.toString())
-                            .header("Authorization", "Bearer ${token.accessToken}")
-                            .header("Accept", "application/json")
-
-                        val response = httpClient.toBlocking().exchange(request, Map::class.java)
-                        val elapsed = System.currentTimeMillis() - startTime
-                        apiCallCount++  // Increment API call counter
-
-                        log.info(">>> Batch {}/{}: Response received in {}ms, status: {}",
-                            batchIndex + 1, batches.size, elapsed, response.status.code)
-
-                        when (response.status.code) {
-                            200 -> {
-                                @Suppress("UNCHECKED_CAST")
-                                val responseBody = response.body() as? Map<String, Any>
-                                    ?: throw CrowdStrikeException("Empty response from Spotlight API")
-
-                                val resources = responseBody["resources"] as? List<*> ?: emptyList<Any>()
-                                val vulns = mapResponseToDtos(resources, metadataByDeviceId)
-
-                                // Apply client-side filtering (days open)
-                                val filtered = vulns.filter { vuln ->
-                                    val daysOpenValue = vuln.daysOpen?.split(" ")?.firstOrNull()?.toIntOrNull() ?: 0
-                                    daysOpenValue >= minDaysOpen
-                                }
-
-                                // Check for pagination BEFORE adding to list
-                                val meta = responseBody["meta"] as? Map<*, *>
-                                val pagination = meta?.get("pagination") as? Map<*, *>
-                                val prevAfterToken = afterToken
-                                afterToken = pagination?.get("after")?.toString()
-
-                                // Detailed pagination logging
-                                log.info(">>> Batch {}/{} page {}: Retrieved {} vulns, {} after filter (total will be: {})",
-                                    batchIndex + 1, batches.size, pageCount, vulns.size, filtered.size, allVulnerabilities.size + filtered.size)
-                                log.info(">>> Batch {}/{} page {}: Pagination - afterToken: {}, vulns.isNotEmpty: {}",
-                                    batchIndex + 1, batches.size, pageCount,
-                                    if (afterToken != null) "present" else "null",
-                                    vulns.isNotEmpty())
-
-                                // Add filtered vulnerabilities to result list
-                                allVulnerabilities.addAll(filtered)
-
-                                // Exit pagination if:
-                                // 1. No afterToken (no more pages)
-                                // 2. No vulnerabilities returned (API has no more data)
-                                // 3. Got results but ALL were filtered out (minDaysOpen filter too strict)
-                                hasMore = afterToken != null && vulns.isNotEmpty()
-
-                                // Safety check 1: if afterToken didn't change, break to prevent infinite loop
-                                if (hasMore && afterToken == prevAfterToken) {
-                                    log.warn(">>> Batch {}/{} page {}: afterToken unchanged - breaking pagination loop",
-                                        batchIndex + 1, batches.size, pageCount)
-                                    hasMore = false
-                                }
-
-                                // Safety check 2: if we got results but ALL filtered out for multiple pages, stop
-                                // This indicates the minDaysOpen filter is too strict and we're wasting API calls
-                                if (hasMore && filtered.isEmpty() && vulns.isNotEmpty() && pageCount >= 3) {
-                                    log.warn(">>> Batch {}/{} page {}: Got {} vulns but ALL filtered out for {} pages - stopping pagination (minDaysOpen={} may be too strict)",
-                                        batchIndex + 1, batches.size, pageCount, vulns.size, pageCount, minDaysOpen)
-                                    hasMore = false
-                                }
-                            }
-                            404 -> {
-                                hasMore = false
-                            }
-                            429 -> {
-                                val retryAfter = response.headers.get("Retry-After")?.toLongOrNull() ?: 30L
-                                throw RateLimitException("Rate limit exceeded on batch ${batchIndex + 1}", retryAfter)
-                            }
-                            in 500..599 -> throw CrowdStrikeException("Spotlight API server error: ${response.status}")
-                            else -> throw CrowdStrikeException("Unexpected Spotlight API response: ${response.status}")
-                        }
-                    } catch (e: io.micronaut.http.client.exceptions.HttpClientResponseException) {
-                        when (e.status.code) {
-                            401 -> {
-                                log.error(">>> Batch {}/{}: UNAUTHORIZED - Token expired (expires at: {})",
-                                    batchIndex + 1, batches.size, token.expiresAt)
-                                throw CrowdStrikeException("Unauthorized: Token invalid or expired (expires at ${token.expiresAt})", e)
-                            }
-                            404 -> {
-                                hasMore = false
-                            }
-                            429 -> {
-                                val retryAfter = e.response.headers.get("Retry-After")?.toLongOrNull() ?: 30L
-                                log.warn(">>> Batch {}/{}: Rate limit, retrying after {}s",
-                                    batchIndex + 1, batches.size, retryAfter)
-                                throw RateLimitException("Rate limit exceeded", retryAfter, e)
-                            }
-                            in 500..599 -> {
-                                log.error(">>> Batch {}/{}: Server error {}", batchIndex + 1, batches.size, e.status)
-                                throw CrowdStrikeException("Server error: ${e.status}", e)
-                            }
-                            else -> {
-                                log.error(">>> Batch {}/{}: API error {}", batchIndex + 1, batches.size, e.status)
-                                throw CrowdStrikeException("API error: ${e.message}", e)
-                            }
-                        }
-                    } catch (e: java.net.SocketTimeoutException) {
-                        log.error(">>> Batch {}/{}: TIMEOUT after waiting for API response", batchIndex + 1, batches.size)
-                        log.error(">>> Consider: 1) CrowdStrike API may be slow, 2) Reduce batch size further, 3) Check network connection")
-                        throw CrowdStrikeException("Timeout waiting for CrowdStrike API response on batch ${batchIndex + 1}", e)
-                    } catch (e: java.io.IOException) {
-                        log.error(">>> Batch {}/{}: Network I/O error: {}", batchIndex + 1, batches.size, e.message)
-                        throw CrowdStrikeException("Network error on batch ${batchIndex + 1}: ${e.message}", e)
-                    } catch (e: RateLimitException) {
-                        log.warn(">>> Batch {}/{}: Rate limit hit, @Retryable will retry automatically",
-                            batchIndex + 1, batches.size)
-                        throw e
-                    } catch (e: CrowdStrikeException) {
-                        log.error(">>> Batch {}/{}: CrowdStrike error (no retry): {}",
-                            batchIndex + 1, batches.size, e.message)
-                        throw e
-                    } catch (e: Exception) {
-                        log.error(">>> Batch {}/{}: Unexpected error (no retry): {} - {}",
-                            batchIndex + 1, batches.size, e.javaClass.simpleName, e.message)
-                        throw CrowdStrikeException("Failed to query batch ${batchIndex + 1}: ${e.message}", e)
-                    }
-                }
-
-                // Check if we hit the page limit
-                if (pageCount >= maxPagesPerBatch) {
-                    log.warn(">>> Batch {}/{}: Reached max page limit ({} pages) - stopping pagination for this batch",
-                        batchIndex + 1, batches.size, maxPagesPerBatch)
-                }
-
-            } catch (e: Exception) {
-                log.error(">>> Batch {}/{} FAILED: {}", batchIndex + 1, batches.size, e.message)
-                throw e
+                throw CrowdStrikeException("Failed to query server batch: ${cause?.message}", cause)
+            } catch (e: InterruptedException) {
+                futures.forEach { it.cancel(true) }
+                executor.shutdownNow()
+                Thread.currentThread().interrupt()
+                throw CrowdStrikeException("Interrupted while querying CrowdStrike server batches", e)
+            } finally {
+                executor.shutdown()
             }
         }
 
-        log.info(">>> Stage 2 complete: Queried {} device IDs across {} batches",
-            deviceIds.size, batches.size)
-        log.info(">>> Stage 2 complete: {} total vulnerabilities found", allVulnerabilities.size)
-        log.info(">>> Stage 2 complete: {} total API calls made", apiCallCount)
+        log.info(">>> Stage 2 complete: {} total vulnerabilities found across {} batches",
+            allVulnerabilities.size, batches.size)
 
         return allVulnerabilities
+    }
+
+    private fun queryBatchVulnerabilities(
+        batchIndex: Int,
+        totalBatches: Int,
+        deviceIds: List<String>,
+        severity: String,
+        minDaysOpen: Int,
+        limit: Int,
+        config: FalconConfigDto
+    ): List<CrowdStrikeVulnerabilityDto> {
+        var token = getAuthToken(config)
+        val metadataByDeviceId = resolveDeviceMetadata(deviceIds, token)
+        val severityFilter = buildSeverityFilter(severity)
+        val deviceIdFilter = buildDeviceIdFilter(deviceIds)
+        val fqlFilter = "$deviceIdFilter+status:'open'+$severityFilter"
+        val batchVulnerabilities = mutableListOf<CrowdStrikeVulnerabilityDto>()
+        val effectiveLimit = limit.coerceAtMost(5000)
+        val maxPagesPerBatch = 50
+        var afterToken: String? = null
+        var hasMore = true
+        var pageCount = 0
+
+        log.debug(">>> Batch {}/{} starting with {} device IDs", batchIndex + 1, totalBatches, deviceIds.size)
+
+        while (hasMore && pageCount < maxPagesPerBatch) {
+            if (Thread.currentThread().isInterrupted) {
+                throw InterruptedException("Batch ${batchIndex + 1} interrupted")
+            }
+
+            if (token.isExpiringSoon(bufferSeconds = 180)) {
+                log.debug(">>> Batch {}/{}: Token expiring soon, refreshing", batchIndex + 1, totalBatches)
+                token = getAuthToken(config)
+            }
+
+            val uri = UriBuilder.of("/spotlight/combined/vulnerabilities/v1")
+                .queryParam("filter", fqlFilter)
+                .queryParam("limit", effectiveLimit)
+                .queryParam("facet", "cve")
+                .apply {
+                    if (afterToken != null) {
+                        queryParam("after", afterToken)
+                    }
+                }
+                .build()
+
+            val request = HttpRequest.GET<Any>(uri.toString())
+                .header("Authorization", "Bearer ${token.accessToken}")
+                .header("Accept", "application/json")
+
+            try {
+                val response = httpClient.toBlocking().exchange(request, Map::class.java)
+                pageCount++
+
+                when (response.status.code) {
+                    200 -> {
+                        @Suppress("UNCHECKED_CAST")
+                        val responseBody = response.body() as? Map<String, Any>
+                            ?: throw CrowdStrikeException("Empty response from Spotlight API")
+
+                        val resources = responseBody["resources"] as? List<*> ?: emptyList<Any>()
+                        val vulns = mapResponseToDtos(resources, metadataByDeviceId)
+
+                        val filtered = vulns.filter { vuln ->
+                            val daysOpenValue = vuln.daysOpen?.split(" ")?.firstOrNull()?.toIntOrNull() ?: 0
+                            daysOpenValue >= minDaysOpen
+                        }
+
+                        val meta = responseBody["meta"] as? Map<*, *>
+                        val pagination = meta?.get("pagination") as? Map<*, *>
+                        val prevAfterToken = afterToken
+                        afterToken = pagination?.get("after")?.toString()
+
+                        log.info(">>> Batch {}/{} page {}: Retrieved {} vulns, {} after filter (batch total: {})",
+                            batchIndex + 1, totalBatches, pageCount, vulns.size, filtered.size,
+                            batchVulnerabilities.size + filtered.size)
+                        log.debug(">>> Batch {}/{} page {}: Pagination - afterToken: {}, vulns.isNotEmpty: {}",
+                            batchIndex + 1, totalBatches, pageCount,
+                            if (afterToken != null) "present" else "null",
+                            vulns.isNotEmpty())
+
+                        batchVulnerabilities.addAll(filtered)
+
+                        hasMore = afterToken != null && vulns.isNotEmpty()
+
+                        if (hasMore && afterToken == prevAfterToken) {
+                            log.warn(">>> Batch {}/{} page {}: afterToken unchanged - breaking pagination loop",
+                                batchIndex + 1, totalBatches, pageCount)
+                            hasMore = false
+                        }
+
+                        if (hasMore && filtered.isEmpty() && vulns.isNotEmpty() && pageCount >= 3) {
+                            log.warn(">>> Batch {}/{} page {}: Got {} vulns but ALL filtered out for {} pages - stopping pagination (minDaysOpen={} may be too strict)",
+                                batchIndex + 1, totalBatches, pageCount, vulns.size, pageCount, minDaysOpen)
+                            hasMore = false
+                        }
+                    }
+                    404 -> hasMore = false
+                    429 -> {
+                        val retryAfter = response.headers.get("Retry-After")?.toLongOrNull() ?: 30L
+                        throw RateLimitException("Rate limit exceeded on batch ${batchIndex + 1}", retryAfter)
+                    }
+                    in 500..599 -> throw CrowdStrikeException("Spotlight API server error: ${response.status}")
+                    else -> throw CrowdStrikeException("Unexpected Spotlight API response: ${response.status}")
+                }
+            } catch (e: io.micronaut.http.client.exceptions.HttpClientResponseException) {
+                when (e.status.code) {
+                    401 -> {
+                        log.warn(">>> Batch {}/{}: Unauthorized - refreshing token (expires at: {})",
+                            batchIndex + 1, totalBatches, token.expiresAt)
+                        authService.clearCache()
+                        token = getAuthToken(config)
+                        continue
+                    }
+                    404 -> hasMore = false
+                    429 -> {
+                        val retryAfter = e.response.headers.get("Retry-After")?.toLongOrNull() ?: 30L
+                        log.warn(">>> Batch {}/{}: Rate limit, retrying after {}s",
+                            batchIndex + 1, totalBatches, retryAfter)
+                        throw RateLimitException("Rate limit exceeded", retryAfter, e)
+                    }
+                    in 500..599 -> {
+                        log.error(">>> Batch {}/{}: Server error {}", batchIndex + 1, totalBatches, e.status)
+                        throw CrowdStrikeException("Server error: ${e.status}", e)
+                    }
+                    else -> {
+                        log.error(">>> Batch {}/{}: API error {}", batchIndex + 1, totalBatches, e.status)
+                        throw CrowdStrikeException("API error: ${e.message}", e)
+                    }
+                }
+            } catch (e: java.net.SocketTimeoutException) {
+                log.error(">>> Batch {}/{}: TIMEOUT after waiting for API response", batchIndex + 1, totalBatches)
+                log.error(">>> Consider: 1) CrowdStrike API may be slow, 2) Reduce batch size further, 3) Check network connection")
+                throw CrowdStrikeException("Timeout waiting for CrowdStrike API response on batch ${batchIndex + 1}", e)
+            } catch (e: java.io.IOException) {
+                log.error(">>> Batch {}/{}: Network I/O error: {}", batchIndex + 1, totalBatches, e.message)
+                throw CrowdStrikeException("Network error on batch ${batchIndex + 1}: ${e.message}", e)
+            } catch (e: io.netty.channel.ChannelException) {
+                log.error(">>> Batch {}/{}: Channel error {}", batchIndex + 1, totalBatches, e.message)
+                throw CrowdStrikeException("Channel error during batch ${batchIndex + 1}: ${e.message}", e)
+            } catch (e: io.micronaut.http.client.exceptions.HttpClientException) {
+                if (e.message?.contains("Channel closed") == true ||
+                    e.message?.contains("aggregating") == true) {
+                    log.error(">>> Batch {}/{}: HTTP client channel error: {}", batchIndex + 1, totalBatches, e.message)
+                }
+                throw CrowdStrikeException("HTTP client error during batch ${batchIndex + 1}: ${e.message}", e)
+            } catch (e: RateLimitException) {
+                throw e
+            } catch (e: CrowdStrikeException) {
+                throw e
+            } catch (e: Exception) {
+                log.error(">>> Batch {}/{}: Unexpected error (no retry): {} - {}",
+                    batchIndex + 1, totalBatches, e.javaClass.simpleName, e.message)
+                throw CrowdStrikeException("Failed to query batch ${batchIndex + 1}: ${e.message}", e)
+            }
+        }
+
+        if (pageCount >= maxPagesPerBatch) {
+            log.warn(">>> Batch {}/{}: Reached max page limit ({} pages) - stopping pagination for this batch",
+                batchIndex + 1, totalBatches, maxPagesPerBatch)
+        }
+
+        log.debug(">>> Batch {}/{} complete: {} vulnerabilities collected",
+            batchIndex + 1, totalBatches, batchVulnerabilities.size)
+
+        return batchVulnerabilities
+    }
+
+    private fun createBatchExecutor(parallelism: Int): ExecutorService {
+        val safeParallelism = parallelism.coerceAtLeast(1)
+        val threadCounter = AtomicInteger(1)
+        return Executors.newFixedThreadPool(safeParallelism) { runnable ->
+            Thread(runnable, "crowdstrike-batch-${threadCounter.getAndIncrement()}").apply {
+                isDaemon = true
+            }
+        }
+    }
+
+    private fun buildSeverityFilter(severity: String): String {
+        val values = severity.split(",")
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .map { it.uppercase() }
+            .ifEmpty { listOf("HIGH") }
+
+        return if (values.size == 1) {
+            "cve.severity:'${values.first()}'"
+        } else {
+            "cve.severity:[${values.joinToString(",") { "'$it'" }}]"
+        }
+    }
+
+    private fun buildDeviceIdFilter(deviceIds: List<String>): String {
+        return if (deviceIds.size == 1) {
+            "aid:'${deviceIds.first()}'"
+        } else {
+            "aid:[${deviceIds.joinToString(",") { "'$it'" }}]"
+        }
     }
 
     /**
