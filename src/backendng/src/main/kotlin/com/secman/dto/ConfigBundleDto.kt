@@ -66,7 +66,7 @@ data class UserMappingExportDto(
     val domain: String? = null,
     val ipAddress: String? = null,
     val userEmail: String? = null, // Reference to user by email
-    val appliedAt: LocalDateTime? = null
+    val appliedAt: Instant? = null
 )
 
 /**

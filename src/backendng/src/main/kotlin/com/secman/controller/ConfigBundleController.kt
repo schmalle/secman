@@ -41,7 +41,7 @@ open class ConfigBundleController(
     @Get("/export")
     @Produces(MediaType.APPLICATION_JSON)
     @Transactional(readOnly = true)
-    open fun exportBundle(authentication: Authentication): HttpResponse<ByteArray> {
+    open fun exportBundle(authentication: Authentication): HttpResponse<*> {
         logger.info("Configuration bundle export requested by user: ${authentication.name}")
 
         return try {

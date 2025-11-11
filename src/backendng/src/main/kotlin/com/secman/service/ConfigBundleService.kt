@@ -1,16 +1,22 @@
 package com.secman.service
 
-import com.secman.domain.*
+import com.secman.domain.Criticality
+import com.secman.domain.FalconConfig
+import com.secman.domain.IdentityProvider
+import com.secman.domain.McpApiKey
+import com.secman.domain.User
+import com.secman.domain.UserMapping
+import com.secman.domain.Workgroup
 import com.secman.dto.*
 import com.secman.repository.*
 import io.micronaut.security.authentication.Authentication
 import io.micronaut.transaction.annotation.Transactional
 import jakarta.inject.Singleton
 import org.slf4j.LoggerFactory
+import jakarta.persistence.EntityManager
 import java.time.Instant
 import java.time.LocalDateTime
 import java.util.*
-import javax.persistence.EntityManager
 
 /**
  * Service for handling configuration bundle export and import operations
@@ -118,8 +124,8 @@ open class ConfigBundleService(
             )
         }
 
-        val importedCounts = ImportCounts()
-        val skippedCounts = ImportCounts()
+        var importedCounts = ImportCounts()
+        var skippedCounts = ImportCounts()
         val errors = mutableListOf<String>()
         val warnings = mutableListOf<String>()
         val newMcpApiKeys = mutableListOf<NewMcpApiKeyInfo>()
@@ -129,43 +135,43 @@ open class ConfigBundleService(
 
             // 1. Import workgroups (including hierarchy)
             val workgroupResults = importWorkgroups(bundle.workgroups, options)
-            importedCounts.copy(workgroups = workgroupResults.imported)
-            skippedCounts.copy(workgroups = workgroupResults.skipped)
+            importedCounts = importedCounts.copy(workgroups = workgroupResults.imported)
+            skippedCounts = skippedCounts.copy(workgroups = workgroupResults.skipped)
             errors.addAll(workgroupResults.errors)
             warnings.addAll(workgroupResults.warnings)
 
             // 2. Import users (with workgroup assignments)
             val userResults = importUsers(bundle.users, options)
-            importedCounts.copy(users = userResults.imported)
-            skippedCounts.copy(users = userResults.skipped)
+            importedCounts = importedCounts.copy(users = userResults.imported)
+            skippedCounts = skippedCounts.copy(users = userResults.skipped)
             errors.addAll(userResults.errors)
             warnings.addAll(userResults.warnings)
 
             // 3. Import user mappings
             val mappingResults = importUserMappings(bundle.userMappings, options)
-            importedCounts.copy(userMappings = mappingResults.imported)
-            skippedCounts.copy(userMappings = mappingResults.skipped)
+            importedCounts = importedCounts.copy(userMappings = mappingResults.imported)
+            skippedCounts = skippedCounts.copy(userMappings = mappingResults.skipped)
             errors.addAll(mappingResults.errors)
             warnings.addAll(mappingResults.warnings)
 
             // 4. Import identity providers
             val idpResults = importIdentityProviders(bundle.identityProviders, request.providedSecrets, options)
-            importedCounts.copy(identityProviders = idpResults.imported)
-            skippedCounts.copy(identityProviders = idpResults.skipped)
+            importedCounts = importedCounts.copy(identityProviders = idpResults.imported)
+            skippedCounts = skippedCounts.copy(identityProviders = idpResults.skipped)
             errors.addAll(idpResults.errors)
             warnings.addAll(idpResults.warnings)
 
             // 5. Import Falcon configs
             val falconResults = importFalconConfigs(bundle.falconConfigs, request.providedSecrets, options)
-            importedCounts.copy(falconConfigs = falconResults.imported)
-            skippedCounts.copy(falconConfigs = falconResults.skipped)
+            importedCounts = importedCounts.copy(falconConfigs = falconResults.imported)
+            skippedCounts = skippedCounts.copy(falconConfigs = falconResults.skipped)
             errors.addAll(falconResults.errors)
             warnings.addAll(falconResults.warnings)
 
             // 6. Import MCP API keys (generate new keys)
             val mcpResults = importMcpApiKeys(bundle.mcpApiKeys, options)
-            importedCounts.copy(mcpApiKeys = mcpResults.imported)
-            skippedCounts.copy(mcpApiKeys = mcpResults.skipped)
+            importedCounts = importedCounts.copy(mcpApiKeys = mcpResults.imported)
+            skippedCounts = skippedCounts.copy(mcpApiKeys = mcpResults.skipped)
             errors.addAll(mcpResults.errors)
             warnings.addAll(mcpResults.warnings)
             newMcpApiKeys.addAll(mcpResults.newKeys)
@@ -219,13 +225,13 @@ open class ConfigBundleService(
         }
 
         bundle.workgroups.forEach { workgroup ->
-            if (workgroupRepository.findByName(workgroup.name).isPresent) {
+            if (workgroupRepository.findByNameIgnoreCase(workgroup.name).isPresent) {
                 conflicts.add(ConflictInfo("Workgroup", workgroup.name, "already_exists"))
             }
         }
 
         bundle.identityProviders.forEach { idp ->
-            if (identityProviderRepository.findByName(idp.name) != null) {
+            if (identityProviderRepository.findByNameIgnoreCase(idp.name).isPresent) {
                 conflicts.add(ConflictInfo("IdentityProvider", idp.name, "already_exists"))
             }
             if (idp.clientSecretMasked) {
@@ -243,7 +249,7 @@ open class ConfigBundleService(
         }
 
         // Check if import would leave system without ADMIN
-        val existingAdmins = userRepository.findAll().count { it.roles.contains(Role.ADMIN) }
+        val existingAdmins = userRepository.findAll().count { it.roles.contains(User.Role.ADMIN) }
         val importingAdmins = bundle.users.count { it.roles.contains("ADMIN") }
         if (existingAdmins == 0 && importingAdmins == 0) {
             errors.add("Import would leave system without any ADMIN users")
@@ -280,7 +286,7 @@ open class ConfigBundleService(
             WorkgroupExportDto(
                 name = workgroup.name,
                 description = workgroup.description,
-                criticality = workgroup.criticality,
+                criticality = workgroup.criticality.name,
                 parentName = workgroup.parent?.name,
                 createdAt = workgroup.createdAt
             )
@@ -323,7 +329,9 @@ open class ConfigBundleService(
                 roleMapping = idp.roleMapping,
                 claimMappings = idp.claimMappings,
                 callbackUrl = idp.callbackUrl,
-                createdAt = idp.createdAt
+                createdAt = java.time.ZoneId.systemDefault().rules.getOffset(idp.createdAt).let { offset ->
+                    idp.createdAt.toInstant(offset)
+                }
             )
         }
     }
@@ -337,7 +345,11 @@ open class ConfigBundleService(
                 clientSecretMasked = true,
                 cloudRegion = falcon.cloudRegion,
                 isActive = falcon.isActive,
-                createdAt = falcon.createdAt
+                createdAt = falcon.createdAt?.let { dt ->
+                    java.time.ZoneId.systemDefault().rules.getOffset(dt).let { offset ->
+                        dt.toInstant(offset)
+                    }
+                }
             )
         }
     }
@@ -351,7 +363,9 @@ open class ConfigBundleService(
                 expiresAt = key.expiresAt,
                 notes = key.notes,
                 isActive = key.isActive,
-                createdAt = key.createdAt
+                createdAt = java.time.ZoneId.systemDefault().rules.getOffset(key.createdAt).let { offset ->
+                    key.createdAt.toInstant(offset)
+                }
             )
         }
     }
@@ -372,7 +386,7 @@ open class ConfigBundleService(
 
         workgroups.forEach { dto ->
             try {
-                val existing = workgroupRepository.findByName(dto.name)
+                val existing = workgroupRepository.findByNameIgnoreCase(dto.name)
                 if (existing.isPresent) {
                     if (options.skipExisting) {
                         skipped++
@@ -381,7 +395,7 @@ open class ConfigBundleService(
                     } else if (options.updateExisting) {
                         val workgroup = existing.get()
                         workgroup.description = dto.description
-                        workgroup.criticality = dto.criticality
+                        workgroup.criticality = dto.criticality?.let { Criticality.valueOf(it) } ?: Criticality.MEDIUM
                         workgroupRepository.save(workgroup)
                         imported++
                         createdWorkgroups[dto.name] = workgroup
@@ -392,7 +406,7 @@ open class ConfigBundleService(
                     val workgroup = Workgroup(
                         name = dto.name,
                         description = dto.description,
-                        criticality = dto.criticality
+                        criticality = dto.criticality?.let { Criticality.valueOf(it) } ?: Criticality.MEDIUM
                     )
                     workgroupRepository.save(workgroup)
                     imported++
@@ -456,7 +470,7 @@ open class ConfigBundleService(
                     // Set roles
                     dto.roles.forEach { roleName ->
                         try {
-                            val role = Role.valueOf(roleName)
+                            val role = User.Role.valueOf(roleName)
                             user.roles.add(role)
                         } catch (e: IllegalArgumentException) {
                             warnings.add("Unknown role '$roleName' for user '${dto.username}'")
@@ -465,7 +479,7 @@ open class ConfigBundleService(
 
                     // Set workgroups
                     dto.workgroupNames.forEach { workgroupName ->
-                        val workgroup = workgroupRepository.findByName(workgroupName)
+                        val workgroup = workgroupRepository.findByNameIgnoreCase(workgroupName)
                         if (workgroup.isPresent) {
                             user.workgroups.add(workgroup.get())
                         } else {
@@ -520,8 +534,8 @@ open class ConfigBundleService(
                     // Link to user if exists
                     if (dto.userEmail != null) {
                         val user = userRepository.findByEmail(dto.userEmail)
-                        if (user != null) {
-                            mapping.user = user
+                        if (user.isPresent) {
+                            mapping.user = user.get()
                         } else {
                             warnings.add("User '${dto.userEmail}' not found for mapping '${dto.email}'")
                         }
@@ -550,8 +564,8 @@ open class ConfigBundleService(
 
         providers.forEach { dto ->
             try {
-                val existing = identityProviderRepository.findByName(dto.name)
-                if (existing != null) {
+                val existing = identityProviderRepository.findByNameIgnoreCase(dto.name)
+                if (existing.isPresent) {
                     if (options.skipExisting) {
                         skipped++
                         warnings.add("Identity provider '${dto.name}' already exists, skipping")
@@ -572,7 +586,7 @@ open class ConfigBundleService(
 
                     val provider = IdentityProvider(
                         name = dto.name,
-                        type = IdentityProviderType.valueOf(dto.type),
+                        type = IdentityProvider.ProviderType.valueOf(dto.type),
                         clientId = dto.clientId,
                         clientSecret = clientSecret ?: "",
                         tenantId = dto.tenantId,
@@ -585,8 +599,8 @@ open class ConfigBundleService(
                         scopes = dto.scopes,
                         enabled = dto.enabled,
                         autoProvision = dto.autoProvision,
-                        buttonText = dto.buttonText,
-                        buttonColor = dto.buttonColor,
+                        buttonText = dto.buttonText ?: "",
+                        buttonColor = dto.buttonColor ?: "#007bff",
                         roleMapping = dto.roleMapping,
                         claimMappings = dto.claimMappings,
                         callbackUrl = dto.callbackUrl
@@ -622,7 +636,7 @@ open class ConfigBundleService(
                         skipped++
                         warnings.add("Falcon configuration already exists, skipping")
                     } else if (options.updateExisting) {
-                        // Update existing config
+                        // Update existing config - delete old and create new due to immutable data class
                         val clientId = if (dto.clientIdMasked) {
                             providedSecrets["FalconConfig:default:client_id"] ?: run {
                                 errors.add("Falcon client ID not provided")
@@ -641,11 +655,14 @@ open class ConfigBundleService(
                             dto.clientSecretEncrypted // This would need decryption in real implementation
                         }
 
-                        existing.clientId = clientId ?: ""
-                        existing.clientSecret = clientSecret ?: ""
-                        existing.cloudRegion = dto.cloudRegion
-                        existing.isActive = dto.isActive
-                        falconConfigRepository.save(existing)
+                        falconConfigRepository.delete(existing)
+                        val updated = FalconConfig(
+                            clientId = clientId ?: "",
+                            clientSecret = clientSecret ?: "",
+                            cloudRegion = dto.cloudRegion,
+                            isActive = dto.isActive
+                        )
+                        falconConfigRepository.save(updated)
                         imported++
                     } else {
                         errors.add("Falcon configuration already exists")
@@ -701,14 +718,16 @@ open class ConfigBundleService(
         keys.forEach { dto ->
             try {
                 // Find user by email
-                val user = userRepository.findByEmail(dto.userEmail)
-                if (user == null) {
+                val userOptional = userRepository.findByEmail(dto.userEmail)
+                if (!userOptional.isPresent) {
                     errors.add("User '${dto.userEmail}' not found for MCP API key '${dto.name}'")
                     return@forEach
                 }
 
+                val user = userOptional.get()
+
                 // Check if key with same name exists for this user
-                val existing = mcpApiKeyRepository.findByUserIdAndName(user.id, dto.name)
+                val existing = mcpApiKeyRepository.findByUserId(user.id!!).find { it.name == dto.name }
                 if (existing != null) {
                     if (options.skipExisting) {
                         skipped++
@@ -726,7 +745,7 @@ open class ConfigBundleService(
                         keyId = keyId,
                         keyHash = keyHash,
                         name = dto.name,
-                        userId = user.id,
+                        userId = user.id!!,
                         permissions = dto.permissions,
                         expiresAt = dto.expiresAt,
                         notes = dto.notes,

@@ -1,12 +1,19 @@
 package com.secman.service
 
-import com.secman.domain.*
+import com.secman.domain.Criticality
+import com.secman.domain.FalconConfig
+import com.secman.domain.IdentityProvider
+import com.secman.domain.McpApiKey
+import com.secman.domain.User
+import com.secman.domain.UserMapping
+import com.secman.domain.Workgroup
 import com.secman.dto.*
 import com.secman.repository.*
 import io.micronaut.security.authentication.Authentication
 import io.micronaut.test.annotation.MockBean
 import io.micronaut.test.extensions.junit5.annotation.MicronautTest
 import jakarta.inject.Inject
+import jakarta.persistence.EntityManager
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -15,7 +22,6 @@ import org.springframework.security.crypto.password.PasswordEncoder
 import java.time.Instant
 import java.time.LocalDateTime
 import java.util.Optional
-import javax.persistence.EntityManager
 
 @MicronautTest
 class ConfigBundleServiceTest {
@@ -90,7 +96,7 @@ class ConfigBundleServiceTest {
             passwordHash = "hashed",
             mfaEnabled = false
         ).apply {
-            roles.add(Role.USER)
+            roles.add(User.Role.USER)
             createdAt = Instant.now()
         }
 
@@ -98,7 +104,7 @@ class ConfigBundleServiceTest {
             id = 1L,
             name = "TestGroup",
             description = "Test workgroup",
-            criticality = "HIGH"
+            criticality = Criticality.HIGH
         ).apply {
             createdAt = Instant.now()
         }
@@ -106,7 +112,7 @@ class ConfigBundleServiceTest {
         val testIdp = IdentityProvider(
             id = 1L,
             name = "TestIDP",
-            type = IdentityProviderType.OIDC,
+            type = IdentityProvider.ProviderType.OIDC,
             clientId = "client123",
             clientSecret = "secret123",
             enabled = true
@@ -290,7 +296,7 @@ class ConfigBundleServiceTest {
         `when`(userRepository.findByEmail(anyString())).thenReturn(null)
         `when`(userRepository.findAll()).thenReturn(listOf(
             User(id = 1L, username = "admin", email = "admin@example.com", passwordHash = "hash").apply {
-                roles.add(Role.ADMIN)
+                roles.add(User.Role.ADMIN)
             }
         ))
 
