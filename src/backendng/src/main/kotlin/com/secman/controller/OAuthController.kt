@@ -60,8 +60,7 @@ class OAuthController(
     @Get("/authorize/{providerId}")
     fun authorize(@PathVariable providerId: Long, request: HttpRequest<*>): HttpResponse<*> {
         return try {
-            val baseUrl = getBaseUrl(request)
-            val authUrl = oauthService.buildAuthorizationUrl(providerId, baseUrl)
+            val authUrl = oauthService.buildAuthorizationUrl(providerId, backendBaseUrl)
             
             if (authUrl != null) {
                 logger.info("Redirecting to OAuth provider {} with URL: {}", providerId, authUrl)
@@ -201,29 +200,5 @@ class OAuthController(
         val code: String,
         val state: String
     )
-
-    private fun getBaseUrl(request: HttpRequest<*>): String {
-		// Check X-Forwarded headers first (for reverse proxy/load balancer scenarios)
-		val forwardedHost = request.headers.get("X-Forwarded-Host")
-		if (forwardedHost != null) {
-            val scheme = request.headers.get("X-Forwarded-Proto") ?: "http"
-			logger.info("getBaseUrl: Found forwarded-host header returning URL from ForwardHost field $scheme://$forwardedHost")
-
-			return "$scheme://$forwardedHost"
-        }
-
-        // Fall back to Host header
-        val hostHeader = request.headers.get("Host")
-        if (hostHeader != null) {
-            val scheme = request.headers.get("X-Forwarded-Proto") ?: "http"
-			logger.info("getBaseUrl: Found host header returning URL from hostheader field $scheme://$hostHeader")
-
-			return "$scheme://$hostHeader"
-        }
-
-        // Finally, use configured backend base URL
-        logger.info("getBaseUrl: Found not matching http headers returning configured backend base URL $backendBaseUrl")
-		return backendBaseUrl
-    }
 
 }

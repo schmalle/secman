@@ -60,13 +60,13 @@ open class OAuthService(
 
 		val providerOpt = identityProviderRepository.findById(providerId)
         if (!providerOpt.isPresent) {
-            logger.error("Identity provider not found: {}", providerId)
+            //logger.error("Identity provider not found: {}", providerId)
             return null
         }
 
         val provider = providerOpt.get()
         if (!provider.enabled) {
-            logger.error("Identity provider is disabled: {}", provider.name)
+            //logger.error("Identity provider is disabled: {}", provider.name)
             return null
         }
 

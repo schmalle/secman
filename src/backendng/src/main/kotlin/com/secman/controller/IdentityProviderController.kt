@@ -1,5 +1,6 @@
 package com.secman.controller
 
+import com.secman.config.AppConfig
 import com.secman.domain.IdentityProvider
 import com.secman.repository.IdentityProviderRepository
 import io.micronaut.http.HttpResponse
@@ -17,9 +18,10 @@ import java.time.LocalDateTime
 @Secured(SecurityRule.IS_AUTHENTICATED)
 @ExecuteOn(TaskExecutors.BLOCKING)
 open class IdentityProviderController(
-    private val identityProviderRepository: IdentityProviderRepository
+    private val identityProviderRepository: IdentityProviderRepository,
+    private val appConfig: AppConfig
 ) {
-    
+
     private val logger = LoggerFactory.getLogger(IdentityProviderController::class.java)
 
     @Serdeable
@@ -140,6 +142,7 @@ open class IdentityProviderController(
     @Secured(SecurityRule.IS_ANONYMOUS)
     fun getEnabledProviders(): HttpResponse<*> {
         return try {
+            logger.info("BACKEND_BASE_URL: {}", appConfig.backend.baseUrl)
             val providers = identityProviderRepository.findByEnabled(true)
             logger.info("Retrieved {} enabled identity providers", providers.size)
             HttpResponse.ok(providers)
