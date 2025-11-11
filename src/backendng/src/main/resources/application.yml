@@ -184,6 +184,6 @@ logger:
 
 app:
   backend:
-    base-url: ${BACKEND_BASE_URL:http://localhost:8080}
+    base-url: ${BACKEND_BASE_URL:https://secman.covestro.net}
   frontend:
     base-url: ${FRONTEND_URL:http://localhost:4321}
