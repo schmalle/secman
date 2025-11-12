@@ -27,10 +27,8 @@ export interface UpdateMappingRequest {
   ipAddress?: string | null;
 }
 
-const API_BASE = 'http://localhost:8080/api';
-
 export async function getUserMappings(userId: number): Promise<UserMapping[]> {
-  const response = await authenticatedFetch(`${API_BASE}/users/${userId}/mappings`);
+  const response = await authenticatedFetch(`/api/users/${userId}/mappings`);
   if (!response.ok) {
     throw new Error('Failed to fetch mappings');
   }
@@ -39,7 +37,7 @@ export async function getUserMappings(userId: number): Promise<UserMapping[]> {
 
 export async function createMapping(userId: number, data: CreateMappingRequest): Promise<UserMapping> {
   try {
-    const response = await csrfPost(`${API_BASE}/users/${userId}/mappings`, data);
+    const response = await csrfPost(`/api/users/${userId}/mappings`, data);
     return response.data;
   } catch (error: any) {
     if (error.response?.data?.error) {
@@ -54,7 +52,7 @@ export async function updateMapping(
   mappingId: number,
   data: UpdateMappingRequest
 ): Promise<UserMapping> {
-  const response = await authenticatedPut(`${API_BASE}/users/${userId}/mappings/${mappingId}`, data);
+  const response = await authenticatedPut(`/api/users/${userId}/mappings/${mappingId}`, data);
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
     throw new Error(errorData.error || 'Failed to update mapping');
@@ -64,7 +62,7 @@ export async function updateMapping(
 
 export async function deleteMapping(userId: number, mappingId: number): Promise<void> {
   try {
-    await csrfDelete(`${API_BASE}/users/${userId}/mappings/${mappingId}`);
+    await csrfDelete(`/api/users/${userId}/mappings/${mappingId}`);
   } catch (error: any) {
     throw new Error('Failed to delete mapping');
   }
