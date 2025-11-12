@@ -90,10 +90,7 @@ const UserManagement = () => {
 
     useEffect(() => {
         let isMounted = true; // Track if component is mounted
-        const listener = async () => {
-            console.log("userLoaded event received in UserManagement");
-            await checkAdminAndFetchUsers();
-        };
+        let timeoutId: NodeJS.Timeout | null = null;
 
         const checkAdminAndFetchUsers = async () => {
             console.log("Checking admin status and fetching users...");
@@ -115,42 +112,36 @@ const UserManagement = () => {
             } else {
                 // User data not yet available, listener should handle it.
                 console.log("User data not yet available, waiting for event...");
+                if (isMounted) {
+                    setIsLoading(false);
+                    setIsAdmin(false);
+                }
             }
         };
 
-        // Check immediately if user data is already loaded
-        if (window.currentUser) {
-            checkAdminAndFetchUsers();
-        } else {
-            // If not loaded, add the event listener
-            console.log("Adding userLoaded listener for UserManagement");
-            window.addEventListener('userLoaded', listener);
+        // Always check immediately on mount (like Sidebar does)
+        checkAdminAndFetchUsers();
 
-            // Set a timeout as a fallback
-            const timeoutId = setTimeout(() => {
-                if (isLoading && isMounted) { // If still loading after timeout
-                    console.log("Timeout waiting for user data in UserManagement");
-                    setIsLoading(false);
-                    setIsAdmin(false); // Assume not admin if data never arrived
-                    if (!window.currentUser) { // Set error only if user data is truly missing
-                         setError("Could not verify user permissions.");
-                    }
-                }
-            }, 3000); // Wait 3 seconds
+        // Always add event listener for future updates
+        console.log("Adding userLoaded listener for UserManagement");
+        window.addEventListener('userLoaded', checkAdminAndFetchUsers);
 
-            // Cleanup for timeout
-            return () => {
-                clearTimeout(timeoutId);
-                window.removeEventListener('userLoaded', listener);
-                isMounted = false;
-                console.log("UserManagement component unmounting - listener removed");
-            };
-        }
-        
-        // Cleanup for case where user data was immediately available
+        // Set a timeout as a fallback for slow browsers (like IE)
+        timeoutId = setTimeout(() => {
+            if (isMounted && !window.currentUser) {
+                console.log("Timeout waiting for user data in UserManagement");
+                setIsLoading(false);
+                setIsAdmin(false);
+                setError("Could not verify user permissions.");
+            }
+        }, 5000); // Wait 5 seconds (increased from 3 for slow browsers)
+
+        // Cleanup
         return () => {
-             isMounted = false;
-             console.log("UserManagement component unmounting");
+            if (timeoutId) clearTimeout(timeoutId);
+            window.removeEventListener('userLoaded', checkAdminAndFetchUsers);
+            isMounted = false;
+            console.log("UserManagement component unmounting - listener removed");
         };
 
     }, []); // Run only once on mount
