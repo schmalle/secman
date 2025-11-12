@@ -1,4 +1,4 @@
-import { authenticatedPost } from '../utils/auth';
+import { authenticatedPost, getAuthToken } from '../utils/auth';
 
 /**
  * Service for User Mapping API operations
@@ -140,7 +140,7 @@ export function getSampleFileUrl(): string {
  * @throws Error if download fails or user is not authenticated
  */
 export async function downloadCSVTemplate(): Promise<void> {
-  const token = sessionStorage.getItem('token');
+  const token = getAuthToken();
   if (!token) {
     throw new Error('Not authenticated');
   }
@@ -203,7 +203,7 @@ export async function listUserMappings(
   email?: string,
   domain?: string
 ): Promise<UserMappingListResponse> {
-  const token = sessionStorage.getItem('token');
+  const token = getAuthToken();
   if (!token) {
     throw new Error('Not authenticated');
   }
@@ -243,7 +243,7 @@ export async function listUserMappings(
  * @returns User mapping details
  */
 export async function getUserMapping(id: number): Promise<UserMapping> {
-  const token = sessionStorage.getItem('token');
+  const token = getAuthToken();
   if (!token) {
     throw new Error('Not authenticated');
   }
@@ -279,7 +279,7 @@ export async function getUserMapping(id: number): Promise<UserMapping> {
  * @returns Created user mapping
  */
 export async function createUserMapping(request: CreateUserMappingRequest): Promise<UserMapping> {
-  const token = sessionStorage.getItem('token');
+  const token = getAuthToken();
   if (!token) {
     throw new Error('Not authenticated');
   }
@@ -319,7 +319,7 @@ export async function createUserMapping(request: CreateUserMappingRequest): Prom
  * @returns Updated user mapping
  */
 export async function updateUserMapping(id: number, request: UpdateUserMappingRequest): Promise<UserMapping> {
-  const token = sessionStorage.getItem('token');
+  const token = getAuthToken();
   if (!token) {
     throw new Error('Not authenticated');
   }
@@ -359,7 +359,7 @@ export async function updateUserMapping(id: number, request: UpdateUserMappingRe
  * @param id Mapping ID
  */
 export async function deleteUserMapping(id: number): Promise<void> {
-  const token = sessionStorage.getItem('token');
+  const token = getAuthToken();
   if (!token) {
     throw new Error('Not authenticated');
   }
@@ -401,7 +401,7 @@ export async function listCurrentMappings(
   page: number = 0,
   size: number = 20
 ): Promise<UserMappingListResponse> {
-  const token = sessionStorage.getItem('token');
+  const token = getAuthToken();
   if (!token) {
     throw new Error('Not authenticated');
   }
@@ -446,7 +446,7 @@ export async function listAppliedHistory(
   page: number = 0,
   size: number = 20
 ): Promise<UserMappingListResponse> {
-  const token = sessionStorage.getItem('token');
+  const token = getAuthToken();
   if (!token) {
     throw new Error('Not authenticated');
   }

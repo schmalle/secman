@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { getAuthToken } from '../utils/auth';
 
 const API_BASE_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:8080';
 
@@ -38,7 +39,7 @@ export interface PagedResponse<T> {
  * Get current user's notification preferences
  */
 export async function getUserPreferences(): Promise<NotificationPreference> {
-  const token = sessionStorage.getItem('token');
+  const token = getAuthToken();
   const response = await axios.get(`${API_BASE_URL}/api/notification-preferences`, {
     headers: {
       Authorization: `Bearer ${token}`
@@ -53,7 +54,7 @@ export async function getUserPreferences(): Promise<NotificationPreference> {
 export async function updateUserPreferences(
   request: UpdatePreferenceRequest
 ): Promise<NotificationPreference> {
-  const token = sessionStorage.getItem('token');
+  const token = getAuthToken();
   const response = await axios.put(
     `${API_BASE_URL}/api/notification-preferences`,
     request,
@@ -80,7 +81,7 @@ export async function listNotificationLogs(params: {
   endDate?: string;
   sort?: string;
 }): Promise<PagedResponse<NotificationLog>> {
-  const token = sessionStorage.getItem('token');
+  const token = getAuthToken();
   const response = await axios.get(`${API_BASE_URL}/api/notification-logs`, {
     params,
     headers: {
@@ -101,7 +102,7 @@ export async function exportNotificationLogs(params: {
   startDate?: string;
   endDate?: string;
 }): Promise<void> {
-  const token = sessionStorage.getItem('token');
+  const token = getAuthToken();
 
   // Use axios to properly send Authorization header with the request
   const response = await axios.get(`${API_BASE_URL}/api/notification-logs/export`, {
