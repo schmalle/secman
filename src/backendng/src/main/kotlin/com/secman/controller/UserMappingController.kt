@@ -339,7 +339,7 @@ class UserMappingController(
      * Extract user ID from authentication object
      */
     private fun getUserIdFromAuthentication(authentication: Authentication): Long {
-        val userId = authentication.attributes["id"]
+        val userId = authentication.attributes["userId"]
         return when (userId) {
             is Long -> userId
             is Int -> userId.toLong()
