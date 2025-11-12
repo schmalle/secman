@@ -56,7 +56,7 @@ open class OAuthService(
      */
     open fun buildAuthorizationUrl(providerId: Long, baseUrl: String): String? {
 
-		logger.debug("OAuthService.buildAuthorizationUrl: Starting ... ")
+		logger.info("OAuthService.buildAuthorizationUrl: Starting for providerId={}, baseUrl={}", providerId, baseUrl)
 
 		val providerOpt = identityProviderRepository.findById(providerId)
         if (!providerOpt.isPresent) {
@@ -81,8 +81,8 @@ open class OAuthService(
 			it.isNotBlank()
 		} ?: "$baseUrl/oauth/callback"
 
-		logger.debug("OAuthService.buildAuthorizationUrl: Provider callback URL: {}", provider.callbackUrl)
-		logger.debug("OAuthService.buildAuthorizationUrl: Constructed RedirectUri: {}", redirectUri)
+		logger.info("OAuthService.buildAuthorizationUrl: Provider callback URL: {}", provider.callbackUrl)
+		logger.info("OAuthService.buildAuthorizationUrl: Constructed RedirectUri: {}", redirectUri)
 
         // Save state (this will commit immediately since method is not @Transactional)
         val oauthState = OAuthState(
