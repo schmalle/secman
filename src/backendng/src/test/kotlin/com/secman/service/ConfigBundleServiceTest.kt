@@ -77,6 +77,9 @@ class ConfigBundleServiceTest {
     @Inject
     lateinit var passwordEncoder: PasswordEncoder
 
+    @Inject
+    lateinit var auditLogService: AuditLogService
+
     private lateinit var authentication: Authentication
 
     @BeforeEach
@@ -116,9 +119,7 @@ class ConfigBundleServiceTest {
             clientId = "client123",
             clientSecret = "secret123",
             enabled = true
-        ).apply {
-            createdAt = Instant.now()
-        }
+        )
 
         val testFalconConfig = FalconConfig(
             id = 1L,
