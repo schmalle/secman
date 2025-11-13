@@ -60,10 +60,19 @@ class OAuthController(
     @Get("/authorize/{providerId}")
     fun authorize(@PathVariable providerId: Long, request: HttpRequest<*>): HttpResponse<*> {
         return try {
+            logger.info("=== OAuth Authorization Request START ===")
+            logger.info("Provider ID: {}", providerId)
+            logger.info("Backend Base URL (from config): {}", backendBaseUrl)
+            logger.info("Request URI: {}", request.uri)
+            logger.info("Request remote address: {}", request.remoteAddress.toString())
+
             val authUrl = oauthService.buildAuthorizationUrl(providerId, backendBaseUrl)
-            
+
             if (authUrl != null) {
+                logger.info("Successfully built authorization URL")
+                logger.info("Full authorization URL: {}", authUrl)
                 logger.info("Redirecting to OAuth provider {} with URL: {}", providerId, authUrl)
+                logger.info("=== OAuth Authorization Request END ===")
                 HttpResponse.redirect(URI.create(authUrl))
             } else {
                 logger.error("Failed to build authorization URL for provider: {}", providerId)

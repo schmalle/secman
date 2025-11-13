@@ -22,18 +22,36 @@ const Login = () => {
 
     const fetchExternalProviders = async () => {
         try {
+            console.log('[OAuth] Fetching enabled identity providers from /api/identity-providers/enabled');
             const response = await fetch('/api/identity-providers/enabled');
             if (response.ok) {
                 const data = await response.json();
+                console.log('[OAuth] Successfully fetched identity providers:', data);
+                console.log('[OAuth] Number of providers:', data.length);
                 setExternalProviders(data);
+            } else {
+                console.error('[OAuth] Failed to fetch providers, status:', response.status);
             }
         } catch (err) {
-            console.error('Failed to load external providers:', err);
+            console.error('[OAuth] Failed to load external providers:', err);
         }
     };
 
     const handleExternalLogin = (providerId: number) => {
-        window.location.href = `/oauth/authorize/${providerId}`;
+        const provider = externalProviders.find(p => p.id === providerId);
+        console.log('=== OAuth Login Flow START ===');
+        console.log('[OAuth] Provider ID:', providerId);
+        console.log('[OAuth] Provider details:', provider);
+        console.log('[OAuth] Current window.location.origin:', window.location.origin);
+        console.log('[OAuth] Current window.location.href:', window.location.href);
+
+        const redirectUrl = `/oauth/authorize/${providerId}`;
+        console.log('[OAuth] Redirecting to:', redirectUrl);
+        console.log('[OAuth] Full URL will be:', window.location.origin + redirectUrl);
+        console.log('[OAuth] Browser will now redirect to backend OAuth endpoint');
+        console.log('=== OAuth Login Flow - Browser Redirect ===');
+
+        window.location.href = redirectUrl;
     };
 
     const handleSubmit = async (e: FormEvent) => {
