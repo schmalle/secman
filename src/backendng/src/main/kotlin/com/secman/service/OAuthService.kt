@@ -50,10 +50,11 @@ open class OAuthService(
     /**
      * Build authorization URL for OAuth provider
      *
-     * Note: This method is NOT @Transactional to ensure the OAuth state is committed
-     * to the database immediately before redirecting to the OAuth provider. This prevents
-     * race conditions where the callback arrives before the transaction commits.
+     * Note: This method MUST be @Transactional to ensure the OAuth state is committed
+     * to the database before redirecting to the OAuth provider. Without a transaction,
+     * the save() call may not commit, causing "state not found" errors on callback.
      */
+    @Transactional
     open fun buildAuthorizationUrl(providerId: Long, baseUrl: String): String? {
 
 		logger.info("OAuthService.buildAuthorizationUrl: Starting for providerId={}, baseUrl={}", providerId, baseUrl)
