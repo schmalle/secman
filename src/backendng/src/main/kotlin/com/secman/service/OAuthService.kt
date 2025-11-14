@@ -293,8 +293,9 @@ open class OAuthService(
             logger.info("Client ID: {}", provider.clientId)
             logger.info("Code (first 20 chars): {}", code.take(20) + "...")
 
-            // For GitHub, the token endpoint expects form data
-            val formData = "client_id=${URLEncoder.encode(provider.clientId, StandardCharsets.UTF_8)}" +
+            // Build OAuth 2.0 token exchange request (required by Microsoft, GitHub, etc.)
+            val formData = "grant_type=authorization_code" +
+                    "&client_id=${URLEncoder.encode(provider.clientId, StandardCharsets.UTF_8)}" +
                     "&client_secret=${URLEncoder.encode(provider.clientSecret ?: "", StandardCharsets.UTF_8)}" +
                     "&code=${URLEncoder.encode(code, StandardCharsets.UTF_8)}" +
                     "&redirect_uri=${URLEncoder.encode(redirectUri, StandardCharsets.UTF_8)}"
