@@ -177,6 +177,14 @@ open class OAuthService(
                     return CallbackResult.Error("Invalid ID token received from ${provider.name}.")
                 }
 
+                // Log all claims for debugging
+                logger.info("=== ID Token Claims Debug ===")
+                logger.info("Provider: {}", provider.name)
+                logger.info("All claims in ID token:")
+                idTokenClaims.forEach { (key, value) ->
+                    logger.info("  {}: {}", key, value)
+                }
+
                 // Validate tenant ID for Microsoft providers
                 if (!validateTenantId(provider, idTokenClaims)) {
                     oauthStateRepository.deleteByStateToken(state)
@@ -190,9 +198,19 @@ open class OAuthService(
 
                 // Extract email from ID token
                 emailFromIdToken = extractEmailFromIdToken(idTokenClaims)
+                logger.info("Extracted email from ID token: {}", emailFromIdToken ?: "NULL")
 
                 // For Microsoft providers, email is required
                 if (provider.name.contains("Microsoft", ignoreCase = true) && emailFromIdToken.isNullOrBlank()) {
+                    logger.error("Email extraction failed - checking available claims for email-like values...")
+                    idTokenClaims.forEach { (key, value) ->
+                        if (key.contains("mail", ignoreCase = true) ||
+                            key.contains("email", ignoreCase = true) ||
+                            key.contains("upn", ignoreCase = true) ||
+                            key.contains("unique_name", ignoreCase = true)) {
+                            logger.error("  Found potential email claim: {} = {}", key, value)
+                        }
+                    }
                     oauthStateRepository.deleteByStateToken(state)
                     return CallbackResult.Error("Email address is required but not provided by ${provider.name}. Please ensure your account has an email address configured.")
                 }
@@ -470,18 +488,35 @@ open class OAuthService(
      * Extract email from ID token claims
      */
     private fun extractEmailFromIdToken(idTokenClaims: Map<String, Any>): String? {
-        // Try 'email' claim first
+        // Try 'email' claim first (standard OIDC claim)
         val email = idTokenClaims["email"] as? String
         if (!email.isNullOrBlank()) {
+            logger.debug("Found email in 'email' claim: {}", email)
             return email
         }
 
-        // Try 'preferred_username' as fallback (often contains email for Microsoft)
+        // Try 'preferred_username' (Microsoft often uses this for email)
         val preferredUsername = idTokenClaims["preferred_username"] as? String
         if (!preferredUsername.isNullOrBlank() && preferredUsername.contains("@")) {
+            logger.debug("Found email in 'preferred_username' claim: {}", preferredUsername)
             return preferredUsername
         }
 
+        // Try 'upn' (User Principal Name - Microsoft specific)
+        val upn = idTokenClaims["upn"] as? String
+        if (!upn.isNullOrBlank() && upn.contains("@")) {
+            logger.debug("Found email in 'upn' claim: {}", upn)
+            return upn
+        }
+
+        // Try 'unique_name' (older Microsoft format)
+        val uniqueName = idTokenClaims["unique_name"] as? String
+        if (!uniqueName.isNullOrBlank() && uniqueName.contains("@")) {
+            logger.debug("Found email in 'unique_name' claim: {}", uniqueName)
+            return uniqueName
+        }
+
+        logger.warn("Could not find email in any known claim (email, preferred_username, upn, unique_name)")
         return null
     }
 
