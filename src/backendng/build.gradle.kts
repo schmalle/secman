@@ -118,6 +118,7 @@ dependencies {
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     testImplementation("io.micronaut:micronaut-http-client")
+    testRuntimeOnly("com.h2database:h2")
 }
 
 application {
