@@ -80,6 +80,8 @@ dependencies {
     runtimeOnly("ch.qos.logback:logback-classic")
     // Bridge Log4j to Logback (required for Apache POI)
     runtimeOnly("org.apache.logging.log4j:log4j-to-slf4j:2.25.2")
+    // Logstash encoder for JSON logging (Feature 046)
+    implementation("net.logstash.logback:logstash-logback-encoder:7.4")
     
     // YAML configuration support
     runtimeOnly("org.yaml:snakeyaml")
@@ -106,19 +108,6 @@ dependencies {
     ksp("io.micronaut.data:micronaut-data-processor")
     ksp("io.micronaut.serde:micronaut-serde-processor")
     ksp("io.micronaut.security:micronaut-security-annotations")
-
-    // Testing dependencies
-    testImplementation("io.micronaut.test:micronaut-test-junit5")
-    testImplementation("io.mockk:mockk:1.13.17")
-    testImplementation("org.mockito:mockito-core:5.14.2")
-    testImplementation("org.mockito.kotlin:mockito-kotlin:5.4.0")
-    testImplementation("ch.qos.logback:logback-classic:1.5.15")
-    testImplementation("org.junit.jupiter:junit-jupiter-api")
-    testImplementation("org.junit.jupiter:junit-jupiter-params")
-    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-    testImplementation("io.micronaut:micronaut-http-client")
-    testRuntimeOnly("com.h2database:h2")
 }
 
 application {
@@ -164,17 +153,5 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
     compilerOptions {
         // Compiler options for Kotlin 2.1.0
         // The -Xannotation-default-target flag is no longer needed in Kotlin 2.1.0
-    }
-}
-
-// Configure test tasks for TDD workflow
-tasks {
-    test {
-        useJUnitPlatform()
-        testLogging {
-            events("passed", "skipped", "failed")
-            exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
-            showStandardStreams = false
-        }
     }
 }

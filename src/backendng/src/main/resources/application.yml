@@ -1,6 +1,11 @@
 micronaut:
   application:
     name: secman-backend-ng
+  executors:
+    email:
+      type: scheduled
+      core-pool-size: 2
+      maximum-pool-size: 5
   server:
     port: 8080
     max-request-size: 20MB

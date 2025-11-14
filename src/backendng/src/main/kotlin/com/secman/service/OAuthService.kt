@@ -15,10 +15,12 @@ import io.micronaut.http.client.HttpClient
 import io.micronaut.http.client.annotation.Client
 import io.micronaut.http.client.exceptions.HttpClientResponseException
 import io.micronaut.security.token.generator.TokenGenerator
+import io.micronaut.scheduling.annotation.Async
 import io.micronaut.transaction.annotation.Transactional
 import jakarta.inject.Singleton
 import jakarta.persistence.EntityManager
 import org.slf4j.LoggerFactory
+import org.slf4j.MDC
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
@@ -36,11 +38,13 @@ open class OAuthService(
     private val adminNotificationService: AdminNotificationService,
     private val eventPublisher: ApplicationEventPublisher<UserCreatedEvent>,
     private val entityManager: EntityManager,
+    private val emailSender: EmailSender,
     @Client("\${oauth.http-client.url:https://api.github.com}") private val githubApiClient: HttpClient,
     @Client private val genericHttpClient: HttpClient
 ) {
-    
+
     private val logger = LoggerFactory.getLogger(OAuthService::class.java)
+    private val securityLog = LoggerFactory.getLogger("security.audit")
     private val passwordEncoder = BCryptPasswordEncoder()
 
     /**
@@ -251,6 +255,9 @@ open class OAuthService(
                     // Log but don't fail OAuth flow if notification fails
                     logger.error("Failed to send OAuth user notification: ${e.message}", e)
                 }
+            } else {
+                // Feature 046: Log existing user login (roles preserved per FR-006)
+                logger.info("Existing OIDC user logged in: ${userInfo.email}, roles preserved")
             }
 
             // Generate JWT token
@@ -526,6 +533,7 @@ open class OAuthService(
         // Try to find existing user by email
         val existingUserOpt = userRepository.findByEmail(email)
         if (existingUserOpt.isPresent) {
+            // FR-006: Existing users preserve their roles; no modification on re-authentication
             return UserCreationResult(user = existingUserOpt.get(), isNewUser = false)
         }
 
@@ -535,19 +543,12 @@ open class OAuthService(
             return null
         }
 
-        // Create new user
+        // Create new user with default roles (Feature 046: OIDC Default Roles)
         val username = userInfo.login ?: userInfo.email.substringBefore("@")
-        val name = userInfo.name ?: username
-
-        val newUser = User(
-            username = username,
-            email = email,
-            passwordHash = passwordEncoder.encode(UUID.randomUUID().toString()), // Random password for OAuth users
-            roles = mutableSetOf(User.Role.USER) // Default role
-        )
 
         return try {
-            val savedUser = userRepository.save(newUser)
+            // FR-001, FR-002: Create user with USER and VULN roles via transactional method
+            val savedUser = createNewOidcUser(email, username, provider.name)
             logger.info("Created new user via OAuth: username={}, email={}, provider={}",
                 savedUser.username, savedUser.email, provider.name)
 
@@ -559,6 +560,131 @@ open class OAuthService(
             logger.error("Failed to create user: {}", e.message, e)
             null
         }
+    }
+
+    /**
+     * Audit log role assignment for new OIDC users
+     * Feature: 046-oidc-default-roles (FR-010, NFR-001)
+     *
+     * Logs role assignment events to security.audit logger with structured JSON format.
+     * Uses MDC (Mapped Diagnostic Context) for contextual information.
+     *
+     * @param user The newly created user
+     * @param roles Comma-separated list of assigned roles
+     * @param idpName Identity provider name
+     */
+    private fun auditRoleAssignment(user: User, roles: String, idpName: String) {
+        try {
+            MDC.put("event", "role_assignment")
+            MDC.put("user_id", user.id.toString())
+            MDC.put("username", user.username)
+            MDC.put("email", user.email)
+            MDC.put("roles", roles)
+            MDC.put("identity_provider", idpName)
+
+            securityLog.info("OIDC user created with default roles")
+
+            MDC.clear()
+        } catch (e: Exception) {
+            // Log errors but don't propagate (audit logging is best-effort)
+            logger.error("Failed to write audit log for user ${user.username}", e)
+        }
+    }
+
+    /**
+     * Send email notification to all administrators about new OIDC user creation
+     * Feature: 046-oidc-default-roles (FR-011, FR-012, NFR-003, NFR-004)
+     *
+     * Executes asynchronously to avoid blocking user creation transaction.
+     * Email delivery is best-effort - failures are logged but do not prevent user creation.
+     *
+     * @param user The newly created user
+     * @param idpName Identity provider name
+     */
+    @Async
+    open fun notifyAdminsNewUser(user: User, idpName: String) {
+        try {
+            logger.info("Sending admin notifications for new user: ${user.username}")
+
+            val admins = userRepository.findByRolesContaining(User.Role.ADMIN)
+            if (admins.isEmpty()) {
+                logger.warn("No administrators found to notify about new user: ${user.username}")
+                return
+            }
+
+            admins.forEach { admin ->
+                try {
+                    val htmlBody = """
+                        <!DOCTYPE html>
+                        <html>
+                        <head><meta charset="UTF-8"></head>
+                        <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                            <h2 style="color: #0066cc;">New OIDC User Created</h2>
+                            <p>A new user has been automatically created via OIDC authentication:</p>
+                            <table style="border-collapse: collapse; width: 100%; margin: 20px 0;">
+                                <tr><td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Username:</td><td style="padding: 8px; border: 1px solid #ddd;">${user.username}</td></tr>
+                                <tr><td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Email:</td><td style="padding: 8px; border: 1px solid #ddd;">${user.email}</td></tr>
+                                <tr><td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Roles:</td><td style="padding: 8px; border: 1px solid #ddd;">${user.roles.joinToString(", ")}</td></tr>
+                                <tr><td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Provider:</td><td style="padding: 8px; border: 1px solid #ddd;">$idpName</td></tr>
+                            </table>
+                            <p style="color: #666; font-size: 12px;">This is an automated notification from Secman.</p>
+                        </body>
+                        </html>
+                    """.trimIndent()
+
+                    emailSender.sendEmail(EmailSender.EmailMessage(
+                        to = admin.email,
+                        subject = "New OIDC User Created - ${user.username}",
+                        htmlBody = htmlBody,
+                        plainTextBody = "New OIDC user created: ${user.username} (${user.email}) with roles: ${user.roles.joinToString(", ")} via provider: $idpName"
+                    ))
+                    logger.debug("Admin notification sent to: ${admin.email}")
+                } catch (e: Exception) {
+                    // FR-012: Log but don't propagate (best-effort delivery)
+                    logger.error("Failed to send notification to admin ${admin.email}", e)
+                }
+            }
+        } catch (e: Exception) {
+            // NFR-004: Log failures for troubleshooting
+            logger.error("Failed to send admin notifications for user ${user.username}", e)
+            // Don't rethrow - email is best-effort
+        }
+    }
+
+    /**
+     * Create new OIDC user with default roles (USER, VULN)
+     * Feature: 046-oidc-default-roles (FR-001, FR-002, FR-009)
+     *
+     * Transaction-wrapped method ensures atomicity: user creation + role assignment succeed together or rollback entirely.
+     * Includes audit logging and async admin notifications.
+     *
+     * @param email User email from OIDC claims
+     * @param username Derived from email or OIDC login claim
+     * @param idpName Identity provider name for audit trail
+     * @return Saved User entity with default roles
+     */
+    @Transactional
+    open fun createNewOidcUser(email: String, username: String, idpName: String): User {
+        logger.info("Creating new OIDC user: $email from provider: $idpName")
+
+        // FR-004, FR-005: Default roles applied before identity provider role mappings; consistent across all providers
+        val newUser = User(
+            username = username,
+            email = email,
+            passwordHash = passwordEncoder.encode(UUID.randomUUID().toString()), // Random password for OIDC users
+            roles = mutableSetOf(User.Role.USER, User.Role.VULN) // FR-001, FR-002: Default roles
+        )
+
+        val savedUser = userRepository.save(newUser)
+        logger.info("User created successfully: ${savedUser.id}, username: ${savedUser.username}")
+
+        // FR-010: Audit logging
+        auditRoleAssignment(savedUser, "USER,VULN", idpName)
+
+        // FR-011: Notify admins (async, best-effort per FR-012)
+        notifyAdminsNewUser(savedUser, idpName)
+
+        return savedUser
     }
 
     /**

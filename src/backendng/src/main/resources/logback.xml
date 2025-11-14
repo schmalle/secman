@@ -20,6 +20,22 @@
         <appender-ref ref="STDOUT"/>
     </logger>
 
+    <!-- Security Audit Logger (Feature: 046-oidc-default-roles) -->
+    <!-- Logs role assignment events for OIDC users with JSON format -->
+    <!-- Constitutional Compliance: Principle I (Security-First) - NFR-001, NFR-002 -->
+    <appender name="SECURITY_AUDIT" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>logs/security-audit.log</file>
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder" />
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>logs/security-audit.%d{yyyy-MM-dd}.log.gz</fileNamePattern>
+            <maxHistory>90</maxHistory> <!-- 90-day retention per NFR-002 -->
+        </rollingPolicy>
+    </appender>
+
+    <logger name="security.audit" level="INFO" additivity="false">
+        <appender-ref ref="SECURITY_AUDIT"/>
+    </logger>
+
     <root level="INFO">
         <appender-ref ref="STDOUT"/>
     </root>

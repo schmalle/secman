@@ -1,6 +1,7 @@
 package com.secman.repository
 
 import com.secman.domain.User
+import io.micronaut.data.annotation.Query
 import io.micronaut.data.annotation.Repository
 import io.micronaut.data.jpa.repository.JpaRepository
 import java.util.*
@@ -46,7 +47,27 @@ interface UserRepository : JpaRepository<User, Long> {
     // since Asset has manualCreator/scanUploader FKs but User doesn't have reverse relationships.
     // Validation moved to UserDeletionValidator service.
 
-    // Note: For admin user queries, use findAll() and filter in service layer
+    // Role-Based Queries - Feature 046
+
+    /**
+     * Find users with a specific role
+     * Used for admin notifications when new OIDC users are created
+     *
+     * Related to: Feature 046 (OIDC Default Roles) - FR-011
+     *
+     * @param role The role to search for (e.g., User.Role.ADMIN)
+     * @return List of users with the specified role
+     *
+     * Note: Queries ElementCollection; may not be as efficient as direct column query
+     * For better performance with large user bases, consider denormalizing roles to User table
+     */
+    @Query("""
+        SELECT DISTINCT u FROM User u
+        JOIN u.roles r
+        WHERE r = :role
+    """)
+    fun findByRolesContaining(role: User.Role): List<User>
+
+    // Note: For other admin user queries, use findAll() and filter in service layer
     // (e.g., users.filter { it.hasRole(Role.ADMIN) })
-    // Micronaut Data doesn't support querying on ElementCollection easily
 }
