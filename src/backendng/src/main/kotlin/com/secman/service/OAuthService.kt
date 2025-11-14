@@ -13,6 +13,7 @@ import io.micronaut.context.event.ApplicationEventPublisher
 import io.micronaut.http.HttpRequest
 import io.micronaut.http.client.HttpClient
 import io.micronaut.http.client.annotation.Client
+import io.micronaut.http.client.exceptions.HttpClientResponseException
 import io.micronaut.security.token.generator.TokenGenerator
 import io.micronaut.transaction.annotation.Transactional
 import jakarta.inject.Singleton
@@ -285,21 +286,27 @@ open class OAuthService(
                 tokenUrl = tokenUrl.replace("{tenantId}", tenantId)
             }
 
-            logger.debug("Exchanging code for token with provider: {}", provider.name)
-            
+            logger.info("=== Token Exchange Debug ===")
+            logger.info("Provider: {}", provider.name)
+            logger.info("Token URL: {}", tokenUrl)
+            logger.info("Redirect URI being sent: {}", redirectUri)
+            logger.info("Client ID: {}", provider.clientId)
+            logger.info("Code (first 20 chars): {}", code.take(20) + "...")
+
             // For GitHub, the token endpoint expects form data
             val formData = "client_id=${URLEncoder.encode(provider.clientId, StandardCharsets.UTF_8)}" +
                     "&client_secret=${URLEncoder.encode(provider.clientSecret ?: "", StandardCharsets.UTF_8)}" +
                     "&code=${URLEncoder.encode(code, StandardCharsets.UTF_8)}" +
                     "&redirect_uri=${URLEncoder.encode(redirectUri, StandardCharsets.UTF_8)}"
-            
-            
+
+            logger.info("Sending token exchange request...")
             val response = genericHttpClient.toBlocking().retrieve(
                 HttpRequest.POST(tokenUrl, formData)
                     .header("Accept", "application/json")
                     .header("Content-Type", "application/x-www-form-urlencoded"),
                 String::class.java
             )
+            logger.info("Received token response")
             
             
             // Parse JSON response
@@ -332,9 +339,29 @@ open class OAuthService(
                 scope = scope,
                 idToken = idToken
             )
-            
+
         } catch (e: Exception) {
-            logger.error("Failed to exchange code for token: {}", e.message, e)
+            logger.error("=== Token Exchange Failed ===")
+            logger.error("Provider: {}", provider.name)
+            logger.error("Error type: {}", e.javaClass.simpleName)
+            logger.error("Error message: {}", e.message)
+
+            // If it's an HTTP error, try to get the response body
+            if (e is io.micronaut.http.client.exceptions.HttpClientResponseException) {
+                val errorBody = e.response.getBody(String::class.java).orElse("No error body")
+                logger.error("HTTP Status: {}", e.status)
+                logger.error("Error response body: {}", errorBody)
+
+                // Try to parse error for better diagnostics
+                try {
+                    val errorData = parseJsonResponse(errorBody)
+                    logger.error("Parsed error: {}", errorData)
+                } catch (parseEx: Exception) {
+                    logger.error("Could not parse error response as JSON")
+                }
+            }
+
+            logger.error("Full stack trace:", e)
             null
         }
     }
