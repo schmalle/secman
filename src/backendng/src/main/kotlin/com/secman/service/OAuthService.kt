@@ -16,6 +16,7 @@ import io.micronaut.http.client.annotation.Client
 import io.micronaut.security.token.generator.TokenGenerator
 import io.micronaut.transaction.annotation.Transactional
 import jakarta.inject.Singleton
+import jakarta.persistence.EntityManager
 import org.slf4j.LoggerFactory
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
 import java.net.URLEncoder
@@ -33,6 +34,7 @@ open class OAuthService(
     private val microsoftErrorMapper: MicrosoftErrorMapper,
     private val adminNotificationService: AdminNotificationService,
     private val eventPublisher: ApplicationEventPublisher<UserCreatedEvent>,
+    private val entityManager: EntityManager,
     @Client("\${oauth.http-client.url:https://api.github.com}") private val githubApiClient: HttpClient,
     @Client private val genericHttpClient: HttpClient
 ) {
@@ -85,23 +87,26 @@ open class OAuthService(
 		logger.info("OAuthService.buildAuthorizationUrl: Provider callback URL: {}", provider.callbackUrl)
 		logger.info("OAuthService.buildAuthorizationUrl: Constructed RedirectUri: {}", redirectUri)
 
-        // Save state (this will commit immediately since method is not @Transactional)
+        // Save state and flush immediately to ensure it's persisted before redirect
         val oauthState = OAuthState(
             stateToken = state,
             providerId = providerId,
             redirectUri = redirectUri
         )
         val savedState = oauthStateRepository.save(oauthState)
-        logger.info("Saved OAuth state with token {} (first 10 chars) for provider {}, expires at {}",
+
+        // Force immediate flush to database - critical for OAuth flow!
+        entityManager.flush()
+        logger.info("Saved and flushed OAuth state with token {} (first 10 chars) for provider {}, expires at {}",
             state.take(10) + "...", providerId, savedState.expiresAt)
 
         // Verify state was actually saved
         val verificationState = oauthStateRepository.findByStateToken(state)
         if (!verificationState.isPresent) {
-            logger.error("Failed to verify saved OAuth state - state not found after save!")
+            logger.error("Failed to verify saved OAuth state - state not found after save and flush!")
             return null
         }
-        logger.debug("Verified OAuth state exists in database before redirect")
+        logger.info("Verified OAuth state exists in database after flush - ready for redirect")
 
         // Build authorization URL - replace {tenantId} placeholder for Microsoft providers
         var authUrl = provider.authorizationUrl ?: return null
