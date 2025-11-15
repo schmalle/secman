@@ -85,6 +85,15 @@
 - **UI**: Templates for Google, Microsoft, GitHub
 - **Auto-provisioning**: Creates new users on first OAuth login
 
+### MaintenanceBanner (Feature 047)
+- **Fields**: id, message(1-2000 chars), startTime(Instant/UTC), endTime(Instant/UTC), createdBy(User FK), createdAt(Instant)
+- **Indexes**: idx_start_time, idx_end_time, idx_created_at (performance optimization for time-range queries)
+- **Methods**: isActive(), getStatus() → ACTIVE/UPCOMING/EXPIRED
+- **Security**: XSS prevention via OWASP Java HTML Sanitizer (sanitizes message field)
+- **Display**: Stacks multiple active banners vertically (newest first) on start/login page
+- **Access**: ADMIN CRUD only; GET /active is public (visible to all users)
+- **Timezone**: Admin enters local time (datetime-local input), stored as UTC, displayed in user's local timezone
+
 ## Unified Access Control
 
 Users access assets if **ANY** is true:
@@ -118,6 +127,8 @@ Users access assets if **ANY** is true:
 **User Mappings (042)**: GET /api/user-mappings/{current,applied-history} (ADMIN), POST/PUT/DELETE /api/user-mappings[/{id}] (ADMIN)
 
 **Identity Providers (041)**: GET /api/identity-providers[/{enabled,{id}}], POST/PUT/DELETE /api/identity-providers[/{id}], POST /api/identity-providers/{id}/test
+
+**Maintenance Banners (047)**: GET /api/maintenance-banners/active (PUBLIC), GET /api/maintenance-banners (ADMIN), GET/POST /api/maintenance-banners[/{id}] (ADMIN), PUT/DELETE /api/maintenance-banners/{id} (ADMIN)
 
 ## Development
 
@@ -196,6 +207,8 @@ eventPublisher.publishEvent(UserCreatedEvent(savedUser, "MANUAL"))
 ## Active Technologies
 - Kotlin 2.2.21 / Java 21 + Micronaut 4.10, Hibernate JPA, JavaMail API (SMTP) (046-oidc-default-roles)
 - MariaDB 12 with Hibernate auto-migration (046-oidc-default-roles)
+- Kotlin 2.2.21 / Java 21 (backend), JavaScript/TypeScript (frontend with Astro 5.15 + React 19) + Micronaut 4.10, Hibernate JPA (backend), Astro 5.15, React 19, Bootstrap 5.3 (frontend), Axios (API client) (047-maintenance-popup)
+- MariaDB 12 (MaintenanceBanner entity with JPA) (047-maintenance-popup)
 
 ## Recent Changes
 - 046-oidc-default-roles: Added Kotlin 2.2.21 / Java 21 + Micronaut 4.10, Hibernate JPA, JavaMail API (SMTP)

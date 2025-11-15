@@ -1,0 +1,31 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import MaintenanceBannerManager from '../../components/admin/MaintenanceBannerManager';
+---
+
+<Layout title="Admin - Maintenance Banners">
+    <div class="container-fluid mt-4">
+        <div class="row">
+            <div class="col-12">
+                <h2 class="mb-4">
+                    <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>
+                    Maintenance Banner Management
+                </h2>
+                <p class="text-muted">
+                    Create and manage maintenance notifications that appear on the start/login page.
+                    Banners are time-based and visible to all users during the configured time window.
+                </p>
+            </div>
+        </div>
+
+        <!-- Combined Form + List Component (React island) -->
+        <MaintenanceBannerManager client:load />
+
+        <div class="mt-4">
+            <a href="/admin" class="btn btn-secondary">
+                <i class="bi bi-arrow-left me-2"></i>
+                Back to Admin
+            </a>
+        </div>
+    </div>
+</Layout>

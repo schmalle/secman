@@ -226,6 +226,21 @@ const AdminPage = () => {
                         </div>
                     </div>
                 </div>
+
+                <div className="col-md-4 mb-3">
+                    <div className="card">
+                        <div className="card-body">
+                            <h5 className="card-title">
+                                <i className="bi bi-exclamation-triangle-fill text-warning me-2"></i>
+                                Maintenance Banners
+                            </h5>
+                            <p className="card-text">Create and schedule maintenance notifications displayed on the login page.</p>
+                            <a href="/admin/maintenance-banners" className="btn btn-primary">
+                                Manage Banners
+                            </a>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     );

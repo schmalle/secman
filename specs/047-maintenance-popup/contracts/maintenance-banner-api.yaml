@@ -1,0 +1,479 @@
+openapi: 3.0.3
+info:
+  title: Maintenance Banner API
+  version: 1.0.0
+  description: |
+    API for managing maintenance banners displayed on the start/login page.
+
+    ## Features
+    - Create, read, update, delete maintenance banners (Admin only)
+    - Get currently active banners (Public)
+    - Time-based banner activation/deactivation
+    - Multiple concurrent banners support
+
+    ## Security
+    - Admin endpoints require `ADMIN` role
+    - Public endpoints require no authentication
+  contact:
+    name: SecMan Development Team
+
+servers:
+  - url: http://localhost:8080/api
+    description: Local development server
+  - url: https://secman.example.com/api
+    description: Production server
+
+tags:
+  - name: Public
+    description: Publicly accessible endpoints (no authentication required)
+  - name: Admin
+    description: Admin-only endpoints (requires ADMIN role)
+
+paths:
+  /maintenance-banners/active:
+    get:
+      tags:
+        - Public
+      summary: Get currently active maintenance banners
+      description: |
+        Returns all maintenance banners that are currently active based on their time range.
+        No authentication required. Used by the frontend to display banners on the start/login page.
+      operationId: getActiveBanners
+      responses:
+        '200':
+          description: List of active banners (may be empty)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MaintenanceBannerResponse'
+              examples:
+                multipleActive:
+                  summary: Multiple active banners
+                  value:
+                    - id: 1
+                      message: "System maintenance in progress. Some features may be temporarily unavailable."
+                      startTime: "2025-11-15T20:00:00Z"
+                      endTime: "2025-11-15T23:00:00Z"
+                      createdAt: "2025-11-15T18:00:00Z"
+                      createdByUsername: "admin"
+                      status: "ACTIVE"
+                      isActive: true
+                    - id: 2
+                      message: "Database backup running. Performance may be slower than usual."
+                      startTime: "2025-11-15T21:00:00Z"
+                      endTime: "2025-11-15T22:00:00Z"
+                      createdAt: "2025-11-15T20:30:00Z"
+                      createdByUsername: "admin"
+                      status: "ACTIVE"
+                      isActive: true
+                noActive:
+                  summary: No active banners
+                  value: []
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /maintenance-banners:
+    get:
+      tags:
+        - Admin
+      summary: Get all maintenance banners
+      description: |
+        Returns all maintenance banners (active, upcoming, and expired) ordered by creation time (newest first).
+        Requires ADMIN role.
+      operationId: getAllBanners
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of all banners
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MaintenanceBannerResponse'
+        '401':
+          description: Unauthorized - Missing or invalid JWT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - User does not have ADMIN role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      tags:
+        - Admin
+      summary: Create a new maintenance banner
+      description: |
+        Creates a new maintenance banner with the specified message and time range.
+        Requires ADMIN role.
+      operationId: createBanner
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MaintenanceBannerRequest'
+            examples:
+              scheduledMaintenance:
+                summary: Scheduled maintenance
+                value:
+                  message: "Scheduled maintenance on November 16th from 2-4 AM UTC. System will be unavailable."
+                  startTime: "2025-11-16T02:00:00Z"
+                  endTime: "2025-11-16T04:00:00Z"
+              immediateMaintenance:
+                summary: Immediate maintenance
+                value:
+                  message: "Emergency maintenance in progress. Please save your work."
+                  startTime: "2025-11-15T21:00:00Z"
+                  endTime: "2025-11-15T23:00:00Z"
+      responses:
+        '201':
+          description: Banner created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MaintenanceBannerResponse'
+        '400':
+          description: Bad request - Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                endBeforeStart:
+                  summary: End time before start time
+                  value:
+                    status: 400
+                    error: "Bad Request"
+                    message: "End time must be after start time"
+                    path: "/api/maintenance-banners"
+                messageTooLong:
+                  summary: Message exceeds max length
+                  value:
+                    status: 400
+                    error: "Bad Request"
+                    message: "Message must be between 1 and 2000 characters"
+                    path: "/api/maintenance-banners"
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - User does not have ADMIN role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /maintenance-banners/{id}:
+    get:
+      tags:
+        - Admin
+      summary: Get a specific maintenance banner by ID
+      description: Returns a single maintenance banner. Requires ADMIN role.
+      operationId: getBannerById
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Banner ID
+          schema:
+            type: integer
+            format: int64
+            example: 1
+      responses:
+        '200':
+          description: Banner found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MaintenanceBannerResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Banner not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: 404
+                error: "Not Found"
+                message: "Maintenance banner with ID 999 not found"
+                path: "/api/maintenance-banners/999"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      tags:
+        - Admin
+      summary: Update an existing maintenance banner
+      description: |
+        Updates an existing maintenance banner's message and/or time range.
+        Requires ADMIN role.
+      operationId: updateBanner
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Banner ID
+          schema:
+            type: integer
+            format: int64
+            example: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MaintenanceBannerRequest'
+            example:
+              message: "Maintenance window extended to 5 AM UTC. Apologies for the inconvenience."
+              startTime: "2025-11-16T02:00:00Z"
+              endTime: "2025-11-16T05:00:00Z"
+      responses:
+        '200':
+          description: Banner updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MaintenanceBannerResponse'
+        '400':
+          description: Bad request - Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Banner not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags:
+        - Admin
+      summary: Delete a maintenance banner
+      description: |
+        Permanently deletes a maintenance banner. This action cannot be undone.
+        Requires ADMIN role.
+      operationId: deleteBanner
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Banner ID
+          schema:
+            type: integer
+            format: int64
+            example: 1
+      responses:
+        '204':
+          description: Banner deleted successfully (no content)
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Banner not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token stored in sessionStorage
+
+  schemas:
+    MaintenanceBannerRequest:
+      type: object
+      required:
+        - message
+        - startTime
+        - endTime
+      properties:
+        message:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          description: Maintenance message text (plain text, will be sanitized)
+          example: "System maintenance in progress. Some features may be temporarily unavailable."
+        startTime:
+          type: string
+          format: date-time
+          description: UTC timestamp when banner becomes active (ISO-8601 format)
+          example: "2025-11-15T20:00:00Z"
+        endTime:
+          type: string
+          format: date-time
+          description: UTC timestamp when banner deactivates (ISO-8601 format)
+          example: "2025-11-15T23:00:00Z"
+
+    MaintenanceBannerResponse:
+      type: object
+      required:
+        - id
+        - message
+        - startTime
+        - endTime
+        - createdAt
+        - status
+        - isActive
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Unique banner identifier
+          example: 1
+        message:
+          type: string
+          description: Maintenance message text (sanitized)
+          example: "System maintenance in progress. Some features may be temporarily unavailable."
+        startTime:
+          type: string
+          format: date-time
+          description: UTC timestamp when banner becomes active
+          example: "2025-11-15T20:00:00Z"
+        endTime:
+          type: string
+          format: date-time
+          description: UTC timestamp when banner deactivates
+          example: "2025-11-15T23:00:00Z"
+        createdAt:
+          type: string
+          format: date-time
+          description: UTC timestamp when banner was created
+          example: "2025-11-15T18:00:00Z"
+        createdByUsername:
+          type: string
+          nullable: true
+          description: Username of admin who created the banner (null if user deleted)
+          example: "admin"
+        status:
+          type: string
+          enum:
+            - UPCOMING
+            - ACTIVE
+            - EXPIRED
+          description: Current status based on time range
+          example: "ACTIVE"
+        isActive:
+          type: boolean
+          description: True if banner should currently display
+          example: true
+
+    ErrorResponse:
+      type: object
+      required:
+        - status
+        - error
+        - message
+        - path
+      properties:
+        status:
+          type: integer
+          description: HTTP status code
+          example: 400
+        error:
+          type: string
+          description: HTTP status text
+          example: "Bad Request"
+        message:
+          type: string
+          description: Human-readable error message
+          example: "End time must be after start time"
+        path:
+          type: string
+          description: Request path that caused the error
+          example: "/api/maintenance-banners"
+        timestamp:
+          type: string
+          format: date-time
+          description: Timestamp when error occurred
+          example: "2025-11-15T21:30:00Z"

@@ -1,8 +1,13 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import Welcome from '../components/Welcome.astro';
+import MaintenanceBanner from '../components/MaintenanceBanner';
+import '../styles/maintenance-banner.css';
 ---
 
 <Layout title="SecMan - Security Management System">
+    <!-- Maintenance Banner (Feature 047) - Displays active maintenance notifications -->
+    <MaintenanceBanner client:load />
+
     <Welcome />
 </Layout>

@@ -47,7 +47,10 @@ dependencies {
     // Validation
     implementation("io.micronaut.validation:micronaut-validation")
     implementation("jakarta.validation:jakarta.validation-api")
-    
+
+    // XSS Prevention - Feature 047
+    implementation("com.googlecode.owasp-java-html-sanitizer:owasp-java-html-sanitizer:20220608.1")
+
     // Email
     implementation("io.micronaut.email:micronaut-email-javamail")
     implementation("org.eclipse.angus:angus-mail:2.0.5")
