@@ -1,0 +1,142 @@
+/**
+ * Maintenance Banner Styles
+ * Feature 047: Maintenance Popup Banner
+ *
+ * Design requirements:
+ * - Visually prominent (top of page, attention-drawing)
+ * - Responsive (320px mobile to 4K desktop)
+ * - Bootstrap 5.3 Alert component base
+ * - Stacks multiple banners vertically
+ * - Non-dismissible (always visible when active)
+ */
+
+/* Container for all maintenance banners */
+.maintenance-banners {
+  /* Sticky positioning keeps banners visible when scrolling */
+  position: sticky;
+  top: 0;
+  z-index: 1030; /* Above most content (Bootstrap modals are 1050+) */
+  width: 100%;
+}
+
+/* Individual banner alert styling */
+.maintenance-banners .alert {
+  margin-bottom: 0.5rem; /* Space between stacked banners */
+  border-radius: 0; /* Full-width appearance */
+  font-weight: 500; /* Medium weight for readability */
+  display: flex;
+  align-items: center;
+  gap: 0.5rem; /* Space between icon and text */
+
+  /* Remove Bootstrap's default dismissible padding */
+  padding: 1rem 1.25rem;
+
+  /* Enhanced visibility */
+  border-left-width: 4px;
+  border-left-style: solid;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Last banner in stack has no bottom margin */
+.maintenance-banners .alert:last-child {
+  margin-bottom: 0;
+}
+
+/* Warning color theme (Bootstrap alert-warning base) */
+.maintenance-banners .alert-warning {
+  background-color: #fff3cd;
+  border-color: #ffc107;
+  color: #856404;
+}
+
+.maintenance-banners .alert-warning .bi {
+  color: #ffc107; /* Icon matches border */
+}
+
+/* Icon styling */
+.maintenance-banners .bi {
+  font-size: 1.25rem;
+  flex-shrink: 0; /* Prevent icon from shrinking */
+}
+
+/* Message text */
+.maintenance-banners .banner-message {
+  flex: 1; /* Take remaining space */
+  word-break: break-word; /* Handle long words */
+}
+
+/* Responsive: Mobile devices (320px - 576px) */
+@media (max-width: 576px) {
+  .maintenance-banners .alert {
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
+  }
+
+  .maintenance-banners .bi {
+    font-size: 1.1rem;
+  }
+}
+
+/* Responsive: Tablet devices (577px - 768px) */
+@media (min-width: 577px) and (max-width: 768px) {
+  .maintenance-banners .alert {
+    font-size: 0.95rem;
+  }
+}
+
+/* Responsive: Desktop and up (769px+) */
+@media (min-width: 769px) {
+  .maintenance-banners .alert {
+    font-size: 1rem;
+  }
+}
+
+/* Responsive: Large desktop (1200px+) */
+@media (min-width: 1200px) {
+  .maintenance-banners .alert {
+    padding: 1.25rem 1.5rem;
+  }
+}
+
+/* Animation: Fade in when banner appears */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.maintenance-banners .alert {
+  animation: fadeIn 0.3s ease-in;
+}
+
+/* Accessibility: High contrast mode support */
+@media (prefers-contrast: high) {
+  .maintenance-banners .alert {
+    border-width: 2px;
+    font-weight: 600;
+  }
+}
+
+/* Accessibility: Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .maintenance-banners .alert {
+    animation: none;
+  }
+}
+
+/* Print styles: Show banners in print */
+@media print {
+  .maintenance-banners {
+    position: static;
+  }
+
+  .maintenance-banners .alert {
+    page-break-inside: avoid;
+    box-shadow: none;
+  }
+}
