@@ -32,10 +32,6 @@ The script will:
 - Execute the SQL script as MySQL root user
 - Provide status feedback and next steps
 
-### Other Scripts
-
-- `reset_database.sql` / `reset_database.sh` - Drop all tables (destructive)
-- `quick_reset.sh` - Quick table reset without confirmation prompts
 
 ## Database Configuration
 

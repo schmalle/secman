@@ -5,12 +5,9 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="94ada8b3-9f4e-473c-9fea-3bc9651b5bdd" name="Changes" comment="test change">
-      <change afterPath="$PROJECT_DIR$/scripts/install/Apache/host.conf" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/install/install.sh" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/install/db/install.sh" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/install/install.sql" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/install/db/install.sql" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/install/installdb.sh" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/install/db/installdb.sh" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/install/nginx.conf" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/install/nginx/nginx.conf" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/install/db/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/install/db/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/package-lock.json" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/package-lock.json" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
