@@ -192,3 +192,10 @@ eventPublisher.publishEvent(UserCreatedEvent(savedUser, "MANUAL"))
 
 ---
 *Last updated: 2025-11-09*
+
+## Active Technologies
+- Kotlin 2.2.21 / Java 21 + Micronaut 4.10, Hibernate JPA, JavaMail API (SMTP) (046-oidc-default-roles)
+- MariaDB 12 with Hibernate auto-migration (046-oidc-default-roles)
+
+## Recent Changes
+- 046-oidc-default-roles: Added Kotlin 2.2.21 / Java 21 + Micronaut 4.10, Hibernate JPA, JavaMail API (SMTP)
