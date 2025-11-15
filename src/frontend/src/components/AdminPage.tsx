@@ -21,29 +21,41 @@ const AdminPage = () => {
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
+        let timeoutId: NodeJS.Timeout | null = null;
+        let eventHandled = false;
+
         const checkAdminRole = () => {
             if (window.currentUser) {
                 setIsAdmin(window.currentUser.roles?.includes('ADMIN') ?? false);
                 setIsLoading(false);
             } else {
                 // If currentUser isn't loaded yet, wait for the event
-                window.addEventListener('userLoaded', () => {
-                     setIsAdmin(window.currentUser?.roles?.includes('ADMIN') ?? false);
-                     setIsLoading(false);
-                }, { once: true }); // Only listen once
+                const handleUserLoaded = () => {
+                    eventHandled = true;
+                    if (timeoutId) clearTimeout(timeoutId);
+                    setIsAdmin(window.currentUser?.roles?.includes('ADMIN') ?? false);
+                    setIsLoading(false);
+                };
+
+                window.addEventListener('userLoaded', handleUserLoaded, { once: true });
 
                 // Set a timeout in case the event never fires (e.g., user not logged in)
-                 setTimeout(() => {
-                    if (isLoading) { // If still loading after timeout
+                timeoutId = setTimeout(() => {
+                    if (!eventHandled) {
+                        window.removeEventListener('userLoaded', handleUserLoaded);
                         setIsLoading(false);
                         setIsAdmin(false); // Assume not admin if data never arrived
                     }
-                 }, 2000); // Wait 2 seconds
+                }, 5000); // Wait 5 seconds (increased for IE/Edge)
             }
         };
 
         checkAdminRole();
 
+        // Cleanup function
+        return () => {
+            if (timeoutId) clearTimeout(timeoutId);
+        };
     }, []); // Empty dependency array
 
     if (isLoading) {
