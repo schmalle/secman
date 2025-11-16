@@ -1,5 +1,6 @@
 # Build backend (IMPORTANT: Use shadowJar task to create executable JAR)
 git pull
+./gradlew :cli:shadowJar
 cd src/backendng
 ./gradlew clean shadowJar -x test
 # JAR will be created at: build/libs/backendng-0.1-all.jar
