@@ -60,6 +60,7 @@ const AssetManagement: React.FC = () => {
   const [nameFilter, setNameFilter] = useState<string>('');
   const [ipFilter, setIpFilter] = useState<string>('');
   const [ownerFilter, setOwnerFilter] = useState<string>('');
+  const [adDomainFilter, setAdDomainFilter] = useState<string>('');
   const [workgroupFilter, setWorkgroupFilter] = useState<string>('');
 
   // Bulk delete states (Feature 029 - User Story 1)
@@ -330,13 +331,14 @@ const AssetManagement: React.FC = () => {
       const nameMatch = !nameFilter || asset.name.toLowerCase().includes(nameFilter.toLowerCase());
       const ipMatch = !ipFilter || (asset.ip && asset.ip.toLowerCase().includes(ipFilter.toLowerCase()));
       const ownerMatch = !ownerFilter || asset.owner.toLowerCase().includes(ownerFilter.toLowerCase());
+      const adDomainMatch = !adDomainFilter || (asset.adDomain && asset.adDomain.toLowerCase().includes(adDomainFilter.toLowerCase()));
       const workgroupMatch = !workgroupFilter || (
         asset.workgroups && asset.workgroups.some(wg =>
           wg.name.toLowerCase().includes(workgroupFilter.toLowerCase())
         )
       );
 
-      return nameMatch && ipMatch && ownerMatch && workgroupMatch;
+      return nameMatch && ipMatch && ownerMatch && adDomainMatch && workgroupMatch;
     });
   };
 
@@ -597,6 +599,19 @@ const AssetManagement: React.FC = () => {
                   />
                 </div>
                 <div className="col-md-3">
+                  <label htmlFor="adDomainFilter" className="form-label">AD Domain</label>
+                  <input
+                    type="text"
+                    id="adDomainFilter"
+                    className="form-control"
+                    placeholder="Filter by domain..."
+                    value={adDomainFilter}
+                    onChange={(e) => setAdDomainFilter(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="row mt-2">
+                <div className="col-md-3">
                   <label htmlFor="workgroupFilter" className="form-label">Workgroups</label>
                   <input
                     type="text"
@@ -608,7 +623,7 @@ const AssetManagement: React.FC = () => {
                   />
                 </div>
               </div>
-              {(nameFilter || ipFilter || ownerFilter || workgroupFilter) && (
+              {(nameFilter || ipFilter || ownerFilter || adDomainFilter || workgroupFilter) && (
                 <div className="mt-2">
                   <button
                     className="btn btn-sm btn-outline-secondary"
@@ -616,6 +631,7 @@ const AssetManagement: React.FC = () => {
                       setNameFilter('');
                       setIpFilter('');
                       setOwnerFilter('');
+                      setAdDomainFilter('');
                       setWorkgroupFilter('');
                     }}
                   >

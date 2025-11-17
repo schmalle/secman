@@ -261,11 +261,14 @@ const Sidebar = () => {
                         </div>
                         {vulnMenuOpen && (
                             <ul className="list-unstyled ps-4">
-                                <li>
-                                    <a href="/vulnerabilities/current" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                        <i className="bi bi-list-ul me-2"></i> Vuln overview
-                                    </a>
-                                </li>
+                                {/* Vuln overview - ADMIN or SECCHAMPION only */}
+                                {(userRoles.includes('ADMIN') || userRoles.includes('SECCHAMPION')) && (
+                                    <li>
+                                        <a href="/vulnerabilities/current" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                            <i className="bi bi-list-ul me-2"></i> Vuln overview
+                                        </a>
+                                    </li>
+                                )}
                                 <li>
                                     <a href="/vulnerabilities/domain" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
                                         <i className="bi bi-globe me-2"></i> Domain vulns

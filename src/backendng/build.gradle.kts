@@ -111,6 +111,7 @@ dependencies {
     ksp("io.micronaut.data:micronaut-data-processor")
     ksp("io.micronaut.serde:micronaut-serde-processor")
     ksp("io.micronaut.security:micronaut-security-annotations")
+
 }
 
 application {
@@ -158,3 +159,4 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
         // The -Xannotation-default-target flag is no longer needed in Kotlin 2.1.0
     }
 }
+

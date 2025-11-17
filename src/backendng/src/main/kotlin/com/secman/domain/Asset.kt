@@ -171,7 +171,7 @@ data class Asset(
      * Vulnerabilities should be loaded explicitly via asset vulnerabilities endpoint.
      */
     @JsonIgnore
-    @OneToMany(mappedBy = "asset", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "asset", fetch = FetchType.LAZY)
     var vulnerabilities: MutableList<Vulnerability> = mutableListOf()
 ) {
     /**
