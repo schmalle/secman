@@ -19,80 +19,8 @@
 - **Metadata**: groups, cloudAccountId, cloudInstanceId, adDomain, osVersion
 - **Relations**: vulnerabilities, scanResults, workgroups, manualCreator, scanUploader
 
-### User
-- **Fields**: username, email, passwordHash, roles, workgroups
-- **Roles**: USER, ADMIN, VULN, RELEASE_MANAGER, SECCHAMPION
 
-### Vulnerability
-- **Fields**: asset(FK), vulnerabilityId(CVE), cvssSeverity, vulnerableProductVersions, daysOpen, scanTimestamp
-- **Relations**: ManyToOne Asset (cascade delete)
 
-### Workgroup
-- **Fields**: name, description, users(ManyToMany), assets(ManyToMany), criticality, parent(FK self-ref)
-- **Access**: ADMIN CRUD only
-- **Features**: Nested hierarchy, criticality inheritance
-
-### UserMapping (Feature 042 - Future Mappings)
-- **Fields**: email, awsAccountId(12 digits), domain, ipAddress, user(FK nullable), appliedAt(nullable)
-- **Import**: Excel/CSV with auto-delimiter detection
-- **Future Mappings**: user=null, appliedAt=null (applied via @EventListener @Async on user creation)
-- **UI**: "Current" (future+active) | "Applied History" tabs
-- **Access Control**: Grants asset access by AWS account or AD domain (see below)
-
-### VulnerabilityException
-- **Fields**: exceptionType(IP/PRODUCT), targetValue, expirationDate, reason
-- **Methods**: isActive(), matches()
-- **Access**: ADMIN, VULN
-
-### VulnerabilityExceptionRequest (Feature 031)
-- **Fields**: vulnerability, scope(SINGLE/CVE_PATTERN), status(PENDING→APPROVED/REJECTED/CANCELLED), autoApproved, reason(50-2048), expirationDate, requestedByUser, reviewedByUser
-- **SSE**: Real-time badge updates
-- **API**: 11 endpoints at /api/vulnerability-exception-requests/*
-
-### Release
-- **Fields**: version(semantic), name, status(DRAFT/PUBLISHED/ARCHIVED), createdBy
-- **Snapshots**: Immutable RequirementSnapshot entities
-- **Access**: ADMIN/RELEASE_MANAGER create/delete; all read
-
-### OutdatedAssetMaterializedView (Feature 034)
-- **Purpose**: Pre-calculated denormalized view of assets with overdue vulnerabilities
-- **Fields**: assetId, assetName, assetType, severityCounts (critical/high/medium/low), oldestVulnDays, workgroupIds, lastCalculatedAt
-- **Performance**: <2s query for 10K+ assets
-- **Refresh**: Manual (ADMIN button) + automatic (after CLI imports), SSE progress streaming
-
-### MaterializedViewRefreshJob (Feature 034)
-- **Purpose**: Track async refresh with progress monitoring
-- **Fields**: status(RUNNING/COMPLETED/FAILED), triggeredBy, progress%, timestamps, errorMessage
-- **Concurrency**: Single job at a time
-
-### NotificationPreference (Feature 035)
-- **Fields**: userId(unique), enableNewVulnNotifications(default false), lastVulnNotificationSentAt
-- **Access**: All authenticated users
-
-### AssetReminderState (Feature 035)
-- **Purpose**: Track 2-level escalation for outdated assets
-- **Fields**: assetId(unique), level(1-2), lastSentAt, outdatedSince
-- **Logic**: Level 1 → (7 days) → Level 2; duplicate prevention via lastSentAt.date check
-
-### NotificationLog (Feature 035)
-- **Purpose**: Audit trail for emails
-- **Fields**: assetId, assetName, ownerEmail, notificationType(OUTDATED_LEVEL1/LEVEL2/NEW_VULNERABILITY), sentAt, status(SENT/FAILED)
-- **Access**: ADMIN only, pagination, CSV export
-
-### IdentityProvider (Feature 041)
-- **Fields**: name, type(OIDC/SAML), clientId, clientSecret, tenantId, discoveryUrl, authorizationUrl, tokenUrl, userInfoUrl, issuer, jwksUri, scopes, enabled, autoProvision, buttonText, buttonColor, roleMapping, claimMappings, callbackUrl(nullable, max 512 chars)
-- **Callback URL**: If null → `${BACKEND_BASE_URL}/oauth/callback`; if set → custom URL (must start with https:// or http://localhost)
-- **UI**: Templates for Google, Microsoft, GitHub
-- **Auto-provisioning**: Creates new users on first OAuth login
-
-### MaintenanceBanner (Feature 047)
-- **Fields**: id, message(1-2000 chars), startTime(Instant/UTC), endTime(Instant/UTC), createdBy(User FK), createdAt(Instant)
-- **Indexes**: idx_start_time, idx_end_time, idx_created_at (performance optimization for time-range queries)
-- **Methods**: isActive(), getStatus() → ACTIVE/UPCOMING/EXPIRED
-- **Security**: XSS prevention via OWASP Java HTML Sanitizer (sanitizes message field)
-- **Display**: Stacks multiple active banners vertically (newest first) on start/login page
-- **Access**: ADMIN CRUD only; GET /active is public (visible to all users)
-- **Timezone**: Admin enters local time (datetime-local input), stored as UTC, displayed in user's local timezone
 
 ## Unified Access Control
 
@@ -104,7 +32,6 @@ Users access assets if **ANY** is true:
 5. Asset's cloudAccountId matches user's AWS mappings (UserMapping)
 6. Asset's adDomain matches user's domain mappings (case-insensitive, UserMapping)
 
-**Implementation**: `AssetFilterService.getAccessibleAssets()` at src/backendng/src/main/kotlin/com/secman/service/AssetFilterService.kt:84-101
 
 ## API Endpoints
 
@@ -144,6 +71,8 @@ Users access assets if **ANY** is true:
 2. API-First: RESTful, backward compatible
 3. RBAC: @Secured on endpoints, role checks in UI
 4. Schema Evolution: Hibernate auto-migration
+5. Never write testcases
+6. A feature is only complete. if gradlew build is showing no errors anymore
 
 ## Common Patterns
 
@@ -161,6 +90,22 @@ Users access assets if **ANY** is true:
 - Backend: `@Secured(SecurityRule.IS_AUTHENTICATED)`, `authentication.roles.contains("ADMIN"/"VULN")`
 - Frontend: JWT in sessionStorage → Axios headers
 
+### Duplicate Prevention Pattern (Feature 048)
+**Pattern**: Transactional replace for CrowdStrike vulnerability imports
+```kotlin
+@Transactional
+open fun importVulnerabilitiesForServer(batch: CrowdStrikeVulnerabilityBatchDto): ServerImportResult {
+    val (asset, isNewAsset) = findOrCreateAsset(batch)
+    // DELETE existing vulnerabilities
+    vulnerabilityRepository.deleteByAssetId(asset.id!!)
+    // INSERT new vulnerabilities
+    vulnerabilityRepository.saveAll(vulnerabilities)
+}
+```
+**Guarantees**: Idempotency, no duplicates, atomicity, remediation tracking
+**Documentation**: docs/CROWDSTRIKE_IMPORT.md
+**CRITICAL**: Asset.vulnerabilities MUST NOT use `cascade = [CascadeType.ALL]` or `orphanRemoval = true`. JPA cascade conflicts with manual delete-insert pattern, causing 99% data loss (e.g., 166,812 imported → 1,819 retained). Use explicit `vulnerabilityRepository.deleteByAssetId()` in service layer instead.
+
 ### Event-Driven Architecture (Feature 042)
 **Pattern**: @EventListener @Async for cross-service communication
 ```kotlin
@@ -171,28 +116,6 @@ eventPublisher.publishEvent(UserCreatedEvent(savedUser, "MANUAL"))
 **Use**: User creation → mapping application, Asset import → view refresh, Vuln detection → email
 **Performance**: <5ms event delivery, non-blocking
 
-### Materialized View Refresh (Feature 034)
-1. Create MaterializedViewRefreshJob (status=RUNNING)
-2. @Async: Truncate → Query source data → Batch process (1000 chunks) → Emit SSE progress (Sinks.Many.multicast())
-3. Mark COMPLETED/FAILED with metrics
-**Triggers**: Manual (ADMIN button) + Auto (CLI imports)
-**Performance**: <30s for 10K assets, <2s query time
-
-### Email Notification (Feature 035)
-1. CLI: `send-notifications` → NotificationCliService
-2. Query: Join OutdatedAssetMaterializedView + Asset + UserMapping
-3. Check AssetReminderState (level 1→2 after 7 days), skip if lastSentAt.date == today
-4. Aggregate by owner email, render Thymeleaf templates (Level 1: professional, Level 2: urgent)
-5. SMTP: EmailSender (3 retries, 1s delay), log to NotificationLog, update AssetReminderState
-6. Check NotificationPreference.enableNewVulnNotifications
-**Performance**: JavaMail API, 30s timeout
-
-### Last Admin Protection (Feature 037)
-**Purpose**: Prevent last ADMIN deletion/demotion
-1. UserDeletionValidator: Check admin count via `findAll().count { it.roles.contains(ADMIN) }`
-2. Block with 409 Conflict if last admin
-3. Return BlockingReference(entityType="SystemConstraint", role="last_admin", details="...")
-**Implementation**: UserController.kt:282-323 (delete), :227-258 (update), UserDeletionValidator.kt:32-211
 
 ## File Locations
 - Backend: `src/backendng/src/main/kotlin/com/secman/{domain,controller,service,repository}/`
@@ -209,6 +132,9 @@ eventPublisher.publishEvent(UserCreatedEvent(savedUser, "MANUAL"))
 - MariaDB 12 with Hibernate auto-migration (046-oidc-default-roles)
 - Kotlin 2.2.21 / Java 21 (backend), JavaScript/TypeScript (frontend with Astro 5.15 + React 19) + Micronaut 4.10, Hibernate JPA (backend), Astro 5.15, React 19, Bootstrap 5.3 (frontend), Axios (API client) (047-maintenance-popup)
 - MariaDB 12 (MaintenanceBanner entity with JPA) (047-maintenance-popup)
+- Kotlin 2.2.21 / Java 21 + Micronaut 4.10, Hibernate JPA, MariaDB 12 (048-prevent-duplicate-vulnerabilities)
+- MariaDB 12 (existing Vulnerability and Asset entities) (048-prevent-duplicate-vulnerabilities)
 
 ## Recent Changes
+- 048-prevent-duplicate-vulnerabilities: Fixed critical 99% data loss bug by removing JPA cascade from Asset.vulnerabilities; added transactional replace pattern for duplicate prevention, comprehensive documentation
 - 046-oidc-default-roles: Added Kotlin 2.2.21 / Java 21 + Micronaut 4.10, Hibernate JPA, JavaMail API (SMTP)

@@ -392,6 +392,31 @@ git commit -m "feat(scope): description"
 git push origin 024-feature-name
 ```
 
+
+## Documentation
+
+Comprehensive documentation is available for key system components:
+
+### CrowdStrike Vulnerability Import
+
+The CrowdStrike vulnerability import system uses a transactional replace pattern to prevent duplicate entries and ensure data consistency.
+
+**Key Features:**
+- **Duplicate Prevention**: Each (Asset, CVE) combination exists exactly once
+- **Idempotency**: Same import → same database state (no duplicates)
+- **Remediation Tracking**: Missing CVEs indicate patched vulnerabilities
+- **Transaction Safety**: All-or-nothing import with automatic rollback on failure
+
+**Documentation**: [docs/CROWDSTRIKE_IMPORT.md](docs/CROWDSTRIKE_IMPORT.md)
+
+This document explains:
+- How the transactional replace pattern works
+- Why it was chosen over alternatives (upsert, soft delete, differential sync)
+- Edge case handling (concurrent imports, duplicate hostnames, missing CVE IDs)
+- Performance characteristics and optimization notes
+- Usage examples and integration tests
+
+
 ## Contributing
 
 We welcome contributions! Please follow these guidelines:

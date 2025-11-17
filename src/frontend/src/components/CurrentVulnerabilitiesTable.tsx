@@ -26,13 +26,14 @@ import {
 } from '../services/vulnerabilityManagementService';
 import OverdueStatusBadge from './OverdueStatusBadge';
 import ExceptionRequestModal from './ExceptionRequestModal';
-import { isAdmin } from '../utils/auth';
+import { isAdmin, hasRole } from '../utils/auth';
 
 const CurrentVulnerabilitiesTable: React.FC = () => {
     const [paginatedResponse, setPaginatedResponse] = useState<PaginatedVulnerabilitiesResponse | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
+    const [hasAccess, setHasAccess] = useState(false);
 
     // Exception request modal state
     const [showRequestModal, setShowRequestModal] = useState(false);
@@ -62,12 +63,35 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
     const [sortField, setSortField] = useState<keyof CurrentVulnerability>('scanTimestamp');
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
+    // Check access on mount - ADMIN or SECCHAMPION only
     useEffect(() => {
-        fetchVulnerabilities();
-    }, [severityFilter, systemFilter, exceptionFilter, productFilter, adDomainFilter, currentPage]);
+        const checkAccess = () => {
+            const isAuthorized = hasRole('ADMIN') || hasRole('SECCHAMPION');
+            setHasAccess(isAuthorized);
+            setLoading(false);
+
+            if (!isAuthorized) {
+                setError('Access denied. This page is only accessible to ADMIN and SECCHAMPION roles.');
+            }
+        };
+
+        checkAccess();
+
+        // Listen for user data updates
+        window.addEventListener('userLoaded', checkAccess);
+        return () => window.removeEventListener('userLoaded', checkAccess);
+    }, []);
 
     useEffect(() => {
-        // Fetch available filter options on mount
+        if (hasAccess) {
+            fetchVulnerabilities();
+        }
+    }, [severityFilter, systemFilter, exceptionFilter, productFilter, adDomainFilter, currentPage, hasAccess]);
+
+    useEffect(() => {
+        // Fetch available filter options on mount (only if user has access)
+        if (!hasAccess) return;
+
         const fetchFilterOptions = async () => {
             try {
                 const [products, domains] = await Promise.all([
@@ -81,7 +105,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
             }
         };
         fetchFilterOptions();
-    }, []);
+    }, [hasAccess]);
 
     const fetchVulnerabilities = async () => {
         try {
