@@ -1,7 +1,11 @@
 import axios from 'axios';
 import { getAuthToken } from '../utils/auth';
 
-const API_BASE_URL = import.meta.env.PUBLIC_API_URL || 'http://localhost:8080';
+// API base URL - uses relative URLs in production to avoid CORS issues
+const API_BASE_URL = import.meta.env.PUBLIC_API_URL ||
+  (typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+    ? '' // Use relative URLs in production
+    : 'http://localhost:8080'); // Use localhost in development
 
 export interface NotificationPreference {
   id: number | null;

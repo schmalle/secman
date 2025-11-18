@@ -178,9 +178,17 @@ const UserManagement = () => {
             if (response.ok) {
                 const data: Workgroup[] = await response.json();
                 setWorkgroups(data);
+            } else if (response.status === 403) {
+                // User doesn't have ADMIN role
+                console.info('Workgroups not available for non-admin users');
+                setWorkgroups([]);
+            } else {
+                console.error('Failed to fetch workgroups, status:', response.status);
+                setWorkgroups([]);
             }
         } catch (err: any) {
             console.error("Error fetching workgroups:", err);
+            setWorkgroups([]);
         }
     };
 

@@ -98,9 +98,17 @@ const AssetManagement: React.FC = () => {
       if (response.ok) {
         const data: Workgroup[] = await response.json();
         setWorkgroups(data);
+      } else if (response.status === 403) {
+        // User doesn't have ADMIN role - workgroups filter not available
+        console.info('Workgroups filter not available for non-admin users');
+        setWorkgroups([]);
+      } else {
+        console.error('Failed to fetch workgroups, status:', response.status);
+        setWorkgroups([]);
       }
     } catch (err) {
       console.error('Failed to fetch workgroups:', err);
+      setWorkgroups([]);
     }
   };
 
