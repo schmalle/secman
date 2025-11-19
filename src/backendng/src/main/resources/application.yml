@@ -76,10 +76,21 @@ micronaut:
   # Cache configuration
   # Feature: 041-falcon-instance-lookup
   # Task: T034
+  # Feature: Database Structure Optimization - Extended caching
   caches:
     vulnerability_queries:
       maximum-size: 1000
       expire-after-write: 15m
+    # Database optimization caches (Feature: Database Structure Optimization)
+    asset_queries:
+      maximum-size: 500
+      expire-after-write: 10m
+    active_exceptions:
+      maximum-size: 100
+      expire-after-write: 5m
+    workgroup_memberships:
+      maximum-size: 200
+      expire-after-write: 10m
 
 # Email functionality configuration
 secman:
@@ -166,6 +177,13 @@ datasources:
     driverClassName: org.mariadb.jdbc.Driver
     username: ${DB_USERNAME:secman}
     password: ${DB_PASSWORD:CHANGEME}
+    # Connection pool configuration (Feature: Database Structure Optimization)
+    maximum-pool-size: 20          # Maximum number of connections in the pool
+    minimum-idle: 5                # Minimum number of idle connections
+    connection-timeout: 30000      # 30 seconds - timeout for acquiring connection
+    idle-timeout: 600000           # 10 minutes - maximum idle time for connections
+    max-lifetime: 1800000          # 30 minutes - maximum lifetime of connections
+    leak-detection-threshold: 60000 # 60 seconds - detect connection leaks
 
 jpa:
   default:
@@ -175,6 +193,19 @@ jpa:
           auto: update
         show_sql: false
         format_sql: true
+        # Query optimization settings (Feature: Database Structure Optimization)
+        query:
+          plan_cache_max_size: 2048                    # Cache compiled query plans
+          plan_parameter_metadata_max_size: 128        # Cache query parameter metadata
+        jdbc:
+          batch_size: 20                               # Batch INSERT/UPDATE statements
+          fetch_size: 50                               # JDBC fetch size for result sets
+        order_inserts: true                            # Order INSERT statements for batching
+        order_updates: true                            # Order UPDATE statements for batching
+        # Second-level cache (disabled by default, enable if needed)
+        cache:
+          use_second_level_cache: false
+          use_query_cache: false
 
 jackson:
   dateFormat: yyyy-MM-dd'T'HH:mm:ss.SSSZ

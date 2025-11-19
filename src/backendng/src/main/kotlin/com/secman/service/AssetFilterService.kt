@@ -82,17 +82,15 @@ open class AssetFilterService(
         }
 
         // Get assets accessible via AD domain mapping (case-insensitive)
+        // OPTIMIZATION: Use database query instead of loading all assets into memory
         val domainAssets = if (userEmail != null) {
             val userDomains = userMappingRepository.findDistinctDomainByEmail(userEmail)
             if (userDomains.isNotEmpty()) {
-                // Get all assets with non-null adDomain
-                val allAssetsWithDomain = assetRepository.findAll().filter { it.adDomain != null }
+                // Convert to lowercase for case-insensitive matching (domains already normalized in DB)
+                val userDomainsLowercase = userDomains.map { it.lowercase() }
 
-                // Filter assets whose adDomain matches any user domain (case-insensitive)
-                val userDomainsLowercase = userDomains.map { it.lowercase() }.toSet()
-                allAssetsWithDomain.filter { asset ->
-                    asset.adDomain?.lowercase() in userDomainsLowercase
-                }
+                // Use optimized query that filters at database level
+                assetRepository.findByAdDomainInIgnoreCase(userDomainsLowercase)
             } else {
                 emptyList()
             }
