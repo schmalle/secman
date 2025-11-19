@@ -35,7 +35,10 @@ dependencies {
     implementation("io.micronaut.sql:micronaut-hibernate-jpa")
     implementation("io.micronaut.sql:micronaut-jdbc-hikari")
     runtimeOnly("org.mariadb.jdbc:mariadb-java-client:3.5.3")
-    
+
+	implementation("io.micronaut.flyway:micronaut-flyway")
+	runtimeOnly("org.flywaydb:flyway-core")
+	
     // Security
     implementation("io.micronaut.security:micronaut-security-jwt")
     implementation("io.micronaut.security:micronaut-security-oauth2")
