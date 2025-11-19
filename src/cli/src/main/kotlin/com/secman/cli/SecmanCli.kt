@@ -1,9 +1,13 @@
 package com.secman.cli
 
 import com.secman.cli.commands.ConfigCommand
+import com.secman.cli.commands.ManageUserMappingsCommand
 import com.secman.cli.commands.MonitorCommand
 import com.secman.cli.commands.QueryCommand
+import com.secman.cli.commands.SendNotificationsCommand
 import com.secman.cli.commands.ServersCommand
+import io.micronaut.configuration.picocli.PicocliRunner
+import io.micronaut.context.ApplicationContext
 import org.slf4j.LoggerFactory
 
 /**
@@ -165,6 +169,20 @@ class SecmanCli {
                 }
                 monitorCommand.execute()
             }
+            args[0] == "manage-user-mappings" -> {
+                // Use Picocli with Micronaut DI for user mapping commands
+                ApplicationContext.run().use { ctx ->
+                    PicocliRunner.run(ManageUserMappingsCommand::class.java, ctx, *args)
+                }
+                0
+            }
+            args[0] == "send-notifications" -> {
+                // Use Picocli with Micronaut DI for notification command
+                ApplicationContext.run().use { ctx ->
+                    PicocliRunner.run(SendNotificationsCommand::class.java, ctx, *args)
+                }
+                0
+            }
             else -> {
                 System.err.println("Unknown command: ${args[0]}")
                 showHelp()
@@ -180,11 +198,13 @@ class SecmanCli {
             Usage: secman [command] [options]
 
             Commands:
-              query servers  Query and import server vulnerabilities (Feature 032)
-              query          Query CrowdStrike vulnerabilities
-              monitor        Continuously monitor for HIGH/CRITICAL vulnerabilities
-              config         Configure CrowdStrike API credentials
-              help           Show this help message
+              query servers          Query and import server vulnerabilities (Feature 032)
+              query                  Query CrowdStrike vulnerabilities
+              monitor                Continuously monitor for HIGH/CRITICAL vulnerabilities
+              config                 Configure CrowdStrike API credentials
+              send-notifications     Send email notifications for outdated assets (Feature 035)
+              manage-user-mappings   Manage user mappings for domains and AWS accounts (Feature 049)
+              help                   Show this help message
 
             Query Servers Options (Feature 032):
               --hostnames <list>       Comma-separated list of hostnames (optional, default: all servers)
@@ -261,6 +281,16 @@ class SecmanCli {
               # Monitor continuously
               secman monitor --interval 10 --hostnames server01,server02,server03
               secman monitor --dry-run --verbose
+
+              # Send email notifications (Feature 035)
+              secman send-notifications
+              secman send-notifications --dry-run --verbose
+              secman send-notifications --outdated-only
+
+              # Manage user mappings (Feature 049)
+              secman manage-user-mappings add-domain --emails user@example.com --domains example.com --admin-user admin@company.com
+              secman manage-user-mappings add-aws --emails user@example.com --accounts 123456789012 --admin-user admin@company.com
+              secman manage-user-mappings --help
 
             For more information, visit: https://github.com/schmalle/secman
         """.trimIndent())
