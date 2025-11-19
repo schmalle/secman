@@ -247,4 +247,19 @@ interface UserMappingRepository : JpaRepository<UserMapping, Long> {
      * @return Number of applied historical mappings (appliedAt IS NOT NULL)
      */
     fun countByAppliedAtIsNotNull(): Long
+
+    // Feature 049: CLI User Mapping Management
+
+    /**
+     * Find all mappings for a specific email and status
+     *
+     * Use case: Find pending mappings when user is created for auto-application
+     *
+     * Related to: Feature 049 (CLI User Mapping Management)
+     *
+     * @param email User's email address (case-insensitive)
+     * @param status Mapping status (PENDING or ACTIVE)
+     * @return List of mappings matching email and status
+     */
+    fun findByEmailAndStatus(email: String, status: com.secman.domain.MappingStatus): List<UserMapping>
 }

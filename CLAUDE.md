@@ -65,6 +65,7 @@ Users access assets if **ANY** is true:
 - Backend: `./gradlew build`
 - Frontend: `npm run dev`
 - CLI Notifications: `./gradlew cli:run --args='send-notifications [--dry-run] [--verbose] [--outdated-only]'`
+- CLI User Mappings (049): `./gradlew cli:run --args='manage-user-mappings <subcommand>'` (see `src/cli/src/main/resources/cli-docs/USER_MAPPING_COMMANDS.md`)
 
 **Principles**:
 1. Security-First: File validation, input sanitization, RBAC, security review required
@@ -134,6 +135,8 @@ eventPublisher.publishEvent(UserCreatedEvent(savedUser, "MANUAL"))
 - MariaDB 12 (MaintenanceBanner entity with JPA) (047-maintenance-popup)
 - Kotlin 2.2.21 / Java 21 + Micronaut 4.10, Hibernate JPA, MariaDB 12 (048-prevent-duplicate-vulnerabilities)
 - MariaDB 12 (existing Vulnerability and Asset entities) (048-prevent-duplicate-vulnerabilities)
+- Kotlin 2.2.21 / Java 21 + Micronaut 4.10, Hibernate JPA, Picocli 4.7 (CLI framework), Apache Commons CSV 1.11.0, Jackson (JSON parsing) (049-cli-user-mappings)
+- MariaDB 12 (reuses existing UserMapping entity from feature 042) (049-cli-user-mappings)
 
 ## Recent Changes
 - 048-prevent-duplicate-vulnerabilities: Fixed critical 99% data loss bug by removing JPA cascade from Asset.vulnerabilities; added transactional replace pattern for duplicate prevention, comprehensive documentation

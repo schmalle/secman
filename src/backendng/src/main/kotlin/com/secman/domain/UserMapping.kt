@@ -53,7 +53,9 @@ import java.time.Instant
         Index(name = "idx_user_mapping_ip_address", columnList = "ip_address"),
         Index(name = "idx_user_mapping_ip_range", columnList = "ip_range_start,ip_range_end"),
         Index(name = "idx_user_mapping_email_ip", columnList = "email,ip_address"),
-        Index(name = "idx_user_mapping_applied_at", columnList = "applied_at") // Feature 042: Efficient filtering for Current vs Applied History tabs
+        Index(name = "idx_user_mapping_applied_at", columnList = "applied_at"), // Feature 042: Efficient filtering for Current vs Applied History tabs
+        Index(name = "idx_user_mapping_status", columnList = "status"), // Feature 049: Status filtering
+        Index(name = "idx_user_mapping_email_status", columnList = "email,status") // Feature 049: User + status queries
     ]
 )
 @Serdeable
@@ -102,7 +104,12 @@ data class UserMapping(
     var createdAt: Instant? = null,
 
     @Column(name = "updated_at")
-    var updatedAt: Instant? = null
+    var updatedAt: Instant? = null,
+
+    // Feature 049: Status tracking for pending vs active mappings
+    @Column(name = "status", nullable = false, length = 20)
+    @Enumerated(EnumType.STRING)
+    var status: MappingStatus = MappingStatus.ACTIVE
 ) {
     /**
      * Lifecycle callback - executed before entity is persisted to database
@@ -117,6 +124,12 @@ data class UserMapping(
         email = email.lowercase().trim()
         domain = domain?.lowercase()?.trim()
         awsAccountId = awsAccountId?.trim()
+
+        // Feature 049: Set status based on user existence
+        // PENDING if user is null (future user mapping), ACTIVE otherwise
+        if (user == null && status == MappingStatus.ACTIVE) {
+            status = MappingStatus.PENDING
+        }
     }
 
     /**
