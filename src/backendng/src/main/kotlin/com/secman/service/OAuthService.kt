@@ -16,6 +16,7 @@ import io.micronaut.http.client.annotation.Client
 import io.micronaut.http.client.exceptions.HttpClientResponseException
 import io.micronaut.security.token.generator.TokenGenerator
 import io.micronaut.scheduling.annotation.Async
+import io.micronaut.scheduling.annotation.Scheduled
 import io.micronaut.transaction.annotation.Transactional
 import jakarta.inject.Singleton
 import jakarta.persistence.EntityManager
@@ -57,11 +58,15 @@ open class OAuthService(
     /**
      * Build authorization URL for OAuth provider
      *
-     * Note: This method MUST be @Transactional to ensure the OAuth state is committed
-     * to the database before redirecting to the OAuth provider. Without a transaction,
-     * the save() call may not commit, causing "state not found" errors on callback.
+     * CRITICAL: This method must NOT be @Transactional to prevent race conditions.
+     * The OAuth state MUST be committed to the database BEFORE redirecting the user
+     * to the OAuth provider. With @Transactional, the transaction commits AFTER the
+     * method returns, causing the redirect to happen before the state is visible in
+     * the database. Fast OAuth callbacks (especially with cached provider sessions)
+     * then fail with "Invalid or expired state parameter" because the state lookup
+     * occurs before the transaction commits. We use entityManager.flush() instead
+     * to force immediate persistence within the existing transaction context.
      */
-    @Transactional
     open fun buildAuthorizationUrl(providerId: Long, baseUrl: String): String? {
 
 		logger.info("OAuthService.buildAuthorizationUrl: Starting for providerId={}, baseUrl={}", providerId, baseUrl)
@@ -133,15 +138,24 @@ open class OAuthService(
      */
     @Transactional
     open fun handleCallback(providerId: Long, code: String, state: String): CallbackResult {
+        val callbackStartTime = LocalDateTime.now()
+        logger.info("OAuth callback received at {} for provider {}, state={}",
+            callbackStartTime, providerId, state.take(10) + "...")
+
         // Validate state
         val stateOpt = oauthStateRepository.findByStateToken(state)
         if (!stateOpt.isPresent) {
             logger.error("OAuth state not found in database for state token: {}", state.take(10) + "...")
+            logger.error("Callback timestamp: {}, Provider ID: {}", callbackStartTime, providerId)
             logger.error("This may indicate: 1) State was never saved (transaction timing issue), 2) State was already used/deleted, 3) State expired and was cleaned up")
             return CallbackResult.Error("Invalid or expired state parameter")
         }
 
         val oauthState = stateOpt.get()
+        val stateAge = java.time.Duration.between(oauthState.createdAt, callbackStartTime).toMillis()
+        logger.info("OAuth state found: created at {}, callback at {}, age={}ms",
+            oauthState.createdAt, callbackStartTime, stateAge)
+
         if (oauthState.providerId != providerId) {
             logger.error("State provider mismatch: state belongs to provider {}, but callback is for provider {}", oauthState.providerId, providerId)
             return CallbackResult.Error("State provider mismatch")
@@ -685,6 +699,21 @@ open class OAuthService(
         notifyAdminsNewUser(savedUser, idpName)
 
         return savedUser
+    }
+
+    /**
+     * Scheduled job to clean up expired OAuth states
+     * Runs every 5 minutes to prevent database bloat from orphaned states
+     */
+    @Scheduled(fixedDelay = "5m")
+    open fun cleanupExpiredOAuthStates() {
+        try {
+            logger.debug("Running scheduled cleanup of expired OAuth states")
+            oauthStateRepository.deleteExpiredStates()
+            logger.debug("Completed scheduled cleanup of expired OAuth states")
+        } catch (e: Exception) {
+            logger.error("Error during scheduled OAuth state cleanup", e)
+        }
     }
 
     /**
