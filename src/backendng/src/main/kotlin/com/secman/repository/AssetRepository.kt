@@ -169,4 +169,39 @@ interface AssetRepository : JpaRepository<Asset, Long> {
         ORDER BY a.adDomain
     """)
     fun findDistinctAdDomains(): List<String>
+
+    // Database Optimization - Feature: Database Structure Optimization
+
+    /**
+     * Find assets by AD domain (case-insensitive match)
+     * Optimized query for domain-based access control filtering
+     * Uses index: idx_asset_ad_domain
+     *
+     * Feature: Database Structure Optimization
+     *
+     * @param domains List of AD domain names (lowercase)
+     * @return List of assets matching any of the specified domains
+     */
+    @io.micronaut.data.annotation.Query("""
+        SELECT a FROM Asset a
+        WHERE LOWER(a.adDomain) IN :domains
+        ORDER BY a.name ASC
+    """)
+    fun findByAdDomainInIgnoreCase(domains: List<String>): List<Asset>
+
+    /**
+     * Find all assets with non-null AD domain
+     * Optimized for domain filtering operations
+     * Uses index: idx_asset_ad_domain
+     *
+     * Feature: Database Structure Optimization
+     *
+     * @return List of assets with AD domain set
+     */
+    @io.micronaut.data.annotation.Query("""
+        SELECT a FROM Asset a
+        WHERE a.adDomain IS NOT NULL
+        ORDER BY a.name ASC
+    """)
+    fun findAllWithAdDomain(): List<Asset>
 }

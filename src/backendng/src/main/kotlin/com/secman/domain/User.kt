@@ -8,7 +8,14 @@ import jakarta.validation.constraints.NotBlank
 import java.time.Instant
 
 @Entity
-@Table(name = "users")
+@Table(
+    name = "users",
+    indexes = [
+        // Query optimization indexes (Feature: Database Structure Optimization)
+        Index(name = "idx_user_email", columnList = "email"),      // Email lookups for OAuth/mappings
+        Index(name = "idx_user_username", columnList = "username") // Username lookups
+    ]
+)
 @Serdeable
 data class User(
     @Id
