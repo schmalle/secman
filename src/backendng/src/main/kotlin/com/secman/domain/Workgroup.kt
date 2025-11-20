@@ -23,7 +23,9 @@ import java.time.Instant
         UniqueConstraint(columnNames = ["parent_id", "name"])
     ],
     indexes = [
-        Index(name = "idx_workgroup_parent", columnList = "parent_id")
+        Index(name = "idx_workgroup_parent", columnList = "parent_id"),
+        // Query optimization indexes (Feature: Database Structure Optimization)
+        Index(name = "idx_workgroup_name", columnList = "name")  // Name lookups and filtering
     ]
 )
 @Serdeable

@@ -11,7 +11,16 @@ import java.time.LocalDateTime
 @Table(
     name = "asset",
     indexes = [
-        Index(name = "idx_asset_ip_numeric", columnList = "ip_numeric")
+        Index(name = "idx_asset_ip_numeric", columnList = "ip_numeric"),
+        // Query optimization indexes (Feature: Database Structure Optimization)
+        Index(name = "idx_asset_name", columnList = "name"),                      // Asset lookups, filters, sorting
+        Index(name = "idx_asset_cloud_account", columnList = "cloud_account_id"), // AWS account-based access control
+        Index(name = "idx_asset_ad_domain", columnList = "ad_domain"),            // AD domain filtering
+        Index(name = "idx_asset_type", columnList = "type"),                      // Asset type grouping/filtering
+        Index(name = "idx_asset_owner", columnList = "owner"),                    // Owner-based filtering
+        Index(name = "idx_asset_last_seen", columnList = "last_seen"),            // Outdated asset queries
+        Index(name = "idx_asset_manual_creator", columnList = "manual_creator_id"), // Access control by creator
+        Index(name = "idx_asset_scan_uploader", columnList = "scan_uploader_id")    // Access control by uploader
     ]
 )
 @Serdeable
