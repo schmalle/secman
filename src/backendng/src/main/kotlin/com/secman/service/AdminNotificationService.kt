@@ -7,7 +7,6 @@ import com.secman.repository.AdminNotificationSettingsRepository
 import com.secman.repository.UserRepository
 import io.micronaut.scheduling.annotation.Async
 import jakarta.inject.Singleton
-import jakarta.annotation.PostConstruct
 import org.slf4j.LoggerFactory
 import java.time.Instant
 import java.util.concurrent.CompletableFuture
@@ -19,7 +18,7 @@ import java.util.concurrent.atomic.AtomicReference
  * Feature: 027-admin-user-notifications
  *
  * Handles configuration for email notifications sent to ADMIN users when new users are created.
- * Implements in-memory caching for performance.
+ * Implements in-memory caching for performance with lazy initialization.
  */
 @Singleton
 open class AdminNotificationService(
@@ -30,21 +29,33 @@ open class AdminNotificationService(
 ) {
     private val logger = LoggerFactory.getLogger(AdminNotificationService::class.java)
 
-    // Cached enabled state for fast lookup
+    // Cached enabled state for fast lookup with lazy initialization
     private val cachedEnabled = AtomicBoolean(true) // Default to enabled (opt-out model)
     private val cachedSenderEmail = AtomicReference<String>("noreply@secman.local")
+    private val cacheInitialized = AtomicBoolean(false)
 
-    @PostConstruct
-    fun initializeCache() {
-        try {
-            val settings = getOrCreateSettings()
-            cachedEnabled.set(settings.notificationsEnabled)
-            cachedSenderEmail.set(settings.senderEmail)
-            logger.info("Initialized admin notification settings cache: enabled=${settings.notificationsEnabled}, sender=${settings.senderEmail}")
-        } catch (e: Exception) {
-            logger.error("Failed to initialize admin notification settings cache, using defaults", e)
-            cachedEnabled.set(true)
-            cachedSenderEmail.set("noreply@secman.local")
+    /**
+     * Initialize cache lazily on first access
+     * Thread-safe singleton initialization pattern
+     */
+    private fun ensureCacheInitialized() {
+        if (!cacheInitialized.get()) {
+            synchronized(this) {
+                if (!cacheInitialized.get()) {
+                    try {
+                        val settings = getOrCreateSettings()
+                        cachedEnabled.set(settings.notificationsEnabled)
+                        cachedSenderEmail.set(settings.senderEmail)
+                        cacheInitialized.set(true)
+                        logger.info("Initialized admin notification settings cache: enabled=${settings.notificationsEnabled}, sender=${settings.senderEmail}")
+                    } catch (e: Exception) {
+                        logger.error("Failed to initialize admin notification settings cache, using defaults", e)
+                        cachedEnabled.set(true)
+                        cachedSenderEmail.set("noreply@secman.local")
+                        cacheInitialized.set(true)
+                    }
+                }
+            }
         }
     }
 
@@ -55,6 +66,7 @@ open class AdminNotificationService(
      * @return true if notifications are enabled, false otherwise
      */
     fun isNotificationEnabled(): Boolean {
+        ensureCacheInitialized()
         return cachedEnabled.get()
     }
 
@@ -64,6 +76,7 @@ open class AdminNotificationService(
      * @return current sender email address
      */
     fun getSenderEmail(): String {
+        ensureCacheInitialized()
         return cachedSenderEmail.get()
     }
 

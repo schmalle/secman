@@ -61,7 +61,8 @@ const ERROR_RESET_TIMEOUT = 60000; // Reset error count after 1 minute
  * - Callback receives 0 on connection errors (safe fallback)
  *
  * **Authentication**:
- * - Uses default browser credentials (cookies/session)
+ * - Passes JWT token from localStorage as query parameter
+ * - Required because EventSource doesn't support Authorization headers
  * - Requires authenticated session (401 if not logged in)
  *
  * @param onUpdate Callback function to receive count updates
@@ -96,10 +97,20 @@ export function connectToBadgeUpdates(onUpdate: BadgeCountCallback): () => void 
   connectionState = 'connecting';
   console.log('[ExceptionBadge] Connecting to SSE endpoint for real-time updates');
 
-  // Create EventSource connection
-  const eventSource = new EventSource('/api/exception-badge-updates', {
-    withCredentials: true // Include session cookies for authentication
-  });
+  // Get JWT token from localStorage
+  const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
+
+  if (!token) {
+    console.error('[ExceptionBadge] No JWT token found in localStorage, cannot connect to SSE');
+    connectionState = 'error';
+    errorCount++;
+    onUpdate(0);
+    return () => {};
+  }
+
+  // Create EventSource connection with token as query parameter
+  // (EventSource doesn't support custom headers like Authorization)
+  const eventSource = new EventSource(`/api/exception-badge-updates?token=${encodeURIComponent(token)}`);
 
   let isCleaningUp = false;
 

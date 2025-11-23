@@ -89,7 +89,8 @@ Users access assets if **ANY** is true:
 
 ### Authentication
 - Backend: `@Secured(SecurityRule.IS_AUTHENTICATED)`, `authentication.roles.contains("ADMIN"/"VULN")`
-- Frontend: JWT in sessionStorage → Axios headers
+- Frontend: JWT in localStorage (`authToken`) → Axios headers (`Authorization: Bearer <token>`)
+- SSE: JWT passed as query parameter (`?token=<jwt>`) since EventSource doesn't support custom headers
 
 ### Duplicate Prevention Pattern (Feature 048)
 **Pattern**: Transactional replace for CrowdStrike vulnerability imports

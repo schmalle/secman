@@ -69,13 +69,19 @@ class ExceptionBadgeUpdateHandler(
      * **Access**: Requires authentication (any authenticated user)
      * **Content-Type**: text/event-stream
      *
+     * **Authentication**:
+     * - Supports JWT token via Authorization header OR query parameter
+     * - Query parameter: `/api/exception-badge-updates?token=<jwt>`
+     * - Required for EventSource (cannot send custom headers)
+     *
      * **Response Stream**:
      * 1. Initial event: Current pending count
      * 2. Subsequent events: Count updates when ExceptionCountChangedEvent fires
      *
      * **Client Usage** (Frontend):
      * ```typescript
-     * const eventSource = new EventSource('/api/exception-badge-updates');
+     * const token = localStorage.getItem('authToken');
+     * const eventSource = new EventSource(`/api/exception-badge-updates?token=${token}`);
      * eventSource.addEventListener('count-update', (event) => {
      *   const data = JSON.parse(event.data);
      *   updateBadge(data.pendingCount);
