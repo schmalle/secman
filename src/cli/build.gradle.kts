@@ -1,6 +1,7 @@
 plugins {
     id("org.jetbrains.kotlin.jvm")
     id("org.jetbrains.kotlin.plugin.allopen")
+    id("org.jetbrains.kotlin.plugin.jpa")
     id("com.google.devtools.ksp")
     id("io.micronaut.application")
     id("com.gradleup.shadow")
@@ -24,6 +25,11 @@ dependencies {
 
     // Micronaut Data (required for Pageable and repository interfaces)
     implementation("io.micronaut.data:micronaut-data-hibernate-jpa")
+
+    // Database (required for EntityManager and JPA support)
+    implementation("io.micronaut.sql:micronaut-hibernate-jpa")
+    implementation("io.micronaut.sql:micronaut-jdbc-hikari")
+    runtimeOnly("org.mariadb.jdbc:mariadb-java-client:3.5.3")
 
     // Picocli for CLI
     implementation("info.picocli:picocli:4.7.5")
@@ -85,6 +91,7 @@ tasks {
 allOpen {
     annotation("io.micronaut.aop.Around")
     annotation("jakarta.inject.Singleton")
+    annotation("jakarta.transaction.Transactional")
     annotation("picocli.CommandLine.Command")
 }
 

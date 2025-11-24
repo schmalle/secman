@@ -1,7 +1,11 @@
-// @ts-check
 import { defineConfig } from "astro/config";
 import react from "@astrojs/react";
 import node from "@astrojs/node";
+
+
+const allowedDomain = process.env.SECMAN_DOMAIN || "http://localhost:4321";
+const allowedHost = process.env.SECMAN_HOST || "localhost";
+
 
 // https://astro.build/config
 export default defineConfig({
@@ -17,16 +21,16 @@ export default defineConfig({
   vite: {
     server: {
         allowedHosts: [
-            '*'
+            allowedHost
         ],
       proxy: {
         "/api": {
-          target: "http://localhost:8080",
+          target: allowedDomain,
           changeOrigin: true,
           secure: false,
         },
         "/oauth": {
-          target: "http://localhost:8080",
+          target: allowedDomain,
           changeOrigin: true,
           secure: false,
         },
