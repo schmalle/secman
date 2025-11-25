@@ -123,22 +123,6 @@ const Sidebar = () => {
             </div>
 
             <ul className="list-unstyled components p-2">
-                {/* OVERVIEW & ANALYTICS Section */}
-                <li className="sidebar-section-header">OVERVIEW & ANALYTICS</li>
-                <li>
-                    <a href="/" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                        <i className="bi bi-house-door me-2"></i> Dashboard
-                    </a>
-                </li>
-                {/* Notifications - ADMIN or SECCHAMPION only (Feature: 035-notification-system) */}
-                {(userRoles.includes('ADMIN') || userRoles.includes('SECCHAMPION')) && (
-                    <li>
-                        <a href="/notification-preferences" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                            <i className="bi bi-bell me-2"></i> Notifications
-                        </a>
-                    </li>
-                )}
-
                 {/* ASSET MANAGEMENT Section */}
                 <li className="sidebar-section-header">ASSET MANAGEMENT</li>
                 <li>
@@ -147,14 +131,6 @@ const Sidebar = () => {
                     </a>
                 </li>
 
-                {/* Vulnerability Statistics Lense - Quick access for VULN/ADMIN users */}
-                {hasVuln && (
-                    <li>
-                        <a href="/vulnerability-statistics" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                            <i className="bi bi-bar-chart-line me-2"></i> Vuln Statistics
-                        </a>
-                    </li>
-                )}
 
                 {/* REQUIREMENTS Section - ADMIN, REQ, or SECCHAMPION only (Feature: 025-role-based-access-control) */}
                 {hasReq && (
@@ -520,6 +496,11 @@ const Sidebar = () => {
 
                                 {/* Monitoring */}
                                 <li className="admin-subsection-header">Monitoring</li>
+                                <li>
+                                    <a href="/notification-preferences" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-bell me-2"></i> Notifications
+                                    </a>
+                                </li>
                                 <li>
                                     <a href="/notification-logs" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
                                         <i className="bi bi-envelope-paper me-2"></i> Notification Logs
