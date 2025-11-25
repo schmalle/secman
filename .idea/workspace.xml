@@ -5,12 +5,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="94ada8b3-9f4e-473c-9fea-3bc9651b5bdd" name="Changes" comment="test change">
-      <change afterPath="$PROJECT_DIR$/scripts/install/Install.MD" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/security/QueryParameterTokenReader.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/security/QueryParameterTokenReader.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/cli/build.gradle.kts" beforeDir="false" afterPath="$PROJECT_DIR$/src/cli/build.gradle.kts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/cli/src/main/resources/application.yml" beforeDir="false" afterPath="$PROJECT_DIR$/src/cli/src/main/resources/application.yml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/frontend/astro.config.mjs" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/astro.config.mjs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/src/components/Sidebar.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/components/Sidebar.tsx" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
