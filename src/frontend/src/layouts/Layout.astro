@@ -83,6 +83,16 @@ const requiresRedirect = !user && !isPublicPage;
             // Define a global variable to hold user info
             window.currentUser = null;
 
+            // Import session keep-alive functions dynamically
+            async function initSessionKeepAlive() {
+                try {
+                    const authModule = await import('../utils/auth.ts');
+                    authModule.startSessionKeepAlive();
+                } catch (error) {
+                    console.error('Failed to initialize session keep-alive:', error);
+                }
+            }
+
             async function checkAuthAndRedirect() {
                 if (isPublicPage) {
                     // Don't redirect if on a public page like /login or /about
@@ -97,7 +107,7 @@ const requiresRedirect = !user && !isPublicPage;
                         window.location.href = '/login';
                         return;
                     }
-                    
+
                     const response = await fetch('/api/auth/status', {
                         headers: {
                             'Authorization': `Bearer ${token}`,
@@ -124,6 +134,8 @@ const requiresRedirect = !user && !isPublicPage;
                         console.log('User authenticated:', user.username, 'Roles:', user.roles);
                         // Trigger a custom event if components need to react to user data being loaded
                         window.dispatchEvent(new CustomEvent('userLoaded'));
+                        // Start session keep-alive service
+                        initSessionKeepAlive();
                     }
                 } catch (error) {
                     console.error('Failed to fetch auth status:', error);

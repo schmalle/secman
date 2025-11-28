@@ -88,6 +88,8 @@ dependencies {
     runtimeOnly("org.apache.logging.log4j:log4j-to-slf4j:2.25.2")
     // Logstash encoder for JSON logging (Feature 046)
     implementation("net.logstash.logback:logstash-logback-encoder:7.4")
+    // Conditional logging support (Janino) - for SECMAN_LOGGING env var
+    implementation("org.codehaus.janino:janino:3.1.12")
     
     // YAML configuration support
     runtimeOnly("org.yaml:snakeyaml")

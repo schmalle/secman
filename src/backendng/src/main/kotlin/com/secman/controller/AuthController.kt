@@ -123,7 +123,7 @@ class AuthController(
     fun status(authentication: Authentication): HttpResponse<*> {
         val username = authentication.name
         val userOptional = userRepository.findByUsername(username)
-        
+
         if (userOptional.isEmpty) {
             return HttpResponse.unauthorized<Any>().body(mapOf("error" to "User not found"))
         }
@@ -137,5 +137,63 @@ class AuthController(
         )
 
         return HttpResponse.ok(response)
+    }
+
+    @Serdeable
+    data class RefreshResponse(
+        val token: String,
+        val expiresIn: Int = 28800  // 8 hours in seconds
+    )
+
+    @Serdeable
+    data class HeartbeatResponse(
+        val status: String = "ok",
+        val timestamp: Long = System.currentTimeMillis()
+    )
+
+    /**
+     * Refresh the current JWT token.
+     * Issues a new token with extended expiration if the current token is still valid.
+     */
+    @Post("/refresh")
+    @Secured(SecurityRule.IS_AUTHENTICATED)
+    fun refresh(authentication: Authentication): HttpResponse<*> {
+        val username = authentication.name
+        val userOptional = userRepository.findByUsername(username)
+
+        if (userOptional.isEmpty) {
+            return HttpResponse.unauthorized<Any>().body(mapOf("error" to "User not found"))
+        }
+
+        val user = userOptional.get()
+
+        // Generate a fresh JWT token
+        val userDetails = mapOf(
+            "sub" to user.username,
+            "username" to user.username,
+            "email" to user.email,
+            "roles" to user.roles.map { it.name },
+            "iss" to "secman-backend-ng",
+            "userId" to user.id.toString()
+        )
+
+        val tokenOptional = tokenGenerator.generateToken(userDetails)
+
+        if (tokenOptional.isEmpty) {
+            return HttpResponse.serverError<Any>().body(mapOf("error" to "Failed to generate token"))
+        }
+
+        return HttpResponse.ok(RefreshResponse(token = tokenOptional.get()))
+    }
+
+    /**
+     * Lightweight heartbeat endpoint for session keep-alive.
+     * Validates the token is still valid without generating a new one.
+     */
+    @Get("/heartbeat")
+    @Secured(SecurityRule.IS_AUTHENTICATED)
+    fun heartbeat(authentication: Authentication): HttpResponse<HeartbeatResponse> {
+        // If we reach here, the token is valid
+        return HttpResponse.ok(HeartbeatResponse())
     }
 }

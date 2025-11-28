@@ -1,28 +1,25 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
+    <!--
+        SECMAN_LOGGING Environment Variable Control
+
+        Values:
+        - NO    : Disable all logging (except security audit)
+        - ALL   : Enable all logging (TRACE/DEBUG level)
+        - ERROR : Only show ERROR level logs
+        - (not set/other) : Default behavior (INFO level)
+    -->
+
     <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
             <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
         </encoder>
     </appender>
 
-    <logger name="com.secman" level="INFO"/>
-    <logger name="io.micronaut" level="WARN"/>
-    <logger name="org.hibernate" level="WARN"/>
-    <logger name="org.mariadb" level="WARN"/>
-    <logger name="com.zaxxer.hikari" level="WARN"/>
-
-    <!-- Access Denial Audit Logger (Feature: 025-role-based-access-control) -->
-    <!-- Logs all access denial events for security audit purposes -->
-    <!-- Level: WARN (not ERROR - expected behavior for unauthorized access) -->
-    <!-- Constitutional Compliance: Principle I (Security-First) - FR-014 -->
-    <logger name="ACCESS_DENIAL_AUDIT" level="WARN" additivity="false">
-        <appender-ref ref="STDOUT"/>
-    </logger>
-
     <!-- Security Audit Logger (Feature: 046-oidc-default-roles) -->
     <!-- Logs role assignment events for OIDC users with JSON format -->
     <!-- Constitutional Compliance: Principle I (Security-First) - NFR-001, NFR-002 -->
+    <!-- NOTE: Security audit remains active regardless of SECMAN_LOGGING setting -->
     <appender name="SECURITY_AUDIT" class="ch.qos.logback.core.rolling.RollingFileAppender">
         <file>logs/security-audit.log</file>
         <encoder class="net.logstash.logback.encoder.LogstashEncoder" />
@@ -32,11 +29,81 @@
         </rollingPolicy>
     </appender>
 
+    <!-- Security audit logger - always active for compliance -->
     <logger name="security.audit" level="INFO" additivity="false">
         <appender-ref ref="SECURITY_AUDIT"/>
     </logger>
 
-    <root level="INFO">
-        <appender-ref ref="STDOUT"/>
-    </root>
+    <!-- SECMAN_LOGGING=NO : Disable all logging -->
+    <if condition='property("SECMAN_LOGGING").equals("NO")'>
+        <then>
+            <logger name="com.secman" level="OFF"/>
+            <logger name="io.micronaut" level="OFF"/>
+            <logger name="org.hibernate" level="OFF"/>
+            <logger name="org.mariadb" level="OFF"/>
+            <logger name="com.zaxxer.hikari" level="OFF"/>
+            <logger name="ACCESS_DENIAL_AUDIT" level="OFF" additivity="false">
+                <appender-ref ref="STDOUT"/>
+            </logger>
+            <root level="OFF">
+                <appender-ref ref="STDOUT"/>
+            </root>
+        </then>
+    </if>
+
+    <!-- SECMAN_LOGGING=ALL : Enable all logging (verbose) -->
+    <if condition='property("SECMAN_LOGGING").equals("ALL")'>
+        <then>
+            <logger name="com.secman" level="TRACE"/>
+            <logger name="io.micronaut" level="DEBUG"/>
+            <logger name="org.hibernate" level="DEBUG"/>
+            <logger name="org.mariadb" level="DEBUG"/>
+            <logger name="com.zaxxer.hikari" level="DEBUG"/>
+            <logger name="ACCESS_DENIAL_AUDIT" level="DEBUG" additivity="false">
+                <appender-ref ref="STDOUT"/>
+            </logger>
+            <root level="DEBUG">
+                <appender-ref ref="STDOUT"/>
+            </root>
+        </then>
+    </if>
+
+    <!-- SECMAN_LOGGING=ERROR : Only error level logs -->
+    <if condition='property("SECMAN_LOGGING").equals("ERROR")'>
+        <then>
+            <logger name="com.secman" level="ERROR"/>
+            <logger name="io.micronaut" level="ERROR"/>
+            <logger name="org.hibernate" level="ERROR"/>
+            <logger name="org.mariadb" level="ERROR"/>
+            <logger name="com.zaxxer.hikari" level="ERROR"/>
+            <logger name="ACCESS_DENIAL_AUDIT" level="ERROR" additivity="false">
+                <appender-ref ref="STDOUT"/>
+            </logger>
+            <root level="ERROR">
+                <appender-ref ref="STDOUT"/>
+            </root>
+        </then>
+    </if>
+
+    <!-- Default: SECMAN_LOGGING not set or other value -->
+    <if condition='!property("SECMAN_LOGGING").equals("NO") &amp;&amp; !property("SECMAN_LOGGING").equals("ALL") &amp;&amp; !property("SECMAN_LOGGING").equals("ERROR")'>
+        <then>
+            <logger name="com.secman" level="INFO"/>
+            <logger name="io.micronaut" level="WARN"/>
+            <logger name="org.hibernate" level="WARN"/>
+            <logger name="org.mariadb" level="WARN"/>
+            <logger name="com.zaxxer.hikari" level="WARN"/>
+            <!-- Access Denial Audit Logger (Feature: 025-role-based-access-control) -->
+            <!-- Logs all access denial events for security audit purposes -->
+            <!-- Level: WARN (not ERROR - expected behavior for unauthorized access) -->
+            <!-- Constitutional Compliance: Principle I (Security-First) - FR-014 -->
+            <logger name="ACCESS_DENIAL_AUDIT" level="WARN" additivity="false">
+                <appender-ref ref="STDOUT"/>
+            </logger>
+            <root level="INFO">
+                <appender-ref ref="STDOUT"/>
+            </root>
+        </then>
+    </if>
+
 </configuration>

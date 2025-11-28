@@ -45,7 +45,7 @@ micronaut:
               secret: ${JWT_SECRET:pleasechangethissecrectokeyproductionforsecurityreasonsmustbe256bits}
         generator:
           access-token:
-            expiration: 3600
+            expiration: 28800  # 8 hours - extended for workday coverage
         claims-validators:
           issuer: secman-backend-ng
     oauth2:
@@ -181,9 +181,12 @@ datasources:
     maximum-pool-size: 20          # Maximum number of connections in the pool
     minimum-idle: 5                # Minimum number of idle connections
     connection-timeout: 30000      # 30 seconds - timeout for acquiring connection
-    idle-timeout: 600000           # 10 minutes - maximum idle time for connections
-    max-lifetime: 1800000          # 30 minutes - maximum lifetime of connections
+    idle-timeout: 1800000          # 30 minutes - extended to match session duration
+    max-lifetime: 7200000          # 2 hours - extended for long sessions
     leak-detection-threshold: 60000 # 60 seconds - detect connection leaks
+    # Connection validation to prevent stale connections
+    connection-test-query: SELECT 1
+    validation-timeout: 5000       # 5 seconds - timeout for connection validation
 
 jpa:
   default:
