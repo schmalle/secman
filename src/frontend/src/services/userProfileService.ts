@@ -3,11 +3,13 @@ import axios from 'axios';
 /**
  * User profile data interface
  * Feature 028: User Profile Page
+ * Feature 051: User Password Change (added canChangePassword)
  */
 export interface UserProfileData {
   username: string;
   email: string;
   roles: string[];
+  canChangePassword: boolean;
 }
 
 /**
@@ -32,8 +34,28 @@ export interface MfaToggleResponse {
 }
 
 /**
+ * Password change request
+ * Feature 051: User Password Change
+ */
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+}
+
+/**
+ * Password change response
+ * Feature 051: User Password Change
+ */
+export interface ChangePasswordResponse {
+  success: boolean;
+  message: string;
+}
+
+/**
  * Service for user profile API operations
  * Feature 028: User Profile Page
+ * Feature 051: User Password Change
  */
 class UserProfileService {
   private readonly baseUrl = '/api/users';
@@ -76,6 +98,23 @@ class UserProfileService {
     const response = await axios.put<MfaToggleResponse>(`${this.baseUrl}/profile/mfa-toggle`, { enabled });
     return response.data;
   }
+
+  /**
+   * Change current user's password
+   * Feature 051: User Password Change
+   *
+   * @param request - Password change request with current, new, and confirm passwords
+   * @returns Promise<ChangePasswordResponse> Change result
+   * @throws Error if request fails (validation error, wrong current password, etc.)
+   */
+  async changePassword(request: ChangePasswordRequest): Promise<ChangePasswordResponse> {
+    const response = await axios.put<ChangePasswordResponse>(`${this.baseUrl}/profile/change-password`, request);
+    return response.data;
+  }
 }
 
-export default new UserProfileService();
+const userProfileServiceInstance = new UserProfileService();
+export default userProfileServiceInstance;
+
+// Re-export types explicitly for Vite/esbuild compatibility
+export type { UserProfileData, MfaStatusResponse, MfaToggleResponse, ChangePasswordRequest, ChangePasswordResponse };

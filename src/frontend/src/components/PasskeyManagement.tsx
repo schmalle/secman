@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import passkeyService, { PasskeyCredentialInfo } from '../services/passkeyService';
+import passkeyService from '../services/passkeyService';
+import type { PasskeyCredentialInfo } from '../services/passkeyService';
 
 /**
  * Passkey Management Component

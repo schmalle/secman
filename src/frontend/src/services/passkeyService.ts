@@ -167,4 +167,8 @@ class PasskeyService {
   }
 }
 
-export default new PasskeyService();
+const passkeyServiceInstance = new PasskeyService();
+export default passkeyServiceInstance;
+
+// Re-export types explicitly for Vite/esbuild compatibility
+export type { PasskeyCredentialInfo, PasskeyListResponse };

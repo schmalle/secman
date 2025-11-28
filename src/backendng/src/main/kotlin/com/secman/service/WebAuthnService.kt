@@ -1,5 +1,6 @@
 package com.secman.service
 
+import com.secman.config.AppConfig
 import com.secman.domain.PasskeyCredential
 import com.secman.domain.User
 import com.secman.repository.PasskeyCredentialRepository
@@ -14,8 +15,10 @@ import com.webauthn4j.data.client.Origin
 import com.webauthn4j.data.client.challenge.Challenge
 import com.webauthn4j.data.client.challenge.DefaultChallenge
 import com.webauthn4j.server.ServerProperty
+import io.micronaut.serde.annotation.Serdeable
 import jakarta.inject.Singleton
 import org.slf4j.LoggerFactory
+import java.net.URI
 import java.security.SecureRandom
 import java.time.Instant
 import java.util.*
@@ -28,7 +31,8 @@ import java.util.*
  */
 @Singleton
 class WebAuthnService(
-    private val passkeyCredentialRepository: PasskeyCredentialRepository
+    private val passkeyCredentialRepository: PasskeyCredentialRepository,
+    private val appConfig: AppConfig
 ) {
     private val logger = LoggerFactory.getLogger(WebAuthnService::class.java)
     private val webAuthnManager = WebAuthnManager.createNonStrictWebAuthnManager()
@@ -41,9 +45,43 @@ class WebAuthnService(
 
     companion object {
         private const val RP_NAME = "SecMan"
-        private const val RP_ID = "localhost" // Should be configurable per environment
-        private const val ORIGIN = "http://localhost:4321" // Should be configurable per environment
         private const val CHALLENGE_TIMEOUT_MS = 120000L // 2 minutes
+    }
+
+    /**
+     * Get the Relying Party ID (domain) from the configured backend URL.
+     * WebAuthn RP ID should be just the domain without port.
+     */
+    private fun getRpId(): String {
+        return try {
+            URI(appConfig.backend.baseUrl).host ?: "localhost"
+        } catch (e: Exception) {
+            logger.warn("Failed to parse backend URL for RP ID, using localhost", e)
+            "localhost"
+        }
+    }
+
+    /**
+     * Get the origin from the configured backend URL.
+     * WebAuthn origin should be the scheme + host (+ port if non-standard).
+     */
+    private fun getOrigin(): String {
+        return try {
+            val uri = URI(appConfig.backend.baseUrl)
+            val port = uri.port
+            val scheme = uri.scheme ?: "https"
+            val host = uri.host ?: "localhost"
+
+            // Standard ports (443 for https, 80 for http) should not be included
+            if (port == -1 || (scheme == "https" && port == 443) || (scheme == "http" && port == 80)) {
+                "$scheme://$host"
+            } else {
+                "$scheme://$host:$port"
+            }
+        } catch (e: Exception) {
+            logger.warn("Failed to parse backend URL for origin, using default", e)
+            "http://localhost:4321"
+        }
     }
 
     /**
@@ -63,7 +101,7 @@ class WebAuthnService(
             challenge = challengeBase64,
             rp = RelyingPartyInfo(
                 name = RP_NAME,
-                id = RP_ID
+                id = getRpId()
             ),
             user = UserInfo(
                 id = userIdBase64,
@@ -105,8 +143,8 @@ class WebAuthnService(
 
             // Setup server property
             val serverProperty = ServerProperty.builder()
-                .origin(Origin.create(ORIGIN))
-                .rpId(RP_ID)
+                .origin(Origin.create(getOrigin()))
+                .rpId(getRpId())
                 .challenge(challenge)
                 .build()
 
@@ -167,7 +205,7 @@ class WebAuthnService(
         return AuthenticationOptionsResponse(
             challenge = challengeBase64,
             timeout = CHALLENGE_TIMEOUT_MS,
-            rpId = RP_ID,
+            rpId = getRpId(),
             userVerification = "required",
             allowCredentials = emptyList() // Allow any credential (discoverable)
         )
@@ -198,8 +236,8 @@ class WebAuthnService(
 
             // Setup server property
             val serverProperty = ServerProperty.builder()
-                .origin(Origin.create(ORIGIN))
-                .rpId(RP_ID)
+                .origin(Origin.create(getOrigin()))
+                .rpId(getRpId())
                 .challenge(challenge)
                 .build()
 
@@ -334,6 +372,7 @@ class WebAuthnService(
     }
 
     // Data classes for API responses
+    @Serdeable
     data class RegistrationOptionsResponse(
         val challenge: String,
         val rp: RelyingPartyInfo,
@@ -345,22 +384,26 @@ class WebAuthnService(
         val excludeCredentials: List<PublicKeyCredentialDescriptor>
     )
 
+    @Serdeable
     data class RelyingPartyInfo(
         val name: String,
         val id: String
     )
 
+    @Serdeable
     data class UserInfo(
         val id: String,
         val name: String,
         val displayName: String
     )
 
+    @Serdeable
     data class PubKeyCredParam(
         val type: String,
         val alg: Int
     )
 
+    @Serdeable
     data class AuthenticatorSelectionCriteria(
         val authenticatorAttachment: String,
         val requireResidentKey: Boolean,
@@ -368,12 +411,14 @@ class WebAuthnService(
         val userVerification: String
     )
 
+    @Serdeable
     data class PublicKeyCredentialDescriptor(
         val type: String,
         val id: String,
         val transports: List<String>?
     )
 
+    @Serdeable
     data class RegistrationCredentialResponse(
         val id: String,
         val rawId: String,
@@ -381,6 +426,7 @@ class WebAuthnService(
         val response: AttestationResponse
     )
 
+    @Serdeable
     data class AttestationResponse(
         val clientDataJSON: String,
         val attestationObject: String,
@@ -388,6 +434,7 @@ class WebAuthnService(
         val clientExtensionResults: String?
     )
 
+    @Serdeable
     data class AuthenticationOptionsResponse(
         val challenge: String,
         val timeout: Long,
@@ -396,6 +443,7 @@ class WebAuthnService(
         val allowCredentials: List<PublicKeyCredentialDescriptor>
     )
 
+    @Serdeable
     data class AuthenticationCredentialResponse(
         val id: String,
         val rawId: String,
@@ -403,6 +451,7 @@ class WebAuthnService(
         val response: AssertionResponse
     )
 
+    @Serdeable
     data class AssertionResponse(
         val clientDataJSON: String,
         val authenticatorData: String,
@@ -411,6 +460,7 @@ class WebAuthnService(
         val clientExtensionResults: String?
     )
 
+    @Serdeable
     data class PasskeyCredentialInfo(
         val id: Long,
         val credentialName: String,

@@ -57,6 +57,8 @@ Users access assets if **ANY** is true:
 
 **Maintenance Banners (047)**: GET /api/maintenance-banners/active (PUBLIC), GET /api/maintenance-banners (ADMIN), GET/POST /api/maintenance-banners[/{id}] (ADMIN), PUT/DELETE /api/maintenance-banners/{id} (ADMIN)
 
+**User Profile (051)**: GET /api/users/profile, PUT /api/users/profile/change-password (LOCAL users only), GET /api/users/profile/mfa-status, PUT /api/users/profile/mfa-toggle
+
 ## Development
 
 **Git**: Commits `type(scope): description`, Branches `###-feature-name`
@@ -139,6 +141,8 @@ eventPublisher.publishEvent(UserCreatedEvent(savedUser, "MANUAL"))
 - Kotlin 2.2.21 / Java 21 + Micronaut 4.10, Hibernate JPA, Picocli 4.7 (CLI framework), Apache Commons CSV 1.11.0, Jackson (JSON parsing) (049-cli-user-mappings)
 - MariaDB 12 (reuses existing UserMapping entity from feature 042) (049-cli-user-mappings)
 - MariaDB 12 (existing mcp_api_keys, mcp_audit_logs tables, users table) (050-mcp-user-delegation)
+- Kotlin 2.2.21 / Java 21 (backend), TypeScript (frontend with Astro 5.15 + React 19) + Micronaut 4.10, Hibernate JPA (backend), Astro 5.15, React 19, Bootstrap 5.3 (frontend) (051-user-password-change)
+- MariaDB 12 (existing users table, Flyway migration) (051-user-password-change)
 
 ## Recent Changes
 - 048-prevent-duplicate-vulnerabilities: Fixed critical 99% data loss bug by removing JPA cascade from Asset.vulnerabilities; added transactional replace pattern for duplicate prevention, comprehensive documentation

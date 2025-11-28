@@ -1,15 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import userProfileService, { UserProfileData } from '../services/userProfileService';
+import userProfileService from '../services/userProfileService';
+import type { UserProfileData } from '../services/userProfileService';
 import PasskeyManagement from './PasskeyManagement';
 
 /**
  * User Profile Component
  * Feature 028: User Profile Page
+ * Feature 051: User Password Change
  *
  * Displays authenticated user's profile information:
  * - Username
  * - Email
  * - Roles (as colored badge pills)
+ * - Password change form (for local users only)
  *
  * States:
  * - Loading: Shows spinner while fetching data
@@ -23,6 +26,15 @@ export default function UserProfile() {
   const [mfaEnabled, setMfaEnabled] = useState(false);
   const [mfaLoading, setMfaLoading] = useState(false);
   const [mfaError, setMfaError] = useState<string | null>(null);
+
+  // Password change state (Feature 051)
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
 
   useEffect(() => {
     fetchProfile();
@@ -63,6 +75,47 @@ export default function UserProfile() {
       setMfaError(errorMessage);
     } finally {
       setMfaLoading(false);
+    }
+  };
+
+  /**
+   * Handle password change submission
+   * Feature 051: User Password Change
+   */
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError(null);
+    setPasswordSuccess(null);
+
+    // Client-side validation
+    if (newPassword.length < 8) {
+      setPasswordError('Password must be at least 8 characters');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError('New password and confirmation do not match');
+      return;
+    }
+
+    try {
+      setPasswordLoading(true);
+      const result = await userProfileService.changePassword({
+        currentPassword,
+        newPassword,
+        confirmPassword
+      });
+      setPasswordSuccess(result.message);
+      // Clear form on success
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setShowPasswordForm(false);
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.message || err.response?.data?.error || 'Failed to change password';
+      setPasswordError(errorMessage);
+    } finally {
+      setPasswordLoading(false);
     }
   };
 
@@ -187,6 +240,103 @@ export default function UserProfile() {
             </p>
             <PasskeyManagement client:load />
           </div>
+
+          {/* Password Change - Feature 051 */}
+          {profile?.canChangePassword && (
+            <div className="border-top pt-3 mt-3">
+              <div className="d-flex align-items-center justify-content-between">
+                <div>
+                  <h6>Change Password</h6>
+                  <p className="text-muted small mb-0">
+                    Update your account password
+                  </p>
+                </div>
+                <button
+                  className="btn btn-outline-primary btn-sm"
+                  onClick={() => {
+                    setShowPasswordForm(!showPasswordForm);
+                    setPasswordError(null);
+                    setPasswordSuccess(null);
+                  }}
+                >
+                  {showPasswordForm ? 'Cancel' : 'Change Password'}
+                </button>
+              </div>
+
+              {passwordSuccess && (
+                <div className="alert alert-success mt-3 mb-0" role="alert">
+                  <i className="bi bi-check-circle-fill me-2"></i>
+                  {passwordSuccess}
+                </div>
+              )}
+
+              {showPasswordForm && (
+                <form onSubmit={handlePasswordChange} className="mt-3">
+                  <div className="mb-3">
+                    <label htmlFor="currentPassword" className="form-label">Current Password</label>
+                    <input
+                      type="password"
+                      className="form-control"
+                      id="currentPassword"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      required
+                      disabled={passwordLoading}
+                    />
+                  </div>
+                  <div className="mb-3">
+                    <label htmlFor="newPassword" className="form-label">New Password</label>
+                    <input
+                      type="password"
+                      className="form-control"
+                      id="newPassword"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      required
+                      minLength={8}
+                      disabled={passwordLoading}
+                    />
+                    <div className="form-text">Minimum 8 characters</div>
+                  </div>
+                  <div className="mb-3">
+                    <label htmlFor="confirmPassword" className="form-label">Confirm New Password</label>
+                    <input
+                      type="password"
+                      className="form-control"
+                      id="confirmPassword"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      required
+                      minLength={8}
+                      disabled={passwordLoading}
+                    />
+                  </div>
+
+                  {passwordError && (
+                    <div className="alert alert-danger" role="alert">
+                      <i className="bi bi-exclamation-triangle-fill me-2"></i>
+                      {passwordError}
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    disabled={passwordLoading || !currentPassword || !newPassword || !confirmPassword}
+                  >
+                    {passwordLoading ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                        Changing Password...
+                      </>
+                    ) : (
+                      'Update Password'
+                    )}
+                  </button>
+                </form>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

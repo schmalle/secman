@@ -59,6 +59,15 @@ data class User(
     @Column(name = "mfa_enabled", nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")
     var mfaEnabled: Boolean = false,
 
+    /**
+     * Authentication source tracking
+     * Feature: 051-user-password-change
+     * Determines if user can change password via self-service
+     */
+    @Column(name = "auth_source", nullable = false, length = 20)
+    @Enumerated(EnumType.STRING)
+    var authSource: AuthSource = AuthSource.LOCAL,
+
     @Column(name = "created_at", updatable = false)
     var createdAt: Instant? = null,
 
@@ -79,6 +88,20 @@ data class User(
      */
     enum class Role {
         USER, ADMIN, VULN, RELEASE_MANAGER, REQ, RISK, SECCHAMPION
+    }
+
+    /**
+     * Authentication source for user accounts
+     * Feature: 051-user-password-change
+     *
+     * - LOCAL: User registered with username/password
+     * - OAUTH: User created via OAuth/OIDC provider (no local password)
+     * - HYBRID: User has both local password and linked OAuth (future)
+     */
+    enum class AuthSource {
+        LOCAL,
+        OAUTH,
+        HYBRID
     }
 
     @PrePersist
