@@ -138,6 +138,7 @@ eventPublisher.publishEvent(UserCreatedEvent(savedUser, "MANUAL"))
 - MariaDB 12 (existing Vulnerability and Asset entities) (048-prevent-duplicate-vulnerabilities)
 - Kotlin 2.2.21 / Java 21 + Micronaut 4.10, Hibernate JPA, Picocli 4.7 (CLI framework), Apache Commons CSV 1.11.0, Jackson (JSON parsing) (049-cli-user-mappings)
 - MariaDB 12 (reuses existing UserMapping entity from feature 042) (049-cli-user-mappings)
+- MariaDB 12 (existing mcp_api_keys, mcp_audit_logs tables, users table) (050-mcp-user-delegation)
 
 ## Recent Changes
 - 048-prevent-duplicate-vulnerabilities: Fixed critical 99% data loss bug by removing JPA cascade from Asset.vulnerabilities; added transactional replace pattern for duplicate prevention, comprehensive documentation

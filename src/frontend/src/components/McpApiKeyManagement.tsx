@@ -10,6 +10,10 @@ interface ApiKey {
   expiresAt: string | null;
   createdAt: string;
   notes: string | null;
+  // Feature: 050-mcp-user-delegation
+  delegationEnabled: boolean;
+  allowedDelegationDomains: string | null;
+  delegationDomainCount: number;
 }
 
 interface CreateApiKeyRequest {
@@ -17,6 +21,9 @@ interface CreateApiKeyRequest {
   permissions: string[];
   expiresAt?: string;
   notes?: string;
+  // Feature: 050-mcp-user-delegation
+  delegationEnabled?: boolean;
+  allowedDelegationDomains?: string;
 }
 
 const McpApiKeyManagement: React.FC = () => {
@@ -28,7 +35,9 @@ const McpApiKeyManagement: React.FC = () => {
     name: '',
     permissions: [],
     expiresAt: '',
-    notes: ''
+    notes: '',
+    delegationEnabled: false,
+    allowedDelegationDomains: ''
   });
   const [newApiKey, setNewApiKey] = useState<string | null>(null);
 
@@ -84,6 +93,26 @@ const McpApiKeyManagement: React.FC = () => {
       return;
     }
 
+    // Feature: 050-mcp-user-delegation - Validate delegation domains
+    if (createForm.delegationEnabled) {
+      if (!createForm.allowedDelegationDomains?.trim()) {
+        setError('Allowed delegation domains are required when delegation is enabled');
+        return;
+      }
+      // Validate domain format
+      const domains = createForm.allowedDelegationDomains.split(',').map(d => d.trim()).filter(d => d);
+      for (const domain of domains) {
+        if (!domain.startsWith('@')) {
+          setError(`Invalid domain format: '${domain}' (must start with @)`);
+          return;
+        }
+        if (!domain.includes('.')) {
+          setError(`Invalid domain format: '${domain}' (must contain a TLD)`);
+          return;
+        }
+      }
+    }
+
     try {
       const token = localStorage.getItem('authToken');
       if (!token) {
@@ -95,7 +124,9 @@ const McpApiKeyManagement: React.FC = () => {
         name: createForm.name.trim(),
         permissions: createForm.permissions,
         expiresAt: createForm.expiresAt || undefined,
-        notes: createForm.notes || undefined
+        notes: createForm.notes || undefined,
+        delegationEnabled: createForm.delegationEnabled || false,
+        allowedDelegationDomains: createForm.delegationEnabled ? createForm.allowedDelegationDomains?.trim() : undefined
       };
 
       console.log('Creating API key with:', requestBody);
@@ -116,7 +147,7 @@ const McpApiKeyManagement: React.FC = () => {
         console.log('API key created:', data);
         setNewApiKey(data.apiKey);
         setShowCreateForm(false);
-        setCreateForm({ name: '', permissions: [], expiresAt: '', notes: '' });
+        setCreateForm({ name: '', permissions: [], expiresAt: '', notes: '', delegationEnabled: false, allowedDelegationDomains: '' });
         fetchApiKeys();
         setError(null);
       } else {
@@ -305,6 +336,56 @@ const McpApiKeyManagement: React.FC = () => {
                       placeholder="Optional notes about this API key"
                     />
                   </div>
+
+                  {/* User Delegation Section - Feature: 050-mcp-user-delegation */}
+                  <div className="card border-info mb-3">
+                    <div className="card-header bg-info bg-opacity-10">
+                      <h6 className="mb-0">User Delegation</h6>
+                    </div>
+                    <div className="card-body">
+                      <div className="form-check form-switch mb-3">
+                        <input
+                          className="form-check-input"
+                          type="checkbox"
+                          id="delegationEnabled"
+                          checked={createForm.delegationEnabled || false}
+                          onChange={(e) => setCreateForm(prev => ({
+                            ...prev,
+                            delegationEnabled: e.target.checked,
+                            allowedDelegationDomains: e.target.checked ? prev.allowedDelegationDomains : ''
+                          }))}
+                        />
+                        <label className="form-check-label" htmlFor="delegationEnabled">
+                          Enable User Delegation
+                        </label>
+                      </div>
+                      <div className="form-text mb-2">
+                        When enabled, external tools can pass an authenticated user's email via the <code>X-MCP-User-Email</code> header.
+                        Permissions will be the intersection of the user's roles and this API key's permissions.
+                      </div>
+
+                      {createForm.delegationEnabled && (
+                        <div className="mb-0">
+                          <label htmlFor="allowedDelegationDomains" className="form-label">
+                            Allowed Email Domains *
+                          </label>
+                          <input
+                            type="text"
+                            className="form-control"
+                            id="allowedDelegationDomains"
+                            value={createForm.allowedDelegationDomains || ''}
+                            onChange={(e) => setCreateForm(prev => ({ ...prev, allowedDelegationDomains: e.target.value }))}
+                            placeholder="@company.com, @subsidiary.com"
+                            required={createForm.delegationEnabled}
+                          />
+                          <div className="form-text">
+                            Comma-separated list of allowed email domains (must start with @).
+                            Only users with emails matching these domains can be delegated.
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
                 <div className="modal-footer">
                   <button
@@ -337,6 +418,7 @@ const McpApiKeyManagement: React.FC = () => {
               <tr>
                 <th>Name</th>
                 <th>Status</th>
+                <th>Delegation</th>
                 <th>Permissions</th>
                 <th>Last Used</th>
                 <th>Expires</th>
@@ -354,6 +436,19 @@ const McpApiKeyManagement: React.FC = () => {
                     )}
                   </td>
                   <td>{getStatusBadge(apiKey)}</td>
+                  <td>
+                    {/* Feature: 050-mcp-user-delegation */}
+                    {apiKey.delegationEnabled ? (
+                      <span
+                        className="badge bg-info"
+                        title={apiKey.allowedDelegationDomains || 'Delegation enabled'}
+                      >
+                        Enabled ({apiKey.delegationDomainCount} domain{apiKey.delegationDomainCount !== 1 ? 's' : ''})
+                      </span>
+                    ) : (
+                      <span className="badge bg-light text-muted">Disabled</span>
+                    )}
+                  </td>
                   <td>
                     {apiKey.permissions.map(permission => (
                       <span key={permission} className="badge bg-light text-dark me-1">

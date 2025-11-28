@@ -1,7 +1,7 @@
 # MCP (Model Context Protocol) Integration Guide
 
-**Last Updated:** 2025-11-26
-**Version:** 1.1
+**Last Updated:** 2025-11-28
+**Version:** 1.2
 
 This guide covers integrating Secman with AI assistants (Claude Desktop, ChatGPT, etc.) using the Model Context Protocol (MCP).
 
@@ -12,12 +12,13 @@ This guide covers integrating Secman with AI assistants (Claude Desktop, ChatGPT
 1. [Overview](#overview)
 2. [Quick Start](#quick-start)
 3. [API Key Management](#api-key-management)
-4. [Claude Desktop Setup](#claude-desktop-setup)
-5. [Available MCP Tools](#available-mcp-tools)
-6. [Authentication & Security](#authentication--security)
-7. [Usage Examples](#usage-examples)
-8. [Troubleshooting](#troubleshooting)
-9. [Administration](#administration)
+4. [User Delegation](#user-delegation)
+5. [Claude Desktop Setup](#claude-desktop-setup)
+6. [Available MCP Tools](#available-mcp-tools)
+7. [Authentication & Security](#authentication--security)
+8. [Usage Examples](#usage-examples)
+9. [Troubleshooting](#troubleshooting)
+10. [Administration](#administration)
 
 ---
 
@@ -166,6 +167,142 @@ curl -H "Authorization: Bearer YOUR_JWT_TOKEN" \
 curl -X DELETE \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   http://localhost:8080/api/mcp/admin/api-keys/KEY_ID
+```
+
+---
+
+## User Delegation
+
+*Feature: 050-mcp-user-delegation*
+
+User delegation allows external tools (like Claude Code, Cursor, or custom integrations) to authenticate on behalf of specific Secman users. This maintains role-based access control (RBAC) even when requests come through a shared API key.
+
+### Overview
+
+When enabled, a delegation-enabled API key can include the `X-MCP-User-Email` header to specify which user the request is being made on behalf of. Secman will:
+
+1. Look up the user by email
+2. Validate the email domain against allowed domains
+3. Compute **effective permissions** as the intersection of:
+   - Permissions implied by the user's roles
+   - Permissions granted to the API key
+
+This ensures defense-in-depth: the delegated user can never have more access than either their roles allow OR the API key allows.
+
+### Creating a Delegation-Enabled API Key
+
+```bash
+curl -X POST http://localhost:8080/api/mcp/admin/api-keys \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "External Tool Integration",
+    "permissions": ["REQUIREMENTS_READ", "ASSESSMENTS_READ", "ASSETS_READ", "VULNERABILITIES_READ"],
+    "delegationEnabled": true,
+    "allowedDelegationDomains": "@company.com,@subsidiary.com"
+  }'
+```
+
+**Required fields when `delegationEnabled` is true:**
+- `allowedDelegationDomains`: Comma-separated list of allowed email domains (must start with `@`)
+
+### Using Delegation
+
+When making requests with a delegation-enabled key, include the `X-MCP-User-Email` header:
+
+```bash
+curl -X POST http://localhost:8080/api/mcp/tools/call \
+  -H "X-MCP-API-Key: sk-your-delegation-enabled-key" \
+  -H "X-MCP-User-Email: user@company.com" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": "req-1",
+    "method": "tools/call",
+    "params": {
+      "name": "get_requirements",
+      "arguments": {"limit": 10}
+    }
+  }'
+```
+
+### Permission Mapping
+
+User roles are mapped to MCP permissions as follows:
+
+| User Role | Implied MCP Permissions |
+|-----------|------------------------|
+| `USER` | `REQUIREMENTS_READ`, `ASSETS_READ`, `VULNERABILITIES_READ`, `TAGS_READ` |
+| `ADMIN` | All permissions |
+| `VULN` | `VULNERABILITIES_READ`, `SCANS_READ`, `ASSETS_READ` |
+| `RELEASE_MANAGER` | `REQUIREMENTS_READ`, `ASSESSMENTS_READ` |
+| `REQ` | `REQUIREMENTS_READ`, `REQUIREMENTS_WRITE`, `FILES_READ`, `TAGS_READ` |
+| `RISK` | `ASSESSMENTS_READ`, `ASSESSMENTS_WRITE`, `ASSESSMENTS_EXECUTE` |
+| `SECCHAMPION` | `REQUIREMENTS_READ`, `ASSESSMENTS_READ`, `ASSETS_READ`, `VULNERABILITIES_READ`, `SCANS_READ` |
+
+**Example:** If a user has `VULN` role and the API key has `[ASSETS_READ, VULNERABILITIES_READ, REQUIREMENTS_READ]`:
+- User's implied permissions: `[VULNERABILITIES_READ, SCANS_READ, ASSETS_READ]`
+- API key permissions: `[ASSETS_READ, VULNERABILITIES_READ, REQUIREMENTS_READ]`
+- **Effective permissions**: `[VULNERABILITIES_READ, ASSETS_READ]` (intersection)
+
+### Fallback Behavior
+
+- **No header provided**: Request uses API key's base permissions (backward compatible)
+- **Empty header**: Same as no header
+- **Non-delegation key**: `X-MCP-User-Email` header is ignored
+
+### Security Considerations
+
+1. **Domain Restrictions**: Mandatory when delegation is enabled. Only emails matching allowed domains can be delegated.
+
+2. **User Validation**: The delegated user must exist in Secman and be active.
+
+3. **Audit Trail**: All delegated requests are logged with both the API key owner and delegated user email.
+
+4. **Alert Threshold**: Configurable threshold for failed delegation attempts triggers security alerts. Configure in `application.yml`:
+
+```yaml
+secman:
+  mcp:
+    delegation:
+      alert:
+        threshold: 10        # failures to trigger alert
+        window-minutes: 5    # time window
+```
+
+### Delegation Error Codes
+
+| Error Code | Description |
+|------------|-------------|
+| `DELEGATION_NOT_ENABLED` | API key doesn't have delegation enabled |
+| `DELEGATION_DOMAIN_REJECTED` | Email domain not in allowed list |
+| `DELEGATION_USER_NOT_FOUND` | User with email doesn't exist |
+| `DELEGATION_USER_INACTIVE` | User account is disabled |
+| `DELEGATION_INVALID_EMAIL` | Email format is invalid |
+| `DELEGATION_FAILED` | General delegation failure |
+
+### Example: Claude Code Integration
+
+For Claude Code or similar tools that authenticate users externally:
+
+1. Create a delegation-enabled key with your organization's domain
+2. Configure the tool to pass the authenticated user's email via `X-MCP-User-Email`
+3. Users get permissions based on their Secman roles, not the shared API key
+
+```json
+{
+  "mcpServers": {
+    "secman": {
+      "command": "node",
+      "args": ["/path/to/secman/mcp-server.js"],
+      "env": {
+        "SECMAN_API_URL": "http://localhost:8080/api/mcp",
+        "SECMAN_API_KEY": "sk-delegation-enabled-key",
+        "SECMAN_USER_EMAIL": "${USER_EMAIL}"
+      }
+    }
+  }
+}
 ```
 
 ---

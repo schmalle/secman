@@ -124,6 +124,14 @@ secman:
     notifications:
       batch-size: 50
       async-processing: true
+  # MCP User Delegation Feature (Feature 050)
+  mcp:
+    delegation:
+      alert:
+        # Number of failed delegation attempts to trigger alert
+        threshold: ${MCP_DELEGATION_ALERT_THRESHOLD:10}
+        # Time window in minutes for threshold calculation
+        window-minutes: ${MCP_DELEGATION_ALERT_WINDOW:5}
   vulnerability:
     # Use patch publication date for calculating days open
     # When true: days_open = scan_timestamp - patch_publication_date

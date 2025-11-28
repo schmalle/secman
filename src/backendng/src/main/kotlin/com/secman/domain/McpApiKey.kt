@@ -103,7 +103,25 @@ data class McpApiKey(
      */
     @Column(name = "notes", length = 500)
     @Size(max = 500)
-    val notes: String? = null
+    val notes: String? = null,
+
+    /**
+     * Whether this API key can delegate to users via X-MCP-User-Email header.
+     * When enabled, the key acts as a trusted proxy for user authentication.
+     * Feature: 050-mcp-user-delegation
+     */
+    @Column(name = "delegation_enabled", nullable = false)
+    val delegationEnabled: Boolean = false,
+
+    /**
+     * Comma-separated list of allowed email domains for delegation.
+     * Required when delegationEnabled is true (e.g., "@company.com,@subsidiary.com").
+     * Domain restrictions prevent unauthorized user impersonation.
+     * Feature: 050-mcp-user-delegation
+     */
+    @Column(name = "allowed_delegation_domains", length = 500)
+    @Size(max = 500)
+    val allowedDelegationDomains: String? = null
 ) {
     /**
      * Parse the permissions string into a set of McpPermission enums.
@@ -166,6 +184,43 @@ data class McpApiKey(
         return getPermissionSet().any { it.requiresAdmin() }
     }
 
+    /**
+     * Get the list of allowed delegation domains.
+     * Returns empty list if delegation is disabled or no domains are configured.
+     * Feature: 050-mcp-user-delegation
+     */
+    fun getDelegationDomainsList(): List<String> {
+        if (!delegationEnabled || allowedDelegationDomains.isNullOrBlank()) {
+            return emptyList()
+        }
+        return allowedDelegationDomains
+            .split(",")
+            .map { it.trim().lowercase() }
+            .filter { it.isNotBlank() && it.startsWith("@") }
+    }
+
+    /**
+     * Check if delegation is allowed for a given email address.
+     * Validates that the email domain matches one of the allowed domains.
+     * Feature: 050-mcp-user-delegation
+     *
+     * @param email The email address to check
+     * @return true if delegation is allowed for this email, false otherwise
+     */
+    fun isDelegationAllowedForEmail(email: String): Boolean {
+        if (!delegationEnabled || allowedDelegationDomains.isNullOrBlank()) {
+            return false
+        }
+
+        val emailDomain = "@" + email.substringAfter("@").lowercase()
+        val allowedDomains = getDelegationDomainsList()
+
+        // Case-insensitive suffix match
+        return allowedDomains.any { allowedDomain ->
+            emailDomain.endsWith(allowedDomain)
+        }
+    }
+
     companion object {
         /**
          * Create permissions string from a set of McpPermission enums.
@@ -204,6 +259,7 @@ data class McpApiKey(
     override fun toString(): String {
         return "McpApiKey(id=$id, keyId='$keyId', name='$name', userId=$userId, " +
                "permissionCount=${getPermissionSet().size}, isActive=$isActive, " +
-               "expiresAt=$expiresAt, isExpired=${isExpired()})"
+               "expiresAt=$expiresAt, isExpired=${isExpired()}, " +
+               "delegationEnabled=$delegationEnabled, domains=${getDelegationDomainsList().size})"
     }
 }
