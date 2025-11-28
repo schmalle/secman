@@ -173,7 +173,7 @@ oauth:
 
 datasources:
   default:
-    url: jdbc:mariadb://localhost:3306/secman
+    url: ${DB_CONNECT:jdbc:mariadb://localhost:3306/secman}
     driverClassName: org.mariadb.jdbc.Driver
     username: ${DB_USERNAME:secman}
     password: ${DB_PASSWORD:CHANGEME}
