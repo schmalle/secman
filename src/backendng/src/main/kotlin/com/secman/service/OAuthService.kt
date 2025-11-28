@@ -17,7 +17,7 @@ import io.micronaut.http.client.exceptions.HttpClientResponseException
 import io.micronaut.security.token.generator.TokenGenerator
 import io.micronaut.scheduling.annotation.Async
 import io.micronaut.scheduling.annotation.Scheduled
-import io.micronaut.transaction.annotation.Transactional
+import jakarta.transaction.Transactional
 import jakarta.inject.Singleton
 import jakarta.persistence.EntityManager
 import org.slf4j.LoggerFactory
@@ -49,10 +49,81 @@ open class OAuthService(
     private val passwordEncoder = BCryptPasswordEncoder()
 
     /**
-     * Find OAuth state by state value
+     * Find OAuth state by state value with retry logic for race conditions.
+     *
+     * Microsoft Azure OAuth callbacks can arrive within 100-500ms when users
+     * have cached SSO sessions. This retry mechanism handles the rare case
+     * where the state lookup occurs before the save transaction commits.
      */
     fun findStateByValue(stateToken: String): Optional<OAuthState> {
         return oauthStateRepository.findByStateToken(stateToken)
+    }
+
+    /**
+     * Find OAuth state with retry mechanism to handle race conditions.
+     *
+     * When Microsoft Azure users have cached SSO sessions, callbacks can arrive
+     * in 100-500ms. This retry logic handles cases where the callback arrives
+     * before the state-save transaction is fully visible.
+     *
+     * @param stateToken The OAuth state token to find
+     * @param maxRetries Maximum number of retry attempts (default: 3)
+     * @param retryDelayMs Delay between retries in milliseconds (default: 100ms)
+     * @return Optional containing the state if found, empty otherwise
+     */
+    fun findStateByValueWithRetry(
+        stateToken: String,
+        maxRetries: Int = 3,
+        retryDelayMs: Long = 100
+    ): Optional<OAuthState> {
+        var attempt = 0
+        while (attempt <= maxRetries) {
+            val result = oauthStateRepository.findByStateToken(stateToken)
+            if (result.isPresent) {
+                if (attempt > 0) {
+                    logger.info("OAuth state found after {} retry attempts ({}ms total delay)",
+                        attempt, attempt * retryDelayMs)
+                }
+                return result
+            }
+
+            if (attempt < maxRetries) {
+                logger.debug("OAuth state not found, retry {}/{} after {}ms delay",
+                    attempt + 1, maxRetries, retryDelayMs)
+                try {
+                    Thread.sleep(retryDelayMs)
+                } catch (e: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    break
+                }
+            }
+            attempt++
+        }
+
+        logger.warn("OAuth state not found after {} retries ({}ms total delay)",
+            maxRetries, maxRetries * retryDelayMs)
+        return Optional.empty()
+    }
+
+    /**
+     * Save OAuth state in a NEW transaction to ensure immediate commit.
+     *
+     * CRITICAL: This method uses REQUIRES_NEW to create an independent transaction
+     * that commits immediately upon return, BEFORE the redirect to the OAuth provider.
+     * This prevents race conditions where fast OAuth callbacks (Microsoft Azure with
+     * cached SSO can return in 100-500ms) arrive before the state is visible in the
+     * database.
+     *
+     * @param oauthState The OAuth state to persist
+     * @return The saved OAuth state with generated ID
+     */
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    open fun saveOAuthStateImmediately(oauthState: OAuthState): OAuthState {
+        val saved = oauthStateRepository.save(oauthState)
+        entityManager.flush()
+        logger.debug("OAuth state saved and committed immediately: {} (first 10 chars)",
+            saved.stateToken.take(10) + "...")
+        return saved
     }
 
     /**
@@ -97,26 +168,27 @@ open class OAuthService(
 		logger.info("OAuthService.buildAuthorizationUrl: Provider callback URL: {}", provider.callbackUrl)
 		logger.info("OAuthService.buildAuthorizationUrl: Constructed RedirectUri: {}", redirectUri)
 
-        // Save state and flush immediately to ensure it's persisted before redirect
+        // Save state in a SEPARATE transaction that commits immediately
+        // CRITICAL: This prevents race conditions with fast OAuth callbacks (Microsoft Azure SSO)
         val oauthState = OAuthState(
             stateToken = state,
             providerId = providerId,
             redirectUri = redirectUri
         )
-        val savedState = oauthStateRepository.save(oauthState)
 
-        // Force immediate flush to database - critical for OAuth flow!
-        entityManager.flush()
-        logger.info("Saved and flushed OAuth state with token {} (first 10 chars) for provider {}, expires at {}",
+        // Use REQUIRES_NEW transaction to ensure state is COMMITTED before redirect
+        val savedState = saveOAuthStateImmediately(oauthState)
+        logger.info("OAuth state saved and COMMITTED with token {} (first 10 chars) for provider {}, expires at {}",
             state.take(10) + "...", providerId, savedState.expiresAt)
 
-        // Verify state was actually saved
+        // Verify state is visible in a NEW connection (simulates callback scenario)
+        // This verification runs OUTSIDE the save transaction since saveOAuthStateImmediately already committed
         val verificationState = oauthStateRepository.findByStateToken(state)
         if (!verificationState.isPresent) {
-            logger.error("Failed to verify saved OAuth state - state not found after save and flush!")
+            logger.error("CRITICAL: OAuth state not visible after commit! This indicates a database replication lag or configuration issue.")
             return null
         }
-        logger.info("Verified OAuth state exists in database after flush - ready for redirect")
+        logger.info("Verified OAuth state is visible to other transactions - ready for redirect")
 
         // Build authorization URL - replace {tenantId} placeholder for Microsoft providers
         var authUrl = provider.authorizationUrl ?: return null

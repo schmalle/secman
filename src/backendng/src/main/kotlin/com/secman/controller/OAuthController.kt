@@ -117,15 +117,18 @@ class OAuthController(
                 return HttpResponse.redirect<Any>(URI.create("$frontendBaseUrl/login?error=${java.net.URLEncoder.encode("Invalid OAuth callback parameters", "UTF-8")}"))
             }
 
-            // Find provider ID from state
-            val stateOpt = oauthService.findStateByValue(state)
+            // Find provider ID from state with retry mechanism
+            // Microsoft Azure with cached SSO can return in 100-500ms, potentially before
+            // the state-save transaction is fully visible. Retry handles this race condition.
+            val stateOpt = oauthService.findStateByValueWithRetry(state)
             if (!stateOpt.isPresent) {
-                logger.error("Invalid OAuth state: state token not found in database (first 10 chars: {})", state.take(10) + "...")
-                logger.error("Possible causes: transaction not committed, state expired, or state already used")
-                return HttpResponse.redirect<Any>(URI.create("$frontendBaseUrl/login?error=${java.net.URLEncoder.encode("Invalid or expired state parameter", "UTF-8")}"))
+                logger.error("Invalid OAuth state: state token not found in database after retries (first 10 chars: {})", state.take(10) + "...")
+                logger.error("Possible causes: state never saved, state expired (>10min), or state already consumed by another callback")
+                return HttpResponse.redirect<Any>(URI.create("$frontendBaseUrl/login?error=${java.net.URLEncoder.encode("Invalid or expired state parameter. Please try logging in again.", "UTF-8")}"))
             }
 
             val providerId = stateOpt.get().providerId
+            logger.debug("OAuth state validated successfully for provider {}", providerId)
 
             // Process OAuth callback
             val result = oauthService.handleCallback(providerId, code, state)
@@ -166,12 +169,12 @@ class OAuthController(
         @Body callbackRequest: CallbackRequest
     ): HttpResponse<*> {
         return try {
-            // Find provider ID from state
-            val stateOpt = oauthService.findStateByValue(callbackRequest.state)
+            // Find provider ID from state with retry mechanism
+            val stateOpt = oauthService.findStateByValueWithRetry(callbackRequest.state)
             if (!stateOpt.isPresent) {
-                logger.error("Invalid OAuth state in API callback: state token not found (first 10 chars: {})",
+                logger.error("Invalid OAuth state in API callback: state token not found after retries (first 10 chars: {})",
                     callbackRequest.state.take(10) + "...")
-                return HttpResponse.badRequest(ErrorResponse("Invalid or expired state parameter"))
+                return HttpResponse.badRequest(ErrorResponse("Invalid or expired state parameter. Please try again."))
             }
 
             val providerId = stateOpt.get().providerId
