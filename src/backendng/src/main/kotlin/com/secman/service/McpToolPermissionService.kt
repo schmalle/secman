@@ -36,6 +36,84 @@ class McpToolPermissionService(
     private val HOUR_WINDOW_MS = 3_600_000L
 
     /**
+     * Check if a given permission set allows calling a specific tool.
+     * Used for delegation where effective permissions are pre-computed.
+     * Feature: 050-mcp-user-delegation
+     *
+     * @param toolName The name of the tool to check
+     * @param permissions The set of effective permissions
+     * @param requestId Optional request ID for logging
+     * @return PermissionCheckResult indicating whether access is granted
+     */
+    fun hasPermissionWithSet(
+        toolName: String,
+        permissions: Set<McpPermission>,
+        requestId: String? = null
+    ): PermissionCheckResult {
+        try {
+            val hasPermission = checkPermissionSetForTool(permissions, toolName)
+
+            return PermissionCheckResult(
+                granted = hasPermission,
+                permission = null,
+                reason = if (hasPermission) "Permission granted via effective permissions" else "No permission for tool '$toolName'",
+                rateLimitInfo = null
+            )
+        } catch (e: Exception) {
+            logger.error("Permission check with set failed: toolName={}", toolName, e)
+
+            return PermissionCheckResult(
+                granted = false,
+                permission = null,
+                reason = "Permission check system error",
+                rateLimitInfo = null
+            )
+        }
+    }
+
+    /**
+     * Check if a permission set allows access to a specific tool.
+     * Feature: 050-mcp-user-delegation
+     */
+    private fun checkPermissionSetForTool(permissions: Set<McpPermission>, toolName: String): Boolean {
+        return when (toolName) {
+            in ToolCategories.READ_ONLY_TOOLS -> {
+                permissions.contains(McpPermission.REQUIREMENTS_READ) ||
+                permissions.contains(McpPermission.ASSESSMENTS_READ) ||
+                permissions.contains(McpPermission.TAGS_READ)
+            }
+            in ToolCategories.WRITE_TOOLS -> {
+                permissions.contains(McpPermission.REQUIREMENTS_WRITE) ||
+                permissions.contains(McpPermission.ASSESSMENTS_WRITE)
+            }
+            in ToolCategories.ADMIN_TOOLS -> {
+                permissions.contains(McpPermission.SYSTEM_INFO) ||
+                permissions.contains(McpPermission.USER_ACTIVITY)
+            }
+            // Asset and vulnerability tools
+            "get_assets", "get_asset_profile", "search_assets" -> {
+                permissions.contains(McpPermission.ASSETS_READ)
+            }
+            "get_vulnerabilities", "search_vulnerabilities" -> {
+                permissions.contains(McpPermission.VULNERABILITIES_READ)
+            }
+            "get_scans", "get_scan_results", "search_products" -> {
+                permissions.contains(McpPermission.SCANS_READ)
+            }
+            "get_audit_log", "search_audit_logs" -> {
+                permissions.contains(McpPermission.AUDIT_READ)
+            }
+            "translate_requirement" -> {
+                permissions.contains(McpPermission.TRANSLATION_USE)
+            }
+            "get_requirement_files", "download_file" -> {
+                permissions.contains(McpPermission.FILES_READ)
+            }
+            else -> false
+        }
+    }
+
+    /**
      * Check if an API key has permission to call a specific tool with given parameters.
      */
     fun hasPermission(

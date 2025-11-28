@@ -1,0 +1,2 @@
+# MCP Test Client Dependencies
+requests>=2.28.0

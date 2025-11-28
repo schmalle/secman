@@ -24,6 +24,9 @@ class McpAuditService(
 
     /**
      * Log a tool call execution with comprehensive details.
+     *
+     * @param delegatedUserEmail Email of the user on whose behalf the request was made (Feature: 050-mcp-user-delegation)
+     * @param delegatedUserId ID of the delegated user (Feature: 050-mcp-user-delegation)
      */
     fun logToolCall(
         apiKeyId: Long,
@@ -40,7 +43,9 @@ class McpAuditService(
         requestSize: Long? = null,
         responseSize: Long? = null,
         resultSize: Int? = null,
-        cacheHit: Boolean? = null
+        cacheHit: Boolean? = null,
+        delegatedUserEmail: String? = null,
+        delegatedUserId: Long? = null
     ): CompletableFuture<Void> {
         return CompletableFuture.runAsync {
             try {
@@ -50,28 +55,32 @@ class McpAuditService(
                     cacheHit = cacheHit
                 )
 
-                val auditLog = McpAuditLog.createToolCall(
+                val auditLog = McpAuditLog(
+                    eventType = McpEventType.TOOL_CALL,
                     apiKeyId = apiKeyId,
                     userId = userId,
                     sessionId = sessionId,
-                    toolName = toolName,
                     operation = operation,
+                    toolName = toolName,
                     success = success,
-                    durationMs = durationMs,
                     errorCode = errorCode,
                     errorMessage = errorMessage,
                     contextData = contextData,
                     requestId = requestId,
-                    requestSize = requestSize,
-                    responseSize = responseSize
+                    durationMs = durationMs,
+                    requestSizeBytes = requestSize,
+                    responseSizeBytes = responseSize,
+                    severity = if (success) AuditSeverity.INFO else AuditSeverity.ERROR,
+                    delegatedUserEmail = delegatedUserEmail,
+                    delegatedUserId = delegatedUserId
                 )
 
                 auditLogRepository.save(auditLog)
 
                 if (!success) {
                     logger.warn(
-                        "Tool call failed: toolName={}, error={}, sessionId={}",
-                        toolName, errorCode, sessionId
+                        "Tool call failed: toolName={}, error={}, sessionId={}, delegatedUser={}",
+                        toolName, errorCode, sessionId, delegatedUserEmail
                     )
                 }
 

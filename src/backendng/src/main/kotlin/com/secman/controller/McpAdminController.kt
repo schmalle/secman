@@ -33,6 +33,10 @@ class McpAdminController(
 
     /**
      * Create a new MCP API key.
+     *
+     * Supports user delegation (Feature: 050-mcp-user-delegation):
+     * - delegationEnabled: Enable delegation for this key
+     * - allowedDelegationDomains: Required if delegation enabled (comma-separated, e.g. "@company.com")
      */
     @Post("/api-keys")
     suspend fun createApiKey(
@@ -55,6 +59,15 @@ class McpAdminController(
                 )
             }
 
+            // Validate delegation configuration (Feature: 050-mcp-user-delegation)
+            val delegationValidationError = validateDelegationConfig(request.delegationEnabled, request.allowedDelegationDomains)
+            if (delegationValidationError != null) {
+                logger.debug("Delegation validation failed: {}", delegationValidationError)
+                return HttpResponse.badRequest(
+                    McpApiKeyCreateResponse(error = McpErrorResponse("INVALID_DELEGATION_CONFIG", delegationValidationError))
+                )
+            }
+
             // Check for duplicate names
             if (apiKeyRepository.existsByUserIdAndName(userId, request.name)) {
                 return HttpResponse.status<McpApiKeyCreateResponse>(HttpStatus.CONFLICT)
@@ -68,7 +81,7 @@ class McpAdminController(
             // Generate API key
             val keyPair = authService.generateApiKeyPair()
 
-            // Create API key entity
+            // Create API key entity with delegation fields
             val apiKey = McpApiKey(
                 keyId = keyPair.keyId,
                 keyHash = keyPair.keyHash,
@@ -76,7 +89,9 @@ class McpAdminController(
                 userId = userId,
                 permissions = McpApiKey.permissionsToString(permissions),
                 expiresAt = expiresAt,
-                notes = request.notes
+                notes = request.notes,
+                delegationEnabled = request.delegationEnabled,
+                allowedDelegationDomains = request.allowedDelegationDomains
             )
 
             // Save API key
@@ -88,10 +103,13 @@ class McpAdminController(
                 name = request.name,
                 permissions = request.permissions,
                 expiresAt = request.expiresAt,
-                createdAt = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+                createdAt = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME),
+                delegationEnabled = savedApiKey.delegationEnabled,
+                allowedDelegationDomains = savedApiKey.allowedDelegationDomains
             )
 
-            logger.info("API key created: keyId={}, userId={}, name={}", keyPair.keyId, userId, request.name)
+            logger.info("API key created: keyId={}, userId={}, name={}, delegationEnabled={}",
+                       keyPair.keyId, userId, request.name, request.delegationEnabled)
 
             HttpResponse.status<McpApiKeyCreateResponse>(HttpStatus.CREATED).body(response)
 
@@ -138,7 +156,10 @@ class McpAdminController(
                     lastUsedAt = key.lastUsedAt?.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME),
                     expiresAt = key.expiresAt?.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME),
                     createdAt = key.createdAt.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME),
-                    notes = key.notes
+                    notes = key.notes,
+                    delegationEnabled = key.delegationEnabled,
+                    allowedDelegationDomains = key.allowedDelegationDomains,
+                    delegationDomainCount = key.getDelegationDomainsList().size
                 )
             }
 
@@ -246,6 +267,9 @@ class McpAdminController(
 
     /**
      * Get audit logs with filtering.
+     *
+     * Supports filtering by delegated user (Feature: 050-mcp-user-delegation):
+     * - delegatedUserEmail: Filter by requests made on behalf of specific user
      */
     @Get("/audit-logs")
     suspend fun getAuditLogs(
@@ -254,7 +278,8 @@ class McpAdminController(
         @QueryValue("eventType") eventType: String?,
         @QueryValue("startTime") startTime: String?,
         @QueryValue("endTime") endTime: String?,
-        @QueryValue("success") success: Boolean?
+        @QueryValue("success") success: Boolean?,
+        @QueryValue("delegatedUserEmail") delegatedUserEmail: String?
     ): HttpResponse<McpAuditLogResponse> {
         return try {
             if (pageSize > 100) {
@@ -541,6 +566,54 @@ class McpAdminController(
                 }
             } catch (e: Exception) {
                 return "Invalid expiration date format. Use ISO 8601 format (YYYY-MM-DDTHH:MM:SS)"
+            }
+        }
+
+        return null
+    }
+
+    /**
+     * Validate delegation configuration.
+     * Feature: 050-mcp-user-delegation
+     *
+     * @param delegationEnabled Whether delegation is enabled
+     * @param allowedDomains Comma-separated list of allowed domains
+     * @return Error message if invalid, null if valid
+     */
+    private fun validateDelegationConfig(delegationEnabled: Boolean, allowedDomains: String?): String? {
+        if (!delegationEnabled) {
+            // Delegation disabled, no validation needed
+            return null
+        }
+
+        // Delegation enabled, domains are required
+        if (allowedDomains.isNullOrBlank()) {
+            return "Allowed delegation domains are required when delegation is enabled"
+        }
+
+        // Validate each domain format
+        val domains = allowedDomains.split(",").map { it.trim() }
+        if (domains.isEmpty()) {
+            return "At least one delegation domain must be specified"
+        }
+
+        for (domain in domains) {
+            if (domain.isBlank()) {
+                continue // Skip empty entries
+            }
+
+            if (!domain.startsWith("@")) {
+                return "Invalid domain format: '$domain' (must start with @)"
+            }
+
+            if (!domain.contains(".")) {
+                return "Invalid domain format: '$domain' (must contain a TLD)"
+            }
+
+            // Basic domain format validation
+            val domainPart = domain.substring(1) // Remove @
+            if (domainPart.startsWith(".") || domainPart.endsWith(".")) {
+                return "Invalid domain format: '$domain' (cannot start or end with .)"
             }
         }
 

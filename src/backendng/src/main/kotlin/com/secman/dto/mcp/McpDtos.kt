@@ -121,7 +121,11 @@ data class McpApiKeyCreateRequest(
     val name: String = "", // Allow empty string, validation will catch it
     val permissions: List<String>,
     val expiresAt: String? = null, // ISO 8601 format
-    val notes: String? = null
+    val notes: String? = null,
+    /** Enable user delegation for this API key. Feature: 050-mcp-user-delegation */
+    val delegationEnabled: Boolean = false,
+    /** Comma-separated list of allowed email domains (e.g., "@company.com,@subsidiary.com"). Feature: 050-mcp-user-delegation */
+    val allowedDelegationDomains: String? = null
 )
 
 /**
@@ -135,6 +139,10 @@ data class McpApiKeyCreateResponse(
     val permissions: List<String>? = null,
     val expiresAt: String? = null,
     val createdAt: String? = null,
+    /** Whether user delegation is enabled for this key. Feature: 050-mcp-user-delegation */
+    val delegationEnabled: Boolean? = null,
+    /** Allowed email domains for delegation. Feature: 050-mcp-user-delegation */
+    val allowedDelegationDomains: String? = null,
     val error: McpErrorResponse? = null
 )
 
@@ -151,7 +159,13 @@ data class McpApiKeyInfo(
     val lastUsedAt: String?,
     val expiresAt: String?,
     val createdAt: String,
-    val notes: String?
+    val notes: String?,
+    /** Whether user delegation is enabled for this key. Feature: 050-mcp-user-delegation */
+    val delegationEnabled: Boolean = false,
+    /** Allowed email domains for delegation. Feature: 050-mcp-user-delegation */
+    val allowedDelegationDomains: String? = null,
+    /** Number of allowed delegation domains. Feature: 050-mcp-user-delegation */
+    val delegationDomainCount: Int = 0
 )
 
 /**

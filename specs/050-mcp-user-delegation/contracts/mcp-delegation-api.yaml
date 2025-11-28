@@ -1,0 +1,476 @@
+openapi: 3.0.3
+info:
+  title: MCP User Delegation API Extensions
+  version: 1.0.0
+  description: |
+    API extensions for MCP user delegation feature.
+    Extends existing MCP endpoints with delegation support.
+
+paths:
+  /api/mcp/tools/call:
+    post:
+      summary: Execute MCP tool (extended with delegation)
+      description: |
+        Execute an MCP tool. When X-MCP-User-Email header is provided
+        and the API key has delegation enabled, the request is executed
+        with the intersection of user roles and API key permissions.
+      parameters:
+        - name: X-MCP-API-Key
+          in: header
+          required: true
+          schema:
+            type: string
+          description: MCP API key (sk-xxx format)
+        - name: X-MCP-User-Email
+          in: header
+          required: false
+          schema:
+            type: string
+            format: email
+          description: |
+            Email of the user on whose behalf to execute the request.
+            Only processed if API key has delegationEnabled=true.
+            Email domain must match allowedDelegationDomains.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpToolCallRequest'
+      responses:
+        '200':
+          description: Tool executed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/McpToolCallResponse'
+        '401':
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/McpErrorResponse'
+              examples:
+                invalidKey:
+                  value:
+                    error:
+                      code: AUTH_FAILED
+                      message: Invalid API key
+                userNotFound:
+                  value:
+                    error:
+                      code: DELEGATION_FAILED
+                      message: Delegated user not found
+                domainNotAllowed:
+                  value:
+                    error:
+                      code: DELEGATION_DOMAIN_REJECTED
+                      message: Email domain not allowed for delegation
+                userInactive:
+                  value:
+                    error:
+                      code: DELEGATION_USER_INACTIVE
+                      message: User account is inactive
+        '403':
+          description: Permission denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/McpErrorResponse'
+
+  /api/mcp-api-keys:
+    post:
+      summary: Create MCP API key (extended with delegation)
+      description: Create a new MCP API key with optional delegation configuration
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMcpApiKeyRequest'
+      responses:
+        '201':
+          description: API key created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/McpApiKeyCreatedResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+              examples:
+                missingDomains:
+                  value:
+                    error: Delegation enabled but no allowed domains specified
+                    field: allowedDelegationDomains
+                invalidDomain:
+                  value:
+                    error: "Invalid domain format: 'company.com' (must start with @)"
+                    field: allowedDelegationDomains
+
+  /api/mcp-api-keys/{id}:
+    put:
+      summary: Update MCP API key (extended with delegation)
+      description: Update an existing MCP API key including delegation settings
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMcpApiKeyRequest'
+      responses:
+        '200':
+          description: API key updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/McpApiKeyResponse'
+        '400':
+          description: Validation error
+        '404':
+          description: API key not found
+
+  /api/mcp-audit-logs:
+    get:
+      summary: Get MCP audit logs (extended with delegation filter)
+      description: Query MCP audit logs with optional delegation user filter
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: delegatedUserEmail
+          in: query
+          required: false
+          schema:
+            type: string
+            format: email
+          description: Filter by delegated user email
+        - name: apiKeyId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+          description: Filter by API key ID
+        - name: since
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: Filter logs after this timestamp
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: Audit logs retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/McpAuditLogPage'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    McpToolCallRequest:
+      type: object
+      required:
+        - jsonrpc
+        - method
+        - id
+        - params
+      properties:
+        jsonrpc:
+          type: string
+          enum: ["2.0"]
+        method:
+          type: string
+          enum: ["tools/call"]
+        id:
+          type: string
+        params:
+          type: object
+          required:
+            - name
+          properties:
+            name:
+              type: string
+              description: Tool name to execute
+            arguments:
+              type: object
+              additionalProperties: true
+
+    McpToolCallResponse:
+      type: object
+      properties:
+        jsonrpc:
+          type: string
+        id:
+          type: string
+        result:
+          $ref: '#/components/schemas/McpToolResult'
+        error:
+          $ref: '#/components/schemas/McpError'
+
+    McpToolResult:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            type: object
+        isError:
+          type: boolean
+        metadata:
+          type: object
+          additionalProperties: true
+
+    McpError:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+
+    McpErrorResponse:
+      type: object
+      properties:
+        error:
+          $ref: '#/components/schemas/McpError'
+
+    CreateMcpApiKeyRequest:
+      type: object
+      required:
+        - name
+        - permissions
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        permissions:
+          type: array
+          items:
+            type: string
+            enum:
+              - REQUIREMENTS_READ
+              - REQUIREMENTS_WRITE
+              - REQUIREMENTS_DELETE
+              - ASSESSMENTS_READ
+              - ASSESSMENTS_EXECUTE
+              - ASSESSMENTS_WRITE
+              - ASSETS_READ
+              - SCANS_READ
+              - VULNERABILITIES_READ
+              - FILES_READ
+              - TAGS_READ
+              - SYSTEM_INFO
+              - USER_ACTIVITY
+              - AUDIT_READ
+              - TRANSLATION_USE
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        notes:
+          type: string
+          maxLength: 500
+          nullable: true
+        delegationEnabled:
+          type: boolean
+          default: false
+          description: Enable user delegation for this key
+        allowedDelegationDomains:
+          type: string
+          maxLength: 500
+          nullable: true
+          description: |
+            Comma-separated list of allowed email domains.
+            Required when delegationEnabled is true.
+            Example: "@company.com,@subsidiary.com"
+
+    UpdateMcpApiKeyRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        permissions:
+          type: array
+          items:
+            type: string
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        notes:
+          type: string
+          maxLength: 500
+          nullable: true
+        isActive:
+          type: boolean
+        delegationEnabled:
+          type: boolean
+        allowedDelegationDomains:
+          type: string
+          maxLength: 500
+          nullable: true
+
+    McpApiKeyCreatedResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        keyId:
+          type: string
+          description: Public key identifier
+        keySecret:
+          type: string
+          description: Secret key (shown only once)
+        name:
+          type: string
+        permissions:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        delegationEnabled:
+          type: boolean
+        allowedDelegationDomains:
+          type: string
+          nullable: true
+
+    McpApiKeyResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        keyId:
+          type: string
+        name:
+          type: string
+        permissions:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+        lastUsedAt:
+          type: string
+          format: date-time
+          nullable: true
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        isActive:
+          type: boolean
+        notes:
+          type: string
+          nullable: true
+        delegationEnabled:
+          type: boolean
+        allowedDelegationDomains:
+          type: string
+          nullable: true
+
+    McpAuditLogPage:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/McpAuditLogEntry'
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+        page:
+          type: integer
+        size:
+          type: integer
+
+    McpAuditLogEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        eventType:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        apiKeyId:
+          type: integer
+          format: int64
+          nullable: true
+        userId:
+          type: integer
+          format: int64
+          nullable: true
+        delegatedUserEmail:
+          type: string
+          nullable: true
+          description: Email of delegated user (if delegation was used)
+        delegatedUserId:
+          type: integer
+          format: int64
+          nullable: true
+        toolName:
+          type: string
+          nullable: true
+        success:
+          type: boolean
+        errorCode:
+          type: string
+          nullable: true
+        errorMessage:
+          type: string
+          nullable: true
+
+    ValidationErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        field:
+          type: string

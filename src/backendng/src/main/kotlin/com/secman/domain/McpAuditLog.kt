@@ -25,7 +25,8 @@ import com.fasterxml.jackson.databind.ObjectMapper
         Index(name = "idx_mcp_audit_user", columnList = "userId"),
         Index(name = "idx_mcp_audit_success", columnList = "success"),
         Index(name = "idx_mcp_audit_severity", columnList = "severity"),
-        Index(name = "idx_mcp_audit_composite", columnList = "eventType, timestamp, success")
+        Index(name = "idx_mcp_audit_composite", columnList = "eventType, timestamp, success"),
+        Index(name = "idx_mcp_audit_delegated_user", columnList = "delegatedUserEmail, timestamp")
     ]
 )
 @Serdeable
@@ -157,7 +158,22 @@ data class McpAuditLog(
     @Column(name = "severity", nullable = false, length = 10)
     @Enumerated(EnumType.STRING)
     @NotNull
-    val severity: AuditSeverity = AuditSeverity.INFO
+    val severity: AuditSeverity = AuditSeverity.INFO,
+
+    /**
+     * Email of the user on whose behalf the request was made (if delegation was used).
+     * Feature: 050-mcp-user-delegation
+     */
+    @Column(name = "delegated_user_email", length = 255)
+    @Size(max = 255)
+    val delegatedUserEmail: String? = null,
+
+    /**
+     * ID of the delegated user (for joins, if delegation was used).
+     * Feature: 050-mcp-user-delegation
+     */
+    @Column(name = "delegated_user_id")
+    val delegatedUserId: Long? = null
 ) {
     /**
      * Parse the context data JSON into a JsonNode for programmatic access.
@@ -202,9 +218,18 @@ data class McpAuditLog(
         val operation = if (toolName != null) "tool '$toolName'" else operation?.name?.lowercase() ?: "operation"
         val result = if (success) "succeeded" else "failed"
         val user = if (userId != null) " for user $userId" else ""
+        val delegated = if (delegatedUserEmail != null) " (delegated: $delegatedUserEmail)" else ""
         val session = if (sessionId != null) " in session ${sessionId.take(8)}..." else ""
 
-        return "${eventType.name.lowercase().replace('_', ' ')} - $operation $result$user$session"
+        return "${eventType.name.lowercase().replace('_', ' ')} - $operation $result$user$delegated$session"
+    }
+
+    /**
+     * Check if this request was made via delegation.
+     * Feature: 050-mcp-user-delegation
+     */
+    fun isDelegatedRequest(): Boolean {
+        return delegatedUserEmail != null
     }
 
     /**

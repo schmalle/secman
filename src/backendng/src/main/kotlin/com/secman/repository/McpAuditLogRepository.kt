@@ -514,4 +514,99 @@ interface McpAuditLogRepository : JpaRepository<McpAuditLog, Long> {
         LIMIT :limit
     """)
     fun findRecent(since: LocalDateTime, limit: Int): List<McpAuditLog>
+
+    // ===== DELEGATION QUERIES (Feature: 050-mcp-user-delegation) =====
+
+    /**
+     * Find audit logs for delegated requests by email.
+     * Used for tracking requests made on behalf of specific users.
+     * Feature: 050-mcp-user-delegation
+     */
+    @Query("""
+        SELECT al FROM McpAuditLog al
+        WHERE al.delegatedUserEmail = :email
+        AND al.timestamp >= :since
+        ORDER BY al.timestamp DESC
+    """)
+    fun findByDelegatedUserEmail(email: String, since: LocalDateTime): List<McpAuditLog>
+
+    /**
+     * Find delegated requests with pagination.
+     * Feature: 050-mcp-user-delegation
+     */
+    @Query(value = """
+        SELECT al FROM McpAuditLog al
+        WHERE al.delegatedUserEmail = :email
+        ORDER BY al.timestamp DESC
+    """,
+    countQuery = """
+        SELECT COUNT(al) FROM McpAuditLog al
+        WHERE al.delegatedUserEmail = :email
+    """)
+    fun findByDelegatedUserEmail(email: String, pageable: Pageable): Page<McpAuditLog>
+
+    /**
+     * Find all delegated requests within time range.
+     * Used for delegation activity monitoring.
+     * Feature: 050-mcp-user-delegation
+     */
+    @Query("""
+        SELECT al FROM McpAuditLog al
+        WHERE al.delegatedUserEmail IS NOT NULL
+        AND al.timestamp BETWEEN :startTime AND :endTime
+        ORDER BY al.timestamp DESC
+    """)
+    fun findDelegatedRequests(startTime: LocalDateTime, endTime: LocalDateTime): List<McpAuditLog>
+
+    /**
+     * Get delegation statistics by delegated user.
+     * Returns email, request count, success rate, last activity.
+     * Feature: 050-mcp-user-delegation
+     */
+    @Query("""
+        SELECT
+            al.delegatedUserEmail,
+            COUNT(al) as requestCount,
+            AVG(CASE WHEN al.success = true THEN 1.0 ELSE 0.0 END) as successRate,
+            MAX(al.timestamp) as lastActivity
+        FROM McpAuditLog al
+        WHERE al.delegatedUserEmail IS NOT NULL
+        AND al.timestamp >= :since
+        GROUP BY al.delegatedUserEmail
+        ORDER BY requestCount DESC
+    """)
+    fun getDelegationStatistics(since: LocalDateTime): List<Array<Any>>
+
+    /**
+     * Get delegation statistics by API key.
+     * Returns apiKeyId, delegated user count, request count.
+     * Feature: 050-mcp-user-delegation
+     */
+    @Query("""
+        SELECT
+            al.apiKeyId,
+            COUNT(DISTINCT al.delegatedUserEmail) as uniqueUsers,
+            COUNT(al) as requestCount,
+            MAX(al.timestamp) as lastActivity
+        FROM McpAuditLog al
+        WHERE al.delegatedUserEmail IS NOT NULL
+        AND al.timestamp >= :since
+        GROUP BY al.apiKeyId
+        ORDER BY requestCount DESC
+    """)
+    fun getDelegationStatisticsByApiKey(since: LocalDateTime): List<Array<Any>>
+
+    /**
+     * Count failed delegation attempts for an API key within time window.
+     * Used for threshold-based alerting.
+     * Feature: 050-mcp-user-delegation
+     */
+    @Query("""
+        SELECT COUNT(al) FROM McpAuditLog al
+        WHERE al.apiKeyId = :apiKeyId
+        AND al.success = false
+        AND al.errorCode LIKE 'DELEGATION_%'
+        AND al.timestamp >= :since
+    """)
+    fun countDelegationFailures(apiKeyId: Long, since: LocalDateTime): Long
 }
