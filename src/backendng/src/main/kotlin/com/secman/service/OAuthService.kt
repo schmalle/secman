@@ -758,7 +758,8 @@ open class OAuthService(
             username = username,
             email = email,
             passwordHash = passwordEncoder.encode(UUID.randomUUID().toString()), // Random password for OIDC users
-            roles = mutableSetOf(User.Role.USER, User.Role.VULN) // FR-001, FR-002: Default roles
+            roles = mutableSetOf(User.Role.USER, User.Role.VULN), // FR-001, FR-002: Default roles
+            authSource = User.AuthSource.OAUTH // Feature 051: Mark as OAuth user (cannot change password)
         )
 
         val savedUser = userRepository.save(newUser)
