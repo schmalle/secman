@@ -1,6 +1,7 @@
 package com.secman.mcp.tools
 
 import com.secman.domain.McpOperation
+import com.secman.dto.mcp.McpExecutionContext
 import com.secman.service.RequirementService
 import jakarta.inject.Inject
 import jakarta.inject.Singleton
@@ -50,7 +51,7 @@ class GetRequirementsTool(
         )
     )
 
-    override suspend fun execute(arguments: Map<String, Any>): McpToolResult {
+    override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
         val limit = (arguments["limit"] as? Number)?.toInt() ?: 20
         val offset = (arguments["offset"] as? Number)?.toInt() ?: 0
         val tags = (arguments["tags"] as? List<*>)?.filterIsInstance<String>()

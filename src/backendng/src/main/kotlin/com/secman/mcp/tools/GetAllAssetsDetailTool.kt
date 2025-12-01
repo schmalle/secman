@@ -1,6 +1,7 @@
 package com.secman.mcp.tools
 
 import com.secman.domain.McpOperation
+import com.secman.dto.mcp.McpExecutionContext
 import com.secman.service.AssetFilterService
 import io.micronaut.data.model.Pageable
 import jakarta.inject.Inject
@@ -10,9 +11,8 @@ import jakarta.inject.Singleton
  * MCP Tool: get_all_assets_detail
  *
  * Retrieves all assets with optional filtering and pagination.
- * Enforces workgroup-based access control.
- *
  * Feature 009: Enhanced asset retrieval with comprehensive filtering
+ * Feature 052: MCP Access Control - Filters results based on delegated user's access rights
  */
 @Singleton
 class GetAllAssetsDetailTool(
@@ -79,7 +79,7 @@ class GetAllAssetsDetailTool(
         )
     )
 
-    override suspend fun execute(arguments: Map<String, Any>): McpToolResult {
+    override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
         try {
             // Extract and validate parameters
             val page = (arguments["page"] as? Number)?.toInt() ?: 0
@@ -108,15 +108,47 @@ class GetAllAssetsDetailTool(
 
             val pageable = Pageable.from(page, pageSize)
 
-            // Get all assets (workgroup filtering will be applied by authentication layer)
-            // For now, we'll use a simple approach - this should be enhanced with workgroup filtering
+            // Get accessible asset IDs for access control filtering (Feature: 052-mcp-access-control)
+            val accessibleIds = context.getFilterableAssetIds()
+
+            // If delegation is active and user has no accessible assets, return empty result
+            if (accessibleIds != null && accessibleIds.isEmpty()) {
+                return McpToolResult.success(mapOf(
+                    "assets" to emptyList<Map<String, Any?>>(),
+                    "total" to 0,
+                    "page" to page,
+                    "pageSize" to pageSize,
+                    "totalPages" to 0,
+                    "hasMore" to false
+                ))
+            }
+
+            // Get all assets with access control applied
             val resultPage = when {
                 nameFilter != null -> {
-                    // This is a simplified version - in production, combine all filters
-                    assetRepository.findByNameContainingIgnoreCase(nameFilter, pageable)
+                    val allMatching = assetRepository.findByNameContainingIgnoreCase(nameFilter, Pageable.UNPAGED).content
+                    val filtered = if (accessibleIds != null) {
+                        allMatching.filter { accessibleIds.contains(it.id) }
+                    } else allMatching
+                    val total = filtered.size
+                    val start = page * pageSize
+                    val end = minOf(start + pageSize, total)
+                    val content = if (start < total) filtered.subList(start, end) else emptyList()
+                    io.micronaut.data.model.Page.of(content, pageable, total.toLong())
                 }
                 else -> {
-                    assetRepository.findAll(pageable)
+                    if (accessibleIds != null) {
+                        val allAccessible = assetRepository.findAll()
+                            .filter { accessibleIds.contains(it.id) }
+                            .sortedBy { it.name }
+                        val total = allAccessible.size
+                        val start = page * pageSize
+                        val end = minOf(start + pageSize, total)
+                        val content = if (start < total) allAccessible.subList(start, end) else emptyList()
+                        io.micronaut.data.model.Page.of(content, pageable, total.toLong())
+                    } else {
+                        assetRepository.findAll(pageable)
+                    }
                 }
             }
 

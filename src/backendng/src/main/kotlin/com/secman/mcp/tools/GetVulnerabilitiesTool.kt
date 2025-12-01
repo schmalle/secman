@@ -1,6 +1,7 @@
 package com.secman.mcp.tools
 
 import com.secman.domain.McpOperation
+import com.secman.dto.mcp.McpExecutionContext
 import com.secman.repository.VulnerabilityRepository
 import io.micronaut.data.model.Pageable
 import jakarta.inject.Inject
@@ -11,6 +12,7 @@ import java.time.format.DateTimeFormatter
 /**
  * MCP tool for retrieving vulnerability data with filtering and pagination.
  * Feature 006: MCP Tools for Asset Inventory, Scans, Vulnerabilities, and Products
+ * Feature 052: MCP Access Control - Filters results based on delegated user's accessible assets
  */
 @Singleton
 class GetVulnerabilitiesTool(
@@ -64,7 +66,7 @@ class GetVulnerabilitiesTool(
         )
     )
 
-    override suspend fun execute(arguments: Map<String, Any>): McpToolResult {
+    override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
         val page = (arguments["page"] as? Number)?.toInt() ?: 0
         val pageSize = (arguments["pageSize"] as? Number)?.toInt() ?: 100
         val cveIdFilter = arguments["cveId"] as? String
@@ -88,29 +90,88 @@ class GetVulnerabilitiesTool(
             val startDate = startDateStr?.let { LocalDateTime.parse(it, DateTimeFormatter.ISO_DATE_TIME) }
             val endDate = endDateStr?.let { LocalDateTime.parse(it, DateTimeFormatter.ISO_DATE_TIME) }
 
-            // Query based on filters (priority order)
+            // Get accessible asset IDs for access control filtering (Feature: 052-mcp-access-control)
+            val accessibleIds = context.getFilterableAssetIds()
+
+            // If delegation is active and user has no accessible assets, return empty result
+            if (accessibleIds != null && accessibleIds.isEmpty()) {
+                return McpToolResult.success(mapOf(
+                    "vulnerabilities" to emptyList<Map<String, Any?>>(),
+                    "total" to 0,
+                    "page" to page,
+                    "pageSize" to pageSize,
+                    "totalPages" to 0
+                ))
+            }
+
+            // If filtering by specific asset, check access first
+            if (assetIdFilter != null && !context.canAccessAsset(assetIdFilter)) {
+                return McpToolResult.error("ASSET_NOT_FOUND", "Asset with ID $assetIdFilter not found")
+            }
+
+            // Query based on filters (priority order), applying access control where needed
             val resultPage = when {
-                // CVE ID search
-                cveIdFilter != null -> vulnerabilityRepository.findByVulnerabilityIdContainingIgnoreCase(cveIdFilter, pageable)
-
-                // Asset-specific vulnerabilities
-                assetIdFilter != null -> vulnerabilityRepository.findByAssetId(assetIdFilter, pageable)
-
-                // Date range filter
-                startDate != null && endDate != null -> vulnerabilityRepository.findByScanTimestampBetween(startDate, endDate, pageable)
-
-                // Severity filter (array)
-                severityFilter != null && severityFilter.isNotEmpty() -> {
-                    val severities = severityFilter.mapNotNull { it as? String }
-                    if (severities.size == 1) {
-                        vulnerabilityRepository.findByCvssSeverity(severities.first(), pageable)
-                    } else {
-                        vulnerabilityRepository.findByCvssSeverityIn(severities, pageable)
-                    }
+                // CVE ID search with access control
+                cveIdFilter != null -> {
+                    val allMatching = vulnerabilityRepository.findByVulnerabilityIdContainingIgnoreCase(cveIdFilter, Pageable.UNPAGED).content
+                    val filtered = if (accessibleIds != null) {
+                        allMatching.filter { accessibleIds.contains(it.asset?.id) }
+                    } else allMatching
+                    val total = filtered.size
+                    val start = page * pageSize
+                    val end = minOf(start + pageSize, total)
+                    val content = if (start < total) filtered.subList(start, end) else emptyList()
+                    io.micronaut.data.model.Page.of(content, pageable, total.toLong())
                 }
 
-                // No filters - get all
-                else -> vulnerabilityRepository.findAll(pageable)
+                // Asset-specific vulnerabilities (already access-checked above)
+                assetIdFilter != null -> vulnerabilityRepository.findByAssetId(assetIdFilter, pageable)
+
+                // Date range filter with access control
+                startDate != null && endDate != null -> {
+                    val allMatching = vulnerabilityRepository.findByScanTimestampBetween(startDate, endDate, Pageable.UNPAGED).content
+                    val filtered = if (accessibleIds != null) {
+                        allMatching.filter { accessibleIds.contains(it.asset?.id) }
+                    } else allMatching
+                    val total = filtered.size
+                    val start = page * pageSize
+                    val end = minOf(start + pageSize, total)
+                    val content = if (start < total) filtered.subList(start, end) else emptyList()
+                    io.micronaut.data.model.Page.of(content, pageable, total.toLong())
+                }
+
+                // Severity filter with access control
+                severityFilter != null && severityFilter.isNotEmpty() -> {
+                    val severities = severityFilter.mapNotNull { it as? String }
+                    val allMatching = if (severities.size == 1) {
+                        vulnerabilityRepository.findByCvssSeverity(severities.first(), Pageable.UNPAGED).content
+                    } else {
+                        vulnerabilityRepository.findByCvssSeverityIn(severities, Pageable.UNPAGED).content
+                    }
+                    val filtered = if (accessibleIds != null) {
+                        allMatching.filter { accessibleIds.contains(it.asset?.id) }
+                    } else allMatching
+                    val total = filtered.size
+                    val start = page * pageSize
+                    val end = minOf(start + pageSize, total)
+                    val content = if (start < total) filtered.subList(start, end) else emptyList()
+                    io.micronaut.data.model.Page.of(content, pageable, total.toLong())
+                }
+
+                // No filters - get all with access control
+                else -> {
+                    if (accessibleIds != null) {
+                        val allAccessible = vulnerabilityRepository.findAll()
+                            .filter { accessibleIds.contains(it.asset?.id) }
+                        val total = allAccessible.size
+                        val start = page * pageSize
+                        val end = minOf(start + pageSize, total)
+                        val content = if (start < total) allAccessible.subList(start, end) else emptyList()
+                        io.micronaut.data.model.Page.of(content, pageable, total.toLong())
+                    } else {
+                        vulnerabilityRepository.findAll(pageable)
+                    }
+                }
             }
 
             // Check total results limit

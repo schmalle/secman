@@ -1,6 +1,7 @@
 package com.secman.mcp.tools
 
 import com.secman.domain.McpOperation
+import com.secman.dto.mcp.McpExecutionContext
 import com.secman.repository.ScanRepository
 import io.micronaut.data.model.Pageable
 import jakarta.inject.Inject
@@ -59,7 +60,7 @@ class GetScansTool(
         )
     )
 
-    override suspend fun execute(arguments: Map<String, Any>): McpToolResult {
+    override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
         val page = (arguments["page"] as? Number)?.toInt() ?: 0
         val pageSize = (arguments["pageSize"] as? Number)?.toInt() ?: 100
         val scanTypeFilter = arguments["scanType"] as? String

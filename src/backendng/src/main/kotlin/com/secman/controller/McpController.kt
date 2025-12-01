@@ -1,6 +1,7 @@
 package com.secman.controller
 
 import com.secman.service.*
+import com.secman.service.mcp.McpAccessControlService
 import com.secman.mcp.McpToolRegistry
 import com.secman.domain.*
 import com.secman.dto.mcp.*
@@ -35,7 +36,8 @@ class McpController(
     @Inject private val auditService: McpAuditService,
     @Inject private val toolPermissionService: McpToolPermissionService,
     @Inject private val toolRegistry: McpToolRegistry,
-    @Inject private val delegationService: McpDelegationService
+    @Inject private val delegationService: McpDelegationService,
+    @Inject private val accessControlService: McpAccessControlService
 ) {
     private val logger = LoggerFactory.getLogger(McpController::class.java)
 
@@ -340,8 +342,11 @@ class McpController(
                 )
             }
 
-            // Execute tool
-            val toolResult = tool.execute(arguments)
+            // Build execution context with access control data (Feature: 052-mcp-access-control)
+            val executionContext = accessControlService.buildExecutionContext(mcpApiKey, delegation)
+
+            // Execute tool with context
+            val toolResult = tool.execute(arguments, executionContext)
             val duration = System.currentTimeMillis() - startTime
 
             // Log tool execution with delegation info

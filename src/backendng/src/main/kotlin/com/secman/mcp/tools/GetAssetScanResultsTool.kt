@@ -1,6 +1,7 @@
 package com.secman.mcp.tools
 
 import com.secman.domain.McpOperation
+import com.secman.dto.mcp.McpExecutionContext
 import com.secman.repository.ScanPortRepository
 import io.micronaut.data.model.Pageable
 import jakarta.inject.Inject
@@ -76,7 +77,7 @@ class GetAssetScanResultsTool(
         )
     )
 
-    override suspend fun execute(arguments: Map<String, Any>): McpToolResult {
+    override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
         try {
             // Extract and validate parameters
             val page = (arguments["page"] as? Number)?.toInt() ?: 0

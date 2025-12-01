@@ -1,6 +1,7 @@
 package com.secman.mcp.tools
 
 import com.secman.domain.McpOperation
+import com.secman.dto.mcp.McpExecutionContext
 import com.secman.repository.AssetRepository
 import io.micronaut.data.model.Pageable
 import jakarta.inject.Inject
@@ -9,11 +10,13 @@ import jakarta.inject.Singleton
 /**
  * MCP tool for retrieving asset inventory with filtering and pagination.
  * Feature 006: MCP Tools for Asset Inventory, Scans, Vulnerabilities, and Products
+ * Feature 052: MCP Access Control - Filters results based on delegated user's access rights
  *
  * Enforces:
  * - Max 500 items per page
  * - Max 50,000 total results per query
  * - Permission: ASSETS_READ
+ * - Row-level access control when user delegation is active
  */
 @Singleton
 class GetAssetsTool(
@@ -65,7 +68,7 @@ class GetAssetsTool(
         )
     )
 
-    override suspend fun execute(arguments: Map<String, Any>): McpToolResult {
+    override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
         // Extract and validate parameters
         val page = (arguments["page"] as? Number)?.toInt() ?: 0
         val pageSize = (arguments["pageSize"] as? Number)?.toInt() ?: 100
@@ -88,54 +91,106 @@ class GetAssetsTool(
         try {
             val pageable = Pageable.from(page, pageSize)
 
-            // Query based on filters
-            val resultPage = when {
-                // Name filter
-                nameFilter != null -> assetRepository.findByNameContainingIgnoreCase(nameFilter, pageable)
+            // Get accessible asset IDs for access control filtering (Feature: 052-mcp-access-control)
+            val accessibleIds = context.getFilterableAssetIds()
 
-                // Type filter
+            // If delegation is active and user has no accessible assets, return empty result
+            if (accessibleIds != null && accessibleIds.isEmpty()) {
+                return McpToolResult.success(mapOf(
+                    "assets" to emptyList<Map<String, Any?>>(),
+                    "total" to 0,
+                    "page" to page,
+                    "pageSize" to pageSize,
+                    "totalPages" to 0
+                ))
+            }
+
+            // Query based on filters, applying access control where needed
+            val resultPage = when {
+                // Name filter with access control
+                nameFilter != null -> {
+                    if (accessibleIds != null) {
+                        // Filter by accessible IDs and name
+                        val filtered = assetRepository.findByNameContainingIgnoreCase(nameFilter, Pageable.UNPAGED)
+                            .content.filter { accessibleIds.contains(it.id) }
+                        val total = filtered.size
+                        val start = page * pageSize
+                        val end = minOf(start + pageSize, total)
+                        val content = if (start < total) filtered.subList(start, end) else emptyList()
+                        createManualPage(content, total, pageable)
+                    } else {
+                        assetRepository.findByNameContainingIgnoreCase(nameFilter, pageable)
+                    }
+                }
+
+                // Type filter with access control
                 typeFilter != null -> {
                     val allByType = assetRepository.findByType(typeFilter)
-                    // Manual pagination for filters without Pageable support
-                    val total = allByType.size
+                    val filtered = if (accessibleIds != null) {
+                        allByType.filter { accessibleIds.contains(it.id) }
+                    } else allByType
+                    val total = filtered.size
                     val start = page * pageSize
                     val end = minOf(start + pageSize, total)
-                    val content = if (start < total) allByType.subList(start, end) else emptyList()
+                    val content = if (start < total) filtered.subList(start, end) else emptyList()
                     createManualPage(content, total, pageable)
                 }
 
-                // Owner filter
+                // Owner filter with access control
                 ownerFilter != null -> {
                     val allByOwner = assetRepository.findByOwner(ownerFilter)
-                    val total = allByOwner.size
+                    val filtered = if (accessibleIds != null) {
+                        allByOwner.filter { accessibleIds.contains(it.id) }
+                    } else allByOwner
+                    val total = filtered.size
                     val start = page * pageSize
                     val end = minOf(start + pageSize, total)
-                    val content = if (start < total) allByOwner.subList(start, end) else emptyList()
+                    val content = if (start < total) filtered.subList(start, end) else emptyList()
                     createManualPage(content, total, pageable)
                 }
 
-                // IP filter
+                // IP filter with access control
                 ipFilter != null -> {
                     val allByIp = assetRepository.findByIpContainingIgnoreCase(ipFilter)
-                    val total = allByIp.size
+                    val filtered = if (accessibleIds != null) {
+                        allByIp.filter { accessibleIds.contains(it.id) }
+                    } else allByIp
+                    val total = filtered.size
                     val start = page * pageSize
                     val end = minOf(start + pageSize, total)
-                    val content = if (start < total) allByIp.subList(start, end) else emptyList()
+                    val content = if (start < total) filtered.subList(start, end) else emptyList()
                     createManualPage(content, total, pageable)
                 }
 
-                // Group filter
+                // Group filter with access control
                 groupFilter != null -> {
                     val allByGroup = assetRepository.findByGroupsContaining(groupFilter)
-                    val total = allByGroup.size
+                    val filtered = if (accessibleIds != null) {
+                        allByGroup.filter { accessibleIds.contains(it.id) }
+                    } else allByGroup
+                    val total = filtered.size
                     val start = page * pageSize
                     val end = minOf(start + pageSize, total)
-                    val content = if (start < total) allByGroup.subList(start, end) else emptyList()
+                    val content = if (start < total) filtered.subList(start, end) else emptyList()
                     createManualPage(content, total, pageable)
                 }
 
-                // No filters - get all
-                else -> assetRepository.findAll(pageable)
+                // No filters - get all with access control
+                else -> {
+                    if (accessibleIds != null) {
+                        // Get only accessible assets
+                        val allAccessible = assetRepository.findAll()
+                            .filter { accessibleIds.contains(it.id) }
+                            .sortedBy { it.name }
+                        val total = allAccessible.size
+                        val start = page * pageSize
+                        val end = minOf(start + pageSize, total)
+                        val content = if (start < total) allAccessible.subList(start, end) else emptyList()
+                        createManualPage(content, total, pageable)
+                    } else {
+                        assetRepository.findAll(pageable)
+                    }
+                }
             }
 
             // Check total results limit (50,000 max)

@@ -154,6 +154,9 @@ curl -X POST \\
                 <ul>
                   <li><code>REQUIREMENTS_READ</code> - Read security requirements</li>
                   <li><code>ASSESSMENTS_READ</code> - Read risk assessments</li>
+                  <li><code>ASSETS_READ</code> - Read asset inventory</li>
+                  <li><code>VULNERABILITIES_READ</code> - Read vulnerability data</li>
+                  <li><code>SCANS_READ</code> - Read scan results</li>
                   <li><code>REQUIREMENTS_WRITE</code> - Create/modify requirements (optional)</li>
                   <li><code>ASSESSMENTS_WRITE</code> - Create/modify assessments (optional)</li>
                 </ul>
@@ -218,10 +221,13 @@ curl -X POST \\
               <ul>
                 <li>🔍 Search and retrieve security requirements</li>
                 <li>📊 Access risk assessments and findings</li>
+                <li>💻 Browse asset inventory with full details</li>
+                <li>🔓 Query vulnerabilities with severity filtering</li>
+                <li>🌐 View network scan results and open ports</li>
                 <li>🏷️ Browse tags and categories</li>
                 <li>✏️ Create new requirements and assessments (with write permissions)</li>
-                <li>🔄 Real-time data access</li>
-                <li>🛡️ Secure API key authentication</li>
+                <li>🔄 Real-time data access with access control</li>
+                <li>🛡️ Secure API key authentication with User Delegation</li>
               </ul>
             </div>
           </div>
@@ -385,6 +391,11 @@ curl -X POST \\
                 <li><code>search_requirements</code> - Search through requirements</li>
                 <li><code>get_assessments</code> - Retrieve risk assessments</li>
                 <li><code>search_assessments</code> - Search through assessments</li>
+                <li><code>get_assets</code> - Retrieve asset inventory</li>
+                <li><code>get_asset_profile</code> - Get complete asset profile with vulnerabilities</li>
+                <li><code>get_vulnerabilities</code> - Retrieve vulnerability data</li>
+                <li><code>get_scans</code> - Retrieve scan history</li>
+                <li><code>search_products</code> - Search for products/services in network scans</li>
                 <li><code>get_tags</code> - Get available tags</li>
                 <li><code>search_all</code> - Universal search</li>
               </ul>

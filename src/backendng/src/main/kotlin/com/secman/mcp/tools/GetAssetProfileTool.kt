@@ -1,6 +1,7 @@
 package com.secman.mcp.tools
 
 import com.secman.domain.McpOperation
+import com.secman.dto.mcp.McpExecutionContext
 import com.secman.repository.AssetRepository
 import com.secman.repository.VulnerabilityRepository
 import com.secman.repository.ScanResultRepository
@@ -12,6 +13,7 @@ import jakarta.inject.Singleton
 /**
  * MCP tool for retrieving comprehensive asset profile.
  * Feature 006: MCP Tools for Asset Inventory, Scans, Vulnerabilities, and Products
+ * Feature 052: MCP Access Control - Checks delegated user's access to the asset
  *
  * Provides complete view of a single asset including:
  * - Asset details
@@ -65,7 +67,7 @@ class GetAssetProfileTool(
         "required" to listOf("assetId")
     )
 
-    override suspend fun execute(arguments: Map<String, Any>): McpToolResult {
+    override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
         val assetId = (arguments["assetId"] as? Number)?.toLong()
             ?: return McpToolResult.error("MISSING_ASSET_ID", "assetId parameter is required")
 
@@ -75,6 +77,12 @@ class GetAssetProfileTool(
         val scanHistoryLimit = ((arguments["scanHistoryLimit"] as? Number)?.toInt() ?: 10).coerceIn(1, 50)
 
         try {
+            // Access control check (Feature: 052-mcp-access-control)
+            // Returns generic "not found" to avoid revealing asset existence
+            if (!context.canAccessAsset(assetId)) {
+                return McpToolResult.error("ASSET_NOT_FOUND", "Asset with ID $assetId not found")
+            }
+
             // Fetch asset
             val asset = assetRepository.findById(assetId).orElse(null)
                 ?: return McpToolResult.error("ASSET_NOT_FOUND", "Asset with ID $assetId not found")

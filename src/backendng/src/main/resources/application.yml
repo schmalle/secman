@@ -91,6 +91,10 @@ micronaut:
     workgroup_memberships:
       maximum-size: 200
       expire-after-write: 10m
+    # MCP Access Control cache (Feature: 052-mcp-access-control)
+    mcp_accessible_assets:
+      maximum-size: 500
+      expire-after-write: 5m
 
 # Email functionality configuration
 secman:

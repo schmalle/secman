@@ -1,6 +1,7 @@
 package com.secman.mcp.tools
 
 import com.secman.domain.McpOperation
+import com.secman.dto.mcp.McpExecutionContext
 import com.secman.repository.VulnerabilityRepository
 import io.micronaut.data.model.Pageable
 import jakarta.inject.Inject
@@ -13,6 +14,7 @@ import jakarta.inject.Singleton
  * Provides detailed vulnerability information including CVE IDs, severity, and affected assets.
  *
  * Feature 009: Enhanced vulnerability retrieval
+ * Feature 052: MCP Access Control - Filters results based on delegated user's accessible assets
  */
 @Singleton
 class GetAllVulnerabilitiesDetailTool(
@@ -69,7 +71,7 @@ class GetAllVulnerabilitiesDetailTool(
         )
     )
 
-    override suspend fun execute(arguments: Map<String, Any>): McpToolResult {
+    override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
         try {
             // Extract and validate parameters
             val page = (arguments["page"] as? Number)?.toInt() ?: 0
@@ -104,16 +106,54 @@ class GetAllVulnerabilitiesDetailTool(
 
             val pageable = Pageable.from(page, pageSize)
 
-            // Query based on filters
+            // Get accessible asset IDs for access control filtering (Feature: 052-mcp-access-control)
+            val accessibleIds = context.getFilterableAssetIds()
+
+            // If delegation is active and user has no accessible assets, return empty result
+            if (accessibleIds != null && accessibleIds.isEmpty()) {
+                return McpToolResult.success(mapOf(
+                    "vulnerabilities" to emptyList<Map<String, Any?>>(),
+                    "total" to 0,
+                    "page" to page,
+                    "pageSize" to pageSize,
+                    "totalPages" to 0,
+                    "hasMore" to false
+                ))
+            }
+
+            // If filtering by specific asset, check access first
+            if (assetIdFilter != null && !context.canAccessAsset(assetIdFilter)) {
+                return McpToolResult.error("ASSET_NOT_FOUND", "Asset with ID $assetIdFilter not found")
+            }
+
+            // Query based on filters with access control
             val resultPage = when {
                 assetIdFilter != null -> {
                     vulnerabilityRepository.findByAssetId(assetIdFilter, pageable)
                 }
                 severityFilter != null -> {
-                    vulnerabilityRepository.findByCvssSeverity(severityFilter.uppercase(), pageable)
+                    val allMatching = vulnerabilityRepository.findByCvssSeverity(severityFilter.uppercase(), Pageable.UNPAGED).content
+                    val filtered = if (accessibleIds != null) {
+                        allMatching.filter { accessibleIds.contains(it.asset.id) }
+                    } else allMatching
+                    val total = filtered.size
+                    val start = page * pageSize
+                    val end = minOf(start + pageSize, total)
+                    val content = if (start < total) filtered.subList(start, end) else emptyList()
+                    io.micronaut.data.model.Page.of(content, pageable, total.toLong())
                 }
                 else -> {
-                    vulnerabilityRepository.findAll(pageable)
+                    if (accessibleIds != null) {
+                        val allAccessible = vulnerabilityRepository.findAll()
+                            .filter { accessibleIds.contains(it.asset.id) }
+                        val total = allAccessible.size
+                        val start = page * pageSize
+                        val end = minOf(start + pageSize, total)
+                        val content = if (start < total) allAccessible.subList(start, end) else emptyList()
+                        io.micronaut.data.model.Page.of(content, pageable, total.toLong())
+                    } else {
+                        vulnerabilityRepository.findAll(pageable)
+                    }
                 }
             }
 
