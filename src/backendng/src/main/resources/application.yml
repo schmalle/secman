@@ -8,9 +8,9 @@ micronaut:
       maximum-pool-size: 5
   server:
     port: 8080
-    max-request-size: 20MB
+    max-request-size: 100MB  # Increased from 20MB for large vulnerability batch imports
     multipart:
-      max-file-size: 20MB
+      max-file-size: 100MB   # Increased from 20MB for large file uploads
       disk: true
     cors:
       enabled: true
@@ -170,7 +170,7 @@ secman:
     client:
       read-timeout: 30s
       connect-timeout: 10s
-      max-content-length: 20971520  # 20MB (aligns with max-request-size)
+      max-content-length: 104857600  # 100MB (aligns with max-request-size)
       translation:
         read-timeout: 30s
         connect-timeout: 10s

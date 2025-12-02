@@ -46,6 +46,7 @@ const WorkgroupManagement: React.FC = () => {
   const [selectedWorkgroup, setSelectedWorkgroup] = useState<Workgroup | null>(null);
   const [selectedUserIds, setSelectedUserIds] = useState<number[]>([]);
   const [selectedAssetIds, setSelectedAssetIds] = useState<number[]>([]);
+  const [assetSearchTerm, setAssetSearchTerm] = useState<string>('');
 
   useEffect(() => {
     fetchWorkgroups();
@@ -158,8 +159,44 @@ const WorkgroupManagement: React.FC = () => {
   const handleAssignAssets = (workgroup: Workgroup) => {
     setSelectedWorkgroup(workgroup);
     setSelectedAssetIds([]);
+    setAssetSearchTerm('');
     setShowAssignAssets(true);
   };
+
+  /**
+   * Filter assets based on search term with wildcard support
+   * Supports: partial match, * wildcard, case-insensitive
+   */
+  const filterAssets = (searchTerm: string): Asset[] => {
+    if (!searchTerm.trim()) {
+      return assets;
+    }
+
+    const term = searchTerm.toLowerCase().trim();
+
+    // Convert wildcard pattern to regex
+    // * matches any characters, ? matches single character
+    const regexPattern = term
+      .replace(/[.+^${}()|[\]\\]/g, '\\$&') // Escape regex special chars except * and ?
+      .replace(/\*/g, '.*')  // * becomes .*
+      .replace(/\?/g, '.');  // ? becomes .
+
+    try {
+      const regex = new RegExp(regexPattern);
+      return assets.filter(asset =>
+        regex.test(asset.name.toLowerCase()) ||
+        regex.test(asset.type.toLowerCase())
+      );
+    } catch {
+      // If regex is invalid, fall back to simple includes
+      return assets.filter(asset =>
+        asset.name.toLowerCase().includes(term) ||
+        asset.type.toLowerCase().includes(term)
+      );
+    }
+  };
+
+  const filteredAssets = filterAssets(assetSearchTerm);
 
   const submitAssignUsers = async () => {
     if (!selectedWorkgroup || selectedUserIds.length === 0) {
@@ -414,18 +451,83 @@ const WorkgroupManagement: React.FC = () => {
               </div>
               <div className="modal-body">
                 <p className="text-muted">Select assets to assign to this workgroup:</p>
-                <div className="list-group" style={{ maxHeight: '400px', overflowY: 'auto' }}>
-                  {assets.map(asset => (
-                    <label key={asset.id} className="list-group-item list-group-item-action">
-                      <input
-                        type="checkbox"
-                        className="form-check-input me-2"
-                        checked={selectedAssetIds.includes(asset.id)}
-                        onChange={() => toggleAssetSelection(asset.id)}
-                      />
-                      <strong>{asset.name}</strong> ({asset.type})
-                    </label>
-                  ))}
+
+                {/* Search input */}
+                <div className="mb-3">
+                  <div className="input-group">
+                    <span className="input-group-text">
+                      <i className="bi bi-search"></i>
+                    </span>
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="Search assets... (use * for wildcard, e.g. ip-10-* or *prod*)"
+                      value={assetSearchTerm}
+                      onChange={(e) => setAssetSearchTerm(e.target.value)}
+                      autoFocus
+                    />
+                    {assetSearchTerm && (
+                      <button
+                        className="btn btn-outline-secondary"
+                        type="button"
+                        onClick={() => setAssetSearchTerm('')}
+                        title="Clear search"
+                      >
+                        <i className="bi bi-x-lg"></i>
+                      </button>
+                    )}
+                  </div>
+                  <small className="text-muted">
+                    {filteredAssets.length} of {assets.length} assets shown
+                    {assetSearchTerm && ` matching "${assetSearchTerm}"`}
+                  </small>
+                </div>
+
+                {/* Select all filtered / Clear selection buttons */}
+                {filteredAssets.length > 0 && (
+                  <div className="mb-2">
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-primary me-2"
+                      onClick={() => {
+                        const filteredIds = filteredAssets.map(a => a.id);
+                        setSelectedAssetIds(prev => [...new Set([...prev, ...filteredIds])]);
+                      }}
+                    >
+                      Select all shown ({filteredAssets.length})
+                    </button>
+                    {selectedAssetIds.length > 0 && (
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline-secondary"
+                        onClick={() => setSelectedAssetIds([])}
+                      >
+                        Clear selection
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                <div className="list-group" style={{ maxHeight: '350px', overflowY: 'auto' }}>
+                  {filteredAssets.length === 0 ? (
+                    <div className="list-group-item text-center text-muted">
+                      {assetSearchTerm
+                        ? `No assets found matching "${assetSearchTerm}"`
+                        : 'No assets available'}
+                    </div>
+                  ) : (
+                    filteredAssets.map(asset => (
+                      <label key={asset.id} className="list-group-item list-group-item-action">
+                        <input
+                          type="checkbox"
+                          className="form-check-input me-2"
+                          checked={selectedAssetIds.includes(asset.id)}
+                          onChange={() => toggleAssetSelection(asset.id)}
+                        />
+                        <strong>{asset.name}</strong> ({asset.type})
+                      </label>
+                    ))
+                  )}
                 </div>
                 <p className="mt-3 text-muted">{selectedAssetIds.length} asset(s) selected</p>
               </div>

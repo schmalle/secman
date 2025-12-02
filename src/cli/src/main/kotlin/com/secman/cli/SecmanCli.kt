@@ -2,6 +2,7 @@ package com.secman.cli
 
 import com.secman.cli.commands.ConfigCommand
 import com.secman.cli.commands.ManageUserMappingsCommand
+import com.secman.cli.commands.ManageWorkgroupsCommand
 import com.secman.cli.commands.MonitorCommand
 import com.secman.cli.commands.QueryCommand
 import com.secman.cli.commands.SendNotificationsCommand
@@ -183,6 +184,15 @@ class SecmanCli {
                 }
                 0
             }
+            args[0] == "manage-workgroups" -> {
+                // Use Picocli with Micronaut DI for workgroup commands
+                // Drop the first argument (command name) before passing to PicocliRunner
+                val subArgs = args.drop(1).toTypedArray()
+                ApplicationContext.run().use { ctx ->
+                    PicocliRunner.run(ManageWorkgroupsCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
             else -> {
                 System.err.println("Unknown command: ${args[0]}")
                 showHelp()
@@ -204,6 +214,7 @@ class SecmanCli {
               config                 Configure CrowdStrike API credentials
               send-notifications     Send email notifications for outdated assets (Feature 035)
               manage-user-mappings   Manage user mappings for domains and AWS accounts (Feature 049)
+              manage-workgroups      Manage workgroup asset assignments (list, assign, remove)
               help                   Show this help message
 
             Query Servers Options (Feature 032):
@@ -291,6 +302,17 @@ class SecmanCli {
               secman manage-user-mappings add-domain --emails user@example.com --domains example.com --admin-user admin@company.com
               secman manage-user-mappings add-aws --emails user@example.com --accounts 123456789012 --admin-user admin@company.com
               secman manage-user-mappings --help
+
+              # Manage workgroup assets
+              secman manage-workgroups list                                    # List all workgroups
+              secman manage-workgroups list --workgroup Production             # List assets in workgroup
+              secman manage-workgroups list --search-assets "ip-10-*"          # Search assets by pattern
+              secman manage-workgroups assign-assets -w Production -p "ip-10-*" -u admin@company.com  # Assign by pattern
+              secman manage-workgroups assign-assets -w Production -p "*prod*" --type SERVER -u admin@company.com
+              secman manage-workgroups assign-assets -w Production --ids 1,2,3 -u admin@company.com   # Assign by ID
+              secman manage-workgroups remove-assets -w Test -p "*test*" -u admin@company.com        # Remove by pattern
+              secman manage-workgroups remove-assets -w Test --all -u admin@company.com              # Remove all
+              secman manage-workgroups --help
 
             For more information, visit: https://github.com/schmalle/secman
         """.trimIndent())

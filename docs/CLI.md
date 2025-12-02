@@ -236,6 +236,78 @@ java -jar secman-cli.jar manage-user-mappings remove --id 42
 | `import` | Bulk import from CSV/JSON |
 | `remove` | Remove mapping by ID |
 
+### Manage Workgroups
+
+Manage workgroup asset assignments with pattern-based selection.
+
+```bash
+# List all workgroups
+java -jar secman-cli.jar manage-workgroups list
+
+# List assets in a specific workgroup
+java -jar secman-cli.jar manage-workgroups list --workgroup Production
+
+# Search assets by pattern (preview before assigning)
+java -jar secman-cli.jar manage-workgroups list --search-assets "ip-10-*"
+
+# Assign assets by pattern (wildcards supported)
+java -jar secman-cli.jar manage-workgroups assign-assets \
+  --workgroup Production \
+  --pattern "ip-10-*" \
+  --admin-user admin@example.com
+
+# Assign assets by pattern with type filter
+java -jar secman-cli.jar manage-workgroups assign-assets \
+  --workgroup Production \
+  --pattern "*prod*" \
+  --type SERVER \
+  --admin-user admin@example.com
+
+# Assign specific assets by ID
+java -jar secman-cli.jar manage-workgroups assign-assets \
+  --workgroup Production \
+  --ids 1,2,3 \
+  --admin-user admin@example.com
+
+# Preview assignment without changes (dry-run)
+java -jar secman-cli.jar manage-workgroups assign-assets \
+  --workgroup Production \
+  --pattern "*" \
+  --dry-run
+
+# Remove assets by pattern
+java -jar secman-cli.jar manage-workgroups remove-assets \
+  --workgroup Test \
+  --pattern "*test*" \
+  --admin-user admin@example.com
+
+# Remove all assets from workgroup
+java -jar secman-cli.jar manage-workgroups remove-assets \
+  --workgroup Test \
+  --all \
+  --admin-user admin@example.com
+
+# Output in different formats
+java -jar secman-cli.jar manage-workgroups list --format JSON
+java -jar secman-cli.jar manage-workgroups list --format CSV
+```
+
+**Subcommands:**
+
+| Command | Description |
+|---------|-------------|
+| `list` | List workgroups or assets in a workgroup |
+| `assign-assets` | Assign assets to a workgroup by pattern or IDs |
+| `remove-assets` | Remove assets from a workgroup |
+
+**Wildcard Patterns:**
+
+| Pattern | Description | Example |
+|---------|-------------|---------|
+| `*` | Matches any characters | `ip-10-*` matches `ip-10-255-75-85` |
+| `?` | Matches single character | `server?` matches `server1`, `serverA` |
+| `*text*` | Contains text | `*prod*` matches `web-prod-01` |
+
 ---
 
 ## Cron Job Setup
@@ -500,7 +572,8 @@ exit 0
 - [Environment Variables](./ENVIRONMENT.md) - Complete configuration reference
 - [Deployment Guide](./DEPLOYMENT.md) - Server setup
 - [CrowdStrike Import](./CROWDSTRIKE_IMPORT.md) - Import technical details
-- [User Mapping Commands](../src/cli/src/main/resources/cli-docs/USER_MAPPING_COMMANDS.md) - Detailed CLI subcommands
+- [User Mapping Commands](../src/cli/src/main/resources/cli-docs/USER_MAPPING_COMMANDS.md) - Detailed user mapping CLI subcommands
+- [Workgroup Commands](../src/cli/src/main/resources/cli-docs/WORKGROUP_COMMANDS.md) - Detailed workgroup management CLI subcommands
 
 ---
 
