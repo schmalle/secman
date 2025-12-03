@@ -10,6 +10,7 @@ interface User {
     email: string;
     roles: string[];
     workgroups?: WorkgroupSummary[];
+    lastLogin?: string;
 }
 
 interface WorkgroupSummary {
@@ -1039,6 +1040,7 @@ const UserManagement = () => {
                         <th>Username</th>
                         <th>Email</th>
                         <th>Roles</th>
+                        <th>Last Login</th>
                         <th>Workgroups</th>
                         <th>Actions</th>
                     </tr>
@@ -1051,6 +1053,15 @@ const UserManagement = () => {
                                 <td>{user.username}</td>
                                 <td>{user.email}</td>
                                 <td>{user.roles?.join(', ') || 'N/A'}</td>
+                                <td>
+                                    {user.lastLogin ? (
+                                        <span title={new Date(user.lastLogin).toLocaleString()}>
+                                            {new Date(user.lastLogin).toLocaleDateString()}
+                                        </span>
+                                    ) : (
+                                        <span className="text-muted">Never</span>
+                                    )}
+                                </td>
                                 <td>
                                     {user.workgroups && user.workgroups.length > 0 ? (
                                         <div>
@@ -1087,7 +1098,7 @@ const UserManagement = () => {
                         ))
                     ) : (
                         <tr>
-                            <td colSpan={6} className="text-center">
+                            <td colSpan={7} className="text-center">
                                 {/* Show different message based on whether there was an error or just no users */}
                                 {error && !error.includes("Access Denied") ? "Could not load users." : "No users found."}
                             </td>

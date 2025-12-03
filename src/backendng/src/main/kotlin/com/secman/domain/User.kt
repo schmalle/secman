@@ -72,7 +72,15 @@ data class User(
     var createdAt: Instant? = null,
 
     @Column(name = "updated_at")
-    var updatedAt: Instant? = null
+    var updatedAt: Instant? = null,
+
+    /**
+     * Last login timestamp
+     * Feature: User Management - Last Login Tracking
+     * Updated on each successful authentication (local or OAuth)
+     */
+    @Column(name = "last_login")
+    var lastLogin: Instant? = null
 ) {
     /**
      * User roles for access control

@@ -57,6 +57,7 @@ open class UserController(
         val mfaEnabled: Boolean,
         val createdAt: String?,
         val updatedAt: String?,
+        val lastLogin: String?,
         val workgroups: List<WorkgroupSummary>? = null,
         val workgroupCount: Int? = null
     ) {
@@ -70,6 +71,7 @@ open class UserController(
                     mfaEnabled = user.mfaEnabled,
                     createdAt = user.createdAt?.toString(),
                     updatedAt = user.updatedAt?.toString(),
+                    lastLogin = user.lastLogin?.toString(),
                     workgroups = if (includeWorkgroups) {
                         user.workgroups.map { WorkgroupSummary(it.id!!, it.name) }
                     } else null,

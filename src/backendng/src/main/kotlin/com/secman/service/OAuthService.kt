@@ -25,6 +25,7 @@ import org.slf4j.MDC
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
+import java.time.Instant
 import java.time.LocalDateTime
 import java.util.*
 
@@ -374,9 +375,13 @@ open class OAuthService(
                 return CallbackResult.Error("Unable to complete login process. Please try again.")
             }
 
+            // Update last login timestamp
+            user.lastLogin = Instant.now()
+            userRepository.update(user)
+
             // Clean up used state only after successful processing
             oauthStateRepository.deleteByStateToken(state)
-            
+
             return CallbackResult.Success(
                 token = tokenOptional.get(),
                 user = UserInfo(

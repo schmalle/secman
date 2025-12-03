@@ -13,11 +13,13 @@ import io.micronaut.security.rules.SecurityRule
 import io.micronaut.security.token.generator.TokenGenerator
 import io.micronaut.serde.annotation.Serdeable
 import jakarta.inject.Inject
+import jakarta.transaction.Transactional
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
+import java.time.Instant
 import java.util.*
 
 @Controller("/api/auth")
-class AuthController(
+open class AuthController(
     private val userRepository: UserRepository,
     private val tokenGenerator: TokenGenerator,
     private val inputValidationService: InputValidationService
@@ -50,7 +52,8 @@ class AuthController(
 
     @Post("/login")
     @Secured(SecurityRule.IS_ANONYMOUS)
-    fun login(@Body loginRequest: LoginRequest): HttpResponse<*> {
+    @Transactional
+    open fun login(@Body loginRequest: LoginRequest): HttpResponse<*> {
         if (loginRequest.username.isBlank() || loginRequest.password.isBlank()) {
             return HttpResponse.badRequest(mapOf("error" to "Username and password are required"))
         }
@@ -100,6 +103,10 @@ class AuthController(
         if (tokenOptional.isEmpty) {
             return HttpResponse.serverError<Any>().body(mapOf("error" to "Failed to generate token"))
         }
+
+        // Update last login timestamp
+        user.lastLogin = Instant.now()
+        userRepository.update(user)
 
         val response = LoginResponse(
             id = user.id!!,
