@@ -6,18 +6,11 @@
   <component name="ChangeListManager">
     <list default="true" id="94ada8b3-9f4e-473c-9fea-3bc9651b5bdd" name="Changes" comment="test change">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/CLI.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/CLI.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/VulnerabilityManagementController.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/VulnerabilityManagementController.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/domain/Vulnerability.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/domain/Vulnerability.kt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/repository/VulnerabilityRepository.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/repository/VulnerabilityRepository.kt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeVulnerabilityImportService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeVulnerabilityImportService.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeVulnerabilityService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeVulnerabilityService.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/VulnerabilityImportService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/VulnerabilityImportService.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/VulnerabilityTimestampMigrationService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/VulnerabilityTimestampMigrationService.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/resources/application.yml" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/resources/application.yml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/SecmanCli.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/SecmanCli.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/service/VulnerabilityStorageService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/service/VulnerabilityStorageService.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/frontend/src/components/WorkgroupManagement.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/components/WorkgroupManagement.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/MaterializedViewRefreshService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/MaterializedViewRefreshService.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/src/components/CrowdStrikeVulnerabilityLookup.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/components/CrowdStrikeVulnerabilityLookup.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/src/layouts/Layout.astro" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/layouts/Layout.astro" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

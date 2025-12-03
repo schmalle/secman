@@ -78,20 +78,15 @@ const requiresRedirect = !user && !isPublicPage;
         <!-- Bootstrap JS Bundle -->
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
 
+        {/* Session keep-alive script - properly bundled by Astro */}
+        <script>
+            import '../scripts/sessionKeepAlive';
+        </script>
+
         {/* Client-side Auth Check and Redirect */}
         <script define:vars={{ isPublicPage }}>
             // Define a global variable to hold user info
             window.currentUser = null;
-
-            // Import session keep-alive functions dynamically
-            async function initSessionKeepAlive() {
-                try {
-                    const authModule = await import('../utils/auth.ts');
-                    authModule.startSessionKeepAlive();
-                } catch (error) {
-                    console.error('Failed to initialize session keep-alive:', error);
-                }
-            }
 
             async function checkAuthAndRedirect() {
                 if (isPublicPage) {
@@ -132,10 +127,8 @@ const requiresRedirect = !user && !isPublicPage;
                         const user = await response.json();
                         window.currentUser = user; // Store user data
                         console.log('User authenticated:', user.username, 'Roles:', user.roles);
-                        // Trigger a custom event if components need to react to user data being loaded
+                        // Trigger a custom event to initialize session keep-alive
                         window.dispatchEvent(new CustomEvent('userLoaded'));
-                        // Start session keep-alive service
-                        initSessionKeepAlive();
                     }
                 } catch (error) {
                     console.error('Failed to fetch auth status:', error);
@@ -153,7 +146,7 @@ const requiresRedirect = !user && !isPublicPage;
                     console.log('Intercepted 401, redirecting to /login');
                     window.location.href = '/login';
                     // Return a dummy response or throw an error to prevent further processing
-                    return new Response(null, { status: 401, statusText: 'Unauthorized' }); 
+                    return new Response(null, { status: 401, statusText: 'Unauthorized' });
                 }
                 return response;
             };
