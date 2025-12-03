@@ -154,7 +154,19 @@ open class OAuthService(
             return null
         }
 
-        // Clean up expired states
+        // AGGRESSIVE CLEANUP: Delete ALL existing states for this provider
+        // This prevents "state" errors in corporate AAD environments where:
+        // 1. User has multiple tabs/windows open
+        // 2. Browser cached old OAuth redirects
+        // 3. Previous login attempts left orphaned states
+        val existingStateCount = oauthStateRepository.countByProviderId(providerId)
+        if (existingStateCount > 0) {
+            logger.info("Cleaning up {} existing OAuth states for provider {} before generating new one",
+                existingStateCount, providerId)
+            oauthStateRepository.deleteByProviderId(providerId)
+        }
+
+        // Also clean up expired states from all providers
         oauthStateRepository.deleteExpiredStates()
 
         // Generate state parameter

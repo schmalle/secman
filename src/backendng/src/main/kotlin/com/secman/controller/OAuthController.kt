@@ -56,6 +56,10 @@ class OAuthController(
 
     /**
      * Initiate OAuth authorization flow
+     *
+     * IMPORTANT: Cache-control headers are added by SecurityHeadersFilter for all OAuth endpoints
+     * to prevent browser caching of OAuth redirects, which can cause "state" errors in
+     * corporate AAD environments where cached responses contain stale state tokens.
      */
     @Get("/authorize/{providerId}")
     fun authorize(@PathVariable providerId: Long, request: HttpRequest<*>): HttpResponse<*> {
@@ -73,7 +77,7 @@ class OAuthController(
                 logger.info("Full authorization URL: {}", authUrl)
                 logger.info("Redirecting to OAuth provider {} with URL: {}", providerId, authUrl)
                 logger.info("=== OAuth Authorization Request END ===")
-                HttpResponse.redirect(URI.create(authUrl))
+                HttpResponse.redirect<Any>(URI.create(authUrl))
             } else {
                 logger.error("Failed to build authorization URL for provider: {}", providerId)
                 HttpResponse.badRequest(ErrorResponse("Failed to build authorization URL"))
@@ -86,6 +90,8 @@ class OAuthController(
 
     /**
      * Handle OAuth callback without provider ID - fallback for external OAuth providers
+     *
+     * Cache-control headers are added by SecurityHeadersFilter for all OAuth endpoints.
      */
     @Get("/callback")
     @ExecuteOn(TaskExecutors.BLOCKING)
@@ -132,22 +138,22 @@ class OAuthController(
 
             // Process OAuth callback
             val result = oauthService.handleCallback(providerId, code, state)
-            
+
             when (result) {
                 is OAuthService.CallbackResult.Success -> {
                     logger.info("OAuth login successful for user: {}", result.user.username)
-                    
+
                     // Create user info JSON
                     val userInfoJson = """{"id":${result.user.id},"username":"${result.user.username}","email":"${result.user.email}","roles":[${result.user.roles.joinToString(",") { "\"$it\"" }}]}"""
-                    
+
                     // Pass token and user data as URL parameters as expected by the frontend
                     val encodedUser = java.net.URLEncoder.encode(userInfoJson, "UTF-8")
                     val redirectUrl = "$frontendBaseUrl/login/success?token=${result.token}&user=$encodedUser"
-                    
+
                     logger.debug("Redirecting to: {}", redirectUrl)
                     HttpResponse.redirect<Any>(URI.create(redirectUrl))
                 }
-                
+
                 is OAuthService.CallbackResult.Error -> {
                     logger.error("OAuth callback error: {}", result.message)
                     HttpResponse.redirect<Any>(URI.create("$frontendBaseUrl/login?error=${java.net.URLEncoder.encode(result.message, "UTF-8")}"))

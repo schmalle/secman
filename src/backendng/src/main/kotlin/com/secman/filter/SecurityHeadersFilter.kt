@@ -81,9 +81,17 @@ class SecurityHeadersFilter : HttpServerFilter {
         // Add custom security header
         response.header("X-Security-Policy", "enabled")
         
-        // Cache control for sensitive data
+        // Cache control for sensitive data (API endpoints)
         if (request.uri.path.startsWith("/api/")) {
             response.header("Cache-Control", "no-store, no-cache, must-revalidate, private")
+            response.header("Pragma", "no-cache")
+            response.header("Expires", "0")
+        }
+
+        // AGGRESSIVE cache control for OAuth endpoints to prevent "state" errors
+        // in corporate AAD environments where cached responses cause state mismatches
+        if (request.uri.path.startsWith("/oauth/")) {
+            response.header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
             response.header("Pragma", "no-cache")
             response.header("Expires", "0")
         }

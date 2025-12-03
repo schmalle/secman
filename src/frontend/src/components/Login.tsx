@@ -45,7 +45,23 @@ const Login = () => {
         console.log('[OAuth] Current window.location.origin:', window.location.origin);
         console.log('[OAuth] Current window.location.href:', window.location.href);
 
-        const redirectUrl = `/oauth/authorize/${providerId}`;
+        // Clear any stale authentication data before starting fresh OAuth flow
+        // This prevents issues with cached OAuth states in corporate AAD environments
+        console.log('[OAuth] Clearing stale authentication data...');
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('user');
+        sessionStorage.clear(); // Clear any cached OAuth-related data
+
+        // Delete auth cookies to ensure fresh OAuth flow
+        document.cookie = 'authToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+
+        // Generate a fresh login nonce to ensure state uniqueness
+        const loginNonce = Date.now().toString(36) + Math.random().toString(36).substr(2);
+        sessionStorage.setItem('oauth_login_nonce', loginNonce);
+        console.log('[OAuth] Generated login nonce:', loginNonce);
+
+        // Add cache-busting parameter to force fresh OAuth state generation
+        const redirectUrl = `/oauth/authorize/${providerId}?_t=${loginNonce}`;
         console.log('[OAuth] Redirecting to:', redirectUrl);
         console.log('[OAuth] Full URL will be:', window.location.origin + redirectUrl);
         console.log('[OAuth] Browser will now redirect to backend OAuth endpoint');
