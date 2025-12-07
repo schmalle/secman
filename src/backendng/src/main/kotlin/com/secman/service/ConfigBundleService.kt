@@ -460,9 +460,9 @@ open class ConfigBundleService(
                         username = dto.username,
                         email = dto.email,
                         passwordHash = if (options.generateTempPasswords) {
-                            passwordEncoder.encode(generateTempPassword())
+                            passwordEncoder.encode(generateTempPassword())!!
                         } else {
-                            passwordEncoder.encode("ChangeMeNow123!") // Default password
+                            passwordEncoder.encode("ChangeMeNow123!")!! // Default password
                         },
                         mfaEnabled = dto.mfaEnabled
                     )
@@ -739,7 +739,7 @@ open class ConfigBundleService(
                     // Generate new API key
                     val keyId = UUID.randomUUID().toString().replace("-", "")
                     val keySecret = UUID.randomUUID().toString().replace("-", "") + UUID.randomUUID().toString().replace("-", "")
-                    val keyHash = passwordEncoder.encode(keySecret)
+                    val keyHash = passwordEncoder.encode(keySecret)!!
 
                     val apiKey = McpApiKey(
                         keyId = keyId,

@@ -136,7 +136,7 @@ open class UserController(
             val user = User(
                 username = request.username,
                 email = request.email,
-                passwordHash = passwordEncoder.encode(request.password),
+                passwordHash = passwordEncoder.encode(request.password)!!,
                 roles = roles,
                 mfaEnabled = request.mfaEnabled ?: false
             )
@@ -227,7 +227,7 @@ open class UserController(
 
             request.password?.let {
                 if (it.isNotBlank()) {
-                    user.passwordHash = passwordEncoder.encode(it)
+                    user.passwordHash = passwordEncoder.encode(it)!!
                 }
             }
 

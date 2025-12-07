@@ -269,7 +269,7 @@ open class UserProfileController(
         }
 
         // FR-010: Update password with secure hashing
-        user.passwordHash = passwordEncoder.encode(request.newPassword)
+        user.passwordHash = passwordEncoder.encode(request.newPassword)!!
         userRepository.update(user)
 
         logger.info("Password changed successfully for user: {} (ID: {})", username, user.id)
