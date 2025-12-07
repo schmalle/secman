@@ -20,6 +20,7 @@ import io.micronaut.serde.annotation.Serdeable
  * @property globalMedium Total medium vulnerabilities across all domains
  * @property globalLow Total low vulnerabilities across all domains
  * @property queriedAt Timestamp when the data was fetched from Falcon API
+ * @property lastSyncedAt Timestamp of the most recent CrowdStrike import (null if never synced)
  */
 @Serdeable
 data class DomainVulnsSummaryDto(
@@ -30,7 +31,8 @@ data class DomainVulnsSummaryDto(
     val globalHigh: Int? = null,
     val globalMedium: Int? = null,
     val globalLow: Int? = null,
-    val queriedAt: String
+    val queriedAt: String,
+    val lastSyncedAt: String? = null
 )
 
 /**
@@ -81,4 +83,29 @@ data class DeviceVulnCountDto(
     val highCount: Int? = null,
     val mediumCount: Int? = null,
     val lowCount: Int? = null
+)
+
+/**
+ * Domain Sync Result DTO
+ *
+ * Feature: Domain Vulnerability Sync
+ *
+ * Result of syncing a domain's vulnerabilities from CrowdStrike Falcon API
+ * to the secman database.
+ *
+ * @property domain The AD domain that was synced
+ * @property syncedAt Timestamp when the sync completed
+ * @property devicesProcessed Number of devices processed from CrowdStrike
+ * @property devicesCreated Number of new devices created in the database
+ * @property devicesUpdated Number of existing devices updated
+ * @property vulnerabilitiesImported Number of vulnerabilities imported
+ */
+@Serdeable
+data class DomainSyncResultDto(
+    val domain: String,
+    val syncedAt: String,
+    val devicesProcessed: Int,
+    val devicesCreated: Int,
+    val devicesUpdated: Int,
+    val vulnerabilitiesImported: Int
 )

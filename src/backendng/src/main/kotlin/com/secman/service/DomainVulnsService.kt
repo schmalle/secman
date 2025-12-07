@@ -1,9 +1,15 @@
 package com.secman.service
 
+import com.secman.crowdstrike.client.CrowdStrikeApiClient
+import com.secman.crowdstrike.dto.FalconConfigDto
+import com.secman.dto.CrowdStrikeVulnerabilityBatchDto
 import com.secman.dto.DeviceVulnCountDto
 import com.secman.dto.DomainGroupDto
+import com.secman.dto.DomainSyncResultDto
 import com.secman.dto.DomainVulnsSummaryDto
+import com.secman.dto.VulnerabilityDto
 import com.secman.repository.AssetRepository
+import com.secman.repository.FalconConfigRepository
 import com.secman.repository.UserMappingRepository
 import com.secman.repository.VulnerabilityRepository
 import io.micronaut.security.authentication.Authentication
@@ -36,7 +42,10 @@ import java.time.format.DateTimeFormatter
 class DomainVulnsService(
     private val userMappingRepository: UserMappingRepository,
     private val assetRepository: AssetRepository,
-    private val vulnerabilityRepository: VulnerabilityRepository
+    private val vulnerabilityRepository: VulnerabilityRepository,
+    private val crowdStrikeApiClient: CrowdStrikeApiClient,
+    private val falconConfigRepository: FalconConfigRepository,
+    private val importService: CrowdStrikeVulnerabilityImportService
 ) {
     private val log = LoggerFactory.getLogger(DomainVulnsService::class.java)
 
@@ -144,6 +153,12 @@ class DomainVulnsService(
         val totalMedium = deviceVulnCounts.sumOf { it.mediumCount ?: 0 }
         val totalLow = deviceVulnCounts.sumOf { it.lowCount ?: 0 }
 
+        // Get latest import timestamp for "Last Synced" indicator
+        val lastSyncedAt = if (assetIds.isNotEmpty()) {
+            vulnerabilityRepository.findLatestImportTimestampByAssetIds(assetIds.toSet())
+                ?.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+        } else null
+
         return DomainVulnsSummaryDto(
             domainGroups = domainGroups,
             totalDevices = deviceVulnCounts.size,
@@ -152,7 +167,8 @@ class DomainVulnsService(
             globalHigh = totalHigh,
             globalMedium = totalMedium,
             globalLow = totalLow,
-            queriedAt = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+            queriedAt = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME),
+            lastSyncedAt = lastSyncedAt
         )
     }
 
@@ -200,5 +216,155 @@ class DomainVulnsService(
                 totalLow = totalLow
             )
         }.sortedByDescending { it.totalVulnerabilities }
+    }
+
+    /**
+     * Get user's domain mappings
+     *
+     * @param email User email address
+     * @return List of domain names the user has access to
+     */
+    fun getUserDomains(email: String): List<String> {
+        return userMappingRepository.findDistinctDomainByEmail(email)
+    }
+
+    /**
+     * Sync domain vulnerabilities from CrowdStrike Falcon API to secman database
+     *
+     * Feature: Domain Vulnerability Sync
+     *
+     * Workflow:
+     * 1. Query CrowdStrike Falcon API for all devices in the specified domain
+     * 2. Convert vulnerabilities to batch format
+     * 3. Import using transactional replace pattern (delete old + insert new)
+     * 4. Return sync statistics
+     *
+     * @param domain AD domain name to sync (e.g., "CONTOSO")
+     * @param triggeredBy User that triggered the sync (for audit trail)
+     * @return DomainSyncResultDto with sync statistics
+     * @throws IllegalStateException if CrowdStrike API is not configured
+     */
+    fun syncDomainFromCrowdStrike(domain: String, triggeredBy: String): DomainSyncResultDto {
+        log.info("Starting domain sync from CrowdStrike: domain={}, triggeredBy={}", domain, triggeredBy)
+
+        // Get CrowdStrike configuration
+        val config = getConfiguration()
+
+        // Query CrowdStrike for all devices in the domain
+        // Use empty severity filter to get all vulnerabilities
+        val response = crowdStrikeApiClient.queryVulnerabilitiesByDomains(
+            domains = listOf(domain),
+            severity = "",  // No severity filter - get all
+            minDaysOpen = 0,
+            config = config,
+            limit = 10000  // High limit to get all vulnerabilities
+        )
+
+        log.info("CrowdStrike query returned {} vulnerabilities for domain {}",
+            response.vulnerabilities.size, domain)
+
+        if (response.vulnerabilities.isEmpty()) {
+            log.warn("No vulnerabilities found in CrowdStrike for domain {}", domain)
+            return DomainSyncResultDto(
+                domain = domain,
+                syncedAt = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME),
+                devicesProcessed = 0,
+                devicesCreated = 0,
+                devicesUpdated = 0,
+                vulnerabilitiesImported = 0
+            )
+        }
+
+        // Group vulnerabilities by hostname to create batch DTOs
+        val batches = groupVulnerabilitiesByHostname(response.vulnerabilities, domain)
+
+        log.info("Grouped vulnerabilities into {} device batches for domain {}", batches.size, domain)
+
+        // Import using the existing import service
+        val stats = importService.importServerVulnerabilities(batches, triggeredBy, triggerRefresh = true)
+
+        log.info("Domain sync completed: domain={}, devices={}, created={}, updated={}, vulns={}",
+            domain, stats.serversProcessed, stats.serversCreated, stats.serversUpdated, stats.vulnerabilitiesImported)
+
+        return DomainSyncResultDto(
+            domain = domain,
+            syncedAt = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME),
+            devicesProcessed = stats.serversProcessed,
+            devicesCreated = stats.serversCreated,
+            devicesUpdated = stats.serversUpdated,
+            vulnerabilitiesImported = stats.vulnerabilitiesImported
+        )
+    }
+
+    /**
+     * Get CrowdStrike Falcon configuration from database
+     *
+     * @return FalconConfigDto with API credentials
+     * @throws IllegalStateException if configuration not found
+     */
+    private fun getConfiguration(): FalconConfigDto {
+        val configOpt = falconConfigRepository.findActiveConfig()
+        val config = if (configOpt.isPresent) {
+            configOpt.get()
+        } else {
+            throw IllegalStateException("No active CrowdStrike configuration found. Contact administrator.")
+        }
+
+        // Map cloud region to base URL
+        val baseUrl = when (config.cloudRegion) {
+            "us-1" -> "https://api.crowdstrike.com"
+            "us-2" -> "https://api.us-2.crowdstrike.com"
+            "eu-1" -> "https://api.eu-1.crowdstrike.com"
+            "us-gov-1" -> "https://api.us-gov-1.crowdstrike.com"
+            "us-gov-2" -> "https://api.us-gov-2.crowdstrike.com"
+            else -> "https://api.crowdstrike.com"
+        }
+
+        return FalconConfigDto(
+            clientId = config.clientId,
+            clientSecret = config.clientSecret,
+            baseUrl = baseUrl
+        )
+    }
+
+    /**
+     * Group CrowdStrike vulnerabilities by hostname into batch DTOs
+     *
+     * @param vulnerabilities List of vulnerabilities from CrowdStrike
+     * @param domain The AD domain for metadata
+     * @return List of batch DTOs ready for import
+     */
+    private fun groupVulnerabilitiesByHostname(
+        vulnerabilities: List<com.secman.crowdstrike.dto.CrowdStrikeVulnerabilityDto>,
+        domain: String
+    ): List<CrowdStrikeVulnerabilityBatchDto> {
+        // Group by hostname
+        val byHostname = vulnerabilities.groupBy { it.hostname }
+
+        return byHostname.map { (hostname, vulns) ->
+            val firstVuln = vulns.first()
+
+            CrowdStrikeVulnerabilityBatchDto(
+                hostname = hostname,
+                ip = firstVuln.ip,
+                groups = null,  // Not available from API
+                cloudAccountId = null,  // Not in this query
+                cloudInstanceId = null,  // Not in this query
+                adDomain = domain,
+                osVersion = null,  // Not in this query
+                vulnerabilities = vulns.map { vuln ->
+                    // Parse daysOpen from string (e.g., "15 days" -> 15)
+                    val daysOpenInt = vuln.daysOpen?.split(" ")?.firstOrNull()?.toIntOrNull() ?: 0
+
+                    VulnerabilityDto(
+                        cveId = vuln.cveId ?: "",
+                        severity = vuln.severity,
+                        affectedProduct = vuln.affectedProduct,
+                        daysOpen = daysOpenInt,
+                        patchPublicationDate = null  // Not in this query
+                    )
+                }
+            )
+        }
     }
 }

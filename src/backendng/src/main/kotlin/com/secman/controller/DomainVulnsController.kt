@@ -1,10 +1,13 @@
 package com.secman.controller
 
+import com.secman.dto.DomainSyncResultDto
 import com.secman.dto.DomainVulnsSummaryDto
 import com.secman.service.DomainVulnsService
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.annotation.Controller
 import io.micronaut.http.annotation.Get
+import io.micronaut.http.annotation.PathVariable
+import io.micronaut.http.annotation.Post
 import io.micronaut.scheduling.TaskExecutors
 import io.micronaut.scheduling.annotation.ExecuteOn
 import io.micronaut.security.annotation.Secured
@@ -103,6 +106,79 @@ class DomainVulnsController(
             HttpResponse.serverError<Any>()
                 .body(mapOf(
                     "message" to "Failed to retrieve domain vulnerabilities: ${e.message}",
+                    "error" to "INTERNAL_ERROR"
+                ))
+        }
+    }
+
+    /**
+     * Sync domain vulnerabilities from CrowdStrike
+     *
+     * Feature: Domain Vulnerability Sync
+     *
+     * Triggers a sync of vulnerabilities for the specified domain from CrowdStrike Falcon API.
+     * This will:
+     * 1. Query CrowdStrike for all devices in the domain
+     * 2. Delete existing vulnerabilities for those devices
+     * 3. Import fresh vulnerability data from CrowdStrike
+     *
+     * Access: Authenticated users only (non-admin)
+     *
+     * @param domain AD domain name to sync (e.g., "CONTOSO")
+     * @param authentication User authentication context
+     * @return DomainSyncResultDto with sync statistics
+     */
+    @Post("/sync/{domain}")
+    fun syncDomain(
+        @PathVariable domain: String,
+        authentication: Authentication
+    ): HttpResponse<*> {
+        val email = authentication.attributes["email"]?.toString() ?: "unknown"
+        log.info("POST /api/domain-vulns/sync/{} - user: {}", domain, email)
+
+        return try {
+            // Check if user is admin
+            if (authentication.roles.contains("ADMIN")) {
+                log.warn("Admin user {} attempted to sync domain {}", email, domain)
+                return HttpResponse.status<Any>(io.micronaut.http.HttpStatus.FORBIDDEN)
+                    .body(mapOf(
+                        "message" to "Admin users should use the CLI to sync domain vulnerabilities",
+                        "error" to "ADMIN_FORBIDDEN"
+                    ))
+            }
+
+            // Verify user has mapping for this domain
+            val userDomains = domainVulnsService.getUserDomains(email)
+            if (!userDomains.any { it.equals(domain, ignoreCase = true) }) {
+                log.warn("User {} attempted to sync domain {} without mapping", email, domain)
+                return HttpResponse.status<Any>(io.micronaut.http.HttpStatus.FORBIDDEN)
+                    .body(mapOf(
+                        "message" to "You don't have access to sync this domain",
+                        "error" to "ACCESS_DENIED"
+                    ))
+            }
+
+            // Trigger sync
+            val result = domainVulnsService.syncDomainFromCrowdStrike(domain, email)
+
+            log.info("Domain sync completed: domain={}, user={}, devices={}, vulns={}",
+                domain, email, result.devicesProcessed, result.vulnerabilitiesImported)
+
+            HttpResponse.ok(result)
+        } catch (e: IllegalStateException) {
+            // CrowdStrike not configured
+            log.error("CrowdStrike configuration error for user {}: {}", email, e.message)
+            HttpResponse.status<Any>(io.micronaut.http.HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(mapOf(
+                    "message" to (e.message ?: "CrowdStrike API not configured"),
+                    "error" to "CONFIG_ERROR"
+                ))
+        } catch (e: Exception) {
+            // Unexpected error
+            log.error("Unexpected error syncing domain {} for user {}", domain, email, e)
+            HttpResponse.serverError<Any>()
+                .body(mapOf(
+                    "message" to "Failed to sync domain: ${e.message}",
                     "error" to "INTERNAL_ERROR"
                 ))
         }

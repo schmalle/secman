@@ -1,6 +1,6 @@
 # Secman Environment Variables Reference
 
-**Last Updated:** 2025-11-26
+**Last Updated:** 2025-12-04
 **Version:** 1.0
 
 This document provides a comprehensive reference for all environment variables used by Secman components.
@@ -98,6 +98,39 @@ These URLs are used for:
 ```bash
 export BACKEND_BASE_URL=https://api.yourdomain.com
 export FRONTEND_URL=https://secman.yourdomain.com
+```
+
+### OAuth Configuration
+
+These variables control OAuth robustness settings for handling race conditions and transient failures during authentication.
+
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `OAUTH_STATE_RETRY_MAX_ATTEMPTS` | Maximum retry attempts for OAuth state lookup | `5` | No |
+| `OAUTH_STATE_RETRY_INITIAL_DELAY` | Initial delay between retries (ms) | `100` | No |
+| `OAUTH_STATE_RETRY_MAX_DELAY` | Maximum delay between retries (ms) | `500` | No |
+| `OAUTH_STATE_RETRY_BACKOFF_MULTIPLIER` | Exponential backoff multiplier | `1.5` | No |
+| `OAUTH_TOKEN_EXCHANGE_MAX_RETRIES` | Maximum retries for token exchange | `2` | No |
+| `OAUTH_TOKEN_EXCHANGE_RETRY_DELAY` | Delay between token exchange retries (ms) | `500` | No |
+
+**Behavior:**
+- **State Retry**: Handles race conditions where Microsoft Azure callbacks arrive before the state-save transaction commits (100-500ms with cached SSO). Uses exponential backoff: 100ms → 150ms → 225ms → 337ms → 500ms.
+- **Token Exchange Retry**: Handles transient 5xx server errors and timeouts during OAuth token exchange. Does NOT retry 4xx errors (permanent failures).
+
+**When to Adjust:**
+- Increase `OAUTH_STATE_RETRY_MAX_ATTEMPTS` if users frequently see "login session not found" errors
+- Increase delays if database replication lag is suspected
+- Increase `OAUTH_TOKEN_EXCHANGE_MAX_RETRIES` if the OAuth provider (Microsoft, GitHub) has intermittent availability issues
+
+**Example:**
+```bash
+# Increase retry tolerance for slow database environments
+export OAUTH_STATE_RETRY_MAX_ATTEMPTS=7
+export OAUTH_STATE_RETRY_MAX_DELAY=1000
+
+# Increase token exchange retries for unreliable OAuth providers
+export OAUTH_TOKEN_EXCHANGE_MAX_RETRIES=3
+export OAUTH_TOKEN_EXCHANGE_RETRY_DELAY=1000
 ```
 
 ### Vulnerability Configuration
@@ -222,7 +255,7 @@ java -Dcrowdstrike.clientId=xxx -Dcrowdstrike.clientSecret=yyy -jar cli.jar quer
 
 ### All Variables by Component
 
-#### Backend (23 variables)
+#### Backend (29 variables)
 ```
 DB_USERNAME, DB_PASSWORD
 JWT_SECRET
@@ -230,6 +263,9 @@ SECMAN_ENCRYPTION_PASSWORD, SECMAN_ENCRYPTION_SALT
 SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD
 SMTP_FROM_ADDRESS, SMTP_FROM_NAME, SMTP_ENABLE_TLS
 BACKEND_BASE_URL, FRONTEND_URL
+OAUTH_STATE_RETRY_MAX_ATTEMPTS, OAUTH_STATE_RETRY_INITIAL_DELAY
+OAUTH_STATE_RETRY_MAX_DELAY, OAUTH_STATE_RETRY_BACKOFF_MULTIPLIER
+OAUTH_TOKEN_EXCHANGE_MAX_RETRIES, OAUTH_TOKEN_EXCHANGE_RETRY_DELAY
 VULN_USE_PATCH_PUBLICATION_DATE, VULN_REQUIRE_PATCH_PUBLICATION_DATE
 ```
 
@@ -286,6 +322,15 @@ FRONTEND_URL=https://secman.yourdomain.com
 # --- Optional: Vulnerability Settings ---
 VULN_USE_PATCH_PUBLICATION_DATE=false
 VULN_REQUIRE_PATCH_PUBLICATION_DATE=false
+
+# --- Optional: OAuth Robustness Settings ---
+# Increase these if users experience intermittent OAuth login failures
+# OAUTH_STATE_RETRY_MAX_ATTEMPTS=5
+# OAUTH_STATE_RETRY_INITIAL_DELAY=100
+# OAUTH_STATE_RETRY_MAX_DELAY=500
+# OAUTH_STATE_RETRY_BACKOFF_MULTIPLIER=1.5
+# OAUTH_TOKEN_EXCHANGE_MAX_RETRIES=2
+# OAUTH_TOKEN_EXCHANGE_RETRY_DELAY=500
 ```
 
 ### Frontend Production Template (`/etc/secman/frontend.env`)
@@ -369,6 +414,22 @@ baseUrl: https://api.crowdstrike.com
 - Verify `CROWDSTRIKE_CLIENT_ID` and `CROWDSTRIKE_CLIENT_SECRET` are correct
 - Ensure the API credentials have the required scopes
 - Check `CROWDSTRIKE_BASE_URL` matches your CrowdStrike cloud region
+
+**"Your login session was not found" (OAuth)**
+- This indicates the OAuth state was not found in the database when the callback arrived
+- Increase `OAUTH_STATE_RETRY_MAX_ATTEMPTS` and `OAUTH_STATE_RETRY_MAX_DELAY` to handle database replication lag
+- Check if the `oauth_states` table cleanup job is running too aggressively
+
+**"Could not complete authentication" (OAuth)**
+- This indicates token exchange with the OAuth provider failed
+- Check network connectivity to the OAuth provider (Microsoft, GitHub)
+- Increase `OAUTH_TOKEN_EXCHANGE_MAX_RETRIES` for unreliable network conditions
+- Review backend logs for specific HTTP error codes from the provider
+
+**"Your login session expired" (OAuth)**
+- The OAuth state existed but was older than 10 minutes
+- This can happen if users take too long at the OAuth provider login page
+- Ensure users complete the OAuth flow within 10 minutes
 
 ---
 

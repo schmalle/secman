@@ -1,6 +1,7 @@
 package com.secman.service
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.secman.config.OAuthConfig
 import com.secman.domain.IdentityProvider
 import com.secman.domain.OAuthState
 import com.secman.domain.User
@@ -14,6 +15,7 @@ import io.micronaut.http.HttpRequest
 import io.micronaut.http.client.HttpClient
 import io.micronaut.http.client.annotation.Client
 import io.micronaut.http.client.exceptions.HttpClientResponseException
+import io.micronaut.http.client.exceptions.ReadTimeoutException
 import io.micronaut.security.token.generator.TokenGenerator
 import io.micronaut.scheduling.annotation.Async
 import io.micronaut.scheduling.annotation.Scheduled
@@ -41,6 +43,7 @@ open class OAuthService(
     private val eventPublisher: ApplicationEventPublisher<UserCreatedEvent>,
     private val entityManager: EntityManager,
     private val emailSender: EmailSender,
+    private val oauthConfig: OAuthConfig,
     @Client("\${oauth.http-client.url:https://api.github.com}") private val githubApiClient: HttpClient,
     @Client private val genericHttpClient: HttpClient
 ) {
@@ -48,6 +51,23 @@ open class OAuthService(
     private val logger = LoggerFactory.getLogger(OAuthService::class.java)
     private val securityLog = LoggerFactory.getLogger("security.audit")
     private val passwordEncoder = BCryptPasswordEncoder()
+
+    /**
+     * OAuth error codes with user-friendly messages
+     */
+    enum class OAuthErrorCode(val userMessage: String) {
+        STATE_NOT_FOUND("Your login session was not found. Please try again."),
+        STATE_EXPIRED("Your login session expired. Please try again."),
+        STATE_MISMATCH("Invalid login state. Please start over."),
+        TOKEN_EXCHANGE_FAILED("Could not complete authentication. Please try again."),
+        TOKEN_EXCHANGE_TIMEOUT("Authentication timed out. Please try again."),
+        USER_INFO_FAILED("Could not retrieve your account information. Please try again."),
+        USER_CREATION_FAILED("Could not create your account. Please contact support."),
+        EMAIL_REQUIRED("Your account does not have an email address configured."),
+        TENANT_MISMATCH("Your account is not from the expected organization."),
+        PROVIDER_NOT_FOUND("Identity provider not found. Please contact support."),
+        UNEXPECTED_ERROR("An unexpected error occurred during login. Please try again.")
+    }
 
     /**
      * Find OAuth state by state value with retry logic for race conditions.
@@ -67,32 +87,39 @@ open class OAuthService(
      * in 100-500ms. This retry logic handles cases where the callback arrives
      * before the state-save transaction is fully visible.
      *
+     * Uses exponential backoff: 100ms -> 150ms -> 225ms -> 337ms -> 500ms (default config)
+     * Total max wait: ~1.3 seconds
+     *
      * @param stateToken The OAuth state token to find
-     * @param maxRetries Maximum number of retry attempts (default: 3)
-     * @param retryDelayMs Delay between retries in milliseconds (default: 100ms)
      * @return Optional containing the state if found, empty otherwise
      */
-    fun findStateByValueWithRetry(
-        stateToken: String,
-        maxRetries: Int = 3,
-        retryDelayMs: Long = 100
-    ): Optional<OAuthState> {
+    fun findStateByValueWithRetry(stateToken: String): Optional<OAuthState> {
+        val config = oauthConfig.stateRetry
         var attempt = 0
-        while (attempt <= maxRetries) {
+        var currentDelayMs = config.initialDelayMs
+        var totalDelayMs = 0L
+
+        while (attempt <= config.maxAttempts) {
             val result = oauthStateRepository.findByStateToken(stateToken)
             if (result.isPresent) {
                 if (attempt > 0) {
                     logger.info("OAuth state found after {} retry attempts ({}ms total delay)",
-                        attempt, attempt * retryDelayMs)
+                        attempt, totalDelayMs)
                 }
                 return result
             }
 
-            if (attempt < maxRetries) {
-                logger.debug("OAuth state not found, retry {}/{} after {}ms delay",
-                    attempt + 1, maxRetries, retryDelayMs)
+            if (attempt < config.maxAttempts) {
+                logger.debug("OAuth state not found, retry {}/{} after {}ms delay (exponential backoff)",
+                    attempt + 1, config.maxAttempts, currentDelayMs)
                 try {
-                    Thread.sleep(retryDelayMs)
+                    Thread.sleep(currentDelayMs)
+                    totalDelayMs += currentDelayMs
+                    // Apply exponential backoff with max cap
+                    currentDelayMs = minOf(
+                        (currentDelayMs * config.backoffMultiplier).toLong(),
+                        config.maxDelayMs
+                    )
                 } catch (e: InterruptedException) {
                     Thread.currentThread().interrupt()
                     break
@@ -101,8 +128,8 @@ open class OAuthService(
             attempt++
         }
 
-        logger.warn("OAuth state not found after {} retries ({}ms total delay)",
-            maxRetries, maxRetries * retryDelayMs)
+        logger.warn("OAuth state not found after {} retries ({}ms total delay with exponential backoff)",
+            config.maxAttempts, totalDelayMs)
         return Optional.empty()
     }
 
@@ -220,12 +247,19 @@ open class OAuthService(
 
     /**
      * Handle OAuth callback and exchange code for token
+     *
+     * Includes correlation ID logging for tracking OAuth flow through logs.
      */
     @Transactional
     open fun handleCallback(providerId: Long, code: String, state: String): CallbackResult {
-        val callbackStartTime = LocalDateTime.now()
-        logger.info("OAuth callback received at {} for provider {}, state={}",
-            callbackStartTime, providerId, state.take(10) + "...")
+        // Generate correlation ID for tracking this OAuth flow through logs
+        val correlationId = UUID.randomUUID().toString().take(8)
+        MDC.put("oauth_correlation_id", correlationId)
+
+        try {
+            val callbackStartTime = LocalDateTime.now()
+            logger.info("[{}] OAuth callback started for provider {}, state={}",
+                correlationId, providerId, state.take(10) + "...")
 
         // Validate state
         val stateOpt = oauthStateRepository.findByStateToken(state)
@@ -233,7 +267,7 @@ open class OAuthService(
             logger.error("OAuth state not found in database for state token: {}", state.take(10) + "...")
             logger.error("Callback timestamp: {}, Provider ID: {}", callbackStartTime, providerId)
             logger.error("This may indicate: 1) State was never saved (transaction timing issue), 2) State was already used/deleted, 3) State expired and was cleaned up")
-            return CallbackResult.Error("Invalid or expired state parameter")
+            return CallbackResult.Error(OAuthErrorCode.STATE_NOT_FOUND.userMessage)
         }
 
         val oauthState = stateOpt.get()
@@ -243,20 +277,20 @@ open class OAuthService(
 
         if (oauthState.providerId != providerId) {
             logger.error("State provider mismatch: state belongs to provider {}, but callback is for provider {}", oauthState.providerId, providerId)
-            return CallbackResult.Error("State provider mismatch")
+            return CallbackResult.Error(OAuthErrorCode.STATE_MISMATCH.userMessage)
         }
 
         if (oauthState.expiresAt.isBefore(LocalDateTime.now())) {
             logger.error("Expired OAuth state: created at {}, expired at {}, current time {}",
                 oauthState.createdAt, oauthState.expiresAt, LocalDateTime.now())
             oauthStateRepository.deleteByStateToken(state)
-            return CallbackResult.Error("Expired state parameter")
+            return CallbackResult.Error(OAuthErrorCode.STATE_EXPIRED.userMessage)
         }
 
         val providerOpt = identityProviderRepository.findById(providerId)
         if (!providerOpt.isPresent) {
             logger.error("Identity provider not found: {}", providerId)
-            return CallbackResult.Error("Identity provider not found")
+            return CallbackResult.Error(OAuthErrorCode.PROVIDER_NOT_FOUND.userMessage)
         }
 
         val provider = providerOpt.get()
@@ -264,11 +298,11 @@ open class OAuthService(
         logger.debug("Processing OAuth callback for provider: {}", provider.name)
 
         try {
-            // Exchange code for access token
-            val tokenResponse = exchangeCodeForToken(provider, code, oauthState.redirectUri!!)
+            // Exchange code for access token (with retry for transient failures)
+            val tokenResponse = exchangeCodeForTokenWithRetry(provider, code, oauthState.redirectUri!!)
             if (tokenResponse == null) {
                 oauthStateRepository.deleteByStateToken(state)
-                return CallbackResult.Error("Unable to authenticate with ${provider.name}. Please try again.")
+                return CallbackResult.Error(OAuthErrorCode.TOKEN_EXCHANGE_FAILED.userMessage)
             }
 
             // For OIDC providers (Microsoft), validate ID token
@@ -277,7 +311,7 @@ open class OAuthService(
                 val idTokenClaims = parseIdToken(tokenResponse.idToken)
                 if (idTokenClaims == null) {
                     oauthStateRepository.deleteByStateToken(state)
-                    return CallbackResult.Error("Invalid ID token received from ${provider.name}.")
+                    return CallbackResult.Error(OAuthErrorCode.TOKEN_EXCHANGE_FAILED.userMessage)
                 }
 
                 // Log all claims for debugging
@@ -315,7 +349,7 @@ open class OAuthService(
                         }
                     }
                     oauthStateRepository.deleteByStateToken(state)
-                    return CallbackResult.Error("Email address is required but not provided by ${provider.name}. Please ensure your account has an email address configured.")
+                    return CallbackResult.Error(OAuthErrorCode.EMAIL_REQUIRED.userMessage)
                 }
             }
 
@@ -333,7 +367,7 @@ open class OAuthService(
                 val info = getUserInfo(provider, tokenResponse.accessToken)
                 if (info == null) {
                     oauthStateRepository.deleteByStateToken(state)
-                    return CallbackResult.Error("Unable to retrieve user information from ${provider.name}. Please try again.")
+                    return CallbackResult.Error(OAuthErrorCode.USER_INFO_FAILED.userMessage)
                 }
                 info
             }
@@ -342,7 +376,7 @@ open class OAuthService(
             val userResult = findOrCreateUser(provider, userInfo)
             if (userResult == null) {
                 oauthStateRepository.deleteByStateToken(state)
-                return CallbackResult.Error("Unable to create user account. Please contact support if this persists.")
+                return CallbackResult.Error(OAuthErrorCode.USER_CREATION_FAILED.userMessage)
             }
             val user = userResult.user
 
@@ -393,10 +427,14 @@ open class OAuthService(
             )
 
         } catch (e: Exception) {
-            logger.error("OAuth callback error: {}", e.message, e)
+            logger.error("[{}] OAuth callback error: {}", correlationId, e.message, e)
             // Clean up state on error to prevent accumulation
             oauthStateRepository.deleteByStateToken(state)
-            return CallbackResult.Error("OAuth processing failed: ${e.message}")
+            return CallbackResult.Error(OAuthErrorCode.UNEXPECTED_ERROR.userMessage)
+        }
+        } finally {
+            // Clean up MDC correlation ID
+            MDC.remove("oauth_correlation_id")
         }
     }
 
@@ -493,6 +531,62 @@ open class OAuthService(
             logger.error("Full stack trace:", e)
             null
         }
+    }
+
+    /**
+     * Exchange authorization code for token with retry logic for transient failures.
+     *
+     * Retries on 5xx server errors and timeouts. Does NOT retry on 4xx errors
+     * as those indicate permanent failures (invalid code, bad credentials, etc.).
+     *
+     * @param provider The identity provider configuration
+     * @param code The authorization code from OAuth callback
+     * @param redirectUri The redirect URI used in the authorization request
+     * @return TokenResponse if successful, null if all retries fail
+     */
+    private fun exchangeCodeForTokenWithRetry(
+        provider: IdentityProvider,
+        code: String,
+        redirectUri: String
+    ): TokenResponse? {
+        val config = oauthConfig.tokenExchange
+        var lastException: Exception? = null
+
+        repeat(config.maxRetries + 1) { attempt ->
+            try {
+                val result = exchangeCodeForToken(provider, code, redirectUri)
+                if (result != null) {
+                    if (attempt > 0) {
+                        logger.info("Token exchange succeeded on attempt {} after previous failures", attempt + 1)
+                    }
+                    return result
+                }
+                // exchangeCodeForToken returned null (4xx error or parse issue) - don't retry
+                return null
+            } catch (e: HttpClientResponseException) {
+                if (e.status.code >= 500) {
+                    logger.warn("Token exchange attempt {} failed with server error {}, retrying...",
+                        attempt + 1, e.status)
+                    lastException = e
+                    if (attempt < config.maxRetries) {
+                        Thread.sleep(config.retryDelayMs)
+                    }
+                } else {
+                    // 4xx errors are not retryable
+                    logger.error("Token exchange failed with client error {}, not retrying", e.status)
+                    throw e
+                }
+            } catch (e: ReadTimeoutException) {
+                logger.warn("Token exchange attempt {} timed out, retrying...", attempt + 1)
+                lastException = e
+                if (attempt < config.maxRetries) {
+                    Thread.sleep(config.retryDelayMs)
+                }
+            }
+        }
+
+        logger.error("Token exchange failed after {} attempts", config.maxRetries + 1, lastException)
+        return null
     }
 
     private fun getUserInfo(provider: IdentityProvider, accessToken: String): UserInfoResponse? {

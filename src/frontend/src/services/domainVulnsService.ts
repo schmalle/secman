@@ -50,6 +50,19 @@ export interface DomainVulnsSummary {
   globalMedium?: number;
   globalLow?: number;
   queriedAt: string;
+  lastSyncedAt?: string;
+}
+
+/**
+ * Domain sync result
+ */
+export interface DomainSyncResult {
+  domain: string;
+  syncedAt: string;
+  devicesProcessed: number;
+  devicesCreated: number;
+  devicesUpdated: number;
+  vulnerabilitiesImported: number;
 }
 
 /**
@@ -67,6 +80,38 @@ export async function getDomainVulns(): Promise<DomainVulnsSummary> {
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
     throw new Error(errorData.message || `Request failed with status ${response.status}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Sync domain vulnerabilities from CrowdStrike
+ *
+ * Triggers a sync of vulnerabilities for the specified domain from CrowdStrike Falcon API.
+ * This will refresh the database with the latest vulnerability data.
+ *
+ * @param domain AD domain name to sync
+ * @returns Promise resolving to sync result
+ * @throws Error if sync fails
+ */
+export async function syncDomainFromCrowdStrike(domain: string): Promise<DomainSyncResult> {
+  const token = localStorage.getItem('authToken');
+  if (!token) {
+    throw new Error('Not authenticated');
+  }
+
+  const response = await fetch(`/api/domain-vulns/sync/${encodeURIComponent(domain)}`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    }
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.message || `Sync failed with status ${response.status}`);
   }
 
   return response.json();

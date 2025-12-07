@@ -161,7 +161,8 @@ class OAuthController(
             }
         } catch (e: Exception) {
             logger.error("OAuth callback processing error: {}", e.message, e)
-            HttpResponse.redirect<Any>(URI.create("$frontendBaseUrl/login?error=${java.net.URLEncoder.encode("OAuth processing failed", "UTF-8")}"))
+            val errorMsg = "An unexpected error occurred during login. Please try again."
+            HttpResponse.redirect<Any>(URI.create("$frontendBaseUrl/login?error=${java.net.URLEncoder.encode(errorMsg, "UTF-8")}"))
         }
     }
 
@@ -209,7 +210,7 @@ class OAuthController(
             }
         } catch (e: Exception) {
             logger.error("OAuth API callback processing error: {}", e.message, e)
-            HttpResponse.serverError(ErrorResponse("OAuth processing failed: ${e.message}"))
+            HttpResponse.serverError(ErrorResponse("An unexpected error occurred during login. Please try again."))
         }
     }
 

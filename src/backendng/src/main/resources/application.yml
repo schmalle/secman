@@ -136,6 +136,22 @@ secman:
         threshold: ${MCP_DELEGATION_ALERT_THRESHOLD:10}
         # Time window in minutes for threshold calculation
         window-minutes: ${MCP_DELEGATION_ALERT_WINDOW:5}
+  # OAuth robustness configuration
+  oauth:
+    state-retry:
+      # Maximum retry attempts for finding OAuth state (handles DB commit race conditions)
+      max-attempts: ${OAUTH_STATE_RETRY_MAX_ATTEMPTS:5}
+      # Initial delay between retries in milliseconds
+      initial-delay-ms: ${OAUTH_STATE_RETRY_INITIAL_DELAY:100}
+      # Maximum delay between retries in milliseconds
+      max-delay-ms: ${OAUTH_STATE_RETRY_MAX_DELAY:500}
+      # Backoff multiplier for exponential backoff
+      backoff-multiplier: ${OAUTH_STATE_RETRY_BACKOFF_MULTIPLIER:1.5}
+    token-exchange:
+      # Maximum retry attempts for token exchange (handles 5xx errors and timeouts)
+      max-retries: ${OAUTH_TOKEN_EXCHANGE_MAX_RETRIES:2}
+      # Delay between retries in milliseconds
+      retry-delay-ms: ${OAUTH_TOKEN_EXCHANGE_RETRY_DELAY:500}
   vulnerability:
     # Use patch publication date for calculating days open
     # When true: days_open = scan_timestamp - patch_publication_date

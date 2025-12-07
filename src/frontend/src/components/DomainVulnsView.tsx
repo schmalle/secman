@@ -19,7 +19,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { getDomainVulns, type DomainVulnsSummary } from '../services/domainVulnsService';
+import { getDomainVulns, syncDomainFromCrowdStrike, type DomainVulnsSummary } from '../services/domainVulnsService';
 import SeverityBadge from './SeverityBadge';
 
 const DomainVulnsView: React.FC = () => {
@@ -29,6 +29,8 @@ const DomainVulnsView: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [isAdminRedirect, setIsAdminRedirect] = useState(false);
+    const [syncing, setSyncing] = useState<string | null>(null);  // Domain being synced, or null
+    const [syncError, setSyncError] = useState<string | null>(null);
 
     const formatTimestamp = (timestamp: string): string => {
         const date = new Date(timestamp);
@@ -82,6 +84,26 @@ const DomainVulnsView: React.FC = () => {
         } finally {
             console.log('[DomainVulnsView] fetchDomainVulns completed - setting loading=false');
             setLoading(false);
+        }
+    };
+
+    const handleSyncDomain = async (domain: string) => {
+        console.log('[DomainVulnsView] Starting sync for domain:', domain);
+        setSyncing(domain);
+        setSyncError(null);
+
+        try {
+            const result = await syncDomainFromCrowdStrike(domain);
+            console.log('[DomainVulnsView] Sync completed:', result);
+
+            // Refresh data after sync
+            await fetchDomainVulns();
+        } catch (err) {
+            console.error('[DomainVulnsView] Sync error:', err);
+            const errorMessage = err instanceof Error ? err.message : 'Sync failed';
+            setSyncError(errorMessage);
+        } finally {
+            setSyncing(null);
         }
     };
 
@@ -260,12 +282,40 @@ const DomainVulnsView: React.FC = () => {
                 </div>
             </div>
 
-            {/* Query timestamp */}
+            {/* Sync error alert */}
+            {syncError && (
+                <div className="alert alert-danger alert-dismissible fade show mb-4" role="alert">
+                    <i className="bi bi-exclamation-triangle me-2"></i>
+                    <strong>Sync Error:</strong> {syncError}
+                    <button type="button" className="btn-close" onClick={() => setSyncError(null)} aria-label="Close"></button>
+                </div>
+            )}
+
+            {/* Timestamps row */}
             <div className="row mb-4">
-                <div className="col-12">
+                <div className="col-md-6">
                     <div className="card border-0 shadow-sm bg-light">
                         <div className="card-body">
-                            <h6 className="text-muted mb-1">Last Refreshed</h6>
+                            <h6 className="text-muted mb-1">
+                                <i className="bi bi-clock-history me-2"></i>
+                                Last Synced with CrowdStrike
+                            </h6>
+                            <div className="fw-semibold">
+                                {summary.lastSyncedAt
+                                    ? formatTimestamp(summary.lastSyncedAt)
+                                    : <span className="text-warning">Never synced</span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div className="col-md-6">
+                    <div className="card border-0 shadow-sm bg-light">
+                        <div className="card-body">
+                            <h6 className="text-muted mb-1">
+                                <i className="bi bi-arrow-repeat me-2"></i>
+                                Data Refreshed
+                            </h6>
                             <div className="fw-semibold">{formatTimestamp(summary.queriedAt)}</div>
                         </div>
                     </div>
@@ -286,10 +336,30 @@ const DomainVulnsView: React.FC = () => {
                     <div key={group.domain} className="card mb-4 border-0 shadow-sm">
                         <div className="card-header bg-light border-bottom">
                             <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                                <h5 className="mb-0 text-dark">
-                                    <i className="bi bi-hdd-network me-2 text-primary"></i>
-                                    Domain: {group.domain}
-                                </h5>
+                                <div className="d-flex align-items-center gap-3">
+                                    <h5 className="mb-0 text-dark">
+                                        <i className="bi bi-hdd-network me-2 text-primary"></i>
+                                        Domain: {group.domain}
+                                    </h5>
+                                    <button
+                                        className="btn btn-sm btn-outline-primary"
+                                        onClick={() => handleSyncDomain(group.domain)}
+                                        disabled={syncing !== null}
+                                        title="Sync vulnerabilities from CrowdStrike"
+                                    >
+                                        {syncing === group.domain ? (
+                                            <>
+                                                <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                                Syncing...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <i className="bi bi-cloud-download me-1"></i>
+                                                Sync
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
                                 {/* Domain-level severity breakdown */}
                                 <div className="d-flex gap-2 flex-wrap align-items-center">
                                     <span className="badge bg-secondary bg-opacity-10 text-secondary border border-secondary">
@@ -334,7 +404,14 @@ const DomainVulnsView: React.FC = () => {
                                             group.devices.map((device) => (
                                                 <tr key={device.hostname}>
                                                     <td>
-                                                        <strong>{device.hostname}</strong>
+                                                        <a
+                                                            href={`/vulnerabilities/system?hostname=${encodeURIComponent(device.hostname)}`}
+                                                            className="text-decoration-none fw-bold"
+                                                            title={`View vulnerabilities for ${device.hostname} in CrowdStrike`}
+                                                        >
+                                                            {device.hostname}
+                                                            <i className="bi bi-box-arrow-up-right ms-1 small"></i>
+                                                        </a>
                                                     </td>
                                                     <td>
                                                         <code className="text-muted">{device.ip || 'N/A'}</code>

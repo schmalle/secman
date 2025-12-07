@@ -120,16 +120,42 @@ eventPublisher.publishEvent(UserCreatedEvent(savedUser, "MANUAL"))
 **Use**: User creation → mapping application, Asset import → view refresh, Vuln detection → email
 **Performance**: <5ms event delivery, non-blocking
 
+### OAuth Robustness Pattern
+**Problem**: Microsoft Azure OAuth callbacks can arrive in 100-500ms with cached SSO, before state-save transaction commits.
+**Solution**: Exponential backoff retry + configurable parameters
+```kotlin
+// State lookup with retry (OAuthService.kt)
+fun findStateByValueWithRetry(stateToken: String): Optional<OAuthState> {
+    val config = oauthConfig.stateRetry  // from application.yml
+    var currentDelayMs = config.initialDelayMs
+    repeat(config.maxAttempts) { attempt ->
+        val result = oauthStateRepository.findByStateToken(stateToken)
+        if (result.isPresent) return result
+        Thread.sleep(currentDelayMs)
+        currentDelayMs = minOf((currentDelayMs * config.backoffMultiplier).toLong(), config.maxDelayMs)
+    }
+    return Optional.empty()
+}
+```
+**Config**: `OAuthConfig.kt` reads from `secman.oauth.*` in application.yml
+**Environment Variables**:
+- `OAUTH_STATE_RETRY_MAX_ATTEMPTS` (default: 5) - Max retry attempts for state lookup
+- `OAUTH_STATE_RETRY_INITIAL_DELAY` (default: 100ms) - Initial retry delay
+- `OAUTH_STATE_RETRY_MAX_DELAY` (default: 500ms) - Max retry delay
+- `OAUTH_STATE_RETRY_BACKOFF_MULTIPLIER` (default: 1.5) - Exponential backoff multiplier
+- `OAUTH_TOKEN_EXCHANGE_MAX_RETRIES` (default: 2) - Token exchange retry count
+- `OAUTH_TOKEN_EXCHANGE_RETRY_DELAY` (default: 500ms) - Token exchange retry delay
 
 ## File Locations
-- Backend: `src/backendng/src/main/kotlin/com/secman/{domain,controller,service,repository}/`
+- Backend: `src/backendng/src/main/kotlin/com/secman/{domain,controller,service,repository,config}/`
 - Frontend: `src/frontend/src/{components,pages,services}/`
 - CLI: `src/cli/src/main/kotlin/com/secman/cli/{commands,service}/`
 - Email Templates: `src/backendng/src/main/resources/email-templates/`
 - Config: `src/backendng/src/main/resources/application.yml`
+- Environment Docs: `docs/ENVIRONMENT.md`
 
 ---
-*Last updated: 2025-11-09*
+*Last updated: 2025-12-04*
 
 ## Active Technologies
 - Kotlin 2.2.21 / Java 21 + Micronaut 4.10, Hibernate JPA, JavaMail API (SMTP) (046-oidc-default-roles)

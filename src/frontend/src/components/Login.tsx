@@ -20,6 +20,17 @@ const Login = () => {
         fetchExternalProviders();
     }, []);
 
+    // Read OAuth error from URL parameter (redirected from backend on OAuth failure)
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const errorParam = params.get('error');
+        if (errorParam) {
+            setError(decodeURIComponent(errorParam));
+            // Clean URL to prevent error persisting on refresh
+            window.history.replaceState({}, '', '/login');
+        }
+    }, []);
+
     const fetchExternalProviders = async () => {
         try {
             console.log('[OAuth] Fetching enabled identity providers from /api/identity-providers/enabled');
@@ -192,7 +203,12 @@ const Login = () => {
                                 </div>
                                 {error && (
                                     <div className="alert alert-danger" role="alert">
-                                        {error}
+                                        <strong>Login failed:</strong> {error}
+                                        <div className="mt-2">
+                                            <small className="text-muted">
+                                                If this persists, try clearing your browser cache or contact IT support.
+                                            </small>
+                                        </div>
                                     </div>
                                 )}
                                 <div className="d-grid">
