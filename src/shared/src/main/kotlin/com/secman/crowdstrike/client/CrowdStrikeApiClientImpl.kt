@@ -131,6 +131,9 @@ open class CrowdStrikeApiClientImpl(
 
                 // For now, return single page (pagination requires CrowdStrike cursor/offset support)
                 hasMore = false
+            } catch (e: CrowdStrikeException) {
+                // Don't log stack trace for known CrowdStrike exceptions - just rethrow
+                throw e
             } catch (e: Exception) {
                 log.error("Error during pagination: offset={}", offset, e)
                 throw e

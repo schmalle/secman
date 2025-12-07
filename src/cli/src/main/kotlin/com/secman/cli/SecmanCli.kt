@@ -1,5 +1,6 @@
 package com.secman.cli
 
+import com.secman.cli.commands.AddVulnerabilityCommand
 import com.secman.cli.commands.ConfigCommand
 import com.secman.cli.commands.ManageUserMappingsCommand
 import com.secman.cli.commands.ManageWorkgroupsCommand
@@ -193,6 +194,15 @@ class SecmanCli {
                 }
                 0
             }
+            args[0] == "add-vulnerability" -> {
+                // Use Picocli with Micronaut DI for add-vulnerability command
+                // Feature: 052-cli-add-vulnerability
+                val subArgs = args.drop(1).toTypedArray()
+                ApplicationContext.run().use { ctx ->
+                    PicocliRunner.run(AddVulnerabilityCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
             else -> {
                 System.err.println("Unknown command: ${args[0]}")
                 showHelp()
@@ -215,6 +225,7 @@ class SecmanCli {
               send-notifications     Send email notifications for outdated assets (Feature 035)
               manage-user-mappings   Manage user mappings for domains and AWS accounts (Feature 049)
               manage-workgroups      Manage workgroup asset assignments (list, assign, remove)
+              add-vulnerability      Add or update a vulnerability for an asset (Feature 052)
               help                   Show this help message
 
             Query Servers Options (Feature 032):
@@ -251,6 +262,20 @@ class SecmanCli {
               --dry-run                Query but don't store results
               --no-storage             Disable automatic storage
               --verbose                Enable verbose logging
+
+            Add Vulnerability Options (Feature 052):
+              --hostname <hostname>    Target asset hostname (required)
+              --cve <cve-id>           CVE identifier or custom vulnerability ID (required)
+              --criticality <level>    Severity: CRITICAL, HIGH, MEDIUM, or LOW (required)
+              --days-open <num>        Days the vulnerability has been open (default: 0)
+              --backend-url <url>      Backend API URL (default: http://localhost:8080)
+              --username <user>        Backend username (or set SECMAN_USERNAME env var)
+              --password <pass>        Backend password (or set SECMAN_PASSWORD env var)
+              --verbose                Enable verbose output
+
+            Environment Variables:
+              SECMAN_USERNAME          Backend username for authentication
+              SECMAN_PASSWORD          Backend password for authentication (recommended over --password)
 
             Examples:
               # Configure CrowdStrike credentials
@@ -313,6 +338,18 @@ class SecmanCli {
               secman manage-workgroups remove-assets -w Test -p "*test*" -u admin@company.com        # Remove by pattern
               secman manage-workgroups remove-assets -w Test --all -u admin@company.com              # Remove all
               secman manage-workgroups --help
+
+              # Add vulnerability manually (Feature 052)
+              # Using environment variables (recommended for security):
+              export SECMAN_USERNAME=admin
+              export SECMAN_PASSWORD=secret
+              secman add-vulnerability --hostname webserver01 --cve CVE-2024-1234 --criticality HIGH
+              secman add-vulnerability --hostname webserver01 --cve CVE-2024-1234 --criticality HIGH --days-open 30
+
+              # Using command line arguments:
+              secman add-vulnerability --hostname webserver01 --cve CVE-2024-1234 --criticality HIGH --username admin --password secret
+              secman add-vulnerability --hostname newserver99 --cve CVE-2023-5678 --criticality CRITICAL --username admin --password secret --verbose
+              secman add-vulnerability --help
 
             For more information, visit: https://github.com/schmalle/secman
         """.trimIndent())
