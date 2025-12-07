@@ -766,14 +766,13 @@ const AssetManagement: React.FC = () => {
                                   <i className="bi bi-diagram-3"></i> Ports
                                 </button>
                               )}
-                              <button
-                                type="button"
-                                onClick={() => handleShowVulnerabilities(asset)}
+                              <a
+                                href={`/vulnerabilities/system?hostname=${encodeURIComponent(asset.name)}`}
                                 className="btn btn-sm btn-outline-danger"
-                                title="Show vulnerabilities"
+                                title="Show vulnerabilities in CrowdStrike"
                               >
                                 <i className="bi bi-shield-exclamation"></i> Vulnerabilities
-                              </button>
+                              </a>
                               {/* Delete button only visible to ADMIN users (Feature 033) */}
                               {isAdmin(getUser()?.roles) && (
                                 <button
