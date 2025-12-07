@@ -38,6 +38,7 @@ let connectionState: 'disconnected' | 'connecting' | 'connected' | 'error' = 'di
 let errorCount = 0;
 const MAX_ERRORS = 5;
 const ERROR_RESET_TIMEOUT = 60000; // Reset error count after 1 minute
+let reconnectTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
 /**
  * Connect to SSE endpoint for real-time badge count updates.
@@ -136,8 +137,8 @@ export function connectToBadgeUpdates(onUpdate: BadgeCountCallback): () => void 
   eventSource.addEventListener('open', () => {
     console.log('[ExceptionBadge] SSE connection established');
     connectionState = 'connected';
-    // Reset error count on successful connection
-    errorCount = 0;
+    // NOTE: Don't reset errorCount here - it gets reset on successful message receipt
+    // This prevents the error loop where auto-reconnect resets count before we can track failures
   });
 
   // Handle connection errors
@@ -151,27 +152,30 @@ export function connectToBadgeUpdates(onUpdate: BadgeCountCallback): () => void 
 
     console.error(`[ExceptionBadge] SSE connection error (${errorCount}/${MAX_ERRORS}):`, error);
 
-    // Check if connection is closed (readyState 2 = CLOSED)
-    if (eventSource.readyState === EventSource.CLOSED) {
-      console.warn('[ExceptionBadge] SSE connection closed by server');
-
-      // Force close if too many errors to prevent reconnection
-      if (errorCount >= MAX_ERRORS) {
-        console.error('[ExceptionBadge] Maximum errors reached, closing connection permanently');
-        eventSource.close();
-        connectionState = 'disconnected';
-      }
-    }
+    // ALWAYS close EventSource to prevent browser auto-reconnect
+    eventSource.close();
 
     // Fallback to 0 count on error (safe default)
     onUpdate(0);
 
-    // Reset error count after timeout to allow future reconnections
-    setTimeout(() => {
-      if (errorCount > 0) {
-        errorCount = Math.max(0, errorCount - 1);
-      }
-    }, ERROR_RESET_TIMEOUT);
+    // Stop if max errors reached
+    if (errorCount >= MAX_ERRORS) {
+      console.error('[ExceptionBadge] Maximum errors reached, stopping reconnection. Refresh page to retry.');
+      connectionState = 'disconnected';
+      return;
+    }
+
+    // Exponential backoff: 1s, 2s, 4s, 8s, 16s (capped at 30s)
+    const backoffDelay = Math.min(1000 * Math.pow(2, errorCount - 1), 30000);
+    console.log(`[ExceptionBadge] Will retry in ${backoffDelay / 1000}s...`);
+
+    connectionState = 'disconnected';
+
+    // Schedule reconnection with backoff
+    reconnectTimeoutId = setTimeout(() => {
+      reconnectTimeoutId = null;
+      connectToBadgeUpdates(onUpdate);
+    }, backoffDelay);
   });
 
   // Return cleanup function
@@ -180,6 +184,11 @@ export function connectToBadgeUpdates(onUpdate: BadgeCountCallback): () => void 
     console.log('[ExceptionBadge] Disconnecting from SSE endpoint');
     eventSource.close();
     connectionState = 'disconnected';
+    // Cancel any pending reconnection attempt
+    if (reconnectTimeoutId) {
+      clearTimeout(reconnectTimeoutId);
+      reconnectTimeoutId = null;
+    }
   };
 }
 
