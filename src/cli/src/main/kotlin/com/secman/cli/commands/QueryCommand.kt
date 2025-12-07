@@ -7,6 +7,10 @@ import com.secman.crowdstrike.auth.CrowdStrikeAuthService
 import com.secman.crowdstrike.client.CrowdStrikeApiClient
 import com.secman.crowdstrike.client.CrowdStrikeApiClientImpl
 import com.secman.crowdstrike.dto.FalconConfigDto
+import com.secman.crowdstrike.exception.AuthenticationException
+import com.secman.crowdstrike.exception.CrowdStrikeException
+import com.secman.crowdstrike.exception.NotFoundException
+import com.secman.crowdstrike.exception.RateLimitException
 import io.micronaut.context.ApplicationContext
 import io.micronaut.http.client.HttpClient
 import org.slf4j.LoggerFactory
@@ -188,6 +192,31 @@ class QueryCommand {
             }
 
             0
+        } catch (e: NotFoundException) {
+            System.err.println()
+            System.err.println("Error: Hostname '$hostname' not found in CrowdStrike")
+            System.err.println("   The hostname may not exist or may not be monitored by CrowdStrike Falcon.")
+            System.err.println("   Please verify the hostname is correct and the device is enrolled.")
+            1
+        } catch (e: AuthenticationException) {
+            System.err.println()
+            System.err.println("Error: CrowdStrike authentication failed")
+            System.err.println("   Please check your CrowdStrike API credentials.")
+            System.err.println("   Run 'secman config --show' to verify your configuration.")
+            1
+        } catch (e: RateLimitException) {
+            System.err.println()
+            System.err.println("Error: CrowdStrike API rate limit exceeded")
+            System.err.println("   Please wait a few minutes before trying again.")
+            1
+        } catch (e: CrowdStrikeException) {
+            System.err.println()
+            System.err.println("Error: CrowdStrike API error")
+            System.err.println("   ${e.message}")
+            if (verbose) {
+                e.printStackTrace()
+            }
+            1
         } catch (e: IllegalStateException) {
             System.err.println("Error: ${e.message}")
             1

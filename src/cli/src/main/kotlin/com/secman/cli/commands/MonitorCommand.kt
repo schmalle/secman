@@ -4,6 +4,10 @@ import com.secman.cli.config.ConfigLoader
 import com.secman.cli.service.CrowdStrikePollerService
 import com.secman.cli.service.MonitorStatistics
 import com.secman.crowdstrike.dto.FalconConfigDto
+import com.secman.crowdstrike.exception.AuthenticationException
+import com.secman.crowdstrike.exception.CrowdStrikeException
+import com.secman.crowdstrike.exception.NotFoundException
+import com.secman.crowdstrike.exception.RateLimitException
 import io.micronaut.context.ApplicationContext
 import org.slf4j.LoggerFactory
 import java.util.concurrent.Executors
@@ -81,6 +85,28 @@ class MonitorCommand {
             
             log.info("Monitor stopped")
             0
+        } catch (e: AuthenticationException) {
+            System.err.println()
+            System.err.println("Error: CrowdStrike authentication failed")
+            System.err.println("   Please check your CrowdStrike API credentials.")
+            System.err.println("   Run 'secman config --show' to verify your configuration.")
+            log.error("CrowdStrike authentication error", e)
+            1
+        } catch (e: RateLimitException) {
+            System.err.println()
+            System.err.println("Error: CrowdStrike API rate limit exceeded")
+            System.err.println("   Please wait a few minutes before trying again.")
+            log.error("CrowdStrike rate limit error", e)
+            1
+        } catch (e: CrowdStrikeException) {
+            System.err.println()
+            System.err.println("Error: CrowdStrike API error")
+            System.err.println("   ${e.message}")
+            if (verbose) {
+                e.printStackTrace()
+            }
+            log.error("CrowdStrike API error", e)
+            1
         } catch (e: IllegalStateException) {
             System.err.println("Configuration error: ${e.message}")
             log.error("Configuration error", e)
@@ -162,10 +188,42 @@ class MonitorCommand {
             
             log.info("Poll cycle completed: devices={}, vulnerabilities={}, stored={}, duration={}ms",
                 result.devicesQueried, result.totalVulnerabilities, result.stored, duration)
+        } catch (e: NotFoundException) {
+            val duration = System.currentTimeMillis() - startTime
+            statistics.recordError()
+
+            val hostnameInfo = if (hostnames.isNotEmpty()) {
+                "Hostname(s) not found: ${hostnames.joinToString(", ")}"
+            } else {
+                "Device not found in CrowdStrike"
+            }
+            System.err.println("[${getCurrentTimestamp()}] Poll failed: $hostnameInfo")
+            System.err.println("   Verify hostnames are correct and devices are enrolled in CrowdStrike Falcon.")
+            log.error("Poll cycle failed after {}ms - NotFoundException", duration, e)
+        } catch (e: AuthenticationException) {
+            val duration = System.currentTimeMillis() - startTime
+            statistics.recordError()
+
+            System.err.println("[${getCurrentTimestamp()}] Poll failed: CrowdStrike authentication error")
+            System.err.println("   Please check your API credentials. Run 'secman config --show' to verify.")
+            log.error("Poll cycle failed after {}ms - AuthenticationException", duration, e)
+        } catch (e: RateLimitException) {
+            val duration = System.currentTimeMillis() - startTime
+            statistics.recordError()
+
+            System.err.println("[${getCurrentTimestamp()}] Poll failed: CrowdStrike rate limit exceeded")
+            System.err.println("   Will retry on next poll interval.")
+            log.error("Poll cycle failed after {}ms - RateLimitException", duration, e)
+        } catch (e: CrowdStrikeException) {
+            val duration = System.currentTimeMillis() - startTime
+            statistics.recordError()
+
+            System.err.println("[${getCurrentTimestamp()}] Poll failed: CrowdStrike API error - ${e.message}")
+            log.error("Poll cycle failed after {}ms - CrowdStrikeException", duration, e)
         } catch (e: Exception) {
             val duration = System.currentTimeMillis() - startTime
             statistics.recordError()
-            
+
             System.err.println("[${getCurrentTimestamp()}] Poll failed: ${e.message}")
             log.error("Poll cycle failed after {}ms", duration, e)
         }

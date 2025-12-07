@@ -1,9 +1,9 @@
 # Secman CLI Reference
 
-**Last Updated:** 2025-11-26
+**Last Updated:** 2025-12-07
 **Version:** 1.0
 
-Command-line interface for CrowdStrike vulnerability queries, notifications, and user mapping management.
+Command-line interface for CrowdStrike vulnerability queries, notifications, user mapping management, and manual vulnerability entry.
 
 ---
 
@@ -25,6 +25,7 @@ The Secman CLI provides command-line access to:
 - Query CrowdStrike Falcon API for vulnerabilities
 - Send automated notification emails for outdated assets
 - Manage user-to-asset mappings (AWS accounts, AD domains)
+- Manually add vulnerabilities for assets (with auto-asset creation)
 - Export vulnerability data to JSON/CSV
 
 ### Requirements
@@ -235,6 +236,74 @@ java -jar secman-cli.jar manage-user-mappings remove --id 42
 | `add-domain` | Add AD domain mapping |
 | `import` | Bulk import from CSV/JSON |
 | `remove` | Remove mapping by ID |
+
+### Add Vulnerability
+
+Manually add or update vulnerability records for assets.
+
+```bash
+# Basic usage - add vulnerability to existing asset
+java -jar secman-cli.jar add-vulnerability \
+  --hostname webserver01 \
+  --cve CVE-2024-1234 \
+  --criticality HIGH \
+  --username admin \
+  --password secret
+
+# With days open (how long vulnerability has been present)
+java -jar secman-cli.jar add-vulnerability \
+  --hostname webserver01 \
+  --cve CVE-2024-1234 \
+  --criticality CRITICAL \
+  --days-open 30 \
+  --username admin \
+  --password secret
+
+# Auto-creates asset if hostname not found
+java -jar secman-cli.jar add-vulnerability \
+  --hostname newserver99 \
+  --cve CVE-2024-5678 \
+  --criticality MEDIUM \
+  --username admin \
+  --password secret
+
+# Update existing vulnerability (upsert pattern)
+java -jar secman-cli.jar add-vulnerability \
+  --hostname webserver01 \
+  --cve CVE-2024-1234 \
+  --criticality HIGH \
+  --days-open 45 \
+  --username admin \
+  --password secret
+
+# With custom backend URL and verbose output
+java -jar secman-cli.jar add-vulnerability \
+  --hostname webserver01 \
+  --cve CVE-2024-1234 \
+  --criticality HIGH \
+  --backend-url https://api.yourdomain.com \
+  --username admin \
+  --password secret \
+  --verbose
+```
+
+**Options:**
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--hostname` | Target asset hostname (required) | - |
+| `--cve` | CVE identifier or custom ID (required) | - |
+| `--criticality` | CRITICAL, HIGH, MEDIUM, or LOW (required) | - |
+| `--days-open` | Days the vulnerability has been open | 0 |
+| `--username` | Backend authentication username (required) | - |
+| `--password` | Backend authentication password (required) | - |
+| `--backend-url` | Backend API URL | http://localhost:8080 |
+| `--verbose` | Show detailed output | false |
+
+**Behavior:**
+- **Upsert pattern**: If same CVE exists for asset, updates instead of creating duplicate
+- **Auto-create**: If hostname not found, creates asset with type=SERVER, owner=CLI-IMPORT
+- **Exit codes**: 0=success, 1=validation/auth error, 2=connection error
 
 ### Manage Workgroups
 
@@ -574,6 +643,7 @@ exit 0
 - [CrowdStrike Import](./CROWDSTRIKE_IMPORT.md) - Import technical details
 - [User Mapping Commands](../src/cli/src/main/resources/cli-docs/USER_MAPPING_COMMANDS.md) - Detailed user mapping CLI subcommands
 - [Workgroup Commands](../src/cli/src/main/resources/cli-docs/WORKGROUP_COMMANDS.md) - Detailed workgroup management CLI subcommands
+- [Add Vulnerability Command](../src/cli/src/main/resources/cli-docs/ADD_VULNERABILITY_COMMANDS.md) - Detailed add-vulnerability CLI command
 
 ---
 
