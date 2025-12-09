@@ -61,7 +61,8 @@ open class AssetController(
         @Nullable val ip: String? = null,
         @NotBlank @Size(max = 255) val owner: String,
         @Nullable val description: String? = null,
-        @Nullable val criticality: Criticality? = null
+        @Nullable val criticality: Criticality? = null,
+        @Nullable val adDomain: String? = null
     )
 
     @Serdeable
@@ -72,7 +73,8 @@ open class AssetController(
         @Nullable val owner: String? = null,
         @Nullable val description: String? = null,
         @Nullable val workgroupIds: List<Long>? = null,
-        @Nullable val criticality: Criticality? = null
+        @Nullable val criticality: Criticality? = null,
+        @Nullable val adDomain: String? = null
     )
 
     @Serdeable
@@ -185,6 +187,7 @@ open class AssetController(
                 criticality = request.criticality,
                 manualCreator = manualCreator
             )
+            asset.adDomain = request.adDomain?.trim()?.takeIf { it.isNotBlank() }
 
             val savedAsset = assetRepository.save(asset)
 
@@ -241,6 +244,11 @@ open class AssetController(
             // Feature 039: Handle criticality update (null explicitly allowed to revert to inheritance)
             if (request.criticality !== null) {
                 asset.criticality = request.criticality
+            }
+
+            // Feature 053: Handle adDomain update
+            request.adDomain?.let { newAdDomain ->
+                asset.adDomain = newAdDomain.trim().takeIf { it.isNotBlank() }
             }
 
             request.workgroupIds?.let { workgroupIds ->

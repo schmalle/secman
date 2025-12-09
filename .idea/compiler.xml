@@ -141,6 +141,17 @@
         <module name="secman.backendng.main" />
       </profile>
     </annotationProcessing>
+    <bytecodeTargetLevel>
+      <module name="secman.backendng" target="21" />
+      <module name="secman.backendng.main" target="21" />
+      <module name="secman.backendng.test" target="21" />
+      <module name="secman.cli" target="21" />
+      <module name="secman.cli.main" target="21" />
+      <module name="secman.cli.test" target="21" />
+      <module name="secman.shared" target="21" />
+      <module name="secman.shared.main" target="21" />
+      <module name="secman.shared.test" target="21" />
+    </bytecodeTargetLevel>
   </component>
   <component name="JavacSettings">
     <option name="ADDITIONAL_OPTIONS_OVERRIDE">
