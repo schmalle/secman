@@ -744,25 +744,39 @@ open class CrowdStrikeApiClientImpl(
                 })
             }
 
+            // Collect results with fault tolerance - continue even if some batches fail
+            val failedBatches = mutableListOf<Int>()
+            val errors = mutableListOf<String>()
+
             try {
-                futures.forEach { future ->
-                    allVulnerabilities.addAll(future.get())
+                futures.forEachIndexed { index, future ->
+                    try {
+                        allVulnerabilities.addAll(future.get())
+                    } catch (e: ExecutionException) {
+                        val cause = e.cause
+                        val errorMsg = "Batch ${index + 1}/${batches.size} failed: ${cause?.message ?: e.message}"
+                        log.warn(">>> $errorMsg")
+                        failedBatches.add(index + 1)
+                        errors.add(errorMsg)
+                        // Continue with other batches instead of failing entirely
+                    } catch (e: java.util.concurrent.CancellationException) {
+                        log.warn(">>> Batch ${index + 1}/${batches.size} was cancelled")
+                        failedBatches.add(index + 1)
+                    }
                 }
-            } catch (e: ExecutionException) {
-                futures.forEach { it.cancel(true) }
-                executor.shutdownNow()
-                val cause = e.cause
-                if (cause is RuntimeException) {
-                    throw cause
-                }
-                throw CrowdStrikeException("Failed to query server batch: ${cause?.message}", cause)
             } catch (e: InterruptedException) {
+                log.warn(">>> Batch processing interrupted, cancelling remaining futures")
                 futures.forEach { it.cancel(true) }
-                executor.shutdownNow()
                 Thread.currentThread().interrupt()
-                throw CrowdStrikeException("Interrupted while querying CrowdStrike server batches", e)
+                // Don't throw - return partial results
             } finally {
                 executor.shutdown()
+            }
+
+            // Log summary of failures
+            if (failedBatches.isNotEmpty()) {
+                log.warn(">>> {} of {} batches failed: {}", failedBatches.size, batches.size, failedBatches.joinToString(", "))
+                log.warn(">>> Continuing with {} vulnerabilities from successful batches", allVulnerabilities.size)
             }
         }
 
@@ -794,6 +808,31 @@ open class CrowdStrikeApiClientImpl(
         var pageCount = 0
 
         log.debug(">>> Batch {}/{} starting with {} device IDs", batchIndex + 1, totalBatches, deviceIds.size)
+
+        // Retry tracking for transient network errors (Feature 053)
+        val maxRetries = 3
+        val retryCount = mutableMapOf<Int, Int>()  // page -> retry count
+
+        // Helper to handle retry logic for transient errors
+        fun retryTransientError(batchIdx: Int, totalBatch: Int, page: Int, errorType: String, e: Exception): Boolean {
+            val currentRetries = retryCount.getOrDefault(page, 0)
+            if (currentRetries < maxRetries) {
+                retryCount[page] = currentRetries + 1
+                val backoffMs = (currentRetries + 1) * 2000L  // 2s, 4s, 6s
+                log.warn(">>> Batch {}/{} page {}: {} - {}. Retry {}/{} after {}ms",
+                    batchIdx + 1, totalBatch, page, errorType, e.message, currentRetries + 1, maxRetries, backoffMs)
+                try {
+                    Thread.sleep(backoffMs)
+                } catch (ie: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    return false
+                }
+                return true
+            }
+            log.error(">>> Batch {}/{} page {}: {} - {}. Max retries ({}) exceeded",
+                batchIdx + 1, totalBatch, page, errorType, e.message, maxRetries)
+            return false
+        }
 
         while (hasMore && pageCount < maxPagesPerBatch) {
             if (Thread.currentThread().isInterrupted) {
@@ -892,7 +931,10 @@ open class CrowdStrikeApiClientImpl(
                         throw RateLimitException("Rate limit exceeded", retryAfter, e)
                     }
                     in 500..599 -> {
-                        log.error(">>> Batch {}/{}: Server error {}", batchIndex + 1, totalBatches, e.status)
+                        // Server errors are often transient - retry with backoff
+                        if (retryTransientError(batchIndex, totalBatches, pageCount, "Server error ${e.status.code}", e)) {
+                            continue
+                        }
                         throw CrowdStrikeException("Server error: ${e.status}", e)
                     }
                     else -> {
@@ -901,19 +943,27 @@ open class CrowdStrikeApiClientImpl(
                     }
                 }
             } catch (e: java.net.SocketTimeoutException) {
-                log.error(">>> Batch {}/{}: TIMEOUT after waiting for API response", batchIndex + 1, totalBatches)
-                log.error(">>> Consider: 1) CrowdStrike API may be slow, 2) Reduce batch size further, 3) Check network connection")
+                // Retry transient network errors with backoff
+                if (retryTransientError(batchIndex, totalBatches, pageCount, "Timeout", e)) {
+                    continue
+                }
                 throw CrowdStrikeException("Timeout waiting for CrowdStrike API response on batch ${batchIndex + 1}", e)
             } catch (e: java.io.IOException) {
-                log.error(">>> Batch {}/{}: Network I/O error: {}", batchIndex + 1, totalBatches, e.message)
+                if (retryTransientError(batchIndex, totalBatches, pageCount, "Network I/O error", e)) {
+                    continue
+                }
                 throw CrowdStrikeException("Network error on batch ${batchIndex + 1}: ${e.message}", e)
             } catch (e: io.netty.channel.ChannelException) {
-                log.error(">>> Batch {}/{}: Channel error {}", batchIndex + 1, totalBatches, e.message)
+                if (retryTransientError(batchIndex, totalBatches, pageCount, "Channel error", e)) {
+                    continue
+                }
                 throw CrowdStrikeException("Channel error during batch ${batchIndex + 1}: ${e.message}", e)
             } catch (e: io.micronaut.http.client.exceptions.HttpClientException) {
-                if (e.message?.contains("Channel closed") == true ||
-                    e.message?.contains("aggregating") == true) {
-                    log.error(">>> Batch {}/{}: HTTP client channel error: {}", batchIndex + 1, totalBatches, e.message)
+                val isTransient = e.message?.contains("Channel closed") == true ||
+                    e.message?.contains("aggregating") == true ||
+                    e.message?.contains("Connection closed") == true
+                if (isTransient && retryTransientError(batchIndex, totalBatches, pageCount, "HTTP client error", e)) {
+                    continue
                 }
                 throw CrowdStrikeException("HTTP client error during batch ${batchIndex + 1}: ${e.message}", e)
             } catch (e: RateLimitException) {

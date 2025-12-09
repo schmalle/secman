@@ -86,12 +86,8 @@ class DomainVulnsService(
         log.info("User {} has {} domain mapping(s): {}", email, domains.size, domains.joinToString(", "))
 
         // Query database for assets matching user's domains (case-insensitive)
-        val allAssets = assetRepository.findAll().toList()
-        val assetsInDomains = allAssets.filter { asset ->
-            asset.adDomain != null && domains.any { domain ->
-                domain.equals(asset.adDomain, ignoreCase = true)
-            }
-        }
+        // Feature 053: Use database-level filtering instead of loading all assets
+        val assetsInDomains = assetRepository.findByAdDomainInIgnoreCase(domains)
 
         log.info("Found {} assets in user's domains", assetsInDomains.size)
 
@@ -120,19 +116,23 @@ class DomainVulnsService(
             )
         }
 
-        // Get vulnerabilities for all assets in user's domains
+        // Get vulnerabilities for all assets in user's domains (only from latest import per asset)
         val assetIds = assetsInDomains.mapNotNull { it.id }
-        val allVulnerabilities = vulnerabilityRepository.findAll().toList()
-            .filter { vuln -> assetIds.contains(vuln.asset.id) }
+        val allVulnerabilities = if (assetIds.isNotEmpty()) {
+            vulnerabilityRepository.findLatestVulnerabilitiesForAssetIds(assetIds.toSet())
+        } else {
+            emptyList()
+        }
 
         log.info("Found {} vulnerabilities for assets in user's domains", allVulnerabilities.size)
 
-        // Group vulnerabilities by asset (hostname)
-        val vulnsByAsset = allVulnerabilities.groupBy { it.asset }
+        // Group vulnerabilities by asset ID (more reliable than object reference)
+        // Native queries may return entities with different object references
+        val vulnsByAssetId = allVulnerabilities.groupBy { it.asset.id }
 
-        // Create device vulnerability counts
+        // Create device vulnerability counts using asset ID for lookup
         val deviceVulnCounts = assetsInDomains.map { asset ->
-            val vulns = vulnsByAsset[asset] ?: emptyList()
+            val vulns = vulnsByAssetId[asset.id] ?: emptyList()
             DeviceVulnCountDto(
                 hostname = asset.name,
                 ip = asset.ip,

@@ -190,6 +190,22 @@ interface AssetRepository : JpaRepository<Asset, Long> {
     fun findByAdDomainInIgnoreCase(domains: List<String>): List<Asset>
 
     /**
+     * Find assets by name or name starting with "name." (FQDN check)
+     * Used to detect duplicate assets (e.g. "server1" vs "server1.domain.com")
+     *
+     * Feature: 053-crowdstrike-import-cleanup
+     *
+     * @param name The short hostname
+     * @return List of potential duplicate assets
+     */
+    @io.micronaut.data.annotation.Query("""
+        SELECT a FROM Asset a
+        WHERE LOWER(a.name) = LOWER(:name) 
+        OR LOWER(a.name) LIKE LOWER(CONCAT(:name, '.%'))
+    """)
+    fun findPotentialDuplicates(name: String): List<Asset>
+
+    /**
      * Find all assets with non-null AD domain
      * Optimized for domain filtering operations
      * Uses index: idx_asset_ad_domain
