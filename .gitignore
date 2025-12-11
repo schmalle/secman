@@ -22,6 +22,7 @@ playwright-report/
 checkin-test-results/
 checkin-test-results.json
 *.log
+*.hprof
 
 # IDE
 .idea/

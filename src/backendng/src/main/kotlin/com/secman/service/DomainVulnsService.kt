@@ -361,7 +361,7 @@ class DomainVulnsService(
                         severity = vuln.severity,
                         affectedProduct = vuln.affectedProduct,
                         daysOpen = daysOpenInt,
-                        patchPublicationDate = null  // Not in this query
+                        patchPublicationDate = vuln.patchPublicationDate
                     )
                 }
             )

@@ -6,6 +6,7 @@ micronaut:
       # Increase timeouts for long-running CrowdStrike API queries
       read-timeout: 120s       # 2 minutes read timeout (was default 10s)
       connect-timeout: 30s     # 30 seconds connection timeout
+      max-content-length: 104857600  # 100MB - matches backend max-request-size
       pool:
         enabled: true
         max-connections: 20    # Allow up to 20 concurrent connections
@@ -16,6 +17,7 @@ secman:
   crowdstrike:
     batch-size: ${SECMAN_CROWDSTRIKE_BATCH_SIZE:25}
     max-parallel-batches: ${SECMAN_CROWDSTRIKE_MAX_PARALLEL_BATCHES:4}
+    max-vulnerabilities-per-batch: ${SECMAN_MAX_VULNS_PER_BATCH:50000}
 
 # Database configuration (required for EntityManager/JPA support)
 # CLI needs access to the same database as the backend to use backend services

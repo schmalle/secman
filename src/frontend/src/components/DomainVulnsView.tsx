@@ -268,14 +268,6 @@ const DomainVulnsView: React.FC = () => {
                                     severity="HIGH"
                                     count={summary.globalHigh ?? 0}
                                 />
-                                <SeverityBadge
-                                    severity="MEDIUM"
-                                    count={summary.globalMedium ?? 0}
-                                />
-                                <SeverityBadge
-                                    severity="LOW"
-                                    count={summary.globalLow ?? 0}
-                                />
                             </div>
                         </div>
                     </div>
@@ -373,14 +365,6 @@ const DomainVulnsView: React.FC = () => {
                                         severity="HIGH"
                                         count={group.totalHigh ?? 0}
                                     />
-                                    <SeverityBadge
-                                        severity="MEDIUM"
-                                        count={group.totalMedium ?? 0}
-                                    />
-                                    <SeverityBadge
-                                        severity="LOW"
-                                        count={group.totalLow ?? 0}
-                                    />
                                 </div>
                             </div>
                         </div>
@@ -395,8 +379,6 @@ const DomainVulnsView: React.FC = () => {
                                             <th className="text-end">Vulnerabilities</th>
                                             <th className="text-end">Critical</th>
                                             <th className="text-end">High</th>
-                                            <th className="text-end">Medium</th>
-                                            <th className="text-end">Low</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -431,21 +413,11 @@ const DomainVulnsView: React.FC = () => {
                                                             {device.highCount ?? 0}
                                                         </span>
                                                     </td>
-                                                    <td className="text-end">
-                                                        <span className="badge bg-info text-dark">
-                                                            {device.mediumCount ?? 0}
-                                                        </span>
-                                                    </td>
-                                                    <td className="text-end">
-                                                        <span className="badge bg-secondary">
-                                                            {device.lowCount ?? 0}
-                                                        </span>
-                                                    </td>
                                                 </tr>
                                             ))
                                         ) : (
                                             <tr>
-                                                <td colSpan={7} className="text-center text-muted py-4">
+                                                <td colSpan={5} className="text-center text-muted py-4">
                                                     No devices found in this domain
                                                 </td>
                                             </tr>
