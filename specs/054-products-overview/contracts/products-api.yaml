@@ -1,0 +1,227 @@
+openapi: 3.0.3
+info:
+  title: Products Overview API
+  description: API for viewing systems by product (extracted from CrowdStrike vulnerability data)
+  version: 1.0.0
+
+servers:
+  - url: /api
+    description: API base path
+
+security:
+  - bearerAuth: []
+
+paths:
+  /products:
+    get:
+      summary: Get list of unique products
+      description: |
+        Returns all unique product names from vulnerability data.
+        Non-admin users only see products from assets they have access to.
+      operationId: getProducts
+      tags:
+        - Products
+      parameters:
+        - name: search
+          in: query
+          description: Case-insensitive partial match filter for product names
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: Maximum number of products to return (default 500)
+          required: false
+          schema:
+            type: integer
+            default: 500
+            maximum: 1000
+      responses:
+        '200':
+          description: List of products
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductListResponse'
+        '401':
+          description: Unauthorized - missing or invalid token
+        '403':
+          description: Forbidden - user lacks required role (ADMIN, VULN, or SECCHAMPION)
+
+  /products/{product}/systems:
+    get:
+      summary: Get systems running a specific product
+      description: |
+        Returns paginated list of assets (systems) that have the specified product.
+        Non-admin users only see assets they have access to.
+      operationId: getProductSystems
+      tags:
+        - Products
+      parameters:
+        - name: product
+          in: path
+          description: Product name (URL encoded)
+          required: true
+          schema:
+            type: string
+        - name: page
+          in: query
+          description: Page number (0-indexed)
+          required: false
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+        - name: size
+          in: query
+          description: Page size (default 50, max 500)
+          required: false
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 500
+      responses:
+        '200':
+          description: Paginated list of systems
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedProductSystemsResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /products/{product}/systems/export:
+    get:
+      summary: Export systems list to Excel
+      description: |
+        Downloads an Excel file containing all systems running the specified product.
+        Respects user access control (non-admins only export accessible systems).
+      operationId: exportProductSystems
+      tags:
+        - Products
+      parameters:
+        - name: product
+          in: path
+          description: Product name (URL encoded)
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Excel file download
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+              example: 'attachment; filename="product-systems.xlsx"'
+        '204':
+          description: No systems found for this product
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    ProductListResponse:
+      type: object
+      required:
+        - products
+        - totalCount
+      properties:
+        products:
+          type: array
+          items:
+            type: string
+          description: List of unique product names, alphabetically sorted
+          example: ["Apache HTTP Server 2.4.6", "OpenSSL 1.0.2k", "PostgreSQL 12.0"]
+        totalCount:
+          type: integer
+          description: Total number of unique products
+          example: 150
+
+    ProductSystemDto:
+      type: object
+      required:
+        - assetId
+        - name
+      properties:
+        assetId:
+          type: integer
+          format: int64
+          description: Asset ID
+          example: 12345
+        name:
+          type: string
+          description: System/asset name
+          example: "web-server-01.example.com"
+        ip:
+          type: string
+          nullable: true
+          description: IP address
+          example: "192.168.1.100"
+        adDomain:
+          type: string
+          nullable: true
+          description: Active Directory domain
+          example: "corp.example.com"
+
+    PaginatedProductSystemsResponse:
+      type: object
+      required:
+        - content
+        - totalElements
+        - totalPages
+        - currentPage
+        - pageSize
+        - hasNext
+        - hasPrevious
+        - productName
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductSystemDto'
+        totalElements:
+          type: integer
+          format: int64
+          description: Total number of systems with this product
+          example: 250
+        totalPages:
+          type: integer
+          description: Total number of pages
+          example: 5
+        currentPage:
+          type: integer
+          description: Current page number (0-indexed)
+          example: 0
+        pageSize:
+          type: integer
+          description: Number of items per page
+          example: 50
+        hasNext:
+          type: boolean
+          description: Whether there is a next page
+          example: true
+        hasPrevious:
+          type: boolean
+          description: Whether there is a previous page
+          example: false
+        productName:
+          type: string
+          description: The product name that was queried
+          example: "OpenSSL 1.0.2k"

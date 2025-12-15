@@ -286,6 +286,11 @@ const Sidebar = () => {
                                     </a>
                                 </li>
                                 <li>
+                                    <a href="/products" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-box-seam me-2"></i> Products
+                                    </a>
+                                </li>
+                                <li>
                                     <a href="/vulnerabilities/exceptions" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
                                         <i className="bi bi-x-circle me-2"></i> Exceptions
                                     </a>
