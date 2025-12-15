@@ -174,6 +174,8 @@ fun findStateByValueWithRetry(stateToken: String): Optional<OAuthState> {
 - MariaDB 12 (existing users table, Flyway migration) (051-user-password-change)
 - Kotlin 2.2.21 / Java 21 + Micronaut 4.10, Picocli 4.7, Hibernate JPA (052-cli-add-vulnerability)
 - MariaDB 12 (existing Asset, Vulnerability entities) (052-cli-add-vulnerability)
+- Kotlin 2.2.21 / Java 21 (backend), TypeScript (frontend) + Micronaut 4.10, Hibernate JPA (backend); Astro 5.14, React 19, Bootstrap 5.3 (frontend) (054-products-overview)
+- MariaDB 11.4 (existing Vulnerability and Asset entities) (054-products-overview)
 
 ## Recent Changes
 - 048-prevent-duplicate-vulnerabilities: Fixed critical 99% data loss bug by removing JPA cascade from Asset.vulnerabilities; added transactional replace pattern for duplicate prevention, comprehensive documentation

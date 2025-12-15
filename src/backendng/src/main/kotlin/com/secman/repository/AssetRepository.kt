@@ -220,4 +220,145 @@ interface AssetRepository : JpaRepository<Asset, Long> {
         ORDER BY a.name ASC
     """)
     fun findAllWithAdDomain(): List<Asset>
+
+    // Feature 054: Products Overview - Asset queries by product
+
+    /**
+     * Find assets running a specific product with access control and pagination
+     * Returns distinct assets that have vulnerabilities with the specified product
+     *
+     * Feature: 054-products-overview
+     * Task: T006
+     *
+     * @param product The product name to search for (exact match on vulnerableProductVersions)
+     * @param accessibleAssetIds Set of asset IDs the user has access to
+     * @param pageable Pagination parameters
+     * @return Page of assets running the specified product
+     */
+    @io.micronaut.data.annotation.Query(
+        value = """
+            SELECT DISTINCT a FROM Asset a
+            JOIN Vulnerability v ON v.asset.id = a.id
+            WHERE v.vulnerableProductVersions = :product
+            AND a.id IN :accessibleAssetIds
+            ORDER BY a.name ASC
+        """,
+        countQuery = """
+            SELECT COUNT(DISTINCT a.id) FROM Asset a
+            JOIN Vulnerability v ON v.asset.id = a.id
+            WHERE v.vulnerableProductVersions = :product
+            AND a.id IN :accessibleAssetIds
+        """
+    )
+    fun findAssetsByProductWithAccessControl(
+        product: String,
+        accessibleAssetIds: Set<Long>,
+        pageable: Pageable
+    ): Page<Asset>
+
+    /**
+     * Find assets running a specific product for admin users (no access control) with pagination
+     * Returns distinct assets that have vulnerabilities with the specified product
+     *
+     * Feature: 054-products-overview
+     * Task: T006
+     *
+     * @param product The product name to search for (exact match on vulnerableProductVersions)
+     * @param pageable Pagination parameters
+     * @return Page of assets running the specified product
+     */
+    @io.micronaut.data.annotation.Query(
+        value = """
+            SELECT DISTINCT a FROM Asset a
+            JOIN Vulnerability v ON v.asset.id = a.id
+            WHERE v.vulnerableProductVersions = :product
+            ORDER BY a.name ASC
+        """,
+        countQuery = """
+            SELECT COUNT(DISTINCT a.id) FROM Asset a
+            JOIN Vulnerability v ON v.asset.id = a.id
+            WHERE v.vulnerableProductVersions = :product
+        """
+    )
+    fun findAssetsByProductForAll(
+        product: String,
+        pageable: Pageable
+    ): Page<Asset>
+
+    /**
+     * Count assets running a specific product with access control
+     * Used for pagination total count
+     *
+     * Feature: 054-products-overview
+     * Task: T007
+     *
+     * @param product The product name to search for
+     * @param accessibleAssetIds Set of asset IDs the user has access to
+     * @return Count of assets running the specified product
+     */
+    @io.micronaut.data.annotation.Query("""
+        SELECT COUNT(DISTINCT a.id) FROM Asset a
+        JOIN Vulnerability v ON v.asset.id = a.id
+        WHERE v.vulnerableProductVersions = :product
+        AND a.id IN :accessibleAssetIds
+    """)
+    fun countAssetsByProductWithAccessControl(product: String, accessibleAssetIds: Set<Long>): Long
+
+    /**
+     * Count all assets running a specific product (admin view)
+     * Used for pagination total count
+     *
+     * Feature: 054-products-overview
+     * Task: T007
+     *
+     * @param product The product name to search for
+     * @return Count of all assets running the specified product
+     */
+    @io.micronaut.data.annotation.Query("""
+        SELECT COUNT(DISTINCT a.id) FROM Asset a
+        JOIN Vulnerability v ON v.asset.id = a.id
+        WHERE v.vulnerableProductVersions = :product
+    """)
+    fun countAssetsByProductForAll(product: String): Long
+
+    /**
+     * Find all assets running a specific product with access control (no pagination)
+     * Used for export functionality
+     *
+     * Feature: 054-products-overview
+     * Task: T025 (Export)
+     *
+     * @param product The product name to search for
+     * @param accessibleAssetIds Set of asset IDs the user has access to
+     * @return List of all assets running the specified product
+     */
+    @io.micronaut.data.annotation.Query("""
+        SELECT DISTINCT a FROM Asset a
+        JOIN Vulnerability v ON v.asset.id = a.id
+        WHERE v.vulnerableProductVersions = :product
+        AND a.id IN :accessibleAssetIds
+        ORDER BY a.name ASC
+    """)
+    fun findAssetsByProductWithAccessControlNoLimit(
+        product: String,
+        accessibleAssetIds: Set<Long>
+    ): List<Asset>
+
+    /**
+     * Find all assets running a specific product (admin view, no pagination)
+     * Used for export functionality
+     *
+     * Feature: 054-products-overview
+     * Task: T025 (Export)
+     *
+     * @param product The product name to search for
+     * @return List of all assets running the specified product
+     */
+    @io.micronaut.data.annotation.Query("""
+        SELECT DISTINCT a FROM Asset a
+        JOIN Vulnerability v ON v.asset.id = a.id
+        WHERE v.vulnerableProductVersions = :product
+        ORDER BY a.name ASC
+    """)
+    fun findAssetsByProductForAllNoLimit(product: String): List<Asset>
 }
