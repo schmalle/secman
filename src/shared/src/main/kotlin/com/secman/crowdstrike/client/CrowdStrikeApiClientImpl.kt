@@ -3,6 +3,7 @@ package com.secman.crowdstrike.client
 import com.secman.crowdstrike.auth.CrowdStrikeAuthService
 import com.secman.crowdstrike.dto.CrowdStrikeQueryResponse
 import com.secman.crowdstrike.dto.CrowdStrikeVulnerabilityDto
+import com.secman.crowdstrike.dto.DeviceType
 import com.secman.crowdstrike.dto.FalconConfigDto
 import com.secman.crowdstrike.exception.CrowdStrikeException
 import com.secman.crowdstrike.exception.NotFoundException
@@ -399,19 +400,20 @@ open class CrowdStrikeApiClientImpl(
             }
         } else {
             // TWO-STAGE OPTIMIZED QUERY:
-            // 1. Query SERVER devices first (using product_type_desc filter)
+            // 1. Query devices first (using product_type_desc filter for SERVER/WORKSTATION/ALL)
             // 2. Query vulnerabilities only for those specific devices
             // This avoids querying ALL vulnerabilities (which caused 30-minute timeouts)
-            log.info("Querying all servers using two-stage optimization (servers first, then vulnerabilities)")
+            val parsedDeviceType = DeviceType.fromString(deviceType)
+            log.info("Querying all {} using two-stage optimization (devices first, then vulnerabilities)", parsedDeviceType.displayName())
 
-            // Stage 1: Get SERVER device IDs
+            // Stage 1: Get device IDs for the specified type
             log.info(">>> Stage 1: Getting authentication token")
             val token = getAuthToken(config)
-            log.info(">>> Stage 1: Querying SERVER devices with product_type_desc filter")
-            val serverDeviceIds = getServerDeviceIdsFiltered(token, limit)
+            log.info(">>> Stage 1: Querying {} devices with product_type_desc filter", parsedDeviceType.name)
+            val serverDeviceIds = getDeviceIdsFiltered(token, parsedDeviceType, limit)
 
             if (serverDeviceIds.isEmpty()) {
-                log.info(">>> Stage 1: No SERVER devices found in CrowdStrike")
+                log.info(">>> Stage 1: No {} devices found in CrowdStrike", parsedDeviceType.name)
                 return CrowdStrikeQueryResponse(
                     hostname = "ALL",
                     vulnerabilities = emptyList(),
@@ -420,7 +422,7 @@ open class CrowdStrikeApiClientImpl(
                 )
             }
 
-            log.info(">>> Stage 1 complete: Found {} SERVER devices", serverDeviceIds.size)
+            log.info(">>> Stage 1 complete: Found {} {} devices", serverDeviceIds.size, parsedDeviceType.name)
             log.info(">>> Stage 1: Sample device IDs: {}", serverDeviceIds.take(10).joinToString(", "))
 
             // Stage 2: Query vulnerabilities for those specific devices
@@ -559,14 +561,15 @@ open class CrowdStrikeApiClientImpl(
     }
 
     /**
-     * Get SERVER device IDs from CrowdStrike using product_type_desc filter
+     * Get device IDs from CrowdStrike using product_type_desc filter
      *
-     * Feature: 032-servers-query-import (Performance Optimization)
-     * Optimization: Query only SERVER devices (not workstations) using product_type_desc filter
+     * Feature: 055-cli-query-clients (Extended from 032-servers-query-import)
+     * Supports querying SERVER, WORKSTATION, or ALL device types
      *
      * @param token OAuth2 access token
+     * @param deviceType Device type to query (SERVER, WORKSTATION, or ALL)
      * @param limit Maximum number of devices to retrieve per page
-     * @return List of server device IDs
+     * @return List of device IDs matching the specified type
      */
     @Retryable(
         includes = [RateLimitException::class],
@@ -575,11 +578,23 @@ open class CrowdStrikeApiClientImpl(
         multiplier = "2.0",
         maxDelay = "60s"
     )
-    open fun getServerDeviceIdsFiltered(
+    open fun getDeviceIdsFiltered(
         token: AuthToken,
+        deviceType: DeviceType = DeviceType.SERVER,
         limit: Int = 5000
     ): List<String> {
-        log.info(">>> Stage 1: Querying SERVER devices with product_type_desc + last_seen filters")
+        // Handle ALL device type by querying both SERVER and WORKSTATION
+        if (deviceType == DeviceType.ALL) {
+            log.info(">>> Stage 1: Querying ALL devices (SERVER + WORKSTATION)")
+            val serverIds = getDeviceIdsFiltered(token, DeviceType.SERVER, limit)
+            val workstationIds = getDeviceIdsFiltered(token, DeviceType.WORKSTATION, limit)
+            val combined = (serverIds + workstationIds).distinct()
+            log.info(">>> Stage 1 complete: {} total devices ({} servers + {} workstations)",
+                combined.size, serverIds.size, workstationIds.size)
+            return combined
+        }
+
+        log.info(">>> Stage 1: Querying {} devices with product_type_desc + last_seen filters", deviceType.name)
 
         val allDeviceIds = mutableListOf<String>()
         var offset = 0
@@ -587,11 +602,11 @@ open class CrowdStrikeApiClientImpl(
 
         while (hasMore) {
             try {
-                // OPTIMIZATION: Combine filters to get only active servers seen in the last day
-                // - product_type_desc:'Server' = Only servers (not workstations)
+                // OPTIMIZATION: Combine filters to get only active devices seen in the last day
+                // - product_type_desc:'Server' or 'Workstation' = Only specified device type
                 // - last_seen:>'now-1d' = Only devices seen in the last 24 hours
-                // This reduces the result set from ~17,700 to <3,000 servers
-                val filter = "product_type_desc:'Server'+last_seen:>'now-1d'"
+                // This reduces the result set significantly
+                val filter = "${deviceType.toFqlFilter()}+last_seen:>'now-1d'"
 
                 val uri = UriBuilder.of("/devices/queries/devices/v1")
                     .queryParam("filter", filter)
@@ -635,12 +650,12 @@ open class CrowdStrikeApiClientImpl(
                         }
                     }
                     404 -> {
-                        log.info("No SERVER devices found")
+                        log.info("No {} devices found", deviceType.name)
                         hasMore = false
                     }
                     429 -> {
                         val retryAfter = response.headers.get("Retry-After")?.toLongOrNull() ?: 30L
-                        throw RateLimitException("Rate limit exceeded querying SERVER devices", retryAfter)
+                        throw RateLimitException("Rate limit exceeded querying ${deviceType.name} devices", retryAfter)
                     }
                     in 500..599 -> throw CrowdStrikeException("CrowdStrike server error: ${response.status}")
                     else -> throw CrowdStrikeException("Unexpected CrowdStrike response: ${response.status}")
@@ -648,7 +663,7 @@ open class CrowdStrikeApiClientImpl(
             } catch (e: io.micronaut.http.client.exceptions.HttpClientResponseException) {
                 when (e.status.code) {
                     404 -> {
-                        log.info("No SERVER devices found")
+                        log.info("No {} devices found", deviceType.name)
                         hasMore = false
                     }
                     429 -> {
@@ -661,13 +676,12 @@ open class CrowdStrikeApiClientImpl(
             } catch (e: RateLimitException) {
                 throw e
             } catch (e: Exception) {
-                log.error("Unexpected error querying SERVER device IDs", e)
-                throw CrowdStrikeException("Failed to query SERVER device IDs: ${e.message}", e)
+                log.error("Unexpected error querying {} device IDs", deviceType.name, e)
+                throw CrowdStrikeException("Failed to query ${deviceType.name} device IDs: ${e.message}", e)
             }
         }
 
-        log.info(">>> Stage 1 complete: {} active SERVER devices found (last seen within 24 hours)", allDeviceIds.size)
-        log.info(">>> Stage 1 complete: Optimization reduced server count from ~17,700 to {}", allDeviceIds.size)
+        log.info(">>> Stage 1 complete: {} active {} devices found (last seen within 24 hours)", allDeviceIds.size, deviceType.name)
         return allDeviceIds
     }
 

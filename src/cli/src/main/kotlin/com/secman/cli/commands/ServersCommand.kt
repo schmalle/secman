@@ -4,6 +4,7 @@ import com.secman.cli.config.ConfigLoader
 import com.secman.cli.service.ServerVulnerabilityBatch
 import com.secman.cli.service.VulnerabilityStorageService
 import com.secman.crowdstrike.client.CrowdStrikeApiClient
+import com.secman.crowdstrike.dto.DeviceType
 import com.secman.crowdstrike.dto.FalconConfigDto
 import com.secman.crowdstrike.exception.AuthenticationException
 import com.secman.crowdstrike.exception.CrowdStrikeException
@@ -59,9 +60,20 @@ class ServersCommand {
      */
     fun execute(): Int {
         return try {
+            // Validate and parse device type (case-insensitive)
+            val parsedDeviceType = try {
+                DeviceType.fromString(deviceType)
+            } catch (e: IllegalArgumentException) {
+                System.err.println("Error: ${e.message}")
+                return 1
+            }
+
+            // Always show which device type is being queried
+            System.out.println("Device type: ${parsedDeviceType.name}")
+
             if (verbose) {
-                log.info("Starting servers query with filters: deviceType={}, severity={}, minDaysOpen={}, hostnames={}",
-                    deviceType, severity, minDaysOpen, hostnames?.joinToString(",") ?: "ALL")
+                log.info("Starting query with filters: deviceType={}, severity={}, minDaysOpen={}, hostnames={}",
+                    parsedDeviceType.name, severity, minDaysOpen, hostnames?.joinToString(",") ?: "ALL")
             }
 
             // Load or override configuration
@@ -79,9 +91,9 @@ class ServersCommand {
             }
 
             // Query CrowdStrike API with filters
-            System.out.println("Querying CrowdStrike for servers...")
+            System.out.println("Querying CrowdStrike for ${parsedDeviceType.displayName()}...")
             if (verbose) {
-                System.out.println("Filters: device type=$deviceType, severity=$severity, min days open=$minDaysOpen")
+                System.out.println("Filters: device type=${parsedDeviceType.name}, severity=$severity, min days open=$minDaysOpen")
                 if (hostnames != null) {
                     System.out.println("Hostnames: ${hostnames!!.joinToString(", ")}")
                 }
@@ -96,7 +108,7 @@ class ServersCommand {
                 limit = limit
             )
 
-            System.out.println("Found ${response.vulnerabilities.size} vulnerabilities across servers")
+            System.out.println("Found ${response.vulnerabilities.size} vulnerabilities across ${parsedDeviceType.displayName()}")
 
             if (response.vulnerabilities.isEmpty()) {
                 System.out.println("No vulnerabilities found matching criteria")
@@ -105,7 +117,7 @@ class ServersCommand {
 
             // Group vulnerabilities by hostname for display
             val vulnerabilitiesByHostname = response.vulnerabilities.groupBy { it.hostname }
-            System.out.println("Servers with vulnerabilities: ${vulnerabilitiesByHostname.size}")
+            System.out.println("${parsedDeviceType.displayName().replaceFirstChar { it.uppercase() }} with vulnerabilities: ${vulnerabilitiesByHostname.size}")
 
             if (verbose) {
                 vulnerabilitiesByHostname.forEach { (hostname, vulns) ->
@@ -115,7 +127,7 @@ class ServersCommand {
 
             // Dry-run mode: skip backend import
             if (dryRun) {
-                System.out.println("\n[DRY-RUN MODE] Would import ${vulnerabilitiesByHostname.size} servers with ${response.vulnerabilities.size} vulnerabilities")
+                System.out.println("\n[DRY-RUN MODE] Would import ${vulnerabilitiesByHostname.size} ${parsedDeviceType.displayName()} with ${response.vulnerabilities.size} vulnerabilities")
                 return 0
             }
 
@@ -168,10 +180,11 @@ class ServersCommand {
             val result = storageService.storeServerVulnerabilities(serverBatches, backendUrl, authToken)
 
             // Display import statistics
+            val deviceLabel = parsedDeviceType.displayName().replaceFirstChar { it.uppercase() }
             System.out.println("\n--- Import Statistics ---")
-            System.out.println("Servers processed: ${result.serversProcessed}")
-            System.out.println("  - New servers created: ${result.serversCreated}")
-            System.out.println("  - Existing servers updated: ${result.serversUpdated}")
+            System.out.println("$deviceLabel processed: ${result.serversProcessed}")
+            System.out.println("  - New $deviceLabel created: ${result.serversCreated}")
+            System.out.println("  - Existing $deviceLabel updated: ${result.serversUpdated}")
             System.out.println("Vulnerabilities imported: ${result.vulnerabilitiesImported}")
             System.out.println("  - With patch publication date: ${result.vulnerabilitiesWithPatchDate}")
             System.out.println("Vulnerabilities skipped: ${result.vulnerabilitiesSkipped}")

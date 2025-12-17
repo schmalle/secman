@@ -42,9 +42,16 @@ class SecmanCli {
                             serversCommand.hostnames = args[i + 1].split(",").map { it.trim() }
                             i++
                         }
-                        args[i] == "--device-type" && i + 1 < args.size -> {
-                            serversCommand.deviceType = args[i + 1]
-                            i++
+                        args[i] == "--device-type" -> {
+                            // Check if next arg exists and is not another flag
+                            if (i + 1 < args.size && !args[i + 1].startsWith("--")) {
+                                serversCommand.deviceType = args[i + 1]
+                                i++
+                            } else {
+                                // No value provided, default to SERVER
+                                serversCommand.deviceType = "SERVER"
+                                System.out.println("Info: No device type specified, defaulting to SERVER")
+                            }
                         }
                         args[i] == "--severity" && i + 1 < args.size -> {
                             serversCommand.severity = args[i + 1]
@@ -228,9 +235,9 @@ class SecmanCli {
               add-vulnerability      Add or update a vulnerability for an asset (Feature 052)
               help                   Show this help message
 
-            Query Servers Options (Feature 032):
-              --hostnames <list>       Comma-separated list of hostnames (optional, default: all servers)
-              --device-type <type>     Device type filter (default: SERVER)
+            Query Servers Options (Feature 032, 055):
+              --hostnames <list>       Comma-separated list of hostnames (optional, default: all devices)
+              --device-type <type>     Device type: SERVER, WORKSTATION, or ALL (default: SERVER)
               --severity <levels>      Severity filter (default: HIGH,CRITICAL)
               --min-days-open <num>    Minimum days open filter (default: 30)
               --limit <num>            Page size for pagination (default: 800)
@@ -313,6 +320,14 @@ class SecmanCli {
 
               # Query specific servers and save to database
               secman query servers --hostnames server01,server02 --save --username admin --password secret
+
+              # Query workstations/clients (Feature 055)
+              secman query servers --device-type WORKSTATION --dry-run --verbose
+              secman query servers --device-type WORKSTATION --severity CRITICAL,HIGH --save --username admin --password secret
+
+              # Query all device types (servers + workstations)
+              secman query servers --device-type ALL --dry-run --verbose
+              secman query servers --device-type ALL --save --username admin --password secret
 
               # Monitor continuously
               secman monitor --interval 10 --hostnames server01,server02,server03
