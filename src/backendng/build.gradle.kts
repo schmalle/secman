@@ -59,8 +59,8 @@ dependencies {
     implementation("org.eclipse.angus:angus-mail:2.0.5")
 
     // Amazon SES
-    implementation("software.amazon.awssdk:ses:2.40.8")
-    implementation("software.amazon.awssdk:auth:2.40.8")
+    implementation("software.amazon.awssdk:ses:2.40.9")
+    implementation("software.amazon.awssdk:auth:2.40.9")
 
     // Email templates (Thymeleaf) - Feature 035
     implementation("io.micronaut.views:micronaut-views-thymeleaf")
@@ -95,7 +95,7 @@ dependencies {
     runtimeOnly("org.yaml:snakeyaml:2.5")
     
     // Password encoding
-    implementation("org.springframework.security:spring-security-crypto:7.0.0")
+    implementation("org.springframework.security:spring-security-crypto:7.0.2")
     implementation("commons-logging:commons-logging:1.3.5")
     
     // Document generation (Apache POI)

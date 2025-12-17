@@ -44,8 +44,8 @@ dependencies {
     implementation("org.apache.commons:commons-csv:1.11.0")
     
     // Kotlin
-    implementation("org.jetbrains.kotlin:kotlin-reflect:2.1.0")
-    implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.1.0")
+    implementation("org.jetbrains.kotlin:kotlin-reflect:2.3.0")
+    implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.3.0")
     
     // Logging
     runtimeOnly("ch.qos.logback:logback-classic")
