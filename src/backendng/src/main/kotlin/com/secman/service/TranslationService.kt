@@ -2,6 +2,7 @@ package com.secman.service
 
 import com.secman.domain.TranslationConfig
 import com.secman.repository.TranslationConfigRepository
+import com.fasterxml.jackson.databind.ObjectMapper
 import io.micronaut.context.annotation.Bean
 import io.micronaut.http.HttpRequest
 import io.micronaut.http.HttpResponse
@@ -19,7 +20,8 @@ import java.util.concurrent.CompletableFuture
 @Singleton
 open class TranslationService(
     private val translationConfigRepository: TranslationConfigRepository,
-    private val httpClient: HttpClient
+    private val httpClient: HttpClient,
+    private val objectMapper: ObjectMapper
 ) {
     
     private val logger = LoggerFactory.getLogger(TranslationService::class.java)
@@ -133,8 +135,8 @@ open class TranslationService(
                 }
                 
                 return try {
-                    // Parse JSON manually to handle potential parsing issues
-                    val responseBody = com.fasterxml.jackson.databind.ObjectMapper().readValue(responseBodyString, TranslateResponse::class.java)
+                    // Parse JSON using injected ObjectMapper (configured with Kotlin module)
+                    val responseBody = objectMapper.readValue(responseBodyString, TranslateResponse::class.java)
                     
                     if (responseBody.error != null) {
                         logger.error("Translation API error: {}", responseBody.error.message)

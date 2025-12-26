@@ -752,6 +752,51 @@ open class RequirementController(
         }
     }
 
+    /**
+     * Batch translate all requirement fields and static labels upfront.
+     * This drastically reduces API calls by deduplicating and batching translations.
+     * Returns a map of original text -> translated text.
+     */
+    private fun batchTranslateRequirements(
+        requirements: List<Requirement>,
+        targetLanguage: String,
+        includeHeaders: Boolean = false
+    ): Map<String, String> {
+        val textsToTranslate = mutableSetOf<String>()
+
+        // Collect all translatable requirement fields
+        requirements.forEach { req ->
+            textsToTranslate.add(req.shortreq)
+            req.details?.takeIf { it.isNotBlank() }?.let { textsToTranslate.add(it) }
+            req.motivation?.takeIf { it.isNotBlank() }?.let { textsToTranslate.add(it) }
+            req.example?.takeIf { it.isNotBlank() }?.let { textsToTranslate.add(it) }
+        }
+
+        // Add static labels (Word doc uses these)
+        textsToTranslate.addAll(listOf("Use Cases", "Standards/Norms"))
+
+        // Add Excel headers if requested
+        if (includeHeaders) {
+            textsToTranslate.addAll(listOf("Chapter", "Norm", "Short Requirement", "Details", "Motivation", "Example"))
+        }
+
+        // Filter empty strings and convert to list
+        val uniqueTexts = textsToTranslate.filter { it.isNotBlank() }.toList()
+
+        if (uniqueTexts.isEmpty()) {
+            return emptyMap()
+        }
+
+        // Batch translate all texts at once
+        return try {
+            val translations = translationService.translateTexts(uniqueTexts, targetLanguage).get()
+            uniqueTexts.zip(translations).toMap()
+        } catch (e: Exception) {
+            // On error, return empty map (fallback to original text)
+            emptyMap()
+        }
+    }
+
     private fun createTranslatedWordDocument(requirements: List<Requirement>, title: String, targetLanguage: String): XWPFDocument {
         val document = XWPFDocument()
         val languageName = translationService.getSupportedLanguages()[targetLanguage] ?: targetLanguage
@@ -790,8 +835,11 @@ open class RequirementController(
         
         // Add page break
         document.createParagraph().createRun().addBreak(org.apache.poi.xwpf.usermodel.BreakType.PAGE)
-        
-        // Translate and add requirements
+
+        // Batch translate all texts upfront (reduces 500+ API calls to 1 batch call)
+        val translationMap = batchTranslateRequirements(requirements, targetLanguage)
+
+        // Add requirements using pre-translated content
         requirements.forEach { requirement ->
             // Chapter heading
             if (!requirement.chapter.isNullOrBlank()) {
@@ -803,100 +851,76 @@ open class RequirementController(
                 document.createParagraph()
             }
             
-            // Short requirement (translate if English)
+            // Short requirement (use batch-translated value)
             val shortReqParagraph = document.createParagraph()
             val shortReqRun = shortReqParagraph.createRun()
             shortReqRun.setText("Requirement: ")
             shortReqRun.isBold = true
-            
-            val shortReqTranslated = try {
-                translationService.translateText(requirement.shortreq, targetLanguage).get()
-            } catch (e: Exception) {
-                requirement.shortreq
-            }
-            
+
+            val shortReqTranslated = translationMap[requirement.shortreq] ?: requirement.shortreq
+
             val shortReqValueRun = shortReqParagraph.createRun()
             shortReqValueRun.setText(shortReqTranslated)
             
-            // Details (translate if present)
+            // Details (use batch-translated value)
             if (!requirement.details.isNullOrBlank()) {
                 val detailsParagraph = document.createParagraph()
                 val detailsRun = detailsParagraph.createRun()
                 detailsRun.setText("Details: ")
                 detailsRun.isBold = true
-                
-                val detailsTranslated = try {
-                    translationService.translateText(requirement.details!!, targetLanguage).get()
-                } catch (e: Exception) {
-                    requirement.details!!
-                }
-                
+
+                val detailsTranslated = translationMap[requirement.details] ?: requirement.details!!
+
                 val detailsValueRun = detailsParagraph.createRun()
                 detailsValueRun.setText(detailsTranslated)
             }
             
-            // Motivation (translate if present)
+            // Motivation (use batch-translated value)
             if (!requirement.motivation.isNullOrBlank()) {
                 val motivationParagraph = document.createParagraph()
                 val motivationRun = motivationParagraph.createRun()
                 motivationRun.setText("Motivation: ")
                 motivationRun.isBold = true
-                
-                val motivationTranslated = try {
-                    translationService.translateText(requirement.motivation!!, targetLanguage).get()
-                } catch (e: Exception) {
-                    requirement.motivation!!
-                }
-                
+
+                val motivationTranslated = translationMap[requirement.motivation] ?: requirement.motivation!!
+
                 val motivationValueRun = motivationParagraph.createRun()
                 motivationValueRun.setText(motivationTranslated)
             }
             
-            // Example (translate if present)
+            // Example (use batch-translated value)
             if (!requirement.example.isNullOrBlank()) {
                 val exampleParagraph = document.createParagraph()
                 val exampleRun = exampleParagraph.createRun()
                 exampleRun.setText("Example: ")
                 exampleRun.isBold = true
-                
-                val exampleTranslated = try {
-                    translationService.translateText(requirement.example!!, targetLanguage).get()
-                } catch (e: Exception) {
-                    requirement.example!!
-                }
-                
+
+                val exampleTranslated = translationMap[requirement.example] ?: requirement.example!!
+
                 val exampleValueRun = exampleParagraph.createRun()
                 exampleValueRun.setText(exampleTranslated)
             }
             
-            // Use cases (do not translate names, just labels)
+            // Use cases (use batch-translated label)
             if (requirement.usecases.isNotEmpty()) {
                 val usecaseParagraph = document.createParagraph()
                 val usecaseRun = usecaseParagraph.createRun()
-                val usecaseLabel = try {
-                    translationService.translateText("Use Cases", targetLanguage).get()
-                } catch (e: Exception) {
-                    "Use Cases"
-                }
+                val usecaseLabel = translationMap["Use Cases"] ?: "Use Cases"
                 usecaseRun.setText("$usecaseLabel: ")
                 usecaseRun.isBold = true
-                
+
                 val usecaseValueRun = usecaseParagraph.createRun()
                 usecaseValueRun.setText(requirement.usecases.joinToString(", ") { it.name })
             }
             
-            // Norms (do not translate names, just labels)
+            // Norms (use batch-translated label)
             if (requirement.norms.isNotEmpty()) {
                 val normParagraph = document.createParagraph()
                 val normRun = normParagraph.createRun()
-                val normLabel = try {
-                    translationService.translateText("Standards/Norms", targetLanguage).get()
-                } catch (e: Exception) {
-                    "Standards/Norms"
-                }
+                val normLabel = translationMap["Standards/Norms"] ?: "Standards/Norms"
                 normRun.setText("$normLabel: ")
                 normRun.isBold = true
-                
+
                 val normValueRun = normParagraph.createRun()
                 normValueRun.setText(requirement.norms.joinToString(", ") { it.name })
             }
@@ -1008,18 +1032,16 @@ open class RequirementController(
         val infoCell = infoRow.createCell(0)
         infoCell.setCellValue("Translated to: $languageName - Generated on: ${LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))}")
         infoCell.cellStyle = headerStyle
-        
-        // Create header row
+
+        // Batch translate all texts upfront (reduces 500+ API calls to 1 batch call)
+        val translationMap = batchTranslateRequirements(requirements, targetLanguage, includeHeaders = true)
+
+        // Create header row (use batch-translated headers)
         val headerRow = sheet.createRow(1)
         val headers = listOf("Chapter", "Norm", "Short Requirement", "Details", "Motivation", "Example", "Use Cases")
         headers.forEachIndexed { index, header ->
             val cell = headerRow.createCell(index)
-            // Translate header labels
-            val translatedHeader = try {
-                translationService.translateText(header, targetLanguage).get()
-            } catch (e: Exception) {
-                header
-            }
+            val translatedHeader = translationMap[header] ?: header
             cell.setCellValue(translatedHeader)
             cell.cellStyle = headerStyle
         }
@@ -1034,45 +1056,29 @@ open class RequirementController(
             // Norm (not translated)
             row.createCell(1).setCellValue(requirement.norms.joinToString(", ") { it.name })
             
-            // Short requirement (translated)
-            val shortReqTranslated = try {
-                translationService.translateText(requirement.shortreq, targetLanguage).get()
-            } catch (e: Exception) {
-                requirement.shortreq
-            }
+            // Short requirement (use batch-translated value)
+            val shortReqTranslated = translationMap[requirement.shortreq] ?: requirement.shortreq
             row.createCell(2).setCellValue(shortReqTranslated)
             
-            // Details (translated if present)
+            // Details (use batch-translated value)
             val detailsTranslated = if (!requirement.details.isNullOrBlank()) {
-                try {
-                    translationService.translateText(requirement.details!!, targetLanguage).get()
-                } catch (e: Exception) {
-                    requirement.details!!
-                }
+                translationMap[requirement.details] ?: requirement.details!!
             } else {
                 ""
             }
             row.createCell(3).setCellValue(detailsTranslated)
             
-            // Motivation (translated if present)
+            // Motivation (use batch-translated value)
             val motivationTranslated = if (!requirement.motivation.isNullOrBlank()) {
-                try {
-                    translationService.translateText(requirement.motivation!!, targetLanguage).get()
-                } catch (e: Exception) {
-                    requirement.motivation!!
-                }
+                translationMap[requirement.motivation] ?: requirement.motivation!!
             } else {
                 ""
             }
             row.createCell(4).setCellValue(motivationTranslated)
             
-            // Example (translated if present)
+            // Example (use batch-translated value)
             val exampleTranslated = if (!requirement.example.isNullOrBlank()) {
-                try {
-                    translationService.translateText(requirement.example!!, targetLanguage).get()
-                } catch (e: Exception) {
-                    requirement.example!!
-                }
+                translationMap[requirement.example] ?: requirement.example!!
             } else {
                 ""
             }

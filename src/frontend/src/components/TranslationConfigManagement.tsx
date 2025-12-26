@@ -23,7 +23,7 @@ const TranslationConfigManagement: React.FC = () => {
   const [formData, setFormData] = useState<TranslationConfig>({
     apiKey: '',
     baseUrl: 'https://openrouter.ai/api/v1',
-    modelName: 'anthropic/claude-3-haiku',
+    modelName: 'anthropic/claude-3.5-haiku',
     maxTokens: 4000,
     temperature: 0.3,
     isActive: true
@@ -135,7 +135,7 @@ const TranslationConfigManagement: React.FC = () => {
     setFormData({
       apiKey: '',
       baseUrl: 'https://openrouter.ai/api/v1',
-      modelName: 'anthropic/claude-3-haiku',
+      modelName: 'anthropic/claude-3.5-haiku',
       maxTokens: 4000,
       temperature: 0.3,
       isActive: true
@@ -250,13 +250,32 @@ const TranslationConfigManagement: React.FC = () => {
                           onChange={handleInputChange}
                           required
                         >
-                          <option value="anthropic/claude-3-haiku">Claude 3 Haiku (Fast & Affordable)</option>
-                          <option value="anthropic/claude-3.5-sonnet">Claude 3.5 Sonnet (Balanced)</option>
-                          <option value="anthropic/claude-3-opus">Claude 3 Opus (Most Capable)</option>
-                          <option value="openai/gpt-4o-mini">GPT-4o Mini (Fast & Affordable)</option>
-                          <option value="openai/gpt-4o">GPT-4o (Balanced)</option>
-                          <option value="meta-llama/llama-3.1-8b-instruct">Llama 3.1 8B (Open Source)</option>
-                          <option value="meta-llama/llama-3.1-70b-instruct">Llama 3.1 70B (Open Source)</option>
+                          <optgroup label="Anthropic Claude">
+                            <option value="anthropic/claude-opus-4.5">Claude Opus 4.5 (Most Capable)</option>
+                            <option value="anthropic/claude-opus-4">Claude Opus 4</option>
+                            <option value="anthropic/claude-sonnet-4">Claude Sonnet 4 (Balanced)</option>
+                            <option value="anthropic/claude-3.5-sonnet">Claude 3.5 Sonnet (Previous Gen)</option>
+                            <option value="anthropic/claude-3.5-haiku">Claude 3.5 Haiku (Fast)</option>
+                            <option value="anthropic/claude-3-haiku">Claude 3 Haiku (Legacy)</option>
+                          </optgroup>
+                          <optgroup label="OpenAI GPT">
+                            <option value="openai/gpt-4o">GPT-4o (Most Capable)</option>
+                            <option value="openai/gpt-4o-mini">GPT-4o Mini (Fast & Affordable)</option>
+                            <option value="openai/gpt-4-turbo">GPT-4 Turbo</option>
+                          </optgroup>
+                          <optgroup label="Google Gemini">
+                            <option value="google/gemini-2.0-flash-exp">Gemini 2.0 Flash (Fast)</option>
+                            <option value="google/gemini-pro-1.5">Gemini Pro 1.5</option>
+                          </optgroup>
+                          <optgroup label="Meta Llama (Open Source)">
+                            <option value="meta-llama/llama-3.3-70b-instruct">Llama 3.3 70B</option>
+                            <option value="meta-llama/llama-3.1-70b-instruct">Llama 3.1 70B</option>
+                            <option value="meta-llama/llama-3.1-8b-instruct">Llama 3.1 8B</option>
+                          </optgroup>
+                          <optgroup label="Other">
+                            <option value="mistralai/mistral-large-2411">Mistral Large</option>
+                            <option value="deepseek/deepseek-chat">DeepSeek Chat</option>
+                          </optgroup>
                         </select>
                       </div>
                     </div>
