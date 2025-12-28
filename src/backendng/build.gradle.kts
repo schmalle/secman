@@ -22,22 +22,22 @@ dependencies {
     implementation(project(":shared"))
     
     // Micronaut Core
-    implementation("io.micronaut:micronaut-http-client:4.10.10")
-    implementation("io.micronaut:micronaut-http-server-netty:4.10.10")
-    implementation("io.micronaut:micronaut-jackson-databind:4.10.10")
+    implementation("io.micronaut:micronaut-http-client:4.10.12")
+    implementation("io.micronaut:micronaut-http-server-netty:4.10.12")
+    implementation("io.micronaut:micronaut-jackson-databind:4.10.12")
     implementation("io.micronaut.kotlin:micronaut-kotlin-runtime")
     implementation("io.micronaut.kotlin:micronaut-kotlin-extension-functions")
-    implementation("io.micronaut:micronaut-retry:4.10.10")
+    implementation("io.micronaut:micronaut-retry:4.10.12")
     implementation("io.micronaut.cache:micronaut-cache-caffeine")
     
     // Database
     implementation("io.micronaut.data:micronaut-data-hibernate-jpa:4.14.2")
     implementation("io.micronaut.sql:micronaut-hibernate-jpa:7.0.0")
     implementation("io.micronaut.sql:micronaut-jdbc-hikari:7.0.0")
-    runtimeOnly("org.mariadb.jdbc:mariadb-java-client:3.5.6")
+    runtimeOnly("org.mariadb.jdbc:mariadb-java-client:3.5.7")
 
 	implementation("io.micronaut.flyway:micronaut-flyway:7.9.2")
-	runtimeOnly("org.flywaydb:flyway-core:11.19.0")
+	runtimeOnly("org.flywaydb:flyway-core:11.20.0")
 	
     // Security
     implementation("io.micronaut.security:micronaut-security-jwt:4.16.0")
@@ -59,8 +59,8 @@ dependencies {
     implementation("org.eclipse.angus:angus-mail:2.0.5")
 
     // Amazon SES
-    implementation("software.amazon.awssdk:ses:2.40.9")
-    implementation("software.amazon.awssdk:auth:2.40.9")
+    implementation("software.amazon.awssdk:ses:2.40.15")
+    implementation("software.amazon.awssdk:auth:2.40.15")
 
     // Email templates (Thymeleaf) - Feature 035
     implementation("io.micronaut.views:micronaut-views-thymeleaf")
@@ -83,9 +83,9 @@ dependencies {
     implementation("io.micronaut.reactor:micronaut-reactor-http-client")
     
     // Logging
-    runtimeOnly("ch.qos.logback:logback-classic:1.5.22")
+    runtimeOnly("ch.qos.logback:logback-classic:1.5.23")
     // Bridge Log4j to Logback (required for Apache POI)
-    runtimeOnly("org.apache.logging.log4j:log4j-to-slf4j:2.25.2")
+    runtimeOnly("org.apache.logging.log4j:log4j-to-slf4j:2.25.3")
     // Logstash encoder for JSON logging (Feature 046)
     implementation("net.logstash.logback:logstash-logback-encoder:9.0")
     // Conditional logging support (Janino) - for SECMAN_LOGGING env var
