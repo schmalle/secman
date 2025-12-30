@@ -53,6 +53,13 @@ dependencies {
     
     // KSP
     ksp("io.micronaut:micronaut-http-validation")
+
+    // Test dependencies - Feature 056
+    testImplementation("org.junit.jupiter:junit-jupiter-api:5.11.3")
+    testImplementation("org.junit.jupiter:junit-jupiter-engine:5.11.3")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.11.3")
+    testImplementation("io.mockk:mockk:1.13.13")
+    testImplementation("org.assertj:assertj-core:3.26.3")
 }
 
 application {
@@ -73,18 +80,15 @@ tasks {
         // jvmTarget is automatically set by jvmToolchain(21) above
         // No need for kotlinOptions block
     }
-    
-    // Disable all test tasks
+
+    // Enable JUnit 5 platform for tests - Feature 056
     test {
-        enabled = false
+        useJUnitPlatform()
     }
-    
-    compileTestKotlin {
-        enabled = false
-    }
-    
-    processTestResources {
-        enabled = false
+
+    // Fix for zip64 issue - archive has more than 65535 entries
+    shadowJar {
+        isZip64 = true
     }
 }
 

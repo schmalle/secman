@@ -19,9 +19,6 @@
 - **Metadata**: groups, cloudAccountId, cloudInstanceId, adDomain, osVersion
 - **Relations**: vulnerabilities, scanResults, workgroups, manualCreator, scanUploader
 
-
-
-
 ## Unified Access Control
 
 Users access assets if **ANY** is true:
@@ -41,9 +38,9 @@ Users access assets if **ANY** is true:
 
 **Vulnerabilities**: GET /api/vulnerabilities/current, GET /api/vulnerability-exceptions, POST /api/vulnerability-exception-requests, GET /api/vulnerability-exception-requests/pending/count, GET /api/exception-badge-updates (SSE)
 
-**Outdated Assets (034)**: GET /api/outdated-assets[/{id}[/vulnerabilities]], GET /api/outdated-assets/{last-refresh,count}, POST /api/materialized-view-refresh/trigger (ADMIN), GET /api/materialized-view-refresh/{progress (SSE), status, history}
+**Outdated Assets**: GET /api/outdated-assets[/{id}[/vulnerabilities]], GET /api/outdated-assets/{last-refresh,count}, POST /api/materialized-view-refresh/trigger (ADMIN), GET /api/materialized-view-refresh/{progress (SSE), status, history}
 
-**Notifications (035)**: GET/PUT /api/notification-preferences, GET /api/notification-logs, GET /api/notification-logs/export (ADMIN)
+**Notifications**: GET/PUT /api/notification-preferences, GET /api/notification-logs, GET /api/notification-logs/export (ADMIN)
 
 **Workgroups**: POST/GET /api/workgroups (ADMIN), POST /api/workgroups/{id}/{users,assets} (ADMIN)
 
@@ -51,15 +48,15 @@ Users access assets if **ANY** is true:
 
 **Auth**: POST /api/auth/login, GET /oauth/{authorize,callback}
 
-**User Mappings (042)**: GET /api/user-mappings/{current,applied-history} (ADMIN), POST/PUT/DELETE /api/user-mappings[/{id}] (ADMIN)
+**User Mappings**: GET /api/user-mappings/{current,applied-history} (ADMIN), POST/PUT/DELETE /api/user-mappings[/{id}] (ADMIN)
 
-**Identity Providers (041)**: GET /api/identity-providers[/{enabled,{id}}], POST/PUT/DELETE /api/identity-providers[/{id}], POST /api/identity-providers/{id}/test
+**Identity Providers**: GET /api/identity-providers[/{enabled,{id}}], POST/PUT/DELETE /api/identity-providers[/{id}], POST /api/identity-providers/{id}/test
 
-**Maintenance Banners (047)**: GET /api/maintenance-banners/active (PUBLIC), GET /api/maintenance-banners (ADMIN), GET/POST /api/maintenance-banners[/{id}] (ADMIN), PUT/DELETE /api/maintenance-banners/{id} (ADMIN)
+**Maintenance Banners**: GET /api/maintenance-banners/active (PUBLIC), GET /api/maintenance-banners (ADMIN), GET/POST /api/maintenance-banners[/{id}] (ADMIN), PUT/DELETE /api/maintenance-banners/{id} (ADMIN)
 
-**User Profile (051)**: GET /api/users/profile, PUT /api/users/profile/change-password (LOCAL users only), GET /api/users/profile/mfa-status, PUT /api/users/profile/mfa-toggle
+**User Profile**: GET /api/users/profile, PUT /api/users/profile/change-password (LOCAL users only), GET /api/users/profile/mfa-status, PUT /api/users/profile/mfa-toggle
 
-**CLI Add Vulnerability (052)**: POST /api/vulnerabilities/cli-add (ADMIN/VULN) - Add or update vulnerability for a hostname with auto-asset creation
+**CLI Add Vulnerability**: POST /api/vulnerabilities/cli-add (ADMIN/VULN) - Add or update vulnerability with auto-asset creation
 
 ## Development
 
@@ -68,9 +65,21 @@ Users access assets if **ANY** is true:
 **Commands**:
 - Backend: `./gradlew build`
 - Frontend: `npm run dev`
-- CLI Notifications: `./gradlew cli:run --args='send-notifications [--dry-run] [--verbose] [--outdated-only]'`
-- CLI User Mappings (049): `./gradlew cli:run --args='manage-user-mappings <subcommand>'` (see `src/cli/src/main/resources/cli-docs/USER_MAPPING_COMMANDS.md`)
-- CLI Add Vulnerability (052): `./gradlew cli:run --args='add-vulnerability --hostname <host> --cve <cve> --criticality <CRITICAL|HIGH|MEDIUM|LOW> [--days-open <n>] --username <user> --password <pass>'`
+- CLI: Build JAR once with `./gradlew :cli:shadowJar`, then use `./bin/secman <command>`
+  - `./bin/secman help` - Show all commands and options
+  - `./bin/secman query servers --dry-run` - Query CrowdStrike
+  - `./bin/secman send-notifications --dry-run` - Email notifications
+  - `./bin/secman manage-user-mappings --help` - User mappings
+  - `./bin/secman export-requirements --format xlsx` - Export requirements
+  - `./bin/secman add-requirement --shortreq "text"` - Add requirement
+  - `./bin/secman add-vulnerability --hostname host --cve CVE-xxx --criticality HIGH` - Add vulnerability
+
+**Test Commands**:
+- All tests: `./gradlew build` (includes unit + integration tests)
+- Unit tests only: `./gradlew :backendng:test --tests "*ServiceTest*"`
+- CLI tests: `./gradlew :cli:test`
+- Integration tests (requires Docker): `./gradlew :backendng:test --tests "*IntegrationTest*"`
+- Specific test class: `./gradlew :backendng:test --tests "VulnerabilityServiceTest"`
 
 **Principles**:
 1. Security-First: File validation, input sanitization, RBAC, security review required
@@ -97,7 +106,7 @@ Users access assets if **ANY** is true:
 - Frontend: JWT in localStorage (`authToken`) → Axios headers (`Authorization: Bearer <token>`)
 - SSE: JWT passed as query parameter (`?token=<jwt>`) since EventSource doesn't support custom headers
 
-### Duplicate Prevention Pattern (Feature 048)
+### Duplicate Prevention Pattern
 **Pattern**: Transactional replace for CrowdStrike vulnerability imports
 ```kotlin
 @Transactional
@@ -113,7 +122,7 @@ open fun importVulnerabilitiesForServer(batch: CrowdStrikeVulnerabilityBatchDto)
 **Documentation**: docs/CROWDSTRIKE_IMPORT.md
 **CRITICAL**: Asset.vulnerabilities MUST NOT use `cascade = [CascadeType.ALL]` or `orphanRemoval = true`. JPA cascade conflicts with manual delete-insert pattern, causing 99% data loss (e.g., 166,812 imported → 1,819 retained). Use explicit `vulnerabilityRepository.deleteByAssetId()` in service layer instead.
 
-### Event-Driven Architecture (Feature 042)
+### Event-Driven Architecture
 **Pattern**: @EventListener @Async for cross-service communication
 ```kotlin
 @Serdeable data class UserCreatedEvent(val user: User, val source: String)
@@ -122,6 +131,33 @@ eventPublisher.publishEvent(UserCreatedEvent(savedUser, "MANUAL"))
 ```
 **Use**: User creation → mapping application, Asset import → view refresh, Vuln detection → email
 **Performance**: <5ms event delivery, non-blocking
+
+### Test Infrastructure
+**Stack**: JUnit 5, Mockk, Testcontainers (MariaDB), AssertJ
+**Structure**:
+- Unit tests: `src/backendng/src/test/kotlin/com/secman/service/` - Mockk for mocking dependencies
+- Integration tests: `src/backendng/src/test/kotlin/com/secman/integration/` - Testcontainers for real DB
+- CLI tests: `src/cli/src/test/kotlin/com/secman/cli/commands/` - Picocli parameter validation
+- Test utilities: `src/backendng/src/test/kotlin/com/secman/testutil/`
+  - `BaseIntegrationTest.kt` - Testcontainers setup, skips when Docker unavailable
+  - `TestDataFactory.kt` - Create test users, assets, vulnerabilities
+  - `TestAuthHelper.kt` - Get JWT tokens for authenticated requests
+
+**Patterns**:
+```kotlin
+// Unit test with Mockk
+@MicronautTest
+class ServiceTest {
+    @MockBean(Repository::class) val repo = mockk<Repository>()
+    every { repo.save(any()) } returns savedEntity
+}
+
+// Integration test extending BaseIntegrationTest
+@EnabledIf("com.secman.testutil.DockerAvailable#isDockerAvailable")
+class MyIntegrationTest : BaseIntegrationTest() {
+    @Inject lateinit var repo: Repository
+}
+```
 
 ### OAuth Robustness Pattern
 **Problem**: Microsoft Azure OAuth callbacks can arrive in 100-500ms with cached SSO, before state-save transaction commits.
@@ -158,27 +194,4 @@ fun findStateByValueWithRetry(stateToken: String): Optional<OAuthState> {
 - Environment Docs: `docs/ENVIRONMENT.md`
 
 ---
-*Last updated: 2025-12-04*
-
-## Active Technologies
-- Kotlin 2.2.21 / Java 21 + Micronaut 4.10, Hibernate JPA, JavaMail API (SMTP) (046-oidc-default-roles)
-- MariaDB 12 with Hibernate auto-migration (046-oidc-default-roles)
-- Kotlin 2.2.21 / Java 21 (backend), JavaScript/TypeScript (frontend with Astro 5.15 + React 19) + Micronaut 4.10, Hibernate JPA (backend), Astro 5.15, React 19, Bootstrap 5.3 (frontend), Axios (API client) (047-maintenance-popup)
-- MariaDB 12 (MaintenanceBanner entity with JPA) (047-maintenance-popup)
-- Kotlin 2.2.21 / Java 21 + Micronaut 4.10, Hibernate JPA, MariaDB 12 (048-prevent-duplicate-vulnerabilities)
-- MariaDB 12 (existing Vulnerability and Asset entities) (048-prevent-duplicate-vulnerabilities)
-- Kotlin 2.2.21 / Java 21 + Micronaut 4.10, Hibernate JPA, Picocli 4.7 (CLI framework), Apache Commons CSV 1.11.0, Jackson (JSON parsing) (049-cli-user-mappings)
-- MariaDB 12 (reuses existing UserMapping entity from feature 042) (049-cli-user-mappings)
-- MariaDB 12 (existing mcp_api_keys, mcp_audit_logs tables, users table) (050-mcp-user-delegation)
-- Kotlin 2.2.21 / Java 21 (backend), TypeScript (frontend with Astro 5.15 + React 19) + Micronaut 4.10, Hibernate JPA (backend), Astro 5.15, React 19, Bootstrap 5.3 (frontend) (051-user-password-change)
-- MariaDB 12 (existing users table, Flyway migration) (051-user-password-change)
-- Kotlin 2.2.21 / Java 21 + Micronaut 4.10, Picocli 4.7, Hibernate JPA (052-cli-add-vulnerability)
-- MariaDB 12 (existing Asset, Vulnerability entities) (052-cli-add-vulnerability)
-- Kotlin 2.2.21 / Java 21 (backend), TypeScript (frontend) + Micronaut 4.10, Hibernate JPA (backend); Astro 5.14, React 19, Bootstrap 5.3 (frontend) (054-products-overview)
-- MariaDB 11.4 (existing Vulnerability and Asset entities) (054-products-overview)
-- Kotlin 2.2.21 / Java 21 + Micronaut 4.10, Picocli 4.7 (CLI framework) (055-cli-query-clients)
-- MariaDB 11.4 (existing Asset/Vulnerability entities - no changes required) (055-cli-query-clients)
-
-## Recent Changes
-- 048-prevent-duplicate-vulnerabilities: Fixed critical 99% data loss bug by removing JPA cascade from Asset.vulnerabilities; added transactional replace pattern for duplicate prevention, comprehensive documentation
-- 046-oidc-default-roles: Added Kotlin 2.2.21 / Java 21 + Micronaut 4.10, Hibernate JPA, JavaMail API (SMTP)
+*Last updated: 2025-12-29*

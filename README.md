@@ -14,6 +14,7 @@
 SecMan is a full-stack security management platform that helps organizations manage security requirements, track vulnerabilities, assess risks, and maintain compliance. Originally started as a simple requirement formatter, it has evolved into a comprehensive security operations tool with vulnerability management, asset tracking, workgroup-based access control, and AI assistant integration.
 
 **Key Capabilities:**
+
 - 📋 Security requirements management with version control and release tracking
 - 🔍 Vulnerability management with CrowdStrike Falcon integration
 - 🖥️ Asset inventory with network scan import (Nmap, Masscan)
@@ -27,14 +28,14 @@ SecMan is a full-stack security management platform that helps organizations man
 - **Backend**: Micronaut 4.10 + Kotlin 2.2 (Java 21)
 - **Frontend**: Astro 5.15 + React 19 + Bootstrap 5.3
 - **Database**: MariaDB 12 with Hibernate JPA
-- **Helper Tools**: Python 3.11+ (CrowdStrike Falcon API integration)
 - **Build System**: Gradle 9.2 (Kotlin DSL)
-- **CLI Tools**: Kotlin-based notification system and data import utilities
+- **CLI Tools**: Kotlin-based CLI for CrowdStrike queries, notifications, and data management
 - **Authentication**: JWT with OAuth2 and GitHub SSO
 
 ## Features
 
 ### Requirements Management
+
 - ✅ Create, edit, and organize security requirements
 - ✅ Version control with release management (DRAFT → PUBLISHED → ARCHIVED)
 - ✅ Release comparison and diff visualization
@@ -44,6 +45,7 @@ SecMan is a full-stack security management platform that helps organizations man
 - ✅ Relationship tracking (requirements ↔ norms ↔ use cases)
 
 ### Vulnerability Management
+
 - ✅ Import vulnerabilities from Excel/CSV or CrowdStrike Falcon API
 - ✅ CVE tracking with CVSS severity scoring
 - ✅ Vulnerability exception requests with approval workflow
@@ -56,6 +58,7 @@ SecMan is a full-stack security management platform that helps organizations man
 - ✅ Outdated assets materialized view for fast performance (<2s for 10K+ assets)
 
 ### Asset Management
+
 - ✅ Import assets from Nmap XML scans
 - ✅ Import assets from Masscan XML scans
 - ✅ Network service discovery and port tracking
@@ -67,6 +70,7 @@ SecMan is a full-stack security management platform that helps organizations man
 - ✅ Outdated asset tracking with automated email notifications
 
 ### Access Control & Multi-Tenancy
+
 - ✅ **Workgroups**: Organize users and assets into isolated groups with nested hierarchy
 - ✅ **User Mapping**: CSV/Excel upload for AWS account ↔ user and AD domain associations
 - ✅ **Role-Based Access Control (RBAC)**:
@@ -80,6 +84,7 @@ SecMan is a full-stack security management platform that helps organizations man
 - ✅ **Unified Access Control**: AWS account ID and AD domain-based asset filtering
 
 ### AI Assistant Integration
+
 - ✅ **MCP Tools** (Model Context Protocol) for AI assistants:
   - `get_assets` - Query asset inventory
   - `get_scans` - Retrieve scan history
@@ -89,14 +94,25 @@ SecMan is a full-stack security management platform that helps organizations man
 - ✅ Permission-scoped API access (ASSETS_READ, SCANS_READ, VULNERABILITIES_READ)
 - ✅ Rate limiting (1000 req/min, 50K req/hour)
 
-### Helper Tools
-- ✅ **Falcon Vulnerability Query Tool** (`falcon-vulns` CLI):
+### CLI Tools
+
+- ✅ **CrowdStrike Vulnerability Query** (`query servers` command):
   - Query CrowdStrike Falcon API with flexible filters
-  - Filter by device type (CLIENT/SERVER), severity, days open
-  - Export to XLSX, CSV, or TXT formats
-  - AD domain and hostname filtering
+  - Filter by device type (SERVER/WORKSTATION/ALL), severity, days open
+  - Save results to database or export to JSON/CSV
+  - Hostname and severity filtering with pagination support
+- ✅ **Workgroup Management** (`manage-workgroups` command):
+  - Pattern-based asset assignment to workgroups
+  - List, assign, and remove assets with wildcards
+- ✅ **User Mapping Management** (`manage-user-mappings` command):
+  - Manage AWS account and AD domain mappings
+  - Bulk import from CSV/JSON files
+- ✅ **Manual Vulnerability Entry** (`add-vulnerability` command):
+  - Add or update vulnerabilities via CLI
+  - Auto-creates assets if hostname not found
 
 ### Import/Export
+
 - ✅ Excel import for requirements, vulnerabilities, user mappings, assets
 - ✅ CSV import for user mappings (auto-detect delimiter/encoding)
 - ✅ Nmap/Masscan XML import for network scans
@@ -106,6 +122,7 @@ SecMan is a full-stack security management platform that helps organizations man
 - ✅ Notification log export to CSV (admin only)
 
 ### Email Notifications (Feature 035)
+
 - ✅ Automated outdated asset notifications (2-level escalation: professional → urgent)
 - ✅ New vulnerability notifications (opt-in via user preferences)
 - ✅ Email aggregation (one email per owner with all their assets)
@@ -124,8 +141,8 @@ SecMan is a full-stack security management platform that helps organizations man
 - Node.js 20+
 - MariaDB 12+
 - Gradle 9.2+
-- Python 3.11+ (optional, for helper tools)
 - Git
+- Docker (optional, for integration tests)
 
 ### Installation
 
@@ -151,11 +168,12 @@ npm run dev
 
 ### Default Credentials
 
-| Username | Password | Roles |
-|----------|----------|-------|
-| `adminuser` | `password` | ADMIN, USER |
-| `normaluser` | `password` | USER |
-| `vulnuser` | `password` | VULN, USER |
+
+| Username      | Password   | Roles                 |
+| ------------- | ---------- | --------------------- |
+| `adminuser`   | `password` | ADMIN, USER           |
+| `normaluser`  | `password` | USER                  |
+| `vulnuser`    | `password` | VULN, USER            |
 | `releaseuser` | `password` | RELEASE_MANAGER, USER |
 
 **⚠️ IMPORTANT:** Change default passwords immediately in production!
@@ -174,20 +192,20 @@ secman/
 │   │   │   ├── repository/ # Data repositories
 │   │   │   ├── service/    # Business logic
 │   │   │   └── mcp/        # MCP tools
-│   ├── cli/                # Kotlin CLI tools (notifications)
+│   │   └── src/test/       # Backend tests (unit + integration)
+│   ├── cli/                # Kotlin CLI tools
 │   │   └── src/main/kotlin/com/secman/cli/
-│   │       ├── commands/   # CLI commands
+│   │       ├── commands/   # CLI commands (query, monitor, manage-*)
 │   │       └── service/    # Business logic
 │   ├── frontend/           # Astro + React frontend
 │   │   ├── src/
 │   │   │   ├── components/ # React components
 │   │   │   ├── pages/      # Astro pages
 │   │   │   └── services/   # API clients
-│   └── helper/             # Python helper tools
-│       ├── src/
-│       │   ├── cli/        # Falcon CLI commands
-│       │   ├── services/   # Business logic
-│       │   └── exporters/  # Export utilities
+├── docs/                   # Documentation
+│   ├── CLI.md              # CLI reference
+│   ├── TESTING.md          # Test documentation
+│   └── ENVIRONMENT.md      # Environment variables
 └── scripts/                # Utility scripts
 ```
 
@@ -196,7 +214,7 @@ secman/
 ```bash
 # Backend
 cd src/backendng
-./gradlew build              # Build
+./gradlew build              # Build (includes tests)
 ./gradlew run                # Start server (port 8080)
 
 # Frontend
@@ -204,16 +222,17 @@ cd src/frontend
 npm run dev                  # Dev server (port 4321)
 npm run build                # Production build
 
-# CLI Tools
-cd src/cli
-./gradlew run --args='send-notifications'              # Send email notifications
-./gradlew run --args='send-notifications --dry-run'    # Dry run mode
+# CLI Tools (from repository root)
+./gradlew cli:run --args='query servers --dry-run'                  # Query CrowdStrike
+./gradlew cli:run --args='send-notifications --dry-run --verbose'   # Email notifications
+./gradlew cli:run --args='manage-workgroups list'                   # List workgroups
+./gradlew cli:run --args='add-vulnerability --help'                 # Add vulnerability help
 
-# Helper Tools
-cd src/helper
-pip install -e .             # Install in dev mode
-falcon-vulns --help          # CLI help
-ruff check .                 # Lint
+# Tests
+./gradlew build                                         # All tests
+./gradlew :backendng:test --tests "*ServiceTest*"      # Unit tests only
+./gradlew :backendng:test --tests "*IntegrationTest*"  # Integration tests (Docker required)
+./gradlew :cli:test                                    # CLI tests
 ```
 
 ### CLI Notification System
@@ -232,54 +251,60 @@ SecMan includes a Kotlin-based CLI for sending automated email notifications:
 ```
 
 **Features:**
+
 - Email notifications for outdated assets (2-level escalation)
 - New vulnerability notifications (opt-in via user preferences)
 - Thymeleaf HTML templates with plain-text fallback
 - SMTP with retry logic and audit logging
 - SSE real-time progress updates
 
-## Helper Tools
+## CLI Tools
 
-### Falcon Vulnerability Query Tool
+The Secman CLI provides command-line access to CrowdStrike queries, notifications, and data management.
 
-Query CrowdStrike Falcon API for vulnerability data with flexible filtering.
+**Build and run:**
 
-**Installation:**
 ```bash
-cd src/helper
-pip install -r requirements.txt
-pip install -e .
+# Build standalone JAR
+./gradlew :cli:shadowJar
+
+# Run CLI
+java -jar src/cli/build/libs/cli-0.1.0-all.jar --help
+
+# Or use Gradle directly
+./gradlew cli:run --args='--help'
 ```
 
-**Configuration:**
+**Quick examples:**
+
 ```bash
-export FALCON_CLIENT_ID="your_client_id"
-export FALCON_CLIENT_SECRET="your_client_secret"
-export FALCON_CLOUD_REGION="us-1"  # us-1, us-2, eu-1, us-gov-1
+# Query CrowdStrike for server vulnerabilities
+./gradlew cli:run --args='query servers --severity HIGH,CRITICAL --dry-run'
+
+# Save to database (with authentication)
+./gradlew cli:run --args='query servers --save --username admin --password secret'
+
+# Query workstations/clients
+./gradlew cli:run --args='query servers --device-type WORKSTATION --dry-run'
+
+# Manage workgroup assets
+./gradlew cli:run --args='manage-workgroups list'
+./gradlew cli:run --args='manage-workgroups assign-assets -w Production -p "ip-10-*" -u admin@example.com'
+
+# Add vulnerability manually
+./gradlew cli:run --args='add-vulnerability --hostname webserver01 --cve CVE-2024-1234 --criticality HIGH --username admin --password secret'
 ```
 
-**Usage Examples:**
-```bash
-# Critical vulnerabilities on servers, open 30+ days
-falcon-vulns --device-type SERVER --severity CRITICAL --min-days-open 30
-
-# Export to CSV with domain filter
-falcon-vulns --device-type BOTH --severity HIGH CRITICAL \
-             --ad-domain CORP.LOCAL \
-             --output vulns.csv --format CSV
-
-# Verbose logging with hostname filter
-falcon-vulns --device-type CLIENT --hostname WEB-* --verbose
-```
-
-See [src/helper/README.md](src/helper/README.md) for full documentation.
+See [docs/CLI.md](docs/CLI.md) for complete CLI reference.
 
 ## API Documentation
 
 ### Authentication
+
 All endpoints require JWT authentication via `Authorization: Bearer <token>` header.
 
 **Login:**
+
 ```bash
 POST /api/auth/login
 {
@@ -288,25 +313,27 @@ POST /api/auth/login
 }
 ```
 
+
 ### Key Endpoints
 
-| Endpoint | Method | Description | Roles |
-|----------|--------|-------------|-------|
-| `/api/requirements` | GET | List requirements | Authenticated |
-| `/api/requirements/export/xlsx` | GET | Export to Excel | Authenticated |
-| `/api/releases` | POST | Create release | ADMIN, RELEASE_MANAGER |
-| `/api/assets` | GET | List assets (workgroup-filtered) | Authenticated |
-| `/api/vulnerabilities/current` | GET | Current vulnerabilities | ADMIN, VULN |
-| `/api/vulnerability-exception-requests` | POST | Create exception request | Authenticated |
-| `/api/vulnerability-exception-requests/pending/count` | GET | Badge count for pending requests | ADMIN, VULN |
-| `/api/outdated-assets` | GET | List outdated assets (paginated) | Authenticated |
-| `/api/materialized-view-refresh/trigger` | POST | Trigger view refresh | ADMIN |
-| `/api/notification-preferences` | GET/PUT | Manage notification preferences | Authenticated |
-| `/api/notification-logs` | GET | Notification audit logs | ADMIN |
-| `/api/account-vulns` | GET | User's account vulnerabilities | USER (non-admin) |
-| `/api/workgroups` | POST | Create workgroup | ADMIN |
-| `/api/import/upload-nmap-xml` | POST | Import Nmap scan | ADMIN |
-| `/api/import/upload-user-mappings-csv` | POST | Import user mappings | ADMIN |
+
+| Endpoint                                              | Method  | Description                      | Roles                  |
+| ----------------------------------------------------- | ------- | -------------------------------- | ---------------------- |
+| `/api/requirements`                                   | GET     | List requirements                | Authenticated          |
+| `/api/requirements/export/xlsx`                       | GET     | Export to Excel                  | Authenticated          |
+| `/api/releases`                                       | POST    | Create release                   | ADMIN, RELEASE_MANAGER |
+| `/api/assets`                                         | GET     | List assets (workgroup-filtered) | Authenticated          |
+| `/api/vulnerabilities/current`                        | GET     | Current vulnerabilities          | ADMIN, VULN            |
+| `/api/vulnerability-exception-requests`               | POST    | Create exception request         | Authenticated          |
+| `/api/vulnerability-exception-requests/pending/count` | GET     | Badge count for pending requests | ADMIN, VULN            |
+| `/api/outdated-assets`                                | GET     | List outdated assets (paginated) | Authenticated          |
+| `/api/materialized-view-refresh/trigger`              | POST    | Trigger view refresh             | ADMIN                  |
+| `/api/notification-preferences`                       | GET/PUT | Manage notification preferences  | Authenticated          |
+| `/api/notification-logs`                              | GET     | Notification audit logs          | ADMIN                  |
+| `/api/account-vulns`                                  | GET     | User's account vulnerabilities   | USER (non-admin)       |
+| `/api/workgroups`                                     | POST    | Create workgroup                 | ADMIN                  |
+| `/api/import/upload-nmap-xml`                         | POST    | Import Nmap scan                 | ADMIN                  |
+| `/api/import/upload-user-mappings-csv`                | POST    | Import user mappings             | ADMIN                  |
 
 See [CLAUDE.md](CLAUDE.md) for complete API reference.
 
@@ -319,6 +346,7 @@ See [CLAUDE.md](CLAUDE.md) for complete API reference.
 - **Schema:** Auto-migrated via Hibernate
 
 **Access:**
+
 ```bash
 # Local
 mysql -u secman -pCHANGEME secman
@@ -352,10 +380,14 @@ GITHUB_CLIENT_SECRET=your-github-secret
 # Translation (optional)
 OPENROUTER_API_KEY=your-openrouter-key
 
-# Falcon API (optional)
-FALCON_CLIENT_ID=your-falcon-client-id
-FALCON_CLIENT_SECRET=your-falcon-secret
-FALCON_CLOUD_REGION=us-1
+# CrowdStrike API (for CLI)
+CROWDSTRIKE_CLIENT_ID=your-client-id
+CROWDSTRIKE_CLIENT_SECRET=your-client-secret
+CROWDSTRIKE_BASE_URL=https://api.crowdstrike.com
+
+# CLI Authentication (for --save operations)
+SECMAN_USERNAME=adminuser
+SECMAN_PASSWORD=your-password
 ```
 
 ## Development Workflow
@@ -392,7 +424,6 @@ git commit -m "feat(scope): description"
 git push origin 024-feature-name
 ```
 
-
 ## Documentation
 
 Comprehensive documentation is available for key system components:
@@ -402,6 +433,7 @@ Comprehensive documentation is available for key system components:
 The CrowdStrike vulnerability import system uses a transactional replace pattern to prevent duplicate entries and ensure data consistency.
 
 **Key Features:**
+
 - **Duplicate Prevention**: Each (Asset, CVE) combination exists exactly once
 - **Idempotency**: Same import → same database state (no duplicates)
 - **Remediation Tracking**: Missing CVEs indicate patched vulnerabilities
@@ -410,12 +442,12 @@ The CrowdStrike vulnerability import system uses a transactional replace pattern
 **Documentation**: [docs/CROWDSTRIKE_IMPORT.md](docs/CROWDSTRIKE_IMPORT.md)
 
 This document explains:
+
 - How the transactional replace pattern works
 - Why it was chosen over alternatives (upsert, soft delete, differential sync)
 - Edge case handling (concurrent imports, duplicate hostnames, missing CVE IDs)
 - Performance characteristics and optimization notes
 - Usage examples and integration tests
-
 
 ## Contributing
 
@@ -432,20 +464,20 @@ For major changes, please open an issue first to discuss what you would like to 
 
 ## Roadmap
 
-- [x] Automated email notifications for outdated assets (Feature 035)
-- [x] Vulnerability exception request workflow (Feature 031)
-- [x] Materialized views for performance optimization (Feature 034)
-- [x] Last admin protection (Feature 037)
-- [x] Asset and workgroup criticality levels (Feature 039)
-- [x] Nested workgroup hierarchies (Feature 040)
-- [ ] Advanced vulnerability correlation and trending analytics
-- [ ] Automated remediation workflows with approval gates
-- [ ] Integration with additional vulnerability scanners (Tenable, Qualys)
-- [ ] Advanced reporting dashboards with Chart.js/Recharts
-- [ ] Mobile application (React Native)
-- [ ] SAML/LDAP authentication
-- [ ] Compliance frameworks mapping (SOC2, ISO 27001, NIST)
-- [ ] Risk scoring engine with machine learning
+- [X]  Automated email notifications for outdated assets (Feature 035)
+- [X]  Vulnerability exception request workflow (Feature 031)
+- [X]  Materialized views for performance optimization (Feature 034)
+- [X]  Last admin protection (Feature 037)
+- [X]  Asset and workgroup criticality levels (Feature 039)
+- [X]  Nested workgroup hierarchies (Feature 040)
+- [ ]  Advanced vulnerability correlation and trending analytics
+- [ ]  Automated remediation workflows with approval gates
+- [ ]  Integration with additional vulnerability scanners (Tenable, Qualys)
+- [ ]  Advanced reporting dashboards with Chart.js/Recharts
+- [ ]  Mobile application (React Native)
+- [ ]  SAML/LDAP authentication
+- [ ]  Compliance frameworks mapping (SOC2, ISO 27001, NIST)
+- [ ]  Risk scoring engine with machine learning
 
 ## License
 

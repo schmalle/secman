@@ -1,7 +1,7 @@
 # MCP (Model Context Protocol) Integration Guide
 
-**Last Updated:** 2025-11-28
-**Version:** 1.2
+**Last Updated:** 2025-12-30
+**Version:** 2.0
 
 This guide covers integrating Secman with AI assistants (Claude Desktop, ChatGPT, etc.) using the Model Context Protocol (MCP).
 
@@ -24,7 +24,13 @@ This guide covers integrating Secman with AI assistants (Claude Desktop, ChatGPT
 
 ## Overview
 
-Secman supports the Model Context Protocol (MCP), allowing AI assistants to programmatically access security requirements and risk assessments. This enables AI-assisted security management workflows.
+Secman supports the Model Context Protocol (MCP), allowing AI assistants to programmatically access security data including:
+- **Security Requirements** - Query, export, and manage security requirements
+- **Asset Inventory** - Browse assets, get detailed profiles with vulnerabilities
+- **Vulnerability Data** - Search vulnerabilities by severity, CVE, or affected asset
+- **Scan Results** - Review network scan history and discovered services
+
+The MCP server exposes **14 tools** for comprehensive security management workflows.
 
 ### Prerequisites
 
@@ -146,13 +152,13 @@ curl -X POST http://localhost:8080/api/mcp/admin/api-keys \
 
 | Permission | Description | Tools Enabled |
 |------------|-------------|---------------|
-| `REQUIREMENTS_READ` | Read security requirements | `get_requirements`, `search_requirements` |
-| `REQUIREMENTS_WRITE` | Create/modify requirements | `create_requirement`, `update_requirement` |
-| `ASSESSMENTS_READ` | Read risk assessments | `get_assessments`, `search_assessments` |
-| `ASSESSMENTS_WRITE` | Create/modify assessments | `create_assessment`, `update_assessment` |
-| `TAGS_READ` | Read tags and categories | `get_tags` |
-| `SYSTEM_INFO` | Access system information | `get_system_info` |
-| `USER_ACTIVITY` | View user activity logs | `get_user_activity` |
+| `REQUIREMENTS_READ` | Read security requirements | `get_requirements`, `export_requirements` |
+| `REQUIREMENTS_WRITE` | Create/modify requirements | `add_requirement` |
+| `REQUIREMENTS_DELETE` | Delete requirements | `delete_all_requirements` |
+| `ASSETS_READ` | Read asset inventory | `get_assets`, `get_all_assets_detail`, `get_asset_profile`, `get_asset_complete_profile` |
+| `VULNERABILITIES_READ` | Read vulnerability data | `get_vulnerabilities`, `get_all_vulnerabilities_detail` |
+| `SCANS_READ` | Read scan history | `get_scans`, `get_asset_scan_results`, `search_products` |
+| `TAGS_READ` | Read tags and categories | (used by requirements filtering) |
 
 ### Managing Keys
 
@@ -371,10 +377,29 @@ You should see a JSON response indicating successful initialization.
 
 ## Available MCP Tools
 
+The MCP server exposes **14 tools** organized into four categories:
+
+| Category | Tools | Description |
+|----------|-------|-------------|
+| **Requirements** | 4 tools | Security requirement management |
+| **Assets** | 4 tools | Asset inventory and profiles |
+| **Vulnerabilities** | 2 tools | Vulnerability data and analysis |
+| **Scans** | 3 tools | Scan history and product discovery |
+
+---
+
 ### Requirements Management
 
 #### `get_requirements`
-Retrieve security requirements with filtering.
+Retrieve security requirements with optional filtering and pagination.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `limit` | number | Max results (default: 20, max: 100) |
+| `offset` | number | Skip N results (default: 0) |
+| `tags` | string[] | Filter by tags |
+| `status` | enum | Filter by status: `DRAFT`, `ACTIVE`, `DEPRECATED`, `ARCHIVED` |
+| `priority` | enum | Filter by priority: `LOW`, `MEDIUM`, `HIGH`, `CRITICAL` |
 
 ```json
 {
@@ -382,65 +407,273 @@ Retrieve security requirements with filtering.
   "arguments": {
     "limit": 10,
     "tags": ["GDPR", "ISO27001"],
-    "status": "active"
+    "status": "ACTIVE",
+    "priority": "HIGH"
   }
 }
 ```
 
-#### `search_requirements`
-Full-text search across requirements.
+#### `export_requirements`
+Export all requirements to Excel or Word format. Returns base64-encoded file content.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `format` | enum | Yes | Export format: `xlsx` (Excel) or `docx` (Word) |
 
 ```json
 {
-  "name": "search_requirements",
+  "name": "export_requirements",
   "arguments": {
-    "query": "authentication",
-    "limit": 20
+    "format": "xlsx"
   }
 }
 ```
 
-### Risk Assessment Management
+#### `add_requirement`
+Create a new security requirement.
 
-#### `get_assessments`
-Retrieve risk assessments.
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `shortreq` | string | Yes | Short requirement text |
+| `details` | string | No | Detailed description |
+| `motivation` | string | No | Why this requirement exists |
+| `example` | string | No | Implementation example |
+| `norm` | string | No | Regulatory norm reference (e.g., ISO 27001) |
+| `usecase` | string | No | Use case description |
+| `chapter` | string | No | Chapter/category for grouping |
 
 ```json
 {
-  "name": "get_assessments",
+  "name": "add_requirement",
   "arguments": {
-    "limit": 20,
-    "risk_level": "HIGH"
+    "shortreq": "All API endpoints must use TLS 1.3",
+    "details": "Transport Layer Security version 1.3 or higher must be enforced on all public-facing API endpoints.",
+    "motivation": "Protect data in transit from eavesdropping and tampering",
+    "norm": "ISO 27001:2022 A.8.24",
+    "chapter": "Network Security"
   }
 }
 ```
 
-#### `search_assessments`
-Search risk assessments.
+#### `delete_all_requirements`
+Delete ALL requirements from the system. **ADMIN only.** Requires explicit confirmation.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `confirm` | boolean | Yes | Must be `true` to confirm deletion |
 
 ```json
 {
-  "name": "search_assessments",
+  "name": "delete_all_requirements",
   "arguments": {
-    "query": "data privacy"
+    "confirm": true
   }
 }
 ```
 
-### Utility Tools
+---
 
-#### `get_tags`
-Retrieve all available tags and categories.
+### Asset Management
 
-#### `search_all`
-Universal search across all content types.
+#### `get_assets`
+Retrieve asset inventory with filtering and pagination.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `page` | number | Page number (0-indexed, default: 0) |
+| `pageSize` | number | Items per page (max: 500, default: 100) |
+| `name` | string | Filter by name (partial match, case-insensitive) |
+| `type` | string | Filter by type: `SERVER`, `WORKSTATION`, `NETWORK`, `OTHER` |
+| `ip` | string | Filter by IP address (partial match) |
+| `owner` | string | Filter by owner (exact match) |
+| `group` | string | Filter by group membership (exact match) |
 
 ```json
 {
-  "name": "search_all",
+  "name": "get_assets",
   "arguments": {
-    "query": "security vulnerability",
-    "types": ["requirements", "assessments"]
+    "type": "SERVER",
+    "pageSize": 50
+  }
+}
+```
+
+#### `get_all_assets_detail`
+Retrieve all assets with comprehensive filtering, pagination, and workgroup info.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `name` | string | Filter by name (case-insensitive contains) |
+| `type` | string | Filter by type: `SERVER`, `CLIENT`, `NETWORK_DEVICE` |
+| `ip` | string | Filter by IP address (contains) |
+| `owner` | string | Filter by owner name (contains) |
+| `group` | string | Filter by group membership (exact match) |
+| `page` | integer | Page number (0-indexed, default: 0) |
+| `pageSize` | integer | Items per page (max: 1000, default: 100) |
+
+```json
+{
+  "name": "get_all_assets_detail",
+  "arguments": {
+    "owner": "IT-Security",
+    "pageSize": 200
+  }
+}
+```
+
+#### `get_asset_profile`
+Retrieve comprehensive profile for a single asset including vulnerabilities and scan history.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `assetId` | number | Yes | The asset ID to retrieve |
+| `includeVulnerabilities` | boolean | No | Include vulnerability data (default: true) |
+| `includeScanHistory` | boolean | No | Include scan history (default: true) |
+| `vulnerabilityLimit` | number | No | Max vulnerabilities to return (max: 100, default: 20) |
+| `scanHistoryLimit` | number | No | Max scan results to return (max: 50, default: 10) |
+
+```json
+{
+  "name": "get_asset_profile",
+  "arguments": {
+    "assetId": 42,
+    "includeVulnerabilities": true,
+    "vulnerabilityLimit": 50
+  }
+}
+```
+
+#### `get_asset_complete_profile`
+Retrieve complete asset profile including base details, all vulnerabilities, and all scan results.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `assetId` | integer | Yes | The asset ID to retrieve |
+| `includeVulnerabilities` | boolean | No | Include vulnerability data (default: true) |
+| `includeScanResults` | boolean | No | Include scan result data (default: true) |
+
+```json
+{
+  "name": "get_asset_complete_profile",
+  "arguments": {
+    "assetId": 42
+  }
+}
+```
+
+---
+
+### Vulnerability Management
+
+#### `get_vulnerabilities`
+Retrieve vulnerability data with optional filtering and pagination.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `page` | number | Page number (0-indexed, default: 0) |
+| `pageSize` | number | Items per page (max: 500, default: 100) |
+| `cveId` | string | Filter by CVE ID (partial match, case-insensitive) |
+| `severity` | string[] | Filter by severity: `Critical`, `High`, `Medium`, `Low`, `Info` |
+| `assetId` | number | Filter by asset ID |
+| `startDate` | string | Filter after this date (ISO-8601) |
+| `endDate` | string | Filter before this date (ISO-8601) |
+
+```json
+{
+  "name": "get_vulnerabilities",
+  "arguments": {
+    "severity": ["Critical", "High"],
+    "pageSize": 100
+  }
+}
+```
+
+#### `get_all_vulnerabilities_detail`
+Retrieve vulnerabilities with severity/asset/days-open filtering and detailed asset info.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `severity` | enum | Filter by severity: `CRITICAL`, `HIGH`, `MEDIUM`, `LOW` |
+| `assetId` | integer | Filter by specific asset ID |
+| `minDaysOpen` | integer | Filter by minimum days vulnerability has been open |
+| `page` | integer | Page number (0-indexed, default: 0) |
+| `pageSize` | integer | Items per page (max: 1000, default: 100) |
+
+```json
+{
+  "name": "get_all_vulnerabilities_detail",
+  "arguments": {
+    "severity": "CRITICAL",
+    "minDaysOpen": 30
+  }
+}
+```
+
+---
+
+### Scan Management
+
+#### `get_scans`
+Retrieve scan history with optional filtering and pagination.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `page` | number | Page number (0-indexed, default: 0) |
+| `pageSize` | number | Items per page (max: 500, default: 100) |
+| `scanType` | enum | Filter by type: `nmap`, `masscan` |
+| `uploadedBy` | string | Filter by uploader username |
+| `startDate` | string | Filter scans after this date (ISO-8601) |
+| `endDate` | string | Filter scans before this date (ISO-8601) |
+
+```json
+{
+  "name": "get_scans",
+  "arguments": {
+    "scanType": "nmap",
+    "pageSize": 50
+  }
+}
+```
+
+#### `get_asset_scan_results`
+Retrieve scan results (open ports, services, products) with optional filtering.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `portMin` | integer | Minimum port number (1-65535) |
+| `portMax` | integer | Maximum port number (1-65535) |
+| `service` | string | Filter by service name (case-insensitive contains) |
+| `state` | enum | Filter by port state: `open`, `filtered`, `closed` |
+| `page` | integer | Page number (0-indexed, default: 0) |
+| `pageSize` | integer | Items per page (max: 1000, default: 100) |
+
+```json
+{
+  "name": "get_asset_scan_results",
+  "arguments": {
+    "state": "open",
+    "portMin": 1,
+    "portMax": 1024
+  }
+}
+```
+
+#### `search_products`
+Search for products/services discovered in network scans across infrastructure.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `page` | number | Page number (0-indexed, default: 0) |
+| `pageSize` | number | Items per page (max: 500, default: 100) |
+| `service` | string | Filter by service name (partial match, case-insensitive) |
+| `stateFilter` | enum | Filter by port state: `open`, `filtered`, `closed`, `all` (default: `open`) |
+
+```json
+{
+  "name": "search_products",
+  "arguments": {
+    "service": "Apache",
+    "stateFilter": "open"
   }
 }
 ```
@@ -485,20 +718,25 @@ All MCP operations are logged with:
 
 ### Claude Desktop Prompts
 
-**"Show me all critical security requirements"**
-```
-Claude will use get_requirements with priority: "CRITICAL"
-```
+**Requirements:**
+- "Show me all critical security requirements" → `get_requirements` with `priority: "CRITICAL"`
+- "Export requirements to Excel" → `export_requirements` with `format: "xlsx"`
+- "Add a new requirement for password complexity" → `add_requirement`
 
-**"Find risk assessments related to data privacy"**
-```
-Claude will use search_assessments with query: "data privacy"
-```
+**Assets:**
+- "Show me all servers" → `get_assets` with `type: "SERVER"`
+- "Get details for asset ID 42" → `get_asset_profile` with `assetId: 42`
+- "List assets owned by IT-Security team" → `get_all_assets_detail` with `owner: "IT-Security"`
 
-**"Create a new requirement for API security"**
-```
-Claude will use create_requirement (requires WRITE permission)
-```
+**Vulnerabilities:**
+- "Show me all critical vulnerabilities" → `get_vulnerabilities` with `severity: ["Critical"]`
+- "Find vulnerabilities open for more than 30 days" → `get_all_vulnerabilities_detail` with `minDaysOpen: 30`
+- "What vulnerabilities affect asset 42?" → `get_vulnerabilities` with `assetId: 42`
+
+**Scans:**
+- "Show recent nmap scans" → `get_scans` with `scanType: "nmap"`
+- "Find all open SSH ports" → `get_asset_scan_results` with `service: "ssh"`, `state: "open"`
+- "Search for Apache servers in the network" → `search_products` with `service: "Apache"`
 
 ### Programmatic Access
 
