@@ -5,9 +5,25 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="94ada8b3-9f4e-473c-9fea-3bc9651b5bdd" name="Changes" comment="test change">
+      <change beforePath="$PROJECT_DIR$/.codex/prompts/speckit.analyze.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.codex/prompts/speckit.checklist.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.codex/prompts/speckit.clarify.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.codex/prompts/speckit.constitution.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.codex/prompts/speckit.implement.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.codex/prompts/speckit.plan.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.codex/prompts/speckit.specify.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.codex/prompts/speckit.tasks.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/compiler.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/compiler.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/CLAUDE.md" beforeDir="false" afterPath="$PROJECT_DIR$/CLAUDE.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/GEMINI.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/.claude/settings.local.json" beforeDir="false" afterPath="$PROJECT_DIR$/src/.claude/settings.local.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/backendng/build.gradle.kts" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/build.gradle.kts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/gradle.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/gradle.properties" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/mcp/McpToolRegistry.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/mcp/McpToolRegistry.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/cli/build.gradle.kts" beforeDir="false" afterPath="$PROJECT_DIR$/src/cli/build.gradle.kts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/SecmanCli.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/SecmanCli.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/start.md" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/docs/start.md" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -94,7 +110,7 @@
     &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
     &quot;SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
     &quot;SHELLCHECK.PATH&quot;: &quot;/Users/flake/Library/Application Support/JetBrains/IntelliJIdea2025.2/plugins/Shell Script/shellcheck&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;057-cli-mcp-requirements&quot;,
     &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,
     &quot;kotlin-language-version-configured&quot;: &quot;true&quot;,
     &quot;last_opened_file_path&quot;: &quot;/Users/flake/sources/misc/secman&quot;,
@@ -116,11 +132,11 @@
 }</component>
   <component name="RecentsManager">
     <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/src/backendng/docs" />
       <recent name="$PROJECT_DIR$/scripts/install/db" />
       <recent name="$PROJECT_DIR$/scripts/install/nginx" />
       <recent name="$PROJECT_DIR$/mcp" />
       <recent name="$PROJECT_DIR$/scripts/tests" />
-      <recent name="$PROJECT_DIR$/scripts/install" />
     </key>
   </component>
   <component name="RunManager" selected="Gradle.backendng [build]">

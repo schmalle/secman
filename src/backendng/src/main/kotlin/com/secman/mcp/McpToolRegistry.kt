@@ -23,7 +23,11 @@ class McpToolRegistry(
     @Inject private val getAllAssetsDetailTool: GetAllAssetsDetailTool,
     @Inject private val getAssetScanResultsTool: GetAssetScanResultsTool,
     @Inject private val getAllVulnerabilitiesDetailTool: GetAllVulnerabilitiesDetailTool,
-    @Inject private val getAssetCompleteProfileTool: GetAssetCompleteProfileTool
+    @Inject private val getAssetCompleteProfileTool: GetAssetCompleteProfileTool,
+    // Feature 057: MCP Tools for Requirements Management
+    @Inject private val exportRequirementsTool: ExportRequirementsTool,
+    @Inject private val addRequirementTool: AddRequirementTool,
+    @Inject private val deleteAllRequirementsTool: DeleteAllRequirementsTool
 ) {
     private val logger = LoggerFactory.getLogger(McpToolRegistry::class.java)
 
@@ -43,7 +47,11 @@ class McpToolRegistry(
             getAllAssetsDetailTool,
             getAssetScanResultsTool,
             getAllVulnerabilitiesDetailTool,
-            getAssetCompleteProfileTool
+            getAssetCompleteProfileTool,
+            // Feature 057: MCP Tools for Requirements Management
+            exportRequirementsTool,
+            addRequirementTool,
+            deleteAllRequirementsTool
         ).forEach { tool ->
             toolMap[tool.name] = tool
             logger.debug("Registered MCP tool: {}", tool.name)
@@ -99,14 +107,14 @@ class McpToolRegistry(
     private fun isToolAuthorized(toolName: String, tool: McpTool, permissions: Set<McpPermission>): Boolean {
         return when (toolName) {
             // Requirements tools
-            "get_requirements", "search_requirements" -> {
+            "get_requirements", "search_requirements", "export_requirements" -> {
                 permissions.contains(McpPermission.REQUIREMENTS_READ)
             }
-            "create_requirement", "update_requirement" -> {
+            "create_requirement", "update_requirement", "add_requirement" -> {
                 permissions.contains(McpPermission.REQUIREMENTS_WRITE)
             }
-            "delete_requirement" -> {
-                permissions.contains(McpPermission.REQUIREMENTS_WRITE) // Or could require separate DELETE permission
+            "delete_requirement", "delete_all_requirements" -> {
+                permissions.contains(McpPermission.REQUIREMENTS_WRITE) // ADMIN role also checked in tool execute()
             }
 
             // Assessment tools

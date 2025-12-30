@@ -117,6 +117,17 @@ dependencies {
     ksp("io.micronaut.serde:micronaut-serde-processor")
     ksp("io.micronaut.security:micronaut-security-annotations")
 
+    // Test dependencies - Feature 056
+    kspTest("io.micronaut:micronaut-inject-java")
+    testImplementation("org.junit.jupiter:junit-jupiter-api:5.11.3")
+    testImplementation("org.junit.jupiter:junit-jupiter-engine:5.11.3")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.11.3")
+    testImplementation("io.micronaut.test:micronaut-test-junit5:4.8.1")
+    testImplementation("io.mockk:mockk:1.13.13")
+    testImplementation("org.testcontainers:testcontainers:1.20.4")
+    testImplementation("org.testcontainers:mariadb:1.20.4")
+    testImplementation("org.testcontainers:junit-jupiter:1.20.4")
+    testImplementation("org.assertj:assertj-core:3.26.3")
 }
 
 application {
@@ -163,5 +174,10 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
         // Compiler options for Kotlin 2.1.0
         // The -Xannotation-default-target flag is no longer needed in Kotlin 2.1.0
     }
+}
+
+// Configure test task to use JUnit 5 platform - Feature 056
+tasks.test {
+    useJUnitPlatform()
 }
 

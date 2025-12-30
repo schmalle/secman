@@ -1,0 +1,45 @@
+# Test configuration for Feature 056 - Test Suite
+# Applied when running tests with @MicronautTest
+
+micronaut:
+  application:
+    name: secman-test
+  security:
+    enabled: true
+    token:
+      jwt:
+        signatures:
+          secret:
+            generator:
+              secret: test-secret-key-for-jwt-signing-minimum-256-bits-long-enough
+              jws-algorithm: HS256
+        generator:
+          access-token:
+            expiration: 3600
+
+# Datasource configured dynamically by Testcontainers via @DynamicPropertySource
+datasources:
+  default:
+    driverClassName: org.mariadb.jdbc.Driver
+    dialect: MYSQL
+
+jpa:
+  default:
+    properties:
+      hibernate:
+        hbm2ddl:
+          auto: create-drop
+        show_sql: false
+        format_sql: false
+
+# Disable Flyway for tests - use Hibernate schema generation
+flyway:
+  enabled: false
+
+# Reduce logging verbosity in tests
+logger:
+  levels:
+    io.micronaut: WARN
+    com.secman: INFO
+    org.hibernate: WARN
+    org.testcontainers: WARN

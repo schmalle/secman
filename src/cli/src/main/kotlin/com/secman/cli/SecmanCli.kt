@@ -1,7 +1,10 @@
 package com.secman.cli
 
+import com.secman.cli.commands.AddRequirementCommand
 import com.secman.cli.commands.AddVulnerabilityCommand
 import com.secman.cli.commands.ConfigCommand
+import com.secman.cli.commands.DeleteAllRequirementsCommand
+import com.secman.cli.commands.ExportRequirementsCommand
 import com.secman.cli.commands.ManageUserMappingsCommand
 import com.secman.cli.commands.ManageWorkgroupsCommand
 import com.secman.cli.commands.MonitorCommand
@@ -210,6 +213,33 @@ class SecmanCli {
                 }
                 0
             }
+            args[0] == "export-requirements" -> {
+                // Use Picocli with Micronaut DI for export-requirements command
+                // Feature: 057-cli-mcp-requirements
+                val subArgs = args.drop(1).toTypedArray()
+                ApplicationContext.run().use { ctx ->
+                    PicocliRunner.run(ExportRequirementsCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
+            args[0] == "add-requirement" -> {
+                // Use Picocli with Micronaut DI for add-requirement command
+                // Feature: 057-cli-mcp-requirements
+                val subArgs = args.drop(1).toTypedArray()
+                ApplicationContext.run().use { ctx ->
+                    PicocliRunner.run(AddRequirementCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
+            args[0] == "delete-all-requirements" -> {
+                // Use Picocli with Micronaut DI for delete-all-requirements command
+                // Feature: 057-cli-mcp-requirements
+                val subArgs = args.drop(1).toTypedArray()
+                ApplicationContext.run().use { ctx ->
+                    PicocliRunner.run(DeleteAllRequirementsCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
             else -> {
                 System.err.println("Unknown command: ${args[0]}")
                 showHelp()
@@ -233,6 +263,9 @@ class SecmanCli {
               manage-user-mappings   Manage user mappings for domains and AWS accounts (Feature 049)
               manage-workgroups      Manage workgroup asset assignments (list, assign, remove)
               add-vulnerability      Add or update a vulnerability for an asset (Feature 052)
+              export-requirements    Export all requirements to Excel or Word (Feature 057)
+              add-requirement        Add a new security requirement (Feature 057)
+              delete-all-requirements  Delete ALL requirements (requires ADMIN, Feature 057)
               help                   Show this help message
 
             Query Servers Options (Feature 032, 055):
@@ -277,6 +310,34 @@ class SecmanCli {
               --days-open <num>        Days the vulnerability has been open (default: 0)
               --backend-url <url>      Backend API URL (default: http://localhost:8080)
               --username <user>        Backend username (or set SECMAN_USERNAME env var)
+              --password <pass>        Backend password (or set SECMAN_PASSWORD env var)
+              --verbose                Enable verbose output
+
+            Export Requirements Options (Feature 057):
+              --format <xlsx|docx>     Export format: xlsx (Excel) or docx (Word) (required)
+              --output <path>          Output file path (default: requirements_export_YYYYMMDD.{format})
+              --backend-url <url>      Backend API URL (default: http://localhost:8080)
+              --username <user>        Backend username (or set SECMAN_USERNAME env var)
+              --password <pass>        Backend password (or set SECMAN_PASSWORD env var)
+              --verbose                Enable verbose output
+
+            Add Requirement Options (Feature 057):
+              --shortreq <text>        Short requirement text (required)
+              --chapter <name>         Chapter/category for grouping
+              --details <text>         Detailed description
+              --motivation <text>      Why this requirement exists
+              --example <text>         Implementation example
+              --norm <name>            Regulatory norm reference (e.g., ISO 27001)
+              --usecase <name>         Use case description
+              --backend-url <url>      Backend API URL (default: http://localhost:8080)
+              --username <user>        Backend username (or set SECMAN_USERNAME env var)
+              --password <pass>        Backend password (or set SECMAN_PASSWORD env var)
+              --verbose                Enable verbose output
+
+            Delete All Requirements Options (Feature 057):
+              --confirm                Required safety flag to confirm deletion (required)
+              --backend-url <url>      Backend API URL (default: http://localhost:8080)
+              --username <user>        Backend username with ADMIN role (or set SECMAN_USERNAME env var)
               --password <pass>        Backend password (or set SECMAN_PASSWORD env var)
               --verbose                Enable verbose output
 
@@ -365,6 +426,40 @@ class SecmanCli {
               secman add-vulnerability --hostname webserver01 --cve CVE-2024-1234 --criticality HIGH --username admin --password secret
               secman add-vulnerability --hostname newserver99 --cve CVE-2023-5678 --criticality CRITICAL --username admin --password secret --verbose
               secman add-vulnerability --help
+
+              # Export requirements (Feature 057)
+              # Using environment variables (recommended for security):
+              export SECMAN_USERNAME=admin
+              export SECMAN_PASSWORD=secret
+              secman export-requirements --format xlsx
+              secman export-requirements --format docx --output security_requirements.docx
+              secman export-requirements --format xlsx --output /path/to/export.xlsx --verbose
+
+              # Using command line arguments:
+              secman export-requirements --format xlsx --username admin --password secret
+              secman export-requirements --format docx --output requirements.docx --username admin --password secret
+              secman export-requirements --help
+
+              # Add requirements (Feature 057)
+              # Using environment variables (recommended for security):
+              export SECMAN_USERNAME=admin
+              export SECMAN_PASSWORD=secret
+              secman add-requirement --shortreq "All passwords must be at least 12 characters"
+              secman add-requirement --shortreq "MFA required for admin access" --chapter "Authentication"
+              secman add-requirement --shortreq "Encrypt data at rest" --chapter "Data Protection" --norm "GDPR Article 32" --verbose
+
+              # Using command line arguments:
+              secman add-requirement --shortreq "Log all admin actions" --chapter "Audit" --username admin --password secret
+              secman add-requirement --help
+
+              # Delete all requirements (Feature 057) - REQUIRES ADMIN ROLE
+              # WARNING: This is a destructive operation!
+              export SECMAN_USERNAME=admin
+              export SECMAN_PASSWORD=secret
+              secman delete-all-requirements --confirm
+              secman delete-all-requirements --confirm --verbose
+              secman delete-all-requirements --confirm --backend-url http://test-server:8080
+              secman delete-all-requirements --help
 
             For more information, visit: https://github.com/schmalle/secman
         """.trimIndent())

@@ -1,0 +1,26 @@
+#!/bin/bash
+# secman - CLI wrapper for secman security management tool
+# Usage: ./bin/secman <command> [options]
+#
+# Examples:
+#   ./bin/secman help
+#   ./bin/secman export-requirements --format xlsx
+#   ./bin/secman query servers --dry-run
+#
+# Prerequisites:
+#   1. Java 21 must be installed and in PATH
+#   2. Build the JAR first: ./gradlew :cli:shadowJar
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+JAR_PATH="$REPO_ROOT/src/cli/build/libs/cli-0.1.0-all.jar"
+
+if [ ! -f "$JAR_PATH" ]; then
+    echo "Error: CLI JAR not found at $JAR_PATH"
+    echo ""
+    echo "Build it first with:"
+    echo "  ./gradlew :cli:shadowJar"
+    exit 1
+fi
+
+exec java -jar "$JAR_PATH" "$@"
