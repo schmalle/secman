@@ -579,6 +579,10 @@ export default function RequirementManagement() {
                 <div className="col-md-6 d-flex align-items-end">
                     <span className="text-muted">
                         Showing {filteredRequirements.length} of {requirements.length} requirements
+                        {' | '}
+                        <span className={requirements.filter(r => !r.norms || r.norms.length === 0).length > 0 ? 'text-warning' : 'text-success'}>
+                            {requirements.filter(r => !r.norms || r.norms.length === 0).length} missing norm mappings
+                        </span>
                     </span>
                 </div>
             </div>
