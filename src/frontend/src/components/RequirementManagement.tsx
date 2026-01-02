@@ -340,20 +340,12 @@ export default function RequirementManagement() {
                                 {isAddingRequirement ? 'Cancel' : 'Add Requirement'}
                             </button>
                             {requirements.length > 0 && (
-                                <button 
-                                    className="btn btn-outline-info" 
-                                    onClick={handleMissingMappings}
-                                    title="AI-powered mapping to NIST 800-53, ISO 27001, and IEC 62443"
-                                    disabled={isMappingInProgress || isDeleting}
+                                <button
+                                    className="btn btn-outline-secondary"
+                                    title="Feature not yet implemented - AI-powered mapping to NIST 800-53, ISO 27001, and IEC 62443"
+                                    disabled={true}
                                 >
-                                    {isMappingInProgress ? (
-                                        <>
-                                            <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                                            Analyzing...
-                                        </>
-                                    ) : (
-                                        'Missing mapping'
-                                    )}
+                                    Missing mapping
                                 </button>
                             )}
                             {requirements.length > 0 && (
