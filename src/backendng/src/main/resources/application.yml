@@ -97,6 +97,14 @@ micronaut:
       expire-after-write: 5m
 
 # Email functionality configuration
+micronaut:
+  http:
+    services:
+      openrouter-ai:
+        url: https://openrouter.ai/api/v1
+        read-timeout: 120s
+        connect-timeout: 10s
+
 secman:
   encryption:
     # Encryption password for sensitive data - MUST be overridden in production
@@ -188,7 +196,7 @@ secman:
       connect-timeout: 10s
       max-content-length: 104857600  # 100MB (aligns with max-request-size)
       translation:
-        read-timeout: 30s
+        read-timeout: 120s  # Extended for AI operations (norm mapping batches)
         connect-timeout: 10s
       crowdstrike:
         read-timeout: 10s

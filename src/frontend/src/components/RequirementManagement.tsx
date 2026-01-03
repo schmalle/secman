@@ -247,23 +247,26 @@ export default function RequirementManagement() {
         setMappingSuccess(null);
 
         try {
-            // First ensure required norms exist
-            const ensureResponse = await authenticatedPost('/api/norm-mapping/ensure-norms');
-
-            if (!ensureResponse.ok) {
-                throw new Error('Failed to ensure required norms exist');
-            }
-
-            // Then get mapping suggestions
-            const response = await authenticatedPost('/api/norm-mapping/suggest');
+            // Get AI-powered mapping suggestions
+            const response = await authenticatedPost('/api/norm-mapping/suggest', {});
 
             if (response.ok) {
                 const data = await response.json();
-                setMappingSuggestions(data);
-                setShowMappingModal(true);
+                if (data.totalRequirementsAnalyzed === 0) {
+                    setMappingSuccess('All requirements already have norm mappings.');
+                } else {
+                    setMappingSuggestions(data);
+                    setShowMappingModal(true);
+                }
             } else {
                 const error = await response.json();
-                setMappingError(error.error || 'Failed to get mapping suggestions');
+                if (response.status === 400) {
+                    setMappingError(error.error || 'Configuration error. Please ensure OpenRouter API is configured.');
+                } else if (response.status === 503) {
+                    setMappingError('AI service is temporarily unavailable. Please try again later.');
+                } else {
+                    setMappingError(error.error || 'Failed to get mapping suggestions');
+                }
             }
         } catch (error) {
             console.error('Error getting norm mapping suggestions:', error);
@@ -308,6 +311,8 @@ export default function RequirementManagement() {
         const currentNormIds = new Set(requirement.norms?.map(norm => norm.id) || []);
         setSelectedNormIds(currentNormIds);
         setIsAddingRequirement(true);
+        // Scroll to top to show the edit form
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     const resetForm = () => {
@@ -342,10 +347,18 @@ export default function RequirementManagement() {
                             {requirements.length > 0 && (
                                 <button
                                     className="btn btn-outline-secondary"
-                                    title="Feature not yet implemented - AI-powered mapping to NIST 800-53, ISO 27001, and IEC 62443"
-                                    disabled={true}
+                                    title="AI-powered mapping to ISO 27001 and IEC 62443"
+                                    onClick={handleMissingMappings}
+                                    disabled={isMappingInProgress}
                                 >
-                                    Missing mapping
+                                    {isMappingInProgress ? (
+                                        <>
+                                            <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                            Analyzing...
+                                        </>
+                                    ) : (
+                                        'Missing mapping'
+                                    )}
                                 </button>
                             )}
                             {requirements.length > 0 && (
@@ -746,38 +759,98 @@ export default function RequirementManagement() {
 }
 
 // Mapping Suggestions Modal Component
+interface NormSuggestionItem {
+    standard: string;
+    control: string;
+    controlName: string;
+    confidence: number;
+    reasoning: string;
+    normId?: number | null;
+}
+
+interface RequirementSuggestionItem {
+    requirementId: number;
+    requirementTitle: string;
+    suggestions: NormSuggestionItem[];
+}
+
 interface MappingSuggestionsModalProps {
-    suggestions: any;
+    suggestions: {
+        suggestions: RequirementSuggestionItem[];
+        totalRequirementsAnalyzed: number;
+        totalSuggestionsGenerated: number;
+    };
     onApply: (selectedMappings: any) => void;
     onClose: () => void;
 }
 
-function MappingSuggestionsModal({ suggestions, onApply, onClose }: MappingSuggestionsModalProps) {
-    const [selectedMappings, setSelectedMappings] = useState<{ [key: string]: number[] }>({});
+// Generate unique key for a suggestion
+function getSuggestionKey(reqId: number, suggestion: NormSuggestionItem): string {
+    return `${reqId}-${suggestion.standard}-${suggestion.control}`;
+}
 
-    const handleMappingToggle = (requirementId: number, normId: number) => {
-        const key = requirementId.toString();
-        const current = selectedMappings[key] || [];
-        
-        if (current.includes(normId)) {
-            setSelectedMappings({
-                ...selectedMappings,
-                [key]: current.filter(id => id !== normId)
+function MappingSuggestionsModal({ suggestions, onApply, onClose }: MappingSuggestionsModalProps) {
+    // Track selections by unique key (requirement+standard+control)
+    const [selectedKeys, setSelectedKeys] = useState<Set<string>>(() => {
+        // Pre-select suggestions with confidence >= 4
+        const preSelected = new Set<string>();
+        suggestions.suggestions?.forEach(req => {
+            req.suggestions.forEach(norm => {
+                if (norm.confidence >= 4) {
+                    preSelected.add(getSuggestionKey(req.requirementId, norm));
+                }
             });
+        });
+        return preSelected;
+    });
+
+    const handleMappingToggle = (requirementId: number, normSuggestion: NormSuggestionItem) => {
+        const key = getSuggestionKey(requirementId, normSuggestion);
+        const newSelected = new Set(selectedKeys);
+
+        if (newSelected.has(key)) {
+            newSelected.delete(key);
         } else {
-            setSelectedMappings({
-                ...selectedMappings,
-                [key]: [...current, normId]
-            });
+            newSelected.add(key);
         }
+        setSelectedKeys(newSelected);
     };
 
     const handleApplySelected = () => {
-        onApply(selectedMappings);
+        // Build mappings object in the format expected by the API
+        const mappings: { [reqId: string]: Array<{ normId?: number; standard?: string; control?: string; version?: string }> } = {};
+
+        suggestions.suggestions?.forEach(req => {
+            const reqNorms: Array<{ normId?: number; standard?: string; control?: string; version?: string }> = [];
+
+            req.suggestions.forEach(norm => {
+                const key = getSuggestionKey(req.requirementId, norm);
+                if (selectedKeys.has(key)) {
+                    if (norm.normId) {
+                        // Existing norm - just pass the ID
+                        reqNorms.push({ normId: norm.normId });
+                    } else {
+                        // New norm - pass standard/control for creation
+                        reqNorms.push({
+                            standard: norm.standard,
+                            control: norm.control,
+                            version: extractVersion(norm.standard)
+                        });
+                    }
+                }
+            });
+
+            if (reqNorms.length > 0) {
+                mappings[req.requirementId.toString()] = reqNorms;
+            }
+        });
+
+        onApply(mappings);
     };
 
-    const totalSuggestions = suggestions.suggestions?.length || 0;
-    const hasSelections = Object.values(selectedMappings).some((arr: number[]) => arr.length > 0);
+    const totalSuggestionsCount = suggestions.totalSuggestionsGenerated || 0;
+    const hasSelections = selectedKeys.size > 0;
+    const selectedCount = selectedKeys.size;
 
     return (
         <div className="modal fade show d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
@@ -792,46 +865,66 @@ function MappingSuggestionsModal({ suggestions, onApply, onClose }: MappingSugge
                     </div>
                     <div className="modal-body">
                         <div className="alert alert-info">
-                            <strong>AI Analysis Complete:</strong> Found {totalSuggestions} requirements that could benefit from norm mappings.
-                            Select the suggestions you want to apply.
+                            <strong>AI Analysis Complete:</strong> Analyzed {suggestions.totalRequirementsAnalyzed} requirements,
+                            generated {totalSuggestionsCount} suggestions.
+                            <br />
+                            <small className="text-muted">
+                                Suggestions with confidence 4-5 are pre-selected. Review and adjust selections as needed.
+                            </small>
                         </div>
-                        
+
                         {suggestions.suggestions && suggestions.suggestions.length > 0 ? (
                             <div className="row">
-                                {suggestions.suggestions.map((suggestion: any, index: number) => (
+                                {suggestions.suggestions.map((suggestion) => (
                                     <div key={suggestion.requirementId} className="col-12 mb-4">
                                         <div className="card">
-                                            <div className="card-header">
+                                            <div className="card-header bg-light">
                                                 <h6 className="mb-0">
-                                                    <strong>Requirement:</strong> {suggestion.requirementTitle}
+                                                    <strong>Requirement #{suggestion.requirementId}:</strong> {suggestion.requirementTitle}
                                                 </h6>
                                             </div>
                                             <div className="card-body">
-                                                <p className="text-muted mb-3">Select which norm mappings to apply:</p>
-                                                {suggestion.suggestions.map((normSuggestion: any, normIndex: number) => (
-                                                    <div key={normIndex} className="form-check mb-2">
-                                                        <input
-                                                            className="form-check-input"
-                                                            type="checkbox"
-                                                            id={`mapping-${suggestion.requirementId}-${normIndex}`}
-                                                            checked={selectedMappings[suggestion.requirementId.toString()]?.includes(normSuggestion.normId) || false}
-                                                            onChange={() => normSuggestion.normId && handleMappingToggle(suggestion.requirementId, normSuggestion.normId)}
-                                                            disabled={!normSuggestion.normId}
-                                                        />
-                                                        <label className="form-check-label" htmlFor={`mapping-${suggestion.requirementId}-${normIndex}`}>
-                                                            <strong>{normSuggestion.standard}</strong>
-                                                            <span className={`badge ms-2 ${getConfidenceBadgeClass(normSuggestion.confidence)}`}>
-                                                                Confidence: {normSuggestion.confidence}/5
-                                                            </span>
-                                                            {!normSuggestion.normId && (
-                                                                <span className="badge bg-warning ms-2">Norm not found in database</span>
-                                                            )}
-                                                            <div className="text-muted small mt-1">
-                                                                {normSuggestion.reasoning}
+                                                {suggestion.suggestions.length > 0 ? (
+                                                    suggestion.suggestions.map((normSuggestion, normIndex) => {
+                                                        const key = getSuggestionKey(suggestion.requirementId, normSuggestion);
+                                                        const isSelected = selectedKeys.has(key);
+                                                        return (
+                                                            <div key={normIndex} className="form-check mb-3 p-3 border rounded">
+                                                                <input
+                                                                    className="form-check-input"
+                                                                    type="checkbox"
+                                                                    id={`mapping-${key}`}
+                                                                    checked={isSelected}
+                                                                    onChange={() => handleMappingToggle(suggestion.requirementId, normSuggestion)}
+                                                                />
+                                                                <label className="form-check-label w-100" htmlFor={`mapping-${key}`}>
+                                                                    <div className="d-flex justify-content-between align-items-start">
+                                                                        <div>
+                                                                            <strong>{normSuggestion.standard}: {normSuggestion.control}</strong>
+                                                                            <br />
+                                                                            <span className="text-muted">{normSuggestion.controlName}</span>
+                                                                        </div>
+                                                                        <div className="text-end">
+                                                                            <span className={`badge ${getConfidenceBadgeClass(normSuggestion.confidence)}`}>
+                                                                                Confidence: {normSuggestion.confidence}/5
+                                                                            </span>
+                                                                            {!normSuggestion.normId && (
+                                                                                <span className="badge bg-secondary ms-2" title="This norm will be created when applied">
+                                                                                    New
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="text-muted small mt-2 fst-italic">
+                                                                        {normSuggestion.reasoning}
+                                                                    </div>
+                                                                </label>
                                                             </div>
-                                                        </label>
-                                                    </div>
-                                                ))}
+                                                        );
+                                                    })
+                                                ) : (
+                                                    <p className="text-muted mb-0">No suggestions for this requirement.</p>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
@@ -845,13 +938,16 @@ function MappingSuggestionsModal({ suggestions, onApply, onClose }: MappingSugge
                         )}
                     </div>
                     <div className="modal-footer">
+                        <span className="me-auto text-muted">
+                            {selectedCount} suggestion{selectedCount !== 1 ? 's' : ''} selected
+                        </span>
                         <button type="button" className="btn btn-secondary" onClick={onClose}>
                             Close
                         </button>
-                        {totalSuggestions > 0 && (
-                            <button 
-                                type="button" 
-                                className="btn btn-success" 
+                        {totalSuggestionsCount > 0 && (
+                            <button
+                                type="button"
+                                className="btn btn-success"
                                 onClick={handleApplySelected}
                                 disabled={!hasSelections}
                             >
@@ -863,6 +959,12 @@ function MappingSuggestionsModal({ suggestions, onApply, onClose }: MappingSugge
             </div>
         </div>
     );
+}
+
+// Extract version year from standard string (e.g., "ISO 27001:2022" -> "2022")
+function extractVersion(standard: string): string {
+    const match = standard.match(/(\d{4})/);
+    return match ? match[1] : '';
 }
 
 function getConfidenceBadgeClass(confidence: number): string {
