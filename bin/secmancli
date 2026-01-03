@@ -1,4 +1,4 @@
 #!/bin/bash
 # secman - CLI wrapper for secman security management tool
 
-op run --env-file ./secman.env -- ./bin/secmanbackendsupport
+op run --env-file ./secman.env -- ./bin/secmanclisupport
