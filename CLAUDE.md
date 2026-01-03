@@ -195,3 +195,10 @@ fun findStateByValueWithRetry(stateToken: String): Optional<OAuthState> {
 
 ---
 *Last updated: 2025-12-29*
+
+## Active Technologies
+- Kotlin 2.2.21 / Java 21 (backend), TypeScript/React 19 (frontend) + Micronaut 4.10, Hibernate JPA, Axios, Bootstrap 5.3 (058-ai-norm-mapping)
+- MariaDB 11.4 (existing `requirement`, `norm`, `requirement_norm` tables) (058-ai-norm-mapping)
+
+## Recent Changes
+- 058-ai-norm-mapping: Added Kotlin 2.2.21 / Java 21 (backend), TypeScript/React 19 (frontend) + Micronaut 4.10, Hibernate JPA, Axios, Bootstrap 5.3

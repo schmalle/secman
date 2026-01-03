@@ -1,0 +1,4 @@
+#!/bin/bash
+# secman - wrapper for secman security management tool
+ gradle :backendng:run
+
