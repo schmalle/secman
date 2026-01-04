@@ -47,6 +47,7 @@ export default function RequirementManagement() {
     });
     const [selectedUseCaseIds, setSelectedUseCaseIds] = useState<Set<number>>(new Set());
     const [selectedNormIds, setSelectedNormIds] = useState<Set<number>>(new Set());
+    const [useCaseSearchFilter, setUseCaseSearchFilter] = useState('');
     const [normSearchFilter, setNormSearchFilter] = useState('');
     
     // Delete all modal states
@@ -366,6 +367,7 @@ export default function RequirementManagement() {
         });
         setSelectedUseCaseIds(new Set());
         setSelectedNormIds(new Set());
+        setUseCaseSearchFilter('');
         setNormSearchFilter('');
         setSelectedRequirement(null);
         setIsAddingRequirement(false);
@@ -566,22 +568,79 @@ export default function RequirementManagement() {
                                         />
                                     </div>
 
-                                    {/* Use Case Selection */}
+                                    {/* Use Case Selection - Compact with Search */}
                                     <div className="mb-3">
                                         <label className="form-label">Associated Use Cases</label>
-                                        <div className="list-group">
-                                            {allUseCases.map(uc => (
-                                                <label key={uc.id} className="list-group-item">
-                                                    <input
-                                                        className="form-check-input me-1"
-                                                        type="checkbox"
-                                                        value={uc.id}
-                                                        checked={selectedUseCaseIds.has(uc.id)}
-                                                        onChange={() => handleUseCaseChange(uc.id)}
-                                                    />
-                                                    {uc.name}
-                                                </label>
-                                            ))}
+
+                                        {/* Selected use cases display */}
+                                        {selectedUseCaseIds.size > 0 && (
+                                            <div className="mb-2">
+                                                <small className="text-muted">Selected ({selectedUseCaseIds.size}):</small>
+                                                <div className="d-flex flex-wrap gap-1 mt-1">
+                                                    {allUseCases.filter(uc => selectedUseCaseIds.has(uc.id)).map(uc => (
+                                                        <span
+                                                            key={uc.id}
+                                                            className="badge bg-success d-flex align-items-center gap-1"
+                                                            style={{ cursor: 'pointer' }}
+                                                            onClick={() => handleUseCaseChange(uc.id)}
+                                                            title="Click to remove"
+                                                        >
+                                                            {uc.name}
+                                                            <span className="ms-1">&times;</span>
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Search input */}
+                                        <input
+                                            type="text"
+                                            className="form-control form-control-sm mb-2"
+                                            placeholder="Search use cases..."
+                                            value={useCaseSearchFilter}
+                                            onChange={(e) => setUseCaseSearchFilter(e.target.value)}
+                                        />
+
+                                        {/* Scrollable use case list */}
+                                        <div
+                                            className="border rounded"
+                                            style={{ maxHeight: '200px', overflowY: 'auto' }}
+                                        >
+                                            {allUseCases
+                                                .filter(uc => {
+                                                    if (!useCaseSearchFilter) return !selectedUseCaseIds.has(uc.id);
+                                                    const searchLower = useCaseSearchFilter.toLowerCase();
+                                                    return uc.name.toLowerCase().includes(searchLower) && !selectedUseCaseIds.has(uc.id);
+                                                })
+                                                .map(uc => (
+                                                    <div
+                                                        key={uc.id}
+                                                        className="form-check px-3 py-1 border-bottom"
+                                                        style={{ fontSize: '0.875rem' }}
+                                                    >
+                                                        <input
+                                                            className="form-check-input"
+                                                            type="checkbox"
+                                                            id={`usecase-${uc.id}`}
+                                                            checked={selectedUseCaseIds.has(uc.id)}
+                                                            onChange={() => handleUseCaseChange(uc.id)}
+                                                        />
+                                                        <label
+                                                            className="form-check-label"
+                                                            htmlFor={`usecase-${uc.id}`}
+                                                            style={{ cursor: 'pointer' }}
+                                                        >
+                                                            {uc.name}
+                                                        </label>
+                                                    </div>
+                                                ))
+                                            }
+                                            {allUseCases.filter(uc => !selectedUseCaseIds.has(uc.id) && (!useCaseSearchFilter || uc.name.toLowerCase().includes(useCaseSearchFilter.toLowerCase()))).length === 0 && (
+                                                <div className="text-muted text-center py-2" style={{ fontSize: '0.875rem' }}>
+                                                    {useCaseSearchFilter ? 'No matching use cases' : 'All use cases selected'}
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
 
