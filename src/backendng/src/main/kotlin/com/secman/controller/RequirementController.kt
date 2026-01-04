@@ -542,51 +542,73 @@ open class RequirementController(
         val requirementsByChapter = requirements.groupBy { it.chapter ?: "No Chapter" }
         var requirementNumber = 1
         
+        var isFirstChapter = true
         for ((chapter, chapterRequirements) in requirementsByChapter) {
-            // Chapter heading
+            // Page break before each chapter (first chapter already has one from TOC)
+            if (!isFirstChapter) {
+                document.createParagraph().createRun().addBreak(org.apache.poi.xwpf.usermodel.BreakType.PAGE)
+            }
+            isFirstChapter = false
+
+            // Chapter heading with Heading 1 style for TOC
             val chapterParagraph = document.createParagraph()
+            chapterParagraph.style = "Heading1"
             val chapterRun = chapterParagraph.createRun()
-            chapterRun.setText("Chapter: $chapter")
+            chapterRun.setText(chapter)
             chapterRun.fontSize = 16
             chapterRun.isBold = true
-            
+
             document.createParagraph() // Empty line
             
             for (requirement in chapterRequirements) {
-                // Requirement header with light blue highlighting
+                // Requirement header with light green background
                 val reqHeaderParagraph = document.createParagraph()
+                // Set light green background shading
+                val ctp = reqHeaderParagraph.ctp
+                val ppr = if (ctp.isSetPPr) ctp.pPr else ctp.addNewPPr()
+                val shd = if (ppr.isSetShd) ppr.shd else ppr.addNewShd()
+                shd.fill = "C1D5C0"  // Soft sage green (Scandinavian style)
+
                 val reqHeaderRun = reqHeaderParagraph.createRun()
-                reqHeaderRun.setText("$requirementNumber. ${requirement.shortreq}")
+                reqHeaderRun.setText("Req $requirementNumber: ${requirement.shortreq}")
                 reqHeaderRun.fontSize = 12
                 reqHeaderRun.isBold = true
-                reqHeaderRun.color = "0066CC"
                 
-                // Details
+                // Details - no label, content follows directly after header
                 requirement.details?.let { details ->
                     val detailsParagraph = document.createParagraph()
                     val detailsRun = detailsParagraph.createRun()
-                    detailsRun.setText("Details: $details")
+                    detailsRun.setText(details)
                 }
-                
-                // Motivation
+
+                // Motivation - label bold, content regular
                 requirement.motivation?.let { motivation ->
                     val motivationParagraph = document.createParagraph()
-                    val motivationRun = motivationParagraph.createRun()
-                    motivationRun.setText("Motivation: $motivation")
+                    val motivationLabelRun = motivationParagraph.createRun()
+                    motivationLabelRun.setText("Motivation: ")
+                    motivationLabelRun.isBold = true
+                    val motivationValueRun = motivationParagraph.createRun()
+                    motivationValueRun.setText(motivation)
                 }
-                
-                // Example
+
+                // Example - label bold, content regular
                 requirement.example?.let { example ->
                     val exampleParagraph = document.createParagraph()
-                    val exampleRun = exampleParagraph.createRun()
-                    exampleRun.setText("Example: $example")
+                    val exampleLabelRun = exampleParagraph.createRun()
+                    exampleLabelRun.setText("Example: ")
+                    exampleLabelRun.isBold = true
+                    val exampleValueRun = exampleParagraph.createRun()
+                    exampleValueRun.setText(example)
                 }
-                
-                // Norm reference
+
+                // Norm reference - label bold, content regular
                 requirement.norm?.let { norm ->
                     val normParagraph = document.createParagraph()
-                    val normRun = normParagraph.createRun()
-                    normRun.setText("Norm Reference: $norm")
+                    val normLabelRun = normParagraph.createRun()
+                    normLabelRun.setText("Norm Reference: ")
+                    normLabelRun.isBold = true
+                    val normValueRun = normParagraph.createRun()
+                    normValueRun.setText(norm)
                 }
                 
                 document.createParagraph() // Empty line between requirements
