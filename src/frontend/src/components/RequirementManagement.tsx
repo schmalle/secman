@@ -47,6 +47,7 @@ export default function RequirementManagement() {
     });
     const [selectedUseCaseIds, setSelectedUseCaseIds] = useState<Set<number>>(new Set());
     const [selectedNormIds, setSelectedNormIds] = useState<Set<number>>(new Set());
+    const [normSearchFilter, setNormSearchFilter] = useState('');
     
     // Delete all modal states
     const [showFirstDeleteModal, setShowFirstDeleteModal] = useState(false);
@@ -365,6 +366,7 @@ export default function RequirementManagement() {
         });
         setSelectedUseCaseIds(new Set());
         setSelectedNormIds(new Set());
+        setNormSearchFilter('');
         setSelectedRequirement(null);
         setIsAddingRequirement(false);
     };
@@ -583,22 +585,80 @@ export default function RequirementManagement() {
                                         </div>
                                     </div>
 
-                                    {/* Norm Selection */}
+                                    {/* Norm Selection - Compact with Search */}
                                     <div className="mb-3">
                                         <label className="form-label">Associated Norms</label>
-                                        <div className="list-group">
-                                            {allNorms.map(norm => (
-                                                <label key={norm.id} className="list-group-item">
-                                                    <input
-                                                        className="form-check-input me-1"
-                                                        type="checkbox"
-                                                        value={norm.id}
-                                                        checked={selectedNormIds.has(norm.id)}
-                                                        onChange={() => handleNormChange(norm.id)}
-                                                    />
-                                                    {norm.name} {norm.version && `(${norm.version})`} {norm.year && `- ${norm.year}`}
-                                                </label>
-                                            ))}
+
+                                        {/* Selected norms display */}
+                                        {selectedNormIds.size > 0 && (
+                                            <div className="mb-2">
+                                                <small className="text-muted">Selected ({selectedNormIds.size}):</small>
+                                                <div className="d-flex flex-wrap gap-1 mt-1">
+                                                    {allNorms.filter(n => selectedNormIds.has(n.id)).map(norm => (
+                                                        <span
+                                                            key={norm.id}
+                                                            className="badge bg-primary d-flex align-items-center gap-1"
+                                                            style={{ cursor: 'pointer' }}
+                                                            onClick={() => handleNormChange(norm.id)}
+                                                            title="Click to remove"
+                                                        >
+                                                            {norm.name}{norm.version && ` (${norm.version})`}
+                                                            <span className="ms-1">&times;</span>
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Search input */}
+                                        <input
+                                            type="text"
+                                            className="form-control form-control-sm mb-2"
+                                            placeholder="Search norms..."
+                                            value={normSearchFilter}
+                                            onChange={(e) => setNormSearchFilter(e.target.value)}
+                                        />
+
+                                        {/* Scrollable norm list */}
+                                        <div
+                                            className="border rounded"
+                                            style={{ maxHeight: '200px', overflowY: 'auto' }}
+                                        >
+                                            {allNorms
+                                                .filter(norm => {
+                                                    if (!normSearchFilter) return !selectedNormIds.has(norm.id);
+                                                    const searchLower = normSearchFilter.toLowerCase();
+                                                    const normText = `${norm.name} ${norm.version || ''} ${norm.year || ''}`.toLowerCase();
+                                                    return normText.includes(searchLower) && !selectedNormIds.has(norm.id);
+                                                })
+                                                .map(norm => (
+                                                    <div
+                                                        key={norm.id}
+                                                        className="form-check px-3 py-1 border-bottom"
+                                                        style={{ fontSize: '0.875rem' }}
+                                                    >
+                                                        <input
+                                                            className="form-check-input"
+                                                            type="checkbox"
+                                                            id={`norm-${norm.id}`}
+                                                            checked={selectedNormIds.has(norm.id)}
+                                                            onChange={() => handleNormChange(norm.id)}
+                                                        />
+                                                        <label
+                                                            className="form-check-label"
+                                                            htmlFor={`norm-${norm.id}`}
+                                                            style={{ cursor: 'pointer' }}
+                                                        >
+                                                            {norm.name}{norm.version && ` (${norm.version})`}{norm.year && ` - ${norm.year}`}
+                                                        </label>
+                                                    </div>
+                                                ))
+                                            }
+                                            {allNorms.filter(n => !selectedNormIds.has(n.id) && (!normSearchFilter || `${n.name} ${n.version || ''} ${n.year || ''}`.toLowerCase().includes(normSearchFilter.toLowerCase()))).length === 0 && (
+                                                <div className="text-muted text-center py-2" style={{ fontSize: '0.875rem' }}>
+                                                    {normSearchFilter ? 'No matching norms' : 'All norms selected'}
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
 
