@@ -45,7 +45,18 @@ const handleRowClick = (vulnerabilityId: string) => {
   console.log(`Navigate to vulnerability details: ${vulnerabilityId}`);
 };
 
-export default function MostCommonVulnerabilities() {
+/**
+ * Props for MostCommonVulnerabilities component
+ *
+ * Feature: 059-vuln-stats-domain-filter
+ * Task: T012 [US1]
+ */
+interface MostCommonVulnerabilitiesProps {
+  /** Optional AD domain filter (null = all domains) */
+  domain?: string | null;
+}
+
+export default function MostCommonVulnerabilities({ domain }: MostCommonVulnerabilitiesProps = {}) {
   const [data, setData] = useState<MostCommonVulnerabilityDto[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -55,7 +66,7 @@ export default function MostCommonVulnerabilities() {
       try {
         setLoading(true);
         setError(null);
-        const result = await vulnerabilityStatisticsApi.getMostCommonVulnerabilities();
+        const result = await vulnerabilityStatisticsApi.getMostCommonVulnerabilities(domain);
         setData(result);
       } catch (err) {
         console.error('Error fetching most common vulnerabilities:', err);
@@ -66,7 +77,7 @@ export default function MostCommonVulnerabilities() {
     };
 
     fetchData();
-  }, []);
+  }, [domain]); // Re-fetch when domain changes
 
   // Loading state
   if (loading) {

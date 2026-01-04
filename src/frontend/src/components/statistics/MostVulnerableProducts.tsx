@@ -13,7 +13,18 @@
 import React, { useEffect, useState } from 'react';
 import { vulnerabilityStatisticsApi, type MostVulnerableProductDto } from '../../services/api/vulnerabilityStatisticsApi';
 
-export default function MostVulnerableProducts() {
+/**
+ * Props for MostVulnerableProducts component
+ *
+ * Feature: 059-vuln-stats-domain-filter
+ * Task: T013 [US1]
+ */
+interface MostVulnerableProductsProps {
+  /** Optional AD domain filter (null = all domains) */
+  domain?: string | null;
+}
+
+export default function MostVulnerableProducts({ domain }: MostVulnerableProductsProps = {}) {
   const [data, setData] = useState<MostVulnerableProductDto[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -23,7 +34,7 @@ export default function MostVulnerableProducts() {
       try {
         setLoading(true);
         setError(null);
-        const result = await vulnerabilityStatisticsApi.getMostVulnerableProducts();
+        const result = await vulnerabilityStatisticsApi.getMostVulnerableProducts(domain);
         setData(result);
       } catch (err) {
         console.error('Error fetching most vulnerable products:', err);
@@ -34,7 +45,7 @@ export default function MostVulnerableProducts() {
     };
 
     fetchData();
-  }, []);
+  }, [domain]); // Re-fetch when domain changes
 
   // Loading state
   if (loading) {

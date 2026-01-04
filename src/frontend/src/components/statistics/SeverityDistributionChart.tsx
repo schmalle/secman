@@ -44,7 +44,18 @@ const handleSegmentClick = (severity: string) => {
   // Future: window.location.href = `/vulnerabilities?severity=${severity}`;
 };
 
-export default function SeverityDistributionChart() {
+/**
+ * Props for SeverityDistributionChart component
+ *
+ * Feature: 059-vuln-stats-domain-filter
+ * Task: T014 [US1]
+ */
+interface SeverityDistributionChartProps {
+  /** Optional AD domain filter (null = all domains) */
+  domain?: string | null;
+}
+
+export default function SeverityDistributionChart({ domain }: SeverityDistributionChartProps = {}) {
   const [data, setData] = useState<SeverityDistributionDto | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -54,7 +65,7 @@ export default function SeverityDistributionChart() {
       try {
         setLoading(true);
         setError(null);
-        const result = await vulnerabilityStatisticsApi.getSeverityDistribution();
+        const result = await vulnerabilityStatisticsApi.getSeverityDistribution(domain);
         setData(result);
       } catch (err) {
         console.error('Error fetching severity distribution:', err);
@@ -65,7 +76,7 @@ export default function SeverityDistributionChart() {
     };
 
     fetchData();
-  }, []);
+  }, [domain]); // Re-fetch when domain changes
 
   // Loading state
   if (loading) {
