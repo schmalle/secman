@@ -1,0 +1,215 @@
+openapi: 3.0.3
+info:
+  title: Vulnerability Statistics Domain Filter API
+  description: |
+    Extension to the vulnerability statistics API adding domain filtering capability.
+    Feature: 059-vuln-stats-domain-filter
+  version: 1.0.0
+
+paths:
+  /api/vulnerability-statistics/available-domains:
+    get:
+      summary: Get available domains for filtering
+      description: |
+        Returns list of unique Active Directory domains from assets the user has access to.
+        Used to populate the domain selector dropdown.
+
+        Feature: 059-vuln-stats-domain-filter
+        Spec: FR-002
+      operationId: getAvailableDomains
+      tags:
+        - Vulnerability Statistics
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of available domains
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AvailableDomainsResponse'
+        '401':
+          description: Unauthorized - authentication required
+        '500':
+          description: Internal server error
+
+  /api/vulnerability-statistics/most-common:
+    get:
+      summary: Get most common vulnerabilities (with optional domain filter)
+      description: |
+        Returns top 10 most common vulnerabilities.
+        Optionally filter by Active Directory domain.
+
+        Feature: 059-vuln-stats-domain-filter (extends 036-vuln-stats-lense)
+        Spec: FR-004
+      operationId: getMostCommonVulnerabilities
+      tags:
+        - Vulnerability Statistics
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DomainFilter'
+      responses:
+        '200':
+          description: List of most common vulnerabilities
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MostCommonVulnerabilityDto'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Internal server error
+
+  /api/vulnerability-statistics/most-vulnerable-products:
+    get:
+      summary: Get most vulnerable products (with optional domain filter)
+      description: |
+        Returns top 10 products ranked by vulnerability count.
+        Optionally filter by Active Directory domain.
+
+        Feature: 059-vuln-stats-domain-filter (extends 036-vuln-stats-lense)
+        Spec: FR-004
+      operationId: getMostVulnerableProducts
+      tags:
+        - Vulnerability Statistics
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DomainFilter'
+      responses:
+        '200':
+          description: List of most vulnerable products
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MostVulnerableProductDto'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Internal server error
+
+  /api/vulnerability-statistics/severity-distribution:
+    get:
+      summary: Get severity distribution (with optional domain filter)
+      description: |
+        Returns vulnerability counts by severity level.
+        Optionally filter by Active Directory domain.
+
+        Feature: 059-vuln-stats-domain-filter (extends 036-vuln-stats-lense)
+        Spec: FR-004
+      operationId: getSeverityDistribution
+      tags:
+        - Vulnerability Statistics
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DomainFilter'
+      responses:
+        '200':
+          description: Severity distribution statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SeverityDistributionDto'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Internal server error
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    DomainFilter:
+      name: domain
+      in: query
+      required: false
+      description: |
+        Active Directory domain to filter by.
+        If omitted, returns statistics for all accessible assets.
+        Case-insensitive (normalized to lowercase).
+      schema:
+        type: string
+        example: "ms.home"
+
+  schemas:
+    AvailableDomainsResponse:
+      type: object
+      required:
+        - domains
+        - totalAssetCount
+      properties:
+        domains:
+          type: array
+          description: Sorted list of unique domain names (lowercase)
+          items:
+            type: string
+          example: ["contoso.local", "fabrikam.com", "ms.home"]
+        totalAssetCount:
+          type: integer
+          description: Total count of assets with domains
+          example: 150
+
+    MostCommonVulnerabilityDto:
+      type: object
+      properties:
+        vulnerabilityId:
+          type: string
+          description: CVE identifier
+          example: "CVE-2025-54100"
+        cvssSeverity:
+          type: string
+          enum: [CRITICAL, HIGH, MEDIUM, LOW, UNKNOWN]
+        occurrenceCount:
+          type: integer
+        affectedAssetCount:
+          type: integer
+
+    MostVulnerableProductDto:
+      type: object
+      properties:
+        product:
+          type: string
+        vulnerabilityCount:
+          type: integer
+        affectedAssetCount:
+          type: integer
+        criticalCount:
+          type: integer
+        highCount:
+          type: integer
+
+    SeverityDistributionDto:
+      type: object
+      properties:
+        critical:
+          type: integer
+        high:
+          type: integer
+        medium:
+          type: integer
+        low:
+          type: integer
+        unknown:
+          type: integer
+        total:
+          type: integer
+        criticalPercentage:
+          type: number
+        highPercentage:
+          type: number
+        mediumPercentage:
+          type: number
+        lowPercentage:
+          type: number
+        unknownPercentage:
+          type: number
