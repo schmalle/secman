@@ -23,6 +23,22 @@ export interface NormMappingSuggestionResponse {
   suggestions: RequirementSuggestions[];
   totalRequirementsAnalyzed: number;
   totalSuggestionsGenerated: number;
+  // Partial failure tracking
+  batchesProcessed?: number;
+  batchesFailed?: number;
+  failedBatchErrors?: BatchFailureInfo[];
+  processingTimeMs?: number;
+  partialSuccess?: boolean;
+}
+
+/**
+ * Info about a failed batch
+ */
+export interface BatchFailureInfo {
+  batchNumber: number;
+  requirementCount: number;
+  errorMessage: string;
+  errorType: 'TIMEOUT' | 'API_ERROR' | 'PARSE_ERROR' | 'UNKNOWN';
 }
 
 /**
@@ -85,6 +101,27 @@ export interface UnmappedCountResponse {
 export interface NormMappingErrorResponse {
   error: string;
   details?: string | null;
+}
+
+/**
+ * Response for auto-apply mapping operation
+ */
+export interface AutoApplyMappingsResponse {
+  totalRequirementsAnalyzed: number;
+  requirementsSuccessfullyMapped: number;
+  requirementsFailed: number;
+  totalMappingsApplied: number;
+  newNormsCreated: number;
+  existingNormsLinked: number;
+  failedRequirements: FailedRequirementInfo[];
+  processingTimeMs: number;
+}
+
+export interface FailedRequirementInfo {
+  requirementId: number;
+  requirementTitle: string;
+  errorMessage: string;
+  errorType: 'TIMEOUT' | 'API_ERROR' | 'PARSE_ERROR' | 'UNKNOWN';
 }
 
 // ========== API Functions ==========

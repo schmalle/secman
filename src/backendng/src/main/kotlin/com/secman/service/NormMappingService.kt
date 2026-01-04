@@ -31,8 +31,8 @@ open class NormMappingService(
         // Default to Claude 3 Opus if not configured - uses OpenRouter model naming
         const val DEFAULT_MODEL = "anthropic/claude-3-opus"
         const val MAX_REQUIREMENT_TEXT_LENGTH = 500
-        // Process requirements in batches to avoid timeout
-        const val BATCH_SIZE = 10
+        // Process one requirement per API call to avoid timeout
+        const val BATCH_SIZE = 1
     }
 
     // OpenRouter API DTOs
@@ -316,6 +316,7 @@ Rules:
      * Processes requirements in batches to avoid API timeout
      */
     fun suggestMappings(request: NormMappingSuggestionRequest? = null): NormMappingSuggestionResponse {
+        val startTime = System.currentTimeMillis()
         logger.info("Starting norm mapping suggestion process")
 
         // Get requirements to analyze
@@ -332,7 +333,12 @@ Rules:
             return NormMappingSuggestionResponse(
                 suggestions = emptyList(),
                 totalRequirementsAnalyzed = 0,
-                totalSuggestionsGenerated = 0
+                totalSuggestionsGenerated = 0,
+                batchesProcessed = 0,
+                batchesFailed = 0,
+                failedBatchErrors = emptyList(),
+                processingTimeMs = System.currentTimeMillis() - startTime,
+                partialSuccess = true
             )
         }
 
@@ -340,7 +346,9 @@ Rules:
 
         // Process requirements in batches to avoid timeout
         val allSuggestions = mutableListOf<RequirementSuggestions>()
+        val failedBatches = mutableListOf<BatchFailureInfo>()
         val batches = requirements.chunked(BATCH_SIZE)
+        var successfulBatches = 0
 
         for ((batchIndex, batch) in batches.withIndex()) {
             logger.info("Processing batch {}/{} ({} requirements)", batchIndex + 1, batches.size, batch.size)
@@ -352,25 +360,221 @@ Rules:
 
                 val batchSuggestions = parseAIResponse(aiResponse, batch)
                 allSuggestions.addAll(batchSuggestions)
+                successfulBatches++
 
                 logger.info("Batch {}/{} completed: {} suggestions generated",
                     batchIndex + 1, batches.size, batchSuggestions.sumOf { it.suggestions.size })
-            } catch (e: Exception) {
+            } catch (e: io.micronaut.http.client.exceptions.ReadTimeoutException) {
+                logger.error("Batch {}/{} timeout: {}", batchIndex + 1, batches.size, e.message)
+                failedBatches.add(BatchFailureInfo(
+                    batchNumber = batchIndex + 1,
+                    requirementCount = batch.size,
+                    errorMessage = "AI service timeout after read timeout",
+                    errorType = "TIMEOUT"
+                ))
+            } catch (e: RuntimeException) {
                 logger.error("Batch {}/{} failed: {}", batchIndex + 1, batches.size, e.message)
-                // Continue with next batch instead of failing entirely
-                // This allows partial results to be returned
+                val errorType = when {
+                    e.message?.contains("timeout", ignoreCase = true) == true -> "TIMEOUT"
+                    e.message?.contains("AI service", ignoreCase = true) == true -> "API_ERROR"
+                    e.message?.contains("parse", ignoreCase = true) == true -> "PARSE_ERROR"
+                    else -> "UNKNOWN"
+                }
+                failedBatches.add(BatchFailureInfo(
+                    batchNumber = batchIndex + 1,
+                    requirementCount = batch.size,
+                    errorMessage = e.message ?: "Unknown error",
+                    errorType = errorType
+                ))
+            } catch (e: Exception) {
+                logger.error("Batch {}/{} unexpected error: {}", batchIndex + 1, batches.size, e.message)
+                failedBatches.add(BatchFailureInfo(
+                    batchNumber = batchIndex + 1,
+                    requirementCount = batch.size,
+                    errorMessage = e.message ?: "Unexpected error",
+                    errorType = "UNKNOWN"
+                ))
             }
         }
 
         val totalSuggestions = allSuggestions.sumOf { it.suggestions.size }
-        logger.info("Generated {} suggestions for {} requirements across {} batches",
-            totalSuggestions, allSuggestions.size, batches.size)
+        val processingTime = System.currentTimeMillis() - startTime
+
+        logger.info("Generated {} suggestions for {} requirements across {} batches ({} failed) in {}ms",
+            totalSuggestions, allSuggestions.size, batches.size, failedBatches.size, processingTime)
 
         return NormMappingSuggestionResponse(
             suggestions = allSuggestions,
             totalRequirementsAnalyzed = requirements.size,
-            totalSuggestionsGenerated = totalSuggestions
+            totalSuggestionsGenerated = totalSuggestions,
+            batchesProcessed = successfulBatches,
+            batchesFailed = failedBatches.size,
+            failedBatchErrors = failedBatches,
+            processingTimeMs = processingTime,
+            partialSuccess = successfulBatches > 0
         )
+    }
+
+    /**
+     * Process requirements one by one, get AI suggestions, and auto-apply mappings.
+     * This method is resilient - if one requirement fails, others continue processing.
+     */
+    @Transactional
+    open fun suggestAndApplyMappings(request: NormMappingSuggestionRequest? = null): AutoApplyMappingsResponse {
+        val startTime = System.currentTimeMillis()
+        logger.info("Starting auto-apply norm mapping process")
+
+        // Get requirements to analyze
+        val requirements = if (request?.requirementIds != null && request.requirementIds.isNotEmpty()) {
+            request.requirementIds.mapNotNull { id ->
+                requirementRepository.findById(id).orElse(null)
+            }.filter { it.norms.isEmpty() }
+        } else {
+            getUnmappedRequirements()
+        }
+
+        if (requirements.isEmpty()) {
+            logger.info("No unmapped requirements found")
+            return AutoApplyMappingsResponse(
+                totalRequirementsAnalyzed = 0,
+                requirementsSuccessfullyMapped = 0,
+                requirementsFailed = 0,
+                totalMappingsApplied = 0,
+                newNormsCreated = 0,
+                existingNormsLinked = 0,
+                failedRequirements = emptyList(),
+                processingTimeMs = System.currentTimeMillis() - startTime
+            )
+        }
+
+        logger.info("Processing {} unmapped requirements one by one with auto-apply", requirements.size)
+
+        val failedRequirements = mutableListOf<FailedRequirementInfo>()
+        var successfullyMapped = 0
+        var totalMappingsApplied = 0
+        var newNormsCreated = 0
+        var existingNormsLinked = 0
+
+        for ((index, requirement) in requirements.withIndex()) {
+            logger.info("Processing requirement {}/{}: {} (ID: {})",
+                index + 1, requirements.size, requirement.shortreq.take(50), requirement.id)
+
+            try {
+                // Build prompt for single requirement
+                val prompt = buildAIPrompt(listOf(requirement))
+                val aiResponse = callOpenRouter(prompt)
+                    ?: throw RuntimeException("No response from AI service")
+
+                // Parse response
+                val suggestions = parseAIResponse(aiResponse, listOf(requirement))
+
+                if (suggestions.isNotEmpty() && suggestions[0].suggestions.isNotEmpty()) {
+                    // Auto-apply all suggestions with confidence >= 3
+                    val highConfidenceSuggestions = suggestions[0].suggestions.filter { it.confidence >= 3 }
+
+                    for (suggestion in highConfidenceSuggestions) {
+                        val norm = findOrCreateNormInternal(suggestion.standard, suggestion.control)
+
+                        // Check if norm was newly created
+                        if (suggestion.normId == null) {
+                            newNormsCreated++
+                        } else {
+                            existingNormsLinked++
+                        }
+
+                        // Add norm to requirement if not already present
+                        if (!requirement.norms.any { it.id == norm.id }) {
+                            requirement.norms.add(norm)
+                            totalMappingsApplied++
+                        }
+                    }
+
+                    // Save the updated requirement
+                    if (highConfidenceSuggestions.isNotEmpty()) {
+                        requirementRepository.save(requirement)
+                        successfullyMapped++
+                        logger.info("Requirement {}/{} mapped with {} norms",
+                            index + 1, requirements.size, highConfidenceSuggestions.size)
+                    }
+                }
+            } catch (e: io.micronaut.http.client.exceptions.ReadTimeoutException) {
+                logger.error("Requirement {}/{} (ID: {}) timeout: {}",
+                    index + 1, requirements.size, requirement.id, e.message)
+                failedRequirements.add(FailedRequirementInfo(
+                    requirementId = requirement.id!!,
+                    requirementTitle = requirement.shortreq.take(100),
+                    errorMessage = "AI service timeout",
+                    errorType = "TIMEOUT"
+                ))
+            } catch (e: RuntimeException) {
+                logger.error("Requirement {}/{} (ID: {}) failed: {}",
+                    index + 1, requirements.size, requirement.id, e.message)
+                val errorType = when {
+                    e.message?.contains("timeout", ignoreCase = true) == true -> "TIMEOUT"
+                    e.message?.contains("AI service", ignoreCase = true) == true -> "API_ERROR"
+                    e.message?.contains("parse", ignoreCase = true) == true -> "PARSE_ERROR"
+                    else -> "UNKNOWN"
+                }
+                failedRequirements.add(FailedRequirementInfo(
+                    requirementId = requirement.id!!,
+                    requirementTitle = requirement.shortreq.take(100),
+                    errorMessage = e.message ?: "Unknown error",
+                    errorType = errorType
+                ))
+            } catch (e: Exception) {
+                logger.error("Requirement {}/{} (ID: {}) unexpected error: {}",
+                    index + 1, requirements.size, requirement.id, e.message)
+                failedRequirements.add(FailedRequirementInfo(
+                    requirementId = requirement.id!!,
+                    requirementTitle = requirement.shortreq.take(100),
+                    errorMessage = e.message ?: "Unexpected error",
+                    errorType = "UNKNOWN"
+                ))
+            }
+        }
+
+        val processingTime = System.currentTimeMillis() - startTime
+
+        logger.info("Auto-apply complete: {} mapped, {} failed, {} total mappings in {}ms",
+            successfullyMapped, failedRequirements.size, totalMappingsApplied, processingTime)
+
+        return AutoApplyMappingsResponse(
+            totalRequirementsAnalyzed = requirements.size,
+            requirementsSuccessfullyMapped = successfullyMapped,
+            requirementsFailed = failedRequirements.size,
+            totalMappingsApplied = totalMappingsApplied,
+            newNormsCreated = newNormsCreated,
+            existingNormsLinked = existingNormsLinked,
+            failedRequirements = failedRequirements,
+            processingTimeMs = processingTime
+        )
+    }
+
+    /**
+     * Internal method to find or create norm without opening new transaction
+     */
+    private fun findOrCreateNormInternal(standard: String, control: String): Norm {
+        val normName = "$standard: $control"
+
+        // Check if norm exists
+        val existing = normRepository.findByName(normName)
+        if (existing.isPresent) {
+            return existing.get()
+        }
+
+        // Extract year from standard if present
+        val yearMatch = Regex("(\\d{4})").find(standard)
+        val year = yearMatch?.value?.toIntOrNull()
+
+        // Create new norm
+        val newNorm = Norm(
+            name = normName,
+            version = yearMatch?.value ?: "",
+            year = year
+        )
+
+        logger.info("Creating new norm: {}", normName)
+        return normRepository.save(newNorm)
     }
 
     /**

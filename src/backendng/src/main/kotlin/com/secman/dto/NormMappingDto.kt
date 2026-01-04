@@ -16,7 +16,21 @@ data class NormMappingSuggestionRequest(
 data class NormMappingSuggestionResponse(
     val suggestions: List<RequirementSuggestions>,
     val totalRequirementsAnalyzed: Int,
-    val totalSuggestionsGenerated: Int
+    val totalSuggestionsGenerated: Int,
+    // Partial failure tracking
+    val batchesProcessed: Int = 0,
+    val batchesFailed: Int = 0,
+    val failedBatchErrors: List<BatchFailureInfo> = emptyList(),
+    val processingTimeMs: Long = 0,
+    val partialSuccess: Boolean = true  // true if at least some batches succeeded
+)
+
+@Serdeable
+data class BatchFailureInfo(
+    val batchNumber: Int,
+    val requirementCount: Int,
+    val errorMessage: String,
+    val errorType: String  // "TIMEOUT", "API_ERROR", "PARSE_ERROR", "UNKNOWN"
 )
 
 @Serdeable
@@ -65,4 +79,28 @@ data class UnmappedCountResponse(
 data class NormMappingErrorResponse(
     val error: String,
     val details: String? = null
+)
+
+/**
+ * Response for auto-apply mapping operation.
+ * Processes requirements one by one and automatically applies mappings.
+ */
+@Serdeable
+data class AutoApplyMappingsResponse(
+    val totalRequirementsAnalyzed: Int,
+    val requirementsSuccessfullyMapped: Int,
+    val requirementsFailed: Int,
+    val totalMappingsApplied: Int,
+    val newNormsCreated: Int,
+    val existingNormsLinked: Int,
+    val failedRequirements: List<FailedRequirementInfo> = emptyList(),
+    val processingTimeMs: Long = 0
+)
+
+@Serdeable
+data class FailedRequirementInfo(
+    val requirementId: Long,
+    val requirementTitle: String,
+    val errorMessage: String,
+    val errorType: String  // "TIMEOUT", "API_ERROR", "PARSE_ERROR", "UNKNOWN"
 )

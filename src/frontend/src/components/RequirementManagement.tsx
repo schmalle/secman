@@ -62,6 +62,11 @@ export default function RequirementManagement() {
     const [showMappingModal, setShowMappingModal] = useState(false);
     const [mappingSuccess, setMappingSuccess] = useState<string | null>(null);
     const [mappingError, setMappingError] = useState<string | null>(null);
+    const [partialFailureWarning, setPartialFailureWarning] = useState<{
+        batchesFailed: number;
+        totalBatches: number;
+        errors: Array<{ batchNumber: number; errorType: string; errorMessage: string }>;
+    } | null>(null);
 
     // Fetch requirements, use cases, and norms from backend
     useEffect(() => {
@@ -245,18 +250,44 @@ export default function RequirementManagement() {
         setIsMappingInProgress(true);
         setMappingError(null);
         setMappingSuccess(null);
+        setPartialFailureWarning(null);
 
         try {
-            // Get AI-powered mapping suggestions
-            const response = await authenticatedPost('/api/norm-mapping/suggest', {});
+            // Use auto-apply endpoint - processes one requirement at a time and auto-applies mappings
+            const response = await authenticatedPost('/api/norm-mapping/auto-apply', {});
 
             if (response.ok) {
                 const data = await response.json();
+
                 if (data.totalRequirementsAnalyzed === 0) {
                     setMappingSuccess('All requirements already have norm mappings.');
                 } else {
-                    setMappingSuggestions(data);
-                    setShowMappingModal(true);
+                    // Build success message
+                    const timeSeconds = (data.processingTimeMs / 1000).toFixed(1);
+                    let message = `Successfully mapped ${data.requirementsSuccessfullyMapped} of ${data.totalRequirementsAnalyzed} requirements `;
+                    message += `with ${data.totalMappingsApplied} norm mappings in ${timeSeconds}s.`;
+
+                    if (data.newNormsCreated > 0) {
+                        message += ` Created ${data.newNormsCreated} new norms.`;
+                    }
+
+                    setMappingSuccess(message);
+
+                    // Show partial failure warning if some requirements failed
+                    if (data.requirementsFailed > 0) {
+                        setPartialFailureWarning({
+                            batchesFailed: data.requirementsFailed,
+                            totalBatches: data.totalRequirementsAnalyzed,
+                            errors: data.failedRequirements?.map((f: any) => ({
+                                batchNumber: f.requirementId,
+                                errorType: f.errorType,
+                                errorMessage: f.errorMessage
+                            })) || []
+                        });
+                    }
+
+                    // Refresh the requirements list to show updated mappings
+                    fetchRequirements();
                 }
             } else {
                 const error = await response.json();
@@ -265,12 +296,19 @@ export default function RequirementManagement() {
                 } else if (response.status === 503) {
                     setMappingError('AI service is temporarily unavailable. Please try again later.');
                 } else {
-                    setMappingError(error.error || 'Failed to get mapping suggestions');
+                    setMappingError(error.error || 'Failed to apply mappings');
                 }
             }
         } catch (error) {
-            console.error('Error getting norm mapping suggestions:', error);
-            setMappingError('Error getting mapping suggestions. Please try again.');
+            console.error('Error during auto-apply norm mapping:', error);
+            if (error instanceof Error && error.message.includes('timeout')) {
+                setMappingError(
+                    'Request timed out while processing requirements. ' +
+                    'The AI service may be overloaded. Please try again later.'
+                );
+            } else {
+                setMappingError('Error applying mappings. Please try again.');
+            }
         } finally {
             setIsMappingInProgress(false);
         }
@@ -407,6 +445,36 @@ export default function RequirementManagement() {
                             <i className="bi bi-exclamation-triangle me-2"></i>
                             {mappingError}
                             <button type="button" className="btn-close" onClick={() => setMappingError(null)} aria-label="Close"></button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {partialFailureWarning && (
+                <div className="row mb-3">
+                    <div className="col-12">
+                        <div className="alert alert-warning alert-dismissible fade show" role="alert">
+                            <i className="bi bi-exclamation-triangle me-2"></i>
+                            <strong>Partial Results:</strong> {partialFailureWarning.batchesFailed} of{' '}
+                            {partialFailureWarning.totalBatches} requirements failed to process.
+                            {partialFailureWarning.errors.length > 0 && (
+                                <details className="mt-2">
+                                    <summary style={{ cursor: 'pointer' }}>View failure details</summary>
+                                    <ul className="mb-0 mt-2 small">
+                                        {partialFailureWarning.errors.map((err, idx) => (
+                                            <li key={idx}>
+                                                Requirement #{err.batchNumber}: {err.errorType} - {err.errorMessage}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </details>
+                            )}
+                            <button
+                                type="button"
+                                className="btn-close"
+                                onClick={() => setPartialFailureWarning(null)}
+                                aria-label="Close"
+                            ></button>
                         </div>
                     </div>
                 </div>
@@ -779,6 +847,9 @@ interface MappingSuggestionsModalProps {
         suggestions: RequirementSuggestionItem[];
         totalRequirementsAnalyzed: number;
         totalSuggestionsGenerated: number;
+        batchesProcessed?: number;
+        batchesFailed?: number;
+        processingTimeMs?: number;
     };
     onApply: (selectedMappings: any) => void;
     onClose: () => void;
@@ -866,7 +937,17 @@ function MappingSuggestionsModal({ suggestions, onApply, onClose }: MappingSugge
                     <div className="modal-body">
                         <div className="alert alert-info">
                             <strong>AI Analysis Complete:</strong> Analyzed {suggestions.totalRequirementsAnalyzed} requirements,
-                            generated {totalSuggestionsCount} suggestions.
+                            generated {totalSuggestionsCount} suggestions
+                            {suggestions.processingTimeMs && (
+                                <> in {(suggestions.processingTimeMs / 1000).toFixed(1)}s</>
+                            )}.
+                            {suggestions.batchesFailed && suggestions.batchesFailed > 0 && (
+                                <div className="mt-2 text-warning">
+                                    <i className="bi bi-exclamation-triangle me-1"></i>
+                                    Warning: {suggestions.batchesFailed} batch(es) failed.
+                                    Some requirements may not have suggestions.
+                                </div>
+                            )}
                             <br />
                             <small className="text-muted">
                                 Suggestions with confidence 4-5 are pre-selected. Review and adjust selections as needed.

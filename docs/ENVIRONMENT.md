@@ -23,12 +23,14 @@ The backend (Kotlin/Micronaut) is configured via environment variables, system p
 
 ### Database Configuration
 
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `DB_USERNAME` | MariaDB database username | `secman` | Yes |
-| `DB_PASSWORD` | MariaDB database password | `CHANGEME` | Yes |
+
+| Variable      | Description               | Default    | Required |
+| ------------- | ------------------------- | ---------- | -------- |
+| `DB_USERNAME` | MariaDB database username | `secman`   | Yes      |
+| `DB_PASSWORD` | MariaDB database password | `CHANGEME` | Yes      |
 
 **Example:**
+
 ```bash
 export DB_USERNAME=secman
 export DB_PASSWORD=your_secure_password
@@ -36,13 +38,15 @@ export DB_PASSWORD=your_secure_password
 
 ### Authentication & Security
 
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `JWT_SECRET` | JWT signing secret (must be 256 bits / 32 bytes) | Development default | **Yes (Production)** |
+
+| Variable                     | Description                                       | Default             | Required             |
+| ---------------------------- | ------------------------------------------------- | ------------------- | -------------------- |
+| `JWT_SECRET`                 | JWT signing secret (must be 256 bits / 32 bytes)  | Development default | **Yes (Production)** |
 | `SECMAN_ENCRYPTION_PASSWORD` | Encryption password for sensitive database fields | Development default | **Yes (Production)** |
-| `SECMAN_ENCRYPTION_SALT` | Encryption salt (16 hex characters) | Development default | **Yes (Production)** |
+| `SECMAN_ENCRYPTION_SALT`     | Encryption salt (16 hex characters)               | Development default | **Yes (Production)** |
 
 **Security Notes:**
+
 - `JWT_SECRET` must be at least 256 bits for HMAC-SHA256 signing
 - Generate with: `openssl rand -base64 32`
 - `SECMAN_ENCRYPTION_PASSWORD` is used for encrypting sensitive fields (OAuth secrets, API keys)
@@ -51,6 +55,7 @@ export DB_PASSWORD=your_secure_password
 - Generate with: `openssl rand -hex 8`
 
 **Example:**
+
 ```bash
 export JWT_SECRET=$(openssl rand -base64 32)
 export SECMAN_ENCRYPTION_PASSWORD=$(openssl rand -hex 32)
@@ -59,17 +64,19 @@ export SECMAN_ENCRYPTION_SALT=$(openssl rand -hex 8)
 
 ### Email / SMTP Configuration
 
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `SMTP_HOST` | SMTP server hostname | `smtp.example.com` | Yes |
-| `SMTP_PORT` | SMTP server port | `587` | Yes |
-| `SMTP_USERNAME` | SMTP authentication username | `noreply@secman.example.com` | Yes |
-| `SMTP_PASSWORD` | SMTP authentication password | `changeme` | Yes |
-| `SMTP_FROM_ADDRESS` | Email "From" address | `noreply@secman.example.com` | Yes |
-| `SMTP_FROM_NAME` | Email "From" display name | `Security Management System` | No |
-| `SMTP_ENABLE_TLS` | Enable STARTTLS | `true` | No |
+
+| Variable            | Description                  | Default                      | Required |
+| ------------------- | ---------------------------- | ---------------------------- | -------- |
+| `SMTP_HOST`         | SMTP server hostname         | `smtp.example.com`           | Yes      |
+| `SMTP_PORT`         | SMTP server port             | `587`                        | Yes      |
+| `SMTP_USERNAME`     | SMTP authentication username | `noreply@secman.example.com` | Yes      |
+| `SMTP_PASSWORD`     | SMTP authentication password | `changeme`                   | Yes      |
+| `SMTP_FROM_ADDRESS` | Email "From" address         | `noreply@secman.example.com` | Yes      |
+| `SMTP_FROM_NAME`    | Email "From" display name    | `Security Management System` | No       |
+| `SMTP_ENABLE_TLS`   | Enable STARTTLS              | `true`                       | No       |
 
 **Example for Gmail:**
+
 ```bash
 export SMTP_HOST=smtp.gmail.com
 export SMTP_PORT=587
@@ -84,17 +91,20 @@ export SMTP_ENABLE_TLS=true
 
 ### URL Configuration
 
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `BACKEND_BASE_URL` | Public URL of the backend API | `https://secman.covestro.net` | Yes |
-| `FRONTEND_URL` | Public URL of the frontend application | `http://localhost:4321` | Yes |
+
+| Variable           | Description                            | Default                       | Required |
+| ------------------ | -------------------------------------- | ----------------------------- | -------- |
+| `BACKEND_BASE_URL` | Public URL of the backend API          | `https://secman.covestro.net` | Yes      |
+| `FRONTEND_URL`     | Public URL of the frontend application | `http://localhost:4321`       | Yes      |
 
 These URLs are used for:
+
 - CORS configuration
 - Email notification links
 - OAuth callback URLs
 
 **Example:**
+
 ```bash
 export BACKEND_BASE_URL=https://api.yourdomain.com
 export FRONTEND_URL=https://secman.yourdomain.com
@@ -104,25 +114,29 @@ export FRONTEND_URL=https://secman.yourdomain.com
 
 These variables control OAuth robustness settings for handling race conditions and transient failures during authentication.
 
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `OAUTH_STATE_RETRY_MAX_ATTEMPTS` | Maximum retry attempts for OAuth state lookup | `5` | No |
-| `OAUTH_STATE_RETRY_INITIAL_DELAY` | Initial delay between retries (ms) | `100` | No |
-| `OAUTH_STATE_RETRY_MAX_DELAY` | Maximum delay between retries (ms) | `500` | No |
-| `OAUTH_STATE_RETRY_BACKOFF_MULTIPLIER` | Exponential backoff multiplier | `1.5` | No |
-| `OAUTH_TOKEN_EXCHANGE_MAX_RETRIES` | Maximum retries for token exchange | `2` | No |
-| `OAUTH_TOKEN_EXCHANGE_RETRY_DELAY` | Delay between token exchange retries (ms) | `500` | No |
+
+| Variable                               | Description                                   | Default | Required |
+| -------------------------------------- | --------------------------------------------- | ------- | -------- |
+| `OAUTH_STATE_RETRY_MAX_ATTEMPTS`       | Maximum retry attempts for OAuth state lookup | `5`     | No       |
+| `OAUTH_STATE_RETRY_INITIAL_DELAY`      | Initial delay between retries (ms)            | `100`   | No       |
+| `OAUTH_STATE_RETRY_MAX_DELAY`          | Maximum delay between retries (ms)            | `500`   | No       |
+| `OAUTH_STATE_RETRY_BACKOFF_MULTIPLIER` | Exponential backoff multiplier                | `1.5`   | No       |
+| `OAUTH_TOKEN_EXCHANGE_MAX_RETRIES`     | Maximum retries for token exchange            | `2`     | No       |
+| `OAUTH_TOKEN_EXCHANGE_RETRY_DELAY`     | Delay between token exchange retries (ms)     | `500`   | No       |
 
 **Behavior:**
+
 - **State Retry**: Handles race conditions where Microsoft Azure callbacks arrive before the state-save transaction commits (100-500ms with cached SSO). Uses exponential backoff: 100ms → 150ms → 225ms → 337ms → 500ms.
 - **Token Exchange Retry**: Handles transient 5xx server errors and timeouts during OAuth token exchange. Does NOT retry 4xx errors (permanent failures).
 
 **When to Adjust:**
+
 - Increase `OAUTH_STATE_RETRY_MAX_ATTEMPTS` if users frequently see "login session not found" errors
 - Increase delays if database replication lag is suspected
 - Increase `OAUTH_TOKEN_EXCHANGE_MAX_RETRIES` if the OAuth provider (Microsoft, GitHub) has intermittent availability issues
 
 **Example:**
+
 ```bash
 # Increase retry tolerance for slow database environments
 export OAUTH_STATE_RETRY_MAX_ATTEMPTS=7
@@ -135,12 +149,14 @@ export OAUTH_TOKEN_EXCHANGE_RETRY_DELAY=1000
 
 ### Vulnerability Configuration
 
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `VULN_USE_PATCH_PUBLICATION_DATE` | Use patch publication date for calculating days open | `false` | No |
-| `VULN_REQUIRE_PATCH_PUBLICATION_DATE` | Only import vulnerabilities with patch publication date | `false` | No |
+
+| Variable                              | Description                                             | Default | Required |
+| ------------------------------------- | ------------------------------------------------------- | ------- | -------- |
+| `VULN_USE_PATCH_PUBLICATION_DATE`     | Use patch publication date for calculating days open    | `false` | No       |
+| `VULN_REQUIRE_PATCH_PUBLICATION_DATE` | Only import vulnerabilities with patch publication date | `false` | No       |
 
 **Behavior:**
+
 - When `VULN_USE_PATCH_PUBLICATION_DATE=false`: days_open = current_time - detection_time
 - When `VULN_USE_PATCH_PUBLICATION_DATE=true`: days_open = scan_timestamp - patch_publication_date
 
@@ -150,15 +166,18 @@ export OAUTH_TOKEN_EXCHANGE_RETRY_DELAY=1000
 
 The frontend (Astro/React) uses environment variables prefixed with `PUBLIC_` to expose them to the client.
 
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `PUBLIC_API_URL` | Backend API URL | Auto-detected | No |
+
+| Variable         | Description     | Default       | Required |
+| ---------------- | --------------- | ------------- | -------- |
+| `PUBLIC_API_URL` | Backend API URL | Auto-detected | No       |
 
 **Behavior:**
+
 - In development (`localhost`): defaults to `http://localhost:8080`
 - In production (non-localhost): uses relative URLs (empty string)
 
 **Example `.env` file:**
+
 ```bash
 PUBLIC_API_URL=https://api.yourdomain.com
 ```
@@ -168,6 +187,7 @@ PUBLIC_API_URL=https://api.yourdomain.com
 ## CLI Environment Variables
 
 The CLI tool supports multiple sources for configuration with the following priority:
+
 1. System properties (highest priority)
 2. Environment variables
 3. Config files (`~/.secman/`)
@@ -175,87 +195,71 @@ The CLI tool supports multiple sources for configuration with the following prio
 
 ### CrowdStrike API Credentials
 
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `CROWDSTRIKE_CLIENT_ID` | CrowdStrike Falcon API client ID | - | Yes |
-| `CROWDSTRIKE_CLIENT_SECRET` | CrowdStrike Falcon API client secret | - | Yes |
-| `CROWDSTRIKE_BASE_URL` | CrowdStrike API base URL | `https://api.crowdstrike.com` | No |
 
-**Alternative Falcon-style naming (for compatibility):**
 
-| Variable | Description |
-|----------|-------------|
-| `FALCON_CLIENT_ID` | Alias for `CROWDSTRIKE_CLIENT_ID` |
-| `FALCON_CLIENT_SECRET` | Alias for `CROWDSTRIKE_CLIENT_SECRET` |
-| `FALCON_CLOUD_REGION` | CrowdStrike cloud region |
+| Variable               | Description                          |
+| ---------------------- | ------------------------------------ |
+| `FALCON_CLIENT_ID`     | Alias for`CROWDSTRIKE_CLIENT_ID`     |
+| `FALCON_CLIENT_SECRET` | Alias for`CROWDSTRIKE_CLIENT_SECRET` |
+| `FALCON_CLOUD_REGION`  | CrowdStrike cloud region             |
 
 **Base URL by Region:**
 
-| Region | Base URL |
-|--------|----------|
-| US-1 (default) | `https://api.crowdstrike.com` |
-| US-2 | `https://api.us-2.crowdstrike.com` |
-| EU-1 | `https://api.eu-1.crowdstrike.com` |
-| US-GOV-1 | `https://api.laggar.gcw.crowdstrike.com` |
-| US-GOV-2 | `https://api.laggar.gcw.crowdstrike.com` |
+
+| Region         | Base URL                                 |
+| -------------- | ---------------------------------------- |
+| US-1 (default) | `https://api.crowdstrike.com`            |
+| US-2           | `https://api.us-2.crowdstrike.com`       |
+| EU-1           | `https://api.eu-1.crowdstrike.com`       |
+| US-GOV-1       | `https://api.laggar.gcw.crowdstrike.com` |
+| US-GOV-2       | `https://api.laggar.gcw.crowdstrike.com` |
 
 **Example:**
+
 ```bash
-export CROWDSTRIKE_CLIENT_ID=your-client-id
-export CROWDSTRIKE_CLIENT_SECRET=your-client-secret
-export CROWDSTRIKE_BASE_URL=https://api.eu-1.crowdstrike.com
+export FALCON_CLIENT_ID=your-client-id
+export FALCON_CLIENT_SECRET=your-client-secret
+export FALCON_BASE_URL=https://api.eu-1.crowdstrike.com
 ```
 
 ### Backend Authentication (for --save flag)
 
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `SECMAN_USERNAME` | Backend username for authentication | - | For --save |
-| `SECMAN_PASSWORD` | Backend password for authentication | - | For --save |
-| `SECMAN_BACKEND_URL` | Backend API URL | `http://localhost:8080` | No |
+
+| Variable             | Description                         | Default                 | Required   |
+| -------------------- | ----------------------------------- | ----------------------- | ---------- |
+| `SECMAN_USERNAME`    | Backend username for authentication | -                       | For --save |
+| `SECMAN_PASSWORD`    | Backend password for authentication | -                       | For --save |
+| `SECMAN_BACKEND_URL` | Backend API URL                     | `http://localhost:8080` | No         |
 
 **Example:**
+
 ```bash
 export SECMAN_USERNAME=adminuser
 export SECMAN_PASSWORD=your-password
 export SECMAN_BACKEND_URL=https://api.yourdomain.com
 ```
 
-### System Properties (Alternative)
-
-CLI also supports Java system properties:
-
-| Property | Equivalent Environment Variable |
-|----------|--------------------------------|
-| `-Dcrowdstrike.clientId` | `CROWDSTRIKE_CLIENT_ID` |
-| `-Dcrowdstrike.clientSecret` | `CROWDSTRIKE_CLIENT_SECRET` |
-| `-Dcrowdstrike.baseUrl` | `CROWDSTRIKE_BASE_URL` |
-
-**Example:**
-```bash
-java -Dcrowdstrike.clientId=xxx -Dcrowdstrike.clientSecret=yyy -jar cli.jar query servers
-```
-
----
 
 ## Quick Reference Tables
 
 ### Production Checklist
 
-| Variable | Component | Must Change |
-|----------|-----------|-------------|
-| `DB_PASSWORD` | Backend | Yes |
-| `JWT_SECRET` | Backend | Yes |
-| `SECMAN_ENCRYPTION_PASSWORD` | Backend | Yes |
-| `SECMAN_ENCRYPTION_SALT` | Backend | Yes |
-| `SMTP_PASSWORD` | Backend | Yes |
-| `BACKEND_BASE_URL` | Backend | Yes |
-| `FRONTEND_URL` | Backend | Yes |
-| `CROWDSTRIKE_CLIENT_SECRET` | CLI | Yes |
+
+| Variable                     | Component | Must Change |
+| ---------------------------- | --------- | ----------- |
+| `DB_PASSWORD`                | Backend   | Yes         |
+| `JWT_SECRET`                 | Backend   | Yes         |
+| `SECMAN_ENCRYPTION_PASSWORD` | Backend   | Yes         |
+| `SECMAN_ENCRYPTION_SALT`     | Backend   | Yes         |
+| `SMTP_PASSWORD`              | Backend   | Yes         |
+| `BACKEND_BASE_URL`           | Backend   | Yes         |
+| `FRONTEND_URL`               | Backend   | Yes         |
+| `CROWDSTRIKE_CLIENT_SECRET`  | CLI       | Yes         |
 
 ### All Variables by Component
 
 #### Backend (29 variables)
+
 ```
 DB_USERNAME, DB_PASSWORD
 JWT_SECRET
@@ -270,13 +274,15 @@ VULN_USE_PATCH_PUBLICATION_DATE, VULN_REQUIRE_PATCH_PUBLICATION_DATE
 ```
 
 #### Frontend (1 variable)
+
 ```
 PUBLIC_API_URL
 ```
 
 #### CLI (9 variables)
+
 ```
-CROWDSTRIKE_CLIENT_ID, CROWDSTRIKE_CLIENT_SECRET, CROWDSTRIKE_BASE_URL
+FALCON_CLIENT_ID, FALCON_CLIENT_SECRET, FALCON_BASE_URL
 FALCON_CLIENT_ID, FALCON_CLIENT_SECRET, FALCON_CLOUD_REGION
 SECMAN_USERNAME, SECMAN_PASSWORD, SECMAN_BACKEND_URL
 ```
@@ -357,9 +363,9 @@ PORT=4321
 # =============================================================================
 
 # --- CrowdStrike API Credentials ---
-CROWDSTRIKE_CLIENT_ID=your-client-id-here
-CROWDSTRIKE_CLIENT_SECRET=your-client-secret-here
-CROWDSTRIKE_BASE_URL=https://api.crowdstrike.com
+FALCON_CLIENT_ID=your-client-id-here
+FALCON_CLIENT_SECRET=your-client-secret-here
+FALCON_BASE_URL=https://api.crowdstrike.com
 
 # --- Backend Authentication (for --save) ---
 SECMAN_USERNAME=adminuser
@@ -399,34 +405,41 @@ baseUrl: https://api.crowdstrike.com
 ### Common Issues
 
 **"JWT signature verification failed"**
+
 - Ensure `JWT_SECRET` is at least 32 characters (256 bits)
 - Verify the same secret is used across all backend instances
 
 **"Failed to decrypt sensitive data"**
+
 - `SECMAN_ENCRYPTION_PASSWORD` or `SECMAN_ENCRYPTION_SALT` changed after data was encrypted
 - These values must remain constant for the lifetime of encrypted data
 
 **"SMTP authentication failed"**
+
 - For Gmail: Use an App Password, not your regular password
 - Verify `SMTP_HOST` and `SMTP_PORT` are correct for your provider
 
 **"CrowdStrike API: 401 Unauthorized"**
+
 - Verify `CROWDSTRIKE_CLIENT_ID` and `CROWDSTRIKE_CLIENT_SECRET` are correct
 - Ensure the API credentials have the required scopes
 - Check `CROWDSTRIKE_BASE_URL` matches your CrowdStrike cloud region
 
 **"Your login session was not found" (OAuth)**
+
 - This indicates the OAuth state was not found in the database when the callback arrived
 - Increase `OAUTH_STATE_RETRY_MAX_ATTEMPTS` and `OAUTH_STATE_RETRY_MAX_DELAY` to handle database replication lag
 - Check if the `oauth_states` table cleanup job is running too aggressively
 
 **"Could not complete authentication" (OAuth)**
+
 - This indicates token exchange with the OAuth provider failed
 - Check network connectivity to the OAuth provider (Microsoft, GitHub)
 - Increase `OAUTH_TOKEN_EXCHANGE_MAX_RETRIES` for unreliable network conditions
 - Review backend logs for specific HTTP error codes from the provider
 
 **"Your login session expired" (OAuth)**
+
 - The OAuth state existed but was older than 10 minutes
 - This can happen if users take too long at the OAuth provider login page
 - Ensure users complete the OAuth flow within 10 minutes
@@ -434,6 +447,7 @@ baseUrl: https://api.crowdstrike.com
 ---
 
 **Related Documentation:**
+
 - [Deployment Guide](./DEPLOYMENT.md)
 - [CLI Reference](./CLI.md)
 - [Technical: CrowdStrike Import](./CROWDSTRIKE_IMPORT.md)

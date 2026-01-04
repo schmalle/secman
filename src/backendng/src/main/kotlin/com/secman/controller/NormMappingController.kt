@@ -107,6 +107,41 @@ open class NormMappingController(
     }
 
     /**
+     * Auto-apply AI norm mappings
+     *
+     * POST /api/norm-mapping/auto-apply
+     *
+     * Processes requirements one by one, gets AI suggestions, and automatically
+     * applies mappings with confidence >= 3. Resilient to failures - if one
+     * requirement fails, others continue processing.
+     */
+    @Post("/auto-apply")
+    open fun autoApplyMappings(@Body request: NormMappingSuggestionRequest?): HttpResponse<*> {
+        return try {
+            log.info("Received auto-apply norm mapping request")
+
+            val response = normMappingService.suggestAndApplyMappings(request)
+
+            log.info("Auto-apply complete: {} of {} requirements mapped, {} total mappings applied",
+                response.requirementsSuccessfullyMapped, response.totalRequirementsAnalyzed, response.totalMappingsApplied)
+
+            HttpResponse.ok(response)
+        } catch (e: IllegalStateException) {
+            log.error("Configuration error during auto-apply: {}", e.message)
+            HttpResponse.badRequest(NormMappingErrorResponse(
+                error = e.message ?: "Configuration error",
+                details = "Please ensure TranslationConfig has a valid OpenRouter API key"
+            ))
+        } catch (e: Exception) {
+            log.error("Error during auto-apply norm mapping", e)
+            HttpResponse.serverError(NormMappingErrorResponse(
+                error = "Failed to auto-apply mappings",
+                details = e.message
+            ))
+        }
+    }
+
+    /**
      * Get count of unmapped requirements
      *
      * GET /api/norm-mapping/unmapped-count
