@@ -6,6 +6,8 @@ import com.secman.service.InputValidationService
 import io.micronaut.http.HttpRequest
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.annotation.*
+import io.micronaut.http.cookie.Cookie
+import io.micronaut.http.cookie.SameSite
 import io.micronaut.security.annotation.Secured
 import io.micronaut.security.authentication.Authentication
 import io.micronaut.security.authentication.UsernamePasswordCredentials
@@ -15,6 +17,7 @@ import io.micronaut.serde.annotation.Serdeable
 import jakarta.inject.Inject
 import jakarta.transaction.Transactional
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
+import java.time.Duration
 import java.time.Instant
 import java.util.*
 
@@ -24,8 +27,42 @@ open class AuthController(
     private val tokenGenerator: TokenGenerator,
     private val inputValidationService: InputValidationService
 ) {
-    
+
     private val passwordEncoder = BCryptPasswordEncoder()
+
+    companion object {
+        const val AUTH_COOKIE_NAME = "secman_auth"
+        private val AUTH_COOKIE_MAX_AGE = Duration.ofHours(8)
+    }
+
+    /**
+     * Create HttpOnly secure cookie for JWT token.
+     * Security properties:
+     * - HttpOnly: Prevents JavaScript access (XSS protection)
+     * - Secure: Only sent over HTTPS
+     * - SameSite=Lax: CSRF protection while allowing navigation
+     * - Path=/: Available for all API endpoints
+     */
+    private fun createAuthCookie(token: String): Cookie {
+        return Cookie.of(AUTH_COOKIE_NAME, token)
+            .httpOnly(true)
+            .secure(true)  // Only sent over HTTPS
+            .sameSite(SameSite.Lax)  // CSRF protection
+            .maxAge(AUTH_COOKIE_MAX_AGE)
+            .path("/")
+    }
+
+    /**
+     * Create expired cookie to clear authentication.
+     */
+    private fun createLogoutCookie(): Cookie {
+        return Cookie.of(AUTH_COOKIE_NAME, "")
+            .httpOnly(true)
+            .secure(true)
+            .sameSite(SameSite.Lax)
+            .maxAge(Duration.ZERO)  // Expire immediately
+            .path("/")
+    }
 
     @Serdeable
     data class LoginRequest(
@@ -108,21 +145,26 @@ open class AuthController(
         user.lastLogin = Instant.now()
         userRepository.update(user)
 
+        val token = tokenOptional.get()
+
         val response = LoginResponse(
             id = user.id!!,
             username = user.username,
             email = user.email,
             roles = user.roles.map { it.name },
-            token = tokenOptional.get()
+            token = token  // Still included for backward compatibility during transition
         )
 
-        return HttpResponse.ok(response)
+        // Set JWT in HttpOnly secure cookie (primary auth mechanism)
+        return HttpResponse.ok(response).cookie(createAuthCookie(token))
     }
 
     @Post("/logout")
     @Secured(SecurityRule.IS_AUTHENTICATED)
     fun logout(): HttpResponse<*> {
+        // Clear the auth cookie by setting an expired cookie
         return HttpResponse.ok(mapOf("message" to "Logged out successfully"))
+            .cookie(createLogoutCookie())
     }
 
     @Get("/status")
@@ -190,7 +232,10 @@ open class AuthController(
             return HttpResponse.serverError<Any>().body(mapOf("error" to "Failed to generate token"))
         }
 
-        return HttpResponse.ok(RefreshResponse(token = tokenOptional.get()))
+        val token = tokenOptional.get()
+        // Update both the cookie and return the token in response
+        return HttpResponse.ok(RefreshResponse(token = token))
+            .cookie(createAuthCookie(token))
     }
 
     /**

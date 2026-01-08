@@ -8,10 +8,16 @@ export interface User {
 }
 
 /**
- * Get the stored JWT token
+ * Get the stored JWT token.
+ * Note: With HttpOnly cookies, the token is not accessible via JavaScript.
+ * This function now returns null for new logins, but may return a token
+ * for users who logged in before the security update.
+ * @deprecated Use cookie-based authentication with credentials: 'include' instead
  */
 export function getAuthToken(): string | null {
     if (typeof window === 'undefined') return null;
+    // For backward compatibility during migration, check localStorage
+    // New logins don't store tokens in localStorage (XSS protection)
     return localStorage.getItem('authToken');
 }
 
@@ -31,10 +37,14 @@ export function getUser(): User | null {
 }
 
 /**
- * Check if user is currently authenticated
+ * Check if user is currently authenticated.
+ * With HttpOnly cookies, we check for user data in localStorage instead of the token.
+ * The actual authentication is validated by the server using the HttpOnly cookie.
  */
 export function isAuthenticated(): boolean {
-    return getAuthToken() !== null;
+    // Check for user data (stored on successful login)
+    // The actual token is in an HttpOnly cookie, not accessible via JS
+    return getUser() !== null;
 }
 
 /**
@@ -61,12 +71,16 @@ export function hasVulnAccess(): boolean {
 }
 
 /**
- * Clear authentication data (logout)
+ * Clear authentication data (logout).
+ * Note: The HttpOnly cookie is cleared by the /api/auth/logout endpoint.
+ * This function clears client-side data (user info and legacy token storage).
  */
 export function clearAuth(): void {
     if (typeof window === 'undefined') return;
-    localStorage.removeItem('authToken');
+    // Clear user data
     localStorage.removeItem('user');
+    // Clear legacy token storage (for backward compatibility during migration)
+    localStorage.removeItem('authToken');
 }
 
 /**
@@ -184,11 +198,13 @@ let heartbeatIntervalId: number | null = null;
 
 /**
  * Refresh the JWT token silently.
- * Returns the new token if successful, null otherwise.
+ * The token is stored in an HttpOnly cookie, so we use credentials: 'include'.
+ * Returns true if successful, false otherwise.
  */
 export async function refreshToken(): Promise<string | null> {
-    const currentToken = getAuthToken();
-    if (!currentToken) {
+    // With HttpOnly cookies, we don't have direct access to the token
+    // Check if user data exists (indicating a logged-in session)
+    if (!isAuthenticated()) {
         return null;
     }
 
@@ -196,18 +212,16 @@ export async function refreshToken(): Promise<string | null> {
         const response = await fetch('/api/auth/refresh', {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${currentToken}`,
                 'Content-Type': 'application/json',
             },
+            credentials: 'include', // Send HttpOnly cookie for authentication
         });
 
         if (response.ok) {
             const data = await response.json();
-            if (data.token) {
-                localStorage.setItem('authToken', data.token);
-                console.log('[auth] Token refreshed successfully');
-                return data.token;
-            }
+            console.log('[auth] Token refreshed successfully (stored in HttpOnly cookie)');
+            // Token is now in the updated HttpOnly cookie, not accessible via JS
+            return data.token || 'refreshed';
         } else if (response.status === 401) {
             // Token is invalid/expired, clear auth and redirect
             console.log('[auth] Token refresh failed - session expired');
@@ -228,17 +242,14 @@ export async function refreshToken(): Promise<string | null> {
  * This validates the token without generating a new one.
  */
 export async function sendHeartbeat(): Promise<boolean> {
-    const token = getAuthToken();
-    if (!token) {
+    if (!isAuthenticated()) {
         return false;
     }
 
     try {
         const response = await fetch('/api/auth/heartbeat', {
             method: 'GET',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-            },
+            credentials: 'include', // Send HttpOnly cookie for authentication
         });
 
         if (response.ok) {

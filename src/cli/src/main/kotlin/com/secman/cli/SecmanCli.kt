@@ -24,10 +24,6 @@ import org.slf4j.LoggerFactory
  *   secman monitor [options]
  *   secman help
  *
- * For now, this is a simple CLI router for testing the CLI module structure.
- *
- * Related to: Feature 023-create-in-the, 026-crowdstrike-polling-monitor
- * Task: T052
  */
 class SecmanCli {
     private val log = LoggerFactory.getLogger(SecmanCli::class.java)

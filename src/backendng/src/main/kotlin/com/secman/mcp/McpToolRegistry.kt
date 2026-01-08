@@ -27,7 +27,9 @@ class McpToolRegistry(
     // Feature 057: MCP Tools for Requirements Management
     @Inject private val exportRequirementsTool: ExportRequirementsTool,
     @Inject private val addRequirementTool: AddRequirementTool,
-    @Inject private val deleteAllRequirementsTool: DeleteAllRequirementsTool
+    @Inject private val deleteAllRequirementsTool: DeleteAllRequirementsTool,
+    // Feature 060: MCP List Users Tool
+    @Inject private val listUsersTool: ListUsersTool
 ) {
     private val logger = LoggerFactory.getLogger(McpToolRegistry::class.java)
 
@@ -51,7 +53,9 @@ class McpToolRegistry(
             // Feature 057: MCP Tools for Requirements Management
             exportRequirementsTool,
             addRequirementTool,
-            deleteAllRequirementsTool
+            deleteAllRequirementsTool,
+            // Feature 060: MCP List Users Tool
+            listUsersTool
         ).forEach { tool ->
             toolMap[tool.name] = tool
             logger.debug("Registered MCP tool: {}", tool.name)
@@ -150,6 +154,11 @@ class McpToolRegistry(
             }
             "get_user_activity" -> {
                 permissions.contains(McpPermission.USER_ACTIVITY)
+            }
+
+            // Feature 060: MCP List Users Tool (ADMIN only via User Delegation)
+            "list_users" -> {
+                permissions.contains(McpPermission.USER_ACTIVITY) // ADMIN role checked in tool execute()
             }
 
             // Feature 006: Asset Inventory, Scans, Vulnerabilities, and Products
