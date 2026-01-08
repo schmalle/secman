@@ -44,6 +44,7 @@ open class OAuthService(
     private val entityManager: EntityManager,
     private val emailSender: EmailSender,
     private val oauthConfig: OAuthConfig,
+    private val jwksValidationService: JwksValidationService,
     @Client("\${oauth.http-client.url:https://api.github.com}") private val githubApiClient: HttpClient,
     @Client private val genericHttpClient: HttpClient
 ) {
@@ -305,10 +306,15 @@ open class OAuthService(
                 return CallbackResult.Error(OAuthErrorCode.TOKEN_EXCHANGE_FAILED.userMessage)
             }
 
-            // For OIDC providers (Microsoft), validate ID token
+            // For OIDC providers (Microsoft), validate ID token signature and parse claims
             var emailFromIdToken: String? = null
             if (tokenResponse.idToken != null) {
-                val idTokenClaims = parseIdToken(tokenResponse.idToken)
+                // Validate JWT signature using JWKS and parse claims
+                val idTokenClaims = jwksValidationService.validateAndParseJwt(
+                    tokenResponse.idToken,
+                    provider.jwksUri,
+                    provider.issuer
+                )
                 if (idTokenClaims == null) {
                     oauthStateRepository.deleteByStateToken(state)
                     return CallbackResult.Error(OAuthErrorCode.TOKEN_EXCHANGE_FAILED.userMessage)
@@ -634,31 +640,9 @@ open class OAuthService(
         }
     }
 
-    /**
-     * Parse ID token JWT and extract claims (payload only, no signature verification)
-     */
-    private fun parseIdToken(idToken: String): Map<String, Any>? {
-        return try {
-            // JWT format: header.payload.signature
-            val parts = idToken.split(".")
-            if (parts.size != 3) {
-                logger.error("Invalid ID token format")
-                return null
-            }
-
-            // Decode base64url payload
-            val payload = parts[1]
-            val decodedBytes = Base64.getUrlDecoder().decode(payload)
-            val payloadJson = String(decodedBytes, StandardCharsets.UTF_8)
-
-            // Parse JSON
-            @Suppress("UNCHECKED_CAST")
-            objectMapper.readValue(payloadJson, Map::class.java) as Map<String, Any>
-        } catch (e: Exception) {
-            logger.error("Failed to parse ID token: {}", e.message, e)
-            null
-        }
-    }
+    // NOTE: parseIdToken() method was removed in security fix.
+    // JWT signature validation is now handled by JwksValidationService.validateAndParseJwt()
+    // which properly validates signatures using JWKS before parsing claims.
 
     /**
      * Validate Microsoft tenant ID from ID token

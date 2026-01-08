@@ -1,0 +1,71 @@
+{
+  "tool": {
+    "name": "list_users",
+    "description": "List all users in the system (ADMIN only, requires User Delegation)",
+    "operation": "READ",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  "authorization": {
+    "requiresDelegation": true,
+    "requiredRole": "ADMIN",
+    "mcpPermission": "USER_ACTIVITY"
+  },
+  "responses": {
+    "success": {
+      "type": "object",
+      "properties": {
+        "users": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "integer", "description": "User ID" },
+              "username": { "type": "string", "description": "Unique username" },
+              "email": { "type": "string", "format": "email", "description": "User email address" },
+              "roles": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": ["USER", "ADMIN", "VULN", "RELEASE_MANAGER", "REQ", "RISK", "SECCHAMPION"]
+                },
+                "description": "User roles"
+              },
+              "authSource": {
+                "type": "string",
+                "enum": ["LOCAL", "OAUTH", "HYBRID"],
+                "description": "Authentication source"
+              },
+              "mfaEnabled": { "type": "boolean", "description": "MFA enabled status" },
+              "createdAt": { "type": "string", "format": "date-time", "nullable": true, "description": "Account creation timestamp" },
+              "lastLogin": { "type": "string", "format": "date-time", "nullable": true, "description": "Last login timestamp" }
+            },
+            "required": ["id", "username", "email", "roles", "authSource", "mfaEnabled"]
+          }
+        },
+        "totalCount": { "type": "integer", "description": "Total number of users" }
+      },
+      "required": ["users", "totalCount"]
+    },
+    "errors": {
+      "DELEGATION_REQUIRED": {
+        "code": "DELEGATION_REQUIRED",
+        "message": "User Delegation must be enabled to use this tool",
+        "httpEquivalent": 401
+      },
+      "ADMIN_REQUIRED": {
+        "code": "ADMIN_REQUIRED",
+        "message": "ADMIN role required to list users",
+        "httpEquivalent": 403
+      },
+      "EXECUTION_ERROR": {
+        "code": "EXECUTION_ERROR",
+        "message": "Failed to retrieve users: {details}",
+        "httpEquivalent": 500
+      }
+    }
+  }
+}

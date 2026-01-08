@@ -20,21 +20,18 @@ const Header = () => {
 
     const handleLogout = async () => {
         try {
-            const token = localStorage.getItem('authToken');
             const response = await fetch('/api/auth/logout', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    ...(token && { 'Authorization': `Bearer ${token}` }),
                 },
+                credentials: 'include', // Send HttpOnly cookie for authentication
             });
             if (response.ok) {
-                // Clear authentication data
-                localStorage.removeItem('authToken');
+                // Clear client-side authentication data
+                // Note: The HttpOnly cookie is cleared by the server response
                 localStorage.removeItem('user');
-
-                // Also clear the authToken cookie
-                document.cookie = 'authToken=; path=/; max-age=0; SameSite=Strict';
+                localStorage.removeItem('authToken'); // Legacy cleanup
 
                 window.currentUser = null;
                 setUser(null);

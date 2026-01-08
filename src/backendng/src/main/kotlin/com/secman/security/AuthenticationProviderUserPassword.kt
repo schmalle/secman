@@ -51,7 +51,8 @@ class AuthenticationProviderUserPassword(
                         emitter.error(AuthenticationResponse.exception("Invalid credentials"))
                     }
                 } else {
-                    emitter.error(AuthenticationResponse.exception("User not found"))
+                    // Use same error message as invalid password to prevent user enumeration
+                    emitter.error(AuthenticationResponse.exception("Invalid credentials"))
                 }
             } catch (e: Exception) {
                 emitter.error(AuthenticationResponse.exception("Authentication error: ${e.message}"))

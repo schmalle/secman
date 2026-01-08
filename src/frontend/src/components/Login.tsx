@@ -99,26 +99,22 @@ const Login = () => {
             const data = await response.json();
 
             if (response.ok) {
-                // Login successful - store the JWT token
-                if (data.token) {
-                    localStorage.setItem('authToken', data.token);
+                // Login successful - JWT is now stored in HttpOnly cookie by backend
+                // Store user data for UI display (non-sensitive info only)
+                const userData = {
+                    id: data.id,
+                    username: data.username,
+                    email: data.email,
+                    roles: data.roles
+                };
+                localStorage.setItem('user', JSON.stringify(userData));
+                // Note: Token is NOT stored in localStorage for security (XSS protection)
+                // Authentication is handled via HttpOnly cookie set by backend
 
-                    // Also store token in a cookie for server-side middleware access
-                    document.cookie = `authToken=${data.token}; path=/; max-age=86400; SameSite=Strict`;
+                // Set global user state for Header component
+                (window as any).currentUser = userData;
+                window.dispatchEvent(new CustomEvent('userLoaded'));
 
-                    const userData = {
-                        id: data.id,
-                        username: data.username,
-                        email: data.email,
-                        roles: data.roles
-                    };
-                    localStorage.setItem('user', JSON.stringify(userData));
-
-                    // Set global user state for Header component
-                    (window as any).currentUser = userData;
-                    window.dispatchEvent(new CustomEvent('userLoaded'));
-                }
-                
                 // Small delay to ensure localStorage is written before redirect
                 setTimeout(() => {
                     window.location.href = '/'; // Or '/dashboard' if you have a dedicated page

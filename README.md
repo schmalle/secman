@@ -25,7 +25,7 @@ SecMan is a full-stack security management platform that helps organizations man
 
 ## Technology Stack
 
-- **Backend**: Micronaut 4.10 + Kotlin 2.2 (Java 21)
+- **Backend**: Micronaut 4.10 + Kotlin 2.2 (Java 25)
 - **Frontend**: Astro 5.15 + React 19 + Bootstrap 5.3
 - **Database**: MariaDB 12 with Hibernate JPA
 - **Build System**: Gradle 9.2 (Kotlin DSL)
@@ -137,7 +137,7 @@ SecMan is a full-stack security management platform that helps organizations man
 
 ### Prerequisites
 
-- Java 21 (JDK 21)
+- Java 25 (JDK 25)
 - Node.js 20+
 - MariaDB 12+
 - Gradle 9.2+
@@ -313,7 +313,6 @@ POST /api/auth/login
 }
 ```
 
-
 ### Key Endpoints
 
 
@@ -381,9 +380,9 @@ GITHUB_CLIENT_SECRET=your-github-secret
 OPENROUTER_API_KEY=your-openrouter-key
 
 # CrowdStrike API (for CLI)
-CROWDSTRIKE_CLIENT_ID=your-client-id
-CROWDSTRIKE_CLIENT_SECRET=your-client-secret
-CROWDSTRIKE_BASE_URL=https://api.crowdstrike.com
+FALCON_CLIENT_ID=your-client-id
+FALCON_CLIENT_SECRET=your-client-secret
+FALCON_BASE_URL=https://api.crowdstrike.com
 
 # CLI Authentication (for --save operations)
 SECMAN_USERNAME=adminuser
@@ -476,7 +475,7 @@ For major changes, please open an issue first to discuss what you would like to 
 - [ ]  Advanced reporting dashboards with Chart.js/Recharts
 - [ ]  Mobile application (React Native)
 - [ ]  SAML/LDAP authentication
-- [ ]  Compliance frameworks mapping (SOC2, ISO 27001, NIST)
+- [X]  Compliance frameworks mapping (SOC2, ISO 27001, NIST)
 - [ ]  Risk scoring engine with machine learning
 
 ## License

@@ -336,14 +336,14 @@ const AssetManagement: React.FC = () => {
   // Filter assets based on current filter values
   const getFilteredAssets = () => {
     return assets.filter(asset => {
+      // Text filters use partial matching
       const nameMatch = !nameFilter || asset.name.toLowerCase().includes(nameFilter.toLowerCase());
       const ipMatch = !ipFilter || (asset.ip && asset.ip.toLowerCase().includes(ipFilter.toLowerCase()));
-      const ownerMatch = !ownerFilter || asset.owner.toLowerCase().includes(ownerFilter.toLowerCase());
-      const adDomainMatch = !adDomainFilter || (asset.adDomain && asset.adDomain.toLowerCase().includes(adDomainFilter.toLowerCase()));
+      // Dropdown filters use exact matching
+      const ownerMatch = !ownerFilter || asset.owner === ownerFilter;
+      const adDomainMatch = !adDomainFilter || asset.adDomain === adDomainFilter;
       const workgroupMatch = !workgroupFilter || (
-        asset.workgroups && asset.workgroups.some(wg =>
-          wg.name.toLowerCase().includes(workgroupFilter.toLowerCase())
-        )
+        asset.workgroups && asset.workgroups.some(wg => wg.name === workgroupFilter)
       );
 
       return nameMatch && ipMatch && ownerMatch && adDomainMatch && workgroupMatch;
@@ -597,38 +597,53 @@ const AssetManagement: React.FC = () => {
                 </div>
                 <div className="col-md-3">
                   <label htmlFor="ownerFilter" className="form-label">Owner</label>
-                  <input
-                    type="text"
+                  <select
                     id="ownerFilter"
-                    className="form-control"
-                    placeholder="Filter by owner..."
+                    className="form-select"
                     value={ownerFilter}
                     onChange={(e) => setOwnerFilter(e.target.value)}
-                  />
+                  >
+                    <option value="">All Owners</option>
+                    {[...new Set(assets.map(a => a.owner).filter(Boolean))].sort().map(owner => (
+                      <option key={owner} value={owner}>{owner}</option>
+                    ))}
+                  </select>
                 </div>
                 <div className="col-md-3">
                   <label htmlFor="adDomainFilter" className="form-label">AD Domain</label>
-                  <input
-                    type="text"
+                  <select
                     id="adDomainFilter"
-                    className="form-control"
-                    placeholder="Filter by domain..."
+                    className="form-select"
                     value={adDomainFilter}
                     onChange={(e) => setAdDomainFilter(e.target.value)}
-                  />
+                  >
+                    <option value="">All Domains</option>
+                    {[...new Set(assets.map(a => a.adDomain).filter(Boolean))].sort().map(domain => (
+                      <option key={domain} value={domain}>{domain}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
               <div className="row mt-2">
                 <div className="col-md-3">
                   <label htmlFor="workgroupFilter" className="form-label">Workgroups</label>
-                  <input
-                    type="text"
+                  <select
                     id="workgroupFilter"
-                    className="form-control"
-                    placeholder="Filter by workgroup..."
+                    className="form-select"
                     value={workgroupFilter}
                     onChange={(e) => setWorkgroupFilter(e.target.value)}
-                  />
+                  >
+                    <option value="">All Workgroups</option>
+                    {workgroups.length > 0 ? (
+                      workgroups.map(wg => (
+                        <option key={wg.id} value={wg.name}>{wg.name}</option>
+                      ))
+                    ) : (
+                      [...new Set(assets.flatMap(a => a.workgroups?.map(w => w.name) || []))].sort().map(name => (
+                        <option key={name} value={name}>{name}</option>
+                      ))
+                    )}
+                  </select>
                 </div>
               </div>
               {(nameFilter || ipFilter || ownerFilter || adDomainFilter || workgroupFilter) && (

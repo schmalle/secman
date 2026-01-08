@@ -19,9 +19,11 @@ class SecurityHeadersFilter : HttpServerFilter {
     private val logger = LoggerFactory.getLogger(SecurityHeadersFilter::class.java)
     
     companion object {
-        // Content Security Policy - Strict policy to prevent XSS
+        // Content Security Policy - Hardened policy to prevent XSS
+        // Note: 'unsafe-inline' kept for scripts due to Astro's inline script requirements
+        // TODO: Migrate to nonce-based CSP for stricter security
         private const val CSP_POLICY = "default-src 'self'; " +
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; " +
+            "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; " +  // Removed unsafe-eval
             "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; " +
             "img-src 'self' data: https:; " +
             "font-src 'self' data: https://cdn.jsdelivr.net; " +
@@ -29,7 +31,8 @@ class SecurityHeadersFilter : HttpServerFilter {
             "frame-ancestors 'none'; " +
             "form-action 'self'; " +
             "base-uri 'self'; " +
-            "object-src 'none'"
+            "object-src 'none'; " +
+            "upgrade-insecure-requests"
         
         // Permissions Policy (formerly Feature Policy)
         private const val PERMISSIONS_POLICY = "geolocation=(), " +
