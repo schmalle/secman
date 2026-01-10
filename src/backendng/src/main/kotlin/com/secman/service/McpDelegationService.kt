@@ -108,51 +108,65 @@ class McpDelegationService {
     /**
      * Validate a delegation request.
      *
+     * Supports both email and username as identifier:
+     * - If identifier contains '@', treat as email (validate format, check domain)
+     * - Otherwise, treat as username (skip email validation and domain check)
+     *
      * @param apiKey The MCP API key making the request
-     * @param email The delegated user's email address
+     * @param identifier The delegated user's email address or username
      * @return DelegationValidationResult with success/failure details
      */
-    fun validateDelegation(apiKey: McpApiKey, email: String): DelegationValidationResult {
-        logger.debug("Validating delegation: apiKeyId={}, email={}", apiKey.id, email)
+    fun validateDelegation(apiKey: McpApiKey, identifier: String): DelegationValidationResult {
+        logger.debug("Validating delegation: apiKeyId={}, identifier={}", apiKey.id, identifier)
 
         // Check if delegation is enabled for this API key
         if (!apiKey.delegationEnabled) {
             logger.debug("Delegation not enabled for API key: {}", apiKey.keyId)
-            recordFailure(apiKey.id, email, DelegationErrorCodes.DELEGATION_NOT_ENABLED)
+            recordFailure(apiKey.id, identifier, DelegationErrorCodes.DELEGATION_NOT_ENABLED)
             return DelegationValidationResult.failure(
                 DelegationErrorCodes.DELEGATION_NOT_ENABLED,
                 "Delegation is not enabled for this API key"
             )
         }
 
-        // Validate email format
-        if (!isValidEmail(email)) {
-            logger.debug("Invalid email format for delegation: {}", email)
-            recordFailure(apiKey.id, email, DelegationErrorCodes.DELEGATION_INVALID_EMAIL)
-            return DelegationValidationResult.failure(
-                DelegationErrorCodes.DELEGATION_INVALID_EMAIL,
-                "Invalid email format: $email"
-            )
+        // Determine if identifier is email or username
+        val isEmail = identifier.contains("@")
+
+        // Look up user based on identifier type
+        val user = if (isEmail) {
+            // Email path: validate format and domain, then lookup
+            if (!isValidEmail(identifier)) {
+                logger.debug("Invalid email format for delegation: {}", identifier)
+                recordFailure(apiKey.id, identifier, DelegationErrorCodes.DELEGATION_INVALID_EMAIL)
+                return DelegationValidationResult.failure(
+                    DelegationErrorCodes.DELEGATION_INVALID_EMAIL,
+                    "Invalid email format: $identifier"
+                )
+            }
+
+            if (!apiKey.isDelegationAllowedForEmail(identifier)) {
+                logger.warn("Domain rejected for delegation: email={}, apiKey={}", identifier, apiKey.keyId)
+                recordFailure(apiKey.id, identifier, DelegationErrorCodes.DELEGATION_DOMAIN_REJECTED)
+                return DelegationValidationResult.failure(
+                    DelegationErrorCodes.DELEGATION_DOMAIN_REJECTED,
+                    "Email domain is not in the allowed list for this API key"
+                )
+            }
+
+            userRepository.findByEmailIgnoreCase(identifier).orElse(null)
+        } else {
+            // Username path: skip email validation and domain check
+            logger.debug("Using username lookup for delegation: {}", identifier)
+            userRepository.findByUsername(identifier).orElse(null)
         }
 
-        // Check if email domain is allowed
-        if (!apiKey.isDelegationAllowedForEmail(email)) {
-            logger.warn("Domain rejected for delegation: email={}, apiKey={}", email, apiKey.keyId)
-            recordFailure(apiKey.id, email, DelegationErrorCodes.DELEGATION_DOMAIN_REJECTED)
-            return DelegationValidationResult.failure(
-                DelegationErrorCodes.DELEGATION_DOMAIN_REJECTED,
-                "Email domain is not in the allowed list for this API key"
-            )
-        }
-
-        // Look up the user by email
-        val user = userRepository.findByEmailIgnoreCase(email).orElse(null)
         if (user == null) {
-            logger.warn("User not found for delegation: email={}", email)
-            recordFailure(apiKey.id, email, DelegationErrorCodes.DELEGATION_USER_NOT_FOUND)
+            val identifierType = if (isEmail) "email" else "username"
+            logger.warn("User not found for delegation: {}={}", identifierType, identifier)
+            recordFailure(apiKey.id, identifier, DelegationErrorCodes.DELEGATION_USER_NOT_FOUND)
             return DelegationValidationResult.failure(
                 DelegationErrorCodes.DELEGATION_USER_NOT_FOUND,
-                "User with email '$email' not found"
+                "User with $identifierType '$identifier' not found"
             )
         }
 
@@ -160,8 +174,8 @@ class McpDelegationService {
         val effectivePermissions = computeEffectivePermissions(user, apiKey)
 
         logger.info(
-            "Delegation validated successfully: email={}, apiKey={}, effectivePermissions={}",
-            email, apiKey.keyId, effectivePermissions.size
+            "Delegation validated successfully: identifier={}, user={}, apiKey={}, effectivePermissions={}",
+            identifier, user.username, apiKey.keyId, effectivePermissions.size
         )
 
         return DelegationValidationResult.success(user, effectivePermissions)

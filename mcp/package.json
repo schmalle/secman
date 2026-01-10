@@ -7,7 +7,7 @@
     "start": "node mcp-server.js"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "latest",
+    "@modelcontextprotocol/sdk": "^1.25.2",
     "node-fetch": "^3.3.2"
   },
   "engines": {

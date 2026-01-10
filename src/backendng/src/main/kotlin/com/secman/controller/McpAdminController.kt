@@ -515,15 +515,24 @@ class McpAdminController(
         }
 
         return try {
-            // Extract user ID from JWT authentication
-            // This depends on how user ID is stored in the JWT
+            // First try to get userId from JWT attributes
             val userIdStr = authentication.attributes["userId"] as? String
             if (userIdStr != null) {
-                userIdStr.toLongOrNull()
-            } else {
-                // Fallback to parsing name
-                authentication.name.toLongOrNull()
+                val userId = userIdStr.toLongOrNull()
+                if (userId != null) {
+                    return userId
+                }
             }
+
+            // Fallback: Look up user by username (same pattern as other controllers)
+            val username = authentication.name
+            val user = userService.getUserByUsername(username)
+            if (user != null) {
+                return user.id
+            }
+
+            logger.warn("Failed to find user for authentication: {}", username)
+            null
         } catch (e: Exception) {
             logger.warn("Failed to extract user ID from authentication", e)
             null

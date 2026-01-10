@@ -100,28 +100,29 @@ const requiresRedirect = !user && !isPublicPage;
                     return;
                 }
                 try {
-                    // Get JWT token from localStorage
-                    const token = localStorage.getItem('authToken');
-                    if (!token) {
-                        // No token, redirect to login
-                        console.log('No auth token found, redirecting to /login');
+                    // Check for user data in localStorage (indicates a logged-in session)
+                    // The actual JWT token is stored in an HttpOnly cookie (secman_auth)
+                    // for XSS protection and is sent automatically with credentials: 'include'
+                    const userStr = localStorage.getItem('user');
+                    if (!userStr) {
+                        // No user data, redirect to login
+                        console.log('No user data found, redirecting to /login');
                         window.location.href = '/login';
                         return;
                     }
 
+                    // Validate session with backend (cookie sent automatically)
                     const response = await fetch('/api/auth/status', {
                         headers: {
-                            'Authorization': `Bearer ${token}`,
                             'Content-Type': 'application/json'
                         },
-                        credentials: 'include'
+                        credentials: 'include'  // Sends HttpOnly cookie automatically
                     });
                     if (!response.ok) {
                         // Not logged in or session invalid, redirect to login
                         if (response.status === 401) {
-                             console.log('Not authenticated, clearing token and redirecting to /login');
-                             // Clear invalid token
-                             localStorage.removeItem('authToken');
+                             console.log('Not authenticated, clearing user data and redirecting to /login');
+                             // Clear user data (token is in HttpOnly cookie, cleared by server)
                              localStorage.removeItem('user');
                              window.location.href = '/login';
                         } else {

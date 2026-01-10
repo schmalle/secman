@@ -61,10 +61,10 @@ const McpApiKeyManagement: React.FC = () => {
   const fetchApiKeys = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('authToken');
+      // Authentication is handled via HttpOnly cookie (credentials: 'include')
       const response = await fetch('/api/mcp/admin/api-keys', {
+        credentials: 'include',
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
@@ -117,12 +117,6 @@ const McpApiKeyManagement: React.FC = () => {
     }
 
     try {
-      const token = localStorage.getItem('authToken');
-      if (!token) {
-        setError('You must be logged in to create API keys');
-        return;
-      }
-
       const requestBody = {
         name: createForm.name.trim(),
         permissions: createForm.permissions,
@@ -134,10 +128,11 @@ const McpApiKeyManagement: React.FC = () => {
 
       console.log('Creating API key with:', requestBody);
 
+      // Authentication is handled via HttpOnly cookie (credentials: 'include')
       const response = await fetch('/api/mcp/admin/api-keys', {
         method: 'POST',
+        credentials: 'include',
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(requestBody)
@@ -170,12 +165,10 @@ const McpApiKeyManagement: React.FC = () => {
     }
 
     try {
-      const token = localStorage.getItem('authToken');
+      // Authentication is handled via HttpOnly cookie (credentials: 'include')
       const response = await fetch(`/api/mcp/admin/api-keys/${keyId}?reason=Revoked by user`, {
         method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        credentials: 'include'
       });
 
       if (response.ok) {

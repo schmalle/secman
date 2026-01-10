@@ -4,11 +4,12 @@
  * Secman MCP Server
  * Connects Claude Desktop to Secman backend via Model Context Protocol
  *
- * Exposes 14 tools:
+ * Exposes 15 tools:
  * - Requirements: get_requirements, export_requirements, add_requirement, delete_all_requirements
  * - Assets: get_assets, get_all_assets_detail, get_asset_profile, get_asset_complete_profile
  * - Vulnerabilities: get_vulnerabilities, get_all_vulnerabilities_detail
  * - Scans: get_scans, get_asset_scan_results, search_products
+ * - Admin: list_users (requires ADMIN role via User Delegation)
  */
 
 const { Server } = require('@modelcontextprotocol/sdk/server/index.js');
@@ -22,7 +23,11 @@ const {
 
 // Configuration
 const SECMAN_BASE_URL = process.env.SECMAN_BASE_URL || 'http://localhost:8080';
-const API_KEY = process.env.SECMAN_API_KEY || 'sk-mv5Nioy54KJO4tw1JQYDGQMSTadbFakyLlE1UmrkzNCSYV2M';
+const API_KEY = process.env.SECMAN_API_KEY
+// User identifier for MCP User Delegation (required for admin tools like list_users)
+// Set this to the email or username of a Secman user with appropriate roles (e.g., ADMIN)
+// Examples: "admin@example.com" or "adminuser"
+const USER_EMAIL = process.env.SECMAN_USER_EMAIL || '';
 
 class SecmanMCPServer {
   constructor() {
@@ -57,9 +62,8 @@ class SecmanMCPServer {
               properties: {
                 limit: {
                   type: 'number',
-                  description: 'Maximum number of requirements to return (default: 20, max: 100)',
-                  maximum: 100,
-                  default: 20
+                  description: 'Maximum number of requirements to return. Returns all requirements if not specified.',
+                  minimum: 1
                 },
                 offset: {
                   type: 'number',
@@ -506,6 +510,18 @@ class SecmanMCPServer {
                 }
               }
             }
+          },
+
+          // =====================
+          // ADMIN TOOLS
+          // =====================
+          {
+            name: 'list_users',
+            description: 'List all users in the system (ADMIN only, requires User Delegation). Returns user details including username, email, roles, and authentication source.',
+            inputSchema: {
+              type: 'object',
+              properties: {}
+            }
           }
         ]
       };
@@ -589,6 +605,8 @@ class SecmanMCPServer {
           return this.formatAddResult(content);
         case 'delete_all_requirements':
           return this.formatDeleteResult(content);
+        case 'list_users':
+          return this.formatUsers(content);
         default:
           return JSON.stringify(content, null, 2);
       }
@@ -779,15 +797,44 @@ class SecmanMCPServer {
     return JSON.stringify(content, null, 2);
   }
 
+  formatUsers(content) {
+    const users = content.users || [];
+    const total = content.totalCount || users.length;
+
+    if (users.length === 0) {
+      return 'No users found.';
+    }
+
+    let text = `Found ${total} users:\n\n`;
+    users.forEach((user, i) => {
+      text += `**${i + 1}. ${user.username}** (ID: ${user.id})\n`;
+      text += `   Email: ${user.email || 'N/A'}\n`;
+      text += `   Roles: ${user.roles?.join(', ') || 'None'}\n`;
+      text += `   Auth Source: ${user.authSource || 'LOCAL'}\n`;
+      text += `   MFA Enabled: ${user.mfaEnabled ? 'Yes' : 'No'}\n`;
+      if (user.lastLogin) text += `   Last Login: ${user.lastLogin}\n`;
+      text += '\n';
+    });
+    return text;
+  }
+
   async callSecmanAPI(endpoint, data) {
     const fetch = (await import('node-fetch')).default;
 
+    // Build headers with API key and optional user delegation
+    const headers = {
+      'Content-Type': 'application/json',
+      'X-MCP-API-Key': API_KEY
+    };
+
+    // Add User Delegation header if configured (required for admin tools like list_users)
+    if (USER_EMAIL) {
+      headers['X-MCP-User-Email'] = USER_EMAIL;
+    }
+
     const response = await fetch(`${SECMAN_BASE_URL}/api/mcp${endpoint}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-MCP-API-Key': API_KEY
-      },
+      headers,
       body: JSON.stringify(data)
     });
 
@@ -803,7 +850,8 @@ class SecmanMCPServer {
     await this.server.connect(transport);
     console.error('Secman MCP Server v0.2.0 running on stdio');
     console.error(`Backend URL: ${SECMAN_BASE_URL}`);
-    console.error('Available tools: 14 (requirements, assets, vulnerabilities, scans)');
+    console.error(`User Delegation: ${USER_EMAIL ? `enabled (${USER_EMAIL})` : 'disabled (set SECMAN_USER_EMAIL for admin tools)'}`);
+    console.error('Available tools: 15 (requirements, assets, vulnerabilities, scans, admin)');
   }
 }
 

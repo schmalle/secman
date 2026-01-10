@@ -106,6 +106,10 @@ micronaut:
         connect-timeout: 10s
 
 secman:
+  auth:
+    # Set to false for local development over HTTP, true for production HTTPS
+    # When false, auth cookies will be sent over HTTP (insecure but needed for localhost)
+    cookie-secure: ${SECMAN_AUTH_COOKIE_SECURE:false}
   encryption:
     # Encryption password for sensitive data - MUST be overridden in production
     password: ${SECMAN_ENCRYPTION_PASSWORD:SecManDefaultEncryptionPassword2024}

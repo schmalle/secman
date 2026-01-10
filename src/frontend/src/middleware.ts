@@ -14,7 +14,8 @@ export const onRequest = defineMiddleware(async (context, next) => {
     if (url.pathname.startsWith('/admin')) {
         // Get the auth token from cookies or localStorage (sent via headers)
         // Note: In SSR, we need to get the token from cookies since localStorage is client-side only
-        const authToken = cookies.get('authToken')?.value;
+        // Cookie name must match AuthController.AUTH_COOKIE_NAME ("secman_auth")
+        const authToken = cookies.get('secman_auth')?.value;
 
         if (!authToken) {
             // No token, redirect to login

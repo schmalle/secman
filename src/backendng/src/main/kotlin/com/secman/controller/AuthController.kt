@@ -25,7 +25,9 @@ import java.util.*
 open class AuthController(
     private val userRepository: UserRepository,
     private val tokenGenerator: TokenGenerator,
-    private val inputValidationService: InputValidationService
+    private val inputValidationService: InputValidationService,
+    @io.micronaut.context.annotation.Value("\${secman.auth.cookie-secure:true}")
+    private val cookieSecure: Boolean
 ) {
 
     private val passwordEncoder = BCryptPasswordEncoder()
@@ -39,14 +41,16 @@ open class AuthController(
      * Create HttpOnly secure cookie for JWT token.
      * Security properties:
      * - HttpOnly: Prevents JavaScript access (XSS protection)
-     * - Secure: Only sent over HTTPS
+     * - Secure: Only sent over HTTPS (configurable for development)
      * - SameSite=Lax: CSRF protection while allowing navigation
      * - Path=/: Available for all API endpoints
+     *
+     * Note: Set SECMAN_AUTH_COOKIE_SECURE=false for local development over HTTP
      */
     private fun createAuthCookie(token: String): Cookie {
         return Cookie.of(AUTH_COOKIE_NAME, token)
             .httpOnly(true)
-            .secure(true)  // Only sent over HTTPS
+            .secure(cookieSecure)  // Configurable: false for localhost dev, true for production
             .sameSite(SameSite.Lax)  // CSRF protection
             .maxAge(AUTH_COOKIE_MAX_AGE)
             .path("/")
@@ -58,7 +62,7 @@ open class AuthController(
     private fun createLogoutCookie(): Cookie {
         return Cookie.of(AUTH_COOKIE_NAME, "")
             .httpOnly(true)
-            .secure(true)
+            .secure(cookieSecure)
             .sameSite(SameSite.Lax)
             .maxAge(Duration.ZERO)  // Expire immediately
             .path("/")

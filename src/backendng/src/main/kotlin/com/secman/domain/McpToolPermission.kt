@@ -266,7 +266,7 @@ data class McpToolPermission(
             )
 
             val ADMIN_TOOLS = setOf(
-                "get_system_info", "get_user_activity"
+                "get_system_info", "get_user_activity", "list_users"
             )
         }
 

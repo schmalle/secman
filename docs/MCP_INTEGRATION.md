@@ -111,7 +111,8 @@ Edit your Claude Desktop config:
       "args": ["/path/to/secman/mcp-server.js"],
       "env": {
         "SECMAN_API_URL": "http://localhost:8080/api/mcp",
-        "SECMAN_API_KEY": "your-api-key-here"
+        "SECMAN_API_KEY": "your-api-key-here",
+        "SECMAN_USER_EMAIL": ""  // Optional for user delegation
       }
     }
   }

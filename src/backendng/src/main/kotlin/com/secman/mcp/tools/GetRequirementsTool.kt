@@ -23,9 +23,8 @@ class GetRequirementsTool(
         "properties" to mapOf(
             "limit" to mapOf(
                 "type" to "number",
-                "description" to "Maximum number of requirements to return (max 100)",
-                "default" to 20,
-                "maximum" to 100
+                "description" to "Maximum number of requirements to return. Returns all requirements if not specified.",
+                "minimum" to 1
             ),
             "offset" to mapOf(
                 "type" to "number",
@@ -52,16 +51,11 @@ class GetRequirementsTool(
     )
 
     override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
-        val limit = (arguments["limit"] as? Number)?.toInt() ?: 20
+        val limit = (arguments["limit"] as? Number)?.toInt()  // null = return all
         val offset = (arguments["offset"] as? Number)?.toInt() ?: 0
         val tags = (arguments["tags"] as? List<*>)?.filterIsInstance<String>()
         val status = arguments["status"] as? String
         val priority = arguments["priority"] as? String
-
-        // Validate limit
-        if (limit > 100) {
-            return McpToolResult.error("INVALID_PARAMETER", "Limit cannot exceed 100")
-        }
 
         try {
             val requirements = requirementService.getAllRequirements(limit)
