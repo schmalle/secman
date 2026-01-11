@@ -229,7 +229,7 @@ sudo chmod 640 /etc/secman/backend.env
 
 ```bash
 cd /opt/secman/app
-./gradlew :src:backendng:shadowJar -x test
+./gradlew :backendng:shadowJar -x test
 # Output: src/backendng/build/libs/backendng-0.1-all.jar
 ```
 
@@ -694,11 +694,13 @@ Schedule daily:
 
 ---
 
-## Related Documentation
+## See Also
 
 - [Environment Variables](./ENVIRONMENT.md) - Configuration reference
-- [CLI Reference](./CLI.md) - Command-line tools
-- [CrowdStrike Import](./CROWDSTRIKE_IMPORT.md) - Vulnerability import details
+- [Architecture](./ARCHITECTURE.md) - System design overview
+- [CLI Reference](./CLI.md) - Command-line tools and cron jobs
+- [MCP Integration](./MCP.md) - AI assistant setup
+- [Troubleshooting](./TROUBLESHOOTING.md) - Common issues and solutions
 
 ---
 

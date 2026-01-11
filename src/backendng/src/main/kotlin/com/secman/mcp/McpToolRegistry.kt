@@ -31,7 +31,9 @@ class McpToolRegistry(
     // Feature 060: MCP List Users Tool
     @Inject private val listUsersTool: ListUsersTool,
     // Feature 061: MCP List Products Tool
-    @Inject private val listProductsTool: ListProductsTool
+    @Inject private val listProductsTool: ListProductsTool,
+    // MCP Tool: Get asset with most vulnerabilities
+    @Inject private val getAssetMostVulnerabilitiesTool: GetAssetMostVulnerabilitiesTool
 ) {
     private val logger = LoggerFactory.getLogger(McpToolRegistry::class.java)
 
@@ -59,7 +61,9 @@ class McpToolRegistry(
             // Feature 060: MCP List Users Tool
             listUsersTool,
             // Feature 061: MCP List Products Tool
-            listProductsTool
+            listProductsTool,
+            // MCP Tool: Get asset with most vulnerabilities
+            getAssetMostVulnerabilitiesTool
         ).forEach { tool ->
             toolMap[tool.name] = tool
             logger.debug("Registered MCP tool: {}", tool.name)
@@ -198,6 +202,12 @@ class McpToolRegistry(
                 permissions.contains(McpPermission.VULNERABILITIES_READ)
             }
             "get_asset_complete_profile" -> {
+                permissions.contains(McpPermission.ASSETS_READ)
+            }
+
+            // MCP Tool: Get asset with most vulnerabilities
+            "get_asset_most_vulnerabilities" -> {
+                permissions.contains(McpPermission.VULNERABILITIES_READ) ||
                 permissions.contains(McpPermission.ASSETS_READ)
             }
 

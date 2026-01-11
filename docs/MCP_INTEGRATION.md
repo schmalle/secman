@@ -25,6 +25,7 @@ This guide covers integrating Secman with AI assistants (Claude Desktop, ChatGPT
 ## Overview
 
 Secman supports the Model Context Protocol (MCP), allowing AI assistants to programmatically access security data including:
+
 - **Security Requirements** - Query, export, and manage security requirements
 - **Asset Inventory** - Browse assets, get detailed profiles with vulnerabilities
 - **Vulnerability Data** - Search vulnerabilities by severity, CVE, or affected asset
@@ -61,6 +62,7 @@ cd src/backendng
 ```
 
 Verify it's running:
+
 ```bash
 curl http://localhost:8080/health
 # Expected: {"status":"UP","service":"secman-backend-ng","version":"0.1"}
@@ -69,6 +71,7 @@ curl http://localhost:8080/health
 ### 2. Create an MCP API Key
 
 Get a JWT token first:
+
 ```bash
 curl -X POST "http://localhost:8080/api/auth/login" \
   -H "Content-Type: application/json" \
@@ -76,6 +79,7 @@ curl -X POST "http://localhost:8080/api/auth/login" \
 ```
 
 Create the API key:
+
 ```bash
 curl -X POST "http://localhost:8080/api/mcp/admin/api-keys" \
   -H "Content-Type: application/json" \
@@ -100,10 +104,12 @@ chmod +x mcp-server.js
 ### 4. Configure Claude Desktop
 
 Edit your Claude Desktop config:
+
 - **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
 - **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
 
 ```json
+
 {
   "mcpServers": {
     "secman": {
@@ -116,6 +122,20 @@ Edit your Claude Desktop config:
       }
     }
   }
+}
+
+Streaming variant:
+{
+   "mcpServers": {
+         "secman": {
+           "url": "http://localhost:8080/mcp",
+           "transport": "streamable-http",
+           "headers": {
+             "X-MCP-API-Key": "sk-xxx",
+             "X-MCP-User-Email": "user@example.com"
+           }
+         }
+       }
 }
 ```
 
@@ -151,25 +171,28 @@ curl -X POST http://localhost:8080/api/mcp/admin/api-keys \
 
 ### Permission Types
 
-| Permission | Description | Tools Enabled |
-|------------|-------------|---------------|
-| `REQUIREMENTS_READ` | Read security requirements | `get_requirements`, `export_requirements` |
-| `REQUIREMENTS_WRITE` | Create/modify requirements | `add_requirement` |
-| `REQUIREMENTS_DELETE` | Delete requirements | `delete_all_requirements` |
-| `ASSETS_READ` | Read asset inventory | `get_assets`, `get_all_assets_detail`, `get_asset_profile`, `get_asset_complete_profile` |
-| `VULNERABILITIES_READ` | Read vulnerability data | `get_vulnerabilities`, `get_all_vulnerabilities_detail` |
-| `SCANS_READ` | Read scan history | `get_scans`, `get_asset_scan_results`, `search_products` |
-| `TAGS_READ` | Read tags and categories | (used by requirements filtering) |
+
+| Permission             | Description                | Tools Enabled                                                                            |
+| ---------------------- | -------------------------- | ---------------------------------------------------------------------------------------- |
+| `REQUIREMENTS_READ`    | Read security requirements | `get_requirements`, `export_requirements`                                                |
+| `REQUIREMENTS_WRITE`   | Create/modify requirements | `add_requirement`                                                                        |
+| `REQUIREMENTS_DELETE`  | Delete requirements        | `delete_all_requirements`                                                                |
+| `ASSETS_READ`          | Read asset inventory       | `get_assets`, `get_all_assets_detail`, `get_asset_profile`, `get_asset_complete_profile` |
+| `VULNERABILITIES_READ` | Read vulnerability data    | `get_vulnerabilities`, `get_all_vulnerabilities_detail`                                  |
+| `SCANS_READ`           | Read scan history          | `get_scans`, `get_asset_scan_results`, `search_products`                                 |
+| `TAGS_READ`            | Read tags and categories   | (used by requirements filtering)                                                         |
 
 ### Managing Keys
 
 **List all keys:**
+
 ```bash
 curl -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   http://localhost:8080/api/mcp/admin/api-keys
 ```
 
 **Revoke a key:**
+
 ```bash
 curl -X DELETE \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
@@ -211,6 +234,7 @@ curl -X POST http://localhost:8080/api/mcp/admin/api-keys \
 ```
 
 **Required fields when `delegationEnabled` is true:**
+
 - `allowedDelegationDomains`: Comma-separated list of allowed email domains (must start with `@`)
 
 ### Using Delegation
@@ -237,17 +261,19 @@ curl -X POST http://localhost:8080/api/mcp/tools/call \
 
 User roles are mapped to MCP permissions as follows:
 
-| User Role | Implied MCP Permissions |
-|-----------|------------------------|
-| `USER` | `REQUIREMENTS_READ`, `ASSETS_READ`, `VULNERABILITIES_READ`, `TAGS_READ` |
-| `ADMIN` | All permissions |
-| `VULN` | `VULNERABILITIES_READ`, `SCANS_READ`, `ASSETS_READ` |
-| `RELEASE_MANAGER` | `REQUIREMENTS_READ`, `ASSESSMENTS_READ` |
-| `REQ` | `REQUIREMENTS_READ`, `REQUIREMENTS_WRITE`, `FILES_READ`, `TAGS_READ` |
-| `RISK` | `ASSESSMENTS_READ`, `ASSESSMENTS_WRITE`, `ASSESSMENTS_EXECUTE` |
-| `SECCHAMPION` | `REQUIREMENTS_READ`, `ASSESSMENTS_READ`, `ASSETS_READ`, `VULNERABILITIES_READ`, `SCANS_READ` |
+
+| User Role         | Implied MCP Permissions                                                                      |
+| ----------------- | -------------------------------------------------------------------------------------------- |
+| `USER`            | `REQUIREMENTS_READ`, `ASSETS_READ`, `VULNERABILITIES_READ`, `TAGS_READ`                      |
+| `ADMIN`           | All permissions                                                                              |
+| `VULN`            | `VULNERABILITIES_READ`, `SCANS_READ`, `ASSETS_READ`                                          |
+| `RELEASE_MANAGER` | `REQUIREMENTS_READ`, `ASSESSMENTS_READ`                                                      |
+| `REQ`             | `REQUIREMENTS_READ`, `REQUIREMENTS_WRITE`, `FILES_READ`, `TAGS_READ`                         |
+| `RISK`            | `ASSESSMENTS_READ`, `ASSESSMENTS_WRITE`, `ASSESSMENTS_EXECUTE`                               |
+| `SECCHAMPION`     | `REQUIREMENTS_READ`, `ASSESSMENTS_READ`, `ASSETS_READ`, `VULNERABILITIES_READ`, `SCANS_READ` |
 
 **Example:** If a user has `VULN` role and the API key has `[ASSETS_READ, VULNERABILITIES_READ, REQUIREMENTS_READ]`:
+
 - User's implied permissions: `[VULNERABILITIES_READ, SCANS_READ, ASSETS_READ]`
 - API key permissions: `[ASSETS_READ, VULNERABILITIES_READ, REQUIREMENTS_READ]`
 - **Effective permissions**: `[VULNERABILITIES_READ, ASSETS_READ]` (intersection)
@@ -261,11 +287,8 @@ User roles are mapped to MCP permissions as follows:
 ### Security Considerations
 
 1. **Domain Restrictions**: Mandatory when delegation is enabled. Only emails matching allowed domains can be delegated.
-
 2. **User Validation**: The delegated user must exist in Secman and be active.
-
 3. **Audit Trail**: All delegated requests are logged with both the API key owner and delegated user email.
-
 4. **Alert Threshold**: Configurable threshold for failed delegation attempts triggers security alerts. Configure in `application.yml`:
 
 ```yaml
@@ -279,14 +302,15 @@ secman:
 
 ### Delegation Error Codes
 
-| Error Code | Description |
-|------------|-------------|
-| `DELEGATION_NOT_ENABLED` | API key doesn't have delegation enabled |
-| `DELEGATION_DOMAIN_REJECTED` | Email domain not in allowed list |
-| `DELEGATION_USER_NOT_FOUND` | User with email doesn't exist |
-| `DELEGATION_USER_INACTIVE` | User account is disabled |
-| `DELEGATION_INVALID_EMAIL` | Email format is invalid |
-| `DELEGATION_FAILED` | General delegation failure |
+
+| Error Code                   | Description                             |
+| ---------------------------- | --------------------------------------- |
+| `DELEGATION_NOT_ENABLED`     | API key doesn't have delegation enabled |
+| `DELEGATION_DOMAIN_REJECTED` | Email domain not in allowed list        |
+| `DELEGATION_USER_NOT_FOUND`  | User with email doesn't exist           |
+| `DELEGATION_USER_INACTIVE`   | User account is disabled                |
+| `DELEGATION_INVALID_EMAIL`   | Email format is invalid                 |
+| `DELEGATION_FAILED`          | General delegation failure              |
 
 ### Example: Claude Code Integration
 
@@ -318,11 +342,12 @@ For Claude Code or similar tools that authenticate users externally:
 
 ### Configuration File Location
 
-| OS | Path |
-|----|------|
-| macOS | `~/Library/Application Support/Claude/claude_desktop_config.json` |
-| Windows | `%APPDATA%\Claude\claude_desktop_config.json` |
-| Linux | `~/.config/Claude/claude_desktop_config.json` |
+
+| OS      | Path                                                              |
+| ------- | ----------------------------------------------------------------- |
+| macOS   | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| Windows | `%APPDATA%\Claude\claude_desktop_config.json`                     |
+| Linux   | `~/.config/Claude/claude_desktop_config.json`                     |
 
 ### Node.js MCP Server Configuration
 
@@ -344,13 +369,13 @@ For Claude Code or similar tools that authenticate users externally:
 ### Python MCP Server (Alternative)
 
 1. Install dependencies:
+
    ```bash
    pip install requests
    ```
-
 2. Update `src/misc/mcp.py` with your API key
-
 3. Configure Claude Desktop:
+
    ```json
    {
      "mcpServers": {
@@ -380,27 +405,30 @@ You should see a JSON response indicating successful initialization.
 
 The MCP server exposes **14 tools** organized into four categories:
 
-| Category | Tools | Description |
-|----------|-------|-------------|
-| **Requirements** | 4 tools | Security requirement management |
-| **Assets** | 4 tools | Asset inventory and profiles |
-| **Vulnerabilities** | 2 tools | Vulnerability data and analysis |
-| **Scans** | 3 tools | Scan history and product discovery |
+
+| Category            | Tools   | Description                        |
+| ------------------- | ------- | ---------------------------------- |
+| **Requirements**    | 4 tools | Security requirement management    |
+| **Assets**          | 4 tools | Asset inventory and profiles       |
+| **Vulnerabilities** | 2 tools | Vulnerability data and analysis    |
+| **Scans**           | 3 tools | Scan history and product discovery |
 
 ---
 
 ### Requirements Management
 
 #### `get_requirements`
+
 Retrieve security requirements with optional filtering and pagination.
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `limit` | number | Max results (default: 20, max: 100) |
-| `offset` | number | Skip N results (default: 0) |
-| `tags` | string[] | Filter by tags |
-| `status` | enum | Filter by status: `DRAFT`, `ACTIVE`, `DEPRECATED`, `ARCHIVED` |
-| `priority` | enum | Filter by priority: `LOW`, `MEDIUM`, `HIGH`, `CRITICAL` |
+
+| Parameter  | Type     | Description                                                  |
+| ---------- | -------- | ------------------------------------------------------------ |
+| `limit`    | number   | Max results (default: 20, max: 100)                          |
+| `offset`   | number   | Skip N results (default: 0)                                  |
+| `tags`     | string[] | Filter by tags                                               |
+| `status`   | enum     | Filter by status:`DRAFT`, `ACTIVE`, `DEPRECATED`, `ARCHIVED` |
+| `priority` | enum     | Filter by priority:`LOW`, `MEDIUM`, `HIGH`, `CRITICAL`       |
 
 ```json
 {
@@ -415,11 +443,13 @@ Retrieve security requirements with optional filtering and pagination.
 ```
 
 #### `export_requirements`
+
 Export all requirements to Excel or Word format. Returns base64-encoded file content.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `format` | enum | Yes | Export format: `xlsx` (Excel) or `docx` (Word) |
+
+| Parameter | Type | Required | Description                                   |
+| --------- | ---- | -------- | --------------------------------------------- |
+| `format`  | enum | Yes      | Export format:`xlsx` (Excel) or `docx` (Word) |
 
 ```json
 {
@@ -431,17 +461,19 @@ Export all requirements to Excel or Word format. Returns base64-encoded file con
 ```
 
 #### `add_requirement`
+
 Create a new security requirement.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `shortreq` | string | Yes | Short requirement text |
-| `details` | string | No | Detailed description |
-| `motivation` | string | No | Why this requirement exists |
-| `example` | string | No | Implementation example |
-| `norm` | string | No | Regulatory norm reference (e.g., ISO 27001) |
-| `usecase` | string | No | Use case description |
-| `chapter` | string | No | Chapter/category for grouping |
+
+| Parameter    | Type   | Required | Description                                 |
+| ------------ | ------ | -------- | ------------------------------------------- |
+| `shortreq`   | string | Yes      | Short requirement text                      |
+| `details`    | string | No       | Detailed description                        |
+| `motivation` | string | No       | Why this requirement exists                 |
+| `example`    | string | No       | Implementation example                      |
+| `norm`       | string | No       | Regulatory norm reference (e.g., ISO 27001) |
+| `usecase`    | string | No       | Use case description                        |
+| `chapter`    | string | No       | Chapter/category for grouping               |
 
 ```json
 {
@@ -457,11 +489,13 @@ Create a new security requirement.
 ```
 
 #### `delete_all_requirements`
+
 Delete ALL requirements from the system. **ADMIN only.** Requires explicit confirmation.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `confirm` | boolean | Yes | Must be `true` to confirm deletion |
+
+| Parameter | Type    | Required | Description                       |
+| --------- | ------- | -------- | --------------------------------- |
+| `confirm` | boolean | Yes      | Must be`true` to confirm deletion |
 
 ```json
 {
@@ -477,17 +511,19 @@ Delete ALL requirements from the system. **ADMIN only.** Requires explicit confi
 ### Asset Management
 
 #### `get_assets`
+
 Retrieve asset inventory with filtering and pagination.
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `page` | number | Page number (0-indexed, default: 0) |
-| `pageSize` | number | Items per page (max: 500, default: 100) |
-| `name` | string | Filter by name (partial match, case-insensitive) |
-| `type` | string | Filter by type: `SERVER`, `WORKSTATION`, `NETWORK`, `OTHER` |
-| `ip` | string | Filter by IP address (partial match) |
-| `owner` | string | Filter by owner (exact match) |
-| `group` | string | Filter by group membership (exact match) |
+
+| Parameter  | Type   | Description                                                |
+| ---------- | ------ | ---------------------------------------------------------- |
+| `page`     | number | Page number (0-indexed, default: 0)                        |
+| `pageSize` | number | Items per page (max: 500, default: 100)                    |
+| `name`     | string | Filter by name (partial match, case-insensitive)           |
+| `type`     | string | Filter by type:`SERVER`, `WORKSTATION`, `NETWORK`, `OTHER` |
+| `ip`       | string | Filter by IP address (partial match)                       |
+| `owner`    | string | Filter by owner (exact match)                              |
+| `group`    | string | Filter by group membership (exact match)                   |
 
 ```json
 {
@@ -500,17 +536,19 @@ Retrieve asset inventory with filtering and pagination.
 ```
 
 #### `get_all_assets_detail`
+
 Retrieve all assets with comprehensive filtering, pagination, and workgroup info.
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `name` | string | Filter by name (case-insensitive contains) |
-| `type` | string | Filter by type: `SERVER`, `CLIENT`, `NETWORK_DEVICE` |
-| `ip` | string | Filter by IP address (contains) |
-| `owner` | string | Filter by owner name (contains) |
-| `group` | string | Filter by group membership (exact match) |
-| `page` | integer | Page number (0-indexed, default: 0) |
-| `pageSize` | integer | Items per page (max: 1000, default: 100) |
+
+| Parameter  | Type    | Description                                         |
+| ---------- | ------- | --------------------------------------------------- |
+| `name`     | string  | Filter by name (case-insensitive contains)          |
+| `type`     | string  | Filter by type:`SERVER`, `CLIENT`, `NETWORK_DEVICE` |
+| `ip`       | string  | Filter by IP address (contains)                     |
+| `owner`    | string  | Filter by owner name (contains)                     |
+| `group`    | string  | Filter by group membership (exact match)            |
+| `page`     | integer | Page number (0-indexed, default: 0)                 |
+| `pageSize` | integer | Items per page (max: 1000, default: 100)            |
 
 ```json
 {
@@ -523,15 +561,17 @@ Retrieve all assets with comprehensive filtering, pagination, and workgroup info
 ```
 
 #### `get_asset_profile`
+
 Retrieve comprehensive profile for a single asset including vulnerabilities and scan history.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `assetId` | number | Yes | The asset ID to retrieve |
-| `includeVulnerabilities` | boolean | No | Include vulnerability data (default: true) |
-| `includeScanHistory` | boolean | No | Include scan history (default: true) |
-| `vulnerabilityLimit` | number | No | Max vulnerabilities to return (max: 100, default: 20) |
-| `scanHistoryLimit` | number | No | Max scan results to return (max: 50, default: 10) |
+
+| Parameter                | Type    | Required | Description                                           |
+| ------------------------ | ------- | -------- | ----------------------------------------------------- |
+| `assetId`                | number  | Yes      | The asset ID to retrieve                              |
+| `includeVulnerabilities` | boolean | No       | Include vulnerability data (default: true)            |
+| `includeScanHistory`     | boolean | No       | Include scan history (default: true)                  |
+| `vulnerabilityLimit`     | number  | No       | Max vulnerabilities to return (max: 100, default: 20) |
+| `scanHistoryLimit`       | number  | No       | Max scan results to return (max: 50, default: 10)     |
 
 ```json
 {
@@ -545,13 +585,15 @@ Retrieve comprehensive profile for a single asset including vulnerabilities and 
 ```
 
 #### `get_asset_complete_profile`
+
 Retrieve complete asset profile including base details, all vulnerabilities, and all scan results.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `assetId` | integer | Yes | The asset ID to retrieve |
-| `includeVulnerabilities` | boolean | No | Include vulnerability data (default: true) |
-| `includeScanResults` | boolean | No | Include scan result data (default: true) |
+
+| Parameter                | Type    | Required | Description                                |
+| ------------------------ | ------- | -------- | ------------------------------------------ |
+| `assetId`                | integer | Yes      | The asset ID to retrieve                   |
+| `includeVulnerabilities` | boolean | No       | Include vulnerability data (default: true) |
+| `includeScanResults`     | boolean | No       | Include scan result data (default: true)   |
 
 ```json
 {
@@ -567,17 +609,19 @@ Retrieve complete asset profile including base details, all vulnerabilities, and
 ### Vulnerability Management
 
 #### `get_vulnerabilities`
+
 Retrieve vulnerability data with optional filtering and pagination.
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `page` | number | Page number (0-indexed, default: 0) |
-| `pageSize` | number | Items per page (max: 500, default: 100) |
-| `cveId` | string | Filter by CVE ID (partial match, case-insensitive) |
-| `severity` | string[] | Filter by severity: `Critical`, `High`, `Medium`, `Low`, `Info` |
-| `assetId` | number | Filter by asset ID |
-| `startDate` | string | Filter after this date (ISO-8601) |
-| `endDate` | string | Filter before this date (ISO-8601) |
+
+| Parameter   | Type     | Description                                                    |
+| ----------- | -------- | -------------------------------------------------------------- |
+| `page`      | number   | Page number (0-indexed, default: 0)                            |
+| `pageSize`  | number   | Items per page (max: 500, default: 100)                        |
+| `cveId`     | string   | Filter by CVE ID (partial match, case-insensitive)             |
+| `severity`  | string[] | Filter by severity:`Critical`, `High`, `Medium`, `Low`, `Info` |
+| `assetId`   | number   | Filter by asset ID                                             |
+| `startDate` | string   | Filter after this date (ISO-8601)                              |
+| `endDate`   | string   | Filter before this date (ISO-8601)                             |
 
 ```json
 {
@@ -590,15 +634,17 @@ Retrieve vulnerability data with optional filtering and pagination.
 ```
 
 #### `get_all_vulnerabilities_detail`
+
 Retrieve vulnerabilities with severity/asset/days-open filtering and detailed asset info.
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `severity` | enum | Filter by severity: `CRITICAL`, `HIGH`, `MEDIUM`, `LOW` |
-| `assetId` | integer | Filter by specific asset ID |
-| `minDaysOpen` | integer | Filter by minimum days vulnerability has been open |
-| `page` | integer | Page number (0-indexed, default: 0) |
-| `pageSize` | integer | Items per page (max: 1000, default: 100) |
+
+| Parameter     | Type    | Description                                            |
+| ------------- | ------- | ------------------------------------------------------ |
+| `severity`    | enum    | Filter by severity:`CRITICAL`, `HIGH`, `MEDIUM`, `LOW` |
+| `assetId`     | integer | Filter by specific asset ID                            |
+| `minDaysOpen` | integer | Filter by minimum days vulnerability has been open     |
+| `page`        | integer | Page number (0-indexed, default: 0)                    |
+| `pageSize`    | integer | Items per page (max: 1000, default: 100)               |
 
 ```json
 {
@@ -615,16 +661,18 @@ Retrieve vulnerabilities with severity/asset/days-open filtering and detailed as
 ### Scan Management
 
 #### `get_scans`
+
 Retrieve scan history with optional filtering and pagination.
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `page` | number | Page number (0-indexed, default: 0) |
-| `pageSize` | number | Items per page (max: 500, default: 100) |
-| `scanType` | enum | Filter by type: `nmap`, `masscan` |
-| `uploadedBy` | string | Filter by uploader username |
-| `startDate` | string | Filter scans after this date (ISO-8601) |
-| `endDate` | string | Filter scans before this date (ISO-8601) |
+
+| Parameter    | Type   | Description                              |
+| ------------ | ------ | ---------------------------------------- |
+| `page`       | number | Page number (0-indexed, default: 0)      |
+| `pageSize`   | number | Items per page (max: 500, default: 100)  |
+| `scanType`   | enum   | Filter by type:`nmap`, `masscan`         |
+| `uploadedBy` | string | Filter by uploader username              |
+| `startDate`  | string | Filter scans after this date (ISO-8601)  |
+| `endDate`    | string | Filter scans before this date (ISO-8601) |
 
 ```json
 {
@@ -637,16 +685,18 @@ Retrieve scan history with optional filtering and pagination.
 ```
 
 #### `get_asset_scan_results`
+
 Retrieve scan results (open ports, services, products) with optional filtering.
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `portMin` | integer | Minimum port number (1-65535) |
-| `portMax` | integer | Maximum port number (1-65535) |
-| `service` | string | Filter by service name (case-insensitive contains) |
-| `state` | enum | Filter by port state: `open`, `filtered`, `closed` |
-| `page` | integer | Page number (0-indexed, default: 0) |
-| `pageSize` | integer | Items per page (max: 1000, default: 100) |
+
+| Parameter  | Type    | Description                                        |
+| ---------- | ------- | -------------------------------------------------- |
+| `portMin`  | integer | Minimum port number (1-65535)                      |
+| `portMax`  | integer | Maximum port number (1-65535)                      |
+| `service`  | string  | Filter by service name (case-insensitive contains) |
+| `state`    | enum    | Filter by port state:`open`, `filtered`, `closed`  |
+| `page`     | integer | Page number (0-indexed, default: 0)                |
+| `pageSize` | integer | Items per page (max: 1000, default: 100)           |
 
 ```json
 {
@@ -660,14 +710,16 @@ Retrieve scan results (open ports, services, products) with optional filtering.
 ```
 
 #### `search_products`
+
 Search for products/services discovered in network scans across infrastructure.
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `page` | number | Page number (0-indexed, default: 0) |
-| `pageSize` | number | Items per page (max: 500, default: 100) |
-| `service` | string | Filter by service name (partial match, case-insensitive) |
-| `stateFilter` | enum | Filter by port state: `open`, `filtered`, `closed`, `all` (default: `open`) |
+
+| Parameter     | Type   | Description                                                                |
+| ------------- | ------ | -------------------------------------------------------------------------- |
+| `page`        | number | Page number (0-indexed, default: 0)                                        |
+| `pageSize`    | number | Items per page (max: 500, default: 100)                                    |
+| `service`     | string | Filter by service name (partial match, case-insensitive)                   |
+| `stateFilter` | enum   | Filter by port state:`open`, `filtered`, `closed`, `all` (default: `open`) |
 
 ```json
 {
@@ -693,10 +745,11 @@ Search for products/services discovered in network scans across infrastructure.
 
 ### Rate Limiting
 
-| Limit Type | Default |
-|------------|---------|
-| Per API Key | 1000 requests/hour |
-| Concurrent Sessions | 10 per API key |
+
+| Limit Type          | Default            |
+| ------------------- | ------------------ |
+| Per API Key         | 1000 requests/hour |
+| Concurrent Sessions | 10 per API key     |
 
 ### Session Management
 
@@ -707,6 +760,7 @@ Search for products/services discovered in network scans across infrastructure.
 ### Audit Logging
 
 All MCP operations are logged with:
+
 - Timestamp and duration
 - User and API key information
 - Tool called and parameters
@@ -720,21 +774,25 @@ All MCP operations are logged with:
 ### Claude Desktop Prompts
 
 **Requirements:**
+
 - "Show me all critical security requirements" → `get_requirements` with `priority: "CRITICAL"`
 - "Export requirements to Excel" → `export_requirements` with `format: "xlsx"`
 - "Add a new requirement for password complexity" → `add_requirement`
 
 **Assets:**
+
 - "Show me all servers" → `get_assets` with `type: "SERVER"`
 - "Get details for asset ID 42" → `get_asset_profile` with `assetId: 42`
 - "List assets owned by IT-Security team" → `get_all_assets_detail` with `owner: "IT-Security"`
 
 **Vulnerabilities:**
+
 - "Show me all critical vulnerabilities" → `get_vulnerabilities` with `severity: ["Critical"]`
 - "Find vulnerabilities open for more than 30 days" → `get_all_vulnerabilities_detail` with `minDaysOpen: 30`
 - "What vulnerabilities affect asset 42?" → `get_vulnerabilities` with `assetId: 42`
 
 **Scans:**
+
 - "Show recent nmap scans" → `get_scans` with `scanType: "nmap"`
 - "Find all open SSH ports" → `get_asset_scan_results` with `service: "ssh"`, `state: "open"`
 - "Search for Apache servers in the network" → `search_products` with `service: "Apache"`
@@ -742,6 +800,7 @@ All MCP operations are logged with:
 ### Programmatic Access
 
 #### Python
+
 ```python
 import requests
 
@@ -770,6 +829,7 @@ print(response.json())
 ```
 
 #### Node.js
+
 ```javascript
 const axios = require('axios');
 
@@ -800,19 +860,23 @@ console.log(result.data);
 ### Common Issues
 
 #### "Authentication Failed"
+
 - Verify API key is correct and not expired
 - Check `X-MCP-API-Key` header is set
 - Ensure key has required permissions
 
 #### "Session Not Found"
+
 - Sessions expire after 60 minutes
 - Create new session via `/api/mcp/session`
 
 #### "Permission Denied"
+
 - Verify API key permissions include required tool
 - Check rate limits haven't been exceeded
 
 #### "MCP Server fails to start"
+
 - Ensure Node.js 18+ is installed
 - Run `npm install` in project directory
 - Verify paths in Claude Desktop config are absolute
@@ -821,12 +885,14 @@ console.log(result.data);
 ### Debug Commands
 
 **Test API key:**
+
 ```bash
 curl -H "X-MCP-API-Key: your-key" \
   http://localhost:8080/api/mcp/capabilities
 ```
 
 **Test tool call:**
+
 ```bash
 curl -X POST \
   -H "X-MCP-API-Key: your-key" \
@@ -838,6 +904,7 @@ curl -X POST \
 ### Enable Debug Logging
 
 Set environment variable:
+
 ```bash
 export SECMAN_LOG_LEVEL=DEBUG
 ```
@@ -849,6 +916,7 @@ export SECMAN_LOG_LEVEL=DEBUG
 ### Monitoring
 
 Navigate to **Admin > MCP Monitoring** for:
+
 - Active sessions
 - API key usage statistics
 - Tool usage analytics
@@ -874,6 +942,7 @@ mcp:
 ### Backup
 
 Ensure backup includes MCP-related tables:
+
 - `mcp_api_keys`
 - `mcp_sessions`
 - `mcp_audit_logs`

@@ -18,7 +18,7 @@ micronaut:
         web:
           allowed-origins:
             - "http://localhost:4321"
-            - "http://localhost:3000" 
+            - "http://localhost:3000"
           allowed-methods:
             - GET
             - POST
@@ -34,6 +34,27 @@ micronaut:
           exposed-headers:
             - Authorization
           allow-credentials: true
+          max-age: 3600
+        # MCP Streamable HTTP Transport CORS configuration
+        # Allows direct connections from Claude Desktop and other MCP clients
+        mcp:
+          allowed-origins-regex:
+            - ".*"  # MCP clients can come from anywhere (non-browser)
+          allowed-methods:
+            - GET
+            - POST
+            - DELETE
+            - OPTIONS
+          allowed-headers:
+            - Content-Type
+            - Accept
+            - Mcp-Session-Id
+            - X-MCP-API-Key
+            - X-MCP-User-Email
+            - Origin
+          exposed-headers:
+            - Mcp-Session-Id
+          allow-credentials: false
           max-age: 3600
   security:
     authentication: bearer
@@ -61,6 +82,13 @@ micronaut:
         access:
           - isAnonymous()
       - pattern: /health
+        access:
+          - isAnonymous()
+      # MCP Streamable HTTP Transport - authentication via X-MCP-API-Key header
+      - pattern: /mcp
+        access:
+          - isAnonymous()
+      - pattern: /mcp/**
         access:
           - isAnonymous()
       - pattern: /api/auth/status

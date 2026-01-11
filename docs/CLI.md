@@ -636,15 +636,18 @@ exit 0
 
 ---
 
-## Related Documentation
+## See Also
 
-- [Environment Variables](./ENVIRONMENT.md) - Complete configuration reference
-- [Deployment Guide](./DEPLOYMENT.md) - Server setup
+- [Environment Variables](./ENVIRONMENT.md) - Configuration reference
+- [Deployment Guide](./DEPLOYMENT.md) - Production setup
 - [CrowdStrike Import](./CROWDSTRIKE_IMPORT.md) - Import technical details
-- [User Mapping Commands](../src/cli/src/main/resources/cli-docs/USER_MAPPING_COMMANDS.md) - Detailed user mapping CLI subcommands
-- [Workgroup Commands](../src/cli/src/main/resources/cli-docs/WORKGROUP_COMMANDS.md) - Detailed workgroup management CLI subcommands
-- [Add Vulnerability Command](../src/cli/src/main/resources/cli-docs/ADD_VULNERABILITY_COMMANDS.md) - Detailed add-vulnerability CLI command
+- [Troubleshooting](./TROUBLESHOOTING.md) - Common issues and solutions
+
+**CLI-specific docs:**
+- [User Mapping Commands](../src/cli/src/main/resources/cli-docs/USER_MAPPING_COMMANDS.md)
+- [Workgroup Commands](../src/cli/src/main/resources/cli-docs/WORKGROUP_COMMANDS.md)
+- [Add Vulnerability Command](../src/cli/src/main/resources/cli-docs/ADD_VULNERABILITY_COMMANDS.md)
 
 ---
 
-*For CLI help: `java -jar secman-cli.jar --help`*
+*For CLI help: `./bin/secman help`*

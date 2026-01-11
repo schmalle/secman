@@ -21,7 +21,14 @@ enum class McpConnectionType {
      * HTTP - traditional request-response pattern
      * Best for simple one-off requests and compatibility
      */
-    HTTP;
+    HTTP,
+
+    /**
+     * Streamable HTTP - MCP native HTTP transport with JSON-RPC 2.0
+     * Best for direct connections from Claude Desktop without Node.js middleware
+     * Supports both single requests and batched requests
+     */
+    STREAMABLE_HTTP;
 
     /**
      * Get display name for UI
@@ -31,6 +38,7 @@ enum class McpConnectionType {
             SSE -> "Server-Sent Events"
             WEBSOCKET -> "WebSocket"
             HTTP -> "HTTP"
+            STREAMABLE_HTTP -> "Streamable HTTP (MCP Native)"
         }
     }
 
@@ -42,6 +50,7 @@ enum class McpConnectionType {
             SSE -> "Real-time streaming from server to client, ideal for notifications"
             WEBSOCKET -> "Bidirectional streaming, ideal for interactive sessions"
             HTTP -> "Traditional request-response, maximum compatibility"
+            STREAMABLE_HTTP -> "MCP native HTTP transport, direct connection without middleware"
         }
     }
 
@@ -51,7 +60,7 @@ enum class McpConnectionType {
     fun supportsStreaming(): Boolean {
         return when (this) {
             SSE, WEBSOCKET -> true
-            HTTP -> false
+            HTTP, STREAMABLE_HTTP -> false
         }
     }
 
@@ -61,7 +70,7 @@ enum class McpConnectionType {
     fun supportsBidirectional(): Boolean {
         return when (this) {
             WEBSOCKET -> true
-            SSE, HTTP -> false
+            SSE, HTTP, STREAMABLE_HTTP -> false
         }
     }
 
@@ -71,6 +80,7 @@ enum class McpConnectionType {
     fun getDefaultTimeoutMinutes(): Int {
         return when (this) {
             HTTP -> 2 // Short timeout for HTTP requests
+            STREAMABLE_HTTP -> 5 // Slightly longer for MCP protocol handshake
             SSE -> 60 // Longer timeout for streaming connections
             WEBSOCKET -> 60 // Longer timeout for interactive sessions
         }
@@ -81,7 +91,7 @@ enum class McpConnectionType {
      */
     fun getMaxConcurrentConnections(): Int {
         return when (this) {
-            HTTP -> 1000 // HTTP can handle more concurrent requests
+            HTTP, STREAMABLE_HTTP -> 1000 // HTTP can handle more concurrent requests
             SSE -> 500 // Streaming connections use more resources
             WEBSOCKET -> 200 // Most resource intensive
         }
@@ -94,7 +104,7 @@ enum class McpConnectionType {
         return when (this) {
             SSE -> "text/event-stream"
             WEBSOCKET -> "application/json" // WebSocket typically negotiates its own protocol
-            HTTP -> "application/json"
+            HTTP, STREAMABLE_HTTP -> "application/json"
         }
     }
 
@@ -104,7 +114,7 @@ enum class McpConnectionType {
     fun requiresKeepAlive(): Boolean {
         return when (this) {
             SSE, WEBSOCKET -> true
-            HTTP -> false
+            HTTP, STREAMABLE_HTTP -> false
         }
     }
 }

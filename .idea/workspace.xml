@@ -6,15 +6,8 @@
   <component name="ChangeListManager">
     <list default="true" id="94ada8b3-9f4e-473c-9fea-3bc9651b5bdd" name="Changes" comment="test change">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/mcp/mcp-server.js" beforeDir="false" afterPath="$PROJECT_DIR$/mcp/mcp-server.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/mcp/package.json" beforeDir="false" afterPath="$PROJECT_DIR$/mcp/package.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/AuthController.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/AuthController.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/domain/McpToolPermission.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/domain/McpToolPermission.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/mcp/ToolCategories.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/mcp/ToolCategories.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/resources/application.yml" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/resources/application.yml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/frontend/src/layouts/Layout.astro" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/layouts/Layout.astro" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/frontend/src/middleware.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/middleware.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/frontend/src/utils/auth-init.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/utils/auth-init.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/MCP_INTEGRATION.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/MCP_INTEGRATION.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/domain/McpConnectionType.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/domain/McpConnectionType.kt" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

@@ -600,11 +600,12 @@ fun cleanup() {
 
 ---
 
-## Related Documentation
+## See Also
 
-- [CLI Reference](./CLI.md) - CLI usage and commands
+- [Architecture](./ARCHITECTURE.md) - System design and patterns
 - [Environment Variables](./ENVIRONMENT.md) - Configuration reference
-- [CrowdStrike Import](./CROWDSTRIKE_IMPORT.md) - Import technical details
+- [CLI Reference](./CLI.md) - CLI commands for testing
+- [Troubleshooting](./TROUBLESHOOTING.md) - Common issues and solutions
 
 ---
 

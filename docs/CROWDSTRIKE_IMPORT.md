@@ -508,19 +508,13 @@ Comprehensive integration tests verify duplicate prevention:
 
 ---
 
-## Related Documentation
+## See Also
 
-- **Feature Spec**: `/specs/048-prevent-duplicate-vulnerabilities/spec.md`
-- **Implementation Plan**: `/specs/048-prevent-duplicate-vulnerabilities/plan.md`
-- **Tasks**: `/specs/048-prevent-duplicate-vulnerabilities/tasks.md`
-- **Service Code**: `src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeVulnerabilityImportService.kt`
+- [CLI Reference](./CLI.md) - CrowdStrike query commands
+- [Environment Variables](./ENVIRONMENT.md) - CrowdStrike configuration
+- [Architecture](./ARCHITECTURE.md) - Import patterns and design
+- [Troubleshooting](./TROUBLESHOOTING.md) - Common import issues
 
----
-
-## Support
-
-For questions or issues:
-1. Check this documentation
-2. Review the integration tests for examples
-3. Consult the service KDoc comments
-4. Review the feature specification
+**Internal References:**
+- Feature Spec: `/specs/048-prevent-duplicate-vulnerabilities/spec.md`
+- Service Code: `src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeVulnerabilityImportService.kt`
