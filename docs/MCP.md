@@ -267,7 +267,7 @@ curl -X POST http://localhost:8080/api/mcp/admin/api-keys \
 | `REQUIREMENTS_WRITE` | Create/modify requirements | `add_requirement` |
 | `REQUIREMENTS_DELETE` | Delete requirements | `delete_all_requirements` |
 | `ASSETS_READ` | Read asset inventory | `get_assets`, `get_all_assets_detail`, `get_asset_profile`, `get_asset_complete_profile` |
-| `VULNERABILITIES_READ` | Read vulnerability data | `get_vulnerabilities`, `get_all_vulnerabilities_detail`, `get_asset_most_vulnerabilities` |
+| `VULNERABILITIES_READ` | Read vulnerability data | `get_vulnerabilities`, `get_all_vulnerabilities_detail`, `get_asset_most_vulnerabilities`, `get_overdue_assets`, `get_my_exception_requests`, `get_pending_exception_requests`, `create_exception_request`, `approve_exception_request`, `reject_exception_request`, `cancel_exception_request` |
 | `SCANS_READ` | Read scan history | `get_scans`, `get_asset_scan_results`, `search_products` |
 | `USER_ACTIVITY` | List users | `list_users` (requires delegation) |
 
@@ -447,6 +447,78 @@ Get the asset(s) with the highest number of vulnerabilities, ranked by total cou
 
 Returns asset details with vulnerability counts by severity (critical, high, medium, low).
 
+### Overdue Assets & Exception Handling
+
+#### `get_overdue_assets`
+Get assets with overdue vulnerabilities. **Requires ADMIN or VULN role and User Delegation.**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `page` | number | Page number (0-indexed, default: 0) |
+| `size` | number | Page size (default: 20, max: 100) |
+| `minSeverity` | enum | Minimum severity: `CRITICAL`, `HIGH`, `MEDIUM`, `LOW` |
+| `searchTerm` | string | Search by asset name (case-insensitive) |
+
+Returns paginated list of assets with overdue vulnerability counts by severity.
+
+#### `create_exception_request`
+Create a vulnerability exception request. **Requires User Delegation.**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `vulnerabilityId` | number | Yes | ID of the vulnerability |
+| `reason` | string | Yes | Business justification (50-2048 characters) |
+| `expirationDate` | string | Yes | ISO-8601 datetime (must be future) |
+| `scope` | enum | No | `SINGLE_VULNERABILITY` (default) or `CVE_PATTERN` |
+
+ADMIN and SECCHAMPION roles get auto-approved requests.
+
+#### `get_my_exception_requests`
+Get your own exception requests. **Requires User Delegation.**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `status` | enum | Filter: `PENDING`, `APPROVED`, `REJECTED`, `EXPIRED`, `CANCELLED` |
+| `page` | number | Page number (0-indexed, default: 0) |
+| `size` | number | Page size (default: 20, max: 100) |
+
+#### `get_pending_exception_requests`
+Get all pending requests awaiting approval. **Requires ADMIN or SECCHAMPION role and User Delegation.**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `page` | number | Page number (0-indexed, default: 0) |
+| `size` | number | Page size (default: 20, max: 100) |
+
+Returns requests sorted by oldest first (FIFO processing).
+
+#### `approve_exception_request`
+Approve a pending request. **Requires ADMIN or SECCHAMPION role and User Delegation.**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `requestId` | number | Yes | ID of the request to approve |
+| `comment` | string | No | Optional approval comment (max 1024 chars) |
+
+Creates a VulnerabilityException on successful approval.
+
+#### `reject_exception_request`
+Reject a pending request. **Requires ADMIN or SECCHAMPION role and User Delegation.**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `requestId` | number | Yes | ID of the request to reject |
+| `comment` | string | Yes | Rejection reason (10-1024 characters) |
+
+#### `cancel_exception_request`
+Cancel your own pending request. **Requires User Delegation.**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `requestId` | number | Yes | ID of your request to cancel |
+
+Only the original requester can cancel; only PENDING requests can be cancelled.
+
 ### Scan Management
 
 #### `get_scans`
@@ -543,6 +615,15 @@ All MCP operations are logged with:
 - "Find vulnerabilities open more than 30 days" → `get_all_vulnerabilities_detail` with `minDaysOpen: 30`
 - "What asset has the most vulnerabilities?" → `get_asset_most_vulnerabilities`
 - "Show me the top 5 most vulnerable assets" → `get_asset_most_vulnerabilities` with `topN: 5`
+
+**Overdue Assets & Exceptions:**
+- "Show assets with overdue vulnerabilities" → `get_overdue_assets`
+- "Find critical overdue assets" → `get_overdue_assets` with `minSeverity: "CRITICAL"`
+- "Create an exception request for vulnerability 123" → `create_exception_request` with ID, reason, and expiration
+- "Show my exception requests" → `get_my_exception_requests`
+- "Show pending exception requests" → `get_pending_exception_requests`
+- "Approve exception request 456" → `approve_exception_request` with `requestId: 456`
+- "Reject exception request 789 with reason" → `reject_exception_request` with requestId and comment
 
 **Scans:**
 - "Find all open SSH ports" → `get_asset_scan_results` with `service: "ssh"`, `state: "open"`

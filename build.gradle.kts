@@ -1,8 +1,8 @@
 plugins {
-    id("org.jetbrains.kotlin.jvm") version "2.2.21" apply false
-    id("org.jetbrains.kotlin.plugin.allopen") version "2.2.21" apply false
-    id("org.jetbrains.kotlin.plugin.jpa") version "2.2.21" apply false
-    id("com.google.devtools.ksp") version "2.2.21-2.0.4" apply false
+    id("org.jetbrains.kotlin.jvm") version "2.3.0" apply false
+    id("org.jetbrains.kotlin.plugin.allopen") version "2.3.0" apply false
+    id("org.jetbrains.kotlin.plugin.jpa") version "2.3.0" apply false
+    id("com.google.devtools.ksp") version "2.3.0" apply false
     id("io.micronaut.application") version "4.6.0" apply false
     id("io.micronaut.library") version "4.6.0" apply false
     id("io.micronaut.aot") version "4.6.0" apply false
@@ -20,8 +20,8 @@ subprojects {
 
 // Common dependency versions
 ext {
-    set("kotlinVersion", "2.2.21")
+    set("kotlinVersion", "2.3.0")
     set("micronautVersion", "4.10.1")
-    set("jvmTarget", "21")
+    set("jvmTarget", "25")
     set("picocliVersion", "4.7.5")
 }
