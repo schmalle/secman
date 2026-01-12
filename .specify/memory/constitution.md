@@ -35,6 +35,7 @@ All features MUST implement security as a primary concern, not an afterthought.
 - RBAC MUST be enforced at both API endpoint level (@Secured annotations) and UI level (role checks)
 - Sensitive data MUST NOT be logged or exposed in error messages
 - Authentication tokens MUST be stored securely (sessionStorage for JWT)
+- A secutity review must be done before finalizing the implementation
 
 **Rationale**: Security vulnerabilities in a security requirements management tool are unacceptable and undermine the entire purpose of the system.
 
@@ -90,13 +91,14 @@ Database schema changes MUST be managed through automated migration with appropr
 - Migration MUST be testable in development before production deployment
 - Schema changes MUST NOT cause data loss without explicit approval
 - flyway migration scripts must be created
+- all functionality must be referenced in the corresponding documentation (where needed for end users)
 
 **Rationale**: Automated migration reduces deployment errors and ensures schema-code consistency.
 
 ## Technology Stack
 
 **Backend**:
-- Language: Kotlin 2.2.21 / Java 21
+- Language: Kotlin 2.3.0 / Java 25
 - Framework: Micronaut 4.10
 - ORM: Hibernate JPA
 - Database: MariaDB 11.4

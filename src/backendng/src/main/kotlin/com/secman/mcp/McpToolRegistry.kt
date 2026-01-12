@@ -33,7 +33,15 @@ class McpToolRegistry(
     // Feature 061: MCP List Products Tool
     @Inject private val listProductsTool: ListProductsTool,
     // MCP Tool: Get asset with most vulnerabilities
-    @Inject private val getAssetMostVulnerabilitiesTool: GetAssetMostVulnerabilitiesTool
+    @Inject private val getAssetMostVulnerabilitiesTool: GetAssetMostVulnerabilitiesTool,
+    // Feature 062: MCP Tools for Overdue Vulnerabilities and Exception Handling
+    @Inject private val getOverdueAssetsTool: GetOverdueAssetsTool,
+    @Inject private val createExceptionRequestTool: CreateExceptionRequestTool,
+    @Inject private val getMyExceptionRequestsTool: GetMyExceptionRequestsTool,
+    @Inject private val getPendingExceptionRequestsTool: GetPendingExceptionRequestsTool,
+    @Inject private val approveExceptionRequestTool: ApproveExceptionRequestTool,
+    @Inject private val rejectExceptionRequestTool: RejectExceptionRequestTool,
+    @Inject private val cancelExceptionRequestTool: CancelExceptionRequestTool
 ) {
     private val logger = LoggerFactory.getLogger(McpToolRegistry::class.java)
 
@@ -63,7 +71,15 @@ class McpToolRegistry(
             // Feature 061: MCP List Products Tool
             listProductsTool,
             // MCP Tool: Get asset with most vulnerabilities
-            getAssetMostVulnerabilitiesTool
+            getAssetMostVulnerabilitiesTool,
+            // Feature 062: MCP Tools for Overdue Vulnerabilities and Exception Handling
+            getOverdueAssetsTool,
+            createExceptionRequestTool,
+            getMyExceptionRequestsTool,
+            getPendingExceptionRequestsTool,
+            approveExceptionRequestTool,
+            rejectExceptionRequestTool,
+            cancelExceptionRequestTool
         ).forEach { tool ->
             toolMap[tool.name] = tool
             logger.debug("Registered MCP tool: {}", tool.name)
@@ -209,6 +225,30 @@ class McpToolRegistry(
             "get_asset_most_vulnerabilities" -> {
                 permissions.contains(McpPermission.VULNERABILITIES_READ) ||
                 permissions.contains(McpPermission.ASSETS_READ)
+            }
+
+            // Feature 062: MCP Tools for Overdue Vulnerabilities and Exception Handling
+            "get_overdue_assets" -> {
+                permissions.contains(McpPermission.VULNERABILITIES_READ) ||
+                permissions.contains(McpPermission.ASSETS_READ)
+            }
+            "create_exception_request" -> {
+                permissions.contains(McpPermission.VULNERABILITIES_READ) // Any authenticated user, role check in tool
+            }
+            "get_my_exception_requests" -> {
+                permissions.contains(McpPermission.VULNERABILITIES_READ) // Any authenticated user
+            }
+            "get_pending_exception_requests" -> {
+                permissions.contains(McpPermission.VULNERABILITIES_READ) // Role check in tool
+            }
+            "approve_exception_request" -> {
+                permissions.contains(McpPermission.VULNERABILITIES_READ) // Role check in tool
+            }
+            "reject_exception_request" -> {
+                permissions.contains(McpPermission.VULNERABILITIES_READ) // Role check in tool
+            }
+            "cancel_exception_request" -> {
+                permissions.contains(McpPermission.VULNERABILITIES_READ) // Ownership check in tool
             }
 
             else -> false

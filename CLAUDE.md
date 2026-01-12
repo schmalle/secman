@@ -201,6 +201,7 @@ fun findStateByValueWithRetry(stateToken: String): Optional<OAuthState> {
 - MariaDB 11.4 (existing `requirement`, `norm`, `requirement_norm` tables) (058-ai-norm-mapping)
 - Kotlin 2.2.21 / Java 21 + Micronaut 4.10, Hibernate JPA (060-mcp-list-users)
 - MariaDB 11.4 (existing `users` table) (060-mcp-list-users)
+- MariaDB 11.4 (existing tables: `vulnerability_exception_request`, `vulnerability_exception`, `outdated_asset_materialized_view`) (062-mcp-vuln-exceptions)
 
 ## Recent Changes
 - 058-ai-norm-mapping: Added Kotlin 2.2.21 / Java 21 (backend), TypeScript/React 19 (frontend) + Micronaut 4.10, Hibernate JPA, Axios, Bootstrap 5.3

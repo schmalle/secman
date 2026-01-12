@@ -168,15 +168,6 @@ class GetAllVulnerabilitiesDetailTool(
                 }
             }
 
-            // Check total results limit
-            if (resultPage.totalSize > 100_000) {
-                return McpToolResult.error(
-                    "TOTAL_RESULTS_EXCEEDED",
-                    "Query would return more than 100,000 results. Please add more filters.",
-                    mapOf("totalResults" to resultPage.totalSize)
-                )
-            }
-
             // Map vulnerabilities to response format
             val vulnerabilities = filteredContent.map { vuln ->
                 mapOf(
