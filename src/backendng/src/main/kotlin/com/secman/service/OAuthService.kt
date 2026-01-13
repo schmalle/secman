@@ -31,6 +31,117 @@ import java.time.Instant
 import java.time.LocalDateTime
 import java.util.*
 
+/**
+ * OAuth/OIDC Authentication Service
+ *
+ * Handles complete OAuth 2.0 and OpenID Connect (OIDC) authentication flows for external identity providers.
+ * This is the core authentication service for all single sign-on (SSO) integrations in Secman.
+ *
+ * ## Supported Identity Providers
+ * - **Microsoft Azure AD / Entra ID**: Full OIDC support with tenant validation, JWKS signature verification
+ * - **GitHub**: OAuth 2.0 with user info endpoint for profile data
+ * - **Generic OIDC**: Any standards-compliant OIDC provider via dynamic configuration
+ *
+ * ## OAuth Flow Architecture
+ *
+ * The service implements a standard OAuth 2.0 Authorization Code flow with OIDC extensions:
+ *
+ * ```
+ * ┌─────────┐     ┌─────────────┐     ┌────────────────┐     ┌─────────────┐
+ * │ Browser │────▶│ OAuthCtrl   │────▶│ OAuthService   │────▶│ IdP (Azure/ │
+ * │         │◀────│ /authorize  │◀────│ buildAuthUrl() │◀────│ GitHub/etc) │
+ * └─────────┘     └─────────────┘     └────────────────┘     └─────────────┘
+ *      │                                      │
+ *      │ 1. User clicks "Login with..."       │ 2. Generate state, save to DB
+ *      │                                      │
+ *      ▼                                      ▼
+ * ┌─────────┐     ┌─────────────┐     ┌────────────────┐     ┌─────────────┐
+ * │ Browser │────▶│ OAuthCtrl   │────▶│ OAuthService   │────▶│ IdP Token   │
+ * │         │◀────│ /callback   │◀────│ handleCallback │◀────│ Endpoint    │
+ * └─────────┘     └─────────────┘     └────────────────┘     └─────────────┘
+ *                                             │
+ *      3. IdP redirects with code ───────────▶│ 4. Exchange code for token
+ *                                             │ 5. Validate ID token (OIDC)
+ *      6. Return JWT for frontend ◀───────────│ 7. Find or create user
+ * ```
+ *
+ * ## Race Condition Handling (Microsoft Azure SSO)
+ *
+ * **Problem**: Microsoft Azure callbacks can arrive within 100-500ms when users have cached SSO sessions.
+ * This creates a race condition where the OAuth callback arrives before the state-save transaction
+ * is fully committed and visible to other database connections.
+ *
+ * **Solution**: This service implements two complementary strategies:
+ *
+ * 1. **Immediate State Commit**: [saveOAuthStateImmediately] uses `REQUIRES_NEW` transaction
+ *    with explicit `entityManager.flush()` to ensure the state is committed before redirect.
+ *
+ * 2. **Retry with Exponential Backoff**: [findStateByValueWithRetry] retries state lookups
+ *    with configurable backoff (default: 100ms → 150ms → 225ms → 337ms → 500ms).
+ *
+ * Configuration via environment variables or `application.yml`:
+ * ```yaml
+ * secman:
+ *   oauth:
+ *     state-retry:
+ *       max-attempts: 5           # OAUTH_STATE_RETRY_MAX_ATTEMPTS
+ *       initial-delay-ms: 100     # OAUTH_STATE_RETRY_INITIAL_DELAY
+ *       max-delay-ms: 500         # OAUTH_STATE_RETRY_MAX_DELAY
+ *       backoff-multiplier: 1.5   # OAUTH_STATE_RETRY_BACKOFF_MULTIPLIER
+ *     token-exchange:
+ *       max-retries: 2            # OAUTH_TOKEN_EXCHANGE_MAX_RETRIES
+ *       retry-delay-ms: 500       # OAUTH_TOKEN_EXCHANGE_RETRY_DELAY
+ * ```
+ *
+ * ## Security Features
+ *
+ * - **State Parameter**: CSRF protection via cryptographically random state tokens
+ * - **JWKS Validation**: ID token signatures verified against provider's JWKS endpoint
+ * - **Tenant Validation**: Microsoft Azure tenant ID verified against configured tenant
+ * - **Token Expiry**: OAuth states auto-expire (default 10 minutes) with scheduled cleanup
+ * - **Audit Logging**: Security events logged to `security.audit` logger for compliance
+ *
+ * ## User Provisioning
+ *
+ * When a user authenticates via OAuth for the first time:
+ * 1. User is auto-created if `autoProvision` is enabled on the identity provider
+ * 2. Default roles (USER, VULN) are assigned per Feature 046
+ * 3. [UserCreatedEvent] is published for user mapping application (Feature 042)
+ * 4. Admin notifications sent asynchronously (Feature 027)
+ * 5. Existing users preserve their roles on subsequent logins (FR-006)
+ *
+ * ## Error Handling
+ *
+ * User-friendly error messages are provided via [OAuthErrorCode] enum:
+ * - State validation errors (not found, expired, mismatch)
+ * - Token exchange failures (timeout, server error)
+ * - User provisioning failures
+ *
+ * Microsoft-specific errors are mapped via [MicrosoftErrorMapper] for clearer diagnostics.
+ *
+ * ## Related Components
+ *
+ * - [OAuthController]: REST endpoints for OAuth flow (`/oauth/authorize`, `/oauth/callback`)
+ * - [OAuthConfig]: Retry and timeout configuration
+ * - [JwksValidationService]: JWT signature validation using JWKS
+ * - [IdentityProvider]: Database entity for provider configuration
+ * - [OAuthState]: Database entity for state parameter storage
+ * - [MicrosoftErrorMapper]: Azure AD error code translation
+ *
+ * ## Logging
+ *
+ * - Standard logs: `com.secman.service.OAuthService`
+ * - Security audit: `security.audit` (for compliance/SIEM integration)
+ * - Correlation IDs: Each OAuth flow gets a unique correlation ID for tracing
+ *
+ * @see OAuthController
+ * @see OAuthConfig
+ * @see JwksValidationService
+ * @see IdentityProvider
+ * @see MicrosoftErrorMapper
+ * @since 1.0
+ * @author Secman Development Team
+ */
 @Singleton
 open class OAuthService(
     private val identityProviderRepository: IdentityProviderRepository,
