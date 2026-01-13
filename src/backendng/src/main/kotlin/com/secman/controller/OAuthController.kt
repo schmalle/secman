@@ -6,6 +6,8 @@ import io.micronaut.context.annotation.Value
 import io.micronaut.http.HttpRequest
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.annotation.*
+import io.micronaut.http.cookie.Cookie
+import io.micronaut.http.cookie.SameSite
 import io.micronaut.scheduling.TaskExecutors
 import io.micronaut.scheduling.annotation.ExecuteOn
 import io.micronaut.security.annotation.Secured
@@ -13,18 +15,42 @@ import io.micronaut.security.rules.SecurityRule
 import io.micronaut.serde.annotation.Serdeable
 import org.slf4j.LoggerFactory
 import java.net.URI
+import java.time.Duration
 import java.time.LocalDateTime
 
 @Controller("/oauth")
 @Secured(SecurityRule.IS_ANONYMOUS)
 class OAuthController(
     private val oauthService: OAuthService,
-    private val appConfig: AppConfig
+    private val appConfig: AppConfig,
+    @Value("\${secman.auth.cookie-secure:true}")
+    private val cookieSecure: Boolean
 ) {
-    
+
     private val logger = LoggerFactory.getLogger(OAuthController::class.java)
     private val backendBaseUrl: String = appConfig.backend.baseUrl
     private val frontendBaseUrl: String = appConfig.frontend.baseUrl
+
+    companion object {
+        private val AUTH_COOKIE_MAX_AGE = Duration.ofHours(8)
+    }
+
+    /**
+     * Create HttpOnly secure cookie for JWT token (same as AuthController).
+     * Security properties:
+     * - HttpOnly: Prevents JavaScript access (XSS protection)
+     * - Secure: Only sent over HTTPS (configurable for development)
+     * - SameSite=Lax: CSRF protection while allowing navigation
+     * - Path=/: Available for all API endpoints
+     */
+    private fun createAuthCookie(token: String): Cookie {
+        return Cookie.of(AuthController.AUTH_COOKIE_NAME, token)
+            .httpOnly(true)
+            .secure(cookieSecure)
+            .sameSite(SameSite.Lax)
+            .maxAge(AUTH_COOKIE_MAX_AGE)
+            .path("/")
+    }
 
 
     init {
@@ -143,15 +169,17 @@ class OAuthController(
                 is OAuthService.CallbackResult.Success -> {
                     logger.info("OAuth login successful for user: {}", result.user.username)
 
-                    // Create user info JSON
+                    // Create user info JSON (non-sensitive metadata for UI display)
                     val userInfoJson = """{"id":${result.user.id},"username":"${result.user.username}","email":"${result.user.email}","roles":[${result.user.roles.joinToString(",") { "\"$it\"" }}]}"""
 
-                    // Pass token and user data as URL parameters as expected by the frontend
+                    // Security: Token is set in HttpOnly cookie, NOT passed in URL
+                    // URL only contains non-sensitive user metadata for UI display
                     val encodedUser = java.net.URLEncoder.encode(userInfoJson, "UTF-8")
-                    val redirectUrl = "$frontendBaseUrl/login/success?token=${result.token}&user=$encodedUser"
+                    val redirectUrl = "$frontendBaseUrl/login/success?user=$encodedUser"
 
-                    logger.debug("Redirecting to: {}", redirectUrl)
+                    logger.debug("Redirecting to: {} (token in HttpOnly cookie)", redirectUrl)
                     HttpResponse.redirect<Any>(URI.create(redirectUrl))
+                        .cookie(createAuthCookie(result.token))
                 }
 
                 is OAuthService.CallbackResult.Error -> {

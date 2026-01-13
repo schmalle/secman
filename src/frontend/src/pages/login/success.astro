@@ -41,32 +41,32 @@
 
     <script>
         // Extract URL parameters
+        // Security: JWT token is now in HttpOnly cookie (set by backend), NOT in URL
+        // Only non-sensitive user metadata is passed in URL for UI display
         const urlParams = new URLSearchParams(window.location.search);
-        const token = urlParams.get('token');
         const userJson = urlParams.get('user');
 
-        if (token && userJson) {
+        if (userJson) {
             try {
-                // Decode and parse user data
+                // Decode and parse user data (non-sensitive metadata for UI)
                 const userData = JSON.parse(decodeURIComponent(userJson));
-                
-                // Store authentication data
-                localStorage.setItem('authToken', token);
 
-                // Also store token in a cookie for server-side middleware access
-                document.cookie = `authToken=${token}; path=/; max-age=86400; SameSite=Strict`;
-
+                // Security: Only store non-sensitive user metadata in localStorage
+                // The JWT token is stored in HttpOnly cookie (not accessible via JS)
                 localStorage.setItem('user', JSON.stringify(userData));
+
+                // Clean up any legacy token storage (from previous login sessions)
+                localStorage.removeItem('authToken');
 
                 // Set global user state for Header component
                 window.currentUser = userData;
                 window.dispatchEvent(new CustomEvent('userLoaded'));
-                
+
                 // Small delay to ensure data is stored, then redirect
                 setTimeout(() => {
                     window.location.href = '/';
                 }, 1000);
-                
+
             } catch (error) {
                 console.error('Error processing login success:', error);
                 alert('Login successful, but there was an error processing your data. Redirecting to login...');
@@ -75,7 +75,7 @@
                 }, 2000);
             }
         } else {
-            console.error('Missing token or user data');
+            console.error('Missing user data');
             alert('Login data missing. Redirecting to login...');
             setTimeout(() => {
                 window.location.href = '/login';

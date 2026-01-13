@@ -93,16 +93,10 @@ export async function exportProductSystems(product: string): Promise<void> {
     const encodedProduct = encodeURIComponent(product);
     const url = `/api/products/${encodedProduct}/export`;
 
-    const token = localStorage.getItem('authToken');
-    if (!token) {
-        throw new Error('No authentication token found');
-    }
-
+    // Authentication via HttpOnly cookie (credentials: 'include')
     const response = await fetch(url, {
         method: 'GET',
-        headers: {
-            'Authorization': `Bearer ${token}`
-        }
+        credentials: 'include'
     });
 
     if (!response.ok) {

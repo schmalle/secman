@@ -51,13 +51,11 @@ export async function getActiveBanners(): Promise<MaintenanceBanner[]> {
  * @returns Promise resolving to array of all banners
  */
 export async function getAllBanners(): Promise<MaintenanceBanner[]> {
-  const token = localStorage.getItem('authToken');
+  // Authentication via HttpOnly cookie (withCredentials: true)
   const response = await axios.get<MaintenanceBanner[]>(
     `${API_BASE}/maintenance-banners`,
     {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
+      withCredentials: true
     }
   );
   return response.data;
@@ -70,13 +68,11 @@ export async function getAllBanners(): Promise<MaintenanceBanner[]> {
  * @returns Promise resolving to banner details
  */
 export async function getBannerById(id: number): Promise<MaintenanceBanner> {
-  const token = localStorage.getItem('authToken');
+  // Authentication via HttpOnly cookie (withCredentials: true)
   const response = await axios.get<MaintenanceBanner>(
     `${API_BASE}/maintenance-banners/${id}`,
     {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
+      withCredentials: true
     }
   );
   return response.data;
@@ -89,15 +85,15 @@ export async function getBannerById(id: number): Promise<MaintenanceBanner> {
  * @returns Promise resolving to created banner
  */
 export async function createBanner(request: MaintenanceBannerRequest): Promise<MaintenanceBanner> {
-  const token = localStorage.getItem('authToken');
+  // Authentication via HttpOnly cookie (withCredentials: true)
   const response = await axios.post<MaintenanceBanner>(
     `${API_BASE}/maintenance-banners`,
     request,
     {
       headers: {
-        Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json'
-      }
+      },
+      withCredentials: true
     }
   );
   return response.data;
@@ -111,15 +107,15 @@ export async function createBanner(request: MaintenanceBannerRequest): Promise<M
  * @returns Promise resolving to updated banner
  */
 export async function updateBanner(id: number, request: MaintenanceBannerRequest): Promise<MaintenanceBanner> {
-  const token = localStorage.getItem('authToken');
+  // Authentication via HttpOnly cookie (withCredentials: true)
   const response = await axios.put<MaintenanceBanner>(
     `${API_BASE}/maintenance-banners/${id}`,
     request,
     {
       headers: {
-        Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json'
-      }
+      },
+      withCredentials: true
     }
   );
   return response.data;
@@ -132,13 +128,11 @@ export async function updateBanner(id: number, request: MaintenanceBannerRequest
  * @returns Promise resolving when deletion is complete
  */
 export async function deleteBanner(id: number): Promise<void> {
-  const token = localStorage.getItem('authToken');
+  // Authentication via HttpOnly cookie (withCredentials: true)
   await axios.delete(
     `${API_BASE}/maintenance-banners/${id}`,
     {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
+      withCredentials: true
     }
   );
 }

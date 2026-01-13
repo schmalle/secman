@@ -323,10 +323,79 @@ export function stopSessionKeepAlive(): void {
     console.log('[auth] Session keep-alive service stopped');
 }
 
+// SSE token cache - defined before logout to avoid forward reference
+let cachedSseToken: string | null = null;
+let sseTokenExpiry: number = 0;
+
 /**
- * Enhanced clearAuth that also stops keep-alive service.
+ * Clear the cached SSE token (call on logout).
+ */
+export function clearSseToken(): void {
+    cachedSseToken = null;
+    sseTokenExpiry = 0;
+}
+
+/**
+ * Enhanced clearAuth that also stops keep-alive service and clears SSE token.
  */
 export function logout(): void {
     stopSessionKeepAlive();
     clearAuth();
+    clearSseToken();
+}
+
+/**
+ * Get a short-lived token for SSE (Server-Sent Events) connections.
+ *
+ * Security rationale:
+ * - EventSource doesn't support custom headers, so we need token in URL
+ * - This token is short-lived (5 minutes) to minimize exposure risk
+ * - The main JWT remains secure in HttpOnly cookie
+ *
+ * Returns cached token if still valid (with 30s buffer), otherwise fetches new one.
+ */
+export async function getSseToken(): Promise<string | null> {
+    // Return cached token if still valid (with 30s safety buffer)
+    const now = Date.now();
+    if (cachedSseToken && sseTokenExpiry > now + 30000) {
+        return cachedSseToken;
+    }
+
+    // Check if user is authenticated
+    if (!isAuthenticated()) {
+        console.warn('[auth] Cannot get SSE token: user not authenticated');
+        return null;
+    }
+
+    try {
+        const response = await fetch('/api/auth/sse-token', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            credentials: 'include', // Send HttpOnly cookie for authentication
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            cachedSseToken = data.token;
+            // Set expiry (expiresIn is in seconds)
+            sseTokenExpiry = now + (data.expiresIn * 1000);
+            console.log('[auth] SSE token obtained successfully');
+            return cachedSseToken;
+        } else if (response.status === 401) {
+            console.warn('[auth] SSE token request failed - session expired');
+            clearAuth();
+            if (typeof window !== 'undefined') {
+                window.location.href = '/login';
+            }
+            return null;
+        } else {
+            console.error('[auth] SSE token request failed:', response.status);
+            return null;
+        }
+    } catch (error) {
+        console.error('[auth] SSE token fetch error:', error);
+        return null;
+    }
 }

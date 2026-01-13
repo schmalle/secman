@@ -252,4 +252,57 @@ open class AuthController(
         // If we reach here, the token is valid
         return HttpResponse.ok(HeartbeatResponse())
     }
+
+    @Serdeable
+    data class SseTokenResponse(
+        val token: String,
+        val expiresIn: Int = 300  // 5 minutes in seconds
+    )
+
+    /**
+     * Generate a short-lived token for SSE (Server-Sent Events) connections.
+     *
+     * Security rationale:
+     * - EventSource (SSE) doesn't support custom headers, so we need token in URL
+     * - This token is short-lived (5 minutes) to minimize exposure risk
+     * - The main JWT remains secure in HttpOnly cookie
+     * - Client should request a fresh SSE token when connecting to SSE endpoints
+     *
+     * Usage:
+     * 1. Client calls POST /api/auth/sse-token (auth via HttpOnly cookie)
+     * 2. Server returns short-lived token
+     * 3. Client uses token in SSE URL: /api/sse-endpoint?token=<sse-token>
+     */
+    @Post("/sse-token")
+    @Secured(SecurityRule.IS_AUTHENTICATED)
+    fun generateSseToken(authentication: Authentication): HttpResponse<*> {
+        val username = authentication.name
+        val userOptional = userRepository.findByUsername(username)
+
+        if (userOptional.isEmpty) {
+            return HttpResponse.unauthorized<Any>().body(mapOf("error" to "User not found"))
+        }
+
+        val user = userOptional.get()
+
+        // Generate a short-lived token for SSE (5 minutes)
+        val sseTokenDetails = mapOf(
+            "sub" to user.username,
+            "username" to user.username,
+            "email" to user.email,
+            "roles" to user.roles.map { it.name },
+            "iss" to "secman-backend-ng",
+            "userId" to user.id.toString(),
+            "purpose" to "sse",  // Mark this as SSE-specific token
+            "exp" to (System.currentTimeMillis() / 1000 + 300)  // 5 minutes from now
+        )
+
+        val tokenOptional = tokenGenerator.generateToken(sseTokenDetails)
+
+        if (tokenOptional.isEmpty) {
+            return HttpResponse.serverError<Any>().body(mapOf("error" to "Failed to generate SSE token"))
+        }
+
+        return HttpResponse.ok(SseTokenResponse(token = tokenOptional.get()))
+    }
 }

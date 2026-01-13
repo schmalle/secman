@@ -66,13 +66,8 @@ const ConfigBundleManager: React.FC = () => {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    // Set up axios interceptors for auth
-    const token = sessionStorage.getItem('jwt_token');
-    if (token) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-    }
-  }, []);
+  // Note: Authentication is now handled via HttpOnly cookies (credentials: 'include')
+  // No need to set up axios interceptors for token headers
 
   const handleExport = async () => {
     setIsExporting(true);
@@ -80,11 +75,10 @@ const ConfigBundleManager: React.FC = () => {
     setExportSuccess(false);
 
     try {
+      // Authentication via HttpOnly cookie (withCredentials: true)
       const response = await axios.get(`${API_BASE_URL}/api/config-bundle/export`, {
         responseType: 'blob',
-        headers: {
-          'Authorization': `Bearer ${sessionStorage.getItem('jwt_token')}`
-        }
+        withCredentials: true
       });
 
       // Create download link
@@ -142,11 +136,12 @@ const ConfigBundleManager: React.FC = () => {
     formData.append('file', selectedFile);
 
     try {
+      // Authentication via HttpOnly cookie (withCredentials: true)
       const response = await axios.post(`${API_BASE_URL}/api/config-bundle/validate`, formData, {
         headers: {
-          'Content-Type': 'multipart/form-data',
-          'Authorization': `Bearer ${sessionStorage.getItem('jwt_token')}`
-        }
+          'Content-Type': 'multipart/form-data'
+        },
+        withCredentials: true
       });
 
       setValidationResult(response.data);
@@ -193,11 +188,12 @@ const ConfigBundleManager: React.FC = () => {
     }
 
     try {
+      // Authentication via HttpOnly cookie (withCredentials: true)
       const response = await axios.post(`${API_BASE_URL}/api/config-bundle/import`, formData, {
         headers: {
-          'Content-Type': 'multipart/form-data',
-          'Authorization': `Bearer ${sessionStorage.getItem('jwt_token')}`
-        }
+          'Content-Type': 'multipart/form-data'
+        },
+        withCredentials: true
       });
 
       setImportResult(response.data);

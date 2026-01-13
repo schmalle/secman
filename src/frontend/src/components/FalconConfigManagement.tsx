@@ -49,12 +49,12 @@ const FalconConfigManagement = () => {
         try {
             setLoading(true);
             setError(null);
-            
-            const token = localStorage.getItem('authToken');
+
+            // Authentication via HttpOnly cookie (withCredentials: true)
             const response = await axios.get('/api/falcon-config', {
-                headers: { 'Authorization': `Bearer ${token}` }
+                withCredentials: true
             });
-            
+
             setConfigs(response.data);
         } catch (err: any) {
             setError(err.response?.data?.error || 'Failed to load Falcon configurations');
@@ -65,16 +65,16 @@ const FalconConfigManagement = () => {
 
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
-        
+
         try {
             setError(null);
             setSuccess(null);
-            
-            const token = localStorage.getItem('authToken');
+
+            // Authentication via HttpOnly cookie (withCredentials: true)
             await axios.post('/api/falcon-config', formData, {
-                headers: { 'Authorization': `Bearer ${token}` }
+                withCredentials: true
             });
-            
+
             setSuccess('Falcon configuration created successfully');
             setShowCreateForm(false);
             setFormData({ clientId: '', clientSecret: '', cloudRegion: 'us-1' });
@@ -86,32 +86,31 @@ const FalconConfigManagement = () => {
 
     const handleUpdate = async (e: React.FormEvent) => {
         e.preventDefault();
-        
+
         if (!editingConfig) return;
-        
+
         try {
             setError(null);
             setSuccess(null);
-            
-            const token = localStorage.getItem('authToken');
-            
+
             // Only send fields that are not masked
             const updateData: any = {
                 cloudRegion: formData.cloudRegion
             };
-            
+
             if (formData.clientId && formData.clientId !== '***HIDDEN***') {
                 updateData.clientId = formData.clientId;
             }
-            
+
             if (formData.clientSecret && formData.clientSecret !== '***HIDDEN***') {
                 updateData.clientSecret = formData.clientSecret;
             }
-            
+
+            // Authentication via HttpOnly cookie (withCredentials: true)
             await axios.put(`/api/falcon-config/${editingConfig.id}`, updateData, {
-                headers: { 'Authorization': `Bearer ${token}` }
+                withCredentials: true
             });
-            
+
             setSuccess('Falcon configuration updated successfully');
             setEditingConfig(null);
             setFormData({ clientId: '', clientSecret: '', cloudRegion: 'us-1' });
@@ -125,16 +124,16 @@ const FalconConfigManagement = () => {
         if (!confirm('Are you sure you want to delete this Falcon configuration?')) {
             return;
         }
-        
+
         try {
             setError(null);
             setSuccess(null);
-            
-            const token = localStorage.getItem('authToken');
+
+            // Authentication via HttpOnly cookie (withCredentials: true)
             await axios.delete(`/api/falcon-config/${id}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
+                withCredentials: true
             });
-            
+
             setSuccess('Falcon configuration deleted successfully');
             await loadConfigs();
         } catch (err: any) {
@@ -146,12 +145,12 @@ const FalconConfigManagement = () => {
         try {
             setError(null);
             setSuccess(null);
-            
-            const token = localStorage.getItem('authToken');
+
+            // Authentication via HttpOnly cookie (withCredentials: true)
             await axios.post(`/api/falcon-config/${id}/activate`, {}, {
-                headers: { 'Authorization': `Bearer ${token}` }
+                withCredentials: true
             });
-            
+
             setSuccess('Falcon configuration activated successfully');
             await loadConfigs();
         } catch (err: any) {

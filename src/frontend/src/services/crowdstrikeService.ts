@@ -86,27 +86,19 @@ export async function queryVulnerabilities(
     console.log('[CrowdStrikeService] Hostname:', hostname);
     console.log('[CrowdStrikeService] Force refresh:', force);
 
-    // Get JWT token from localStorage
-    const token = localStorage.getItem('authToken');
-    console.log('[CrowdStrikeService] JWT token present:', !!token);
-
-    if (!token) {
-        console.error('[CrowdStrikeService] No JWT token found in localStorage');
-        throw new Error('Not authenticated. Please log in.');
-    }
-
     // Use new endpoint that supports both hostname and instance ID (Feature 041)
     const forceParam = force ? '&force=true' : '';
     const url = `/api/vulnerabilities?hostname=${encodeURIComponent(hostname)}${forceParam}`;
     console.log('[CrowdStrikeService] Calling API:', url);
 
     try {
+        // Authentication via HttpOnly cookie (credentials: 'include')
         const response = await fetch(url, {
             method: 'GET',
             headers: {
-                'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json'
-            }
+            },
+            credentials: 'include'
         });
 
         console.log('[CrowdStrikeService] Response status:', response.status);
@@ -175,25 +167,17 @@ export async function saveVulnerabilities(
     console.log('[CrowdStrikeService] Hostname:', request.hostname);
     console.log('[CrowdStrikeService] Vulnerabilities count:', request.vulnerabilities.length);
 
-    // Get JWT token from localStorage
-    const token = localStorage.getItem('authToken');
-    console.log('[CrowdStrikeService] JWT token present:', !!token);
-
-    if (!token) {
-        console.error('[CrowdStrikeService] No JWT token found in localStorage');
-        throw new Error('Not authenticated. Please log in.');
-    }
-
     const url = '/api/crowdstrike/vulnerabilities/save';
     console.log('[CrowdStrikeService] Calling API:', url);
 
     try {
+        // Authentication via HttpOnly cookie (credentials: 'include')
         const response = await fetch(url, {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json'
             },
+            credentials: 'include',
             body: JSON.stringify(request)
         });
 

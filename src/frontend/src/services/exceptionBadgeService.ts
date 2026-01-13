@@ -9,10 +9,11 @@
  * - Callback-based updates (observer pattern)
  * - Error handling and auto-reconnection
  * - Connection state tracking
+ * - Secure token handling (short-lived SSE tokens)
  *
  * **Usage**:
  * ```typescript
- * const disconnect = connectToBadgeUpdates((count) => {
+ * const disconnect = await connectToBadgeUpdates((count) => {
  *   setBadgeCount(count);
  * });
  *
@@ -25,6 +26,8 @@
  * Phase 6: Real-Time Badge Updates
  * Reference: spec.md FR-024
  */
+
+import { getSseToken, isAuthenticated } from '../utils/auth';
 
 /**
  * Callback function type for badge count updates.
@@ -62,26 +65,27 @@ let reconnectTimeoutId: ReturnType<typeof setTimeout> | null = null;
  * - Callback receives 0 on connection errors (safe fallback)
  *
  * **Authentication**:
- * - Passes JWT token from localStorage as query parameter
+ * - Uses short-lived SSE token (obtained via HttpOnly cookie auth)
  * - Required because EventSource doesn't support Authorization headers
  * - Requires authenticated session (401 if not logged in)
  *
  * @param onUpdate Callback function to receive count updates
- * @returns Cleanup function to disconnect SSE connection
+ * @returns Promise resolving to cleanup function to disconnect SSE connection
  *
  * @example
  * ```typescript
  * // In React component:
  * useEffect(() => {
- *   const disconnect = connectToBadgeUpdates((count) => {
+ *   let cleanup: (() => void) | undefined;
+ *   connectToBadgeUpdates((count) => {
  *     setPendingCount(count);
- *   });
+ *   }).then(fn => cleanup = fn);
  *
- *   return () => disconnect(); // Cleanup on unmount
+ *   return () => cleanup?.(); // Cleanup on unmount
  * }, []);
  * ```
  */
-export function connectToBadgeUpdates(onUpdate: BadgeCountCallback): () => void {
+export async function connectToBadgeUpdates(onUpdate: BadgeCountCallback): Promise<() => void> {
   // Prevent multiple simultaneous connection attempts
   if (connectionState === 'connecting' || connectionState === 'connected') {
     console.warn('[ExceptionBadge] Connection already in progress or established');
@@ -95,21 +99,28 @@ export function connectToBadgeUpdates(onUpdate: BadgeCountCallback): () => void 
     return () => {};
   }
 
+  // Check authentication before attempting connection
+  if (!isAuthenticated()) {
+    console.warn('[ExceptionBadge] User not authenticated, cannot connect to SSE');
+    onUpdate(0);
+    return () => {};
+  }
+
   connectionState = 'connecting';
   console.log('[ExceptionBadge] Connecting to SSE endpoint for real-time updates');
 
-  // Get JWT token from localStorage
-  const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
+  // Get short-lived SSE token (secure: obtained via HttpOnly cookie auth)
+  const token = await getSseToken();
 
   if (!token) {
-    console.error('[ExceptionBadge] No JWT token found in localStorage, cannot connect to SSE');
+    console.error('[ExceptionBadge] Failed to obtain SSE token, cannot connect');
     connectionState = 'error';
     errorCount++;
     onUpdate(0);
     return () => {};
   }
 
-  // Create EventSource connection with token as query parameter
+  // Create EventSource connection with short-lived SSE token as query parameter
   // (EventSource doesn't support custom headers like Authorization)
   const eventSource = new EventSource(`/api/exception-badge-updates?token=${encodeURIComponent(token)}`);
 
@@ -171,10 +182,14 @@ export function connectToBadgeUpdates(onUpdate: BadgeCountCallback): () => void 
 
     connectionState = 'disconnected';
 
-    // Schedule reconnection with backoff
+    // Schedule reconnection with backoff (async function)
     reconnectTimeoutId = setTimeout(() => {
       reconnectTimeoutId = null;
-      connectToBadgeUpdates(onUpdate);
+      // Note: connectToBadgeUpdates is now async, but we don't need to await here
+      // since reconnection is fire-and-forget
+      connectToBadgeUpdates(onUpdate).catch(err => {
+        console.error('[ExceptionBadge] Reconnection failed:', err);
+      });
     }, backoffDelay);
   });
 
