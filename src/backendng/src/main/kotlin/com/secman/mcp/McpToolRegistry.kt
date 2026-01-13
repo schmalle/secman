@@ -32,6 +32,8 @@ class McpToolRegistry(
     @Inject private val listUsersTool: ListUsersTool,
     // Feature: MCP Add User Tool with roles
     @Inject private val addUserTool: AddUserTool,
+    // Feature: MCP Delete User Tool
+    @Inject private val deleteUserTool: DeleteUserTool,
     // Feature 061: MCP List Products Tool
     @Inject private val listProductsTool: ListProductsTool,
     // MCP Tool: Get asset with most vulnerabilities
@@ -72,6 +74,8 @@ class McpToolRegistry(
             listUsersTool,
             // Feature: MCP Add User Tool with roles
             addUserTool,
+            // Feature: MCP Delete User Tool
+            deleteUserTool,
             // Feature 061: MCP List Products Tool
             listProductsTool,
             // MCP Tool: Get asset with most vulnerabilities
@@ -191,6 +195,11 @@ class McpToolRegistry(
 
             // Feature: MCP Add User Tool (ADMIN only via User Delegation)
             "add_user" -> {
+                permissions.contains(McpPermission.USER_ACTIVITY) // ADMIN role checked in tool execute()
+            }
+
+            // Feature: MCP Delete User Tool (ADMIN only via User Delegation)
+            "delete_user" -> {
                 permissions.contains(McpPermission.USER_ACTIVITY) // ADMIN role checked in tool execute()
             }
 
