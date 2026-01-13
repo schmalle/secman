@@ -1,5 +1,6 @@
 package com.secman.domain
 
+import com.fasterxml.jackson.annotation.JsonIgnore
 import io.micronaut.serde.annotation.Serdeable
 import jakarta.persistence.*
 import java.time.LocalDateTime
@@ -23,6 +24,7 @@ data class IdentityProvider(
     var clientId: String = "",
 
     @Column(name = "client_secret")
+    @JsonIgnore
     var clientSecret: String? = null,
 
     @Column(name = "tenant_id")

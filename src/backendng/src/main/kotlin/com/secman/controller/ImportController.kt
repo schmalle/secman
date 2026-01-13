@@ -26,6 +26,8 @@ import org.apache.poi.ss.usermodel.*
 import org.apache.poi.xssf.usermodel.XSSFWorkbook
 import org.slf4j.LoggerFactory
 import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.attribute.PosixFilePermissions
 
 @Controller("/api/import")
 @Secured(SecurityRule.IS_AUTHENTICATED)
@@ -49,7 +51,7 @@ open class ImportController(
     private val log = LoggerFactory.getLogger(ImportController::class.java)
     
     companion object {
-        private const val MAX_FILE_SIZE = 10 * 1024 * 1024L // 10MB
+        private const val MAX_FILE_SIZE = 100 * 1024 * 1024L // 100MB - aligned with application.yml
         private const val REQUIRED_SHEET_NAME = "Reqs"
         private val REQUIRED_HEADERS = listOf(
             "Chapter", "Norm", "Short req", "DetailsEN", "MotivationEN", "ExampleEN", "UseCase"
@@ -588,10 +590,19 @@ open class ImportController(
             }
 
             // Save to temporary file for processing
-            val tempFile = java.io.File.createTempFile("csv_upload_", ".csv")
+            // Security: Use Files.createTempFile with restrictive permissions to prevent TOCTOU attacks
+            val tempPath = try {
+                // Try to create with restrictive POSIX permissions (owner read/write only)
+                val attrs = PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------"))
+                Files.createTempFile("csv_upload_", ".csv", attrs)
+            } catch (e: UnsupportedOperationException) {
+                // Fallback for non-POSIX systems (Windows)
+                Files.createTempFile("csv_upload_", ".csv")
+            }
+            val tempFile = tempPath.toFile()
             try {
                 csvFile.inputStream.use { input ->
-                    tempFile.outputStream().use { output ->
+                    Files.newOutputStream(tempPath).use { output ->
                         input.copyTo(output)
                     }
                 }
@@ -607,9 +618,7 @@ open class ImportController(
 
             } finally {
                 // Clean up temp file
-                if (tempFile.exists()) {
-                    tempFile.delete()
-                }
+                Files.deleteIfExists(tempPath)
             }
 
         } catch (e: IllegalArgumentException) {

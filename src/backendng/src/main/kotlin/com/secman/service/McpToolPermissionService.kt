@@ -36,6 +36,84 @@ class McpToolPermissionService(
     private val HOUR_WINDOW_MS = 3_600_000L
 
     /**
+     * Check rate limit for an API key without checking permissions.
+     * Used by controllers that handle permission checking separately.
+     * Security fix: HIGH-005 - Enforce MCP rate limiting on all tool calls.
+     *
+     * @param apiKeyId The API key ID to check rate limits for
+     * @param requestId Optional request ID for logging
+     * @return RateLimitInfo with rate limit status
+     */
+    fun checkRateLimitForApiKey(apiKeyId: Long, requestId: String? = null): RateLimitInfo {
+        val now = System.currentTimeMillis()
+
+        // Get or create tracker for this API key
+        val tracker = rateLimitTrackers.computeIfAbsent(apiKeyId) { RateLimitTracker() }
+
+        // Clean up expired windows
+        tracker.cleanup(now)
+
+        // Check minute window (1000 req/min)
+        val minuteKey = now / MINUTE_WINDOW_MS
+        val minuteCount = tracker.minuteWindow.computeIfAbsent(minuteKey) { AtomicInteger(0) }
+        val currentMinuteRequests = minuteCount.get()
+
+        if (currentMinuteRequests >= MAX_REQUESTS_PER_MINUTE) {
+            val nextMinuteStartMs = (minuteKey + 1) * MINUTE_WINDOW_MS
+            val resetTime = LocalDateTime.now().plusSeconds((nextMinuteStartMs - now) / 1000)
+
+            logger.warn("Rate limit exceeded (minute window): apiKeyId={}, requests={}/{}, requestId={}",
+                       apiKeyId, currentMinuteRequests, MAX_REQUESTS_PER_MINUTE, requestId)
+
+            return RateLimitInfo(
+                maxCallsPerHour = MAX_REQUESTS_PER_HOUR,
+                remainingCalls = 0,
+                resetTime = resetTime,
+                exceeded = true
+            )
+        }
+
+        // Check hour window (50,000 req/hour)
+        val hourKey = now / HOUR_WINDOW_MS
+        val hourCount = tracker.hourWindow.computeIfAbsent(hourKey) { AtomicInteger(0) }
+        val currentHourRequests = hourCount.get()
+
+        if (currentHourRequests >= MAX_REQUESTS_PER_HOUR) {
+            val nextHourStartMs = (hourKey + 1) * HOUR_WINDOW_MS
+            val resetTime = LocalDateTime.now().plusSeconds((nextHourStartMs - now) / 1000)
+
+            logger.warn("Rate limit exceeded (hour window): apiKeyId={}, requests={}/{}, requestId={}",
+                       apiKeyId, currentHourRequests, MAX_REQUESTS_PER_HOUR, requestId)
+
+            return RateLimitInfo(
+                maxCallsPerHour = MAX_REQUESTS_PER_HOUR,
+                remainingCalls = 0,
+                resetTime = resetTime,
+                exceeded = true
+            )
+        }
+
+        // Increment counters (request is allowed)
+        minuteCount.incrementAndGet()
+        hourCount.incrementAndGet()
+
+        // Calculate remaining calls (use the more restrictive limit)
+        val remainingMinute = MAX_REQUESTS_PER_MINUTE - currentMinuteRequests - 1
+        val remainingHour = MAX_REQUESTS_PER_HOUR - currentHourRequests - 1
+        val remaining = minOf(remainingMinute, remainingHour)
+
+        val nextHourStartMs = (hourKey + 1) * HOUR_WINDOW_MS
+        val resetTime = LocalDateTime.now().plusSeconds((nextHourStartMs - now) / 1000)
+
+        return RateLimitInfo(
+            maxCallsPerHour = MAX_REQUESTS_PER_HOUR,
+            remainingCalls = remaining,
+            resetTime = resetTime,
+            exceeded = false
+        )
+    }
+
+    /**
      * Check if a given permission set allows calling a specific tool.
      * Used for delegation where effective permissions are pre-computed.
      * Feature: 050-mcp-user-delegation
