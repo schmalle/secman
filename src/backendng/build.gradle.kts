@@ -22,9 +22,9 @@ dependencies {
     implementation(project(":shared"))
     
     // Micronaut Core
-    implementation("io.micronaut:micronaut-http-client:4.10.12")
-    implementation("io.micronaut:micronaut-http-server-netty:4.10.12")
-    implementation("io.micronaut:micronaut-jackson-databind:4.10.12")
+    implementation("io.micronaut:micronaut-http-client:4.10.13")
+    implementation("io.micronaut:micronaut-http-server-netty:4.10.13")
+    implementation("io.micronaut:micronaut-jackson-databind:4.10.13")
     implementation("io.micronaut.kotlin:micronaut-kotlin-runtime")
     implementation("io.micronaut.kotlin:micronaut-kotlin-extension-functions")
     implementation("io.micronaut:micronaut-retry:4.10.12")
