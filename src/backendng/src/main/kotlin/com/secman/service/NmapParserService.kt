@@ -64,10 +64,14 @@ class NmapParserService {
         factory.isNamespaceAware = false
         factory.isValidating = false
 
-        // Security: Disable external entities to prevent XXE attacks
-        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", false)
+        // Security: Complete XXE prevention per OWASP guidelines
+        // Disallow DOCTYPE declarations entirely (most secure option)
+        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
         factory.setFeature("http://xml.org/sax/features/external-general-entities", false)
         factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false)
+        factory.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false)
+        factory.setXIncludeAware(false)
+        factory.setExpandEntityReferences(false)
 
         val builder = factory.newDocumentBuilder()
         return builder.parse(ByteArrayInputStream(xmlContent))

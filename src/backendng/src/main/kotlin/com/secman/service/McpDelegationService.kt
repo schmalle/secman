@@ -52,6 +52,19 @@ class McpDelegationService {
     /**
      * In-memory storage for delegation failures per API key.
      * Key: API key ID, Value: Queue of failure records (sliding window)
+     *
+     * SECURITY NOTE (HIGH-006): This in-memory storage has limitations:
+     * - Data is lost on application restart
+     * - Not shared across multiple application instances in a cluster
+     *
+     * For production environments with high availability requirements or
+     * strict security audit needs, consider implementing database-backed
+     * failure tracking (e.g., DelegationFailureLog entity with scheduled cleanup).
+     *
+     * Current mitigations:
+     * - Sliding window cleanup prevents unbounded memory growth
+     * - Alert threshold triggers immediate warning for investigation
+     * - MCP audit logs capture all delegation events for forensics
      */
     private val failureTracker = ConcurrentHashMap<Long, ConcurrentLinkedDeque<DelegationFailureRecord>>()
 

@@ -268,6 +268,27 @@ class McpController(
 
             val mcpApiKey = authResult.apiKey!!
 
+            // Security: Check rate limits before processing (HIGH-005 fix)
+            val rateLimitInfo = toolPermissionService.checkRateLimitForApiKey(mcpApiKey.id!!, request.id)
+            if (rateLimitInfo.exceeded) {
+                auditService.logAuthenticationEvent(
+                    McpEventType.RATE_LIMITED,
+                    mcpApiKey.id,
+                    mcpApiKey.userId,
+                    success = false,
+                    errorCode = "RATE_LIMITED",
+                    errorMessage = "Rate limit exceeded: ${rateLimitInfo.remainingCalls} calls remaining, resets at ${rateLimitInfo.resetTime}",
+                    requestId = request.id
+                )
+
+                return HttpResponse.status<McpToolCallResponse>(HttpStatus.TOO_MANY_REQUESTS)
+                    .body(McpToolCallResponse(
+                        jsonrpc = request.jsonrpc,
+                        id = request.id,
+                        error = McpErrorResponse("RATE_LIMITED", "Rate limit exceeded. Resets at ${rateLimitInfo.resetTime}")
+                    ))
+            }
+
             // Validate JSON-RPC format
             if (request.jsonrpc != "2.0" || request.method != "tools/call") {
                 return HttpResponse.badRequest(

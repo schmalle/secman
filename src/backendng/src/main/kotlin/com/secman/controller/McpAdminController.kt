@@ -509,9 +509,9 @@ class McpAdminController(
 
     private fun getUserIdFromAuth(authentication: Authentication?): Long? {
         if (authentication == null) {
-            // For testing when security is disabled, return a dummy user ID
-            logger.debug("No authentication provided, using test user ID")
-            return 1L
+            // Security: Never return a fallback user ID - authentication is required
+            logger.warn("No authentication provided - rejecting request")
+            return null
         }
 
         return try {
