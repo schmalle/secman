@@ -47,8 +47,8 @@ class ServersCommand {
     var save: Boolean = false            // Save to database (requires username/password)
     var verbose: Boolean = false         // Verbose logging (FR-009)
     var backendUrl: String = "http://localhost:8080"  // Backend API URL
-    var username: String? = null         // Backend username for authentication
-    var password: String? = null         // Backend password for authentication
+    var username: String? = null         // Backend username (or set SECMAN_USERNAME env var)
+    var password: String? = null         // Backend password (or set SECMAN_PASSWORD env var)
     var clientId: String? = null         // CrowdStrike client ID (optional override)
     var clientSecret: String? = null     // CrowdStrike client secret (optional override)
     var limit: Int = 800                 // Page size for pagination
@@ -133,15 +133,24 @@ class ServersCommand {
 
             // Skip import if --save not specified
             if (!save) {
-                System.out.println("\nQuery completed successfully. Use --save --username <user> --password <pass> to import to database.")
+                System.out.println("\nQuery completed successfully. Use --save with credentials (CLI args or SECMAN_USERNAME/SECMAN_PASSWORD env vars) to import to database.")
                 return 0
             }
 
-            // Validate authentication credentials
-            if (username == null || password == null) {
-                System.err.println("Error: --username and --password are required when using --save")
-                return 1
-            }
+            // Resolve credentials with environment variable fallback
+            val effectiveUsername = username
+                ?: System.getenv("SECMAN_USERNAME")
+                ?: run {
+                    System.err.println("Error: --username required via CLI or SECMAN_USERNAME env var")
+                    return 1
+                }
+
+            val effectivePassword = password
+                ?: System.getenv("SECMAN_PASSWORD")
+                ?: run {
+                    System.err.println("Error: --password required via CLI or SECMAN_PASSWORD env var")
+                    return 1
+                }
 
             // Import to backend via storage service (T011)
             System.out.println("\nImporting to backend: $backendUrl")
@@ -151,7 +160,7 @@ class ServersCommand {
                 System.out.println("Authenticating with backend...")
             }
 
-            val authToken = storageService.authenticate(username!!, password!!, backendUrl)
+            val authToken = storageService.authenticate(effectiveUsername, effectivePassword, backendUrl)
             if (authToken == null) {
                 System.err.println("Error: Authentication failed. Please check your username and password.")
                 return 1
