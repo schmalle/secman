@@ -55,20 +55,21 @@ Secman is a security requirement and risk assessment management tool consisting 
 
 ## Technology Stack
 
-| Layer | Technology | Version |
-|-------|------------|---------|
-| **Backend** | Kotlin | 2.2.21 |
-| | Java | 21 |
-| | Micronaut | 4.10 |
-| | Hibernate JPA | (via Micronaut Data) |
-| **Frontend** | Astro | 5.15 |
-| | React | 19 |
-| | Bootstrap | 5.3 |
-| | Axios | (HTTP client) |
-| **Database** | MariaDB | 11.4+ |
-| **CLI** | Picocli | 4.7 |
-| | Kotlin | 2.2.21 |
-| **Build** | Gradle | 9.2 |
+
+| Layer        | Technology    | Version              |
+| ------------ | ------------- | -------------------- |
+| **Backend**  | Kotlin        | 2.3.0                |
+|              | Java          | 21                   |
+|              | Micronaut     | 4.10                 |
+|              | Hibernate JPA | (via Micronaut Data) |
+| **Frontend** | Astro         | 5.15                 |
+|              | React         | 19                   |
+|              | Bootstrap     | 5.3                  |
+|              | Axios         | (HTTP client)        |
+| **Database** | MariaDB       | 11.4+                |
+| **CLI**      | Picocli       | 4.7                  |
+|              | Kotlin        | 2.2.21               |
+| **Build**    | Gradle        | 9.2                  |
 
 ---
 
@@ -99,6 +100,7 @@ The backend follows a layered architecture:
 ```
 
 **Key packages:**
+
 - `com.secman.domain` - JPA entities and enums
 - `com.secman.repository` - Data access interfaces
 - `com.secman.service` - Business logic
@@ -128,6 +130,7 @@ Astro with React islands architecture:
 ```
 
 **Authentication flow:**
+
 1. JWT stored in `localStorage` as `authToken`
 2. Axios interceptor adds `Authorization: Bearer <token>` header
 3. SSE endpoints receive token via query parameter (`?token=<jwt>`)
@@ -149,6 +152,7 @@ Command-line interface for automated operations:
 ```
 
 **Available commands:**
+
 - `query servers` - Query CrowdStrike for vulnerabilities
 - `send-notifications` - Send email notifications
 - `manage-user-mappings` - Manage AWS/AD domain mappings
@@ -198,15 +202,16 @@ Command-line interface for automated operations:
 
 ### Entity Relationships
 
-| Relationship | Type | Description |
-|--------------|------|-------------|
-| User ↔ Workgroup | Many-to-Many | Users belong to workgroups |
-| Asset ↔ Workgroup | Many-to-Many | Assets assigned to workgroups |
-| Asset → Vulnerability | One-to-Many | Assets have vulnerabilities |
-| Asset → ScanResult | One-to-Many | Assets have scan results |
-| User → Asset (manualCreator) | One-to-Many | Users create assets manually |
-| User → Asset (scanUploader) | One-to-Many | Users upload scans discovering assets |
-| Requirement ↔ Norm | Many-to-Many | Requirements map to standards |
+
+| Relationship                  | Type         | Description                           |
+| ----------------------------- | ------------ | ------------------------------------- |
+| User ↔ Workgroup             | Many-to-Many | Users belong to workgroups            |
+| Asset ↔ Workgroup            | Many-to-Many | Assets assigned to workgroups         |
+| Asset → Vulnerability        | One-to-Many  | Assets have vulnerabilities           |
+| Asset → ScanResult           | One-to-Many  | Assets have scan results              |
+| User → Asset (manualCreator) | One-to-Many  | Users create assets manually          |
+| User → Asset (scanUploader)  | One-to-Many  | Users upload scans discovering assets |
+| Requirement ↔ Norm           | Many-to-Many | Requirements map to standards         |
 
 ### Key Tables
 
@@ -239,14 +244,15 @@ identity_providers, oauth_states, email_config, maintenance_banners
 
 ### Role-Based Access Control (RBAC)
 
-| Role | Description | Key Permissions |
-|------|-------------|-----------------|
-| `USER` | Standard user | View assigned assets, requirements |
-| `ADMIN` | Full access | All operations, user management |
-| `VULN` | Vulnerability manager | Import vulnerabilities, manage scans |
-| `RELEASE_MANAGER` | Release coordinator | Manage releases, view requirements |
-| `REQ` | Requirements editor | Create/edit requirements |
-| `SECCHAMPION` | Security champion | Extended read access, product listing |
+
+| Role              | Description           | Key Permissions                       |
+| ----------------- | --------------------- | ------------------------------------- |
+| `USER`            | Standard user         | View assigned assets, requirements    |
+| `ADMIN`           | Full access           | All operations, user management       |
+| `VULN`            | Vulnerability manager | Import vulnerabilities, manage scans  |
+| `RELEASE_MANAGER` | Release coordinator   | Manage releases, view requirements    |
+| `REQ`             | Requirements editor   | Create/edit requirements              |
+| `SECCHAMPION`     | Security champion     | Extended read access, product listing |
 
 ### Unified Access Control (Asset Visibility)
 
@@ -273,11 +279,12 @@ fun canUserAccessAsset(user: User, asset: Asset): Boolean {
 
 ### Authentication Methods
 
-| Method | Storage | Use Case |
-|--------|---------|----------|
-| JWT | `localStorage` | Frontend API calls |
-| OAuth2/OIDC | Session + JWT | SSO with Azure AD, Google |
-| MCP API Key | Header (`X-MCP-API-Key`) | AI assistant integration |
+
+| Method      | Storage                  | Use Case                  |
+| ----------- | ------------------------ | ------------------------- |
+| JWT         | `localStorage`           | Frontend API calls        |
+| OAuth2/OIDC | Session + JWT            | SSO with Azure AD, Google |
+| MCP API Key | Header (`X-MCP-API-Key`) | AI assistant integration  |
 
 ---
 
@@ -285,16 +292,18 @@ fun canUserAccessAsset(user: User, asset: Asset): Boolean {
 
 ### RESTful Conventions
 
-| HTTP Method | Purpose | Example |
-|-------------|---------|---------|
-| `GET` | Retrieve resources | `GET /api/assets` |
-| `POST` | Create resources | `POST /api/assets` |
-| `PUT` | Update resources | `PUT /api/assets/{id}` |
-| `DELETE` | Delete resources | `DELETE /api/assets/{id}` |
+
+| HTTP Method | Purpose            | Example                   |
+| ----------- | ------------------ | ------------------------- |
+| `GET`       | Retrieve resources | `GET /api/assets`         |
+| `POST`      | Create resources   | `POST /api/assets`        |
+| `PUT`       | Update resources   | `PUT /api/assets/{id}`    |
+| `DELETE`    | Delete resources   | `DELETE /api/assets/{id}` |
 
 ### Endpoint Categories
 
 **Public (unauthenticated):**
+
 - `POST /api/auth/login`
 - `GET /api/identity-providers/enabled`
 - `GET /oauth/*`
@@ -302,11 +311,13 @@ fun canUserAccessAsset(user: User, asset: Asset): Boolean {
 - `POST /mcp` (uses API key auth)
 
 **Protected (authenticated):**
+
 - `GET /api/assets`
 - `GET /api/vulnerabilities/*`
 - `GET /api/requirements`
 
 **Admin-only:**
+
 - `POST /api/workgroups`
 - `DELETE /api/assets/bulk`
 - `GET /api/mcp/admin/api-keys`
@@ -314,6 +325,7 @@ fun canUserAccessAsset(user: User, asset: Asset): Boolean {
 ### Response Formats
 
 **Paginated response:**
+
 ```json
 {
   "content": [...],
@@ -325,6 +337,7 @@ fun canUserAccessAsset(user: User, asset: Asset): Boolean {
 ```
 
 **Error response:**
+
 ```json
 {
   "error": "VALIDATION_ERROR",
@@ -357,6 +370,7 @@ open fun onUserCreated(event: UserCreatedEvent) {
 ```
 
 **Use cases:**
+
 - User creation → Apply pending user mappings
 - Asset import → Trigger materialized view refresh
 - Vulnerability detection → Send email notifications
