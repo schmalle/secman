@@ -45,7 +45,10 @@ class McpToolRegistry(
     @Inject private val getPendingExceptionRequestsTool: GetPendingExceptionRequestsTool,
     @Inject private val approveExceptionRequestTool: ApproveExceptionRequestTool,
     @Inject private val rejectExceptionRequestTool: RejectExceptionRequestTool,
-    @Inject private val cancelExceptionRequestTool: CancelExceptionRequestTool
+    @Inject private val cancelExceptionRequestTool: CancelExceptionRequestTool,
+    // Feature 063: MCP Tools for E2E Vulnerability Exception Workflow
+    @Inject private val deleteAllAssetsTool: DeleteAllAssetsTool,
+    @Inject private val addVulnerabilityTool: AddVulnerabilityTool
 ) {
     private val logger = LoggerFactory.getLogger(McpToolRegistry::class.java)
 
@@ -87,7 +90,10 @@ class McpToolRegistry(
             getPendingExceptionRequestsTool,
             approveExceptionRequestTool,
             rejectExceptionRequestTool,
-            cancelExceptionRequestTool
+            cancelExceptionRequestTool,
+            // Feature 063: MCP Tools for E2E Vulnerability Exception Workflow
+            deleteAllAssetsTool,
+            addVulnerabilityTool
         ).forEach { tool ->
             toolMap[tool.name] = tool
             logger.debug("Registered MCP tool: {}", tool.name)
@@ -267,6 +273,14 @@ class McpToolRegistry(
             }
             "cancel_exception_request" -> {
                 permissions.contains(McpPermission.VULNERABILITIES_READ) // Ownership check in tool
+            }
+
+            // Feature 063: MCP Tools for E2E Vulnerability Exception Workflow
+            "delete_all_assets" -> {
+                permissions.contains(McpPermission.ASSETS_READ) // ADMIN role checked in tool execute()
+            }
+            "add_vulnerability" -> {
+                permissions.contains(McpPermission.VULNERABILITIES_READ) // ADMIN/VULN role checked in tool execute()
             }
 
             else -> false

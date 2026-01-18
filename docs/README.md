@@ -8,16 +8,17 @@ Security requirement and risk assessment management tool.
 
 ## Table of Contents
 
-| Document | Description |
-|----------|-------------|
-| [Architecture](./ARCHITECTURE.md) | System design, data model, and design patterns |
-| [Deployment Guide](./DEPLOYMENT.md) | Production deployment on Linux |
-| [Environment Variables](./ENVIRONMENT.md) | Complete configuration reference |
-| [CLI Reference](./CLI.md) | Command-line interface and cron jobs |
-| [MCP Integration](./MCP.md) | AI assistant integration (Claude, etc.) |
-| [CrowdStrike Import](./CROWDSTRIKE_IMPORT.md) | Vulnerability import technical details |
-| [Testing Guide](./TESTING.md) | Test infrastructure and patterns |
-| [Troubleshooting](./TROUBLESHOOTING.md) | Common issues and solutions |
+
+| Document                                      | Description                                    |
+| --------------------------------------------- | ---------------------------------------------- |
+| [Architecture](./ARCHITECTURE.md)             | System design, data model, and design patterns |
+| [Deployment Guide](./DEPLOYMENT.md)           | Production deployment on Linux                 |
+| [Environment Variables](./ENVIRONMENT.md)     | Complete configuration reference               |
+| [CLI Reference](./CLI.md)                     | Command-line interface and cron jobs           |
+| [MCP Integration](./MCP.md)                   | AI assistant integration (Claude, etc.)        |
+| [CrowdStrike Import](./CROWDSTRIKE_IMPORT.md) | Vulnerability import technical details         |
+| [Testing Guide](./TESTING.md)                 | Test infrastructure and patterns               |
+| [Troubleshooting](./TROUBLESHOOTING.md)       | Common issues and solutions                    |
 
 ---
 
@@ -73,7 +74,8 @@ Using Secman for security management:
 ```
 
 **Technology Stack:**
-- **Backend**: Kotlin 2.2.21, Java 21, Micronaut 4.10, Hibernate JPA
+
+- **Backend**: Kotlin 2.3.0, Java 25, Micronaut 4.10, Hibernate JPA
 - **Frontend**: Astro 5.15, React 19, Bootstrap 5.3, Axios
 - **Database**: MariaDB 11.4+ with auto-migration
 - **CLI**: Picocli 4.7, CrowdStrike API integration
@@ -127,7 +129,7 @@ npm run dev
 ```bash
 # Database
 DB_USERNAME=secman
-DB_PASSWORD=secure_password
+DB_PASSWORD=CHANGEME
 
 # Security (generate unique values!)
 JWT_SECRET=$(openssl rand -base64 32)
@@ -150,6 +152,7 @@ See [ENVIRONMENT.md](./ENVIRONMENT.md) for complete variable reference.
 ### 3. Installation
 
 Follow [DEPLOYMENT.md](./DEPLOYMENT.md) for step-by-step instructions:
+
 - MariaDB database setup
 - Backend deployment
 - Frontend deployment
@@ -227,13 +230,14 @@ curl https://secman.yourdomain.com/
 
 ## Troubleshooting Quick Reference
 
-| Issue | Check |
-|-------|-------|
+
+| Issue               | Check                                |
+| ------------------- | ------------------------------------ |
 | Backend won't start | `journalctl -u secman-backend -n 50` |
-| Frontend blank page | Browser console, `PUBLIC_BACKEND_URL` |
-| Database connection | `mysql -u secman -p secman` |
-| 502 Bad Gateway | `systemctl status secman-backend` |
-| MCP auth fails | API key valid? Headers correct? |
+| Frontend blank page | Browser console,`PUBLIC_BACKEND_URL` |
+| Database connection | `mysql -u secman -p secman`          |
+| 502 Bad Gateway     | `systemctl status secman-backend`    |
+| MCP auth fails      | API key valid? Headers correct?      |
 
 See [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) for detailed solutions.
 

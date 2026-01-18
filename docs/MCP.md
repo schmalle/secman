@@ -1,7 +1,7 @@
 # MCP (Model Context Protocol) Integration Guide
 
-**Last Updated:** 2026-01-11
-**Version:** 3.0
+**Last Updated:** 2026-01-14
+**Version:** 3.1
 
 This guide covers integrating Secman with AI assistants (Claude Desktop, Claude Code, ChatGPT, etc.) using the Model Context Protocol (MCP).
 
@@ -550,6 +550,44 @@ List all users. **Requires ADMIN role and User Delegation.**
 
 #### `list_products`
 List products. **Requires ADMIN or SECCHAMPION role.**
+
+#### `add_user`
+Create a new user. **Requires ADMIN role and User Delegation.**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `email` | string | Yes | User email address |
+| `password` | string | Yes | User password |
+| `roles` | string[] | No | User roles (default: `["USER"]`) |
+
+#### `delete_user`
+Delete a user by email. **Requires ADMIN role and User Delegation.**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `email` | string | Yes | Email of user to delete |
+
+#### `delete_all_assets`
+Delete ALL assets with cascade deletion of vulnerabilities, scan results, and exception requests. **Requires ADMIN role and User Delegation.**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `confirm` | boolean | Yes | Must be `true` to confirm deletion |
+
+Returns counts of deleted assets, vulnerabilities, and scan results.
+
+#### `add_vulnerability`
+Add a vulnerability to an asset. Creates the asset if it doesn't exist. **Requires ADMIN or VULN role and User Delegation.**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `hostname` | string | Yes | Asset hostname/name |
+| `cve` | string | Yes | CVE identifier (e.g., CVE-2024-1234) |
+| `criticality` | enum | Yes | `CRITICAL`, `HIGH`, `MEDIUM`, or `LOW` |
+| `daysOpen` | integer | No | Days the vulnerability has been open (default: 0) |
+| `owner` | string | No | Owner to assign to newly created asset |
+
+Returns vulnerability ID, asset details, and whether the asset/vulnerability were created or updated.
 
 ---
 

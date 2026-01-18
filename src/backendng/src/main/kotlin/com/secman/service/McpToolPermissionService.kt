@@ -187,6 +187,32 @@ class McpToolPermissionService(
             "get_requirement_files", "download_file" -> {
                 permissions.contains(McpPermission.FILES_READ)
             }
+            // Feature 006: Enhanced MCP Tools
+            "get_all_assets_detail", "get_asset_scan_results", "get_asset_complete_profile" -> {
+                permissions.contains(McpPermission.ASSETS_READ)
+            }
+            "get_all_vulnerabilities_detail", "get_asset_most_vulnerabilities" -> {
+                permissions.contains(McpPermission.VULNERABILITIES_READ)
+            }
+            // Feature 060-062: User, Product, and Vulnerability Exception Tools
+            "list_users", "add_user", "delete_user" -> {
+                permissions.contains(McpPermission.USER_ACTIVITY)
+            }
+            "list_products" -> {
+                permissions.contains(McpPermission.VULNERABILITIES_READ)
+            }
+            "get_overdue_assets", "create_exception_request", "get_my_exception_requests",
+            "get_pending_exception_requests", "approve_exception_request",
+            "reject_exception_request", "cancel_exception_request" -> {
+                permissions.contains(McpPermission.VULNERABILITIES_READ)
+            }
+            // Feature 063: E2E Vulnerability Exception Workflow Tools
+            "delete_all_assets" -> {
+                permissions.contains(McpPermission.ASSETS_READ)
+            }
+            "add_vulnerability" -> {
+                permissions.contains(McpPermission.VULNERABILITIES_READ)
+            }
             else -> false
         }
     }
