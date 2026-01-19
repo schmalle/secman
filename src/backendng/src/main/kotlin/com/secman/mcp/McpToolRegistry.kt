@@ -48,7 +48,10 @@ class McpToolRegistry(
     @Inject private val cancelExceptionRequestTool: CancelExceptionRequestTool,
     // Feature 063: MCP Tools for E2E Vulnerability Exception Workflow
     @Inject private val deleteAllAssetsTool: DeleteAllAssetsTool,
-    @Inject private val addVulnerabilityTool: AddVulnerabilityTool
+    @Inject private val addVulnerabilityTool: AddVulnerabilityTool,
+    // Feature 064: MCP and CLI User Mapping Upload
+    @Inject private val importUserMappingsTool: ImportUserMappingsTool,
+    @Inject private val listUserMappingsTool: ListUserMappingsTool
 ) {
     private val logger = LoggerFactory.getLogger(McpToolRegistry::class.java)
 
@@ -93,7 +96,10 @@ class McpToolRegistry(
             cancelExceptionRequestTool,
             // Feature 063: MCP Tools for E2E Vulnerability Exception Workflow
             deleteAllAssetsTool,
-            addVulnerabilityTool
+            addVulnerabilityTool,
+            // Feature 064: MCP and CLI User Mapping Upload
+            importUserMappingsTool,
+            listUserMappingsTool
         ).forEach { tool ->
             toolMap[tool.name] = tool
             logger.debug("Registered MCP tool: {}", tool.name)
@@ -281,6 +287,14 @@ class McpToolRegistry(
             }
             "add_vulnerability" -> {
                 permissions.contains(McpPermission.VULNERABILITIES_READ) // ADMIN/VULN role checked in tool execute()
+            }
+
+            // Feature 064: MCP and CLI User Mapping Upload
+            "import_user_mappings" -> {
+                permissions.contains(McpPermission.USER_ACTIVITY) // ADMIN role checked in tool execute()
+            }
+            "list_user_mappings" -> {
+                permissions.contains(McpPermission.USER_ACTIVITY) // ADMIN role checked in tool execute()
             }
 
             else -> false

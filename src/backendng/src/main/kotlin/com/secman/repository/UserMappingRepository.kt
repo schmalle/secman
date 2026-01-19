@@ -262,4 +262,31 @@ interface UserMappingRepository : JpaRepository<UserMapping, Long> {
      * @return List of mappings matching email and status
      */
     fun findByEmailAndStatus(email: String, status: com.secman.domain.MappingStatus): List<UserMapping>
+
+    // Feature 064: MCP and CLI User Mapping Upload
+
+    /**
+     * Find all mappings with pagination
+     *
+     * Use case: List all mappings via MCP tool with pagination
+     *
+     * Related to: Feature 064 (MCP and CLI User Mapping Upload)
+     *
+     * @param pageable Pagination parameters (page number, size, sort)
+     * @return Page of all user mappings
+     */
+    override fun findAll(pageable: io.micronaut.data.model.Pageable): io.micronaut.data.model.Page<UserMapping>
+
+    /**
+     * Find mappings by email containing (partial match) with pagination
+     *
+     * Use case: Filter mappings by email via MCP tool with pagination
+     *
+     * Related to: Feature 064 (MCP and CLI User Mapping Upload)
+     *
+     * @param email Partial email to search for (case-insensitive)
+     * @param pageable Pagination parameters (page number, size, sort)
+     * @return Page of mappings matching the email filter
+     */
+    fun findByEmailContainingIgnoreCase(email: String, pageable: io.micronaut.data.model.Pageable): io.micronaut.data.model.Page<UserMapping>
 }

@@ -269,7 +269,7 @@ curl -X POST http://localhost:8080/api/mcp/admin/api-keys \
 | `ASSETS_READ` | Read asset inventory | `get_assets`, `get_all_assets_detail`, `get_asset_profile`, `get_asset_complete_profile` |
 | `VULNERABILITIES_READ` | Read vulnerability data | `get_vulnerabilities`, `get_all_vulnerabilities_detail`, `get_asset_most_vulnerabilities`, `get_overdue_assets`, `get_my_exception_requests`, `get_pending_exception_requests`, `create_exception_request`, `approve_exception_request`, `reject_exception_request`, `cancel_exception_request` |
 | `SCANS_READ` | Read scan history | `get_scans`, `get_asset_scan_results`, `search_products` |
-| `USER_ACTIVITY` | List users | `list_users` (requires delegation) |
+| `USER_ACTIVITY` | User management and mappings | `list_users`, `add_user`, `delete_user`, `import_user_mappings`, `list_user_mappings` (all require delegation) |
 
 ### Managing Keys
 
@@ -589,6 +589,54 @@ Add a vulnerability to an asset. Creates the asset if it doesn't exist. **Requir
 
 Returns vulnerability ID, asset details, and whether the asset/vulnerability were created or updated.
 
+### User Mapping Management
+
+#### `import_user_mappings`
+Bulk import user mappings (email to AWS account / domain). **Requires ADMIN role and User Delegation.**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `mappings` | array | Yes | List of mapping objects (max 1000) |
+| `mappings[].email` | string | Yes | User email address |
+| `mappings[].awsAccountId` | string | No | AWS account ID (12 digits) |
+| `mappings[].domain` | string | No | AD domain name |
+| `dryRun` | boolean | No | Validate without persisting (default: false) |
+
+**Note:** Each mapping must have at least one of `awsAccountId` or `domain`.
+
+**Returns:**
+- `totalProcessed`: Number of entries processed
+- `created`: Active mappings created (user exists)
+- `createdPending`: Pending mappings created (user doesn't exist yet)
+- `skipped`: Duplicate mappings skipped
+- `errors`: List of validation errors with index, email, and message
+- `dryRun`: Whether this was a dry-run
+
+#### `list_user_mappings`
+List user mappings with pagination and filtering. **Requires ADMIN role and User Delegation.**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `email` | string | No | Filter by email (partial match, case-insensitive) |
+| `page` | number | No | Page number (0-indexed, default: 0) |
+| `size` | number | No | Page size (default: 20, max: 100) |
+
+**Returns:**
+- `mappings`: List of user mapping DTOs containing:
+  - `id`: Mapping ID
+  - `email`: User email
+  - `awsAccountId`: AWS account ID (if set)
+  - `domain`: AD domain (if set)
+  - `userId`: Associated user ID (null for pending mappings)
+  - `isFutureMapping`: Boolean indicating if user doesn't exist yet
+  - `appliedAt`: Timestamp when mapping was applied
+  - `createdAt`: Creation timestamp
+  - `updatedAt`: Last update timestamp
+- `page`: Current page number
+- `size`: Page size
+- `totalElements`: Total number of mappings
+- `totalPages`: Total number of pages
+
 ---
 
 ## Authentication & Security
@@ -666,6 +714,12 @@ All MCP operations are logged with:
 **Scans:**
 - "Find all open SSH ports" → `get_asset_scan_results` with `service: "ssh"`, `state: "open"`
 - "Search for Apache servers" → `search_products` with `service: "Apache"`
+
+**User Mappings:**
+- "Import user mappings" → `import_user_mappings` with mappings array
+- "Validate mappings before import" → `import_user_mappings` with `dryRun: true`
+- "List all user mappings" → `list_user_mappings`
+- "Find mappings for user@company.com" → `list_user_mappings` with `email: "user@company.com"`
 
 ### Programmatic Access
 

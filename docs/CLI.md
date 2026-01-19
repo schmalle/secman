@@ -202,11 +202,14 @@ java -jar secman-cli.jar send-notifications --outdated-only
 
 ### Manage User Mappings
 
-Manage user-to-asset mappings for access control.
+Manage user-to-asset mappings for access control. User mappings associate email addresses with AWS accounts or AD domains, enabling automatic asset visibility based on these attributes.
 
 ```bash
-# List all mappings
+# List all mappings (table format - default)
 java -jar secman-cli.jar manage-user-mappings list
+
+# List all mappings (JSON format for scripting)
+java -jar secman-cli.jar manage-user-mappings list --format json
 
 # Add AWS account mapping
 java -jar secman-cli.jar manage-user-mappings add-aws \
@@ -218,10 +221,21 @@ java -jar secman-cli.jar manage-user-mappings add-domain \
   --email user@example.com \
   --domain CORP.EXAMPLE.COM
 
-# Import from CSV
+# Import from CSV (validates and persists)
 java -jar secman-cli.jar manage-user-mappings import \
   --file mappings.csv \
   --format csv
+
+# Import with dry-run (validates without persisting)
+java -jar secman-cli.jar manage-user-mappings import \
+  --file mappings.csv \
+  --format csv \
+  --dry-run
+
+# Import from JSON
+java -jar secman-cli.jar manage-user-mappings import \
+  --file mappings.json \
+  --format json
 
 # Remove mapping
 java -jar secman-cli.jar manage-user-mappings remove --id 42
@@ -236,6 +250,81 @@ java -jar secman-cli.jar manage-user-mappings remove --id 42
 | `add-domain` | Add AD domain mapping |
 | `import` | Bulk import from CSV/JSON |
 | `remove` | Remove mapping by ID |
+
+**List Command Options:**
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--format` | Output format: `table` or `json` | `table` |
+
+**Import Command Options:**
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--file` | Path to import file (required) | - |
+| `--format` | File format: `csv` or `json` | `csv` |
+| `--dry-run` | Validate without persisting | `false` |
+
+#### CSV Import Format
+
+CSV files must have a header row with the following columns:
+
+```csv
+email,awsAccountId,domain
+user1@example.com,123456789012,
+user2@example.com,,corp.example.com
+user3@example.com,987654321098,prod.example.com
+```
+
+**Column requirements:**
+- `email` (required): Valid email address
+- `awsAccountId` (optional): 12-digit AWS account ID
+- `domain` (optional): AD domain name
+
+**Note:** At least one of `awsAccountId` or `domain` must be provided per row.
+
+#### JSON Import Format
+
+JSON files should contain an array of mapping objects:
+
+```json
+[
+  {
+    "email": "user1@example.com",
+    "awsAccountId": "123456789012"
+  },
+  {
+    "email": "user2@example.com",
+    "domain": "corp.example.com"
+  },
+  {
+    "email": "user3@example.com",
+    "awsAccountId": "987654321098",
+    "domain": "prod.example.com"
+  }
+]
+```
+
+#### Validation Rules
+
+- **Email**: Must be valid format (`user@domain.tld`), 3-255 characters
+- **AWS Account ID**: Exactly 12 digits (e.g., `123456789012`)
+- **Domain**: Alphanumeric with dots/hyphens, no leading/trailing special characters
+
+#### Import Results
+
+The import command outputs a summary:
+
+```
+Import complete:
+  Total processed: 100
+  Created (active): 75    # User exists, mapping applied immediately
+  Created (pending): 20   # User doesn't exist yet, mapping saved for future
+  Skipped: 5              # Duplicate mappings
+  Errors: 0
+```
+
+When using `--dry-run`, the same summary shows what *would* happen without making changes.
 
 ### Add Vulnerability
 
