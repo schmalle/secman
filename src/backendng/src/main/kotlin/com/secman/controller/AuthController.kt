@@ -2,12 +2,11 @@ package com.secman.controller
 
 import com.secman.domain.User
 import com.secman.repository.UserRepository
+import com.secman.service.AuthCookieService
 import com.secman.service.InputValidationService
 import io.micronaut.http.HttpRequest
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.annotation.*
-import io.micronaut.http.cookie.Cookie
-import io.micronaut.http.cookie.SameSite
 import io.micronaut.security.annotation.Secured
 import io.micronaut.security.authentication.Authentication
 import io.micronaut.security.authentication.UsernamePasswordCredentials
@@ -17,7 +16,6 @@ import io.micronaut.serde.annotation.Serdeable
 import jakarta.inject.Inject
 import jakarta.transaction.Transactional
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
-import java.time.Duration
 import java.time.Instant
 import java.util.*
 
@@ -26,47 +24,10 @@ open class AuthController(
     private val userRepository: UserRepository,
     private val tokenGenerator: TokenGenerator,
     private val inputValidationService: InputValidationService,
-    @io.micronaut.context.annotation.Value("\${secman.auth.cookie-secure:true}")
-    private val cookieSecure: Boolean
+    private val authCookieService: AuthCookieService
 ) {
 
     private val passwordEncoder = BCryptPasswordEncoder()
-
-    companion object {
-        const val AUTH_COOKIE_NAME = "secman_auth"
-        private val AUTH_COOKIE_MAX_AGE = Duration.ofHours(8)
-    }
-
-    /**
-     * Create HttpOnly secure cookie for JWT token.
-     * Security properties:
-     * - HttpOnly: Prevents JavaScript access (XSS protection)
-     * - Secure: Only sent over HTTPS (configurable for development)
-     * - SameSite=Lax: CSRF protection while allowing navigation
-     * - Path=/: Available for all API endpoints
-     *
-     * Note: Set SECMAN_AUTH_COOKIE_SECURE=false for local development over HTTP
-     */
-    private fun createAuthCookie(token: String): Cookie {
-        return Cookie.of(AUTH_COOKIE_NAME, token)
-            .httpOnly(true)
-            .secure(cookieSecure)  // Configurable: false for localhost dev, true for production
-            .sameSite(SameSite.Lax)  // CSRF protection
-            .maxAge(AUTH_COOKIE_MAX_AGE)
-            .path("/")
-    }
-
-    /**
-     * Create expired cookie to clear authentication.
-     */
-    private fun createLogoutCookie(): Cookie {
-        return Cookie.of(AUTH_COOKIE_NAME, "")
-            .httpOnly(true)
-            .secure(cookieSecure)
-            .sameSite(SameSite.Lax)
-            .maxAge(Duration.ZERO)  // Expire immediately
-            .path("/")
-    }
 
     @Serdeable
     data class LoginRequest(
@@ -160,7 +121,7 @@ open class AuthController(
         )
 
         // Set JWT in HttpOnly secure cookie (primary auth mechanism)
-        return HttpResponse.ok(response).cookie(createAuthCookie(token))
+        return HttpResponse.ok(response).cookie(authCookieService.createAuthCookie(token))
     }
 
     @Post("/logout")
@@ -168,7 +129,7 @@ open class AuthController(
     fun logout(): HttpResponse<*> {
         // Clear the auth cookie by setting an expired cookie
         return HttpResponse.ok(mapOf("message" to "Logged out successfully"))
-            .cookie(createLogoutCookie())
+            .cookie(authCookieService.createLogoutCookie())
     }
 
     @Get("/status")
@@ -239,7 +200,7 @@ open class AuthController(
         val token = tokenOptional.get()
         // Update both the cookie and return the token in response
         return HttpResponse.ok(RefreshResponse(token = token))
-            .cookie(createAuthCookie(token))
+            .cookie(authCookieService.createAuthCookie(token))
     }
 
     /**

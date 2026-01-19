@@ -1,6 +1,6 @@
 package com.secman.security
 
-import com.secman.controller.AuthController
+import com.secman.service.AuthCookieService
 import io.micronaut.core.util.StringUtils
 import io.micronaut.http.HttpRequest
 import io.micronaut.security.token.reader.TokenReader
@@ -40,7 +40,7 @@ class CookieTokenReader : TokenReader<HttpRequest<*>> {
      */
     override fun findToken(request: HttpRequest<*>): Optional<String> {
         val cookies = request.cookies
-        val authCookie = cookies.get(AuthController.AUTH_COOKIE_NAME)
+        val authCookie = cookies.get(AuthCookieService.AUTH_COOKIE_NAME)
 
         if (authCookie != null && StringUtils.isNotEmpty(authCookie.value)) {
             return Optional.of(authCookie.value)

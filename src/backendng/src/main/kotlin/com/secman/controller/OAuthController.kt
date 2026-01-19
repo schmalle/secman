@@ -1,6 +1,7 @@
 package com.secman.controller
 
 import com.secman.config.AppConfig
+import com.secman.service.AuthCookieService
 import com.secman.service.OAuthService
 import io.micronaut.context.annotation.Value
 import io.micronaut.http.HttpRequest
@@ -19,7 +20,8 @@ import java.time.LocalDateTime
 @Secured(SecurityRule.IS_ANONYMOUS)
 class OAuthController(
     private val oauthService: OAuthService,
-    private val appConfig: AppConfig
+    private val appConfig: AppConfig,
+    private val authCookieService: AuthCookieService
 ) {
     
     private val logger = LoggerFactory.getLogger(OAuthController::class.java)
@@ -151,7 +153,9 @@ class OAuthController(
                     val redirectUrl = "$frontendBaseUrl/login/success?token=${result.token}&user=$encodedUser"
 
                     logger.debug("Redirecting to: {}", redirectUrl)
+                    // Set HttpOnly cookie for authentication (same as local login)
                     HttpResponse.redirect<Any>(URI.create(redirectUrl))
+                        .cookie(authCookieService.createAuthCookie(result.token))
                 }
 
                 is OAuthService.CallbackResult.Error -> {
@@ -190,7 +194,7 @@ class OAuthController(
             when (result) {
                 is OAuthService.CallbackResult.Success -> {
                     logger.info("OAuth API login successful for user: {}", result.user.username)
-                    
+
                     val response = LoginResponse(
                         id = result.user.id,
                         username = result.user.username,
@@ -198,9 +202,9 @@ class OAuthController(
                         roles = result.user.roles,
                         token = result.token
                     )
-                    
+
                     HttpResponse.ok(response)
-                        .header("Set-Cookie", "auth_token=${result.token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=3600")
+                        .cookie(authCookieService.createAuthCookie(result.token))
                 }
                 
                 is OAuthService.CallbackResult.Error -> {
