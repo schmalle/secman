@@ -42,6 +42,10 @@ dependencies {
     
     // CSV export
     implementation("org.apache.commons:commons-csv:1.11.0")
+
+    // AWS SDK for S3 (Feature 065 - S3 User Mapping Import)
+    implementation(platform("software.amazon.awssdk:bom:2.29.0"))
+    implementation("software.amazon.awssdk:s3")
     
     // Kotlin
     implementation("org.jetbrains.kotlin:kotlin-reflect:2.3.0")
