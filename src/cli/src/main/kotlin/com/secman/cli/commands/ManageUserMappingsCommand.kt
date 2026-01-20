@@ -18,6 +18,7 @@ import jakarta.inject.Singleton
  *   list        - List existing mappings
  *   remove      - Remove user mappings
  *   import      - Batch import from CSV/JSON file
+ *   import-s3   - Batch import from AWS S3 bucket (Feature 065)
  *
  * Authentication:
  *   All operations require ADMIN role
@@ -35,7 +36,8 @@ import jakarta.inject.Singleton
         AddAwsCommand::class,
         ListCommand::class,
         RemoveCommand::class,
-        ImportCommand::class
+        ImportCommand::class,
+        ImportS3Command::class
     ]
 )
 class ManageUserMappingsCommand : Runnable {

@@ -1,8 +1,8 @@
 # User Mapping Management Commands
 
-**Feature**: 049-cli-user-mappings
-**Version**: 1.0.0
-**Last Updated**: 2025-01-19
+**Feature**: 049-cli-user-mappings, 065-s3-user-mapping-import
+**Version**: 1.1.0
+**Last Updated**: 2026-01-20
 
 ## Overview
 
@@ -13,6 +13,7 @@ The `manage-user-mappings` command suite provides CLI tools for ADMIN users to m
 - List existing mappings with filtering and multiple output formats
 - Remove mappings by specific criteria
 - Batch import from CSV/JSON files with validation
+- **Import from AWS S3** for automated daily imports (Feature 065)
 - Pending mapping support for future users
 - Audit logging for all operations
 
@@ -450,6 +451,123 @@ Errors:
   - Line 9: Missing required fields (email, type, value)
 
 ✗ Import completed with errors
+```
+
+---
+
+### 6. S3 Import (Feature 065)
+
+**Command**: `import-s3`
+
+**Purpose**: Import multiple mappings from a file stored in AWS S3. Ideal for automated daily imports via cron.
+
+**Syntax**:
+```bash
+./bin/secman manage-user-mappings import-s3 \
+  --bucket <bucket-name> \
+  --key <object-key> \
+  [--aws-region <region>] \
+  [--aws-profile <profile>] \
+  [--format <CSV|JSON|AUTO>] \
+  [--dry-run] \
+  [--admin-user <admin-email>]
+```
+
+**Options**:
+- `--bucket` or `-b` (required): S3 bucket name
+- `--key` or `-k` (required): S3 object key (path to file in bucket)
+- `--aws-region`: AWS region (default: SDK default resolution)
+- `--aws-profile`: AWS credential profile name (default: default credential chain)
+- `--format`: File format (default: AUTO for auto-detection)
+- `--dry-run`: Validate file without creating mappings
+- `--admin-user` or `-u`: Admin user email
+
+**AWS Authentication**:
+The command uses the standard AWS SDK credential chain:
+1. Environment variables (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`)
+2. AWS credentials file (`~/.aws/credentials`)
+3. IAM roles (for EC2/ECS deployments)
+
+**Required IAM Permissions**:
+```json
+{
+  "Effect": "Allow",
+  "Action": ["s3:GetObject", "s3:HeadObject"],
+  "Resource": "arn:aws:s3:::your-bucket/path/*"
+}
+```
+
+**File Formats**: Same CSV and JSON formats as the local `import` command.
+
+**File Size Limit**: 10MB maximum.
+
+**Exit Codes** (for cron automation):
+- `0`: Success - all mappings imported
+- `1`: Partial success - some mappings failed validation
+- `2`: Fatal error - S3 access or authentication failure
+- `3`: Unexpected error
+
+**Examples**:
+```bash
+# Basic import
+./bin/secman manage-user-mappings import-s3 \
+  --bucket my-mapping-bucket \
+  --key user-mappings/current.csv \
+  --admin-user admin@example.com
+
+# With specific region and profile
+./bin/secman manage-user-mappings import-s3 \
+  --bucket my-mapping-bucket \
+  --key user-mappings/current.csv \
+  --aws-region eu-west-1 \
+  --aws-profile production \
+  --admin-user admin@example.com
+
+# Dry-run validation
+./bin/secman manage-user-mappings import-s3 \
+  --bucket my-mapping-bucket \
+  --key user-mappings/current.csv \
+  --dry-run \
+  --admin-user admin@example.com
+```
+
+**Cron Setup** (daily import at 2 AM):
+```bash
+# Using environment variables
+0 2 * * * root AWS_ACCESS_KEY_ID=xxx AWS_SECRET_ACCESS_KEY=xxx \
+  /opt/secman/bin/secman manage-user-mappings import-s3 \
+  --bucket company-mappings --key daily/users.csv \
+  --admin-user admin@company.com >> /var/log/secman/s3-import.log 2>&1
+
+# Using IAM role (EC2)
+0 2 * * * root /opt/secman/bin/secman manage-user-mappings import-s3 \
+  --bucket company-mappings --key daily/users.csv \
+  --admin-user admin@company.com >> /var/log/secman/s3-import.log 2>&1
+```
+
+**Output**:
+```
+============================================================
+Import User Mappings from S3
+============================================================
+
+Admin user: admin@example.com
+Source: s3://my-bucket/user-mappings/current.csv
+AWS Region: us-east-1
+Format: AUTO
+
+Downloading from S3...
+Download complete.
+
+============================================================
+Summary
+============================================================
+Total: 50 mapping(s) processed
+Created: 45 active mapping(s)
+Created: 3 pending mapping(s)
+Skipped: 2 duplicate(s)
+
+Import successful
 ```
 
 ---

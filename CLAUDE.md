@@ -205,6 +205,8 @@ fun findStateByValueWithRetry(stateToken: String): Optional<OAuthState> {
 - Kotlin 2.3.0 / Java 25 (backend), Bash (test script) + Micronaut 4.10, Hibernate JPA, PicoCLI (CLI) (063-e2e-vuln-exception)
 - Kotlin 2.3.0 / Java 25 + Micronaut 4.10, Hibernate JPA, PicoCLI (CLI), MCP Protocol (064-mcp-cli-user-mapping)
 - MariaDB 11.4 (existing `user_mapping` table) (064-mcp-cli-user-mapping)
+- Kotlin 2.3.0 / Java 21 + Micronaut 4.10, PicoCLI 4.7.5, AWS SDK for Java v2 (S3) (065-s3-user-mapping-import)
+- MariaDB 11.4 (existing user_mapping table), local temp files for S3 downloads (065-s3-user-mapping-import)
 
 ## Recent Changes
 - 058-ai-norm-mapping: Added Kotlin 2.2.21 / Java 21 (backend), TypeScript/React 19 (frontend) + Micronaut 4.10, Hibernate JPA, Axios, Bootstrap 5.3
