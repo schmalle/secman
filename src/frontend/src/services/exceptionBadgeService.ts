@@ -62,8 +62,8 @@ let reconnectTimeoutId: ReturnType<typeof setTimeout> | null = null;
  * - Callback receives 0 on connection errors (safe fallback)
  *
  * **Authentication**:
- * - Passes JWT token from localStorage as query parameter
- * - Required because EventSource doesn't support Authorization headers
+ * - Uses HttpOnly cookie-based authentication (withCredentials: true)
+ * - Browser automatically sends the secman_auth cookie with the request
  * - Requires authenticated session (401 if not logged in)
  *
  * @param onUpdate Callback function to receive count updates
@@ -98,20 +98,9 @@ export function connectToBadgeUpdates(onUpdate: BadgeCountCallback): () => void 
   connectionState = 'connecting';
   console.log('[ExceptionBadge] Connecting to SSE endpoint for real-time updates');
 
-  // Get JWT token from localStorage
-  const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
-
-  if (!token) {
-    console.error('[ExceptionBadge] No JWT token found in localStorage, cannot connect to SSE');
-    connectionState = 'error';
-    errorCount++;
-    onUpdate(0);
-    return () => {};
-  }
-
-  // Create EventSource connection with token as query parameter
-  // (EventSource doesn't support custom headers like Authorization)
-  const eventSource = new EventSource(`/api/exception-badge-updates?token=${encodeURIComponent(token)}`);
+  // Create EventSource connection with credentials to send HttpOnly auth cookie
+  // The backend CookieTokenReader will extract the JWT from the secman_auth cookie
+  const eventSource = new EventSource('/api/exception-badge-updates', { withCredentials: true });
 
   let isCleaningUp = false;
 

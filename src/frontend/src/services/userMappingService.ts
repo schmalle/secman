@@ -1,4 +1,4 @@
-import { authenticatedPost, getAuthToken } from '../utils/auth';
+import { authenticatedPost, authenticatedGet, authenticatedPut, authenticatedDelete } from '../utils/auth';
 
 /**
  * Service for User Mapping API operations
@@ -140,17 +140,10 @@ export function getSampleFileUrl(): string {
  * @throws Error if download fails or user is not authenticated
  */
 export async function downloadCSVTemplate(): Promise<void> {
-  const token = getAuthToken();
-  if (!token) {
-    throw new Error('Not authenticated');
-  }
-
   try {
     const response = await fetch('/api/import/user-mapping-template-csv', {
       method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-      },
+      credentials: 'include', // Send HttpOnly auth cookie
     });
 
     if (!response.ok) {
@@ -203,24 +196,13 @@ export async function listUserMappings(
   email?: string,
   domain?: string
 ): Promise<UserMappingListResponse> {
-  const token = getAuthToken();
-  if (!token) {
-    throw new Error('Not authenticated');
-  }
-
   const params = new URLSearchParams();
   params.append('page', page.toString());
   params.append('size', size.toString());
   if (email) params.append('email', email);
   if (domain) params.append('domain', domain);
 
-  const response = await fetch(`/api/user-mappings?${params.toString()}`, {
-    method: 'GET',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-  });
+  const response = await authenticatedGet(`/api/user-mappings?${params.toString()}`);
 
   if (!response.ok) {
     if (response.status === 401) {
@@ -243,18 +225,7 @@ export async function listUserMappings(
  * @returns User mapping details
  */
 export async function getUserMapping(id: number): Promise<UserMapping> {
-  const token = getAuthToken();
-  if (!token) {
-    throw new Error('Not authenticated');
-  }
-
-  const response = await fetch(`/api/user-mappings/${id}`, {
-    method: 'GET',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-  });
+  const response = await authenticatedGet(`/api/user-mappings/${id}`);
 
   if (!response.ok) {
     if (response.status === 404) {
@@ -279,19 +250,7 @@ export async function getUserMapping(id: number): Promise<UserMapping> {
  * @returns Created user mapping
  */
 export async function createUserMapping(request: CreateUserMappingRequest): Promise<UserMapping> {
-  const token = getAuthToken();
-  if (!token) {
-    throw new Error('Not authenticated');
-  }
-
-  const response = await fetch('/api/user-mappings', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(request),
-  });
+  const response = await authenticatedPost('/api/user-mappings', request);
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({ message: 'Failed to create mapping' }));
@@ -319,19 +278,7 @@ export async function createUserMapping(request: CreateUserMappingRequest): Prom
  * @returns Updated user mapping
  */
 export async function updateUserMapping(id: number, request: UpdateUserMappingRequest): Promise<UserMapping> {
-  const token = getAuthToken();
-  if (!token) {
-    throw new Error('Not authenticated');
-  }
-
-  const response = await fetch(`/api/user-mappings/${id}`, {
-    method: 'PUT',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(request),
-  });
+  const response = await authenticatedPut(`/api/user-mappings/${id}`, request);
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({ message: 'Failed to update mapping' }));
@@ -359,17 +306,7 @@ export async function updateUserMapping(id: number, request: UpdateUserMappingRe
  * @param id Mapping ID
  */
 export async function deleteUserMapping(id: number): Promise<void> {
-  const token = getAuthToken();
-  if (!token) {
-    throw new Error('Not authenticated');
-  }
-
-  const response = await fetch(`/api/user-mappings/${id}`, {
-    method: 'DELETE',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-    },
-  });
+  const response = await authenticatedDelete(`/api/user-mappings/${id}`);
 
   if (!response.ok) {
     if (response.status === 404) {
@@ -401,22 +338,11 @@ export async function listCurrentMappings(
   page: number = 0,
   size: number = 20
 ): Promise<UserMappingListResponse> {
-  const token = getAuthToken();
-  if (!token) {
-    throw new Error('Not authenticated');
-  }
-
   const params = new URLSearchParams();
   params.append('page', page.toString());
   params.append('size', size.toString());
 
-  const response = await fetch(`/api/user-mappings/current?${params.toString()}`, {
-    method: 'GET',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-  });
+  const response = await authenticatedGet(`/api/user-mappings/current?${params.toString()}`);
 
   if (!response.ok) {
     if (response.status === 401) {
@@ -446,22 +372,11 @@ export async function listAppliedHistory(
   page: number = 0,
   size: number = 20
 ): Promise<UserMappingListResponse> {
-  const token = getAuthToken();
-  if (!token) {
-    throw new Error('Not authenticated');
-  }
-
   const params = new URLSearchParams();
   params.append('page', page.toString());
   params.append('size', size.toString());
 
-  const response = await fetch(`/api/user-mappings/applied-history?${params.toString()}`, {
-    method: 'GET',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-  });
+  const response = await authenticatedGet(`/api/user-mappings/applied-history?${params.toString()}`);
 
   if (!response.ok) {
     if (response.status === 401) {
