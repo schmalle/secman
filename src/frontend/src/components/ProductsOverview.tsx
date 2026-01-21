@@ -168,11 +168,20 @@ const ProductsOverview: React.FC = () => {
     };
 
     /**
-     * Handle product selection
+     * Handle product selection from dropdown
      */
     const handleProductChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         setSelectedProduct(e.target.value);
         setCurrentPage(0); // Reset to first page when product changes
+    };
+
+    /**
+     * Handle product selection from top products list
+     */
+    const handleTopProductClick = (productName: string) => {
+        setSelectedProduct(productName);
+        setSearchTerm('');
+        setCurrentPage(0);
     };
 
     /**
@@ -203,7 +212,7 @@ const ProductsOverview: React.FC = () => {
             await exportProductSystems(selectedProduct);
         } catch (err: any) {
             console.error('Failed to export systems:', err);
-            setError('Failed to export systems. Please try again.');
+            setError(err.message || 'Failed to export systems. Please try again.');
         } finally {
             setExporting(false);
         }
@@ -352,8 +361,8 @@ const ProductsOverview: React.FC = () => {
                 </div>
             </div>
 
-            {/* Top 15 Products Statistics */}
-            {!loadingTopProducts && topProducts.length > 0 && (
+            {/* Top 15 Products Statistics - only show when no product is selected */}
+            {!selectedProduct && !loadingTopProducts && topProducts.length > 0 && (
                 <div className="card mb-4">
                     <div className="card-header">
                         <i className="bi bi-bar-chart-fill me-2"></i>
@@ -375,11 +384,8 @@ const ProductsOverview: React.FC = () => {
                                                     <span
                                                         className="text-truncate"
                                                         style={{ maxWidth: 'calc(100% - 80px)', cursor: 'pointer' }}
-                                                        title={`Click to select ${product.product}`}
-                                                        onClick={() => {
-                                                            setSelectedProduct(product.product);
-                                                            setSearchTerm('');
-                                                        }}
+                                                        title={`Click to view systems running ${product.product}`}
+                                                        onClick={() => handleTopProductClick(product.product)}
                                                     >
                                                         <a href="#" onClick={(e) => e.preventDefault()} className="text-decoration-none">
                                                             {product.product}
@@ -409,7 +415,7 @@ const ProductsOverview: React.FC = () => {
                 </div>
             )}
 
-            {loadingTopProducts && (
+            {!selectedProduct && loadingTopProducts && (
                 <div className="card mb-4">
                     <div className="card-header">
                         <i className="bi bi-bar-chart-fill me-2"></i>
@@ -426,23 +432,7 @@ const ProductsOverview: React.FC = () => {
                 </div>
             )}
 
-            {/* Empty state - no products */}
-            {!loadingProducts && products.length === 0 && !searchTerm && (
-                <div className="alert alert-info" role="alert">
-                    <i className="bi bi-info-circle me-2"></i>
-                    No products available. Products are discovered automatically from CrowdStrike vulnerability imports.
-                </div>
-            )}
-
-            {/* Empty state - no search results */}
-            {!loadingProducts && products.length === 0 && searchTerm && (
-                <div className="alert alert-warning" role="alert">
-                    <i className="bi bi-search me-2"></i>
-                    No products found matching "{searchTerm}". Try a different search term.
-                </div>
-            )}
-
-            {/* Systems table */}
+            {/* Systems table - shown when a product is selected */}
             {selectedProduct && (
                 <div className="card">
                     <div className="card-header d-flex justify-content-between align-items-center">
@@ -581,6 +571,22 @@ const ProductsOverview: React.FC = () => {
                             </>
                         )}
                     </div>
+                </div>
+            )}
+
+            {/* Empty state - no products */}
+            {!selectedProduct && !loadingProducts && products.length === 0 && !searchTerm && (
+                <div className="alert alert-info" role="alert">
+                    <i className="bi bi-info-circle me-2"></i>
+                    No products available. Products are discovered automatically from CrowdStrike vulnerability imports.
+                </div>
+            )}
+
+            {/* Empty state - no search results */}
+            {!selectedProduct && !loadingProducts && products.length === 0 && searchTerm && (
+                <div className="alert alert-warning" role="alert">
+                    <i className="bi bi-search me-2"></i>
+                    No products found matching "{searchTerm}". Try a different search term.
                 </div>
             )}
         </div>

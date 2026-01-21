@@ -122,20 +122,24 @@ export async function exportProductSystems(product: string): Promise<void> {
     const encodedProduct = encodeURIComponent(product);
     const url = `/api/products/${encodedProduct}/export`;
 
-    const token = localStorage.getItem('authToken');
-    if (!token) {
-        throw new Error('No authentication token found');
-    }
-
+    // Use fetch with credentials to include HttpOnly auth cookie
     const response = await fetch(url, {
         method: 'GET',
-        headers: {
-            'Authorization': `Bearer ${token}`
-        }
+        credentials: 'include'
     });
 
     if (!response.ok) {
-        throw new Error(`Failed to export product systems: ${response.status}`);
+        // Try to get error message from response body
+        let errorMessage = `Failed to export product systems: ${response.status}`;
+        try {
+            const errorBody = await response.json();
+            if (errorBody.error) {
+                errorMessage = errorBody.error;
+            }
+        } catch {
+            // Ignore JSON parse error, use default message
+        }
+        throw new Error(errorMessage);
     }
 
     // Get filename from Content-Disposition header or use default
