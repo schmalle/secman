@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { csrfPost } from '../utils/csrf';
-import { authenticatedPost } from '../utils/auth';
+import { authenticatedPost, isAdmin } from '../utils/auth';
 import VulnerabilityImportForm from './VulnerabilityImportForm';
+import UserMappingUpload from './UserMappingUpload';
 import { importAssets, type ImportResult } from '../services/assetService';
 
-type ImportType = 'requirements' | 'nmap' | 'masscan' | 'vulnerabilities' | 'assets';
+type ImportType = 'requirements' | 'nmap' | 'masscan' | 'vulnerabilities' | 'assets' | 'usermappings';
 
 interface ScanSummary {
     scanId: number;
@@ -30,7 +31,7 @@ const Import = () => {
         if (typeof window !== 'undefined') {
             const params = new URLSearchParams(window.location.search);
             const typeParam = params.get('type');
-            if (typeParam && ['requirements', 'nmap', 'masscan', 'vulnerabilities', 'assets'].includes(typeParam)) {
+            if (typeParam && ['requirements', 'nmap', 'masscan', 'vulnerabilities', 'assets', 'usermappings'].includes(typeParam)) {
                 return typeParam as ImportType;
             }
         }
@@ -104,7 +105,7 @@ const Import = () => {
         const handleUrlChange = () => {
             const params = new URLSearchParams(window.location.search);
             const typeParam = params.get('type');
-            if (typeParam && ['requirements', 'nmap', 'masscan', 'vulnerabilities', 'assets'].includes(typeParam)) {
+            if (typeParam && ['requirements', 'nmap', 'masscan', 'vulnerabilities', 'assets', 'usermappings'].includes(typeParam)) {
                 setImportType(typeParam as ImportType);
             }
         };
@@ -348,6 +349,19 @@ const Import = () => {
                                         Assets
                                     </button>
                                 </li>
+                                {isAdmin() && (
+                                    <li className="nav-item" role="presentation">
+                                        <button
+                                            className={`nav-link ${importType === 'usermappings' ? 'active' : ''}`}
+                                            type="button"
+                                            onClick={() => handleImportTypeChange('usermappings')}
+                                        >
+                                            <i className="bi bi-person-lines-fill me-2"></i>
+                                            User Mappings
+                                            <span className="badge bg-warning text-dark ms-2">ADMIN</span>
+                                        </button>
+                                    </li>
+                                )}
                             </ul>
 
                             <div className="p-5">
@@ -356,8 +370,13 @@ const Import = () => {
                                 <VulnerabilityImportForm />
                             )}
 
+                            {/* User Mappings Tab Content */}
+                            {importType === 'usermappings' && (
+                                <UserMappingUpload />
+                            )}
+
                             {/* Requirements, Nmap, Masscan, and Assets Tab Content */}
-                            {importType !== 'vulnerabilities' && (
+                            {importType !== 'vulnerabilities' && importType !== 'usermappings' && (
                                 <>
                             {/* File Upload Area */}
                             <div 

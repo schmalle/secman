@@ -6,6 +6,7 @@ import com.secman.repository.EmailConfigRepository
 import jakarta.inject.Singleton
 import jakarta.transaction.Transactional
 import org.slf4j.LoggerFactory
+import java.util.concurrent.TimeUnit
 
 /**
  * Service for managing email provider configurations
@@ -14,7 +15,8 @@ import org.slf4j.LoggerFactory
 @Singleton
 open class EmailProviderConfigService(
     private val emailConfigRepository: EmailConfigRepository,
-    private val sesEmailService: SesEmailService
+    private val sesEmailService: SesEmailService,
+    private val emailService: EmailService
 ) {
     private val logger = LoggerFactory.getLogger(EmailProviderConfigService::class.java)
 
@@ -238,12 +240,29 @@ open class EmailProviderConfigService(
     }
 
     /**
-     * Test SMTP configuration
+     * Test SMTP configuration by sending a test email
      */
     private fun testSmtpConfig(config: EmailConfig, testEmailAddress: String): Result<String> {
-        // TODO: Implement SMTP test using EmailSender with the specific config
-        // For now, return a placeholder
-        return Result.success("SMTP test functionality will be implemented")
+        return try {
+            logger.info("Testing SMTP configuration '{}' by sending email to {}", config.name, testEmailAddress)
+
+            val future = emailService.testEmailConfiguration(config, testEmailAddress)
+            val success = future.get(30, TimeUnit.SECONDS)
+
+            if (success) {
+                logger.info("SMTP test email sent successfully to {}", testEmailAddress)
+                Result.success("Test email sent successfully to $testEmailAddress")
+            } else {
+                logger.warn("SMTP test email failed for configuration '{}'", config.name)
+                Result.failure(RuntimeException("Failed to send test email - check SMTP credentials and settings"))
+            }
+        } catch (e: java.util.concurrent.TimeoutException) {
+            logger.error("SMTP test email timed out for configuration '{}'", config.name)
+            Result.failure(RuntimeException("Email sending timed out after 30 seconds"))
+        } catch (e: Exception) {
+            logger.error("SMTP test email failed for configuration '{}': {}", config.name, e.message, e)
+            Result.failure(RuntimeException("Failed to send test email: ${e.message}"))
+        }
     }
 
     /**
