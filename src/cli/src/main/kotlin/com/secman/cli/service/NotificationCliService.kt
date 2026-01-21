@@ -75,6 +75,7 @@ class NotificationCliService(
             workgroupId = null,  // Get all, no workgroup filtering
             searchTerm = null,
             minSeverity = null,
+            adDomain = null,
             pageable = pageable
         )
 

@@ -281,6 +281,7 @@ open class MaterializedViewRefreshService(
             oldestVulnDays = oldestVulnDays,
             oldestVulnId = oldestVuln?.vulnerabilityId,
             workgroupIds = workgroupIds,
+            adDomain = asset.adDomain,
             lastCalculatedAt = now
         )
     }

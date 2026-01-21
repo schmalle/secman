@@ -49,6 +49,7 @@ interface OutdatedAssetMaterializedViewRepository : JpaRepository<OutdatedAssetM
                     WHEN :minSeverity = 'MEDIUM' THEN (v.criticalCount > 0 OR v.highCount > 0 OR v.mediumCount > 0)
                     ELSE true
                 END))
+            AND (:adDomain IS NULL OR LOWER(v.adDomain) = LOWER(:adDomain))
         """,
         countQuery = """
             SELECT COUNT(v) FROM OutdatedAssetMaterializedView v
@@ -64,12 +65,14 @@ interface OutdatedAssetMaterializedViewRepository : JpaRepository<OutdatedAssetM
                     WHEN :minSeverity = 'MEDIUM' THEN (v.criticalCount > 0 OR v.highCount > 0 OR v.mediumCount > 0)
                     ELSE true
                 END))
+            AND (:adDomain IS NULL OR LOWER(v.adDomain) = LOWER(:adDomain))
         """
     )
     fun findOutdatedAssets(
         workgroupId: String?,
         searchTerm: String?,
         minSeverity: String?,
+        adDomain: String?,
         pageable: Pageable
     ): Page<OutdatedAssetMaterializedView>
 

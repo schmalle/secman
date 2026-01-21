@@ -2,6 +2,7 @@ package com.secman.service
 
 import com.secman.domain.OutdatedAssetMaterializedView
 import com.secman.domain.Vulnerability
+import com.secman.repository.AssetRepository
 import com.secman.repository.OutdatedAssetMaterializedViewRepository
 import com.secman.repository.VulnerabilityRepository
 import io.micronaut.data.model.Page
@@ -25,7 +26,8 @@ import jakarta.inject.Singleton
 @Singleton
 class OutdatedAssetService(
     private val outdatedAssetRepository: OutdatedAssetMaterializedViewRepository,
-    private val vulnerabilityRepository: VulnerabilityRepository
+    private val vulnerabilityRepository: VulnerabilityRepository,
+    private val assetRepository: AssetRepository
 ) {
 
     /**
@@ -39,6 +41,7 @@ class OutdatedAssetService(
      * @param authentication Current user authentication context
      * @param searchTerm Optional search term for asset name (case-insensitive)
      * @param minSeverity Optional minimum severity filter (CRITICAL, HIGH, MEDIUM, LOW)
+     * @param adDomain Optional AD domain filter (case-insensitive exact match)
      * @param pageable Pagination and sorting parameters
      * @return Page of outdated assets visible to the user
      */
@@ -46,6 +49,7 @@ class OutdatedAssetService(
         authentication: Authentication,
         searchTerm: String? = null,
         minSeverity: String? = null,
+        adDomain: String? = null,
         pageable: Pageable
     ): Page<OutdatedAssetMaterializedView> {
         // Extract user's workgroup IDs from authentication attributes
@@ -72,6 +76,7 @@ class OutdatedAssetService(
             workgroupId = workgroupFilter,
             searchTerm = searchTerm,
             minSeverity = minSeverity,
+            adDomain = adDomain,
             pageable = unsortedPageable
         )
     }
@@ -102,6 +107,18 @@ class OutdatedAssetService(
      */
     fun getLastRefreshTimestamp(): java.time.LocalDateTime? {
         return outdatedAssetRepository.findLatestCalculatedAt()
+    }
+
+    /**
+     * Get distinct AD domains for filter dropdown
+     *
+     * Queries the Asset table directly to get all AD domains in the system,
+     * rather than the materialized view which may not be refreshed.
+     *
+     * @return List of unique AD domain values, ordered alphabetically
+     */
+    fun getDistinctAdDomains(): List<String> {
+        return assetRepository.findDistinctAdDomains()
     }
 
     /**

@@ -606,7 +606,15 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                                             <tbody>
                                                 {sortedVulnerabilities.map((vuln) => (
                                                     <tr key={vuln.id}>
-                                                        <td>{vuln.assetName}</td>
+                                                        <td>
+                                                            <a
+                                                                href={`/vulnerabilities/system?hostname=${encodeURIComponent(vuln.assetName)}`}
+                                                                className="text-decoration-none"
+                                                                title={`View all vulnerabilities for ${vuln.assetName}`}
+                                                            >
+                                                                {vuln.assetName}
+                                                            </a>
+                                                        </td>
                                                         <td>{vuln.assetIp || '-'}</td>
                                                         <td>
                                                             <code>{vuln.vulnerabilityId || '-'}</code>

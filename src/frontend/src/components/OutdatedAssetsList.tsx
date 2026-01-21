@@ -20,6 +20,7 @@ import React, { useState, useEffect } from 'react';
 import {
   getOutdatedAssets,
   getLastRefreshTimestamp,
+  getAdDomains,
   triggerRefresh,
   getRefreshStatus,
   type OutdatedAsset,
@@ -47,6 +48,8 @@ const OutdatedAssetsList: React.FC = () => {
   // Filter/search state
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [minSeverity, setMinSeverity] = useState<string>('');
+  const [adDomain, setAdDomain] = useState<string>('');
+  const [adDomainOptions, setAdDomainOptions] = useState<string[]>([]);
   const [sortField, setSortField] = useState<string>('assetName');
   const [sortDirection, setSortDirection] = useState<string>('asc');
 
@@ -72,6 +75,10 @@ const OutdatedAssetsList: React.FC = () => {
         params.minSeverity = minSeverity as any;
       }
 
+      if (adDomain) {
+        params.adDomain = adDomain;
+      }
+
       const page: OutdatedAssetsPage = await getOutdatedAssets(params);
 
       setAssets(page.content);
@@ -95,6 +102,18 @@ const OutdatedAssetsList: React.FC = () => {
       setLastRefresh(timestamp);
     } catch (err) {
       console.error('Failed to fetch last refresh timestamp:', err);
+    }
+  };
+
+  /**
+   * Fetch available AD domains for filter dropdown
+   */
+  const fetchAdDomains = async () => {
+    try {
+      const domains = await getAdDomains();
+      setAdDomainOptions(domains);
+    } catch (err) {
+      console.error('Failed to fetch AD domains:', err);
     }
   };
 
@@ -255,11 +274,12 @@ const OutdatedAssetsList: React.FC = () => {
   // Fetch data on component mount and when filters change
   useEffect(() => {
     fetchAssets();
-  }, [currentPage, pageSize, sortField, sortDirection, minSeverity]);
+  }, [currentPage, pageSize, sortField, sortDirection, minSeverity, adDomain]);
 
-  // Fetch last refresh timestamp on mount
+  // Fetch last refresh timestamp and AD domains on mount
   useEffect(() => {
     fetchLastRefresh();
+    fetchAdDomains();
   }, []);
 
   // Cleanup poll interval on unmount
@@ -336,7 +356,7 @@ const OutdatedAssetsList: React.FC = () => {
       <div className="card mb-3">
         <div className="card-body">
           <form onSubmit={handleSearch} className="row g-3">
-            <div className="col-md-6">
+            <div className="col-md-5">
               <label htmlFor="searchTerm" className="form-label">
                 Search Asset Name
               </label>
@@ -349,7 +369,7 @@ const OutdatedAssetsList: React.FC = () => {
                 placeholder="Search by asset name..."
               />
             </div>
-            <div className="col-md-4">
+            <div className="col-md-3">
               <label htmlFor="minSeverity" className="form-label">
                 Minimum Severity
               </label>
@@ -367,6 +387,27 @@ const OutdatedAssetsList: React.FC = () => {
                 <option value="HIGH">High or Above</option>
                 <option value="MEDIUM">Medium or Above</option>
                 <option value="LOW">Low or Above</option>
+              </select>
+            </div>
+            <div className="col-md-2">
+              <label htmlFor="adDomain" className="form-label">
+                AD Domain
+              </label>
+              <select
+                className="form-select"
+                id="adDomain"
+                value={adDomain}
+                onChange={(e) => {
+                  setAdDomain(e.target.value);
+                  setCurrentPage(0);
+                }}
+              >
+                <option value="">All Domains</option>
+                {adDomainOptions.map((domain) => (
+                  <option key={domain} value={domain}>
+                    {domain}
+                  </option>
+                ))}
               </select>
             </div>
             <div className="col-md-2 d-flex align-items-end">

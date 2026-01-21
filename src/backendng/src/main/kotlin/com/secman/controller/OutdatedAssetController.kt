@@ -48,6 +48,7 @@ class OutdatedAssetController(
      * - sort (optional): Sort field and direction (e.g., "oldestVulnDays,desc")
      * - searchTerm (optional): Search by asset name (case-insensitive)
      * - minSeverity (optional): Minimum severity filter (CRITICAL, HIGH, MEDIUM, LOW)
+     * - adDomain (optional): AD domain filter (case-insensitive exact match)
      *
      * Response:
      * - 200 OK: Paginated list of outdated assets
@@ -63,6 +64,7 @@ class OutdatedAssetController(
         authentication: Authentication,
         @QueryValue(defaultValue = "") searchTerm: String?,
         @QueryValue(defaultValue = "") minSeverity: String?,
+        @QueryValue(defaultValue = "") adDomain: String?,
         pageable: Pageable
     ): HttpResponse<Page<OutdatedAssetDto>> {
         // Validate user has required role
@@ -76,6 +78,7 @@ class OutdatedAssetController(
             authentication = authentication,
             searchTerm = searchTerm.takeIf { !it.isNullOrBlank() },
             minSeverity = minSeverity.takeIf { !it.isNullOrBlank() },
+            adDomain = adDomain.takeIf { !it.isNullOrBlank() },
             pageable = pageable
         )
 
@@ -83,6 +86,27 @@ class OutdatedAssetController(
         val dtoPage = page.map { OutdatedAssetDto.from(it) }
 
         return HttpResponse.ok(dtoPage)
+    }
+
+    /**
+     * GET /api/outdated-assets/ad-domains
+     *
+     * Returns distinct AD domain values for the filter dropdown
+     *
+     * Response:
+     * - 200 OK: { "adDomains": ["domain1.local", "domain2.local"] }
+     */
+    @Get("/ad-domains")
+    @Secured("ADMIN", "VULN")
+    fun getAdDomains(authentication: Authentication): HttpResponse<Map<String, Any>> {
+        // Validate user has required role
+        val hasRequiredRole = authentication.roles.any { it == "ADMIN" || it == "VULN" }
+        if (!hasRequiredRole) {
+            return HttpResponse.status(HttpStatus.FORBIDDEN)
+        }
+
+        val domains = outdatedAssetService.getDistinctAdDomains()
+        return HttpResponse.ok(mapOf("adDomains" to domains))
     }
 
     /**

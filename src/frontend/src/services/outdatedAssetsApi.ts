@@ -41,10 +41,15 @@ export interface OutdatedAssetsParams {
   sort?: string; // e.g., "oldestVulnDays,desc"
   searchTerm?: string;
   minSeverity?: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+  adDomain?: string;
 }
 
 export interface LastRefreshResponse {
   lastRefreshTimestamp: string;
+}
+
+export interface AdDomainsResponse {
+  adDomains: string[];
 }
 
 export interface CountResponse {
@@ -77,6 +82,9 @@ export async function getOutdatedAssets(
   if (params.minSeverity) {
     queryParams.append('minSeverity', params.minSeverity);
   }
+  if (params.adDomain) {
+    queryParams.append('adDomain', params.adDomain);
+  }
 
   const url = `/api/outdated-assets${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
   const response = await authenticatedGet(url);
@@ -103,6 +111,17 @@ export async function getLastRefreshTimestamp(): Promise<string | null> {
     }
     throw error;
   }
+}
+
+/**
+ * Get distinct AD domains for filter dropdown
+ *
+ * @returns List of unique AD domain values
+ */
+export async function getAdDomains(): Promise<string[]> {
+  const response = await authenticatedGet('/api/outdated-assets/ad-domains');
+  const data: AdDomainsResponse = await response.json();
+  return data.adDomains;
 }
 
 /**

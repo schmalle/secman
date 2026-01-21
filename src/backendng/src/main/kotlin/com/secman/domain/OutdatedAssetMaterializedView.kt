@@ -60,6 +60,9 @@ data class OutdatedAssetMaterializedView(
     @Column(name = "workgroup_ids", length = 500)
     var workgroupIds: String? = null,
 
+    @Column(name = "ad_domain", length = 255)
+    var adDomain: String? = null,
+
     @Column(name = "last_calculated_at", nullable = false)
     var lastCalculatedAt: LocalDateTime = LocalDateTime.now()
 )
