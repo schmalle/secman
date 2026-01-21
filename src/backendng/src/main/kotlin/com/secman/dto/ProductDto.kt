@@ -43,3 +43,26 @@ data class PaginatedProductSystemsResponse(
     val hasPrevious: Boolean,
     val productName: String          // Echo back the selected product
 )
+
+/**
+ * DTO representing a product with its vulnerability count
+ *
+ * Related to: Feature 054-products-overview
+ */
+@Serdeable
+data class TopProductDto(
+    val product: String,
+    val vulnerabilityCount: Long
+)
+
+/**
+ * Response DTO for GET /api/products/top endpoint
+ * Contains list of products with their vulnerability counts
+ *
+ * Related to: Feature 054-products-overview
+ */
+@Serdeable
+data class TopProductsResponse(
+    val products: List<TopProductDto>,
+    val totalCount: Int
+)

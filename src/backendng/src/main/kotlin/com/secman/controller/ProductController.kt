@@ -2,6 +2,7 @@ package com.secman.controller
 
 import com.secman.dto.PaginatedProductSystemsResponse
 import com.secman.dto.ProductListResponse
+import com.secman.dto.TopProductsResponse
 import com.secman.service.ProductService
 import io.micronaut.core.annotation.Nullable
 import io.micronaut.http.HttpResponse
@@ -38,6 +39,32 @@ open class ProductController(
 
     @Serdeable
     data class ErrorResponse(val error: String)
+
+    /**
+     * Get top products by vulnerability count
+     *
+     * GET /api/products/top?limit=15
+     * Auth: ADMIN, VULN, or SECCHAMPION role
+     * Response: TopProductsResponse
+     *
+     * Query parameters:
+     * - limit: Maximum number of products to return (default: 15, max: 50)
+     *
+     * Non-admin users only see products from assets they have access to.
+     */
+    @Get("/top")
+    open fun getTopProducts(
+        authentication: Authentication,
+        @Nullable @QueryValue limit: Int?
+    ): HttpResponse<TopProductsResponse> {
+        val effectiveLimit = minOf(maxOf(limit ?: 15, 1), 50)
+        log.debug("Getting top {} products for user: {}", effectiveLimit, authentication.name)
+
+        val response = productService.getTopProducts(authentication, effectiveLimit)
+
+        log.debug("Returning {} top products", response.totalCount)
+        return HttpResponse.ok(response)
+    }
 
     /**
      * Get list of unique products from vulnerability data

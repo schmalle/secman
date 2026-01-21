@@ -18,9 +18,11 @@ import {
     getProducts,
     getProductSystems,
     exportProductSystems,
+    getTopProducts,
     type ProductListResponse,
     type PaginatedProductSystemsResponse,
-    type ProductSystemDto
+    type ProductSystemDto,
+    type TopProductDto
 } from '../services/productService';
 
 const ProductsOverview: React.FC = () => {
@@ -28,6 +30,10 @@ const ProductsOverview: React.FC = () => {
     const [products, setProducts] = useState<string[]>([]);
     const [selectedProduct, setSelectedProduct] = useState<string>('');
     const [loadingProducts, setLoadingProducts] = useState<boolean>(true);
+
+    // Top products state
+    const [topProducts, setTopProducts] = useState<TopProductDto[]>([]);
+    const [loadingTopProducts, setLoadingTopProducts] = useState<boolean>(true);
 
     // Search state
     const [searchTerm, setSearchTerm] = useState<string>('');
@@ -77,6 +83,13 @@ const ProductsOverview: React.FC = () => {
     }, [debouncedSearch]);
 
     /**
+     * Fetch top products on mount
+     */
+    useEffect(() => {
+        fetchTopProducts();
+    }, []);
+
+    /**
      * Fetch systems when product changes
      */
     useEffect(() => {
@@ -108,6 +121,23 @@ const ProductsOverview: React.FC = () => {
             setError('Failed to load products. Please try again.');
         } finally {
             setLoadingProducts(false);
+        }
+    };
+
+    /**
+     * Fetch top products by vulnerability count
+     */
+    const fetchTopProducts = async () => {
+        setLoadingTopProducts(true);
+
+        try {
+            const response = await getTopProducts(15);
+            setTopProducts(response.products);
+        } catch (err: any) {
+            console.error('Failed to fetch top products:', err);
+            // Don't set error for top products - just log it
+        } finally {
+            setLoadingTopProducts(false);
         }
     };
 
@@ -321,6 +351,80 @@ const ProductsOverview: React.FC = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Top 15 Products Statistics */}
+            {!loadingTopProducts && topProducts.length > 0 && (
+                <div className="card mb-4">
+                    <div className="card-header">
+                        <i className="bi bi-bar-chart-fill me-2"></i>
+                        Top 15 Products by Vulnerability Count
+                    </div>
+                    <div className="card-body">
+                        <div className="row">
+                            {topProducts.map((product, index) => {
+                                const maxCount = topProducts[0]?.vulnerabilityCount || 1;
+                                const percentage = (product.vulnerabilityCount / maxCount) * 100;
+                                return (
+                                    <div key={index} className="col-12 mb-2">
+                                        <div className="d-flex align-items-center">
+                                            <div className="text-muted me-2" style={{ width: '25px', textAlign: 'right' }}>
+                                                {index + 1}.
+                                            </div>
+                                            <div className="flex-grow-1">
+                                                <div className="d-flex justify-content-between mb-1">
+                                                    <span
+                                                        className="text-truncate"
+                                                        style={{ maxWidth: 'calc(100% - 80px)', cursor: 'pointer' }}
+                                                        title={`Click to select ${product.product}`}
+                                                        onClick={() => {
+                                                            setSelectedProduct(product.product);
+                                                            setSearchTerm('');
+                                                        }}
+                                                    >
+                                                        <a href="#" onClick={(e) => e.preventDefault()} className="text-decoration-none">
+                                                            {product.product}
+                                                        </a>
+                                                    </span>
+                                                    <span className="badge bg-primary ms-2">
+                                                        {product.vulnerabilityCount.toLocaleString()}
+                                                    </span>
+                                                </div>
+                                                <div className="progress" style={{ height: '8px' }}>
+                                                    <div
+                                                        className="progress-bar bg-primary"
+                                                        role="progressbar"
+                                                        style={{ width: `${percentage}%` }}
+                                                        aria-valuenow={percentage}
+                                                        aria-valuemin={0}
+                                                        aria-valuemax={100}
+                                                    ></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {loadingTopProducts && (
+                <div className="card mb-4">
+                    <div className="card-header">
+                        <i className="bi bi-bar-chart-fill me-2"></i>
+                        Top 15 Products by Vulnerability Count
+                    </div>
+                    <div className="card-body">
+                        <div className="d-flex justify-content-center p-3">
+                            <div className="spinner-border spinner-border-sm text-primary" role="status">
+                                <span className="visually-hidden">Loading top products...</span>
+                            </div>
+                            <span className="ms-2 text-muted">Loading statistics...</span>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Empty state - no products */}
             {!loadingProducts && products.length === 0 && !searchTerm && (

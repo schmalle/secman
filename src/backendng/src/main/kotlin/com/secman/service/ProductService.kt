@@ -3,6 +3,8 @@ package com.secman.service
 import com.secman.dto.PaginatedProductSystemsResponse
 import com.secman.dto.ProductListResponse
 import com.secman.dto.ProductSystemDto
+import com.secman.dto.TopProductDto
+import com.secman.dto.TopProductsResponse
 import com.secman.repository.AssetRepository
 import com.secman.repository.VulnerabilityRepository
 import io.micronaut.data.model.Pageable
@@ -259,6 +261,48 @@ open class ProductService(
         } finally {
             workbook.dispose()
         }
+    }
+
+    /**
+     * Get top products by vulnerability count
+     *
+     * @param authentication Current user authentication
+     * @param limit Maximum number of products to return (default 15)
+     * @return TopProductsResponse with products sorted by vulnerability count
+     */
+    fun getTopProducts(authentication: Authentication, limit: Int = 15): TopProductsResponse {
+        val isAdmin = hasRole(authentication, "ADMIN")
+
+        val topProducts = if (isAdmin) {
+            log.debug("Admin user - fetching top {} products", limit)
+            vulnerabilityRepository.findTopProductsForAll(limit)
+        } else {
+            val accessibleAssetIds = assetFilterService.getAccessibleAssets(authentication)
+                .mapNotNull { it.id }
+                .toSet()
+
+            if (accessibleAssetIds.isEmpty()) {
+                log.debug("User has no accessible assets - returning empty top products list")
+                return TopProductsResponse(products = emptyList(), totalCount = 0)
+            }
+
+            log.debug("Non-admin user - fetching top {} products from {} accessible assets", limit, accessibleAssetIds.size)
+            vulnerabilityRepository.findTopProductsForAssets(accessibleAssetIds, limit)
+        }
+
+        val productDtos = topProducts.mapNotNull { row ->
+            row.product?.let { product ->
+                TopProductDto(
+                    product = product,
+                    vulnerabilityCount = row.vulnerabilityCount?.toLong() ?: 0
+                )
+            }
+        }
+
+        return TopProductsResponse(
+            products = productDtos,
+            totalCount = productDtos.size
+        )
     }
 
     /**

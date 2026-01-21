@@ -31,6 +31,35 @@ export interface PaginatedProductSystemsResponse {
     productName: string;
 }
 
+export interface TopProductDto {
+    product: string;
+    vulnerabilityCount: number;
+}
+
+export interface TopProductsResponse {
+    products: TopProductDto[];
+    totalCount: number;
+}
+
+/**
+ * Get top products by vulnerability count
+ *
+ * @param limit Maximum number of products to return (default 15)
+ * @returns Promise<TopProductsResponse>
+ */
+export async function getTopProducts(limit: number = 15): Promise<TopProductsResponse> {
+    const params = new URLSearchParams();
+    params.append('limit', limit.toString());
+
+    const url = `/api/products/top?${params.toString()}`;
+    const response = await authenticatedGet(url);
+
+    if (!response.ok) {
+        throw new Error(`Failed to fetch top products: ${response.status}`);
+    }
+    return response.json();
+}
+
 /**
  * Get list of unique products from vulnerability data
  * Task: T012, T022 (search support)
