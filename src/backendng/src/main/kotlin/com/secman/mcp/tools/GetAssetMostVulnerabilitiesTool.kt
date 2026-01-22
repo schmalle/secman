@@ -86,11 +86,11 @@ class GetAssetMostVulnerabilitiesTool(
 
     /**
      * Transform raw query result to provide better display names.
-     * When asset_name is a CrowdStrike device ID (hex string), prefer showing IP as identifier.
+     * When assetName is a CrowdStrike device ID (hex string), prefer showing IP as identifier.
      */
     private fun transformAssetResult(asset: Map<String, Any>): Map<String, Any> {
-        val assetName = asset["asset_name"]?.toString() ?: ""
-        val assetIp = asset["asset_ip"]?.toString()
+        val assetName = asset["assetName"]?.toString() ?: ""
+        val assetIp = asset["assetIp"]?.toString()
 
         // Detect if name looks like a CrowdStrike device ID (uppercase hex, no dots/hyphens typical of hostnames)
         val looksLikeDeviceId = assetName.isNotBlank() &&
@@ -105,10 +105,10 @@ class GetAssetMostVulnerabilitiesTool(
         }
 
         return asset.toMutableMap().apply {
-            put("display_name", displayName)
+            put("displayName", displayName)
             if (looksLikeDeviceId) {
-                put("device_id", assetName)  // Preserve original device ID
-                put("name_is_device_id", true)
+                put("deviceId", assetName)  // Preserve original device ID
+                put("nameIsDeviceId", true)
             }
         }
     }

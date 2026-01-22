@@ -37,8 +37,10 @@ export type BadgeCountCallback = (count: number) => void;
 let connectionState: 'disconnected' | 'connecting' | 'connected' | 'error' = 'disconnected';
 let errorCount = 0;
 const MAX_ERRORS = 5;
-const ERROR_RESET_TIMEOUT = 60000; // Reset error count after 1 minute
+const STABLE_CONNECTION_THRESHOLD = 10000; // Must be connected for 10s before resetting error count
 let reconnectTimeoutId: ReturnType<typeof setTimeout> | null = null;
+let errorResetTimeoutId: ReturnType<typeof setTimeout> | null = null;
+let connectionStartTime: number = 0;
 
 /**
  * Connect to SSE endpoint for real-time badge count updates.
@@ -113,9 +115,16 @@ export function connectToBadgeUpdates(onUpdate: BadgeCountCallback): () => void 
       console.log('[ExceptionBadge] Received count update:', newCount);
       onUpdate(newCount);
 
-      // Reset error count on successful message
-      if (errorCount > 0) {
-        errorCount = 0;
+      // Schedule error count reset only after stable connection (10 seconds)
+      // This prevents infinite retry loops when server closes connection after each message
+      if (errorCount > 0 && !errorResetTimeoutId) {
+        errorResetTimeoutId = setTimeout(() => {
+          if (connectionState === 'connected') {
+            console.log('[ExceptionBadge] Connection stable, resetting error count');
+            errorCount = 0;
+          }
+          errorResetTimeoutId = null;
+        }, STABLE_CONNECTION_THRESHOLD);
       }
     } catch (error) {
       console.error('[ExceptionBadge] Failed to parse count update event:', error, event.data);
@@ -126,14 +135,21 @@ export function connectToBadgeUpdates(onUpdate: BadgeCountCallback): () => void 
   eventSource.addEventListener('open', () => {
     console.log('[ExceptionBadge] SSE connection established');
     connectionState = 'connected';
-    // NOTE: Don't reset errorCount here - it gets reset on successful message receipt
-    // This prevents the error loop where auto-reconnect resets count before we can track failures
+    connectionStartTime = Date.now();
+    // NOTE: errorCount is only reset after stable connection (10s of successful operation)
+    // This prevents infinite retry loops when connection immediately errors after receiving data
   });
 
   // Handle connection errors
   eventSource.addEventListener('error', (error) => {
     if (isCleaningUp) {
       return; // Ignore errors during cleanup
+    }
+
+    // Cancel any pending error count reset since we're not stable
+    if (errorResetTimeoutId) {
+      clearTimeout(errorResetTimeoutId);
+      errorResetTimeoutId = null;
     }
 
     errorCount++;
@@ -177,6 +193,11 @@ export function connectToBadgeUpdates(onUpdate: BadgeCountCallback): () => void 
     if (reconnectTimeoutId) {
       clearTimeout(reconnectTimeoutId);
       reconnectTimeoutId = null;
+    }
+    // Cancel any pending error count reset
+    if (errorResetTimeoutId) {
+      clearTimeout(errorResetTimeoutId);
+      errorResetTimeoutId = null;
     }
   };
 }
