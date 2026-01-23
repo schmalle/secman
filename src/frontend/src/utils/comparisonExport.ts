@@ -25,6 +25,9 @@ export interface ReleaseInfo {
 export interface RequirementSnapshotSummary {
     id: number;
     originalRequirementId: number;
+    internalId: string;
+    revision: number;
+    idRevision: string;
     shortreq: string;
     chapter?: string;
     norm?: string;
@@ -43,6 +46,9 @@ export interface FieldChange {
 export interface RequirementDiff {
     id: number;
     originalRequirementId?: number;
+    internalId: string;
+    oldRevision: number;
+    newRevision: number;
     shortreq: string;
     chapter?: string;
     norm?: string;
@@ -117,6 +123,7 @@ export async function exportComparisonToExcel(comparison: ComparisonResult): Pro
         const addedSheet = workbook.addWorksheet('Added');
         addedSheet.columns = [
             { header: 'Change Type', key: 'changeType', width: 15 },
+            { header: 'ID.Revision', key: 'idRevision', width: 15 },
             { header: 'Short Req', key: 'shortreq', width: 20 },
             { header: 'Chapter', key: 'chapter', width: 15 },
             { header: 'Norm', key: 'norm', width: 15 },
@@ -129,6 +136,7 @@ export async function exportComparisonToExcel(comparison: ComparisonResult): Pro
         comparison.added.forEach((req) => {
             addedSheet.addRow({
                 changeType: 'ADDED',
+                idRevision: req.idRevision,
                 shortreq: req.shortreq,
                 chapter: req.chapter || '',
                 norm: req.norm || '',
@@ -148,6 +156,7 @@ export async function exportComparisonToExcel(comparison: ComparisonResult): Pro
         const deletedSheet = workbook.addWorksheet('Deleted');
         deletedSheet.columns = [
             { header: 'Change Type', key: 'changeType', width: 15 },
+            { header: 'ID.Revision', key: 'idRevision', width: 15 },
             { header: 'Short Req', key: 'shortreq', width: 20 },
             { header: 'Chapter', key: 'chapter', width: 15 },
             { header: 'Norm', key: 'norm', width: 15 },
@@ -160,6 +169,7 @@ export async function exportComparisonToExcel(comparison: ComparisonResult): Pro
         comparison.deleted.forEach((req) => {
             deletedSheet.addRow({
                 changeType: 'DELETED',
+                idRevision: req.idRevision,
                 shortreq: req.shortreq,
                 chapter: req.chapter || '',
                 norm: req.norm || '',
@@ -179,6 +189,9 @@ export async function exportComparisonToExcel(comparison: ComparisonResult): Pro
         const modifiedSheet = workbook.addWorksheet('Modified');
         modifiedSheet.columns = [
             { header: 'Change Type', key: 'changeType', width: 15 },
+            { header: 'ID', key: 'internalId', width: 12 },
+            { header: 'Old Rev', key: 'oldRevision', width: 10 },
+            { header: 'New Rev', key: 'newRevision', width: 10 },
             { header: 'Short Req', key: 'shortreq', width: 20 },
             { header: 'Chapter', key: 'chapter', width: 15 },
             { header: 'Norm', key: 'norm', width: 15 },
@@ -192,6 +205,9 @@ export async function exportComparisonToExcel(comparison: ComparisonResult): Pro
             req.changes.forEach((change, index) => {
                 modifiedSheet.addRow({
                     changeType: index === 0 ? 'MODIFIED' : '',
+                    internalId: index === 0 ? req.internalId : '',
+                    oldRevision: index === 0 ? req.oldRevision : '',
+                    newRevision: index === 0 ? req.newRevision : '',
                     shortreq: index === 0 ? req.shortreq : '',
                     chapter: index === 0 ? req.chapter || '' : '',
                     norm: index === 0 ? req.norm || '' : '',

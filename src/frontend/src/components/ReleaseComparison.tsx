@@ -222,8 +222,13 @@ const ReleaseComparison: React.FC = () => {
                             <div className="list-group">
                                 {comparisonResult.added.map((req) => (
                                     <div key={req.id} className="list-group-item list-group-item-success">
-                                        <h6 className="mb-1">{req.shortreq}</h6>
-                                        {req.details && <p className="mb-0 text-muted small">{req.details}</p>}
+                                        <div className="d-flex align-items-start">
+                                            <span className="badge bg-secondary me-2">{req.idRevision}</span>
+                                            <div>
+                                                <h6 className="mb-1">{req.shortreq}</h6>
+                                                {req.details && <p className="mb-0 text-muted small">{req.details}</p>}
+                                            </div>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -239,8 +244,13 @@ const ReleaseComparison: React.FC = () => {
                             <div className="list-group">
                                 {comparisonResult.deleted.map((req) => (
                                     <div key={req.id} className="list-group-item list-group-item-danger">
-                                        <h6 className="mb-1">{req.shortreq}</h6>
-                                        {req.details && <p className="mb-0 text-muted small">{req.details}</p>}
+                                        <div className="d-flex align-items-start">
+                                            <span className="badge bg-secondary me-2">{req.idRevision}</span>
+                                            <div>
+                                                <h6 className="mb-1">{req.shortreq}</h6>
+                                                {req.details && <p className="mb-0 text-muted small">{req.details}</p>}
+                                            </div>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -264,7 +274,13 @@ const ReleaseComparison: React.FC = () => {
                                                 style={{ cursor: 'pointer' }}
                                                 onClick={() => toggleExpanded(req.id)}
                                             >
-                                                <h6 className="mb-1">{req.shortreq}</h6>
+                                                <div className="d-flex align-items-center">
+                                                    <span className="badge bg-secondary me-2">{req.internalId}</span>
+                                                    <span className="badge bg-info me-2" title="Revision change">
+                                                        .{req.oldRevision} → .{req.newRevision}
+                                                    </span>
+                                                    <h6 className="mb-0">{req.shortreq}</h6>
+                                                </div>
                                                 <span className="badge bg-secondary">
                                                     {req.changes.length} field{req.changes.length !== 1 ? 's' : ''} changed
                                                 </span>

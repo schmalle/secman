@@ -8,9 +8,10 @@ import jakarta.inject.Singleton
 import java.time.Instant
 
 @Singleton
-class RequirementService(
+open class RequirementService(
     @Inject private val requirementRepository: RequirementRepository,
-    @Inject private val snapshotRepository: RequirementSnapshotRepository
+    @Inject private val snapshotRepository: RequirementSnapshotRepository,
+    @Inject private val requirementIdService: RequirementIdService
 ) {
 
     fun getAllRequirements(limit: Int? = null): List<Requirement> {
@@ -36,6 +37,9 @@ class RequirementService(
     }
 
     fun createRequirement(requirement: Requirement): Requirement {
+        if (requirement.internalId.isBlank()) {
+            requirement.internalId = requirementIdService.getNextId()
+        }
         requirement.createdAt = Instant.now()
         requirement.updatedAt = Instant.now()
         return requirementRepository.save(requirement)
@@ -85,5 +89,29 @@ class RequirementService(
 
     fun getRequirementsByNormId(normId: Long): List<Requirement> {
         return requirementRepository.findByNormId(normId)
+    }
+
+    /**
+     * Checks if a content change requires a revision increment.
+     * Content fields: shortreq, details, example, motivation, usecase, norm, chapter
+     * Relationship fields (usecases, norms ManyToMany) do NOT trigger revision increment.
+     */
+    fun shouldIncrementRevision(
+        existing: Requirement,
+        newShortreq: String?,
+        newDetails: String?,
+        newExample: String?,
+        newMotivation: String?,
+        newUsecase: String?,
+        newNorm: String?,
+        newChapter: String?
+    ): Boolean {
+        return (newShortreq != null && newShortreq != existing.shortreq) ||
+               (newDetails != null && newDetails != existing.details) ||
+               (newExample != null && newExample != existing.example) ||
+               (newMotivation != null && newMotivation != existing.motivation) ||
+               (newUsecase != null && newUsecase != existing.usecase) ||
+               (newNorm != null && newNorm != existing.norm) ||
+               (newChapter != null && newChapter != existing.chapter)
     }
 }

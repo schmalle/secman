@@ -11,6 +11,7 @@ import com.secman.repository.UseCaseRepository
 import com.secman.repository.NormRepository
 import com.secman.service.TranslationService
 import com.secman.service.InputValidationService
+import com.secman.service.RequirementService
 import io.micronaut.core.annotation.Nullable
 import io.micronaut.data.model.Pageable
 import io.micronaut.http.HttpResponse
@@ -51,7 +52,8 @@ open class RequirementController(
     private val translationService: TranslationService,
     private val inputValidationService: InputValidationService,
     private val releaseRepository: ReleaseRepository,
-    private val snapshotRepository: RequirementSnapshotRepository
+    private val snapshotRepository: RequirementSnapshotRepository,
+    private val requirementService: RequirementService
 ) {
 
     @Serdeable
@@ -85,6 +87,9 @@ open class RequirementController(
     @Serdeable
     data class RequirementResponse(
         val id: Long,
+        val internalId: String,
+        val revision: Int,
+        val idRevision: String,
         val shortreq: String,
         val details: String?,
         val language: String?,
@@ -102,6 +107,9 @@ open class RequirementController(
             fun from(requirement: Requirement): RequirementResponse {
                 return RequirementResponse(
                     id = requirement.id!!,
+                    internalId = requirement.internalId,
+                    revision = requirement.versionNumber,
+                    idRevision = requirement.idRevision,
                     shortreq = requirement.shortreq,
                     details = requirement.details,
                     language = requirement.language,
@@ -231,7 +239,7 @@ open class RequirementController(
                 requirement.norms = norms
             }
 
-            val savedRequirement = requirementRepository.save(requirement)
+            val savedRequirement = requirementService.createRequirement(requirement)
             return HttpResponse.ok(RequirementResponse.from(savedRequirement))
         } catch (e: Exception) {
             return HttpResponse.serverError<Any>().body(mapOf("error" to "Failed to create requirement: ${e.message}"))
@@ -296,6 +304,23 @@ open class RequirementController(
         val requirement = requirementOptional.get()
 
         try {
+            // Check if content change requires revision increment (before modifying)
+            val shouldIncrement = requirementService.shouldIncrementRevision(
+                existing = requirement,
+                newShortreq = request.shortreq,
+                newDetails = request.details,
+                newExample = request.example,
+                newMotivation = request.motivation,
+                newUsecase = request.usecase,
+                newNorm = request.norm,
+                newChapter = request.chapter
+            )
+
+            // Increment revision if content changed
+            if (shouldIncrement) {
+                requirement.incrementVersion()
+            }
+
             // Update fields if provided
             request.shortreq?.let { if (it.isNotBlank()) requirement.shortreq = it }
             request.details?.let { requirement.details = it }
@@ -306,7 +331,7 @@ open class RequirementController(
             request.norm?.let { requirement.norm = it }
             request.chapter?.let { requirement.chapter = it }
 
-            // Handle use case relationships if provided
+            // Handle use case relationships if provided (does NOT increment revision)
             request.usecaseIds?.let { ids ->
                 val useCases = mutableSetOf<UseCase>()
                 ids.forEach { id ->
@@ -315,7 +340,7 @@ open class RequirementController(
                 requirement.usecases = useCases
             }
 
-            // Handle norm relationships if provided
+            // Handle norm relationships if provided (does NOT increment revision)
             request.normIds?.let { ids ->
                 val norms = mutableSetOf<Norm>()
                 ids.forEach { id ->
@@ -570,7 +595,7 @@ open class RequirementController(
                 shd.fill = "C1D5C0"  // Soft sage green (Scandinavian style)
 
                 val reqHeaderRun = reqHeaderParagraph.createRun()
-                reqHeaderRun.setText("Req $requirementNumber: ${requirement.shortreq}")
+                reqHeaderRun.setText("${requirement.idRevision}: ${requirement.shortreq}")
                 reqHeaderRun.fontSize = 12
                 reqHeaderRun.isBold = true
                 
@@ -622,15 +647,15 @@ open class RequirementController(
     private fun createExcelWorkbook(requirements: List<Requirement>): XSSFWorkbook {
         val workbook = XSSFWorkbook()
         val sheet = workbook.createSheet("Reqs") // Use "Reqs" to match import format
-        
-        // Header row - exact same format as import expects
+
+        // Header row - ID.Revision as first column
         val headerRow = sheet.createRow(0)
-        val headers = arrayOf("Chapter", "Norm", "Short req", "DetailsEN", "MotivationEN", "ExampleEN", "UseCase")
-        
+        val headers = arrayOf("ID.Revision", "Chapter", "Norm", "Short req", "DetailsEN", "MotivationEN", "ExampleEN", "UseCase")
+
         headers.forEachIndexed { index, header ->
             val cell = headerRow.createCell(index)
             cell.setCellValue(header)
-            
+
             // Style header cells
             val headerStyle = workbook.createCellStyle()
             val headerFont = workbook.createFont()
@@ -638,14 +663,17 @@ open class RequirementController(
             headerStyle.setFont(headerFont)
             cell.cellStyle = headerStyle
         }
-        
+
         // Data rows
         requirements.forEachIndexed { index, requirement ->
             val row = sheet.createRow(index + 1)
-            
+
+            // ID.Revision - first column
+            row.createCell(0).setCellValue(requirement.idRevision)
+
             // Chapter
-            row.createCell(0).setCellValue(requirement.chapter ?: "")
-            
+            row.createCell(1).setCellValue(requirement.chapter ?: "")
+
             // Norm - combine all parsed norms for round-trip compatibility
             val normString = if (requirement.norms.isNotEmpty()) {
                 requirement.norms.joinToString("; ") { norm ->
@@ -658,29 +686,29 @@ open class RequirementController(
             } else {
                 requirement.norm ?: "" // Fallback to original norm string
             }
-            row.createCell(1).setCellValue(normString)
-            
+            row.createCell(2).setCellValue(normString)
+
             // Short req
-            row.createCell(2).setCellValue(requirement.shortreq)
-            
+            row.createCell(3).setCellValue(requirement.shortreq)
+
             // DetailsEN
-            row.createCell(3).setCellValue(requirement.details ?: "")
-            
+            row.createCell(4).setCellValue(requirement.details ?: "")
+
             // MotivationEN
-            row.createCell(4).setCellValue(requirement.motivation ?: "")
-            
+            row.createCell(5).setCellValue(requirement.motivation ?: "")
+
             // ExampleEN
-            row.createCell(5).setCellValue(requirement.example ?: "")
-            
+            row.createCell(6).setCellValue(requirement.example ?: "")
+
             // UseCase - combine all use case names
             val useCaseString = if (requirement.usecases.isNotEmpty()) {
                 requirement.usecases.joinToString(", ") { it.name }
             } else {
                 requirement.usecase ?: "" // Fallback to original usecase string
             }
-            row.createCell(6).setCellValue(useCaseString)
+            row.createCell(7).setCellValue(useCaseString)
         }
-        
+
         // Auto-size columns with minimum width
         for (i in 0 until headers.size) {
             sheet.autoSizeColumn(i)
@@ -688,7 +716,7 @@ open class RequirementController(
                 sheet.setColumnWidth(i, 2000)
             }
         }
-        
+
         return workbook
     }
 
@@ -1121,10 +1149,12 @@ open class RequirementController(
     /**
      * Helper method to convert RequirementSnapshot to Requirement for export
      * Note: This creates a detached Requirement entity (not persisted)
+     * The internalId and versionNumber are set from the snapshot for correct ID.Revision display
      */
     private fun snapshotToRequirement(snapshot: RequirementSnapshot): Requirement {
-        return Requirement(
+        val requirement = Requirement(
             id = snapshot.originalRequirementId,
+            internalId = snapshot.internalId,
             shortreq = snapshot.shortreq,
             details = snapshot.details,
             language = snapshot.language,
@@ -1136,5 +1166,8 @@ open class RequirementController(
             usecases = mutableSetOf(),  // Snapshots store IDs as JSON, not objects
             norms = mutableSetOf()       // For export purposes, empty sets are acceptable
         )
+        // Set versionNumber from snapshot's revision for correct idRevision display
+        requirement.versionNumber = snapshot.revision
+        return requirement
     }
 }
