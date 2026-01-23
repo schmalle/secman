@@ -1036,7 +1036,6 @@ const UserManagement = () => {
             <table className="table table-striped table-hover">
                 <thead>
                     <tr>
-                        <th>ID</th>
                         <th>Username</th>
                         <th>Email</th>
                         <th>Roles</th>
@@ -1049,7 +1048,6 @@ const UserManagement = () => {
                     {users.length > 0 ? (
                         users.map(user => (
                             <tr key={user.id}>
-                                <td>{user.id}</td>
                                 <td>{user.username}</td>
                                 <td>{user.email}</td>
                                 <td>{user.roles?.join(', ') || 'N/A'}</td>
@@ -1098,7 +1096,7 @@ const UserManagement = () => {
                         ))
                     ) : (
                         <tr>
-                            <td colSpan={7} className="text-center">
+                            <td colSpan={6} className="text-center">
                                 {/* Show different message based on whether there was an error or just no users */}
                                 {error && !error.includes("Access Denied") ? "Could not load users." : "No users found."}
                             </td>
