@@ -82,6 +82,9 @@ class RequirementComparisonService(
                     modified.add(
                         RequirementDiff(
                             id = toSnapshot.originalRequirementId,
+                            internalId = toSnapshot.internalId,
+                            oldRevision = fromSnapshot.revision,
+                            newRevision = toSnapshot.revision,
                             shortreq = toSnapshot.shortreq,
                             changes = changes
                         )
@@ -122,6 +125,9 @@ class RequirementComparisonService(
         return RequirementSnapshotSummary(
             id = snapshot.id!!,
             originalRequirementId = snapshot.originalRequirementId,
+            internalId = snapshot.internalId,
+            revision = snapshot.revision,
+            idRevision = snapshot.idRevision,
             shortreq = snapshot.shortreq,
             details = snapshot.details
         )

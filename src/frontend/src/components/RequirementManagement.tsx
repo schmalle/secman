@@ -16,6 +16,9 @@ interface Norm {
 
 interface Requirement {
     id?: number;
+    internalId?: string;
+    revision?: number;
+    idRevision?: string;
     shortreq: string; // Renamed from title
     details: string;  // Renamed from description
     language?: string; // New optional field

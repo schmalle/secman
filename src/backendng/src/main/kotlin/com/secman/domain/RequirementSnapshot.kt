@@ -26,6 +26,12 @@ data class RequirementSnapshot(
     @Column(name = "original_requirement_id", nullable = false)
     var originalRequirementId: Long,
 
+    @Column(name = "internal_id", nullable = false, length = 20)
+    var internalId: String = "",
+
+    @Column(name = "revision", nullable = false)
+    var revision: Int = 1,
+
     @Column(nullable = false)
     @NotBlank
     var shortreq: String,
@@ -60,6 +66,9 @@ data class RequirementSnapshot(
     @Column(name = "snapshot_timestamp", nullable = false, updatable = false)
     var snapshotTimestamp: Instant = Instant.now()
 ) {
+    val idRevision: String
+        get() = "$internalId.$revision"
+
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (other !is RequirementSnapshot) return false
@@ -76,6 +85,8 @@ data class RequirementSnapshot(
             return RequirementSnapshot(
                 release = release,
                 originalRequirementId = requirement.id!!,
+                internalId = requirement.internalId,
+                revision = requirement.versionNumber,
                 shortreq = requirement.shortreq,
                 details = requirement.details,
                 language = requirement.language,

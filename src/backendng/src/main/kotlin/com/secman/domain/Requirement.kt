@@ -13,6 +13,9 @@ data class Requirement(
     @GeneratedValue
     var id: Long? = null,
 
+    @Column(name = "internal_id", unique = true, nullable = false, length = 20)
+    var internalId: String = "",
+
     @Column(nullable = false)
     @NotBlank
     var shortreq: String,
@@ -60,6 +63,9 @@ data class Requirement(
     @Column(name = "updated_at")
     var updatedAt: Instant? = null
 ) : VersionedEntity() {
+
+    val idRevision: String
+        get() = "$internalId.$versionNumber"
 
     @PrePersist
     fun onCreate() {

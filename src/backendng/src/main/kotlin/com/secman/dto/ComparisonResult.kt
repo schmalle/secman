@@ -34,6 +34,9 @@ data class ReleaseInfo(
 data class RequirementSnapshotSummary(
     val id: Long,
     val originalRequirementId: Long,
+    val internalId: String,
+    val revision: Int,
+    val idRevision: String,
     val shortreq: String,
     val details: String?
 )
@@ -44,6 +47,9 @@ data class RequirementSnapshotSummary(
 @Serdeable
 data class RequirementDiff(
     val id: Long,  // originalRequirementId
+    val internalId: String,
+    val oldRevision: Int,
+    val newRevision: Int,
     val shortreq: String,
     val changes: List<FieldChange>
 )
