@@ -7,6 +7,7 @@ import com.secman.repository.NormRepository
 import com.secman.repository.RequirementRepository
 import com.secman.repository.UseCaseRepository
 import com.secman.service.NormParsingService
+import com.secman.service.RequirementService
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.HttpStatus
 import io.micronaut.http.MediaType
@@ -34,6 +35,7 @@ import java.nio.file.attribute.PosixFilePermissions
 @ExecuteOn(TaskExecutors.BLOCKING)
 open class ImportController(
     private val requirementRepository: RequirementRepository,
+    private val requirementService: RequirementService,
     private val normRepository: NormRepository,
     private val useCaseRepository: UseCaseRepository,
     private val normParsingService: NormParsingService,
@@ -364,15 +366,15 @@ open class ImportController(
         
         for (requirement in requirements) {
             try {
-                // Save requirement first
-                val savedRequirement = requirementRepository.save(requirement)
-                
+                // Use service to properly assign internalId
+                val savedRequirement = requirementService.createRequirement(requirement)
+
                 // Force flush to ensure it's persisted
                 entityManager.flush()
-                
-                log.debug("Saved requirement: {}", savedRequirement.shortreq)
+
+                log.debug("Saved requirement: {} with ID {}", savedRequirement.shortreq, savedRequirement.internalId)
                 processedCount++
-                
+
             } catch (e: Exception) {
                 log.warn("Failed to save requirement '{}': {}", requirement.shortreq, e.message)
                 // Continue with next requirement instead of failing entire import
