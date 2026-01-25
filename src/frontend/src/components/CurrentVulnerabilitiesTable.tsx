@@ -203,13 +203,13 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
     };
 
     const getSeverityBadgeClass = (severity: string | null): string => {
-        if (!severity) return 'bg-secondary';
+        if (!severity) return 'scand-neutral';
         const sev = severity.toLowerCase();
-        if (sev.includes('critical')) return 'bg-danger';
-        if (sev.includes('high')) return 'bg-warning text-dark';
-        if (sev.includes('medium')) return 'bg-info text-dark';
-        if (sev.includes('low')) return 'bg-success';
-        return 'bg-secondary';
+        if (sev.includes('critical')) return 'scand-critical';
+        if (sev.includes('high')) return 'scand-high';
+        if (sev.includes('medium')) return 'scand-medium';
+        if (sev.includes('low')) return 'scand-low';
+        return 'scand-neutral';
     };
 
     const getExceptionBadge = (hasException: boolean, reason: string | null) => {

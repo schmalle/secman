@@ -44,7 +44,7 @@ const OverdueStatusBadge: React.FC<OverdueStatusBadgeProps> = ({
         switch (status) {
             case 'OVERDUE':
                 return {
-                    className: 'badge bg-danger',
+                    className: 'badge scand-critical',
                     icon: '🔴',
                     text: daysOverdue ? `OVERDUE (${daysOverdue}d)` : 'OVERDUE',
                     tooltip: daysOverdue
@@ -55,7 +55,7 @@ const OverdueStatusBadge: React.FC<OverdueStatusBadgeProps> = ({
             case 'EXCEPTED':
                 const endDate = exceptionEndDate ? new Date(exceptionEndDate).toLocaleDateString() : 'unknown date';
                 return {
-                    className: 'badge bg-info text-dark',
+                    className: 'badge scand-medium',
                     icon: '🛡️',
                     text: 'EXCEPTED',
                     tooltip: exceptionReason
@@ -66,7 +66,7 @@ const OverdueStatusBadge: React.FC<OverdueStatusBadgeProps> = ({
             case 'OK':
             default:
                 return {
-                    className: 'badge bg-success',
+                    className: 'badge scand-success',
                     icon: '✅',
                     text: 'OK',
                     tooltip: ageInDays

@@ -27,22 +27,22 @@ interface ExceptionStatusBadgeProps {
 }
 
 /**
- * Get badge color class for status
+ * Get badge color class for status using Scandinavian design system
  */
 function getBadgeClass(status: ExceptionRequestStatus): string {
     switch (status) {
         case 'PENDING':
-            return 'bg-warning text-dark';
+            return 'scand-pending';
         case 'APPROVED':
-            return 'bg-success';
+            return 'scand-success';
         case 'REJECTED':
-            return 'bg-danger';
+            return 'scand-critical';
         case 'EXPIRED':
-            return 'bg-secondary';
+            return 'scand-neutral';
         case 'CANCELLED':
-            return 'bg-secondary';
+            return 'scand-neutral';
         default:
-            return 'bg-secondary';
+            return 'scand-neutral';
     }
 }
 
@@ -91,7 +91,7 @@ const ExceptionStatusBadge: React.FC<ExceptionStatusBadgeProps> = ({ status, aut
     if (status === 'APPROVED' && autoApproved) {
         return (
             <span
-                className={`badge bg-success ${className}`}
+                className={`badge scand-success ${className}`}
                 title="This request was automatically approved because the requester has ADMIN or SECCHAMPION role"
             >
                 <i className="bi bi-check-circle-fill me-1"></i>

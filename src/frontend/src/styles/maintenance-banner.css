@@ -42,15 +42,15 @@
   margin-bottom: 0;
 }
 
-/* Warning color theme (Bootstrap alert-warning base) */
+/* Warning color theme (Scandinavian design system) */
 .maintenance-banners .alert-warning {
-  background-color: #fff3cd;
-  border-color: #ffc107;
-  color: #856404;
+  background-color: var(--scand-warning-bg);
+  border-color: var(--scand-warning-border);
+  color: var(--scand-warning);
 }
 
 .maintenance-banners .alert-warning .bi {
-  color: #ffc107; /* Icon matches border */
+  color: var(--scand-warning); /* Icon matches text */
 }
 
 /* Icon styling */

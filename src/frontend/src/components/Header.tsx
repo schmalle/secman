@@ -72,13 +72,13 @@ const Header = () => {
     if (user === undefined) {
         // Still loading or initial state before first check
         return (
-            <nav className="navbar navbar-expand-lg navbar-light bg-light fixed-top" style={{minHeight: '3.75rem'}}>
+            <nav className="navbar navbar-expand-lg navbar-light fixed-top" style={{minHeight: '3.75rem', backgroundColor: 'var(--scand-bg-page)', borderBottom: '1px solid var(--scand-border)'}}>
                 <div className="container-fluid">
                     <a className="navbar-brand" href="/" style={{marginLeft: '1cm'}}>
-                    <img src="/SecManLogo.png" alt="SecMan" height="64" style={{backgroundColor: '#f8f9fa', padding: '5px', borderRadius: '4px'}} />
+                    <img src="/SecManLogo.png" alt="SecMan" height="64" style={{padding: '5px', borderRadius: '4px'}} />
                 </a>
                     <div className="ms-auto">
-                        <span className="navbar-text">Loading...</span>
+                        <span className="navbar-text" style={{color: 'var(--scand-text-secondary)'}}>Loading...</span>
                     </div>
                 </div>
             </nav>
@@ -86,10 +86,10 @@ const Header = () => {
     }
 
     return (
-        <nav className="navbar navbar-expand-lg navbar-light bg-light fixed-top" style={{minHeight: '3.75rem'}}>
+        <nav className="navbar navbar-expand-lg navbar-light fixed-top" style={{minHeight: '3.75rem', backgroundColor: 'var(--scand-bg-page)', borderBottom: '1px solid var(--scand-border)'}}>
             <div className="container-fluid">
                 <a className="navbar-brand" href="/" style={{marginLeft: '1cm'}}>
-                    <img src="/SecManLogo.png" alt="SecMan" height="64" style={{backgroundColor: '#f8f9fa', padding: '5px', borderRadius: '4px'}} />
+                    <img src="/SecManLogo.png" alt="SecMan" height="64" style={{padding: '5px', borderRadius: '4px'}} />
                 </a>
                 <button className="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNavDropdown" aria-controls="navbarNavDropdown" aria-expanded="false" aria-label="Toggle navigation">
                     <span className="navbar-toggler-icon"></span>

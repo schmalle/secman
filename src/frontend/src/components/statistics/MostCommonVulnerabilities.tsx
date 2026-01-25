@@ -18,21 +18,21 @@ import React, { useEffect, useState } from 'react';
 import { vulnerabilityStatisticsApi, type MostCommonVulnerabilityDto } from '../../services/api/vulnerabilityStatisticsApi';
 
 /**
- * Map severity levels to Bootstrap badge classes
+ * Map severity levels to Scandinavian design system badge classes
  */
 const severityBadgeClass = (severity: string): string => {
   switch (severity.toUpperCase()) {
     case 'CRITICAL':
-      return 'badge bg-danger';
+      return 'badge scand-critical';
     case 'HIGH':
-      return 'badge bg-warning text-dark';
+      return 'badge scand-high';
     case 'MEDIUM':
-      return 'badge bg-info text-dark';
+      return 'badge scand-medium';
     case 'LOW':
-      return 'badge bg-primary';
+      return 'badge scand-low';
     case 'UNKNOWN':
     default:
-      return 'badge bg-secondary';
+      return 'badge scand-neutral';
   }
 };
 
@@ -125,7 +125,7 @@ export default function MostCommonVulnerabilities({ domain }: MostCommonVulnerab
   // Data table
   return (
     <div className="card">
-      <div className="card-header bg-primary text-white">
+      <div className="card-header" style={{backgroundColor: 'var(--scand-bg-header)', color: 'var(--scand-text-light)'}}>
         <h5 className="mb-0">
           <i className="bi bi-shield-exclamation me-2"></i>
           Top 10 Most Common Vulnerabilities

@@ -467,7 +467,7 @@ const Export = () => {
                             <button
                                 className="btn btn-primary btn-sm w-100"
                                 onClick={handleExportByUseCase}
-                                disabled={!selectedUseCase || isExporting}
+                                disabled={isExporting}
                             >
                                 {isExporting ? (
                                     <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
@@ -513,7 +513,7 @@ const Export = () => {
                             <button
                                 className="btn btn-outline-primary btn-sm w-100"
                                 onClick={handleExportToExcelByUseCase}
-                                disabled={!selectedUseCase || isExporting}
+                                disabled={isExporting}
                             >
                                 {isExporting ? (
                                     <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>

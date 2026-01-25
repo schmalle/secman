@@ -93,7 +93,7 @@ export default function MostVulnerableProducts({ domain }: MostVulnerableProduct
   // Data table
   return (
     <div className="card">
-      <div className="card-header bg-info text-white">
+      <div className="card-header" style={{backgroundColor: 'var(--scand-bg-header)', color: 'var(--scand-text-light)'}}>
         <h5 className="mb-0">
           <i className="bi bi-box-seam me-2"></i>
           Top 10 Most Vulnerable Products
@@ -131,20 +131,20 @@ export default function MostVulnerableProducts({ domain }: MostVulnerableProduct
                   </td>
                   <td className="align-middle">
                     {product.criticalCount > 0 ? (
-                      <span className="badge bg-danger">
+                      <span className="badge scand-critical">
                         {product.criticalCount.toLocaleString()}
                       </span>
                     ) : (
-                      <span className="badge bg-light text-muted">0</span>
+                      <span className="badge scand-neutral">0</span>
                     )}
                   </td>
                   <td className="align-middle">
                     {product.highCount > 0 ? (
-                      <span className="badge bg-warning text-dark">
+                      <span className="badge scand-high">
                         {product.highCount.toLocaleString()}
                       </span>
                     ) : (
-                      <span className="badge bg-light text-muted">0</span>
+                      <span className="badge scand-neutral">0</span>
                     )}
                   </td>
                 </tr>

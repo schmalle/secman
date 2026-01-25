@@ -1,0 +1,129 @@
+/**
+ * SecMan Scandinavian Design System
+ *
+ * A muted, professional color palette inspired by Nordic minimalism
+ * with mint/sage/seafoam tones for a calming, natural aesthetic.
+ *
+ * Design Principles:
+ * - Soft off-whites and warm grays for backgrounds
+ * - Dark slate-gray for text (not pure black)
+ * - Muted, nature-inspired colors (mint, sage, dusty rose, seafoam)
+ * - Clean, generous whitespace
+ */
+
+:root {
+  /* ========================
+     BASE COLORS
+     ======================== */
+
+  /* Page & Container Backgrounds */
+  --scand-bg-page: #F8FAF9;           /* Slightly mint-tinted off-white */
+  --scand-bg-card: #FFFFFF;           /* Card/panel backgrounds */
+  --scand-bg-sidebar: #F2F5F4;        /* Sidebar with subtle mint undertone */
+  --scand-bg-header: #3D4F4F;         /* Dark teal-gray header */
+  --scand-bg-hover: #EDF2F0;          /* Hover state with mint tint */
+
+  /* Text Colors */
+  --scand-text-primary: #2D3436;      /* Dark charcoal */
+  --scand-text-secondary: #636E72;    /* Muted gray */
+  --scand-text-light: #FFFFFF;        /* Light text on dark backgrounds */
+  --scand-text-link: #4A7C6F;         /* Muted teal for links */
+
+  /* Border Colors */
+  --scand-border: #DFE6E3;            /* Soft gray-green border */
+  --scand-border-light: #EDF2F0;      /* Light borders */
+  --scand-border-dark: #C8D1CD;       /* Emphasized borders */
+
+  /* ========================
+     ACCENT COLORS
+     ======================== */
+
+  /* Primary Accent (Muted Teal/Sage) */
+  --scand-primary: #4A7C6F;           /* Primary teal-sage */
+  --scand-primary-hover: #3D6A5E;     /* Darker teal */
+  --scand-primary-light: #E8F0ED;     /* Light mint background */
+
+  /* Secondary Accent (Seafoam) */
+  --scand-accent: #6B9E9E;            /* Seafoam teal */
+  --scand-accent-hover: #5A8888;      /* Darker seafoam */
+  --scand-accent-light: #E5F0F0;      /* Light seafoam background */
+
+  /* ========================
+     SEMANTIC COLORS - SCANDINAVIAN/MINT STYLE
+     (Nature-inspired, muted, harmonious)
+     ======================== */
+
+  /* Critical - Dusty Rose/Terracotta (muted, not alarming) */
+  --scand-danger: #9B6B6B;            /* Dusty rose */
+  --scand-danger-bg: #F5EDED;         /* Very light rose */
+  --scand-danger-border: #D4B5B5;     /* Muted rose border */
+  --scand-danger-hover: #7A5555;      /* Darker dusty rose */
+
+  /* High/Warning - Sage/Olive (earthy, natural) */
+  --scand-warning: #8B8B5E;           /* Sage olive */
+  --scand-warning-bg: #F2F2E8;        /* Pale sage background */
+  --scand-warning-border: #C9C9A8;    /* Muted sage border */
+  --scand-warning-hover: #6E6E4A;     /* Darker sage */
+
+  /* Medium/Info - Seafoam/Teal (calming, balanced) */
+  --scand-info: #5E8B8B;              /* Seafoam teal */
+  --scand-info-bg: #E8F2F2;           /* Pale seafoam background */
+  --scand-info-border: #A8C9C9;       /* Muted seafoam border */
+  --scand-info-hover: #4A7070;        /* Darker seafoam */
+
+  /* Success - Soft Mint (fresh, positive) */
+  --scand-success: #5E8B6B;           /* Soft mint green */
+  --scand-success-bg: #E8F2EB;        /* Pale mint background */
+  --scand-success-border: #A8C9B5;    /* Muted mint border */
+  --scand-success-hover: #4A7055;     /* Darker mint */
+
+  /* Low/Muted - Cool Gray-Blue (neutral, unobtrusive) */
+  --scand-muted: #7B8B8B;             /* Cool gray-blue */
+  --scand-muted-bg: #EDF0F0;          /* Pale gray background */
+  --scand-muted-border: #C0CCCC;      /* Muted gray border */
+  --scand-muted-hover: #5E6E6E;       /* Darker gray */
+
+  /* ========================
+     COMPONENT-SPECIFIC TOKENS
+     ======================== */
+
+  /* Cards */
+  --scand-card-shadow: 0 1px 3px rgba(61, 79, 79, 0.08);
+  --scand-card-shadow-hover: 0 4px 6px rgba(61, 79, 79, 0.12);
+  --scand-card-border-radius: 0.5rem;
+
+  /* Buttons */
+  --scand-btn-border-radius: 0.375rem;
+
+  /* Tables */
+  --scand-table-header-bg: #3D4F4F;
+  --scand-table-header-text: #FFFFFF;
+  --scand-table-stripe-bg: #F8FAF9;
+  --scand-table-hover-bg: #EDF2F0;
+
+  /* Sidebar */
+  --scand-sidebar-section-bg: #EDF2F0;
+  --scand-sidebar-section-border: #4A7C6F;
+  --scand-sidebar-hover-bg: #E3E9E7;
+
+  /* Badges */
+  --scand-badge-border-radius: 0.25rem;
+
+  /* ========================
+     TYPOGRAPHY
+     ======================== */
+
+  --scand-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --scand-font-weight-normal: 400;
+  --scand-font-weight-medium: 500;
+  --scand-font-weight-semibold: 600;
+  --scand-font-weight-bold: 700;
+
+  /* ========================
+     TRANSITIONS
+     ======================== */
+
+  --scand-transition-fast: 150ms ease;
+  --scand-transition-normal: 200ms ease;
+  --scand-transition-slow: 300ms ease;
+}

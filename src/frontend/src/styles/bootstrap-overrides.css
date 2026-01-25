@@ -1,0 +1,511 @@
+/**
+ * Bootstrap 5.3 Overrides for Scandinavian Design System
+ *
+ * Overrides Bootstrap's default vivid colors with muted, nature-inspired
+ * Scandinavian alternatives (mint, sage, seafoam, dusty rose).
+ */
+
+/* ========================
+   BOOTSTRAP COLOR OVERRIDES
+   ======================== */
+
+:root {
+  /* Override Bootstrap's primary colors */
+  --bs-primary: var(--scand-primary);
+  --bs-primary-rgb: 74, 124, 111;
+
+  /* Override Bootstrap's danger colors */
+  --bs-danger: var(--scand-danger);
+  --bs-danger-rgb: 155, 107, 107;
+
+  /* Override Bootstrap's warning colors */
+  --bs-warning: var(--scand-warning);
+  --bs-warning-rgb: 139, 139, 94;
+
+  /* Override Bootstrap's success colors */
+  --bs-success: var(--scand-success);
+  --bs-success-rgb: 94, 139, 107;
+
+  /* Override Bootstrap's info colors */
+  --bs-info: var(--scand-info);
+  --bs-info-rgb: 94, 139, 139;
+
+  /* Override Bootstrap's secondary colors */
+  --bs-secondary: var(--scand-muted);
+  --bs-secondary-rgb: 123, 139, 139;
+
+  /* Override Bootstrap's light/dark */
+  --bs-light: var(--scand-bg-sidebar);
+  --bs-light-rgb: 242, 245, 244;
+  --bs-dark: var(--scand-bg-header);
+  --bs-dark-rgb: 61, 79, 79;
+
+  /* Override body colors */
+  --bs-body-bg: var(--scand-bg-page);
+  --bs-body-color: var(--scand-text-primary);
+
+  /* Override border color */
+  --bs-border-color: var(--scand-border);
+
+  /* Override link colors */
+  --bs-link-color: var(--scand-primary);
+  --bs-link-hover-color: var(--scand-primary-hover);
+}
+
+/* ========================
+   GLOBAL STYLES
+   ======================== */
+
+body {
+  background-color: var(--scand-bg-page);
+  color: var(--scand-text-primary);
+}
+
+/* ========================
+   CARD COMPONENT OVERRIDES
+   ======================== */
+
+.card {
+  border-color: var(--scand-border);
+  box-shadow: var(--scand-card-shadow);
+  border-radius: var(--scand-card-border-radius);
+}
+
+.card-header {
+  background-color: var(--scand-bg-sidebar);
+  border-bottom-color: var(--scand-border);
+}
+
+/* Card headers with dark background */
+.card-header.bg-primary,
+.card-header.bg-info,
+.card-header.bg-dark {
+  background-color: var(--scand-bg-header) !important;
+  color: var(--scand-text-light);
+  border-bottom-color: var(--scand-bg-header);
+}
+
+/* ========================
+   BUTTON OVERRIDES
+   ======================== */
+
+.btn-primary {
+  background-color: var(--scand-primary);
+  border-color: var(--scand-primary);
+}
+
+.btn-primary:hover,
+.btn-primary:focus {
+  background-color: var(--scand-primary-hover);
+  border-color: var(--scand-primary-hover);
+}
+
+.btn-outline-primary {
+  color: var(--scand-primary);
+  border-color: var(--scand-primary);
+}
+
+.btn-outline-primary:hover {
+  background-color: var(--scand-primary);
+  border-color: var(--scand-primary);
+  color: var(--scand-text-light);
+}
+
+.btn-danger {
+  background-color: var(--scand-danger);
+  border-color: var(--scand-danger);
+}
+
+.btn-danger:hover,
+.btn-danger:focus {
+  background-color: var(--scand-danger-hover);
+  border-color: var(--scand-danger-hover);
+}
+
+.btn-warning {
+  background-color: var(--scand-warning);
+  border-color: var(--scand-warning);
+  color: var(--scand-text-light);
+}
+
+.btn-warning:hover,
+.btn-warning:focus {
+  background-color: var(--scand-warning-hover);
+  border-color: var(--scand-warning-hover);
+  color: var(--scand-text-light);
+}
+
+.btn-success {
+  background-color: var(--scand-success);
+  border-color: var(--scand-success);
+}
+
+.btn-success:hover,
+.btn-success:focus {
+  background-color: var(--scand-success-hover);
+  border-color: var(--scand-success-hover);
+}
+
+.btn-info {
+  background-color: var(--scand-info);
+  border-color: var(--scand-info);
+  color: var(--scand-text-light);
+}
+
+.btn-info:hover,
+.btn-info:focus {
+  background-color: var(--scand-info-hover);
+  border-color: var(--scand-info-hover);
+  color: var(--scand-text-light);
+}
+
+.btn-secondary {
+  background-color: var(--scand-muted);
+  border-color: var(--scand-muted);
+}
+
+.btn-secondary:hover,
+.btn-secondary:focus {
+  background-color: var(--scand-muted-hover);
+  border-color: var(--scand-muted-hover);
+}
+
+/* ========================
+   DISABLED BUTTON STATES
+   ======================== */
+
+.btn:disabled,
+.btn.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary:disabled,
+.btn-primary.disabled {
+  background-color: var(--scand-primary);
+  border-color: var(--scand-primary);
+  opacity: 0.5;
+}
+
+.btn-outline-primary:disabled,
+.btn-outline-primary.disabled {
+  color: var(--scand-primary);
+  border-color: var(--scand-primary);
+  opacity: 0.5;
+}
+
+.btn-success:disabled,
+.btn-success.disabled {
+  background-color: var(--scand-success);
+  border-color: var(--scand-success);
+  opacity: 0.5;
+}
+
+.btn-outline-success:disabled,
+.btn-outline-success.disabled {
+  color: var(--scand-success);
+  border-color: var(--scand-success);
+  opacity: 0.5;
+}
+
+/* ========================
+   BADGE OVERRIDES
+   ======================== */
+
+/* Primary badge */
+.badge.bg-primary {
+  background-color: var(--scand-primary) !important;
+}
+
+/* Danger/Critical badge */
+.badge.bg-danger {
+  background-color: var(--scand-danger) !important;
+}
+
+/* Warning/High badge */
+.badge.bg-warning {
+  background-color: var(--scand-warning) !important;
+  color: var(--scand-text-light) !important;
+}
+
+/* Success badge */
+.badge.bg-success {
+  background-color: var(--scand-success) !important;
+}
+
+/* Info/Medium badge */
+.badge.bg-info {
+  background-color: var(--scand-info) !important;
+  color: var(--scand-text-light) !important;
+}
+
+/* Secondary badge */
+.badge.bg-secondary {
+  background-color: var(--scand-muted) !important;
+}
+
+/* Light badge (used for counts) */
+.badge.bg-light {
+  background-color: var(--scand-muted-bg) !important;
+  color: var(--scand-text-primary) !important;
+}
+
+/* ========================
+   SCANDINAVIAN SEVERITY BADGES
+   (Muted mint/sage/seafoam with colored text on light backgrounds)
+   ======================== */
+
+.badge.scand-critical {
+  background-color: var(--scand-danger-bg) !important;
+  color: var(--scand-danger) !important;
+  border: 1px solid var(--scand-danger-border);
+}
+
+.badge.scand-high {
+  background-color: var(--scand-warning-bg) !important;
+  color: var(--scand-warning) !important;
+  border: 1px solid var(--scand-warning-border);
+}
+
+.badge.scand-medium {
+  background-color: var(--scand-info-bg) !important;
+  color: var(--scand-info) !important;
+  border: 1px solid var(--scand-info-border);
+}
+
+.badge.scand-low {
+  background-color: var(--scand-muted-bg) !important;
+  color: var(--scand-muted) !important;
+  border: 1px solid var(--scand-muted-border);
+}
+
+.badge.scand-success {
+  background-color: var(--scand-success-bg) !important;
+  color: var(--scand-success) !important;
+  border: 1px solid var(--scand-success-border);
+}
+
+.badge.scand-pending {
+  background-color: var(--scand-warning-bg) !important;
+  color: var(--scand-warning) !important;
+  border: 1px solid var(--scand-warning-border);
+}
+
+.badge.scand-neutral {
+  background-color: var(--scand-muted-bg) !important;
+  color: var(--scand-muted) !important;
+  border: 1px solid var(--scand-muted-border);
+}
+
+/* ========================
+   TABLE OVERRIDES
+   ======================== */
+
+.table {
+  --bs-table-bg: var(--scand-bg-card);
+  --bs-table-striped-bg: var(--scand-table-stripe-bg);
+  --bs-table-hover-bg: var(--scand-table-hover-bg);
+  --bs-table-border-color: var(--scand-border);
+}
+
+.table-light {
+  --bs-table-bg: var(--scand-bg-sidebar);
+  --bs-table-border-color: var(--scand-border);
+}
+
+/* Table header with dark teal-gray background */
+.table-dark,
+thead.table-dark {
+  --bs-table-bg: var(--scand-table-header-bg);
+  --bs-table-color: var(--scand-text-light);
+}
+
+/* ========================
+   ALERT OVERRIDES
+   ======================== */
+
+.alert-primary {
+  background-color: var(--scand-primary-light);
+  border-color: var(--scand-primary);
+  color: var(--scand-primary-hover);
+}
+
+.alert-danger {
+  background-color: var(--scand-danger-bg);
+  border-color: var(--scand-danger-border);
+  color: var(--scand-danger);
+}
+
+.alert-warning {
+  background-color: var(--scand-warning-bg);
+  border-color: var(--scand-warning-border);
+  color: var(--scand-warning);
+}
+
+.alert-success {
+  background-color: var(--scand-success-bg);
+  border-color: var(--scand-success-border);
+  color: var(--scand-success);
+}
+
+.alert-info {
+  background-color: var(--scand-info-bg);
+  border-color: var(--scand-info-border);
+  color: var(--scand-info);
+}
+
+/* ========================
+   NAVIGATION OVERRIDES
+   ======================== */
+
+.navbar-light {
+  background-color: var(--scand-bg-page) !important;
+  border-bottom: 1px solid var(--scand-border);
+}
+
+.navbar-light .navbar-brand,
+.navbar-light .nav-link {
+  color: var(--scand-text-primary);
+}
+
+.navbar-light .nav-link:hover,
+.navbar-light .nav-link:focus {
+  color: var(--scand-primary);
+}
+
+/* ========================
+   DROPDOWN OVERRIDES
+   ======================== */
+
+.dropdown-menu {
+  border-color: var(--scand-border);
+  box-shadow: var(--scand-card-shadow);
+}
+
+.dropdown-item:hover,
+.dropdown-item:focus {
+  background-color: var(--scand-bg-hover);
+}
+
+/* ========================
+   FORM CONTROL OVERRIDES
+   ======================== */
+
+.form-control,
+.form-select {
+  border-color: var(--scand-border);
+}
+
+.form-control:focus,
+.form-select:focus {
+  border-color: var(--scand-primary);
+  box-shadow: 0 0 0 0.2rem rgba(74, 124, 111, 0.25);
+}
+
+/* ========================
+   PAGINATION OVERRIDES
+   ======================== */
+
+.page-link {
+  color: var(--scand-primary);
+  border-color: var(--scand-border);
+}
+
+.page-link:hover {
+  color: var(--scand-primary-hover);
+  background-color: var(--scand-bg-hover);
+}
+
+.page-item.active .page-link {
+  background-color: var(--scand-primary);
+  border-color: var(--scand-primary);
+}
+
+/* ========================
+   SPINNER OVERRIDES
+   ======================== */
+
+.spinner-border.text-primary {
+  color: var(--scand-primary) !important;
+}
+
+/* ========================
+   MODAL OVERRIDES
+   ======================== */
+
+.modal-header {
+  background-color: var(--scand-bg-sidebar);
+  border-bottom-color: var(--scand-border);
+}
+
+.modal-header.bg-primary,
+.modal-header.bg-success,
+.modal-header.bg-danger,
+.modal-header.bg-warning,
+.modal-header.bg-info {
+  color: var(--scand-text-light);
+}
+
+.modal-header.bg-primary {
+  background-color: var(--scand-primary) !important;
+}
+
+.modal-header.bg-success {
+  background-color: var(--scand-success) !important;
+}
+
+.modal-header.bg-danger {
+  background-color: var(--scand-danger) !important;
+}
+
+.modal-header.bg-warning {
+  background-color: var(--scand-warning) !important;
+}
+
+.modal-header.bg-info {
+  background-color: var(--scand-info) !important;
+}
+
+.modal-footer {
+  border-top-color: var(--scand-border);
+}
+
+/* ========================
+   TEXT UTILITIES
+   ======================== */
+
+.text-muted {
+  color: var(--scand-text-secondary) !important;
+}
+
+.text-primary {
+  color: var(--scand-primary) !important;
+}
+
+.text-danger {
+  color: var(--scand-danger) !important;
+}
+
+.text-warning {
+  color: var(--scand-warning) !important;
+}
+
+.text-success {
+  color: var(--scand-success) !important;
+}
+
+.text-info {
+  color: var(--scand-info) !important;
+}
+
+/* ========================
+   BACKGROUND UTILITIES
+   ======================== */
+
+.bg-light {
+  background-color: var(--scand-bg-sidebar) !important;
+}
+
+.bg-dark {
+  background-color: var(--scand-bg-header) !important;
+}

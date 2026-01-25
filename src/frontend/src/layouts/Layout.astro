@@ -3,8 +3,11 @@ import TopNav from '../components/TopNav.astro';
 import Footer from '../components/Footer.astro';
 import Sidebar from '../components/Sidebar.tsx';
 import Header from '../components/Header.tsx'; // Import Header component
-import 'bootstrap/dist/css/bootstrap.min.css'; 
+import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap-icons/font/bootstrap-icons.css'; // Import Bootstrap Icons CSS
+// Scandinavian Design System
+import '../styles/theme.css';
+import '../styles/bootstrap-overrides.css';
 
 interface Props {
     title?: string;

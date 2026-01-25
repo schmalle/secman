@@ -184,6 +184,7 @@ class ReleaseService(
             Release.ReleaseStatus.DRAFT -> newStatus == Release.ReleaseStatus.ACTIVE
             Release.ReleaseStatus.ACTIVE -> false // Cannot manually change ACTIVE status
             Release.ReleaseStatus.LEGACY -> false // No transitions from LEGACY
+            Release.ReleaseStatus.PUBLISHED -> false // Cannot manually change PUBLISHED status
         }
 
         if (!validTransition) {

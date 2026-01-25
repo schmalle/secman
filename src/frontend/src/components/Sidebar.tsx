@@ -523,13 +523,15 @@ const Sidebar = () => {
 
 export default Sidebar;
 
-// Basic styling (can be moved to a CSS file)
+// Scandinavian Design System styling
 const styles = `
 #sidebar {
     min-width: 250px;
     max-width: 250px;
     min-height: 100vh;
     transition: all 0.3s;
+    background-color: var(--scand-bg-sidebar);
+    border-right-color: var(--scand-border);
 }
 
 #sidebar.active {
@@ -537,19 +539,19 @@ const styles = `
 }
 
 .hover-bg-secondary:hover {
-    background-color: #e9ecef; /* Bootstrap secondary background color */
+    background-color: var(--scand-sidebar-hover-bg);
 }
 
 .sidebar-section-header {
     font-size: 0.75rem;
     font-weight: 600;
     text-transform: uppercase;
-    color: #6c757d;
+    color: var(--scand-text-secondary);
     padding: 12px 8px 6px 8px;
     margin-top: 8px;
     letter-spacing: 0.5px;
-    background-color: #f8f9fa;
-    border-left: 3px solid #0d6efd;
+    background-color: var(--scand-sidebar-section-bg);
+    border-left: 3px solid var(--scand-sidebar-section-border);
 }
 
 .sidebar-section-header:first-child {
@@ -560,29 +562,29 @@ const styles = `
     font-size: 0.75rem;
     font-weight: 600;
     text-transform: uppercase;
-    color: #6c757d;
+    color: var(--scand-text-secondary);
     padding: 12px 8px 8px 8px;
     margin-top: 8px;
     letter-spacing: 0.5px;
-    background-color: #f8f9fa;
-    border-left: 3px solid #0d6efd;
-    transition: all 0.2s ease;
+    background-color: var(--scand-sidebar-section-bg);
+    border-left: 3px solid var(--scand-sidebar-section-border);
+    transition: all var(--scand-transition-normal);
 }
 
 .sidebar-section-header-clickable:hover {
-    background-color: #e9ecef;
-    color: #495057;
+    background-color: var(--scand-sidebar-hover-bg);
+    color: var(--scand-text-primary);
 }
 
 .admin-subsection-header {
     font-size: 0.7rem;
     font-weight: 500;
     text-transform: uppercase;
-    color: #868e96;
+    color: var(--scand-text-secondary);
     padding: 8px 8px 4px 8px;
     margin-top: 12px;
     letter-spacing: 0.3px;
-    border-bottom: 1px solid #dee2e6;
+    border-bottom: 1px solid var(--scand-border);
 }
 `;
 
