@@ -263,7 +263,7 @@ curl -X POST http://localhost:8080/api/mcp/admin/api-keys \
 
 | Permission | Description | Tools Enabled |
 |------------|-------------|---------------|
-| `REQUIREMENTS_READ` | Read security requirements | `get_requirements`, `export_requirements` |
+| `REQUIREMENTS_READ` | Read security requirements and releases | `get_requirements`, `export_requirements`, `list_releases`, `get_release`, `create_release`, `delete_release`, `set_release_status` (release tools require ADMIN/RELEASE_MANAGER role and delegation) |
 | `REQUIREMENTS_WRITE` | Create/modify requirements | `add_requirement` |
 | `REQUIREMENTS_DELETE` | Delete requirements | `delete_all_requirements` |
 | `ASSETS_READ` | Read asset inventory | `get_assets`, `get_all_assets_detail`, `get_asset_profile`, `get_asset_complete_profile` |
@@ -637,6 +637,61 @@ List user mappings with pagination and filtering. **Requires ADMIN role and User
 - `totalElements`: Total number of mappings
 - `totalPages`: Total number of pages
 
+### Release Management
+
+#### `list_releases`
+List all releases with optional status filtering. **Requires ADMIN or RELEASE_MANAGER role and User Delegation.**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `status` | enum | No | Filter by status: `DRAFT`, `ACTIVE`, `LEGACY` |
+
+Returns list of releases with version, name, status, description, and metadata.
+
+#### `get_release`
+Get details of a specific release including requirement snapshots. **Requires ADMIN or RELEASE_MANAGER role and User Delegation.**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `releaseId` | number | Yes | ID of the release to retrieve |
+| `includeRequirements` | boolean | No | Include snapshotted requirements (default: false) |
+
+Returns release metadata and optionally the full list of requirement snapshots captured at release time.
+
+#### `create_release`
+Create a new release with requirement snapshots. **Requires ADMIN or RELEASE_MANAGER role and User Delegation.**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `version` | string | Yes | Semantic version (MAJOR.MINOR.PATCH, e.g., "1.0.0") |
+| `name` | string | Yes | Human-readable release name |
+| `description` | string | No | Detailed description of the release |
+
+Creates a new release in DRAFT status and snapshots all current requirements. Returns the created release with snapshot count.
+
+#### `delete_release`
+Delete a release and its requirement snapshots. **Requires ADMIN or RELEASE_MANAGER role and User Delegation.**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `releaseId` | number | Yes | ID of the release to delete |
+
+**Note:** ACTIVE releases cannot be deleted. Set another release as active first, or wait until it becomes LEGACY.
+
+#### `set_release_status`
+Set a release to ACTIVE status. **Requires ADMIN or RELEASE_MANAGER role and User Delegation.**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `releaseId` | number | Yes | ID of the release to activate |
+| `status` | enum | Yes | Must be `ACTIVE` |
+
+**Status Workflow:**
+- Only DRAFT releases can be manually set to ACTIVE
+- When a release becomes ACTIVE, any previously ACTIVE release automatically becomes LEGACY
+- Only one release can be ACTIVE at a time
+- LEGACY releases cannot be transitioned to other states
+
 ---
 
 ## Authentication & Security
@@ -720,6 +775,16 @@ All MCP operations are logged with:
 - "Validate mappings before import" → `import_user_mappings` with `dryRun: true`
 - "List all user mappings" → `list_user_mappings`
 - "Find mappings for user@company.com" → `list_user_mappings` with `email: "user@company.com"`
+
+**Releases:**
+- "List all releases" → `list_releases`
+- "Show only active releases" → `list_releases` with `status: "ACTIVE"`
+- "Show draft releases" → `list_releases` with `status: "DRAFT"`
+- "Get release details" → `get_release` with `releaseId: 1`
+- "Get release with requirements" → `get_release` with `releaseId: 1, includeRequirements: true`
+- "Create a new release version 2.0.0" → `create_release` with `version: "2.0.0", name: "Q1 2026 Release"`
+- "Make release 5 active" → `set_release_status` with `releaseId: 5, status: "ACTIVE"`
+- "Delete draft release 3" → `delete_release` with `releaseId: 3`
 
 ### Programmatic Access
 
