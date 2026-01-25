@@ -49,6 +49,11 @@ const ReleaseList: React.FC<ReleaseListProps> = () => {
     const [releaseToDelete, setReleaseToDelete] = useState<Release | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
 
+    // Set Active modal state
+    const [showActivateModal, setShowActivateModal] = useState(false);
+    const [releaseToActivate, setReleaseToActivate] = useState<Release | null>(null);
+    const [isActivating, setIsActivating] = useState(false);
+
     // Toast state
     const [toast, setToast] = useState<{
         show: boolean;
@@ -214,6 +219,60 @@ const ReleaseList: React.FC<ReleaseListProps> = () => {
         }
     }
 
+    // Handle Set Active button click
+    function handleActivateClick(release: Release, e: React.MouseEvent) {
+        e.stopPropagation(); // Prevent row click navigation
+        setReleaseToActivate(release);
+        setShowActivateModal(true);
+    }
+
+    // Handle Set Active confirmation
+    async function handleActivateConfirm() {
+        if (!releaseToActivate) return;
+
+        setIsActivating(true);
+        try {
+            await releaseService.updateStatus(releaseToActivate.id, 'ACTIVE');
+
+            setToast({
+                show: true,
+                message: `Release v${releaseToActivate.version} is now active`,
+                type: 'success',
+            });
+
+            // Close modal
+            setShowActivateModal(false);
+            setReleaseToActivate(null);
+
+            // Reload releases
+            await loadReleases();
+        } catch (err) {
+            const errorMessage = err instanceof Error
+                ? err.message
+                : 'Failed to set release as active. Please try again.';
+
+            setToast({
+                show: true,
+                message: errorMessage,
+                type: 'error',
+            });
+
+            // Close modal on error too
+            setShowActivateModal(false);
+            setReleaseToActivate(null);
+        } finally {
+            setIsActivating(false);
+        }
+    }
+
+    // Handle Set Active modal close
+    function handleActivateModalClose() {
+        if (!isActivating) {
+            setShowActivateModal(false);
+            setReleaseToActivate(null);
+        }
+    }
+
     // Navigate to detail page
     function handleReleaseClick(releaseId: number) {
         window.location.href = `/releases/${releaseId}`;
@@ -224,9 +283,9 @@ const ReleaseList: React.FC<ReleaseListProps> = () => {
         switch (status) {
             case 'DRAFT':
                 return 'bg-warning text-dark';
-            case 'PUBLISHED':
+            case 'ACTIVE':
                 return 'bg-success';
-            case 'ARCHIVED':
+            case 'LEGACY':
                 return 'bg-secondary';
             default:
                 return 'bg-secondary';
@@ -338,8 +397,8 @@ const ReleaseList: React.FC<ReleaseListProps> = () => {
                     >
                         <option value="ALL">All Statuses</option>
                         <option value="DRAFT">Draft</option>
-                        <option value="PUBLISHED">Published</option>
-                        <option value="ARCHIVED">Archived</option>
+                        <option value="ACTIVE">Active</option>
+                        <option value="LEGACY">Legacy</option>
                     </select>
                 </div>
                 <div className="col-md-8">
@@ -418,16 +477,28 @@ const ReleaseList: React.FC<ReleaseListProps> = () => {
                                     <span className="badge bg-info">{release.requirementCount}</span>
                                 </td>
                                 <td onClick={(e) => e.stopPropagation()}>
-                                    {canDeleteRelease(release, user, userRoles) && (
-                                        <button
-                                            className="btn btn-sm btn-outline-danger"
-                                            onClick={(e) => handleDeleteClick(release, e)}
-                                            title="Delete release"
-                                            data-testid={`delete-release-${release.id}`}
-                                        >
-                                            <i className="bi bi-trash"></i>
-                                        </button>
-                                    )}
+                                    <div className="d-flex gap-1">
+                                        {release.status === 'DRAFT' && canCreate && (
+                                            <button
+                                                className="btn btn-sm btn-outline-info"
+                                                onClick={(e) => handleActivateClick(release, e)}
+                                                title="Set this release as active"
+                                                data-testid={`activate-release-${release.id}`}
+                                            >
+                                                <i className="bi bi-check-circle"></i>
+                                            </button>
+                                        )}
+                                        {canDeleteRelease(release, user, userRoles) && (
+                                            <button
+                                                className="btn btn-sm btn-outline-danger"
+                                                onClick={(e) => handleDeleteClick(release, e)}
+                                                title="Delete release"
+                                                data-testid={`delete-release-${release.id}`}
+                                            >
+                                                <i className="bi bi-trash"></i>
+                                            </button>
+                                        )}
+                                    </div>
                                 </td>
                             </tr>
                         ))}
@@ -518,6 +589,77 @@ const ReleaseList: React.FC<ReleaseListProps> = () => {
                 onClose={handleDeleteModalClose}
                 onConfirm={handleDeleteConfirm}
             />
+
+            {/* Set Active Release Modal */}
+            {showActivateModal && releaseToActivate && (
+                <>
+                    <div
+                        className="modal-backdrop fade show"
+                        onClick={isActivating ? undefined : handleActivateModalClose}
+                        style={{ zIndex: 1040 }}
+                    ></div>
+                    <div
+                        className="modal fade show d-block"
+                        tabIndex={-1}
+                        role="dialog"
+                        style={{ zIndex: 1050 }}
+                        aria-labelledby="activateModalLabel"
+                        aria-modal="true"
+                    >
+                        <div className="modal-dialog">
+                            <div className="modal-content">
+                                <div className="modal-header">
+                                    <h5 className="modal-title" id="activateModalLabel">
+                                        Set Release as Active
+                                    </h5>
+                                    <button
+                                        type="button"
+                                        className="btn-close"
+                                        aria-label="Close"
+                                        onClick={handleActivateModalClose}
+                                        disabled={isActivating}
+                                    ></button>
+                                </div>
+                                <div className="modal-body">
+                                    <p>
+                                        Are you sure you want to set{' '}
+                                        <strong>{releaseToActivate.version} - {releaseToActivate.name}</strong>{' '}
+                                        as the active release?
+                                    </p>
+                                    <p className="text-muted mb-0">
+                                        This will mark this release as the currently active version.
+                                    </p>
+                                </div>
+                                <div className="modal-footer">
+                                    <button
+                                        type="button"
+                                        className="btn btn-secondary"
+                                        onClick={handleActivateModalClose}
+                                        disabled={isActivating}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="btn btn-info"
+                                        onClick={handleActivateConfirm}
+                                        disabled={isActivating}
+                                    >
+                                        {isActivating ? (
+                                            <>
+                                                <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                                Setting Active...
+                                            </>
+                                        ) : (
+                                            'Confirm Set Active'
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </>
+            )}
 
             {/* Toast Notifications */}
             <Toast

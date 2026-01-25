@@ -172,6 +172,14 @@ const Sidebar = () => {
                                         </a>
                                     </li>
                                 )}
+                                {/* Feature 067: Releases navigation below Requirements */}
+                                {canAccessReleases(userRoles) && (
+                                    <li>
+                                        <a href="/releases" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                            <i className="bi bi-tag me-2"></i> Releases
+                                        </a>
+                                    </li>
+                                )}
                             </ul>
                         )}
                     </li>
@@ -484,20 +492,6 @@ const Sidebar = () => {
                                         <i className="bi bi-radar me-2"></i> Scans
                                     </a>
                                 </li>
-                                {canAccessReleases(userRoles) && (
-                                    <li>
-                                        <a href="/releases" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                            <i className="bi bi-archive me-2"></i> Releases
-                                        </a>
-                                    </li>
-                                )}
-                                {canAccessCompareReleases(userRoles) && (
-                                    <li>
-                                        <a href="/releases/compare" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                            <i className="bi bi-columns-gap me-2"></i> Compare Releases
-                                        </a>
-                                    </li>
-                                )}
 
                                 {/* Monitoring */}
                                 <li className="admin-subsection-header">Monitoring</li>

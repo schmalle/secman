@@ -14,7 +14,7 @@ export interface Release {
     version: string;
     name: string;
     description: string;
-    status: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
+    status: 'DRAFT' | 'ACTIVE' | 'LEGACY';
     releaseDate: string | null;
     createdBy: string;
     createdAt: string;
@@ -155,7 +155,7 @@ export const releaseService = {
      * @param status New status (PUBLISHED or ARCHIVED)
      * @returns Updated release
      */
-    async updateStatus(id: number, status: 'PUBLISHED' | 'ARCHIVED'): Promise<Release> {
+    async updateStatus(id: number, status: 'ACTIVE'): Promise<Release> {
         const response = await authenticatedFetch(`/api/releases/${id}/status`, {
             method: 'PUT',
             headers: {

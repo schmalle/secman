@@ -16,7 +16,7 @@ import jakarta.inject.Inject
 import org.slf4j.LoggerFactory
 
 @Controller("/api/releases")
-@Secured("ADMIN")
+@Secured(SecurityRule.IS_AUTHENTICATED)
 class ReleaseController(
     @Inject private val releaseService: ReleaseService,
     @Inject private val snapshotRepository: RequirementSnapshotRepository
@@ -183,7 +183,11 @@ class ReleaseController(
      * GET /api/releases/{id}/requirements - List snapshots in release
      */
     @Get("/{id}/requirements")
-    fun getReleaseRequirements(@PathVariable id: Long): HttpResponse<*> {
+    fun getReleaseRequirements(
+        @PathVariable id: Long,
+        @QueryValue("page") page: Int?,
+        @QueryValue("pageSize") pageSize: Int?
+    ): HttpResponse<*> {
         logger.debug("Getting requirements for release: $id")
 
         try {
@@ -194,7 +198,29 @@ class ReleaseController(
             val snapshots = snapshotRepository.findByReleaseId(id)
             val responseDtos = snapshots.map { toSnapshotResponse(it) }
 
-            return HttpResponse.ok(responseDtos)
+            // Paginate the response
+            val currentPage = page ?: 1
+            val itemsPerPage = pageSize ?: 50
+            val totalItems = responseDtos.size
+            val totalPages = if (totalItems == 0) 1 else ((totalItems + itemsPerPage - 1) / itemsPerPage)
+
+            val startIndex = (currentPage - 1) * itemsPerPage
+            val endIndex = minOf(startIndex + itemsPerPage, totalItems)
+            val paginatedData = if (startIndex < totalItems) {
+                responseDtos.subList(startIndex, endIndex)
+            } else {
+                emptyList()
+            }
+
+            val paginatedResponse = mapOf(
+                "data" to paginatedData,
+                "currentPage" to currentPage,
+                "totalPages" to totalPages,
+                "totalItems" to totalItems,
+                "pageSize" to itemsPerPage
+            )
+
+            return HttpResponse.ok(paginatedResponse)
         } catch (e: NoSuchElementException) {
             logger.warn("Release not found: $id")
             return HttpResponse.notFound(

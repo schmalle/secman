@@ -34,7 +34,7 @@ data class Release(
     var releaseDate: Instant? = null,
 
     @ManyToOne
-    @JoinColumn(name = "created_by_id")
+    @JoinColumn(name = "created_by")
     var createdBy: User? = null,
 
     @Column(name = "created_at", updatable = false)
@@ -44,7 +44,7 @@ data class Release(
     var updatedAt: Instant? = null
 ) {
     enum class ReleaseStatus {
-        DRAFT, ACTIVE, PUBLISHED, ARCHIVED
+        DRAFT, ACTIVE, LEGACY
     }
 
     @PrePersist

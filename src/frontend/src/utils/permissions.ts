@@ -134,32 +134,37 @@ export function canAccessUseCaseManagement(roles: string[] | undefined): boolean
 
 /**
  * Check if user can access Releases
- * 
+ * Feature: 067-requirement-releases
+ *
  * Rules:
- * - ADMIN only
+ * - All users with requirements access can view releases (FR-011)
+ * - ADMIN, REQ, and SECCHAMPION can access
  */
 export function canAccessReleases(roles: string[] | undefined): boolean {
-  return isAdmin(roles);
+  return hasReqAccess(roles);
 }
 
 /**
  * Check if user can access Compare Releases
- * 
+ * Feature: 067-requirement-releases
+ *
  * Rules:
- * - ADMIN only
+ * - All users with requirements access can view/compare releases (FR-011)
+ * - ADMIN, REQ, and SECCHAMPION can access
  */
 export function canAccessCompareReleases(roles: string[] | undefined): boolean {
-  return isAdmin(roles);
+  return hasReqAccess(roles);
 }
 
 /**
  * Check if user can delete a specific release
- * 
+ *
  * Rules:
- * - ADMIN can delete any release
- * - RELEASE_MANAGER can delete only releases they created
+ * - ACTIVE releases cannot be deleted (must set another release as active first)
+ * - ADMIN can delete any non-ACTIVE release
+ * - RELEASE_MANAGER can delete only releases they created (if not ACTIVE)
  * - USER cannot delete releases
- * 
+ *
  * @param release - The release to check permissions for
  * @param currentUser - The current user object
  * @param currentUserRoles - The current user's roles array
@@ -172,7 +177,12 @@ export function canDeleteRelease(
 ): boolean {
   if (!release || !currentUser) return false;
 
-  // ADMIN can delete any release
+  // ACTIVE releases cannot be deleted
+  if (release.status === 'ACTIVE') {
+    return false;
+  }
+
+  // ADMIN can delete any non-ACTIVE release
   if (isAdmin(currentUserRoles)) {
     return true;
   }
