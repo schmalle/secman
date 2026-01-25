@@ -480,8 +480,9 @@ class McpAuthenticationService(
 
     private fun getAllActiveKeys(): List<McpApiKey> {
         return try {
-            // Get all active keys - we'll need to implement this via findAll and filter
-            apiKeyRepository.findAll().filter { it.isActive }
+            // SECURITY: Use database-level filtering for efficiency and security
+            // Avoids loading all keys into memory and filtering in application code
+            apiKeyRepository.findAllActive()
         } catch (e: Exception) {
             logger.error("Failed to get all active keys", e)
             emptyList()

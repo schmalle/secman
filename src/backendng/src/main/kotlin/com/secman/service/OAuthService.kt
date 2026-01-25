@@ -906,6 +906,7 @@ open class OAuthService(
 
             admins.forEach { admin ->
                 try {
+                    // SECURITY: Escape all user-controlled data to prevent XSS in HTML emails
                     val htmlBody = """
                         <!DOCTYPE html>
                         <html>
@@ -914,16 +915,17 @@ open class OAuthService(
                             <h2 style="color: #0066cc;">New OIDC User Created</h2>
                             <p>A new user has been automatically created via OIDC authentication:</p>
                             <table style="border-collapse: collapse; width: 100%; margin: 20px 0;">
-                                <tr><td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Username:</td><td style="padding: 8px; border: 1px solid #ddd;">${user.username}</td></tr>
-                                <tr><td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Email:</td><td style="padding: 8px; border: 1px solid #ddd;">${user.email}</td></tr>
-                                <tr><td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Roles:</td><td style="padding: 8px; border: 1px solid #ddd;">${user.roles.joinToString(", ")}</td></tr>
-                                <tr><td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Provider:</td><td style="padding: 8px; border: 1px solid #ddd;">$idpName</td></tr>
+                                <tr><td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Username:</td><td style="padding: 8px; border: 1px solid #ddd;">${escapeHtml(user.username)}</td></tr>
+                                <tr><td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Email:</td><td style="padding: 8px; border: 1px solid #ddd;">${escapeHtml(user.email)}</td></tr>
+                                <tr><td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Roles:</td><td style="padding: 8px; border: 1px solid #ddd;">${escapeHtml(user.roles.joinToString(", "))}</td></tr>
+                                <tr><td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">Provider:</td><td style="padding: 8px; border: 1px solid #ddd;">${escapeHtml(idpName)}</td></tr>
                             </table>
                             <p style="color: #666; font-size: 12px;">This is an automated notification from Secman.</p>
                         </body>
                         </html>
                     """.trimIndent()
 
+                    // Subject and plain text don't need HTML escaping, but we use the raw values
                     emailSender.sendEmail(EmailSender.EmailMessage(
                         to = admin.email,
                         subject = "New OIDC User Created - ${user.username}",
@@ -1028,5 +1030,18 @@ open class OAuthService(
     sealed class CallbackResult {
         data class Success(val token: String, val user: UserInfo) : CallbackResult()
         data class Error(val message: String) : CallbackResult()
+    }
+
+    /**
+     * SECURITY: Escape HTML special characters to prevent XSS in email templates.
+     * Always use this function when including user-controlled data in HTML emails.
+     */
+    private fun escapeHtml(text: String): String {
+        return text
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace("\"", "&quot;")
+            .replace("'", "&#39;")
     }
 }
