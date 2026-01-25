@@ -51,7 +51,13 @@ class McpToolRegistry(
     @Inject private val addVulnerabilityTool: AddVulnerabilityTool,
     // Feature 064: MCP and CLI User Mapping Upload
     @Inject private val importUserMappingsTool: ImportUserMappingsTool,
-    @Inject private val listUserMappingsTool: ListUserMappingsTool
+    @Inject private val listUserMappingsTool: ListUserMappingsTool,
+    // Feature: MCP Release Management
+    @Inject private val listReleasesTool: ListReleasesTool,
+    @Inject private val createReleaseTool: CreateReleaseTool,
+    @Inject private val deleteReleaseTool: DeleteReleaseTool,
+    @Inject private val setReleaseStatusTool: SetReleaseStatusTool,
+    @Inject private val getReleaseTool: GetReleaseTool
 ) {
     private val logger = LoggerFactory.getLogger(McpToolRegistry::class.java)
 
@@ -99,7 +105,13 @@ class McpToolRegistry(
             addVulnerabilityTool,
             // Feature 064: MCP and CLI User Mapping Upload
             importUserMappingsTool,
-            listUserMappingsTool
+            listUserMappingsTool,
+            // Feature: MCP Release Management
+            listReleasesTool,
+            createReleaseTool,
+            deleteReleaseTool,
+            setReleaseStatusTool,
+            getReleaseTool
         ).forEach { tool ->
             toolMap[tool.name] = tool
             logger.debug("Registered MCP tool: {}", tool.name)
@@ -295,6 +307,14 @@ class McpToolRegistry(
             }
             "list_user_mappings" -> {
                 permissions.contains(McpPermission.USER_ACTIVITY) // ADMIN role checked in tool execute()
+            }
+
+            // Feature: MCP Release Management (ADMIN or RELEASE_MANAGER via User Delegation)
+            "list_releases", "get_release" -> {
+                permissions.contains(McpPermission.REQUIREMENTS_READ) // ADMIN/RELEASE_MANAGER role checked in tool execute()
+            }
+            "create_release", "delete_release", "set_release_status" -> {
+                permissions.contains(McpPermission.REQUIREMENTS_READ) // ADMIN/RELEASE_MANAGER role checked in tool execute()
             }
 
             else -> false

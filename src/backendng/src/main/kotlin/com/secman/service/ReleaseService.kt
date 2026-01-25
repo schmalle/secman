@@ -39,6 +39,29 @@ class ReleaseService(
         description: String?,
         authentication: Authentication
     ): Release {
+        val username = authentication.name
+        val user = userRepository.findByUsername(username)
+            .orElseThrow { IllegalStateException("User not found: $username") }
+        return createReleaseForUser(version, name, description, user.id!!)
+    }
+
+    /**
+     * Create a new release with requirement snapshots (for MCP and programmatic usage)
+     *
+     * @param version Semantic version (MAJOR.MINOR.PATCH)
+     * @param name Human-readable release name
+     * @param description Optional detailed description
+     * @param userId ID of the user creating the release
+     * @return Created release with snapshots
+     * @throws IllegalArgumentException if version is invalid or already exists
+     * @throws NoSuchElementException if user not found
+     */
+    fun createReleaseForUser(
+        version: String,
+        name: String,
+        description: String?,
+        userId: Long
+    ): Release {
         logger.info("Creating release version=$version name=$name")
 
         // 1. Validate version format
@@ -53,10 +76,9 @@ class ReleaseService(
             throw IllegalArgumentException("Release with version $version already exists")
         }
 
-        // 3. Look up the authenticated user
-        val username = authentication.name
-        val user = userRepository.findByUsername(username)
-            .orElseThrow { IllegalStateException("User not found: $username") }
+        // 3. Look up the user
+        val user = userRepository.findById(userId)
+            .orElseThrow { NoSuchElementException("User not found with ID: $userId") }
         logger.debug("Creating release for user: ${user.username}")
 
         // 4. Create Release entity
