@@ -12,6 +12,7 @@ import io.micronaut.http.sse.Event
 import io.micronaut.security.annotation.Secured
 import io.micronaut.security.authentication.Authentication
 import org.reactivestreams.Publisher
+import org.slf4j.LoggerFactory
 import reactor.core.publisher.Flux
 import java.time.Duration
 
@@ -33,6 +34,7 @@ import java.time.Duration
 class MaterializedViewRefreshController(
     private val refreshService: MaterializedViewRefreshService
 ) {
+    private val logger = LoggerFactory.getLogger(MaterializedViewRefreshController::class.java)
 
     /**
      * POST /api/materialized-view-refresh/trigger
@@ -85,12 +87,10 @@ class MaterializedViewRefreshController(
                     .name("progress")
             }
             .doOnSubscribe {
-                // Log subscription
-                println("Client subscribed to refresh progress stream")
+                logger.debug("Client subscribed to refresh progress stream")
             }
             .doOnCancel {
-                // Log unsubscription
-                println("Client unsubscribed from refresh progress stream")
+                logger.debug("Client unsubscribed from refresh progress stream")
             }
     }
 

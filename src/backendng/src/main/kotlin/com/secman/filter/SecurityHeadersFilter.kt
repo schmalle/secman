@@ -11,17 +11,33 @@ import reactor.core.publisher.Flux
 import org.slf4j.LoggerFactory
 
 /**
- * Security headers filter to add comprehensive security headers to all responses
+ * Security headers filter to add comprehensive security headers to all responses.
+ *
+ * SECURITY DOCUMENTATION:
+ *
+ * Content Security Policy (CSP) Configuration:
+ * - 'unsafe-inline' is REQUIRED for Astro's hydration scripts and React islands
+ * - Full nonce-based CSP migration requires frontend changes:
+ *   1. Backend: Generate per-request nonce and pass to templates
+ *   2. Frontend: Add nonce="..." to all <script> and <style> tags
+ *   3. Update Astro config to support nonce injection
+ * - Current mitigation: strict-dynamic is NOT used because it requires nonces
+ *
+ * To migrate to nonce-based CSP (recommended for higher security):
+ * 1. Create NonceProvider singleton that generates cryptographic nonces
+ * 2. Add nonce to response attributes in this filter
+ * 3. Update Astro/React to read nonce from response context
+ * 4. Replace 'unsafe-inline' with 'nonce-{value}'
  */
 @Filter("/**")
 class SecurityHeadersFilter : HttpServerFilter {
-    
+
     private val logger = LoggerFactory.getLogger(SecurityHeadersFilter::class.java)
-    
+
     companion object {
         // Content Security Policy - Hardened policy to prevent XSS
-        // Note: 'unsafe-inline' kept for scripts due to Astro's inline script requirements
-        // TODO: Migrate to nonce-based CSP for stricter security
+        // SECURITY: 'unsafe-inline' is required for Astro framework compatibility
+        // See class documentation for nonce-based CSP migration plan
         private const val CSP_POLICY = "default-src 'self'; " +
             "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; " +  // Removed unsafe-eval
             "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; " +
@@ -33,8 +49,8 @@ class SecurityHeadersFilter : HttpServerFilter {
             "base-uri 'self'; " +
             "object-src 'none'; " +
             "upgrade-insecure-requests"
-        
-        // Permissions Policy (formerly Feature Policy)
+
+        // Permissions Policy (formerly Feature Policy) - disable all risky APIs
         private const val PERMISSIONS_POLICY = "geolocation=(), " +
             "microphone=(), " +
             "camera=(), " +
@@ -43,6 +59,11 @@ class SecurityHeadersFilter : HttpServerFilter {
             "magnetometer=(), " +
             "gyroscope=(), " +
             "accelerometer=()"
+
+        // Cross-Origin policies for additional isolation
+        private const val CROSS_ORIGIN_EMBEDDER_POLICY = "require-corp"
+        private const val CROSS_ORIGIN_OPENER_POLICY = "same-origin"
+        private const val CROSS_ORIGIN_RESOURCE_POLICY = "same-origin"
     }
     
     override fun doFilter(request: HttpRequest<*>, chain: ServerFilterChain): Publisher<MutableHttpResponse<*>> {
@@ -68,9 +89,14 @@ class SecurityHeadersFilter : HttpServerFilter {
         
         // Content Security Policy
         response.header("Content-Security-Policy", CSP_POLICY)
-        
+
         // Permissions Policy
         response.header("Permissions-Policy", PERMISSIONS_POLICY)
+
+        // Cross-Origin Isolation headers for defense-in-depth
+        // These headers prevent various cross-origin attacks
+        response.header("Cross-Origin-Opener-Policy", CROSS_ORIGIN_OPENER_POLICY)
+        response.header("Cross-Origin-Resource-Policy", CROSS_ORIGIN_RESOURCE_POLICY)
         
         // Strict Transport Security (HSTS) - only for HTTPS
         if (request.uri.scheme == "https") {

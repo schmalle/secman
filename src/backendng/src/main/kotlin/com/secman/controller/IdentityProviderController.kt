@@ -15,7 +15,7 @@ import org.slf4j.LoggerFactory
 import java.time.LocalDateTime
 
 @Controller("/api/identity-providers")
-@Secured(SecurityRule.IS_AUTHENTICATED)
+@Secured("ADMIN")  // SECURITY: Restrict all IDP management to ADMIN role
 @ExecuteOn(TaskExecutors.BLOCKING)
 open class IdentityProviderController(
     private val identityProviderRepository: IdentityProviderRepository,
@@ -123,7 +123,7 @@ open class IdentityProviderController(
      * Get all identity providers
      */
     @Get
-    @Secured(SecurityRule.IS_AUTHENTICATED)
+    @Secured("ADMIN")
     open fun getAllProviders(): HttpResponse<*> {
         return try {
             val providers = identityProviderRepository.findAll().toList()
@@ -156,7 +156,7 @@ open class IdentityProviderController(
      * Get identity provider by ID
      */
     @Get("/{id}")
-    @Secured(SecurityRule.IS_AUTHENTICATED)
+    @Secured("ADMIN")
     open fun getProvider(@PathVariable id: Long): HttpResponse<*> {
         return try {
             val providerOpt = identityProviderRepository.findById(id)
@@ -176,7 +176,7 @@ open class IdentityProviderController(
      */
     @Post
     @Transactional
-    @Secured(SecurityRule.IS_AUTHENTICATED)
+    @Secured("ADMIN")
     open fun createProvider(@Body request: IdentityProviderCreateRequest): HttpResponse<*> {
         return try {
             // Check if name already exists
@@ -246,7 +246,7 @@ open class IdentityProviderController(
      */
     @Put("/{id}")
     @Transactional
-    @Secured(SecurityRule.IS_AUTHENTICATED)
+    @Secured("ADMIN")
     open fun updateProvider(@PathVariable id: Long, @Body request: IdentityProviderUpdateRequest): HttpResponse<*> {
         return try {
             val providerOpt = identityProviderRepository.findById(id)
@@ -321,7 +321,7 @@ open class IdentityProviderController(
      */
     @Delete("/{id}")
     @Transactional
-    @Secured(SecurityRule.IS_AUTHENTICATED)
+    @Secured("ADMIN")
     open fun deleteProvider(@PathVariable id: Long): HttpResponse<*> {
         return try {
             val providerOpt = identityProviderRepository.findById(id)
@@ -343,7 +343,7 @@ open class IdentityProviderController(
      * Test identity provider configuration
      */
     @Post("/{id}/test")
-    @Secured(SecurityRule.IS_AUTHENTICATED)
+    @Secured("ADMIN")
     open fun testProvider(@PathVariable id: Long): HttpResponse<*> {
         return try {
             val providerOpt = identityProviderRepository.findById(id)

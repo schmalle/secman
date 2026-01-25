@@ -44,6 +44,14 @@ interface McpApiKeyRepository : JpaRepository<McpApiKey, Long> {
     """)
     fun findValidKeyById(keyId: String, now: LocalDateTime): Optional<McpApiKey>
 
+    /**
+     * Find all active API keys across all users.
+     * SECURITY: Used for efficient authentication lookup instead of loading all keys and filtering in memory.
+     * Performs database-level filtering for better performance and security.
+     */
+    @Query("SELECT ak FROM McpApiKey ak WHERE ak.isActive = true")
+    fun findAllActive(): List<McpApiKey>
+
     // ===== USER MANAGEMENT QUERIES =====
 
     /**
