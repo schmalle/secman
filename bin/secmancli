@@ -1,4 +1,4 @@
 #!/bin/bash
-# secman - CLI wrapper for secman security management tool
+# secman - CLI wrapper for secman security management tool using 1Password
 
 op run --env-file ./secman.env -- ./bin/secmanclisupport

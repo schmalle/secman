@@ -1,0 +1,9 @@
+#!/bin/bash
+# secman - CLI wrapper for secman security management tool
+
+FALCON_CLIENT_ID=
+FALCON_CLIENT_SECRET=
+FALCON_CLOUD_REGION=
+SECMAN_USERNAME=
+SECMAN_PASSWORD=
+./bin/secmanclisupport
