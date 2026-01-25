@@ -93,6 +93,7 @@ class ReleaseService(
      *
      * @param releaseId ID of release to delete
      * @throws NoSuchElementException if release not found
+     * @throws IllegalStateException if release is ACTIVE
      */
     fun deleteRelease(releaseId: Long) {
         logger.info("Deleting release ID=$releaseId")
@@ -100,8 +101,18 @@ class ReleaseService(
         val release = releaseRepository.findById(releaseId)
             .orElseThrow { NoSuchElementException("Release with ID $releaseId not found") }
 
+        // Prevent deletion of ACTIVE releases
+        if (release.status == Release.ReleaseStatus.ACTIVE) {
+            throw IllegalStateException("Cannot delete an ACTIVE release. Set another release as active first.")
+        }
+
+        // Explicitly delete snapshots first (FK doesn't have ON DELETE CASCADE)
+        snapshotRepository.deleteByReleaseId(releaseId)
+        logger.info("Deleted snapshots for release ID=$releaseId")
+
+        // Now delete the release
         releaseRepository.delete(release)
-        logger.info("Deleted release ID=$releaseId (snapshots cascade deleted)")
+        logger.info("Deleted release ID=$releaseId")
     }
 
     /**
@@ -125,10 +136,13 @@ class ReleaseService(
 
     /**
      * Update release status with workflow validation
-     * Enforces workflow: DRAFT → PUBLISHED → ARCHIVED (one-way only)
+     * Enforces workflow: DRAFT → ACTIVE, ACTIVE → LEGACY (automatic)
+     *
+     * Note: Only one release can be ACTIVE at a time. When setting a release to ACTIVE,
+     * the previously ACTIVE release is automatically set to LEGACY.
      *
      * @param releaseId ID of release to update
-     * @param newStatus New status to transition to
+     * @param newStatus New status to transition to (only ACTIVE is allowed manually)
      * @return Updated release
      * @throws NoSuchElementException if release not found
      * @throws IllegalStateException if transition is not allowed
@@ -142,18 +156,31 @@ class ReleaseService(
         val currentStatus = release.status
 
         // Validate status transition workflow
+        // Only DRAFT → ACTIVE is allowed manually
+        // ACTIVE → LEGACY happens automatically when another release becomes ACTIVE
         val validTransition = when (currentStatus) {
-            Release.ReleaseStatus.DRAFT -> newStatus == Release.ReleaseStatus.PUBLISHED
-            Release.ReleaseStatus.ACTIVE -> newStatus == Release.ReleaseStatus.PUBLISHED || newStatus == Release.ReleaseStatus.ARCHIVED
-            Release.ReleaseStatus.PUBLISHED -> newStatus == Release.ReleaseStatus.ARCHIVED
-            Release.ReleaseStatus.ARCHIVED -> false // No transitions from ARCHIVED
+            Release.ReleaseStatus.DRAFT -> newStatus == Release.ReleaseStatus.ACTIVE
+            Release.ReleaseStatus.ACTIVE -> false // Cannot manually change ACTIVE status
+            Release.ReleaseStatus.LEGACY -> false // No transitions from LEGACY
         }
 
         if (!validTransition) {
             throw IllegalStateException(
                 "Invalid status transition from $currentStatus to $newStatus. " +
-                "Allowed workflow: DRAFT → PUBLISHED → ARCHIVED"
+                "Only DRAFT releases can be set to ACTIVE."
             )
+        }
+
+        // When setting to ACTIVE, move all other ACTIVE releases to LEGACY (only one can be active)
+        if (newStatus == Release.ReleaseStatus.ACTIVE) {
+            val currentlyActiveReleases = releaseRepository.findByStatus(Release.ReleaseStatus.ACTIVE)
+            for (activeRelease in currentlyActiveReleases) {
+                if (activeRelease.id != releaseId) {
+                    logger.info("Moving release ${activeRelease.id} (${activeRelease.version}) to LEGACY")
+                    activeRelease.status = Release.ReleaseStatus.LEGACY
+                    releaseRepository.update(activeRelease)
+                }
+            }
         }
 
         // Update status

@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown'; // Import ReactMarkdown
 import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete } from '../utils/auth';
+import ReleaseIndicator from './ReleaseIndicator';
+import ReleaseSelector from './ReleaseSelector';
 
 interface UseCase {
     id: number;
@@ -28,6 +30,15 @@ interface Requirement {
     updatedAt?: string;
     usecases?: UseCase[]; // Added for associated use cases
     norms?: Norm[]; // Added for associated norms
+}
+
+// Feature 067: Release interface for historical viewing
+interface Release {
+    id: number;
+    version: string;
+    name: string;
+    status: string;
+    requirementCount: number;
 }
 
 export default function RequirementManagement() {
@@ -73,12 +84,28 @@ export default function RequirementManagement() {
         errors: Array<{ batchNumber: number; errorType: string; errorMessage: string }>;
     } | null>(null);
 
+    // Feature 067: Release viewing state
+    const [selectedReleaseId, setSelectedReleaseId] = useState<number | null>(null);
+    const [selectedRelease, setSelectedRelease] = useState<Release | null>(null);
+    const [isViewingHistorical, setIsViewingHistorical] = useState(false);
+
     // Fetch requirements, use cases, and norms from backend
     useEffect(() => {
         fetchRequirements();
         fetchAllUseCases();
         fetchAllNorms();
     }, []);
+
+    // Feature 067: Fetch requirements when release selection changes
+    useEffect(() => {
+        fetchRequirements();
+        if (selectedReleaseId !== null) {
+            fetchReleaseDetails(selectedReleaseId);
+        } else {
+            setSelectedRelease(null);
+            setIsViewingHistorical(false);
+        }
+    }, [selectedReleaseId]);
 
     // Filter requirements when filter changes
     useEffect(() => {
@@ -103,12 +130,58 @@ export default function RequirementManagement() {
 
     const fetchRequirements = async () => {
         try {
-            const response = await authenticatedGet('/api/requirements');
-            const data = await response.json();
-            setRequirements(data);
+            if (selectedReleaseId !== null) {
+                // Feature 067: Fetch historical requirements from release snapshot
+                const response = await authenticatedGet(`/api/releases/${selectedReleaseId}/requirements`);
+                const data = await response.json();
+                // Transform snapshot data to requirement format
+                const snapshots = Array.isArray(data) ? data : (data.data || []);
+                const transformedRequirements: Requirement[] = snapshots.map((snapshot: any) => ({
+                    id: snapshot.originalRequirementId,
+                    internalId: snapshot.internalId,
+                    revision: snapshot.revision,
+                    idRevision: snapshot.idRevision || `${snapshot.internalId}.${snapshot.revision}`,
+                    shortreq: snapshot.shortreq,
+                    details: snapshot.details || '',
+                    language: snapshot.language,
+                    example: snapshot.example,
+                    motivation: snapshot.motivation,
+                    usecases: [],  // Snapshots don't store full objects
+                    norms: []      // Snapshots don't store full objects
+                }));
+                setRequirements(transformedRequirements);
+                setIsViewingHistorical(true);
+            } else {
+                // Fetch current requirements
+                const response = await authenticatedGet('/api/requirements');
+                const data = await response.json();
+                setRequirements(data);
+                setIsViewingHistorical(false);
+            }
         } catch (error) {
             console.error('Error fetching requirements:', error);
         }
+    };
+
+    // Feature 067: Fetch release details for indicator
+    const fetchReleaseDetails = async (releaseId: number) => {
+        try {
+            const response = await authenticatedGet(`/api/releases/${releaseId}`);
+            const data = await response.json();
+            setSelectedRelease(data);
+        } catch (error) {
+            console.error('Error fetching release details:', error);
+        }
+    };
+
+    // Feature 067: Handle release selection change
+    const handleReleaseChange = (releaseId: number | null) => {
+        setSelectedReleaseId(releaseId);
+    };
+
+    // Feature 067: Clear release selection
+    const handleClearRelease = () => {
+        setSelectedReleaseId(null);
     };
 
     const fetchAllUseCases = async () => {
@@ -378,45 +451,81 @@ export default function RequirementManagement() {
 
     return (
         <div className="container-fluid p-4">
+            {/* Feature 067: Release indicator and selector header */}
+            <div className="row mb-3">
+                <div className="col-md-6">
+                    <div className="d-flex align-items-center gap-3">
+                        <label className="form-label mb-0 text-muted small">View Release:</label>
+                        <div style={{ minWidth: '250px' }}>
+                            <ReleaseSelector
+                                onReleaseChange={handleReleaseChange}
+                                selectedReleaseId={selectedReleaseId}
+                                className="release-selector-compact"
+                            />
+                        </div>
+                    </div>
+                </div>
+                <div className="col-md-6 d-flex justify-content-end">
+                    <ReleaseIndicator
+                        selectedRelease={selectedRelease}
+                        onClearRelease={handleClearRelease}
+                    />
+                </div>
+            </div>
+
+            {/* Historical view warning banner */}
+            {isViewingHistorical && (
+                <div className="alert alert-warning d-flex align-items-center mb-3" role="alert">
+                    <i className="bi bi-info-circle me-2"></i>
+                    <div>
+                        <strong>Historical View:</strong> You are viewing requirements from release <strong>v{selectedRelease?.version}</strong>.
+                        Editing is disabled. <a href="#" onClick={(e) => { e.preventDefault(); handleClearRelease(); }} className="alert-link">Return to current requirements</a>.
+                    </div>
+                </div>
+            )}
+
             <div className="row">
                 <div className="col-12">
                     <div className="d-flex justify-content-between align-items-center mb-4">
                         <h2>Requirement Management</h2>
-                        <div className="d-flex gap-2">
-                            <button 
-                                className="btn btn-outline-primary" 
-                                onClick={() => setIsAddingRequirement(!isAddingRequirement)}
-                            >
-                                {isAddingRequirement ? 'Cancel' : 'Add Requirement'}
-                            </button>
-                            {requirements.length > 0 && (
+                        {/* Hide action buttons when viewing historical release */}
+                        {!isViewingHistorical && (
+                            <div className="d-flex gap-2">
                                 <button
-                                    className="btn btn-outline-secondary"
-                                    title="AI-powered mapping to ISO 27001 and IEC 62443"
-                                    onClick={handleMissingMappings}
-                                    disabled={isMappingInProgress}
+                                    className="btn btn-outline-primary"
+                                    onClick={() => setIsAddingRequirement(!isAddingRequirement)}
                                 >
-                                    {isMappingInProgress ? (
-                                        <>
-                                            <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                                            Analyzing...
-                                        </>
-                                    ) : (
-                                        'Missing mapping'
-                                    )}
+                                    {isAddingRequirement ? 'Cancel' : 'Add Requirement'}
                                 </button>
-                            )}
-                            {requirements.length > 0 && (
-                                <button 
-                                    className="btn btn-outline-warning" 
-                                    onClick={() => setShowFirstDeleteModal(true)}
-                                    title="Delete all requirements"
-                                    disabled={isDeleting || isMappingInProgress}
-                                >
-                                    Delete All Requirements
-                                </button>
-                            )}
-                        </div>
+                                {requirements.length > 0 && (
+                                    <button
+                                        className="btn btn-outline-secondary"
+                                        title="AI-powered mapping to ISO 27001 and IEC 62443"
+                                        onClick={handleMissingMappings}
+                                        disabled={isMappingInProgress}
+                                    >
+                                        {isMappingInProgress ? (
+                                            <>
+                                                <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                                Analyzing...
+                                            </>
+                                        ) : (
+                                            'Missing mapping'
+                                        )}
+                                    </button>
+                                )}
+                                {requirements.length > 0 && (
+                                    <button
+                                        className="btn btn-outline-warning"
+                                        onClick={() => setShowFirstDeleteModal(true)}
+                                        title="Delete all requirements"
+                                        disabled={isDeleting || isMappingInProgress}
+                                    >
+                                        Delete All Requirements
+                                    </button>
+                                )}
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
@@ -487,7 +596,7 @@ export default function RequirementManagement() {
                 </div>
             )}
 
-            {isAddingRequirement && (
+            {isAddingRequirement && !isViewingHistorical && (
                 <div className="row mb-4">
                     <div className="col-12">
                         <div className="card">
@@ -788,13 +897,19 @@ export default function RequirementManagement() {
                         <table className="table table-striped">
                             <thead>
                                 <tr>
+                                    <th style={{ width: '100px' }}>ID.Rev</th>
                                     <th>Short Requirement</th>
-                                    <th>Actions</th>
+                                    {!isViewingHistorical && <th style={{ width: '120px' }}>Actions</th>}
                                 </tr>
                             </thead>
                             <tbody>
                                 {filteredRequirements.map(req => (
                                     <tr key={req.id}>
+                                        <td>
+                                            <span className="badge bg-light text-dark font-monospace">
+                                                {req.idRevision || `${req.internalId || '?'}.${req.revision || 1}`}
+                                            </span>
+                                        </td>
                                         <td>
                                             {req.shortreq}
                                             {req.usecases && req.usecases.length > 0 && (
@@ -816,22 +931,24 @@ export default function RequirementManagement() {
                                                 </div>
                                             )}
                                         </td>
-                                        <td>
-                                            <div className="btn-group" role="group">
-                                                <button
-                                                    className="btn btn-sm btn-outline-primary"
-                                                    onClick={() => handleEdit(req)}
-                                                >
-                                                    Edit
-                                                </button>
-                                                <button
-                                                    className="btn btn-sm btn-outline-danger"
-                                                    onClick={() => req.id && handleDelete(req.id)}
-                                                >
-                                                    Delete
-                                                </button>
-                                            </div>
-                                        </td>
+                                        {!isViewingHistorical && (
+                                            <td>
+                                                <div className="btn-group" role="group">
+                                                    <button
+                                                        className="btn btn-sm btn-outline-primary"
+                                                        onClick={() => handleEdit(req)}
+                                                    >
+                                                        Edit
+                                                    </button>
+                                                    <button
+                                                        className="btn btn-sm btn-outline-danger"
+                                                        onClick={() => req.id && handleDelete(req.id)}
+                                                    >
+                                                        Delete
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        )}
                                     </tr>
                                 ))}
                             </tbody>

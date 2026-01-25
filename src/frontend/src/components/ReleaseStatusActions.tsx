@@ -1,12 +1,12 @@
 /**
  * ReleaseStatusActions Component
  *
- * Provides status transition buttons for releases (Publish, Archive)
- * Enforces workflow: DRAFT → PUBLISHED → ARCHIVED
+ * Provides status transition button for releases (Set Active)
+ * Enforces workflow: DRAFT → ACTIVE, ACTIVE → LEGACY (automatic)
  *
  * Features:
- * - Shows "Publish" button for DRAFT releases (ADMIN/RELEASE_MANAGER only)
- * - Shows "Archive" button for PUBLISHED releases (ADMIN/RELEASE_MANAGER only)
+ * - Shows "Set Active" button for DRAFT releases (ADMIN/RELEASE_MANAGER only)
+ * - When a release is set to ACTIVE, the previously ACTIVE release becomes LEGACY
  * - Confirmation modal before transitions
  * - Loading state during API calls
  * - Error handling with user feedback
@@ -23,14 +23,11 @@ interface ReleaseStatusActionsProps {
     onStatusChange: (updatedRelease: Release) => void;
 }
 
-type TransitionType = 'publish' | 'archive' | null;
-
 /**
  * Status transition confirmation modal
  */
 interface StatusTransitionModalProps {
     release: Release;
-    transitionType: TransitionType;
     isOpen: boolean;
     isLoading: boolean;
     onClose: () => void;
@@ -39,7 +36,6 @@ interface StatusTransitionModalProps {
 
 const StatusTransitionModal: React.FC<StatusTransitionModalProps> = ({
     release,
-    transitionType,
     isOpen,
     isLoading,
     onClose,
@@ -59,16 +55,9 @@ const StatusTransitionModal: React.FC<StatusTransitionModalProps> = ({
         return () => document.removeEventListener('keydown', handleKeyDown);
     }, [isOpen, isLoading, onClose]);
 
-    if (!isOpen || !transitionType) {
+    if (!isOpen) {
         return null;
     }
-
-    const isPublish = transitionType === 'publish';
-    const title = isPublish ? 'Publish Release' : 'Archive Release';
-    const newStatus = isPublish ? 'PUBLISHED' : 'ARCHIVED';
-    const message = isPublish
-        ? 'This will make it available for exports and comparisons.'
-        : 'This will mark it as historical.';
 
     return (
         <>
@@ -93,7 +82,7 @@ const StatusTransitionModal: React.FC<StatusTransitionModalProps> = ({
                         {/* Header */}
                         <div className="modal-header">
                             <h5 className="modal-title" id="statusTransitionModalLabel">
-                                {title}
+                                Set Release Active
                             </h5>
                             <button
                                 type="button"
@@ -107,10 +96,13 @@ const StatusTransitionModal: React.FC<StatusTransitionModalProps> = ({
                         {/* Body */}
                         <div className="modal-body">
                             <p>
-                                Are you sure you want to {isPublish ? 'publish' : 'archive'}{' '}
-                                <strong>{release.version} - {release.name}</strong>?
+                                Are you sure you want to set{' '}
+                                <strong>{release.version} - {release.name}</strong> as active?
                             </p>
-                            <p className="text-muted mb-0">{message}</p>
+                            <p className="text-muted mb-0">
+                                This will mark this release as the currently active version.
+                                Any previously active release will be moved to LEGACY status.
+                            </p>
                         </div>
 
                         {/* Footer */}
@@ -125,17 +117,17 @@ const StatusTransitionModal: React.FC<StatusTransitionModalProps> = ({
                             </button>
                             <button
                                 type="button"
-                                className={`btn btn-${isPublish ? 'success' : 'warning'}`}
+                                className="btn btn-success"
                                 onClick={onConfirm}
                                 disabled={isLoading}
                             >
                                 {isLoading ? (
                                     <>
                                         <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                                        {isPublish ? 'Publishing...' : 'Archiving...'}
+                                        Setting Active...
                                     </>
                                 ) : (
-                                    `Confirm ${isPublish ? 'Publish' : 'Archive'}`
+                                    'Confirm Set Active'
                                 )}
                             </button>
                         </div>
@@ -150,40 +142,33 @@ const StatusTransitionModal: React.FC<StatusTransitionModalProps> = ({
  * Main component: Status action buttons with workflow enforcement
  */
 export const ReleaseStatusActions: React.FC<ReleaseStatusActionsProps> = ({ release, onStatusChange }) => {
-    const [transitionType, setTransitionType] = useState<TransitionType>(null);
+    const [showModal, setShowModal] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     // Check user permissions
     const canManageStatus = typeof window !== 'undefined' && hasRole(['ADMIN', 'RELEASE_MANAGER']);
 
-    // Only show actions if user has permission
-    if (!canManageStatus) {
+    // Only show actions if user has permission and release is in DRAFT status
+    if (!canManageStatus || release.status !== 'DRAFT') {
         return null;
     }
-
-    // Determine which button to show based on current status
-    const showPublishButton = release.status === 'DRAFT';
-    const showArchiveButton = release.status === 'PUBLISHED';
 
     /**
      * Handle status transition confirmation
      */
     const handleConfirmTransition = async () => {
-        if (!transitionType) return;
-
         setIsLoading(true);
         setError(null);
 
         try {
-            const newStatus = transitionType === 'publish' ? 'PUBLISHED' : 'ARCHIVED';
-            const updatedRelease = await releaseService.updateStatus(release.id, newStatus);
-            
+            const updatedRelease = await releaseService.updateStatus(release.id, 'ACTIVE');
+
             // Notify parent component of status change
             onStatusChange(updatedRelease);
 
             // Close modal
-            setTransitionType(null);
+            setShowModal(false);
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Failed to update status';
             setError(message);
@@ -197,7 +182,7 @@ export const ReleaseStatusActions: React.FC<ReleaseStatusActionsProps> = ({ rele
      */
     const handleCloseModal = () => {
         if (!isLoading) {
-            setTransitionType(null);
+            setShowModal(false);
             setError(null);
         }
     };
@@ -217,38 +202,21 @@ export const ReleaseStatusActions: React.FC<ReleaseStatusActionsProps> = ({ rele
                 </div>
             )}
 
-            {/* Action Buttons */}
-            <div className="d-flex gap-2">
-                {showPublishButton && (
-                    <button
-                        type="button"
-                        className="btn btn-success"
-                        onClick={() => setTransitionType('publish')}
-                        title="Publish this release"
-                    >
-                        <i className="bi bi-upload me-2"></i>
-                        Publish
-                    </button>
-                )}
-
-                {showArchiveButton && (
-                    <button
-                        type="button"
-                        className="btn btn-warning"
-                        onClick={() => setTransitionType('archive')}
-                        title="Archive this release"
-                    >
-                        <i className="bi bi-archive me-2"></i>
-                        Archive
-                    </button>
-                )}
-            </div>
+            {/* Action Button */}
+            <button
+                type="button"
+                className="btn btn-success"
+                onClick={() => setShowModal(true)}
+                title="Set this release as active"
+            >
+                <i className="bi bi-check-circle me-2"></i>
+                Set Active
+            </button>
 
             {/* Confirmation Modal */}
             <StatusTransitionModal
                 release={release}
-                transitionType={transitionType}
-                isOpen={transitionType !== null}
+                isOpen={showModal}
                 isLoading={isLoading}
                 onClose={handleCloseModal}
                 onConfirm={handleConfirmTransition}
