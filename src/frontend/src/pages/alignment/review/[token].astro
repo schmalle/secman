@@ -1,0 +1,21 @@
+---
+/**
+ * Public Alignment Review Page
+ * Feature: 068-requirements-alignment-process
+ *
+ * Public page for reviewers to submit feedback via email token link.
+ * Does not require authentication - token serves as auth.
+ */
+import PublicLayout from '../../../layouts/PublicLayout.astro';
+import AlignmentReviewPage from '../../../components/AlignmentReviewPage.tsx';
+
+const { token } = Astro.params;
+
+if (!token) {
+    return Astro.redirect('/login?error=invalid_token');
+}
+---
+
+<PublicLayout title="Requirements Review - Secman">
+    <AlignmentReviewPage token={token} client:load />
+</PublicLayout>

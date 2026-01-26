@@ -178,10 +178,12 @@ class ReleaseService(
         val currentStatus = release.status
 
         // Validate status transition workflow
-        // Only DRAFT → ACTIVE is allowed manually
+        // DRAFT → ACTIVE is allowed (direct or after alignment)
+        // IN_REVIEW → ACTIVE is allowed (after alignment completes)
         // ACTIVE → LEGACY happens automatically when another release becomes ACTIVE
         val validTransition = when (currentStatus) {
             Release.ReleaseStatus.DRAFT -> newStatus == Release.ReleaseStatus.ACTIVE
+            Release.ReleaseStatus.IN_REVIEW -> newStatus == Release.ReleaseStatus.ACTIVE // Allow activation after alignment
             Release.ReleaseStatus.ACTIVE -> false // Cannot manually change ACTIVE status
             Release.ReleaseStatus.LEGACY -> false // No transitions from LEGACY
             Release.ReleaseStatus.PUBLISHED -> false // Cannot manually change PUBLISHED status

@@ -253,6 +253,21 @@ const AdminPage = () => {
                         </div>
                     </div>
                 </div>
+
+                <div className="col-md-4 mb-3">
+                    <div className="card">
+                        <div className="card-body">
+                            <h5 className="card-title">
+                                <i className="bi bi-gear-fill me-2"></i>
+                                Application Settings
+                            </h5>
+                            <p className="card-text">Configure application-wide settings like the base URL for email notifications.</p>
+                            <a href="/admin/app-settings" className="btn btn-primary">
+                                Configure Settings
+                            </a>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     );
