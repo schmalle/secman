@@ -48,11 +48,18 @@ export function isAuthenticated(): boolean {
 }
 
 /**
- * Check if user has a specific role
+ * Check if user has a specific role or any of the specified roles
+ * @param role Single role string or array of roles to check
+ * @returns true if user has the role (or any of the roles if array)
  */
-export function hasRole(role: string): boolean {
+export function hasRole(role: string | string[]): boolean {
     const user = getUser();
-    return user?.roles.includes(role) || false;
+    if (!user?.roles) return false;
+
+    if (Array.isArray(role)) {
+        return role.some(r => user.roles.includes(r));
+    }
+    return user.roles.includes(role);
 }
 
 /**

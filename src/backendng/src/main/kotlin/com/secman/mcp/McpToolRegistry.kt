@@ -57,7 +57,12 @@ class McpToolRegistry(
     @Inject private val createReleaseTool: CreateReleaseTool,
     @Inject private val deleteReleaseTool: DeleteReleaseTool,
     @Inject private val setReleaseStatusTool: SetReleaseStatusTool,
-    @Inject private val getReleaseTool: GetReleaseTool
+    @Inject private val getReleaseTool: GetReleaseTool,
+    // Feature 185: MCP Tools for Requirements Alignment Process
+    @Inject private val startAlignmentTool: StartAlignmentTool,
+    @Inject private val submitReviewTool: SubmitReviewTool,
+    @Inject private val getAlignmentStatusTool: GetAlignmentStatusTool,
+    @Inject private val finalizeAlignmentTool: FinalizeAlignmentTool
 ) {
     private val logger = LoggerFactory.getLogger(McpToolRegistry::class.java)
 
@@ -111,7 +116,12 @@ class McpToolRegistry(
             createReleaseTool,
             deleteReleaseTool,
             setReleaseStatusTool,
-            getReleaseTool
+            getReleaseTool,
+            // Feature 185: MCP Tools for Requirements Alignment Process
+            startAlignmentTool,
+            submitReviewTool,
+            getAlignmentStatusTool,
+            finalizeAlignmentTool
         ).forEach { tool ->
             toolMap[tool.name] = tool
             logger.debug("Registered MCP tool: {}", tool.name)
@@ -315,6 +325,17 @@ class McpToolRegistry(
             }
             "create_release", "delete_release", "set_release_status" -> {
                 permissions.contains(McpPermission.REQUIREMENTS_READ) // ADMIN/RELEASE_MANAGER role checked in tool execute()
+            }
+
+            // Feature 185: MCP Tools for Requirements Alignment Process
+            "start_alignment", "finalize_alignment" -> {
+                permissions.contains(McpPermission.REQUIREMENTS_READ) // ADMIN/RELEASE_MANAGER role checked in tool execute()
+            }
+            "submit_review" -> {
+                permissions.contains(McpPermission.REQUIREMENTS_READ) // REQ role checked in tool execute()
+            }
+            "get_alignment_status" -> {
+                permissions.contains(McpPermission.REQUIREMENTS_READ) // Any authenticated user with delegation
             }
 
             else -> false

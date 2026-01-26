@@ -43,8 +43,18 @@ data class Release(
     @Column(name = "updated_at")
     var updatedAt: Instant? = null
 ) {
+    /**
+     * Release lifecycle statuses
+     * Feature: 068-requirements-alignment-process
+     *
+     * - DRAFT: Initial state, can be edited, alignment can be started
+     * - IN_REVIEW: Alignment process active, requirements under review
+     * - ACTIVE: Current active release (only one can be ACTIVE at a time)
+     * - LEGACY: Previously active release, replaced by newer ACTIVE
+     * - PUBLISHED: Archived/published release
+     */
     enum class ReleaseStatus {
-        DRAFT, ACTIVE, LEGACY, PUBLISHED
+        DRAFT, IN_REVIEW, ACTIVE, LEGACY, PUBLISHED
     }
 
     @PrePersist

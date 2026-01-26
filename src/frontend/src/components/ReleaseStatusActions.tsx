@@ -1,26 +1,30 @@
 /**
  * ReleaseStatusActions Component
  *
- * Provides status transition button for releases (Set Active)
- * Enforces workflow: DRAFT → ACTIVE, ACTIVE → LEGACY (automatic)
+ * Provides status transition buttons for releases
+ * Enforces workflow: DRAFT → IN_REVIEW → ACTIVE, ACTIVE → LEGACY (automatic)
  *
  * Features:
- * - Shows "Set Active" button for DRAFT releases (ADMIN/RELEASE_MANAGER only)
+ * - Shows "Start Alignment" button for DRAFT releases (ADMIN/RELEASE_MANAGER only)
+ * - Shows alignment dashboard link for IN_REVIEW releases
+ * - Shows "Set Active" button for IN_REVIEW releases after alignment
  * - When a release is set to ACTIVE, the previously ACTIVE release becomes LEGACY
  * - Confirmation modal before transitions
  * - Loading state during API calls
  * - Error handling with user feedback
  *
  * Related to: Feature 012-build-ui-for, User Story 5 (Status Lifecycle)
+ * Updated for: Feature 068-requirements-alignment-process
  */
 
-import React, { useState } from 'react';
-import { releaseService, type Release } from '../services/releaseService';
+import React, { useState, useEffect } from 'react';
+import { releaseService, type Release, type AlignmentStatus } from '../services/releaseService';
 import { hasRole } from '../utils/auth';
 
 interface ReleaseStatusActionsProps {
     release: Release;
     onStatusChange: (updatedRelease: Release) => void;
+    onAlignmentStart?: () => void;
 }
 
 /**
@@ -141,18 +145,73 @@ const StatusTransitionModal: React.FC<StatusTransitionModalProps> = ({
 /**
  * Main component: Status action buttons with workflow enforcement
  */
-export const ReleaseStatusActions: React.FC<ReleaseStatusActionsProps> = ({ release, onStatusChange }) => {
+export const ReleaseStatusActions: React.FC<ReleaseStatusActionsProps> = ({
+    release,
+    onStatusChange,
+    onAlignmentStart
+}) => {
     const [showModal, setShowModal] = useState(false);
+    const [showAlignmentModal, setShowAlignmentModal] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [hasChanges, setHasChanges] = useState<boolean | null>(null);
+    const [alignmentStatus, setAlignmentStatus] = useState<AlignmentStatus | null>(null);
 
     // Check user permissions
     const canManageStatus = typeof window !== 'undefined' && hasRole(['ADMIN', 'RELEASE_MANAGER']);
 
-    // Only show actions if user has permission and release is in DRAFT status
-    if (!canManageStatus || release.status !== 'DRAFT') {
+    // Check for changes when in DRAFT status
+    useEffect(() => {
+        if (release.status === 'DRAFT' && canManageStatus) {
+            releaseService.checkAlignmentRequired(release.id)
+                .then(result => setHasChanges(result.hasChanges))
+                .catch(() => setHasChanges(null));
+        }
+    }, [release.id, release.status, canManageStatus]);
+
+    // Get alignment status when IN_REVIEW
+    useEffect(() => {
+        if (release.status === 'IN_REVIEW' && canManageStatus) {
+            releaseService.getAlignmentStatus(release.id)
+                .then(status => setAlignmentStatus(status))
+                .catch(() => setAlignmentStatus(null));
+        }
+    }, [release.id, release.status, canManageStatus]);
+
+    // Only show actions if user has permission
+    if (!canManageStatus) {
         return null;
     }
+
+    // Don't show actions for ACTIVE or LEGACY releases
+    if (release.status === 'ACTIVE' || release.status === 'LEGACY') {
+        return null;
+    }
+
+    /**
+     * Handle starting alignment process
+     */
+    const handleStartAlignment = async () => {
+        setIsLoading(true);
+        setError(null);
+
+        try {
+            const result = await releaseService.startAlignment(release.id);
+
+            // Notify parent
+            onAlignmentStart?.();
+
+            // Update release status locally
+            onStatusChange({ ...release, status: 'IN_REVIEW' });
+
+            setShowAlignmentModal(false);
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Failed to start alignment';
+            setError(message);
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     /**
      * Handle status transition confirmation
@@ -183,6 +242,7 @@ export const ReleaseStatusActions: React.FC<ReleaseStatusActionsProps> = ({ rele
     const handleCloseModal = () => {
         if (!isLoading) {
             setShowModal(false);
+            setShowAlignmentModal(false);
             setError(null);
         }
     };
@@ -202,18 +262,133 @@ export const ReleaseStatusActions: React.FC<ReleaseStatusActionsProps> = ({ rele
                 </div>
             )}
 
-            {/* Action Button */}
-            <button
-                type="button"
-                className="btn btn-success"
-                onClick={() => setShowModal(true)}
-                title="Set this release as active"
-            >
-                <i className="bi bi-check-circle me-2"></i>
-                Set Active
-            </button>
+            {/* DRAFT status: Show Start Alignment button */}
+            {release.status === 'DRAFT' && (
+                <div className="d-flex flex-column gap-2">
+                    <div className="d-flex gap-2">
+                        <button
+                            type="button"
+                            className="btn btn-primary"
+                            onClick={() => setShowAlignmentModal(true)}
+                            title="Start requirements alignment process"
+                        >
+                            <i className="bi bi-clipboard-check me-2"></i>
+                            Start Alignment
+                        </button>
+                        <button
+                            type="button"
+                            className="btn btn-success"
+                            onClick={() => setShowModal(true)}
+                            title="Skip alignment and activate directly"
+                        >
+                            <i className="bi bi-check-circle me-2"></i>
+                            Set Active
+                        </button>
+                    </div>
+                    {hasChanges === false && (
+                        <small className="text-muted">
+                            <i className="bi bi-info-circle me-1"></i>
+                            No requirement changes detected since last active release
+                        </small>
+                    )}
+                </div>
+            )}
 
-            {/* Confirmation Modal */}
+            {/* IN_REVIEW status: Show alignment progress and dashboard link */}
+            {release.status === 'IN_REVIEW' && alignmentStatus && (
+                <div className="d-flex flex-column gap-2">
+                    <div className="d-flex gap-2 align-items-center">
+                        <span className="badge bg-info">
+                            <i className="bi bi-hourglass-split me-1"></i>
+                            In Review
+                        </span>
+                        <small className="text-muted">
+                            {alignmentStatus.reviewers.completed}/{alignmentStatus.reviewers.total} reviewers complete
+                        </small>
+                    </div>
+                    <div className="btn-group">
+                        <a
+                            href={`/releases/${release.id}/alignment`}
+                            className="btn btn-outline-primary btn-sm"
+                        >
+                            <i className="bi bi-graph-up me-1"></i>
+                            View Dashboard
+                        </a>
+                    </div>
+                </div>
+            )}
+
+            {/* Alignment Start Modal */}
+            {showAlignmentModal && (
+                <>
+                    <div
+                        className="modal-backdrop fade show"
+                        onClick={isLoading ? undefined : handleCloseModal}
+                        style={{ zIndex: 1040 }}
+                    ></div>
+                    <div
+                        className="modal fade show d-block"
+                        tabIndex={-1}
+                        role="dialog"
+                        style={{ zIndex: 1050 }}
+                    >
+                        <div className="modal-dialog">
+                            <div className="modal-content">
+                                <div className="modal-header">
+                                    <h5 className="modal-title">Start Requirements Alignment</h5>
+                                    <button
+                                        type="button"
+                                        className="btn-close"
+                                        onClick={handleCloseModal}
+                                        disabled={isLoading}
+                                    ></button>
+                                </div>
+                                <div className="modal-body">
+                                    <p>
+                                        Starting the alignment process for{' '}
+                                        <strong>{release.version} - {release.name}</strong>
+                                    </p>
+                                    <p className="text-muted">
+                                        This will:
+                                    </p>
+                                    <ul className="text-muted">
+                                        <li>Change release status to IN_REVIEW</li>
+                                        <li>Send email notifications to all users with REQ role</li>
+                                        <li>Allow reviewers to submit feedback on requirement changes</li>
+                                    </ul>
+                                </div>
+                                <div className="modal-footer">
+                                    <button
+                                        type="button"
+                                        className="btn btn-secondary"
+                                        onClick={handleCloseModal}
+                                        disabled={isLoading}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="btn btn-primary"
+                                        onClick={handleStartAlignment}
+                                        disabled={isLoading}
+                                    >
+                                        {isLoading ? (
+                                            <>
+                                                <span className="spinner-border spinner-border-sm me-2"></span>
+                                                Starting...
+                                            </>
+                                        ) : (
+                                            'Start Alignment'
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </>
+            )}
+
+            {/* Direct Activation Modal (for no-changes case) */}
             <StatusTransitionModal
                 release={release}
                 isOpen={showModal}
