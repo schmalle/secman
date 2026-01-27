@@ -124,7 +124,6 @@ const Sidebar = () => {
 
             <ul className="list-unstyled components p-2">
                 {/* ASSET MANAGEMENT Section */}
-                <li className="sidebar-section-header">ASSET MANAGEMENT</li>
                 <li>
                     <a href="/assets" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
                         <i className="bi bi-server me-2"></i> Assets Overview
@@ -221,14 +220,11 @@ const Sidebar = () => {
 
                 {/* DEMAND MANAGEMENT Section - ADMIN, RISK, or SECCHAMPION only (Feature: 025-role-based-access-control) */}
                 {hasRisk && (
-                    <>
-                        <li className="sidebar-section-header">DEMAND MANAGEMENT</li>
-                        <li>
-                            <a href="/demands" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                <i className="bi bi-clipboard-plus me-2"></i> Demand Management
-                            </a>
-                        </li>
-                    </>
+                    <li>
+                        <a href="/demands" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                            <i className="bi bi-clipboard-plus me-2"></i> Demand Management
+                        </a>
+                    </li>
                 )}
 
                 {/* VULNERABILITY MANAGEMENT Section - ADMIN or VULN role (Feature: 004-i-want-to) */}
@@ -388,14 +384,11 @@ const Sidebar = () => {
 
                 {/* TOOLS Section - ADMIN, RISK, or SECCHAMPION only (Feature: 025-role-based-access-control) */}
                 {hasRisk && (
-                    <>
-                        <li className="sidebar-section-header">TOOLS</li>
-                        <li>
-                            <a href="/public-classification" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                <i className="bi bi-funnel me-2"></i> Classification Tool
-                            </a>
-                        </li>
-                    </>
+                    <li>
+                        <a href="/public-classification" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                            <i className="bi bi-funnel me-2"></i> Classification Tool
+                        </a>
+                    </li>
                 )}
 
                 {/* ADMIN Section - expandable menu (only visible to admin users) */}
@@ -540,6 +533,15 @@ const styles = `
 
 .hover-bg-secondary:hover {
     background-color: var(--scand-sidebar-hover-bg);
+}
+
+/* Consistent font size for all top-level sidebar items */
+#sidebar .components > li > a {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--scand-text-secondary);
 }
 
 .sidebar-section-header {

@@ -17,11 +17,11 @@
      ======================== */
 
   /* Page & Container Backgrounds */
-  --scand-bg-page: #F8FAF9;           /* Slightly mint-tinted off-white */
+  --scand-bg-page: #F8F9FA;           /* Neutral off-white */
   --scand-bg-card: #FFFFFF;           /* Card/panel backgrounds */
-  --scand-bg-sidebar: #F2F5F4;        /* Sidebar with subtle mint undertone */
+  --scand-bg-sidebar: #F8F9FA;        /* Light neutral gray sidebar */
   --scand-bg-header: #3D4F4F;         /* Dark teal-gray header */
-  --scand-bg-hover: #EDF2F0;          /* Hover state with mint tint */
+  --scand-bg-hover: #EBEDEF;          /* Neutral hover state */
 
   /* Text Colors */
   --scand-text-primary: #2D3436;      /* Dark charcoal */
@@ -98,13 +98,13 @@
   /* Tables */
   --scand-table-header-bg: #3D4F4F;
   --scand-table-header-text: #FFFFFF;
-  --scand-table-stripe-bg: #F8FAF9;
-  --scand-table-hover-bg: #EDF2F0;
+  --scand-table-stripe-bg: #F8F9FA;
+  --scand-table-hover-bg: #EBEDEF;
 
   /* Sidebar */
-  --scand-sidebar-section-bg: #EDF2F0;
-  --scand-sidebar-section-border: #4A7C6F;
-  --scand-sidebar-hover-bg: #E3E9E7;
+  --scand-sidebar-section-bg: transparent;
+  --scand-sidebar-section-border: #ADB5BD;
+  --scand-sidebar-hover-bg: #E9ECEF;
 
   /* Badges */
   --scand-badge-border-radius: 0.25rem;
