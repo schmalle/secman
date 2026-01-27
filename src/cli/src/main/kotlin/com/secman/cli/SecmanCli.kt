@@ -9,6 +9,7 @@ import com.secman.cli.commands.ManageUserMappingsCommand
 import com.secman.cli.commands.ManageWorkgroupsCommand
 import com.secman.cli.commands.MonitorCommand
 import com.secman.cli.commands.QueryCommand
+import com.secman.cli.commands.SendAdminSummaryCommand
 import com.secman.cli.commands.SendNotificationsCommand
 import com.secman.cli.commands.ServersCommand
 import io.micronaut.configuration.picocli.PicocliRunner
@@ -236,6 +237,15 @@ class SecmanCli {
                 }
                 0
             }
+            args[0] == "send-admin-summary" -> {
+                // Use Picocli with Micronaut DI for send-admin-summary command
+                // Feature: 070-admin-summary-email
+                val subArgs = args.drop(1).toTypedArray()
+                ApplicationContext.run().use { ctx ->
+                    PicocliRunner.run(SendAdminSummaryCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
             else -> {
                 System.err.println("Unknown command: ${args[0]}")
                 showHelp()
@@ -256,6 +266,7 @@ class SecmanCli {
               monitor                Continuously monitor for HIGH/CRITICAL vulnerabilities
               config                 Configure CrowdStrike API credentials
               send-notifications     Send email notifications for outdated assets (Feature 035)
+              send-admin-summary     Send system statistics summary email to ADMIN users (Feature 070)
               manage-user-mappings   Manage user mappings for domains and AWS accounts (Feature 049)
               manage-workgroups      Manage workgroup asset assignments (list, assign, remove)
               add-vulnerability      Add or update a vulnerability for an asset (Feature 052)
@@ -336,6 +347,10 @@ class SecmanCli {
               --username <user>        Backend username with ADMIN role (or set SECMAN_USERNAME env var)
               --password <pass>        Backend password (or set SECMAN_PASSWORD env var)
               --verbose                Enable verbose output
+
+            Send Admin Summary Options (Feature 070):
+              --dry-run                Preview planned recipients without sending emails
+              --verbose, -v            Detailed logging (show per-recipient status)
 
             Environment Variables:
               SECMAN_USERNAME          Backend username for authentication
@@ -456,6 +471,13 @@ class SecmanCli {
               secman delete-all-requirements --confirm --verbose
               secman delete-all-requirements --confirm --backend-url http://test-server:8080
               secman delete-all-requirements --help
+
+              # Send admin summary email (Feature 070)
+              secman send-admin-summary
+              secman send-admin-summary --dry-run
+              secman send-admin-summary --verbose
+              secman send-admin-summary --dry-run --verbose
+              secman send-admin-summary --help
 
             For more information, visit: https://github.com/schmalle/secman
         """.trimIndent())
