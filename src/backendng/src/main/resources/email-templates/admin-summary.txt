@@ -1,0 +1,21 @@
+SECMAN ADMIN SUMMARY
+====================
+
+Hello Administrator,
+
+SYSTEM STATISTICS REPORT
+------------------------
+Generated on: ${executionDate}
+
+CURRENT SYSTEM STATISTICS
+-------------------------
+Total Users:           ${userCount}
+Total Vulnerabilities: ${vulnerabilityCount}
+Total Assets:          ${assetCount}
+
+This is an automated summary of your SecMan instance. Review these
+statistics regularly to ensure your security posture remains strong.
+
+---
+This is an automated notification from the Security Management System.
+Please do not reply to this email.

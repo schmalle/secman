@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecMan Admin Summary</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background-color: #0d6efd;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            border-radius: 5px 5px 0 0;
+        }
+        .content {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 0 0 5px 5px;
+        }
+        .stats-box {
+            background-color: white;
+            border-radius: 5px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid #e9ecef;
+        }
+        .stat-item:last-child {
+            border-bottom: none;
+        }
+        .stat-label {
+            font-weight: bold;
+            color: #495057;
+        }
+        .stat-value {
+            font-size: 1.2em;
+            color: #0d6efd;
+            font-weight: bold;
+        }
+        .info-box {
+            background-color: #cfe2ff;
+            border-left: 4px solid #0d6efd;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .footer {
+            text-align: center;
+            color: #6c757d;
+            font-size: 12px;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>SecMan Admin Summary</h1>
+    </div>
+
+    <div class="content">
+        <p>Hello Administrator,</p>
+
+        <div class="info-box">
+            <strong>System Statistics Report</strong><br>
+            Generated on: ${executionDate}
+        </div>
+
+        <div class="stats-box">
+            <h3 style="margin-top: 0;">Current System Statistics</h3>
+
+            <div class="stat-item">
+                <span class="stat-label">Total Users</span>
+                <span class="stat-value">${userCount}</span>
+            </div>
+
+            <div class="stat-item">
+                <span class="stat-label">Total Vulnerabilities</span>
+                <span class="stat-value">${vulnerabilityCount}</span>
+            </div>
+
+            <div class="stat-item">
+                <span class="stat-label">Total Assets</span>
+                <span class="stat-value">${assetCount}</span>
+            </div>
+        </div>
+
+        <p>This is an automated summary of your SecMan instance. Review these statistics regularly to ensure your security posture remains strong.</p>
+    </div>
+
+    <div class="footer">
+        <p>This is an automated notification from the Security Management System.</p>
+        <p>Please do not reply to this email.</p>
+    </div>
+</body>
+</html>

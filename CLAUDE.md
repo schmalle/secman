@@ -209,6 +209,8 @@ fun findStateByValueWithRetry(stateToken: String): Optional<OAuthState> {
 - MariaDB 11.4 (existing user_mapping table), local temp files for S3 downloads (065-s3-user-mapping-import)
 - Kotlin 2.3.0 / Java 25 + Micronaut 4.10, Hibernate JPA, Apache POI 5.3 (Excel/Word exports) (066-requirement-versioning)
 - MariaDB 11.4 (existing `requirement`, `requirement_snapshot`, `releases` tables) (066-requirement-versioning)
+- Kotlin 2.3.0 / Java 25 + Micronaut 4.10, PicoCLI (CLI framework), Jakarta Mail (email) (070-admin-summary-email)
+- MariaDB 11.4 (existing database) (070-admin-summary-email)
 
 ## Recent Changes
 - 058-ai-norm-mapping: Added Kotlin 2.2.21 / Java 21 (backend), TypeScript/React 19 (frontend) + Micronaut 4.10, Hibernate JPA, Axios, Bootstrap 5.3
