@@ -105,39 +105,57 @@ export async function queryVulnerabilities(
 
         // Handle specific error cases
         if (!response.ok) {
-            // Try to parse error response
-            try {
-                const errorData = await response.json();
-                console.error('[CrowdStrikeService] Error response:', errorData);
-                const errorMessage = errorData.error || `Query failed with status ${response.status}`;
-
-                // Handle specific HTTP status codes
-                if (response.status === 401) {
-                    // Redirect to login
-                    window.location.href = '/login';
-                    throw new Error('Session expired. Please log in again.');
-                } else if (response.status === 403) {
-                    throw new Error('Insufficient permissions. ADMIN or VULN role required.');
-                } else if (response.status === 404) {
-                    // Feature 041: Handle both hostname and instance ID in error message
-                    const isInstanceId = hostname.trim().toLowerCase().startsWith('i-');
-                    const identifier = isInstanceId ? 'instance ID' : 'hostname';
-                    throw new Error(`System not found with ${identifier}: ${hostname}`);
-                } else if (response.status === 429) {
-                    const retryAfter = response.headers.get('Retry-After') || '30';
-                    throw new Error(`Rate limit exceeded. Try again in ${retryAfter} seconds.`);
-                } else if (response.status === 500) {
-                    throw new Error(errorMessage);
-                }
-
-                throw new Error(errorMessage);
-            } catch (e) {
-                if (e instanceof Error && e.message !== `Query failed with status ${response.status}`) {
-                    throw e;
-                }
-                console.error('[CrowdStrikeService] Failed to parse error:', e);
-                throw new Error(`Query failed with status ${response.status}`);
+            // Handle specific HTTP status codes first (before trying to parse body)
+            if (response.status === 401) {
+                window.location.href = '/login';
+                throw new Error('Session expired. Please log in again.');
+            } else if (response.status === 403) {
+                throw new Error('Insufficient permissions. ADMIN or VULN role required.');
+            } else if (response.status === 404) {
+                const isInstanceId = hostname.trim().toLowerCase().startsWith('i-');
+                const identifier = isInstanceId ? 'instance ID' : 'hostname';
+                throw new Error(`System not found with ${identifier}: ${hostname}`);
+            } else if (response.status === 429) {
+                const retryAfter = response.headers.get('Retry-After') || '30';
+                throw new Error(`Rate limit exceeded. Try again in ${retryAfter} seconds.`);
             }
+
+            // Try to parse error response as JSON
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                try {
+                    const errorData = await response.json();
+                    console.error('[CrowdStrikeService] Error response:', errorData);
+                    const errorMessage = errorData.error || errorData.message || `Query failed with status ${response.status}`;
+                    throw new Error(errorMessage);
+                } catch (e) {
+                    if (e instanceof Error && !e.message.includes('Query failed')) {
+                        throw e;
+                    }
+                    console.error('[CrowdStrikeService] Failed to parse JSON error:', e);
+                }
+            } else {
+                // Non-JSON response (likely HTML error page)
+                const text = await response.text();
+                console.error('[CrowdStrikeService] Non-JSON error response:', text.substring(0, 200));
+
+                // Extract meaningful error from HTML if possible
+                if (response.status === 500 || response.status === 502 || response.status === 503) {
+                    throw new Error('CrowdStrike API error: Server temporarily unavailable. Please try again.');
+                } else if (response.status === 504) {
+                    throw new Error('CrowdStrike API error: Request timed out. The system may have too many vulnerabilities. Please try again.');
+                }
+            }
+
+            throw new Error(`CrowdStrike API error: Failed to query Spotlight API: Read Timeout`);
+        }
+
+        // Parse successful response
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            const text = await response.text();
+            console.error('[CrowdStrikeService] Unexpected non-JSON success response:', text.substring(0, 200));
+            throw new Error('Unexpected response format from server');
         }
 
         const result = await response.json();
@@ -183,32 +201,47 @@ export async function saveVulnerabilities(
         console.log('[CrowdStrikeService] Response ok:', response.ok);
 
         if (!response.ok) {
-            // Try to parse error response
-            try {
-                const errorData = await response.json();
-                console.error('[CrowdStrikeService] Error response:', errorData);
-                const errorMessage = errorData.error || `Save failed with status ${response.status}`;
-
-                // Handle specific HTTP status codes
-                if (response.status === 401) {
-                    window.location.href = '/login';
-                    throw new Error('Session expired. Please log in again.');
-                } else if (response.status === 403) {
-                    throw new Error('Insufficient permissions. ADMIN or VULN role required.');
-                } else if (response.status === 400) {
-                    throw new Error(`Validation error: ${errorMessage}`);
-                } else if (response.status === 500) {
-                    throw new Error(errorMessage);
-                }
-
-                throw new Error(errorMessage);
-            } catch (e) {
-                if (e instanceof Error && e.message !== `Save failed with status ${response.status}`) {
-                    throw e;
-                }
-                console.error('[CrowdStrikeService] Failed to parse error:', e);
-                throw new Error(`Save failed with status ${response.status}`);
+            // Handle specific HTTP status codes first
+            if (response.status === 401) {
+                window.location.href = '/login';
+                throw new Error('Session expired. Please log in again.');
+            } else if (response.status === 403) {
+                throw new Error('Insufficient permissions. ADMIN or VULN role required.');
             }
+
+            // Try to parse error response as JSON
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                try {
+                    const errorData = await response.json();
+                    console.error('[CrowdStrikeService] Error response:', errorData);
+                    const errorMessage = errorData.error || errorData.message || `Save failed with status ${response.status}`;
+
+                    if (response.status === 400) {
+                        throw new Error(`Validation error: ${errorMessage}`);
+                    }
+                    throw new Error(errorMessage);
+                } catch (e) {
+                    if (e instanceof Error && !e.message.includes('Save failed')) {
+                        throw e;
+                    }
+                    console.error('[CrowdStrikeService] Failed to parse JSON error:', e);
+                }
+            } else {
+                // Non-JSON response (likely HTML error page)
+                const text = await response.text();
+                console.error('[CrowdStrikeService] Non-JSON error response:', text.substring(0, 200));
+            }
+
+            throw new Error(`Save failed with status ${response.status}`);
+        }
+
+        // Parse successful response
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            const text = await response.text();
+            console.error('[CrowdStrikeService] Unexpected non-JSON success response:', text.substring(0, 200));
+            throw new Error('Unexpected response format from server');
         }
 
         const result = await response.json();

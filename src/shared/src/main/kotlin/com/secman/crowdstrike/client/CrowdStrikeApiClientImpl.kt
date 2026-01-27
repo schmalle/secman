@@ -1177,9 +1177,10 @@ open class CrowdStrikeApiClientImpl(
     }
 
     /**
-     * Query CrowdStrike Spotlight API for vulnerabilities
+     * Query CrowdStrike Spotlight API for vulnerabilities with pagination and retry logic
      *
      * Task: T030, T031 (with retry logic)
+     * Enhancement: Added pagination support, timeout retry with exponential backoff
      *
      * @param deviceId Device ID (aid) from Hosts API
      * @param hostname Hostname for this device (to include in results)
@@ -1198,67 +1199,166 @@ open class CrowdStrikeApiClientImpl(
     open fun querySpotlightApi(deviceId: String, hostname: String, token: AuthToken): List<CrowdStrikeVulnerabilityDto> {
         log.debug("Querying Spotlight API for device ID: {}", deviceId)
 
-        return try {
-            // Build filter query
-            val filter = "aid:'$deviceId'+status:'open'"
+        val allVulnerabilities = mutableListOf<CrowdStrikeVulnerabilityDto>()
+        var afterToken: String? = null
+        var hasMore = true
+        var pageCount = 0
+        val maxPages = 100  // Safety limit to prevent infinite loops
 
-            val uri = UriBuilder.of("/spotlight/combined/vulnerabilities/v1")
-                .queryParam("filter", filter)
-                .queryParam("limit", "5000")
-                // Request CVE facet so severity/CVSS fields are present in the response
-                .queryParam("facet", "cve")
-                .build()
+        // Pagination configuration - start with smaller page size for reliability
+        var currentLimit = 500  // Start conservative, can handle most systems without pagination
+        val minLimit = 100      // Minimum page size on retry
+        val maxRetries = 3      // Max retries per page for timeout errors
 
-            val request = HttpRequest.GET<Any>(uri.toString())
-                .header("Authorization", "Bearer ${token.accessToken}")
-                .header("Accept", "application/json")
+        val filter = "aid:'$deviceId'+status:'open'"
 
-            log.debug("Spotlight API request: filter={}, uri={}", filter, uri)
+        while (hasMore && pageCount < maxPages) {
+            pageCount++
+            var retryCount = 0
+            var pageSuccess = false
 
-            val response = httpClient.toBlocking().exchange(request, Map::class.java)
+            while (!pageSuccess && retryCount <= maxRetries) {
+                try {
+                    val uri = UriBuilder.of("/spotlight/combined/vulnerabilities/v1")
+                        .queryParam("filter", filter)
+                        .queryParam("limit", currentLimit)
+                        .queryParam("facet", "cve")
+                        .apply {
+                            if (afterToken != null) {
+                                queryParam("after", afterToken)
+                            }
+                        }
+                        .build()
 
-            when (response.status.code) {
-                200 -> {
-                    @Suppress("UNCHECKED_CAST")
-                    val responseBody = response.body() as? Map<String, Any>
-                        ?: throw CrowdStrikeException("Empty response from Spotlight API")
+                    val request = HttpRequest.GET<Any>(uri.toString())
+                        .header("Authorization", "Bearer ${token.accessToken}")
+                        .header("Accept", "application/json")
 
-                    val resources = responseBody["resources"] as? List<*> ?: emptyList<Any>()
-                    log.info("Spotlight API returned {} vulnerabilities for device {}", resources.size, deviceId)
+                    log.debug("Spotlight API request: page={}, limit={}, filter={}, afterToken={}",
+                        pageCount, currentLimit, filter, afterToken ?: "null")
 
-                    // Task T033: Map responses to shared DTOs with hostname
-                    mapResponseToDtos(resources, hostname)
+                    val response = httpClient.toBlocking().exchange(request, Map::class.java)
+
+                    when (response.status.code) {
+                        200 -> {
+                            @Suppress("UNCHECKED_CAST")
+                            val responseBody = response.body() as? Map<String, Any>
+                                ?: throw CrowdStrikeException("Empty response from Spotlight API")
+
+                            val resources = responseBody["resources"] as? List<*> ?: emptyList<Any>()
+                            val vulns = mapResponseToDtos(resources, hostname)
+                            allVulnerabilities.addAll(vulns)
+
+                            // Check for pagination
+                            val meta = responseBody["meta"] as? Map<*, *>
+                            val pagination = meta?.get("pagination") as? Map<*, *>
+                            val newAfterToken = pagination?.get("after")?.toString()
+
+                            log.info("Spotlight API page {}: retrieved {} vulnerabilities (total: {})",
+                                pageCount, vulns.size, allVulnerabilities.size)
+
+                            // Check if there are more results
+                            hasMore = newAfterToken != null && vulns.isNotEmpty() && newAfterToken != afterToken
+                            afterToken = newAfterToken
+                            pageSuccess = true
+                        }
+                        404 -> {
+                            log.info("Spotlight API returned 404 for device {}. Treating as no vulnerabilities.", deviceId)
+                            hasMore = false
+                            pageSuccess = true
+                        }
+                        429 -> {
+                            val retryAfter = response.headers.get("Retry-After")?.toLongOrNull() ?: 30L
+                            throw RateLimitException("Rate limit exceeded on Spotlight API", retryAfter)
+                        }
+                        in 500..599 -> throw CrowdStrikeException("Spotlight API server error: ${response.status}")
+                        else -> throw CrowdStrikeException("Unexpected Spotlight API response: ${response.status}")
+                    }
+                } catch (e: java.net.SocketTimeoutException) {
+                    retryCount++
+                    if (retryCount <= maxRetries) {
+                        // Reduce page size on timeout and retry
+                        val newLimit = (currentLimit / 2).coerceAtLeast(minLimit)
+                        val backoffMs = retryCount * 2000L  // 2s, 4s, 6s backoff
+                        log.warn("Spotlight API timeout on page {} (limit={}). Retry {}/{} with limit={} after {}ms",
+                            pageCount, currentLimit, retryCount, maxRetries, newLimit, backoffMs)
+                        currentLimit = newLimit
+                        Thread.sleep(backoffMs)
+                    } else {
+                        log.error("Spotlight API timeout: max retries ({}) exceeded on page {}. Returning partial results ({} vulns)",
+                            maxRetries, pageCount, allVulnerabilities.size)
+                        // Return partial results instead of failing completely
+                        hasMore = false
+                        pageSuccess = true
+                    }
+                } catch (e: io.micronaut.http.client.exceptions.HttpClientException) {
+                    val isTimeout = e.message?.contains("Read Timeout", ignoreCase = true) == true ||
+                        e.message?.contains("timeout", ignoreCase = true) == true ||
+                        e.message?.contains("Channel closed", ignoreCase = true) == true
+
+                    if (isTimeout) {
+                        retryCount++
+                        if (retryCount <= maxRetries) {
+                            val newLimit = (currentLimit / 2).coerceAtLeast(minLimit)
+                            val backoffMs = retryCount * 2000L
+                            log.warn("Spotlight API HTTP client timeout on page {} (limit={}). Retry {}/{} with limit={} after {}ms. Error: {}",
+                                pageCount, currentLimit, retryCount, maxRetries, newLimit, backoffMs, e.message)
+                            currentLimit = newLimit
+                            Thread.sleep(backoffMs)
+                        } else {
+                            log.error("Spotlight API HTTP client timeout: max retries ({}) exceeded. Returning partial results ({} vulns). Error: {}",
+                                maxRetries, allVulnerabilities.size, e.message)
+                            hasMore = false
+                            pageSuccess = true
+                        }
+                    } else {
+                        throw CrowdStrikeException("HTTP client error: ${e.message}", e)
+                    }
+                } catch (e: io.micronaut.http.client.exceptions.HttpClientResponseException) {
+                    when (e.status.code) {
+                        404 -> {
+                            log.info("Spotlight API returned 404 for device. Treating as no vulnerabilities.")
+                            hasMore = false
+                            pageSuccess = true
+                        }
+                        429 -> {
+                            val retryAfter = e.response.headers.get("Retry-After")?.toLongOrNull() ?: 30L
+                            throw RateLimitException("Rate limit exceeded", retryAfter, e)
+                        }
+                        in 500..599 -> {
+                            retryCount++
+                            if (retryCount <= maxRetries) {
+                                val backoffMs = retryCount * 2000L
+                                log.warn("Spotlight API server error {} on page {}. Retry {}/{} after {}ms",
+                                    e.status.code, pageCount, retryCount, maxRetries, backoffMs)
+                                Thread.sleep(backoffMs)
+                            } else {
+                                throw CrowdStrikeException("Server error after $maxRetries retries: ${e.status}", e)
+                            }
+                        }
+                        else -> throw CrowdStrikeException("API error: ${e.message}", e)
+                    }
+                } catch (e: RateLimitException) {
+                    throw e
+                } catch (e: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    throw CrowdStrikeException("Query interrupted", e)
+                } catch (e: Exception) {
+                    log.error("Unexpected error querying Spotlight API on page {}", pageCount, e)
+                    throw CrowdStrikeException("Failed to query Spotlight API: ${e.message}", e)
                 }
-                404 -> {
-                    log.info("Spotlight API returned 404 for device {}. Treating as no vulnerabilities.", deviceId)
-                    emptyList()
-                }
-                429 -> {
-                    val retryAfter = response.headers.get("Retry-After")?.toLongOrNull() ?: 30L
-                    throw RateLimitException("Rate limit exceeded on Spotlight API", retryAfter)
-                }
-                in 500..599 -> throw CrowdStrikeException("Spotlight API server error: ${response.status}")
-                else -> throw CrowdStrikeException("Unexpected Spotlight API response: ${response.status}")
             }
-        } catch (e: io.micronaut.http.client.exceptions.HttpClientResponseException) {
-            when (e.status.code) {
-                404 -> {
-                    log.info("Spotlight API returned 404 for device. Treating as no vulnerabilities.")
-                    emptyList()
-                }
-                429 -> {
-                    val retryAfter = e.response.headers.get("Retry-After")?.toLongOrNull() ?: 30L
-                    throw RateLimitException("Rate limit exceeded", retryAfter, e)
-                }
-                in 500..599 -> throw CrowdStrikeException("Server error: ${e.status}", e)
-                else -> throw CrowdStrikeException("API error: ${e.message}", e)
-            }
-        } catch (e: RateLimitException) {
-            throw e
-        } catch (e: Exception) {
-            log.error("Unexpected error querying Spotlight API", e)
-            throw CrowdStrikeException("Failed to query Spotlight API: ${e.message}", e)
         }
+
+        if (pageCount >= maxPages) {
+            log.warn("Reached max page limit ({}) for device {}. Returning {} vulnerabilities.",
+                maxPages, deviceId, allVulnerabilities.size)
+        }
+
+        log.info("Spotlight API query complete: device={}, hostname={}, pages={}, totalVulnerabilities={}",
+            deviceId, hostname, pageCount, allVulnerabilities.size)
+
+        return allVulnerabilities
     }
 
     /**
