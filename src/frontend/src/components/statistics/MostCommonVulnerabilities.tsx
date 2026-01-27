@@ -15,7 +15,8 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { vulnerabilityStatisticsApi, type MostCommonVulnerabilityDto } from '../../services/api/vulnerabilityStatisticsApi';
+import ExcelJS from 'exceljs';
+import { vulnerabilityStatisticsApi, type MostCommonVulnerabilityDto, type AffectedAssetsByCveDto } from '../../services/api/vulnerabilityStatisticsApi';
 
 /**
  * Map severity levels to Scandinavian design system badge classes
@@ -37,15 +38,6 @@ const severityBadgeClass = (severity: string): string => {
 };
 
 /**
- * Handle row click - navigate to vulnerability details
- * (Future enhancement: will link to vulnerability detail page)
- */
-const handleRowClick = (vulnerabilityId: string) => {
-  // TODO: Implement navigation to vulnerability detail page in future story
-  console.log(`Navigate to vulnerability details: ${vulnerabilityId}`);
-};
-
-/**
  * Props for MostCommonVulnerabilities component
  *
  * Feature: 059-vuln-stats-domain-filter
@@ -60,6 +52,99 @@ export default function MostCommonVulnerabilities({ domain }: MostCommonVulnerab
   const [data, setData] = useState<MostCommonVulnerabilityDto[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Modal state for CVE drilldown
+  const [showModal, setShowModal] = useState<boolean>(false);
+  const [modalLoading, setModalLoading] = useState<boolean>(false);
+  const [modalData, setModalData] = useState<AffectedAssetsByCveDto | null>(null);
+  const [modalError, setModalError] = useState<string | null>(null);
+
+  /**
+   * Handle row click - show affected systems modal
+   */
+  const handleRowClick = async (cveId: string) => {
+    setShowModal(true);
+    setModalLoading(true);
+    setModalError(null);
+    setModalData(null);
+
+    try {
+      const result = await vulnerabilityStatisticsApi.getAffectedAssetsByCve(cveId, domain);
+      setModalData(result);
+    } catch (err) {
+      console.error('Error fetching affected assets:', err);
+      setModalError('Failed to load affected systems. Please try again.');
+    } finally {
+      setModalLoading(false);
+    }
+  };
+
+  const closeModal = () => {
+    setShowModal(false);
+    setModalData(null);
+    setModalError(null);
+  };
+
+  // Export state
+  const [exporting, setExporting] = useState<boolean>(false);
+
+  /**
+   * Export affected systems to Excel
+   */
+  const handleExportAffectedSystems = async () => {
+    if (!modalData || modalData.affectedAssets.length === 0) return;
+
+    setExporting(true);
+    try {
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = 'Secman';
+      workbook.created = new Date();
+
+      const sheet = workbook.addWorksheet('Affected Systems');
+      sheet.columns = [
+        { header: 'System Name', key: 'name', width: 30 },
+        { header: 'IP Address', key: 'ip', width: 18 },
+        { header: 'Domain', key: 'domain', width: 20 },
+        { header: 'Type', key: 'type', width: 15 },
+      ];
+
+      modalData.affectedAssets.forEach((asset) => {
+        sheet.addRow({
+          name: asset.assetName,
+          ip: asset.assetIp || '-',
+          domain: asset.adDomain || '-',
+          type: asset.assetType || '-',
+        });
+      });
+
+      // Style header
+      const headerRow = sheet.getRow(1);
+      headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF3D4F4F' } };
+      headerRow.height = 22;
+
+      // Generate and download
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+
+      const safeCveId = modalData.cveId.replace(/[^a-zA-Z0-9-]/g, '_');
+      const dateStr = new Date().toISOString().split('T')[0];
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Affected_Systems_${safeCveId}_${dateStr}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Export failed:', err);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -180,6 +265,113 @@ export default function MostCommonVulnerabilities({ domain }: MostCommonVulnerab
         <i className="bi bi-info-circle me-1"></i>
         Showing top 10 vulnerabilities ranked by total occurrences. Click any row for details.
       </div>
+
+      {/* CVE Affected Systems Modal */}
+      {showModal && (
+        <div className="modal show d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <div className="modal-dialog modal-lg modal-dialog-scrollable">
+            <div className="modal-content">
+              <div className="modal-header" style={{ backgroundColor: 'var(--scand-bg-header)', color: 'var(--scand-text-light)' }}>
+                <h5 className="modal-title">
+                  <i className="bi bi-server me-2"></i>
+                  Affected Systems {modalData && `- ${modalData.cveId}`}
+                </h5>
+                <button type="button" className="btn-close btn-close-white" onClick={closeModal}></button>
+              </div>
+              <div className="modal-body">
+                {modalLoading && (
+                  <div className="text-center py-4">
+                    <div className="spinner-border text-primary" role="status">
+                      <span className="visually-hidden">Loading...</span>
+                    </div>
+                    <p className="mt-2 text-muted">Loading affected systems...</p>
+                  </div>
+                )}
+
+                {modalError && (
+                  <div className="alert alert-danger" role="alert">
+                    <i className="bi bi-exclamation-triangle me-2"></i>
+                    {modalError}
+                  </div>
+                )}
+
+                {modalData && !modalLoading && (
+                  <>
+                    <div className="mb-3">
+                      <span className={severityBadgeClass(modalData.severity)}>{modalData.severity}</span>
+                      <span className="ms-2 text-muted">
+                        {modalData.totalCount} system{modalData.totalCount !== 1 ? 's' : ''} affected
+                        {domain && <span className="ms-1">(in domain: {domain})</span>}
+                      </span>
+                    </div>
+
+                    {modalData.affectedAssets.length === 0 ? (
+                      <p className="text-muted">No systems found for this vulnerability in your accessible scope.</p>
+                    ) : (
+                      <div className="table-responsive">
+                        <table className="table table-sm table-hover mb-0">
+                          <thead className="table-light">
+                            <tr>
+                              <th>System Name</th>
+                              <th>IP Address</th>
+                              <th>Domain</th>
+                              <th>Type</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {modalData.affectedAssets.map((asset) => (
+                              <tr key={asset.assetId}>
+                                <td>
+                                  <a href={`/assets/${asset.assetId}`} className="text-decoration-none">
+                                    {asset.assetName}
+                                  </a>
+                                </td>
+                                <td>{asset.assetIp || '-'}</td>
+                                <td>{asset.adDomain || '-'}</td>
+                                <td>{asset.assetType || '-'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+
+                    {modalData.totalCount >= 100 && (
+                      <div className="alert alert-info mt-3 mb-0" role="alert">
+                        <i className="bi bi-info-circle me-2"></i>
+                        Showing first 100 affected systems. Use the asset overview for a complete list.
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+              <div className="modal-footer">
+                {modalData && modalData.affectedAssets.length > 0 && (
+                  <button
+                    type="button"
+                    className="btn btn-outline-success me-auto"
+                    onClick={handleExportAffectedSystems}
+                    disabled={exporting}
+                  >
+                    {exporting ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                        Exporting...
+                      </>
+                    ) : (
+                      <>
+                        <i className="bi bi-file-earmark-excel me-2"></i>
+                        Export to Excel
+                      </>
+                    )}
+                  </button>
+                )}
+                <button type="button" className="btn btn-secondary" onClick={closeModal}>Close</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
