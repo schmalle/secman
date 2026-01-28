@@ -170,6 +170,21 @@ interface AssetRepository : JpaRepository<Asset, Long> {
     """)
     fun findDistinctAdDomains(): List<String>
 
+    /**
+     * Find distinct AWS cloud account IDs from all assets
+     * Used for filter dropdown population in Current Vulnerabilities view
+     *
+     * @return List of distinct cloud account IDs (non-null, non-empty), ordered alphabetically
+     */
+    @io.micronaut.data.annotation.Query("""
+        SELECT DISTINCT a.cloudAccountId
+        FROM Asset a
+        WHERE a.cloudAccountId IS NOT NULL
+        AND a.cloudAccountId != ''
+        ORDER BY a.cloudAccountId
+    """)
+    fun findDistinctCloudAccountIds(): List<String>
+
     // Database Optimization - Feature: Database Structure Optimization
 
     /**

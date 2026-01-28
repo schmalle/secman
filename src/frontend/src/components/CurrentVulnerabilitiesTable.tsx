@@ -20,6 +20,7 @@ import {
     cleanupDuplicateVulnerabilities,
     getDistinctProducts,
     getDistinctAdDomains,
+    getDistinctCloudAccountIds,
     type CurrentVulnerability,
     type PaginatedVulnerabilitiesResponse,
     type VulnerabilityCleanupResult
@@ -50,10 +51,12 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
     const [exceptionFilter, setExceptionFilter] = useState<string>('');
     const [productFilter, setProductFilter] = useState<string>('');
     const [adDomainFilter, setAdDomainFilter] = useState<string>('');
+    const [cloudAccountIdFilter, setCloudAccountIdFilter] = useState<string>('');
 
     // Available filter options
     const [availableProducts, setAvailableProducts] = useState<string[]>([]);
     const [availableAdDomains, setAvailableAdDomains] = useState<string[]>([]);
+    const [availableCloudAccountIds, setAvailableCloudAccountIds] = useState<string[]>([]);
 
     // Pagination states
     const [currentPage, setCurrentPage] = useState<number>(0);
@@ -86,7 +89,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
         if (hasAccess) {
             fetchVulnerabilities();
         }
-    }, [severityFilter, systemFilter, exceptionFilter, productFilter, adDomainFilter, currentPage, hasAccess]);
+    }, [severityFilter, systemFilter, exceptionFilter, productFilter, adDomainFilter, cloudAccountIdFilter, currentPage, hasAccess]);
 
     useEffect(() => {
         // Fetch available filter options on mount (only if user has access)
@@ -94,12 +97,14 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
 
         const fetchFilterOptions = async () => {
             try {
-                const [products, domains] = await Promise.all([
+                const [products, domains, accountIds] = await Promise.all([
                     getDistinctProducts(undefined, 100),
-                    getDistinctAdDomains()
+                    getDistinctAdDomains(),
+                    getDistinctCloudAccountIds()
                 ]);
                 setAvailableProducts(products);
                 setAvailableAdDomains(domains);
+                setAvailableCloudAccountIds(accountIds);
             } catch (err) {
                 console.error('Failed to fetch filter options:', err);
             }
@@ -116,6 +121,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                 exceptionFilter || undefined,
                 productFilter || undefined,
                 adDomainFilter || undefined,
+                cloudAccountIdFilter || undefined,
                 currentPage,
                 pageSize
             );
@@ -527,6 +533,28 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                         {availableAdDomains.map((domain) => (
                             <option key={domain} value={domain}>
                                 {domain}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+                <div className="col-md-3">
+                    <label htmlFor="cloudAccountIdFilter" className="form-label">
+                        <i className="bi bi-cloud me-2"></i>
+                        AWS Account ID
+                    </label>
+                    <select
+                        id="cloudAccountIdFilter"
+                        className="form-select"
+                        value={cloudAccountIdFilter}
+                        onChange={(e) => {
+                            setCloudAccountIdFilter(e.target.value);
+                            handleFilterChange();
+                        }}
+                    >
+                        <option value="">All Accounts</option>
+                        {availableCloudAccountIds.map((accountId) => (
+                            <option key={accountId} value={accountId}>
+                                {accountId}
                             </option>
                         ))}
                     </select>
