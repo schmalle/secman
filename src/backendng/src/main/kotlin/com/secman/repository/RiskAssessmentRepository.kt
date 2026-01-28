@@ -71,4 +71,21 @@ interface RiskAssessmentRepository : JpaRepository<RiskAssessment, Long> {
     fun findByUsecaseId(usecaseId: Long): List<RiskAssessment>
     
     fun findByIsReleaseLocked(isLocked: Boolean): List<RiskAssessment>
+
+    // Count queries for report aggregation
+    @Query("SELECT COUNT(ra) FROM RiskAssessment ra WHERE ra.status = :status")
+    fun countByStatusValue(status: String): Long
+
+    @Query("SELECT ra FROM RiskAssessment ra ORDER BY ra.startDate DESC")
+    fun findRecentAssessments(): List<RiskAssessment>
+
+    @Query("SELECT COUNT(DISTINCT ra.assessmentBasisId) FROM RiskAssessment ra WHERE ra.assessmentBasisType = 'ASSET'")
+    fun countDistinctAssetsWithAssessments(): Long
+
+    // Queries with asset ID filtering for access control
+    @Query("SELECT ra FROM RiskAssessment ra WHERE ra.assessmentBasisType = 'ASSET' AND ra.assessmentBasisId IN :assetIds")
+    fun findByAssetBasisIdIn(assetIds: Set<Long>): List<RiskAssessment>
+
+    @Query("SELECT ra FROM RiskAssessment ra WHERE ra.assessmentBasisType = 'ASSET' AND ra.assessmentBasisId IN :assetIds ORDER BY ra.startDate DESC")
+    fun findRecentAssessmentsByAssetIds(assetIds: Set<Long>): List<RiskAssessment>
 }

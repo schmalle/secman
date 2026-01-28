@@ -62,7 +62,12 @@ class McpToolRegistry(
     @Inject private val startAlignmentTool: StartAlignmentTool,
     @Inject private val submitReviewTool: SubmitReviewTool,
     @Inject private val getAlignmentStatusTool: GetAlignmentStatusTool,
-    @Inject private val finalizeAlignmentTool: FinalizeAlignmentTool
+    @Inject private val finalizeAlignmentTool: FinalizeAlignmentTool,
+    // Feature 069: MCP Lense Reports
+    @Inject private val getRiskAssessmentSummaryTool: GetRiskAssessmentSummaryTool,
+    @Inject private val getRiskMitigationStatusTool: GetRiskMitigationStatusTool,
+    @Inject private val getVulnerabilityStatisticsTool: GetVulnerabilityStatisticsTool,
+    @Inject private val getExceptionStatisticsTool: GetExceptionStatisticsTool
 ) {
     private val logger = LoggerFactory.getLogger(McpToolRegistry::class.java)
 
@@ -121,7 +126,12 @@ class McpToolRegistry(
             startAlignmentTool,
             submitReviewTool,
             getAlignmentStatusTool,
-            finalizeAlignmentTool
+            finalizeAlignmentTool,
+            // Feature 069: MCP Lense Reports
+            getRiskAssessmentSummaryTool,
+            getRiskMitigationStatusTool,
+            getVulnerabilityStatisticsTool,
+            getExceptionStatisticsTool
         ).forEach { tool ->
             toolMap[tool.name] = tool
             logger.debug("Registered MCP tool: {}", tool.name)
@@ -336,6 +346,20 @@ class McpToolRegistry(
             }
             "get_alignment_status" -> {
                 permissions.contains(McpPermission.REQUIREMENTS_READ) // Any authenticated user with delegation
+            }
+
+            // Feature 069: MCP Lense Reports
+            "get_risk_assessment_summary" -> {
+                permissions.contains(McpPermission.ASSESSMENTS_READ)
+            }
+            "get_risk_mitigation_status" -> {
+                permissions.contains(McpPermission.ASSESSMENTS_READ)
+            }
+            "get_vulnerability_statistics" -> {
+                permissions.contains(McpPermission.VULNERABILITIES_READ)
+            }
+            "get_exception_statistics" -> {
+                permissions.contains(McpPermission.VULNERABILITIES_READ)
             }
 
             else -> false
