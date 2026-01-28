@@ -2,16 +2,19 @@ package com.secman.service
 
 import com.secman.domain.User
 import com.secman.event.UserCreatedEvent
+import com.secman.repository.AlignmentReviewerRepository
 import com.secman.repository.UserRepository
 import io.micronaut.context.event.ApplicationEventPublisher
 import jakarta.inject.Inject
 import jakarta.inject.Singleton
+import jakarta.transaction.Transactional
 import java.util.*
 
 @Singleton
-class UserService(
+open class UserService(
     @Inject private val userRepository: UserRepository,
-    @Inject private val eventPublisher: ApplicationEventPublisher<UserCreatedEvent>
+    @Inject private val eventPublisher: ApplicationEventPublisher<UserCreatedEvent>,
+    @Inject private val alignmentReviewerRepository: AlignmentReviewerRepository
 ) {
 
     fun getAllUsers(): List<User> {
@@ -53,8 +56,10 @@ class UserService(
         }
     }
 
-    fun deleteUser(id: Long): Boolean {
+    @Transactional
+    open fun deleteUser(id: Long): Boolean {
         return if (userRepository.existsById(id)) {
+            alignmentReviewerRepository.deleteByUser_Id(id)
             userRepository.deleteById(id)
             true
         } else {

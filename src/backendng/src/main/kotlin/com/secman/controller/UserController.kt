@@ -23,7 +23,8 @@ open class UserController(
     private val userDeletionValidator: com.secman.service.UserDeletionValidator,
     private val workgroupRepository: com.secman.repository.WorkgroupRepository,
     private val userMappingService: UserMappingService,
-    private val adminNotificationService: com.secman.service.AdminNotificationService
+    private val adminNotificationService: com.secman.service.AdminNotificationService,
+    private val alignmentReviewerRepository: com.secman.repository.AlignmentReviewerRepository
 ) {
 
     private val passwordEncoder = BCryptPasswordEncoder()
@@ -327,6 +328,7 @@ open class UserController(
         }
 
         try {
+            alignmentReviewerRepository.deleteByUser_Id(id)
             userRepository.deleteById(id)
             return HttpResponse.ok(mapOf("message" to "User deleted successfully"))
         } catch (e: Exception) {

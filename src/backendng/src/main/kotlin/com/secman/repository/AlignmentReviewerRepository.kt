@@ -65,4 +65,9 @@ interface AlignmentReviewerRepository : JpaRepository<AlignmentReviewer, Long> {
      * Delete all reviewers for a session.
      */
     fun deleteBySession_Id(sessionId: Long)
+
+    /**
+     * Delete all reviewer entries for a user.
+     */
+    fun deleteByUser_Id(userId: Long)
 }

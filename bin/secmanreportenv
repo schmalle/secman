@@ -1,0 +1,25 @@
+#!/bin/bash
+# secman - CLI wrapper for secman security management tool
+
+FALCON_CLIENT_ID=op://test/secman/FALCON_CLIENT_ID
+FALCON_CLIENT_SECRET=op://test/secman/FALCON_CLIENT_SECRET
+FALCON_CLOUD_REGION=op://test/secman/FALCON_CLOUD_REGION
+SECMAN_OPENROUTER_API_KEY=op://test/secman/OPENROUTER_API_KEY
+SECMAN_USERNAME=op://test/secman/SECMAN_USERNAME
+SECMAN_PASSWORD=op://test/secman/SECMAN_PASSWORD
+API_KEY=op://test/secman/API_KEY
+SECMAN_ADMIN_EMAIL=op://test/secman/SECMAN_ADMIN_EMAIL
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+JAR_PATH="$REPO_ROOT/src/cli/build/libs/cli-0.1.0-all.jar"
+
+if [ ! -f "$JAR_PATH" ]; then
+    echo "Error: CLI JAR not found at $JAR_PATH"
+    echo ""
+    echo "Build it first with:"
+    echo "  ./gradlew :cli:shadowJar"
+    exit 1
+fi
+
+

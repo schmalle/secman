@@ -3,6 +3,7 @@ package com.secman.cli.commands
 import com.secman.cli.service.AdminSummaryCliService
 import com.secman.domain.ExecutionStatus
 import picocli.CommandLine.*
+import jakarta.inject.Inject
 import jakarta.inject.Singleton
 
 /**
@@ -38,6 +39,7 @@ class SendAdminSummaryCommand : Runnable {
     @Spec
     lateinit var spec: Model.CommandSpec
 
+    @Inject
     lateinit var adminSummaryCliService: AdminSummaryCliService
 
     override fun run() {
