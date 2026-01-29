@@ -2,12 +2,11 @@
 
 Security requirement and risk assessment management tool.
 
-**Last Updated:** 2026-01-11
+**Last Updated:** 2026-01-29
 
 ---
 
 ## Table of Contents
-
 
 | Document                                      | Description                                    |
 | --------------------------------------------- | ---------------------------------------------- |
@@ -75,10 +74,11 @@ Using Secman for security management:
 
 **Technology Stack:**
 
-- **Backend**: Kotlin 2.3.0, Java 25, Micronaut 4.10, Hibernate JPA
-- **Frontend**: Astro 5.15, React 19, Bootstrap 5.3, Axios
-- **Database**: MariaDB 11.4+ with auto-migration
-- **CLI**: Picocli 4.7, CrowdStrike API integration
+- **Backend**: Kotlin 2.3.0, Java 21, Micronaut 4.10, Hibernate JPA
+- **Frontend**: Astro 5.16, React 19, Bootstrap 5.3, Axios
+- **Database**: MariaDB 12 with auto-migration
+- **CLI**: Picocli 4.7, CrowdStrike API, AWS SDK v2
+- **Build**: Gradle 9.3 (Kotlin DSL)
 
 For detailed architecture, see [ARCHITECTURE.md](./ARCHITECTURE.md).
 
@@ -110,6 +110,7 @@ npm run dev
 # Use via wrapper
 ./bin/secman help
 ./bin/secman query servers --dry-run
+./bin/secman send-admin-summary --dry-run
 ```
 
 ---
@@ -121,7 +122,7 @@ npm run dev
 - Linux server (Amazon Linux 2023, Ubuntu 22.04, RHEL 9)
 - Java 21 (Amazon Corretto recommended)
 - Node.js 20.x
-- MariaDB 11.4+
+- MariaDB 12+
 - Nginx
 
 ### 2. Essential Configuration
@@ -208,6 +209,13 @@ See [MCP.md](./MCP.md) for complete setup and available tools.
 0 8 * * 1 /opt/secman/bin/secman send-notifications
 ```
 
+### Admin Summary
+
+```bash
+# Weekly admin summary email
+0 9 * * 1 /opt/secman/bin/secman send-admin-summary
+```
+
 See [CLI.md](./CLI.md) for all commands and cron setup.
 
 ---
@@ -230,14 +238,14 @@ curl https://secman.yourdomain.com/
 
 ## Troubleshooting Quick Reference
 
-
 | Issue               | Check                                |
 | ------------------- | ------------------------------------ |
 | Backend won't start | `journalctl -u secman-backend -n 50` |
-| Frontend blank page | Browser console,`PUBLIC_BACKEND_URL` |
+| Frontend blank page | Browser console, `PUBLIC_BACKEND_URL` |
 | Database connection | `mysql -u secman -p secman`          |
 | 502 Bad Gateway     | `systemctl status secman-backend`    |
 | MCP auth fails      | API key valid? Headers correct?      |
+| OAuth callback fail | Check identity provider config       |
 
 See [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) for detailed solutions.
 
@@ -254,15 +262,15 @@ See [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) for detailed solutions.
 
 ```
 docs/
-├── README.md              ← You are here (index)
-├── ARCHITECTURE.md        ← System design & data model
-├── DEPLOYMENT.md          ← Production deployment
-├── ENVIRONMENT.md         ← Configuration reference
-├── CLI.md                 ← Command-line interface
-├── MCP.md                 ← AI assistant integration
-├── CROWDSTRIKE_IMPORT.md  ← Vulnerability import
-├── TESTING.md             ← Test infrastructure
-└── TROUBLESHOOTING.md     ← Common issues & solutions
+├── README.md              <- You are here (index)
+├── ARCHITECTURE.md        <- System design & data model
+├── DEPLOYMENT.md          <- Production deployment
+├── ENVIRONMENT.md         <- Configuration reference
+├── CLI.md                 <- Command-line interface
+├── MCP.md                 <- AI assistant integration
+├── CROWDSTRIKE_IMPORT.md  <- Vulnerability import
+├── TESTING.md             <- Test infrastructure
+└── TROUBLESHOOTING.md     <- Common issues & solutions
 ```
 
 ---
