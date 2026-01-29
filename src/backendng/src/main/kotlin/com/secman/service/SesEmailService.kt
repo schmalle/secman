@@ -2,16 +2,17 @@ package com.secman.service
 
 import com.secman.domain.EmailConfig
 import jakarta.inject.Singleton
+import jakarta.mail.*
+import jakarta.mail.internet.InternetAddress
+import jakarta.mail.internet.MimeBodyPart
+import jakarta.mail.internet.MimeMessage
+import jakarta.mail.internet.MimeMultipart
 import org.slf4j.LoggerFactory
-import software.amazon.awssdk.auth.credentials.AwsBasicCredentials
-import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider
-import software.amazon.awssdk.regions.Region
-import software.amazon.awssdk.services.ses.SesClient
-import software.amazon.awssdk.services.ses.model.*
+import java.util.*
 
 /**
- * Amazon SES email sending service
- * Provides email delivery via AWS Simple Email Service
+ * Amazon SES email sending service via SMTP
+ * Provides email delivery via AWS SES SMTP endpoint using Jakarta Mail
  */
 @Singleton
 class SesEmailService {
@@ -24,7 +25,7 @@ class SesEmailService {
     )
 
     /**
-     * Send email via Amazon SES
+     * Send email via Amazon SES SMTP endpoint
      */
     fun sendEmail(
         config: EmailConfig,
@@ -41,58 +42,64 @@ class SesEmailService {
         }
 
         try {
-            val credentials = AwsBasicCredentials.create(config.sesAccessKey, config.sesSecretKey)
-            val credentialsProvider = StaticCredentialsProvider.create(credentials)
-            val region = Region.of(config.sesRegion)
+            val props = Properties()
+            config.getSesSmtpProperties().forEach { (key, value) -> props[key] = value }
 
-            val sesClient = SesClient.builder()
-                .region(region)
-                .credentialsProvider(credentialsProvider)
-                .build()
-
-            sesClient.use { client ->
-                val destination = Destination.builder()
-                    .toAddresses(to)
-                    .build()
-
-                val bodyContent = Body.builder()
-                    .html(Content.builder().data(htmlBody).charset("UTF-8").build())
-                    .text(Content.builder().data(plainTextBody).charset("UTF-8").build())
-                    .build()
-
-                val messageContent = Message.builder()
-                    .subject(Content.builder().data(sanitizeEmailHeader(subject)).charset("UTF-8").build())
-                    .body(bodyContent)
-                    .build()
-
-                val sendEmailRequest = SendEmailRequest.builder()
-                    .source("${config.fromName} <${config.fromEmail}>")
-                    .destination(destination)
-                    .message(messageContent)
-                    .build()
-
-                val response = client.sendEmail(sendEmailRequest)
-
-                logger.info("Email sent successfully via SES to $to, MessageId: ${response.messageId()}")
-
-                return SendResult(
-                    success = true,
-                    messageId = response.messageId()
-                )
+            val authenticator = object : Authenticator() {
+                override fun getPasswordAuthentication(): PasswordAuthentication {
+                    return PasswordAuthentication(config.sesAccessKey, config.sesSecretKey)
+                }
             }
-        } catch (e: SesException) {
-            val errorMsg = "SES error: ${e.awsErrorDetails().errorMessage()}"
+
+            val session = Session.getInstance(props, authenticator)
+
+            val mimeMessage = MimeMessage(session).apply {
+                setFrom(InternetAddress(config.fromEmail, config.fromName))
+                addRecipient(Message.RecipientType.TO, InternetAddress(to))
+                setSubject(sanitizeEmailHeader(subject), "UTF-8")
+
+                val multipart = MimeMultipart("alternative")
+
+                val textPart = MimeBodyPart().apply {
+                    setText(plainTextBody, "UTF-8")
+                }
+                multipart.addBodyPart(textPart)
+
+                val htmlPart = MimeBodyPart().apply {
+                    setContent(htmlBody, "text/html; charset=UTF-8")
+                }
+                multipart.addBodyPart(htmlPart)
+
+                setContent(multipart)
+                sentDate = Date()
+            }
+
+            Transport.send(mimeMessage)
+
+            val messageId = mimeMessage.messageID
+            logger.info("Email sent successfully via SES SMTP to $to, MessageId: $messageId")
+
+            return SendResult(
+                success = true,
+                messageId = messageId
+            )
+        } catch (e: AuthenticationFailedException) {
+            val errorMsg = "SES SMTP authentication failed: ${e.message}"
+            logger.error(errorMsg, e)
+            return SendResult(success = false, errorMessage = errorMsg)
+        } catch (e: MessagingException) {
+            val errorMsg = "SES SMTP error: ${e.message}"
             logger.error(errorMsg, e)
             return SendResult(success = false, errorMessage = errorMsg)
         } catch (e: Exception) {
-            val errorMsg = "Failed to send email via SES: ${e.message}"
+            val errorMsg = "Failed to send email via SES SMTP: ${e.message}"
             logger.error(errorMsg, e)
             return SendResult(success = false, errorMessage = errorMsg)
         }
     }
 
     /**
-     * Send test email via SES
+     * Send test email via SES SMTP
      */
     fun sendTestEmail(config: EmailConfig, toAddress: String): SendResult {
         val htmlBody = """
@@ -130,7 +137,7 @@ class SesEmailService {
     }
 
     /**
-     * Verify SES configuration by checking if the from email is verified
+     * Verify SES SMTP configuration by attempting an SMTP connection
      */
     fun verifyConfiguration(config: EmailConfig): Pair<Boolean, String> {
         if (config.sesAccessKey.isNullOrBlank() || config.sesSecretKey.isNullOrBlank() || config.sesRegion.isNullOrBlank()) {
@@ -138,27 +145,26 @@ class SesEmailService {
         }
 
         try {
-            val credentials = AwsBasicCredentials.create(config.sesAccessKey, config.sesSecretKey)
-            val credentialsProvider = StaticCredentialsProvider.create(credentials)
-            val region = Region.of(config.sesRegion)
+            val props = Properties()
+            config.getSesSmtpProperties().forEach { (key, value) -> props[key] = value }
 
-            val sesClient = SesClient.builder()
-                .region(region)
-                .credentialsProvider(credentialsProvider)
-                .build()
+            val session = Session.getInstance(props)
+            val transport = session.getTransport("smtp")
 
-            sesClient.use { client ->
-                val request = GetAccountSendingEnabledRequest.builder().build()
-                val response = client.getAccountSendingEnabled(request)
-
-                if (!response.enabled()) {
-                    return Pair(false, "SES account sending is disabled")
-                }
-
-                return Pair(true, "SES configuration is valid")
+            transport.use {
+                it.connect(
+                    config.getSesSmtpHost(),
+                    587,
+                    config.sesAccessKey,
+                    config.sesSecretKey
+                )
             }
-        } catch (e: SesException) {
-            return Pair(false, "SES error: ${e.awsErrorDetails().errorMessage()}")
+
+            return Pair(true, "SES SMTP configuration is valid")
+        } catch (e: AuthenticationFailedException) {
+            return Pair(false, "SES SMTP authentication failed: ${e.message}")
+        } catch (e: MessagingException) {
+            return Pair(false, "SES SMTP connection failed: ${e.message}")
         } catch (e: Exception) {
             return Pair(false, "Configuration verification failed: ${e.message}")
         }

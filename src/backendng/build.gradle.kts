@@ -58,10 +58,6 @@ dependencies {
     implementation("io.micronaut.email:micronaut-email-javamail:2.11.0")
     implementation("org.eclipse.angus:angus-mail:2.0.5")
 
-    // Amazon SES
-    implementation("software.amazon.awssdk:ses:2.41.8")
-    implementation("software.amazon.awssdk:auth:2.41.8")
-
     // Email templates (Thymeleaf) - Feature 035
     implementation("io.micronaut.views:micronaut-views-thymeleaf")
     implementation("org.thymeleaf:thymeleaf:3.1.3.RELEASE")

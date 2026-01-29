@@ -212,6 +212,8 @@ fun findStateByValueWithRetry(stateToken: String): Optional<OAuthState> {
 - Kotlin 2.3.0 / Java 25 + Micronaut 4.10, PicoCLI (CLI framework), Jakarta Mail (email) (070-admin-summary-email)
 - MariaDB 11.4 (existing database) (070-admin-summary-email)
 - MariaDB 11.4 (read-only queries for statistics) (069-enhanced-admin-summary)
+- Kotlin 2.3.0 / Java 25 + Micronaut 4.10, Jakarta Mail (angus-mail 2.0.5), Hibernate JPA (071-ses-smtp-rewrite)
+- MariaDB 11.4 (existing `email_configs` table) (071-ses-smtp-rewrite)
 
 ## Recent Changes
 - 058-ai-norm-mapping: Added Kotlin 2.2.21 / Java 21 (backend), TypeScript/React 19 (frontend) + Micronaut 4.10, Hibernate JPA, Axios, Bootstrap 5.3

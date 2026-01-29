@@ -59,7 +59,8 @@ interface CrowdStrikeApiClient {
         severity: String = "HIGH,CRITICAL",
         minDaysOpen: Int = 30,
         config: FalconConfigDto,
-        limit: Int = 100
+        limit: Int = 100,
+        lastSeenDays: Int = 0
     ): CrowdStrikeQueryResponse
 
     /**
