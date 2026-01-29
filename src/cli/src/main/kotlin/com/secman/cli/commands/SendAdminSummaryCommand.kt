@@ -66,6 +66,25 @@ class SendAdminSummaryCommand : Runnable {
             println("   Assets: ${statistics.assetCount}")
             println()
 
+            println("Vulnerability Statistics: ${statistics.vulnerabilityStatisticsUrl}")
+            println()
+
+            if (statistics.topProducts.isNotEmpty()) {
+                println("Top 10 Most Affected Products:")
+                statistics.topProducts.forEach { product ->
+                    println("   ${product.name}: ${product.vulnerabilityCount}")
+                }
+                println()
+            }
+
+            if (statistics.topServers.isNotEmpty()) {
+                println("Top 10 Most Affected Servers:")
+                statistics.topServers.forEach { server ->
+                    println("   ${server.name}: ${server.vulnerabilityCount}")
+                }
+                println()
+            }
+
             // Execute send
             val result = adminSummaryCliService.execute(dryRun, verbose)
 
