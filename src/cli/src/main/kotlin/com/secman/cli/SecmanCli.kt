@@ -61,6 +61,10 @@ class SecmanCli {
                             serversCommand.minDaysOpen = args[i + 1].toIntOrNull() ?: 30
                             i++
                         }
+                        args[i] == "--last-seen-days" && i + 1 < args.size -> {
+                            serversCommand.lastSeenDays = args[i + 1].toIntOrNull() ?: 0
+                            i++
+                        }
                         args[i] == "--limit" && i + 1 < args.size -> {
                             serversCommand.limit = args[i + 1].toIntOrNull() ?: 800
                             i++
@@ -280,6 +284,7 @@ class SecmanCli {
               --device-type <type>     Device type: SERVER, WORKSTATION, or ALL (default: SERVER)
               --severity <levels>      Severity filter (default: HIGH,CRITICAL)
               --min-days-open <num>    Minimum days open filter (default: 30)
+              --last-seen-days <num>   Only include devices seen within N days (default: 0 = all devices)
               --limit <num>            Page size for pagination (default: 800)
               --backend-url <url>      Backend API URL (default: http://localhost:8080)
               --save                   Save to database (requires --username and --password)

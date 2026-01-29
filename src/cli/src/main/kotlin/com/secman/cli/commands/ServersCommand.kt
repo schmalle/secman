@@ -52,6 +52,7 @@ class ServersCommand {
     var clientId: String? = null         // CrowdStrike client ID (optional override)
     var clientSecret: String? = null     // CrowdStrike client secret (optional override)
     var limit: Int = 800                 // Page size for pagination
+    var lastSeenDays: Int = 0            // Only include devices seen within N days (0 = all devices)
 
     /**
      * Execute the servers query command
@@ -72,8 +73,8 @@ class ServersCommand {
             System.out.println("Device type: ${parsedDeviceType.name}")
 
             if (verbose) {
-                log.info("Starting query with filters: deviceType={}, severity={}, minDaysOpen={}, hostnames={}",
-                    parsedDeviceType.name, severity, minDaysOpen, hostnames?.joinToString(",") ?: "ALL")
+                log.info("Starting query with filters: deviceType={}, severity={}, minDaysOpen={}, lastSeenDays={}, hostnames={}",
+                    parsedDeviceType.name, severity, minDaysOpen, lastSeenDays, hostnames?.joinToString(",") ?: "ALL")
             }
 
             // Load or override configuration
@@ -93,7 +94,7 @@ class ServersCommand {
             // Query CrowdStrike API with filters
             System.out.println("Querying CrowdStrike for ${parsedDeviceType.displayName()}...")
             if (verbose) {
-                System.out.println("Filters: device type=${parsedDeviceType.name}, severity=$severity, min days open=$minDaysOpen")
+                System.out.println("Filters: device type=${parsedDeviceType.name}, severity=$severity, min days open=$minDaysOpen, last seen days=${if (lastSeenDays > 0) lastSeenDays else "all"}")
                 if (hostnames != null) {
                     System.out.println("Hostnames: ${hostnames!!.joinToString(", ")}")
                 }
@@ -105,7 +106,8 @@ class ServersCommand {
                 severity = severity,
                 minDaysOpen = minDaysOpen,
                 config = config,
-                limit = limit
+                limit = limit,
+                lastSeenDays = lastSeenDays
             )
 
             System.out.println("Found ${response.vulnerabilities.size} vulnerabilities across ${parsedDeviceType.displayName()}")

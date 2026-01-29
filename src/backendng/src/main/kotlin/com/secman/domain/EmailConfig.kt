@@ -276,6 +276,34 @@ data class EmailConfig(
     }
 
     /**
+     * Get SES SMTP host derived from the configured SES region
+     * AWS SES SMTP endpoints follow the pattern: email-smtp.{region}.amazonaws.com
+     */
+    fun getSesSmtpHost(): String {
+        return "email-smtp.${sesRegion}.amazonaws.com"
+    }
+
+    /**
+     * Get SES SMTP configuration properties for Jakarta Mail
+     * Uses port 587 with STARTTLS as recommended by AWS
+     */
+    fun getSesSmtpProperties(): Map<String, String> {
+        val host = getSesSmtpHost()
+        return mapOf(
+            "mail.smtp.host" to host,
+            "mail.smtp.port" to "587",
+            "mail.smtp.auth" to "true",
+            "mail.smtp.starttls.enable" to "true",
+            "mail.smtp.starttls.required" to "true",
+            "mail.smtp.ssl.trust" to host,
+            "mail.smtp.ssl.protocols" to "TLSv1.2 TLSv1.3",
+            "mail.smtp.connectiontimeout" to "10000",
+            "mail.smtp.timeout" to "30000",
+            "mail.smtp.writetimeout" to "10000"
+        )
+    }
+
+    /**
      * Get IMAP configuration properties for JavaMail
      */
     fun getImapProperties(): Map<String, String>? {

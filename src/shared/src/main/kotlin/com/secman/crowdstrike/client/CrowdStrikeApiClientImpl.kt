@@ -366,7 +366,8 @@ open class CrowdStrikeApiClientImpl(
         severity: String,
         minDaysOpen: Int,
         config: FalconConfigDto,
-        limit: Int
+        limit: Int,
+        lastSeenDays: Int
     ): CrowdStrikeQueryResponse {
         log.info("Querying CrowdStrike servers: hostnames={}, deviceType={}, severity={}, minDaysOpen={}",
             hostnames?.joinToString(",") ?: "ALL", deviceType, severity, minDaysOpen)
@@ -410,7 +411,7 @@ open class CrowdStrikeApiClientImpl(
             log.info(">>> Stage 1: Getting authentication token")
             val token = getAuthToken(config)
             log.info(">>> Stage 1: Querying {} devices with product_type_desc filter", parsedDeviceType.name)
-            val serverDeviceIds = getDeviceIdsFiltered(token, parsedDeviceType, limit)
+            val serverDeviceIds = getDeviceIdsFiltered(token, parsedDeviceType, limit, lastSeenDays)
 
             if (serverDeviceIds.isEmpty()) {
                 log.info(">>> Stage 1: No {} devices found in CrowdStrike", parsedDeviceType.name)
@@ -581,20 +582,22 @@ open class CrowdStrikeApiClientImpl(
     open fun getDeviceIdsFiltered(
         token: AuthToken,
         deviceType: DeviceType = DeviceType.SERVER,
-        limit: Int = 5000
+        limit: Int = 5000,
+        lastSeenDays: Int = 0
     ): List<String> {
         // Handle ALL device type by querying both SERVER and WORKSTATION
         if (deviceType == DeviceType.ALL) {
             log.info(">>> Stage 1: Querying ALL devices (SERVER + WORKSTATION)")
-            val serverIds = getDeviceIdsFiltered(token, DeviceType.SERVER, limit)
-            val workstationIds = getDeviceIdsFiltered(token, DeviceType.WORKSTATION, limit)
+            val serverIds = getDeviceIdsFiltered(token, DeviceType.SERVER, limit, lastSeenDays)
+            val workstationIds = getDeviceIdsFiltered(token, DeviceType.WORKSTATION, limit, lastSeenDays)
             val combined = (serverIds + workstationIds).distinct()
             log.info(">>> Stage 1 complete: {} total devices ({} servers + {} workstations)",
                 combined.size, serverIds.size, workstationIds.size)
             return combined
         }
 
-        log.info(">>> Stage 1: Querying {} devices with product_type_desc + last_seen filters", deviceType.name)
+        log.info(">>> Stage 1: Querying {} devices with product_type_desc filter{}", deviceType.name,
+            if (lastSeenDays > 0) " + last_seen:>'now-${lastSeenDays}d'" else " (no recency filter)")
 
         val allDeviceIds = mutableListOf<String>()
         var offset = 0
@@ -602,11 +605,14 @@ open class CrowdStrikeApiClientImpl(
 
         while (hasMore) {
             try {
-                // OPTIMIZATION: Combine filters to get only active devices seen in the last day
+                // Filter by device type, optionally restricting to recently seen devices
                 // - product_type_desc:'Server' or 'Workstation' = Only specified device type
-                // - last_seen:>'now-1d' = Only devices seen in the last 24 hours
-                // This reduces the result set significantly
-                val filter = "${deviceType.toFqlFilter()}+last_seen:>'now-1d'"
+                // - last_seen:>'now-Nd' = Only devices seen in the last N days (when lastSeenDays > 0)
+                val filter = if (lastSeenDays > 0) {
+                    "${deviceType.toFqlFilter()}+last_seen:>'now-${lastSeenDays}d'"
+                } else {
+                    deviceType.toFqlFilter()
+                }
 
                 val uri = UriBuilder.of("/devices/queries/devices/v1")
                     .queryParam("filter", filter)
