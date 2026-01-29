@@ -97,6 +97,20 @@
             </div>
         </div>
 
+        <div style="text-align: center; margin: 25px 0;">
+            <a href="${vulnerabilityStatisticsUrl}" style="display: inline-block; background-color: #0d6efd; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 1.1em;">View Vulnerability Statistics</a>
+        </div>
+
+        <div class="stats-box">
+            <h3 style="margin-top: 0;">Top 10 Most Affected Products</h3>
+            ${topProductsHtml}
+        </div>
+
+        <div class="stats-box">
+            <h3 style="margin-top: 0;">Top 10 Most Affected Servers</h3>
+            ${topServersHtml}
+        </div>
+
         <p>This is an automated summary of your SecMan instance. Review these statistics regularly to ensure your security posture remains strong.</p>
     </div>
 

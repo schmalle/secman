@@ -1,5 +1,6 @@
 package com.secman.service
 
+import com.secman.config.AppConfig
 import com.secman.domain.AdminSummaryLog
 import com.secman.domain.ExecutionStatus
 import com.secman.domain.User
@@ -16,6 +17,7 @@ import java.time.format.DateTimeFormatter
 /**
  * Service for sending admin summary emails with system statistics.
  * Feature: 070-admin-summary-email
+ * Enhanced: 069-enhanced-admin-summary (link, top products, top servers)
  */
 @Singleton
 class AdminSummaryService(
@@ -23,9 +25,28 @@ class AdminSummaryService(
     private val vulnerabilityRepository: VulnerabilityRepository,
     private val assetRepository: AssetRepository,
     private val adminSummaryLogRepository: AdminSummaryLogRepository,
-    private val emailService: EmailService
+    private val emailService: EmailService,
+    private val appConfig: AppConfig
 ) {
     private val logger = LoggerFactory.getLogger(AdminSummaryService::class.java)
+
+    /**
+     * Summary entry for a product's vulnerability count.
+     * Feature: 069-enhanced-admin-summary
+     */
+    data class ProductSummary(
+        val name: String,
+        val vulnerabilityCount: Long
+    )
+
+    /**
+     * Summary entry for a server's vulnerability count.
+     * Feature: 069-enhanced-admin-summary
+     */
+    data class ServerSummary(
+        val name: String,
+        val vulnerabilityCount: Long
+    )
 
     /**
      * System statistics data class
@@ -33,7 +54,10 @@ class AdminSummaryService(
     data class SystemStatistics(
         val userCount: Long,
         val vulnerabilityCount: Long,
-        val assetCount: Long
+        val assetCount: Long,
+        val vulnerabilityStatisticsUrl: String = "",
+        val topProducts: List<ProductSummary> = emptyList(),
+        val topServers: List<ServerSummary> = emptyList()
     )
 
     /**
@@ -49,21 +73,69 @@ class AdminSummaryService(
     )
 
     /**
-     * Get current system statistics (user count, vulnerability count, asset count)
+     * Get current system statistics (user count, vulnerability count, asset count,
+     * vulnerability statistics URL, top 10 products, top 10 servers)
      */
     fun getSystemStatistics(): SystemStatistics {
         val userCount = userRepository.count()
         val vulnerabilityCount = vulnerabilityRepository.count()
         val assetCount = assetRepository.count()
 
-        logger.debug("System statistics: users={}, vulnerabilities={}, assets={}",
-            userCount, vulnerabilityCount, assetCount)
+        val baseUrl = appConfig.backend.baseUrl.trimEnd('/')
+        val vulnerabilityStatisticsUrl = "$baseUrl/vulnerability-statistics"
+
+        val topProducts = getTopProductsAdmin()
+        val topServers = getTopServersAdmin()
+
+        logger.debug("System statistics: users={}, vulnerabilities={}, assets={}, topProducts={}, topServers={}",
+            userCount, vulnerabilityCount, assetCount, topProducts.size, topServers.size)
 
         return SystemStatistics(
             userCount = userCount,
             vulnerabilityCount = vulnerabilityCount,
-            assetCount = assetCount
+            assetCount = assetCount,
+            vulnerabilityStatisticsUrl = vulnerabilityStatisticsUrl,
+            topProducts = topProducts,
+            topServers = topServers
         )
+    }
+
+    /**
+     * Get top 10 most vulnerable products (admin-level, unfiltered).
+     * Feature: 069-enhanced-admin-summary
+     */
+    private fun getTopProductsAdmin(): List<ProductSummary> {
+        return try {
+            vulnerabilityRepository.findMostVulnerableProductsForAll().map { row ->
+                ProductSummary(
+                    name = row.product ?: "",
+                    vulnerabilityCount = row.vulnerabilityCount?.toLong() ?: 0L
+                )
+            }
+        } catch (e: Exception) {
+            logger.error("Failed to fetch top products: {}", e.message)
+            emptyList()
+        }
+    }
+
+    /**
+     * Get top 10 most affected servers (admin-level, unfiltered).
+     * Feature: 069-enhanced-admin-summary
+     */
+    private fun getTopServersAdmin(): List<ServerSummary> {
+        return try {
+            vulnerabilityRepository.findTopAssetsByVulnerabilitiesForAll()
+                .take(10)
+                .map { row ->
+                    ServerSummary(
+                        name = row["assetName"] as? String ?: "",
+                        vulnerabilityCount = (row["totalVulnerabilityCount"] as? Number)?.toLong() ?: 0L
+                    )
+                }
+        } catch (e: Exception) {
+            logger.error("Failed to fetch top servers: {}", e.message)
+            emptyList()
+        }
     }
 
     /**
@@ -211,6 +283,9 @@ class AdminSummaryService(
                     .replace("\${userCount}", statistics.userCount.toString())
                     .replace("\${vulnerabilityCount}", statistics.vulnerabilityCount.toString())
                     .replace("\${assetCount}", statistics.assetCount.toString())
+                    .replace("\${vulnerabilityStatisticsUrl}", statistics.vulnerabilityStatisticsUrl)
+                    .replace("\${topProductsHtml}", renderTopProductsHtml(statistics.topProducts))
+                    .replace("\${topServersHtml}", renderTopServersHtml(statistics.topServers))
             }
         } catch (e: Exception) {
             logger.error("Failed to render HTML template: {}", e.message)
@@ -245,6 +320,9 @@ class AdminSummaryService(
                     .replace("\${userCount}", statistics.userCount.toString())
                     .replace("\${vulnerabilityCount}", statistics.vulnerabilityCount.toString())
                     .replace("\${assetCount}", statistics.assetCount.toString())
+                    .replace("\${vulnerabilityStatisticsUrl}", statistics.vulnerabilityStatisticsUrl)
+                    .replace("\${topProductsText}", renderTopProductsText(statistics.topProducts))
+                    .replace("\${topServersText}", renderTopServersText(statistics.topServers))
             }
         } catch (e: Exception) {
             logger.error("Failed to render text template: {}", e.message)
@@ -258,6 +336,80 @@ class AdminSummaryService(
             Total Vulnerabilities: ${statistics.vulnerabilityCount}
             Total Assets: ${statistics.assetCount}
             """.trimIndent()
+        }
+    }
+
+    /**
+     * Render top products as HTML table rows.
+     * Feature: 069-enhanced-admin-summary
+     */
+    private fun renderTopProductsHtml(products: List<ProductSummary>): String {
+        if (products.isEmpty()) {
+            return """<p style="color: #6c757d; font-style: italic;">No vulnerability data available</p>"""
+        }
+        val rows = products.joinToString("\n") { product ->
+            """            <tr>
+                <td style="padding: 8px 12px; border-bottom: 1px solid #e9ecef;">${product.name}</td>
+                <td style="padding: 8px 12px; border-bottom: 1px solid #e9ecef; text-align: right; font-weight: bold; color: #0d6efd;">${product.vulnerabilityCount}</td>
+            </tr>"""
+        }
+        return """<table style="width: 100%; border-collapse: collapse;">
+            <tr style="background-color: #e9ecef;">
+                <th style="padding: 8px 12px; text-align: left;">Product</th>
+                <th style="padding: 8px 12px; text-align: right;">Vulnerabilities</th>
+            </tr>
+$rows
+        </table>"""
+    }
+
+    /**
+     * Render top servers as HTML table rows.
+     * Feature: 069-enhanced-admin-summary
+     */
+    private fun renderTopServersHtml(servers: List<ServerSummary>): String {
+        if (servers.isEmpty()) {
+            return """<p style="color: #6c757d; font-style: italic;">No vulnerability data available</p>"""
+        }
+        val rows = servers.joinToString("\n") { server ->
+            """            <tr>
+                <td style="padding: 8px 12px; border-bottom: 1px solid #e9ecef;">${server.name}</td>
+                <td style="padding: 8px 12px; border-bottom: 1px solid #e9ecef; text-align: right; font-weight: bold; color: #0d6efd;">${server.vulnerabilityCount}</td>
+            </tr>"""
+        }
+        return """<table style="width: 100%; border-collapse: collapse;">
+            <tr style="background-color: #e9ecef;">
+                <th style="padding: 8px 12px; text-align: left;">Server</th>
+                <th style="padding: 8px 12px; text-align: right;">Vulnerabilities</th>
+            </tr>
+$rows
+        </table>"""
+    }
+
+    /**
+     * Render top products as plain text lines.
+     * Feature: 069-enhanced-admin-summary
+     */
+    private fun renderTopProductsText(products: List<ProductSummary>): String {
+        if (products.isEmpty()) {
+            return "No vulnerability data available"
+        }
+        val maxNameLen = products.maxOf { it.name.length }.coerceAtLeast(7)
+        return products.joinToString("\n") { product ->
+            "   ${product.name.padEnd(maxNameLen)}  ${product.vulnerabilityCount}"
+        }
+    }
+
+    /**
+     * Render top servers as plain text lines.
+     * Feature: 069-enhanced-admin-summary
+     */
+    private fun renderTopServersText(servers: List<ServerSummary>): String {
+        if (servers.isEmpty()) {
+            return "No vulnerability data available"
+        }
+        val maxNameLen = servers.maxOf { it.name.length }.coerceAtLeast(6)
+        return servers.joinToString("\n") { server ->
+            "   ${server.name.padEnd(maxNameLen)}  ${server.vulnerabilityCount}"
         }
     }
 }

@@ -13,6 +13,18 @@ Total Users:           ${userCount}
 Total Vulnerabilities: ${vulnerabilityCount}
 Total Assets:          ${assetCount}
 
+VIEW VULNERABILITY STATISTICS
+------------------------------
+${vulnerabilityStatisticsUrl}
+
+TOP 10 MOST AFFECTED PRODUCTS
+------------------------------
+${topProductsText}
+
+TOP 10 MOST AFFECTED SERVERS
+-----------------------------
+${topServersText}
+
 This is an automated summary of your SecMan instance. Review these
 statistics regularly to ensure your security posture remains strong.
 
