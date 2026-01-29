@@ -152,7 +152,10 @@ const UserManagement = () => {
             console.log("Fetching users...");
             const response = await authenticatedGet('/api/users?includeWorkgroups=true');
             if (response.ok && isMounted) {
-                const data: User[] = await response.json();
+                const data: User[] = (await response.json()).map((u: User) => ({
+                    ...u,
+                    roles: u.roles ?? [],
+                }));
                 setUsers(data);
                 setError(null);
             } else if (isMounted && !response.ok) {
@@ -239,7 +242,7 @@ const UserManagement = () => {
             const response = await authenticatedPost('/api/users', newUser);
             if (response.ok) {
                 const data = await response.json();
-                setUsers(prevUsers => [...prevUsers, data]);
+                setUsers(prevUsers => [...prevUsers, { ...data, roles: data.roles ?? [] }]);
                 setShowAddUserModal(false);
                 setNewUser({ username: '', email: '', password: '', roles: ['USER'], workgroupIds: [] }); // Reset form
             } else {
@@ -307,7 +310,7 @@ const UserManagement = () => {
             username: user.username,
             email: user.email,
             password: '', // Leave blank - only update if user enters a new password
-            roles: [...user.roles],
+            roles: [...(user.roles ?? [])],
             workgroupIds: user.workgroups?.map(wg => wg.id) || [],
         });
         setEditUserError(null);
@@ -402,7 +405,7 @@ const UserManagement = () => {
 
             if (response.ok) {
                 const data = await response.json();
-                setUsers(prevUsers => prevUsers.map(u => u.id === editingUser.id ? data : u));
+                setUsers(prevUsers => prevUsers.map(u => u.id === editingUser.id ? { ...data, roles: data.roles ?? [] } : u));
                 handleCloseEditModal();
             } else {
                 const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
