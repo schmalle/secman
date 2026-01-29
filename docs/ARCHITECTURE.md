@@ -1,6 +1,6 @@
 # Secman Architecture
 
-**Last Updated:** 2026-01-11
+**Last Updated:** 2026-01-29
 
 This document describes the system architecture, data model, and design patterns used in Secman.
 
@@ -45,6 +45,8 @@ Secman is a security requirement and risk assessment management tool consisting 
    [CLI Tool]
    CrowdStrike queries
    Email notifications
+   Admin summaries
+   Data imports
         |
         v
    [Backend :8080]
@@ -55,21 +57,20 @@ Secman is a security requirement and risk assessment management tool consisting 
 
 ## Technology Stack
 
-
 | Layer        | Technology    | Version              |
 | ------------ | ------------- | -------------------- |
 | **Backend**  | Kotlin        | 2.3.0                |
 |              | Java          | 21                   |
 |              | Micronaut     | 4.10                 |
 |              | Hibernate JPA | (via Micronaut Data) |
-| **Frontend** | Astro         | 5.15                 |
+| **Frontend** | Astro         | 5.16                 |
 |              | React         | 19                   |
 |              | Bootstrap     | 5.3                  |
 |              | Axios         | (HTTP client)        |
-| **Database** | MariaDB       | 11.4+                |
+| **Database** | MariaDB       | 12                   |
 | **CLI**      | Picocli       | 4.7                  |
-|              | Kotlin        | 2.2.21               |
-| **Build**    | Gradle        | 9.2                  |
+|              | AWS SDK       | v2                   |
+| **Build**    | Gradle        | 9.3                  |
 
 ---
 
@@ -77,26 +78,26 @@ Secman is a security requirement and risk assessment management tool consisting 
 
 ### Backend (`src/backendng/`)
 
-The backend follows a layered architecture:
+The backend follows a layered architecture with 52 controllers and 98+ services:
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                       Controller Layer                          │
-│   REST endpoints, request validation, response formatting       │
-│   @Controller, @Secured, @PathVariable, @Body                  │
-├─────────────────────────────────────────────────────────────────┤
-│                        Service Layer                            │
-│   Business logic, transaction management, domain operations     │
-│   @Singleton, @Transactional                                   │
-├─────────────────────────────────────────────────────────────────┤
-│                       Repository Layer                          │
-│   Data access, JPA queries, database operations                │
-│   @Repository, CrudRepository, custom queries                  │
-├─────────────────────────────────────────────────────────────────┤
-│                        Domain Layer                             │
-│   Entity definitions, validation, business rules               │
-│   @Entity, @Table, @Column, @ManyToOne                         │
-└─────────────────────────────────────────────────────────────────┘
++-----------------------------------------------------------------+
+|                       Controller Layer                           |
+|   REST endpoints, request validation, response formatting       |
+|   @Controller, @Secured, @PathVariable, @Body                   |
++-----------------------------------------------------------------+
+|                        Service Layer                             |
+|   Business logic, transaction management, domain operations     |
+|   @Singleton, @Transactional                                    |
++-----------------------------------------------------------------+
+|                       Repository Layer                           |
+|   Data access, JPA queries, database operations                 |
+|   @Repository, CrudRepository, custom queries                   |
++-----------------------------------------------------------------+
+|                        Domain Layer                              |
+|   Entity definitions, validation, business rules                |
+|   @Entity, @Table, @Column, @ManyToOne                          |
++-----------------------------------------------------------------+
 ```
 
 **Key packages:**
@@ -108,26 +109,49 @@ The backend follows a layered architecture:
 - `com.secman.config` - Configuration classes
 - `com.secman.dto` - Data transfer objects
 - `com.secman.filter` - HTTP filters
+- `com.secman.mcp` - MCP tools and registry
+
+**Controller categories:**
+
+- **Core Domain**: Asset, Requirement, Release, Workgroup, Product, Standard, Norm, UseCase
+- **Vulnerability**: VulnerabilityManagement, VulnerabilityExceptionRequest, VulnerabilityStatistics, VulnerabilityConfig, AccountVulns, DomainVulns, WorkgroupVulns
+- **Authentication**: Auth, OAuth, Passkey, UserProfile
+- **Admin**: AppSettings, IdentityProvider, MaintenanceBanner, UserMapping, User, TranslationConfig, NotificationSettings, EmailConfig, EmailProviderConfig, FalconConfig, ConfigBundle
+- **Import/Export**: Import, RequirementFile, Scan
+- **Email & Notifications**: Notification, NotificationPreference, NotificationLog, TestEmailAccount
+- **MCP**: Mcp, McpAdmin, McpStreamableHttp
+- **Other**: Health, Alignment, ReleaseComparison, Risk, RiskAssessment, Demand, DemandClassification, NormMapping, CrowdStrike, OutdatedAsset, MaterializedViewRefresh
 
 ### Frontend (`src/frontend/`)
 
-Astro with React islands architecture:
+Astro with React islands architecture, 61 pages:
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                         Astro Pages                             │
-│   Static/SSR pages, routing, layouts                           │
-│   src/pages/*.astro                                            │
-├─────────────────────────────────────────────────────────────────┤
-│                      React Components                           │
-│   Interactive islands, state management, UI logic              │
-│   src/components/*.tsx                                         │
-├─────────────────────────────────────────────────────────────────┤
-│                        Services Layer                           │
-│   API calls, authentication, data fetching                     │
-│   src/services/*.ts (Axios)                                    │
-└─────────────────────────────────────────────────────────────────┘
++-----------------------------------------------------------------+
+|                         Astro Pages                              |
+|   Static/SSR pages, routing, layouts                            |
+|   src/pages/*.astro                                             |
++-----------------------------------------------------------------+
+|                      React Components                            |
+|   Interactive islands, state management, UI logic               |
+|   src/components/*.tsx                                          |
++-----------------------------------------------------------------+
+|                        Services Layer                            |
+|   API calls, authentication, data fetching                      |
+|   src/services/*.ts (Axios)                                     |
++-----------------------------------------------------------------+
 ```
+
+**Page categories:**
+
+- **Core**: Home, Login, Profile, About
+- **Assets**: Assets list, Asset detail, Outdated assets
+- **Vulnerabilities**: Current, Exceptions, System, Domain, Account, Workgroup, Statistics, Exception approvals
+- **Requirements**: Requirements, Standards, Norms, Releases, Release comparison
+- **Risk & Compliance**: Risks, Risk assessments, Demands, Products, Use cases
+- **Import/Export**: Import, Export
+- **Notifications**: Preferences, Logs
+- **Admin (16 pages)**: App settings, Classification rules, Config bundle, Email config, Falcon config, Identity providers, Maintenance banners, MCP API keys, Notification settings, Requirements, Releases, Test email accounts, Translation config, User management, User mappings, Vulnerability config
 
 **Authentication flow:**
 
@@ -137,28 +161,39 @@ Astro with React islands architecture:
 
 ### CLI (`src/cli/`)
 
-Command-line interface for automated operations:
+Command-line interface with 21 commands for automated operations:
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                       Command Classes                           │
-│   Picocli commands, parameter parsing, output formatting       │
-│   @Command, @Option, @Parameters                               │
-├─────────────────────────────────────────────────────────────────┤
-│                        Service Layer                            │
-│   API client, CrowdStrike integration, email sending           │
-│   HTTP clients, token management                               │
-└─────────────────────────────────────────────────────────────────┘
++-----------------------------------------------------------------+
+|                       Command Classes                            |
+|   Picocli commands, parameter parsing, output formatting        |
+|   @Command, @Option, @Parameters                                |
++-----------------------------------------------------------------+
+|                        Service Layer                             |
+|   API client, CrowdStrike integration, email sending            |
+|   HTTP clients, token management                                |
++-----------------------------------------------------------------+
 ```
 
 **Available commands:**
 
 - `query servers` - Query CrowdStrike for vulnerabilities
-- `send-notifications` - Send email notifications
+- `send-notifications` - Send email notifications (outdated assets, new vulnerabilities)
+- `send-admin-summary` - Generate and send admin summary reports
 - `manage-user-mappings` - Manage AWS/AD domain mappings
+- `manage-workgroups` - Manage workgroup asset assignments
 - `export-requirements` - Export to Excel/Word
 - `add-requirement` - Create requirements
 - `add-vulnerability` - Add vulnerability records
+- `add-aws` - Add AWS account associations
+- `add-domain` - Add AD domain associations
+- `import` - Import from local files (XLS, Nmap XML, vulnerabilities)
+- `import-s3` - Import from S3 buckets
+- `config` - Manage CLI configuration
+- `monitor` - System monitoring
+- `list` - List various entities
+- `remove` - Remove assets/data
+- `delete-all-requirements` - Bulk requirement deletion
 
 ---
 
@@ -167,51 +202,80 @@ Command-line interface for automated operations:
 ### Core Entities
 
 ```
-┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐
-│      User        │     │    Workgroup     │     │      Asset       │
-├──────────────────┤     ├──────────────────┤     ├──────────────────┤
-│ id               │     │ id               │     │ id               │
-│ email            │     │ name             │     │ name             │
-│ username         │     │ description      │     │ type             │
-│ password         │     │                  │     │ ip               │
-│ roles[]          │◄───►│                  │◄───►│ owner            │
-│ enabled          │     │                  │     │ description      │
-│ lastLogin        │     │                  │     │ lastSeen         │
-│ authProvider     │     │                  │     │ cloudAccountId   │
-└──────────────────┘     └──────────────────┘     │ adDomain         │
-                                                   │ osVersion        │
-                                                   └────────┬─────────┘
-                                                            │
-                    ┌───────────────────────────────────────┘
-                    │
-                    ▼
-┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐
-│  Vulnerability   │     │   ScanResult     │     │   Requirement    │
-├──────────────────┤     ├──────────────────┤     ├──────────────────┤
-│ id               │     │ id               │     │ id               │
-│ cveId            │     │ port             │     │ shortreq         │
-│ title            │     │ protocol         │     │ details          │
-│ severity         │     │ state            │     │ motivation       │
-│ description      │     │ service          │     │ chapter          │
-│ detectionTime    │     │ product          │     │ status           │
-│ patchPublication │     │ version          │     │ priority         │
-│ daysOpen         │     │ scanTimestamp    │     │ tags[]           │
-│ asset_id (FK)    │     │ asset_id (FK)    │     │ norms[]          │
-└──────────────────┘     └──────────────────┘     └──────────────────┘
++------------------+     +------------------+     +------------------+
+|      User        |     |    Workgroup     |     |      Asset       |
++------------------+     +------------------+     +------------------+
+| id               |     | id               |     | id               |
+| email            |     | name             |     | name             |
+| username         |     | description      |     | type             |
+| password         |     | parentWorkgroup  |     | ip               |
+| roles[]          |<--->|                  |<--->| owner            |
+| enabled          |     |                  |     | description      |
+| lastLogin        |     |                  |     | lastSeen         |
+| authProvider     |     |                  |     | cloudAccountId   |
+| mfaEnabled       |     |                  |     | cloudInstanceId  |
++------------------+     +------------------+     | adDomain         |
+                                                   | osVersion        |
+                                                   | criticality      |
+                                                   +--------+---------+
+                                                            |
+                    +---------------------------------------+
+                    |
+                    v
++------------------+     +------------------+     +------------------+
+|  Vulnerability   |     |   ScanResult     |     |   Requirement    |
++------------------+     +------------------+     +------------------+
+| id               |     | id               |     | id               |
+| cveId            |     | port             |     | shortreq         |
+| title            |     | protocol         |     | details          |
+| severity         |     | state            |     | motivation       |
+| description      |     | service          |     | chapter          |
+| detectionTime    |     | product          |     | status           |
+| patchPublication |     | version          |     | priority         |
+| daysOpen         |     | scanTimestamp    |     | tags[]           |
+| asset_id (FK)    |     | asset_id (FK)    |     | norms[]          |
++------------------+     +------------------+     +------------------+
+```
+
+### Additional Entities
+
+```
++------------------+     +------------------+     +------------------+
+| VulnException    |     |   Release        |     |  IdentityProvider|
++------------------+     +------------------+     +------------------+
+| id               |     | id               |     | id               |
+| cveId            |     | name             |     | name             |
+| reason           |     | description      |     | type (OIDC)      |
+| status           |     | status           |     | clientId         |
+| approvedBy       |     | createdAt        |     | clientSecret     |
+| expiresAt        |     | publishedAt      |     | discoveryUrl     |
++------------------+     +------------------+     | enabled          |
+                                                   +------------------+
+
++------------------+     +------------------+     +------------------+
+|   McpApiKey      |     |  UserMapping     |     | MaintenanceBanner|
++------------------+     +------------------+     +------------------+
+| id               |     | id               |     | id               |
+| name             |     | email            |     | title            |
+| keyHash          |     | mappingType      |     | message          |
+| permissions      |     | mappingValue     |     | severity         |
+| userId           |     | status           |     | active           |
+| expiresAt        |     |                  |     | startsAt/endsAt  |
++------------------+     +------------------+     +------------------+
 ```
 
 ### Entity Relationships
 
-
 | Relationship                  | Type         | Description                           |
 | ----------------------------- | ------------ | ------------------------------------- |
-| User ↔ Workgroup             | Many-to-Many | Users belong to workgroups            |
-| Asset ↔ Workgroup            | Many-to-Many | Assets assigned to workgroups         |
-| Asset → Vulnerability        | One-to-Many  | Assets have vulnerabilities           |
-| Asset → ScanResult           | One-to-Many  | Assets have scan results              |
-| User → Asset (manualCreator) | One-to-Many  | Users create assets manually          |
-| User → Asset (scanUploader)  | One-to-Many  | Users upload scans discovering assets |
-| Requirement ↔ Norm           | Many-to-Many | Requirements map to standards         |
+| User <-> Workgroup            | Many-to-Many | Users belong to workgroups            |
+| Asset <-> Workgroup           | Many-to-Many | Assets assigned to workgroups         |
+| Asset -> Vulnerability        | One-to-Many  | Assets have vulnerabilities           |
+| Asset -> ScanResult           | One-to-Many  | Assets have scan results              |
+| User -> Asset (manualCreator) | One-to-Many  | Users create assets manually          |
+| User -> Asset (scanUploader)  | One-to-Many  | Users upload scans discovering assets |
+| Requirement <-> Norm          | Many-to-Many | Requirements map to standards         |
+| Workgroup -> Workgroup        | Self-ref     | Nested workgroup hierarchy            |
 
 ### Key Tables
 
@@ -228,14 +292,20 @@ vulnerabilities, vulnerability_exceptions, vulnerability_exception_requests
 -- Scans
 scan_uploads, scan_results
 
--- Requirements
-requirements, norms, requirement_norm
+-- Requirements and releases
+requirements, norms, requirement_norm, releases, requirement_snapshots
+
+-- Risk and compliance
+risks, risk_assessments, demands, demand_classifications, standards, products, use_cases
 
 -- MCP integration
-mcp_api_keys, mcp_sessions, mcp_audit_logs
+mcp_api_keys, mcp_sessions, mcp_audit_logs, mcp_tool_permissions
+
+-- Email and notifications
+email_configs, notification_logs, notification_preferences
 
 -- System
-identity_providers, oauth_states, email_config, maintenance_banners
+identity_providers, oauth_states, maintenance_banners, app_settings
 ```
 
 ---
@@ -243,7 +313,6 @@ identity_providers, oauth_states, email_config, maintenance_banners
 ## Access Control Model
 
 ### Role-Based Access Control (RBAC)
-
 
 | Role              | Description           | Key Permissions                       |
 | ----------------- | --------------------- | ------------------------------------- |
@@ -279,19 +348,18 @@ fun canUserAccessAsset(user: User, asset: Asset): Boolean {
 
 ### Authentication Methods
 
-
-| Method      | Storage                  | Use Case                  |
-| ----------- | ------------------------ | ------------------------- |
-| JWT         | `localStorage`           | Frontend API calls        |
-| OAuth2/OIDC | Session + JWT            | SSO with Azure AD, Google |
-| MCP API Key | Header (`X-MCP-API-Key`) | AI assistant integration  |
+| Method         | Storage                  | Use Case                    |
+| -------------- | ------------------------ | --------------------------- |
+| JWT            | `localStorage`           | Frontend API calls          |
+| OAuth2/OIDC    | Session + JWT            | SSO with Azure AD, Google   |
+| Passkeys       | WebAuthn credentials     | Passwordless authentication |
+| MCP API Key    | Header (`X-MCP-API-Key`) | AI assistant integration    |
 
 ---
 
 ## API Design
 
 ### RESTful Conventions
-
 
 | HTTP Method | Purpose            | Example                   |
 | ----------- | ------------------ | ------------------------- |
@@ -306,6 +374,7 @@ fun canUserAccessAsset(user: User, asset: Asset): Boolean {
 
 - `POST /api/auth/login`
 - `GET /api/identity-providers/enabled`
+- `GET /api/maintenance-banners/active`
 - `GET /oauth/*`
 - `GET /health`
 - `POST /mcp` (uses API key auth)
@@ -315,12 +384,20 @@ fun canUserAccessAsset(user: User, asset: Asset): Boolean {
 - `GET /api/assets`
 - `GET /api/vulnerabilities/*`
 - `GET /api/requirements`
+- `GET /api/releases`
+- `GET /api/outdated-assets`
+- `GET/PUT /api/notification-preferences`
+- `GET /api/users/profile`
 
 **Admin-only:**
 
 - `POST /api/workgroups`
 - `DELETE /api/assets/bulk`
 - `GET /api/mcp/admin/api-keys`
+- `POST /api/identity-providers`
+- `POST /api/maintenance-banners`
+- `GET /api/notification-logs`
+- `POST /api/materialized-view-refresh/trigger`
 
 ### Response Formats
 
@@ -371,9 +448,9 @@ open fun onUserCreated(event: UserCreatedEvent) {
 
 **Use cases:**
 
-- User creation → Apply pending user mappings
-- Asset import → Trigger materialized view refresh
-- Vulnerability detection → Send email notifications
+- User creation -> Apply pending user mappings
+- Asset import -> Trigger materialized view refresh
+- Vulnerability detection -> Send email notifications
 
 ### Transactional Replace Pattern
 
@@ -393,6 +470,8 @@ open fun importVulnerabilitiesForServer(batch: Batch): Result {
 ```
 
 **Guarantees:** Idempotency, no duplicates, atomicity, remediation tracking
+
+**CRITICAL:** `Asset.vulnerabilities` MUST NOT use `cascade = [CascadeType.ALL]` or `orphanRemoval = true`. JPA cascade conflicts with the manual delete-insert pattern, causing data loss. Use explicit `vulnerabilityRepository.deleteByAssetId()` in the service layer instead.
 
 ### Entity Merge Pattern
 
@@ -415,7 +494,7 @@ fun findOrCreateAsset(dto: AssetDto): Asset {
 
 ### CSV/Excel Import Pattern
 
-1. Validate file (size ≤10MB, extension, content-type)
+1. Validate file (size <=10MB, extension, content-type)
 2. Parse content (Apache POI for Excel, Commons CSV for CSV)
 3. Detect encoding (UTF-8 BOM, ISO-8859-1 fallback)
 4. Validate headers (case-insensitive matching)
@@ -423,6 +502,24 @@ fun findOrCreateAsset(dto: AssetDto): Asset {
 6. Check duplicates (database + file)
 7. Batch save
 8. Return `ImportResult { imported, skipped, errors[] }`
+
+### OAuth Robustness Pattern
+
+Exponential backoff retry for OAuth state lookup to handle fast SSO callbacks:
+
+```kotlin
+fun findStateByValueWithRetry(stateToken: String): Optional<OAuthState> {
+    val config = oauthConfig.stateRetry
+    var currentDelayMs = config.initialDelayMs
+    repeat(config.maxAttempts) { attempt ->
+        val result = oauthStateRepository.findByStateToken(stateToken)
+        if (result.isPresent) return result
+        Thread.sleep(currentDelayMs)
+        currentDelayMs = minOf((currentDelayMs * config.backoffMultiplier).toLong(), config.maxDelayMs)
+    }
+    return Optional.empty()
+}
+```
 
 ---
 
@@ -435,22 +532,26 @@ secman/
 │   │   └── src/main/kotlin/com/secman/
 │   │       ├── domain/               # JPA entities
 │   │       ├── repository/           # Data access
-│   │       ├── service/              # Business logic
-│   │       ├── controller/           # REST endpoints
+│   │       ├── service/              # Business logic (98+ services)
+│   │       │   └── mcp/              # MCP-specific services
+│   │       ├── controller/           # REST endpoints (52 controllers)
 │   │       ├── config/               # Configuration
 │   │       ├── dto/                  # DTOs
-│   │       └── filter/               # HTTP filters
+│   │       │   └── mcp/              # MCP DTOs
+│   │       ├── filter/               # HTTP filters
+│   │       └── mcp/                  # MCP tools and registry
 │   │
 │   ├── frontend/                     # Astro/React frontend
 │   │   └── src/
-│   │       ├── pages/                # Astro pages
+│   │       ├── pages/                # Astro pages (61 pages)
+│   │       │   └── admin/            # Admin pages (16 pages)
 │   │       ├── components/           # React components
 │   │       ├── services/             # API services
 │   │       └── layouts/              # Layout templates
 │   │
 │   └── cli/                          # CLI tool
 │       └── src/main/kotlin/com/secman/cli/
-│           ├── commands/             # Picocli commands
+│           ├── commands/             # Picocli commands (21 commands)
 │           └── service/              # CLI services
 │
 ├── mcp/                              # MCP Node.js bridge
@@ -467,6 +568,8 @@ secman/
 │   ├── CROWDSTRIKE_IMPORT.md         # CrowdStrike import
 │   └── TROUBLESHOOTING.md            # Troubleshooting guide
 │
+├── scripts/                          # Utility scripts
+├── specs/                            # Feature specifications
 └── build.gradle.kts                  # Root build file
 ```
 
