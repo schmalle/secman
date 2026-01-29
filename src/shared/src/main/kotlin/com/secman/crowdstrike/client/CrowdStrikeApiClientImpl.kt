@@ -1573,7 +1573,9 @@ open class CrowdStrikeApiClientImpl(
     private data class DeviceMetadata(
         val hostname: String?,
         val ip: String?,
-        val adDomain: String?  // Feature 043: Active Directory domain
+        val adDomain: String?,  // Feature 043: Active Directory domain
+        val cloudAccountId: String?,
+        val cloudInstanceId: String?
     )
 
     private fun resolveDeviceMetadata(
@@ -1645,10 +1647,22 @@ open class CrowdStrikeApiClientImpl(
                         nestedDevice?.get("machine_domain")?.toString()
                     )
 
+                    val cloudAccountId = firstNonBlank(
+                        device["service_provider_account_id"]?.toString(),
+                        nestedDevice?.get("service_provider_account_id")?.toString()
+                    )
+
+                    val cloudInstanceId = firstNonBlank(
+                        device["instance_id"]?.toString(),
+                        nestedDevice?.get("instance_id")?.toString()
+                    )
+
                     metadataByDeviceId[deviceId] = DeviceMetadata(
                         hostname = hostname,
                         ip = ip,
-                        adDomain = adDomain
+                        adDomain = adDomain,
+                        cloudAccountId = cloudAccountId,
+                        cloudInstanceId = cloudInstanceId
                     )
                 }
             } catch (e: io.micronaut.http.client.exceptions.HttpClientResponseException) {
@@ -1729,6 +1743,18 @@ open class CrowdStrikeApiClientImpl(
                     vuln["machine_domain"]?.toString()
                 )
 
+                val cloudAccountId = firstNonBlank(
+                    metadata?.cloudAccountId,
+                    hostInfo?.get("service_provider_account_id")?.toString(),
+                    vuln["service_provider_account_id"]?.toString()
+                )
+
+                val cloudInstanceId = firstNonBlank(
+                    metadata?.cloudInstanceId,
+                    hostInfo?.get("instance_id")?.toString(),
+                    vuln["instance_id"]?.toString()
+                )
+
                 val cveObject = vuln["cve"] as? Map<*, *>
                 val cveId = cveObject?.get("id")?.toString()
                 val cvssScore = (vuln["score"] as? Number)?.toDouble()
@@ -1785,7 +1811,9 @@ open class CrowdStrikeApiClientImpl(
                     patchPublicationDate = patchPublicationDate,
                     status = vuln["status"]?.toString() ?: "open",
                     hasException = false,
-                    exceptionReason = null
+                    exceptionReason = null,
+                    cloudAccountId = cloudAccountId,
+                    cloudInstanceId = cloudInstanceId
                 )
             } catch (e: Exception) {
                 log.error("Failed to map vulnerability: {}", e.message, e)

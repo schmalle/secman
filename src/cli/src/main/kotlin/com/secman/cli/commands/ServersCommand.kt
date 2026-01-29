@@ -180,8 +180,8 @@ class ServersCommand {
                     hostname = hostname,
                     vulnerabilities = vulns,
                     groups = null,  // TODO: Not available from current CrowdStrike API response
-                    cloudAccountId = null,  // TODO: Not available from current CrowdStrike API response
-                    cloudInstanceId = null,  // TODO: Not available from current CrowdStrike API response
+                    cloudAccountId = firstVuln?.cloudAccountId,
+                    cloudInstanceId = firstVuln?.cloudInstanceId,
                     adDomain = firstVuln?.adDomain,  // Feature 043: Extracted from CrowdStrike API
                     osVersion = null,  // TODO: Not available from current CrowdStrike API response
                     ip = firstVuln?.ip  // IP is available from CrowdStrikeVulnerabilityDto

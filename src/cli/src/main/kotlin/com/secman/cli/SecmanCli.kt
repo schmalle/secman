@@ -81,6 +81,14 @@ class SecmanCli {
                             serversCommand.password = args[i + 1]
                             i++
                         }
+                        args[i] == "--client-id" && i + 1 < args.size -> {
+                            serversCommand.clientId = args[i + 1]
+                            i++
+                        }
+                        args[i] == "--client-secret" && i + 1 < args.size -> {
+                            serversCommand.clientSecret = args[i + 1]
+                            i++
+                        }
                         args[i] == "--save" -> serversCommand.save = true
                         args[i] == "--dry-run" -> serversCommand.dryRun = true
                         args[i] == "--verbose" -> serversCommand.verbose = true
@@ -129,6 +137,14 @@ class SecmanCli {
                         }
                         args[i] == "--password" && i + 1 < args.size -> {
                             queryCommand.password = args[i + 1]
+                            i++
+                        }
+                        args[i] == "--client-id" && i + 1 < args.size -> {
+                            queryCommand.clientId = args[i + 1]
+                            i++
+                        }
+                        args[i] == "--client-secret" && i + 1 < args.size -> {
+                            queryCommand.clientSecret = args[i + 1]
                             i++
                         }
                         args[i] == "--save" -> queryCommand.save = true
@@ -287,6 +303,8 @@ class SecmanCli {
               --last-seen-days <num>   Only include devices seen within N days (default: 0 = all devices)
               --limit <num>            Page size for pagination (default: 800)
               --backend-url <url>      Backend API URL (default: http://localhost:8080)
+              --client-id <id>         CrowdStrike API client ID (overrides config file)
+              --client-secret <secret> CrowdStrike API client secret (overrides config file)
               --save                   Save to database (requires --username and --password)
               --username <user>        Backend username for authentication (required with --save)
               --password <pass>        Backend password for authentication (required with --save)
@@ -300,6 +318,8 @@ class SecmanCli {
               --limit <num>            Maximum results to return (default: 100)
               --format <json|csv>      Output format (default: json)
               --output <file>          Output file path
+              --client-id <id>         CrowdStrike API client ID (overrides config file)
+              --client-secret <secret> CrowdStrike API client secret (overrides config file)
               --save                   Save asset and vulnerabilities to database
               --backend-url <url>      Backend API URL (default: http://localhost:8080)
               --username <user>        Backend username for authentication (required with --save)
@@ -314,6 +334,18 @@ class SecmanCli {
               --dry-run                Query but don't store results
               --no-storage             Disable automatic storage
               --verbose                Enable verbose logging
+
+            Config Options:
+              --client-id <id>         CrowdStrike API client ID (required for save)
+              --client-secret <secret> CrowdStrike API client secret (required for save)
+              --base-url <url>         CrowdStrike API base URL (default: https://api.crowdstrike.com)
+              --show                   Show current CrowdStrike configuration
+              --format <yaml|conf>     Configuration file format (default: yaml)
+
+            Send Notifications Options (Feature 035):
+              --dry-run                Report planned notifications without sending emails
+              --verbose, -v            Detailed logging (show per-asset processing)
+              --outdated-only          Process only outdated asset reminders (skip new vulnerability notifications)
 
             Add Vulnerability Options (Feature 052):
               --hostname <hostname>    Target asset hostname (required)
