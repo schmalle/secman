@@ -687,8 +687,13 @@ open class CrowdStrikeApiClientImpl(
             }
         }
 
-        log.info(">>> Stage 1 complete: {} active {} devices found (last seen within 24 hours)", allDeviceIds.size, deviceType.name)
-        return allDeviceIds
+        val uniqueDeviceIds = allDeviceIds.distinct()
+        if (uniqueDeviceIds.size < allDeviceIds.size) {
+            log.info("Deduplicated device IDs: {} -> {} unique (removed {} duplicates from pagination overlap)",
+                allDeviceIds.size, uniqueDeviceIds.size, allDeviceIds.size - uniqueDeviceIds.size)
+        }
+        log.info(">>> Stage 1 complete: {} active {} devices found (last seen within 24 hours)", uniqueDeviceIds.size, deviceType.name)
+        return uniqueDeviceIds
     }
 
     /**

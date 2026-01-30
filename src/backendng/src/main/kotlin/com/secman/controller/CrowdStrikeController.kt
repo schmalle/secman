@@ -324,13 +324,16 @@ open class CrowdStrikeController(
             HttpResponse.badRequest(mapOf("error" to (e.message ?: "Invalid request")))
         } catch (e: Exception) {
             val isAdmin = authentication.roles.contains("ADMIN")
+            val rootCause = generateSequence<Throwable>(e) { it.cause }.last()
             val errorMessage = if (isAdmin) {
-                "Import error: ${e.message ?: "Unable to import server vulnerabilities"}"
+                "Import error: [${e.javaClass.simpleName}] ${e.message ?: "Unable to import server vulnerabilities"}" +
+                    if (rootCause !== e) " | Root cause: [${rootCause.javaClass.simpleName}] ${rootCause.message}" else ""
             } else {
                 "Import error: Unable to import server vulnerabilities"
             }
 
-            log.error("Error importing server vulnerabilities: user={}", username, e)
+            log.error("Error importing server vulnerabilities: user={}, exception={}, message={}, rootCause=[{}] {}",
+                username, e.javaClass.name, e.message, rootCause.javaClass.simpleName, rootCause.message, e)
             HttpResponse.status<Map<String, String>>(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(mapOf("error" to errorMessage))
         }

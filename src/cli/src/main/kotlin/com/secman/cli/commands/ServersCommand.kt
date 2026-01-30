@@ -260,9 +260,14 @@ class ServersCommand {
             }
             1
         } catch (e: Exception) {
-            System.err.println("Error: ${e.message}")
+            System.err.println("Error: [${e.javaClass.simpleName}] ${e.message}")
+            if (e.cause != null) {
+                System.err.println("  Caused by: [${e.cause!!.javaClass.simpleName}] ${e.cause!!.message}")
+            }
             if (verbose) {
                 e.printStackTrace()
+            } else {
+                System.err.println("  (Run with --verbose for full stack trace)")
             }
             1
         }

@@ -3,6 +3,7 @@ package com.secman.cli
 import com.secman.cli.commands.AddRequirementCommand
 import com.secman.cli.commands.AddVulnerabilityCommand
 import com.secman.cli.commands.ConfigCommand
+import com.secman.cli.commands.DeduplicateVulnerabilitiesCommand
 import com.secman.cli.commands.DeleteAllRequirementsCommand
 import com.secman.cli.commands.ExportRequirementsCommand
 import com.secman.cli.commands.ManageUserMappingsCommand
@@ -266,6 +267,14 @@ class SecmanCli {
                 }
                 0
             }
+            args[0] == "deduplicate-vulnerabilities" -> {
+                // Remove duplicate vulnerability records from the database
+                val subArgs = args.drop(1).toTypedArray()
+                ApplicationContext.run().use { ctx ->
+                    PicocliRunner.run(DeduplicateVulnerabilitiesCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
             else -> {
                 System.err.println("Unknown command: ${args[0]}")
                 showHelp()
@@ -293,6 +302,7 @@ class SecmanCli {
               export-requirements    Export all requirements to Excel or Word (Feature 057)
               add-requirement        Add a new security requirement (Feature 057)
               delete-all-requirements  Delete ALL requirements (requires ADMIN, Feature 057)
+              deduplicate-vulnerabilities  Remove duplicate vulnerability records (requires ADMIN)
               help                   Show this help message
 
             Query Servers Options (Feature 032, 055):
@@ -384,6 +394,12 @@ class SecmanCli {
               --username <user>        Backend username with ADMIN role (or set SECMAN_USERNAME env var)
               --password <pass>        Backend password (or set SECMAN_PASSWORD env var)
               --verbose                Enable verbose output
+
+            Deduplicate Vulnerabilities Options:
+              --backend-url <url>      Backend API URL (default: http://localhost:8080)
+              --username <user>        Backend username with ADMIN role (or set SECMAN_USERNAME env var)
+              --password <pass>        Backend password (or set SECMAN_PASSWORD env var)
+              --verbose, -v            Show per-asset deduplication details
 
             Send Admin Summary Options (Feature 070):
               --dry-run                Preview planned recipients without sending emails
@@ -508,6 +524,12 @@ class SecmanCli {
               secman delete-all-requirements --confirm --verbose
               secman delete-all-requirements --confirm --backend-url http://test-server:8080
               secman delete-all-requirements --help
+
+              # Deduplicate vulnerability records (requires ADMIN)
+              secman deduplicate-vulnerabilities --username admin --password secret
+              secman deduplicate-vulnerabilities --verbose
+              secman deduplicate-vulnerabilities --backend-url http://prod:8080
+              secman deduplicate-vulnerabilities --help
 
               # Send admin summary email (Feature 070)
               secman send-admin-summary
