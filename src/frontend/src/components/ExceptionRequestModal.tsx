@@ -18,6 +18,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { createRequest, type CreateExceptionRequestDto, type ExceptionScope } from '../services/exceptionRequestService';
+import CveLink from './CveLink';
 
 interface ExceptionRequestModalProps {
     isOpen: boolean;
@@ -267,7 +268,7 @@ const ExceptionRequestModal: React.FC<ExceptionRequestModalProps> = ({
                                     <div className="d-flex align-items-start">
                                         <i className="bi bi-shield-exclamation me-2 mt-1"></i>
                                         <div>
-                                            <strong>Vulnerability:</strong> {vulnerabilityCveId || 'Unknown CVE'}
+                                            <strong>Vulnerability:</strong> <CveLink cveId={vulnerabilityCveId} />
                                             <br />
                                             <strong>Asset:</strong> {assetName}
                                         </div>

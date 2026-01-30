@@ -17,6 +17,7 @@
 import React, { useEffect, useState } from 'react';
 import ExcelJS from 'exceljs';
 import { vulnerabilityStatisticsApi, type MostCommonVulnerabilityDto, type AffectedAssetsByCveDto } from '../../services/api/vulnerabilityStatisticsApi';
+import CveLink from '../CveLink';
 
 /**
  * Map severity levels to Scandinavian design system badge classes
@@ -238,7 +239,7 @@ export default function MostCommonVulnerabilities({ domain }: MostCommonVulnerab
                 >
                   <td className="align-middle">{index + 1}</td>
                   <td className="align-middle">
-                    <strong>{vuln.vulnerabilityId}</strong>
+                    <CveLink cveId={vuln.vulnerabilityId} />
                   </td>
                   <td className="align-middle">
                     <span className={severityBadgeClass(vuln.cvssSeverity)}>

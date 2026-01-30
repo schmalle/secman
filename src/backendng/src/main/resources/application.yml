@@ -119,6 +119,10 @@ micronaut:
     workgroup_memberships:
       maximum-size: 200
       expire-after-write: 10m
+    # CVE description cache (Feature: 072-cve-link-lookup)
+    cve_descriptions:
+      maximum-size: 5000
+      expire-after-write: 24h
     # MCP Access Control cache (Feature: 052-mcp-access-control)
     mcp_accessible_assets:
       maximum-size: 500

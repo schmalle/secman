@@ -28,6 +28,7 @@ import {
 } from '../services/exceptionRequestService';
 import ExceptionStatusBadge from './ExceptionStatusBadge';
 import ApprovalDetailModal from './ApprovalDetailModal';
+import CveLink from './CveLink';
 
 const ExceptionApprovalDashboard: React.FC = () => {
   // Data states
@@ -361,7 +362,7 @@ const ExceptionApprovalDashboard: React.FC = () => {
                           return (
                             <tr key={request.id}>
                               <td>
-                                <code>{request.vulnerabilityCveId || 'Unknown'}</code>
+                                <CveLink cveId={request.vulnerabilityCveId} />
                               </td>
                               <td>{request.assetName}</td>
                               <td>{request.requestedByUsername}</td>
@@ -644,7 +645,7 @@ const ExceptionApprovalDashboard: React.FC = () => {
                                 <tbody>
                                   {statisticsData.topCVEs.map((cve, idx) => (
                                     <tr key={idx}>
-                                      <td><code>{cve.cveId}</code></td>
+                                      <td><CveLink cveId={cve.cveId} /></td>
                                       <td className="text-end">{cve.count}</td>
                                     </tr>
                                   ))}
