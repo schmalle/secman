@@ -4,15 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="94ada8b3-9f4e-473c-9fea-3bc9651b5bdd" name="Changes" comment="test change">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bin/secman" beforeDir="false" afterPath="$PROJECT_DIR$/bin/secman" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bin/secmanbackendsupport" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bin/secmanng" beforeDir="false" afterPath="$PROJECT_DIR$/bin/secmanng" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/commands/ServersCommand.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/commands/ServersCommand.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/shared/src/main/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClientImpl.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/shared/src/main/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClientImpl.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/shared/src/main/kotlin/com/secman/crowdstrike/dto/CrowdStrikeVulnerabilityDto.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/shared/src/main/kotlin/com/secman/crowdstrike/dto/CrowdStrikeVulnerabilityDto.kt" afterDir="false" />
-    </list>
+    <list default="true" id="94ada8b3-9f4e-473c-9fea-3bc9651b5bdd" name="Changes" comment="test change" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />

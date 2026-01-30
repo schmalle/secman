@@ -23,6 +23,7 @@ import {
   type VulnerabilitiesPage
 } from '../services/outdatedAssetsApi';
 import { formatDistanceToNow } from 'date-fns';
+import CveLink from './CveLink';
 
 interface OutdatedAssetDetailProps {
   assetId: number;
@@ -346,7 +347,7 @@ const OutdatedAssetDetail: React.FC<OutdatedAssetDetailProps> = ({ assetId }) =>
                         {vulnerabilities.map((vuln) => (
                           <tr key={vuln.id}>
                             <td>
-                              <strong>{vuln.vulnerabilityId}</strong>
+                              <CveLink cveId={vuln.vulnerabilityId} />
                               {vuln.vulnerableProductVersions && (
                                 <>
                                   <br />

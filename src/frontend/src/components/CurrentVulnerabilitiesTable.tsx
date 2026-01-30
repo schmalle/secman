@@ -27,6 +27,7 @@ import {
 } from '../services/vulnerabilityManagementService';
 import OverdueStatusBadge from './OverdueStatusBadge';
 import ExceptionRequestModal from './ExceptionRequestModal';
+import CveLink from './CveLink';
 import { isAdmin, hasRole } from '../utils/auth';
 
 const CurrentVulnerabilitiesTable: React.FC = () => {
@@ -645,7 +646,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                                                         </td>
                                                         <td>{vuln.assetIp || '-'}</td>
                                                         <td>
-                                                            <code>{vuln.vulnerabilityId || '-'}</code>
+                                                            <CveLink cveId={vuln.vulnerabilityId} />
                                                         </td>
                                                         <td>
                                                             <span className={`badge ${getSeverityBadgeClass(vuln.cvssSeverity)}`}>
