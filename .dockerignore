@@ -1,0 +1,22 @@
+# Build artifacts
+**/build/
+**/dist/
+**/node_modules/
+**/.gradle/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Git
+.git/
+.gitignore
+
+# Environment secrets
+.env
+
+# Documentation
+docs/
+*.md
+LICENSE
