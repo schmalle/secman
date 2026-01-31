@@ -29,10 +29,10 @@ dependencies {
     // Database (required for EntityManager and JPA support)
     implementation("io.micronaut.sql:micronaut-hibernate-jpa")
     implementation("io.micronaut.sql:micronaut-jdbc-hikari")
-    runtimeOnly("org.mariadb.jdbc:mariadb-java-client:3.5.3")
+    runtimeOnly("org.mariadb.jdbc:mariadb-java-client:3.5.7")
 
     // Picocli for CLI
-    implementation("info.picocli:picocli:4.7.5")
+    implementation("info.picocli:picocli:4.7.7")
     implementation("io.micronaut.picocli:micronaut-picocli")
     
     // Jackson for YAML/JSON
@@ -41,10 +41,10 @@ dependencies {
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
     
     // CSV export
-    implementation("org.apache.commons:commons-csv:1.11.0")
+    implementation("org.apache.commons:commons-csv:1.14.1")
 
     // AWS SDK for S3 (Feature 065 - S3 User Mapping Import)
-    implementation(platform("software.amazon.awssdk:bom:2.29.0"))
+    implementation(platform("software.amazon.awssdk:bom:2.41.18"))
     implementation("software.amazon.awssdk:s3")
     
     // Kotlin
@@ -59,11 +59,11 @@ dependencies {
     ksp("io.micronaut:micronaut-http-validation")
 
     // Test dependencies - Feature 056
-    testImplementation("org.junit.jupiter:junit-jupiter-api:5.11.3")
-    testImplementation("org.junit.jupiter:junit-jupiter-engine:5.11.3")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.11.3")
-    testImplementation("io.mockk:mockk:1.13.13")
-    testImplementation("org.assertj:assertj-core:3.26.3")
+    testImplementation("org.junit.jupiter:junit-jupiter-api:6.0.2")
+    testImplementation("org.junit.jupiter:junit-jupiter-engine:6.0.2")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher:6.0.2")
+    testImplementation("io.mockk:mockk:1.14.7")
+    testImplementation("org.assertj:assertj-core:3.27.7")
 }
 
 application {
