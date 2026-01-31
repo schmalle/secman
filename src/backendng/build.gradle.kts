@@ -37,7 +37,7 @@ dependencies {
     runtimeOnly("org.mariadb.jdbc:mariadb-java-client:3.5.7")
 
 	implementation("io.micronaut.flyway:micronaut-flyway:7.9.2")
-	runtimeOnly("org.flywaydb:flyway-core:11.20.2")
+	runtimeOnly("org.flywaydb:flyway-core:11.20.3")
 	
     // Security
     implementation("io.micronaut.security:micronaut-security-jwt:4.16.1")
@@ -74,12 +74,12 @@ dependencies {
     // MCP (Model Context Protocol) Dependencies
     // Note: Using JSON-RPC and reactive streams for MCP implementation
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.10.0")
     implementation("io.micronaut.reactor:micronaut-reactor")
     implementation("io.micronaut.reactor:micronaut-reactor-http-client")
     
     // Logging
-    runtimeOnly("ch.qos.logback:logback-classic:1.5.24")
+    runtimeOnly("ch.qos.logback:logback-classic:1.5.26")
     // Bridge Log4j to Logback (required for Apache POI)
     runtimeOnly("org.apache.logging.log4j:log4j-to-slf4j:2.25.3")
     // Logstash encoder for JSON logging (Feature 046)
@@ -123,7 +123,7 @@ dependencies {
     testImplementation("org.testcontainers:testcontainers:2.0.3")
     testImplementation("org.testcontainers:mariadb:1.21.4")
     testImplementation("org.testcontainers:junit-jupiter:1.21.4")
-    testImplementation("org.assertj:assertj-core:3.27.6")
+    testImplementation("org.assertj:assertj-core:3.27.7")
 }
 
 application {
