@@ -2,17 +2,16 @@ package com.secman.cli.commands
 
 import com.secman.cli.config.ConfigLoader
 import com.secman.cli.export.ExportService
-import com.secman.cli.service.VulnerabilityStorageService
-import com.secman.crowdstrike.auth.CrowdStrikeAuthService
 import com.secman.crowdstrike.client.CrowdStrikeApiClient
-import com.secman.crowdstrike.client.CrowdStrikeApiClientImpl
 import com.secman.crowdstrike.dto.FalconConfigDto
 import com.secman.crowdstrike.exception.AuthenticationException
 import com.secman.crowdstrike.exception.CrowdStrikeException
 import com.secman.crowdstrike.exception.NotFoundException
 import com.secman.crowdstrike.exception.RateLimitException
+import com.secman.dto.CrowdStrikeVulnerabilityBatchDto
+import com.secman.dto.VulnerabilityDto
+import com.secman.service.CrowdStrikeVulnerabilityImportService
 import io.micronaut.context.ApplicationContext
-import io.micronaut.http.client.HttpClient
 import org.slf4j.LoggerFactory
 import java.io.File
 
@@ -27,10 +26,9 @@ import java.io.File
  * - Filter by severity and product
  * - Support pagination
  * - Export to JSON or CSV
- * - Optionally save to database (--save flag)
+ * - Optionally save to database (--save flag, direct DB access)
  *
- * Related to: Feature 023-create-in-the, 032-servers-query-import
- * Task: T049, T057-T060
+ * Related to: Feature 023-create-in-the, 032-servers-query-import, 073-cli-direct-db
  */
 class QueryCommand {
     private val log = LoggerFactory.getLogger(QueryCommand::class.java)
@@ -38,7 +36,7 @@ class QueryCommand {
     private val exportService = ExportService()
     private val appContext = ApplicationContext.run()
     private val apiClient: CrowdStrikeApiClient = appContext.getBean(CrowdStrikeApiClient::class.java)
-    private val storageService: VulnerabilityStorageService = appContext.getBean(VulnerabilityStorageService::class.java)
+    private val importService: CrowdStrikeVulnerabilityImportService = appContext.getBean(CrowdStrikeVulnerabilityImportService::class.java)
 
     var hostname: String = ""
     var outputPath: String? = null
@@ -50,10 +48,7 @@ class QueryCommand {
     var clientId: String? = null
     var clientSecret: String? = null
     var verbose: Boolean = false
-    var save: Boolean = false  // New: save to database flag
-    var backendUrl: String = "http://localhost:8080"  // New: backend API URL
-    var username: String? = null  // Backend username for authentication
-    var password: String? = null  // Backend password for authentication
+    var save: Boolean = false
 
     fun execute(): Int {
         return try {
@@ -130,46 +125,44 @@ class QueryCommand {
 
             // Save to database if --save flag is specified
             if (save && finalResponse.vulnerabilities.isNotEmpty()) {
-                System.out.println("\nSaving to database: $backendUrl")
+                System.out.println("\nSaving to database...")
 
-                // Authenticate with backend if credentials provided
-                var authToken: String? = null
-                if (username != null && password != null) {
-                    System.out.println("Authenticating as: $username")
-                    authToken = storageService.authenticate(username!!, password!!, backendUrl)
-
-                    if (authToken == null) {
-                        System.err.println("❌ Authentication failed. Please check your credentials.")
-                        return 1
-                    }
-                    System.out.println("✅ Authentication successful")
-                } else {
-                    System.out.println("⚠️  No credentials provided. Attempting unauthenticated save...")
-                    System.out.println("   Use --username and --password to authenticate")
-                }
-
-                val saveResult = storageService.storeVulnerabilities(
+                // Build a single batch DTO from the hostname + filtered vulnerabilities
+                val firstVuln = finalResponse.vulnerabilities.firstOrNull()
+                val batch = CrowdStrikeVulnerabilityBatchDto(
                     hostname = hostname,
-                    vulnerabilities = finalResponse.vulnerabilities,
-                    backendUrl = backendUrl,
-                    authToken = authToken
+                    groups = null,
+                    cloudAccountId = firstVuln?.cloudAccountId,
+                    cloudInstanceId = firstVuln?.cloudInstanceId,
+                    adDomain = firstVuln?.adDomain,
+                    osVersion = null,
+                    ip = firstVuln?.ip,
+                    vulnerabilities = finalResponse.vulnerabilities.map { vuln ->
+                        VulnerabilityDto(
+                            cveId = vuln.cveId ?: "",
+                            severity = vuln.severity,
+                            affectedProduct = vuln.affectedProduct,
+                            daysOpen = parseDaysOpenToInt(vuln.daysOpen),
+                            patchPublicationDate = vuln.patchPublicationDate
+                        )
+                    }
                 )
 
-                if (saveResult.errors.isNotEmpty()) {
-                    System.err.println("❌ Save failed:")
-                    saveResult.errors.forEach { error ->
-                        System.err.println("   - $error")
-                    }
-                    return 1
-                }
+                val result = importService.importServerVulnerabilities(listOf(batch), "CLI")
 
-                System.out.println("✅ Save successful!")
-                System.out.println("  - Asset: ${if (saveResult.assetsCreated > 0) "CREATED" else "UPDATED"}")
-                System.out.println("  - Vulnerabilities saved: ${saveResult.stored}")
-                System.out.println("  - Vulnerabilities skipped: ${saveResult.skipped}")
-                System.out.println("  - Message: ${saveResult.message}")
+                System.out.println("Save completed!")
+                System.out.println("  - Asset: ${if (result.serversCreated > 0) "CREATED" else "UPDATED"}")
+                System.out.println("  - Vulnerabilities imported: ${result.vulnerabilitiesImported}")
+                System.out.println("  - Vulnerabilities skipped: ${result.vulnerabilitiesSkipped}")
+
+                if (result.errors.isNotEmpty()) {
+                    System.err.println("  - Errors:")
+                    result.errors.forEach { error ->
+                        System.err.println("    - $error")
+                    }
+                }
             } else if (save && finalResponse.vulnerabilities.isEmpty()) {
-                System.out.println("\n⚠️  No vulnerabilities to save")
+                System.out.println("\nNo vulnerabilities to save")
             }
 
             // Export results if output file is specified
@@ -230,5 +223,15 @@ class QueryCommand {
             }
             1
         }
+    }
+
+    /**
+     * Parse daysOpen string to integer value
+     *
+     * Handles formats: "526 days" -> 526, "1 day" -> 1, null -> 0
+     */
+    private fun parseDaysOpenToInt(daysOpen: String?): Int {
+        if (daysOpen.isNullOrBlank()) return 0
+        return daysOpen.split(" ").firstOrNull()?.toIntOrNull() ?: 0
     }
 }
