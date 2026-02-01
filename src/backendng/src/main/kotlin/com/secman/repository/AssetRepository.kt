@@ -40,6 +40,15 @@ interface AssetRepository : JpaRepository<Asset, Long> {
      */
     fun findByNameIgnoreCase(name: String): Asset?
 
+    /**
+     * Find asset by cloud instance ID (case-insensitive)
+     * Used for database-first vulnerability lookup by AWS EC2 Instance ID
+     *
+     * @param cloudInstanceId The AWS EC2 Instance ID (e.g., "i-0068f94221fe120df")
+     * @return The asset if found, null otherwise
+     */
+    fun findByCloudInstanceIdIgnoreCase(cloudInstanceId: String): Asset?
+
     // MCP Tool Support - Feature 006: Asset inventory queries with pagination
 
     /**

@@ -7,8 +7,13 @@ import com.secman.crowdstrike.exception.NotFoundException
 import com.secman.crowdstrike.exception.RateLimitException
 import com.secman.domain.FalconConfig
 import com.secman.dto.CrowdStrikeQueryResponse
+import com.secman.dto.CrowdStrikeVulnerabilityDto
+import com.secman.repository.AssetRepository
 import com.secman.repository.FalconConfigRepository
+import com.secman.repository.VulnerabilityExceptionRepository
+import com.secman.repository.VulnerabilityRepository
 import io.micronaut.cache.annotation.Cacheable
+import io.micronaut.data.model.Pageable
 import jakarta.inject.Singleton
 import org.slf4j.LoggerFactory
 import java.time.LocalDateTime
@@ -41,7 +46,10 @@ enum class QueryType {
 @Singleton
 open class CrowdStrikeQueryService(
     private val apiClient: CrowdStrikeApiClient,
-    private val falconConfigRepository: FalconConfigRepository
+    private val falconConfigRepository: FalconConfigRepository,
+    private val assetRepository: AssetRepository,
+    private val vulnerabilityRepository: VulnerabilityRepository,
+    private val vulnerabilityExceptionRepository: VulnerabilityExceptionRepository
 ) {
     private val log = LoggerFactory.getLogger(CrowdStrikeQueryService::class.java)
 
@@ -73,6 +81,17 @@ open class CrowdStrikeQueryService(
             hostname, severity, product, limit
         )
 
+        // Check database first - if vulnerabilities exist locally, serve them
+        val dbResponse = queryFromDatabaseByHostname(hostname, limit)
+        if (dbResponse != null) {
+            log.info(
+                "Serving vulnerabilities from database: hostname={}, found={}",
+                hostname, dbResponse.vulnerabilities.size
+            )
+            return applyFilters(dbResponse, severity, product)
+        }
+
+        // Fall through to CrowdStrike API
         try {
             // Get config from database
             val config = getConfiguration()
@@ -200,6 +219,17 @@ open class CrowdStrikeQueryService(
             instanceId, severity, product, limit
         )
 
+        // Check database first - if vulnerabilities exist locally, serve them
+        val dbResponse = queryFromDatabaseByInstanceId(instanceId, limit)
+        if (dbResponse != null) {
+            log.info(
+                "Serving vulnerabilities from database: instanceId={}, found={}",
+                instanceId, dbResponse.vulnerabilities.size
+            )
+            return applyFilters(dbResponse, severity, product)
+        }
+
+        // Fall through to CrowdStrike API
         try {
             // Get config from database
             val config = getConfiguration()
@@ -245,6 +275,86 @@ open class CrowdStrikeQueryService(
                 cause = e
             )
         }
+    }
+
+    /**
+     * Query vulnerabilities from the local database by hostname.
+     * Returns null if no asset or no vulnerabilities found.
+     */
+    private fun queryFromDatabaseByHostname(hostname: String, limit: Int): CrowdStrikeQueryResponse? {
+        val asset = assetRepository.findByNameIgnoreCase(hostname) ?: return null
+        val assetId = asset.id ?: return null
+
+        val vulns = vulnerabilityRepository.findByAssetId(assetId, Pageable.from(0, limit))
+        if (vulns.content.isEmpty()) return null
+
+        val activeExceptions = vulnerabilityExceptionRepository
+            .findByExpirationDateIsNullOrExpirationDateGreaterThan(LocalDateTime.now())
+
+        return CrowdStrikeQueryResponse(
+            hostname = asset.name,
+            vulnerabilities = vulns.content.map { v ->
+                val matchingException = activeExceptions.find { it.matches(v, asset) }
+                CrowdStrikeVulnerabilityDto(
+                    id = "db-${v.id}",
+                    hostname = asset.name,
+                    ip = asset.ip,
+                    cveId = v.vulnerabilityId,
+                    severity = v.cvssSeverity ?: "UNKNOWN",
+                    cvssScore = null,
+                    affectedProduct = v.vulnerableProductVersions,
+                    daysOpen = v.daysOpen,
+                    detectedAt = v.scanTimestamp,
+                    patchPublicationDate = v.patchPublicationDate,
+                    status = "open",
+                    hasException = matchingException != null,
+                    exceptionReason = matchingException?.reason
+                )
+            },
+            totalCount = vulns.totalSize.toInt(),
+            queriedAt = LocalDateTime.now()
+        )
+    }
+
+    /**
+     * Query vulnerabilities from the local database by AWS EC2 Instance ID.
+     * Looks up asset by cloudInstanceId field. Returns null if not found.
+     */
+    private fun queryFromDatabaseByInstanceId(instanceId: String, limit: Int): CrowdStrikeQueryResponse? {
+        val asset = assetRepository.findByCloudInstanceIdIgnoreCase(instanceId) ?: return null
+        val assetId = asset.id ?: return null
+
+        val vulns = vulnerabilityRepository.findByAssetId(assetId, Pageable.from(0, limit))
+        if (vulns.content.isEmpty()) return null
+
+        val activeExceptions = vulnerabilityExceptionRepository
+            .findByExpirationDateIsNullOrExpirationDateGreaterThan(LocalDateTime.now())
+
+        return CrowdStrikeQueryResponse(
+            hostname = asset.name,
+            instanceId = asset.cloudInstanceId,
+            deviceCount = 1,
+            vulnerabilities = vulns.content.map { v ->
+                val matchingException = activeExceptions.find { it.matches(v, asset) }
+                CrowdStrikeVulnerabilityDto(
+                    id = "db-${v.id}",
+                    hostname = asset.name,
+                    ip = asset.ip,
+                    cveId = v.vulnerabilityId,
+                    severity = v.cvssSeverity ?: "UNKNOWN",
+                    cvssScore = null,
+                    affectedProduct = v.vulnerableProductVersions,
+                    daysOpen = v.daysOpen,
+                    detectedAt = v.scanTimestamp,
+                    patchPublicationDate = v.patchPublicationDate,
+                    status = "open",
+                    hasException = matchingException != null,
+                    exceptionReason = matchingException?.reason
+                )
+            },
+            totalCount = vulns.totalSize.toInt(),
+            queriedAt = LocalDateTime.now()
+        )
     }
 
     /**

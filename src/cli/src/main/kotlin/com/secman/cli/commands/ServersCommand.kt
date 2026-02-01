@@ -1,8 +1,6 @@
 package com.secman.cli.commands
 
 import com.secman.cli.config.ConfigLoader
-import com.secman.cli.service.ServerVulnerabilityBatch
-import com.secman.cli.service.VulnerabilityStorageService
 import com.secman.crowdstrike.client.CrowdStrikeApiClient
 import com.secman.crowdstrike.dto.DeviceType
 import com.secman.crowdstrike.dto.FalconConfigDto
@@ -10,6 +8,9 @@ import com.secman.crowdstrike.exception.AuthenticationException
 import com.secman.crowdstrike.exception.CrowdStrikeException
 import com.secman.crowdstrike.exception.NotFoundException
 import com.secman.crowdstrike.exception.RateLimitException
+import com.secman.dto.CrowdStrikeVulnerabilityBatchDto
+import com.secman.dto.VulnerabilityDto
+import com.secman.service.CrowdStrikeVulnerabilityImportService
 import io.micronaut.context.ApplicationContext
 import org.slf4j.LoggerFactory
 
@@ -27,16 +28,14 @@ import org.slf4j.LoggerFactory
  * - Support dry-run mode (query without importing)
  * - Support verbose logging
  *
- * Feature: 032-servers-query-import
- * Tasks: T009, T012, T013, T014, T015, T016
- * Spec reference: FR-001, FR-002, FR-003, FR-004, FR-005, FR-007, FR-009
+ * Feature: 032-servers-query-import, 073-cli-direct-db
  */
 class ServersCommand {
     private val log = LoggerFactory.getLogger(ServersCommand::class.java)
     private val configLoader = ConfigLoader()
     private val appContext = ApplicationContext.run()
     private val apiClient: CrowdStrikeApiClient = appContext.getBean(CrowdStrikeApiClient::class.java)
-    private val storageService: VulnerabilityStorageService = appContext.getBean(VulnerabilityStorageService::class.java)
+    private val importService: CrowdStrikeVulnerabilityImportService = appContext.getBean(CrowdStrikeVulnerabilityImportService::class.java)
 
     // Command-line options
     var hostnames: List<String>? = null  // Optional hostname filter (FR-003)
@@ -44,11 +43,8 @@ class ServersCommand {
     var severity: String = "HIGH,CRITICAL"  // Severity filter (FR-004)
     var minDaysOpen: Int = 30            // Minimum days open filter (FR-004)
     var dryRun: Boolean = false          // Dry-run mode (FR-005)
-    var save: Boolean = false            // Save to database (requires username/password)
+    var save: Boolean = false            // Save to database (direct access)
     var verbose: Boolean = false         // Verbose logging (FR-009)
-    var backendUrl: String = "http://localhost:8080"  // Backend API URL
-    var username: String? = null         // Backend username (or set SECMAN_USERNAME env var)
-    var password: String? = null         // Backend password (or set SECMAN_PASSWORD env var)
     var clientId: String? = null         // CrowdStrike client ID (optional override)
     var clientSecret: String? = null     // CrowdStrike client secret (optional override)
     var limit: Int = 800                 // Page size for pagination
@@ -127,7 +123,7 @@ class ServersCommand {
                 }
             }
 
-            // Dry-run mode: skip backend import
+            // Dry-run mode: skip import
             if (dryRun) {
                 System.out.println("\n[DRY-RUN MODE] Would import ${vulnerabilitiesByHostname.size} ${parsedDeviceType.displayName()} with ${response.vulnerabilities.size} vulnerabilities")
                 return 0
@@ -135,60 +131,37 @@ class ServersCommand {
 
             // Skip import if --save not specified
             if (!save) {
-                System.out.println("\nQuery completed successfully. Use --save with credentials (CLI args or SECMAN_USERNAME/SECMAN_PASSWORD env vars) to import to database.")
+                System.out.println("\nQuery completed successfully. Use --save to import directly to database.")
                 return 0
             }
 
-            // Resolve credentials with environment variable fallback
-            val effectiveUsername = username
-                ?: System.getenv("SECMAN_USERNAME")
-                ?: run {
-                    System.err.println("Error: --username required via CLI or SECMAN_USERNAME env var")
-                    return 1
-                }
+            // Import directly to database via import service
+            System.out.println("\nImporting to database...")
 
-            val effectivePassword = password
-                ?: System.getenv("SECMAN_PASSWORD")
-                ?: run {
-                    System.err.println("Error: --password required via CLI or SECMAN_PASSWORD env var")
-                    return 1
-                }
-
-            // Import to backend via storage service (T011)
-            System.out.println("\nImporting to backend: $backendUrl")
-
-            // Authenticate with backend
-            if (verbose) {
-                System.out.println("Authenticating with backend...")
-            }
-
-            val authToken = storageService.authenticate(effectiveUsername, effectivePassword, backendUrl)
-            if (authToken == null) {
-                System.err.println("Error: Authentication failed. Please check your username and password.")
-                return 1
-            }
-
-            if (verbose) {
-                System.out.println("Authentication successful")
-            }
-
-            // Prepare server batches with metadata
-            val serverBatches = vulnerabilitiesByHostname.mapValues { (hostname, vulns) ->
-                // Extract metadata from first vulnerability
+            // Map CrowdStrike DTOs to backend batch DTOs
+            val batches = vulnerabilitiesByHostname.map { (hostname, vulns) ->
                 val firstVuln = vulns.firstOrNull()
-                ServerVulnerabilityBatch(
+                CrowdStrikeVulnerabilityBatchDto(
                     hostname = hostname,
-                    vulnerabilities = vulns,
-                    groups = null,  // TODO: Not available from current CrowdStrike API response
+                    groups = null,
                     cloudAccountId = firstVuln?.cloudAccountId,
                     cloudInstanceId = firstVuln?.cloudInstanceId,
-                    adDomain = firstVuln?.adDomain,  // Feature 043: Extracted from CrowdStrike API
-                    osVersion = null,  // TODO: Not available from current CrowdStrike API response
-                    ip = firstVuln?.ip  // IP is available from CrowdStrikeVulnerabilityDto
+                    adDomain = firstVuln?.adDomain,
+                    osVersion = null,
+                    ip = firstVuln?.ip,
+                    vulnerabilities = vulns.map { vuln ->
+                        VulnerabilityDto(
+                            cveId = vuln.cveId ?: "",
+                            severity = vuln.severity,
+                            affectedProduct = vuln.affectedProduct,
+                            daysOpen = parseDaysOpenToInt(vuln.daysOpen),
+                            patchPublicationDate = vuln.patchPublicationDate
+                        )
+                    }
                 )
             }
 
-            val result = storageService.storeServerVulnerabilities(serverBatches, backendUrl, authToken)
+            val result = importService.importServerVulnerabilities(batches, "CLI")
 
             // Display import statistics
             val deviceLabel = parsedDeviceType.displayName().replaceFirstChar { it.uppercase() }
@@ -271,5 +244,15 @@ class ServersCommand {
             }
             1
         }
+    }
+
+    /**
+     * Parse daysOpen string to integer value
+     *
+     * Handles formats: "526 days" -> 526, "1 day" -> 1, null -> 0
+     */
+    private fun parseDaysOpenToInt(daysOpen: String?): Int {
+        if (daysOpen.isNullOrBlank()) return 0
+        return daysOpen.split(" ").firstOrNull()?.toIntOrNull() ?: 0
     }
 }

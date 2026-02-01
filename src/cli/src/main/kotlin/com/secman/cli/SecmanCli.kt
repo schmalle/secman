@@ -70,18 +70,6 @@ class SecmanCli {
                             serversCommand.limit = args[i + 1].toIntOrNull() ?: 800
                             i++
                         }
-                        args[i] == "--backend-url" && i + 1 < args.size -> {
-                            serversCommand.backendUrl = args[i + 1]
-                            i++
-                        }
-                        args[i] == "--username" && i + 1 < args.size -> {
-                            serversCommand.username = args[i + 1]
-                            i++
-                        }
-                        args[i] == "--password" && i + 1 < args.size -> {
-                            serversCommand.password = args[i + 1]
-                            i++
-                        }
                         args[i] == "--client-id" && i + 1 < args.size -> {
                             serversCommand.clientId = args[i + 1]
                             i++
@@ -126,18 +114,6 @@ class SecmanCli {
                         }
                         args[i] == "--output" && i + 1 < args.size -> {
                             queryCommand.outputFile = args[i + 1]
-                            i++
-                        }
-                        args[i] == "--backend-url" && i + 1 < args.size -> {
-                            queryCommand.backendUrl = args[i + 1]
-                            i++
-                        }
-                        args[i] == "--username" && i + 1 < args.size -> {
-                            queryCommand.username = args[i + 1]
-                            i++
-                        }
-                        args[i] == "--password" && i + 1 < args.size -> {
-                            queryCommand.password = args[i + 1]
                             i++
                         }
                         args[i] == "--client-id" && i + 1 < args.size -> {
@@ -305,20 +281,17 @@ class SecmanCli {
               deduplicate-vulnerabilities  Remove duplicate vulnerability records (requires ADMIN)
               help                   Show this help message
 
-            Query Servers Options (Feature 032, 055):
+            Query Servers Options (Feature 032, 055, 073):
               --hostnames <list>       Comma-separated list of hostnames (optional, default: all devices)
               --device-type <type>     Device type: SERVER, WORKSTATION, or ALL (default: SERVER)
               --severity <levels>      Severity filter (default: HIGH,CRITICAL)
               --min-days-open <num>    Minimum days open filter (default: 30)
               --last-seen-days <num>   Only include devices seen within N days (default: 0 = all devices)
               --limit <num>            Page size for pagination (default: 800)
-              --backend-url <url>      Backend API URL (default: http://localhost:8080)
               --client-id <id>         CrowdStrike API client ID (overrides config file)
               --client-secret <secret> CrowdStrike API client secret (overrides config file)
-              --save                   Save to database (requires --username and --password)
-              --username <user>        Backend username for authentication (required with --save)
-              --password <pass>        Backend password for authentication (required with --save)
-              --dry-run                Query but don't import to backend
+              --save                   Save to database (direct access, no backend required)
+              --dry-run                Query but don't import
               --verbose                Enable verbose logging
 
             Query Options:
@@ -330,10 +303,7 @@ class SecmanCli {
               --output <file>          Output file path
               --client-id <id>         CrowdStrike API client ID (overrides config file)
               --client-secret <secret> CrowdStrike API client secret (overrides config file)
-              --save                   Save asset and vulnerabilities to database
-              --backend-url <url>      Backend API URL (default: http://localhost:8080)
-              --username <user>        Backend username for authentication (required with --save)
-              --password <pass>        Backend password for authentication (required with --save)
+              --save                   Save asset and vulnerabilities to database (direct access, no backend required)
               --verbose                Enable verbose logging
 
             Monitor Options:
@@ -357,14 +327,11 @@ class SecmanCli {
               --verbose, -v            Detailed logging (show per-asset processing)
               --outdated-only          Process only outdated asset reminders (skip new vulnerability notifications)
 
-            Add Vulnerability Options (Feature 052):
+            Add Vulnerability Options (Feature 052, 073):
               --hostname <hostname>    Target asset hostname (required)
               --cve <cve-id>           CVE identifier or custom vulnerability ID (required)
               --criticality <level>    Severity: CRITICAL, HIGH, MEDIUM, or LOW (required)
               --days-open <num>        Days the vulnerability has been open (default: 0)
-              --backend-url <url>      Backend API URL (default: http://localhost:8080)
-              --username <user>        Backend username (or set SECMAN_USERNAME env var)
-              --password <pass>        Backend password (or set SECMAN_PASSWORD env var)
               --verbose                Enable verbose output
 
             Export Requirements Options (Feature 057):
@@ -417,9 +384,8 @@ class SecmanCli {
               secman query --hostname server01
               secman query --hostname server01 --verbose
 
-              # Query and save to database (with authentication)
-              secman query --hostname server01 --save --username admin --password secret
-              secman query --hostname server01 --save --username admin --password secret --backend-url http://api.example.com:8080
+              # Query and save to database (direct access)
+              secman query --hostname server01 --save
 
               # Query with filtering (single severity)
               secman query --hostname server01 --severity CRITICAL
@@ -429,7 +395,7 @@ class SecmanCli {
               secman query --hostname server01 --severity CRITICAL,HIGH,MEDIUM --verbose
 
               # Query with filtering and save
-              secman query --hostname server01 --severity HIGH,CRITICAL --save --username admin --password secret
+              secman query --hostname server01 --severity HIGH,CRITICAL --save
 
               # Query and export to file
               secman query --hostname server01 --format csv --output vulns.csv
@@ -439,20 +405,20 @@ class SecmanCli {
               secman query servers --hostnames server01,server02 --verbose
               secman query servers --severity CRITICAL --min-days-open 60 --dry-run
 
-              # Query all servers and save to database (with authentication)
-              secman query servers --save --username admin --password secret
-              secman query servers --save --username admin --password secret --verbose
+              # Query all servers and save to database (direct access)
+              secman query servers --save
+              secman query servers --save --verbose
 
               # Query specific servers and save to database
-              secman query servers --hostnames server01,server02 --save --username admin --password secret
+              secman query servers --hostnames server01,server02 --save
 
               # Query workstations/clients (Feature 055)
               secman query servers --device-type WORKSTATION --dry-run --verbose
-              secman query servers --device-type WORKSTATION --severity CRITICAL,HIGH --save --username admin --password secret
+              secman query servers --device-type WORKSTATION --severity CRITICAL,HIGH --save
 
               # Query all device types (servers + workstations)
               secman query servers --device-type ALL --dry-run --verbose
-              secman query servers --device-type ALL --save --username admin --password secret
+              secman query servers --device-type ALL --save
 
               # Monitor continuously
               secman monitor --interval 10 --hostnames server01,server02,server03
@@ -479,16 +445,10 @@ class SecmanCli {
               secman manage-workgroups remove-assets -w Test --all -u admin@company.com              # Remove all
               secman manage-workgroups --help
 
-              # Add vulnerability manually (Feature 052)
-              # Using environment variables (recommended for security):
-              export SECMAN_USERNAME=admin
-              export SECMAN_PASSWORD=secret
+              # Add vulnerability manually (Feature 052, direct DB access)
               secman add-vulnerability --hostname webserver01 --cve CVE-2024-1234 --criticality HIGH
               secman add-vulnerability --hostname webserver01 --cve CVE-2024-1234 --criticality HIGH --days-open 30
-
-              # Using command line arguments:
-              secman add-vulnerability --hostname webserver01 --cve CVE-2024-1234 --criticality HIGH --username admin --password secret
-              secman add-vulnerability --hostname newserver99 --cve CVE-2023-5678 --criticality CRITICAL --username admin --password secret --verbose
+              secman add-vulnerability --hostname newserver99 --cve CVE-2023-5678 --criticality CRITICAL --verbose
               secman add-vulnerability --help
 
               # Export requirements (Feature 057)
