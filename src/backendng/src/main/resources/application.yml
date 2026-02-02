@@ -116,6 +116,9 @@ micronaut:
     active_exceptions:
       maximum-size: 100
       expire-after-write: 5m
+    vulnerability_total_count:
+      maximum-size: 10
+      expire-after-write: 5m
     workgroup_memberships:
       maximum-size: 200
       expire-after-write: 10m

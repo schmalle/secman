@@ -54,10 +54,13 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
     const [adDomainFilter, setAdDomainFilter] = useState<string>('');
     const [cloudAccountIdFilter, setCloudAccountIdFilter] = useState<string>('');
 
-    // Available filter options
+    // Available filter options (lazy-loaded)
     const [availableProducts, setAvailableProducts] = useState<string[]>([]);
     const [availableAdDomains, setAvailableAdDomains] = useState<string[]>([]);
     const [availableCloudAccountIds, setAvailableCloudAccountIds] = useState<string[]>([]);
+    const [productsLoaded, setProductsLoaded] = useState(false);
+    const [adDomainsLoaded, setAdDomainsLoaded] = useState(false);
+    const [cloudAccountIdsLoaded, setCloudAccountIdsLoaded] = useState(false);
 
     // Pagination states
     const [currentPage, setCurrentPage] = useState<number>(0);
@@ -90,32 +93,57 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
         if (hasAccess) {
             fetchVulnerabilities();
         }
-    }, [severityFilter, systemFilter, exceptionFilter, productFilter, adDomainFilter, cloudAccountIdFilter, currentPage, hasAccess]);
+    }, [severityFilter, systemFilter, exceptionFilter, productFilter, adDomainFilter, cloudAccountIdFilter, currentPage, sortField, sortOrder, hasAccess]);
 
-    useEffect(() => {
-        // Fetch available filter options on mount (only if user has access)
-        if (!hasAccess) return;
+    // Lazy-load filter options: load on first focus instead of on mount
+    const loadProducts = async () => {
+        if (productsLoaded || !hasAccess) return;
+        try {
+            const products = await getDistinctProducts(undefined, 100);
+            setAvailableProducts(products);
+            setProductsLoaded(true);
+        } catch (err) {
+            console.error('Failed to fetch products:', err);
+        }
+    };
 
-        const fetchFilterOptions = async () => {
-            try {
-                const [products, domains, accountIds] = await Promise.all([
-                    getDistinctProducts(undefined, 100),
-                    getDistinctAdDomains(),
-                    getDistinctCloudAccountIds()
-                ]);
-                setAvailableProducts(products);
-                setAvailableAdDomains(domains);
-                setAvailableCloudAccountIds(accountIds);
-            } catch (err) {
-                console.error('Failed to fetch filter options:', err);
-            }
-        };
-        fetchFilterOptions();
-    }, [hasAccess]);
+    const loadAdDomains = async () => {
+        if (adDomainsLoaded || !hasAccess) return;
+        try {
+            const domains = await getDistinctAdDomains();
+            setAvailableAdDomains(domains);
+            setAdDomainsLoaded(true);
+        } catch (err) {
+            console.error('Failed to fetch AD domains:', err);
+        }
+    };
+
+    const loadCloudAccountIds = async () => {
+        if (cloudAccountIdsLoaded || !hasAccess) return;
+        try {
+            const accountIds = await getDistinctCloudAccountIds();
+            setAvailableCloudAccountIds(accountIds);
+            setCloudAccountIdsLoaded(true);
+        } catch (err) {
+            console.error('Failed to fetch cloud account IDs:', err);
+        }
+    };
 
     const fetchVulnerabilities = async () => {
         try {
             setLoading(true);
+            // Map frontend field names to backend sort field names
+            const sortFieldMap: Record<string, string> = {
+                assetName: 'assetName',
+                assetIp: 'assetIp',
+                vulnerabilityId: 'vulnerabilityId',
+                cvssSeverity: 'cvssSeverity',
+                vulnerableProductVersions: 'vulnerableProductVersions',
+                daysOpen: 'daysOpen',
+                scanTimestamp: 'scanTimestamp',
+                overdueStatus: 'scanTimestamp', // Sort by scan age as proxy for overdue status
+            };
+            const backendSortField = sortFieldMap[sortField] || undefined;
             const data = await getCurrentVulnerabilities(
                 severityFilter || undefined,
                 systemFilter || undefined,
@@ -124,7 +152,9 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                 adDomainFilter || undefined,
                 cloudAccountIdFilter || undefined,
                 currentPage,
-                pageSize
+                pageSize,
+                backendSortField,
+                sortOrder
             );
             setPaginatedResponse(data);
             setError(null);
@@ -190,23 +220,15 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
             setSortField(field);
             setSortOrder('asc');
         }
+        setCurrentPage(0); // Reset to first page on sort change
     };
 
     const getSortedVulnerabilities = () => {
         if (!paginatedResponse || !paginatedResponse.content || !Array.isArray(paginatedResponse.content)) {
             return [];
         }
-
-        return [...paginatedResponse.content].sort((a, b) => {
-            const aVal = a[sortField];
-            const bVal = b[sortField];
-
-            if (aVal === null || aVal === undefined) return 1;
-            if (bVal === null || bVal === undefined) return -1;
-
-            const comparison = aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
-            return sortOrder === 'asc' ? comparison : -comparison;
-        });
+        // Sorting is now server-side, return content as-is
+        return paginatedResponse.content;
     };
 
     const getSeverityBadgeClass = (severity: string | null): string => {
@@ -499,6 +521,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                         id="productFilter"
                         className="form-select"
                         value={productFilter}
+                        onFocus={loadProducts}
                         onChange={(e) => {
                             setProductFilter(e.target.value);
                             handleFilterChange();
@@ -525,6 +548,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                         id="adDomainFilter"
                         className="form-select"
                         value={adDomainFilter}
+                        onFocus={loadAdDomains}
                         onChange={(e) => {
                             setAdDomainFilter(e.target.value);
                             handleFilterChange();
@@ -547,6 +571,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                         id="cloudAccountIdFilter"
                         className="form-select"
                         value={cloudAccountIdFilter}
+                        onFocus={loadCloudAccountIds}
                         onChange={(e) => {
                             setCloudAccountIdFilter(e.target.value);
                             handleFilterChange();
