@@ -28,6 +28,7 @@ import {
 import OverdueStatusBadge from './OverdueStatusBadge';
 import ExceptionRequestModal from './ExceptionRequestModal';
 import CveLink from './CveLink';
+import SearchableSelect from './SearchableSelect';
 import { isAdmin, hasRole } from '../utils/auth';
 
 const CurrentVulnerabilitiesTable: React.FC = () => {
@@ -99,7 +100,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
     const loadProducts = async () => {
         if (productsLoaded || !hasAccess) return;
         try {
-            const products = await getDistinctProducts(undefined, 100);
+            const products = await getDistinctProducts(undefined, 1000);
             setAvailableProducts(products);
             setProductsLoaded(true);
         } catch (err) {
@@ -517,23 +518,18 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                 </div>
                 <div className="col-md-3">
                     <label htmlFor="productFilter" className="form-label">Product</label>
-                    <select
+                    <SearchableSelect
                         id="productFilter"
-                        className="form-select"
                         value={productFilter}
+                        options={availableProducts}
+                        placeholder="Filter products..."
+                        allLabel="All Products"
                         onFocus={loadProducts}
-                        onChange={(e) => {
-                            setProductFilter(e.target.value);
+                        onChange={(val) => {
+                            setProductFilter(val);
                             handleFilterChange();
                         }}
-                    >
-                        <option value="">All Products</option>
-                        {availableProducts.map((product) => (
-                            <option key={product} value={product}>
-                                {product}
-                            </option>
-                        ))}
-                    </select>
+                    />
                 </div>
             </div>
 
