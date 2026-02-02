@@ -80,15 +80,19 @@ export interface CrowdStrikeSaveResponse {
  */
 export async function queryVulnerabilities(
     hostname: string,
-    force: boolean = false
+    force: boolean = false,
+    page: number = 0,
+    limit: number = 100
 ): Promise<CrowdStrikeQueryResponse> {
     console.log('[CrowdStrikeService] queryVulnerabilities called');
     console.log('[CrowdStrikeService] Hostname:', hostname);
     console.log('[CrowdStrikeService] Force refresh:', force);
+    console.log('[CrowdStrikeService] Page:', page, 'Limit:', limit);
 
     // Use new endpoint that supports both hostname and instance ID (Feature 041)
     const forceParam = force ? '&force=true' : '';
-    const url = `/api/vulnerabilities?hostname=${encodeURIComponent(hostname)}${forceParam}`;
+    const pageParam = `&page=${page}&limit=${limit}`;
+    const url = `/api/vulnerabilities?hostname=${encodeURIComponent(hostname)}${forceParam}${pageParam}`;
     console.log('[CrowdStrikeService] Calling API:', url);
 
     try {

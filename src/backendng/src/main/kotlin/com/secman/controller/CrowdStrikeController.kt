@@ -76,11 +76,12 @@ open class CrowdStrikeController(
         @QueryValue severity: String? = null,
         @QueryValue product: String? = null,
         @QueryValue limit: Int? = null,
+        @QueryValue page: Int? = null,
         @QueryValue(defaultValue = "false") force: Boolean = false
     ): HttpResponse<*> {
         log.info(
-            "Received vulnerability query: input={}, severity={}, product={}, limit={}, force={}",
-            hostname, severity, product, limit, force
+            "Received vulnerability query: input={}, severity={}, product={}, limit={}, page={}, force={}",
+            hostname, severity, product, limit, page, force
         )
 
         return try {
@@ -101,6 +102,14 @@ open class CrowdStrikeController(
                     throw IllegalArgumentException("Limit cannot exceed 1000")
                 }
                 else -> limit
+            }
+
+            val pageNumber = when {
+                page == null -> 0
+                page < 0 -> {
+                    throw IllegalArgumentException("Page must be 0 or greater")
+                }
+                else -> page
             }
 
             // T035: If force=true, invalidate cache before querying
@@ -127,7 +136,8 @@ open class CrowdStrikeController(
                         instanceId = normalizedInstanceId,
                         severity = severity,
                         product = product,
-                        limit = pageSize
+                        limit = pageSize,
+                        page = pageNumber
                     )
                 } catch (e: IllegalArgumentException) {
                     // T017: Clear error message for invalid instance ID format
@@ -142,7 +152,8 @@ open class CrowdStrikeController(
                     hostname = sanitizedHostname,
                     severity = severity,
                     product = product,
-                    limit = pageSize
+                    limit = pageSize,
+                    page = pageNumber
                 )
             }
 

@@ -72,17 +72,18 @@ open class CrowdStrikeQueryService(
         hostname: String,
         severity: String? = null,
         product: String? = null,
-        limit: Int = 100
+        limit: Int = 100,
+        page: Int = 0
     ): CrowdStrikeQueryResponse {
         require(hostname.isNotBlank()) { "Hostname cannot be blank" }
 
         log.info(
-            "Querying vulnerabilities: hostname={}, severity={}, product={}, limit={}",
-            hostname, severity, product, limit
+            "Querying vulnerabilities: hostname={}, severity={}, product={}, limit={}, page={}",
+            hostname, severity, product, limit, page
         )
 
         // Check database first - if vulnerabilities exist locally, serve them
-        val dbResponse = queryFromDatabaseByHostname(hostname, limit)
+        val dbResponse = queryFromDatabaseByHostname(hostname, limit, page)
         if (dbResponse != null) {
             log.info(
                 "Serving vulnerabilities from database: hostname={}, found={}",
@@ -210,17 +211,18 @@ open class CrowdStrikeQueryService(
         instanceId: String,
         severity: String? = null,
         product: String? = null,
-        limit: Int = 100
+        limit: Int = 100,
+        page: Int = 0
     ): CrowdStrikeQueryResponse {
         require(instanceId.isNotBlank()) { "Instance ID cannot be blank" }
 
         log.info(
-            "Querying vulnerabilities by instance ID: instanceId={}, severity={}, product={}, limit={}",
-            instanceId, severity, product, limit
+            "Querying vulnerabilities by instance ID: instanceId={}, severity={}, product={}, limit={}, page={}",
+            instanceId, severity, product, limit, page
         )
 
         // Check database first - if vulnerabilities exist locally, serve them
-        val dbResponse = queryFromDatabaseByInstanceId(instanceId, limit)
+        val dbResponse = queryFromDatabaseByInstanceId(instanceId, limit, page)
         if (dbResponse != null) {
             log.info(
                 "Serving vulnerabilities from database: instanceId={}, found={}",
@@ -281,11 +283,11 @@ open class CrowdStrikeQueryService(
      * Query vulnerabilities from the local database by hostname.
      * Returns null if no asset or no vulnerabilities found.
      */
-    private fun queryFromDatabaseByHostname(hostname: String, limit: Int): CrowdStrikeQueryResponse? {
+    private fun queryFromDatabaseByHostname(hostname: String, limit: Int, page: Int = 0): CrowdStrikeQueryResponse? {
         val asset = assetRepository.findByNameIgnoreCase(hostname) ?: return null
         val assetId = asset.id ?: return null
 
-        val vulns = vulnerabilityRepository.findByAssetId(assetId, Pageable.from(0, limit))
+        val vulns = vulnerabilityRepository.findByAssetId(assetId, Pageable.from(page, limit))
         if (vulns.content.isEmpty()) return null
 
         val activeExceptions = vulnerabilityExceptionRepository
@@ -320,11 +322,11 @@ open class CrowdStrikeQueryService(
      * Query vulnerabilities from the local database by AWS EC2 Instance ID.
      * Looks up asset by cloudInstanceId field. Returns null if not found.
      */
-    private fun queryFromDatabaseByInstanceId(instanceId: String, limit: Int): CrowdStrikeQueryResponse? {
+    private fun queryFromDatabaseByInstanceId(instanceId: String, limit: Int, page: Int = 0): CrowdStrikeQueryResponse? {
         val asset = assetRepository.findByCloudInstanceIdIgnoreCase(instanceId) ?: return null
         val assetId = asset.id ?: return null
 
-        val vulns = vulnerabilityRepository.findByAssetId(assetId, Pageable.from(0, limit))
+        val vulns = vulnerabilityRepository.findByAssetId(assetId, Pageable.from(page, limit))
         if (vulns.content.isEmpty()) return null
 
         val activeExceptions = vulnerabilityExceptionRepository
@@ -370,6 +372,11 @@ open class CrowdStrikeQueryService(
         severity: String?,
         product: String?
     ): CrowdStrikeQueryResponse {
+        // No filters active — return response unchanged to preserve real totalCount
+        if (severity.isNullOrBlank() && product.isNullOrBlank()) {
+            return response
+        }
+
         var filtered = response.vulnerabilities
 
         // Filter by severity
