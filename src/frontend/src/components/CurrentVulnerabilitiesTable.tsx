@@ -28,7 +28,8 @@ import {
 import OverdueStatusBadge from './OverdueStatusBadge';
 import ExceptionRequestModal from './ExceptionRequestModal';
 import CveLink from './CveLink';
-import { isAdmin, hasRole } from '../utils/auth';
+import { isAdmin, hasRole, hasVulnAccess } from '../utils/auth';
+import { exportCurrentVulnerabilitiesToExcel } from '../utils/currentVulnerabilityExport';
 
 const CurrentVulnerabilitiesTable: React.FC = () => {
     const [paginatedResponse, setPaginatedResponse] = useState<PaginatedVulnerabilitiesResponse | null>(null);
@@ -45,6 +46,9 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
     const [showCleanupModal, setShowCleanupModal] = useState(false);
     const [cleanupResult, setCleanupResult] = useState<VulnerabilityCleanupResult | null>(null);
     const [cleanupLoading, setCleanupLoading] = useState(false);
+
+    // Export state
+    const [exportLoading, setExportLoading] = useState(false);
 
     // Filter states
     const [severityFilter, setSeverityFilter] = useState<string>('');
@@ -70,15 +74,15 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
     const [sortField, setSortField] = useState<keyof CurrentVulnerability>('scanTimestamp');
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
-    // Check access on mount - ADMIN or SECCHAMPION only
+    // Check access on mount - ADMIN, VULN, or SECCHAMPION
     useEffect(() => {
         const checkAccess = () => {
-            const isAuthorized = hasRole('ADMIN') || hasRole('SECCHAMPION');
+            const isAuthorized = hasVulnAccess();
             setHasAccess(isAuthorized);
             setLoading(false);
 
             if (!isAuthorized) {
-                setError('Access denied. This page is only accessible to ADMIN and SECCHAMPION roles.');
+                setError('Access denied. This page is only accessible to ADMIN, VULN, and SECCHAMPION roles.');
             }
         };
 
@@ -211,6 +215,55 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
     const handleCloseCleanupModal = () => {
         setShowCleanupModal(false);
         setCleanupResult(null);
+    };
+
+    const handleExport = async () => {
+        try {
+            setExportLoading(true);
+
+            // Fetch all pages of vulnerabilities with current filters
+            const allVulnerabilities: CurrentVulnerability[] = [];
+            let page = 0;
+            let hasMore = true;
+            const batchSize = 500; // Use max page size for efficiency
+
+            while (hasMore) {
+                const response = await getCurrentVulnerabilities(
+                    severityFilter || undefined,
+                    systemFilter || undefined,
+                    exceptionFilter || undefined,
+                    productFilter || undefined,
+                    adDomainFilter || undefined,
+                    cloudAccountIdFilter || undefined,
+                    page,
+                    batchSize,
+                    undefined, // Use default sort for export
+                    undefined
+                );
+
+                allVulnerabilities.push(...response.content);
+                hasMore = response.hasNext;
+                page++;
+            }
+
+            // Generate and download Excel file
+            await exportCurrentVulnerabilitiesToExcel(allVulnerabilities, {
+                exportDate: new Date(),
+                filters: {
+                    severity: severityFilter || undefined,
+                    system: systemFilter || undefined,
+                    exceptionStatus: exceptionFilter || undefined,
+                    product: productFilter || undefined,
+                    adDomain: adDomainFilter || undefined,
+                    cloudAccountId: cloudAccountIdFilter || undefined,
+                },
+            });
+
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to export vulnerabilities');
+        } finally {
+            setExportLoading(false);
+        }
     };
 
     const handleSort = (field: keyof CurrentVulnerability) => {
@@ -422,6 +475,26 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                                         <>
                                             <i className="bi bi-trash3 me-2"></i>
                                             Cleanup Duplicates
+                                        </>
+                                    )}
+                                </button>
+                            )}
+                            {hasVulnAccess() && (
+                                <button
+                                    className="btn btn-success"
+                                    onClick={handleExport}
+                                    disabled={exportLoading}
+                                    title="Export filtered vulnerabilities to Excel"
+                                >
+                                    {exportLoading ? (
+                                        <>
+                                            <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                            Exporting...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <i className="bi bi-download me-2"></i>
+                                            Export
                                         </>
                                     )}
                                 </button>

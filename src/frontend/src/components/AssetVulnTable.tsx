@@ -77,7 +77,7 @@ const AssetVulnTable: React.FC<AssetVulnTableProps> = ({ assets, awsAccountId })
                         <tr key={asset.id}>
                             <td>
                                 <a
-                                    href={`/assets/${asset.id}`}
+                                    href={`/vulnerabilities/system?hostname=${encodeURIComponent(asset.name)}`}
                                     className="text-decoration-none"
                                 >
                                     {asset.name}
