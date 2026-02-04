@@ -268,7 +268,8 @@ open class ConfigBundleService(
     // Private helper methods for exporting each entity type
 
     private fun exportUsers(): List<UserExportDto> {
-        return userRepository.findAll().map { user ->
+        // Feature 073: Use findAllWithWorkgroups() to load workgroups with LAZY loading
+        return userRepository.findAllWithWorkgroups().map { user ->
             UserExportDto(
                 username = user.username,
                 email = user.email,

@@ -10,6 +10,66 @@ import java.util.Optional
 @Repository
 interface AssetRepository : JpaRepository<Asset, Long> {
 
+    // Memory Optimization - Feature 073
+
+    /**
+     * Find asset by ID with workgroups eagerly loaded
+     * Used for detail/update operations when LAZY loading is enabled
+     *
+     * Feature: 073-memory-optimization
+     * Task: T006
+     *
+     * @param id The asset ID
+     * @return Optional containing the asset with workgroups loaded
+     */
+    @io.micronaut.data.annotation.Query("""
+        SELECT a FROM Asset a
+        LEFT JOIN FETCH a.workgroups
+        WHERE a.id = :id
+    """)
+    fun findByIdWithWorkgroups(id: Long): Optional<Asset>
+
+    /**
+     * Find all assets accessible to a user using unified access control query
+     * Combines all access criteria in a single database round trip:
+     * 1. Assets in user's workgroups
+     * 2. Assets manually created by user
+     * 3. Assets discovered via user's scan upload
+     * 4. Assets with cloudAccountId matching user's AWS mappings
+     * 5. Assets with adDomain matching user's domain mappings
+     *
+     * Feature: 073-memory-optimization
+     * Task: T031
+     *
+     * @param userId The user's ID (for workgroup, creator, uploader checks)
+     * @param userEmail The user's email (for AWS account and domain mapping lookups)
+     * @return List of distinct accessible assets, ordered by name
+     */
+    @io.micronaut.data.annotation.Query(
+        value = """
+            SELECT DISTINCT a.* FROM asset a
+            WHERE
+                a.id IN (
+                    SELECT aw.asset_id FROM asset_workgroups aw
+                    JOIN user_workgroups uw ON aw.workgroup_id = uw.workgroup_id
+                    WHERE uw.user_id = :userId
+                )
+                OR a.manual_creator_id = :userId
+                OR a.scan_uploader_id = :userId
+                OR a.cloud_account_id IN (
+                    SELECT um.aws_account_id FROM user_mapping um
+                    WHERE um.email = :userEmail AND um.aws_account_id IS NOT NULL
+                )
+                OR LOWER(a.ad_domain) IN (
+                    SELECT LOWER(um.domain) FROM user_mapping um
+                    WHERE um.email = :userEmail AND um.domain IS NOT NULL
+                )
+            ORDER BY a.name ASC
+        """,
+        nativeQuery = true
+    )
+    fun findAccessibleAssets(userId: Long, userEmail: String): List<Asset>
+
     fun findByNameContainingIgnoreCase(name: String): List<Asset>
 
     fun findByType(type: String): List<Asset>
@@ -148,6 +208,7 @@ interface AssetRepository : JpaRepository<Asset, Long> {
     /**
      * Find assets that belong to any of the specified workgroups
      * Used for WG Vulns feature (022-wg-vulns-handling)
+     * Feature 073: Uses LEFT JOIN FETCH to eagerly load workgroups with LAZY loading.
      *
      * This query joins the asset table with the asset_workgroups join table
      * and filters by workgroup IDs. Returns distinct assets to avoid duplicates
@@ -158,8 +219,12 @@ interface AssetRepository : JpaRepository<Asset, Long> {
      */
     @io.micronaut.data.annotation.Query("""
         SELECT DISTINCT a FROM Asset a
-        JOIN a.workgroups w
-        WHERE w.id IN :workgroupIds
+        LEFT JOIN FETCH a.workgroups
+        WHERE a.id IN (
+            SELECT DISTINCT a2.id FROM Asset a2
+            JOIN a2.workgroups w
+            WHERE w.id IN :workgroupIds
+        )
         ORDER BY a.name ASC
     """)
     fun findByWorkgroupIdIn(workgroupIds: List<Long>): List<Asset>

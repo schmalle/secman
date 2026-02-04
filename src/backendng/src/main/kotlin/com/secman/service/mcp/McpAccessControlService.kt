@@ -77,12 +77,14 @@ open class McpAccessControlService(
 
     /**
      * Build context for delegated user with pre-computed access control data.
+     * Feature 073: Uses findByIdWithWorkgroups() for LAZY loading support.
      */
     private fun buildDelegatedContext(
         apiKey: McpApiKey,
         delegation: DelegationContext
     ): McpExecutionContext {
-        val user = userRepository.findById(delegation.delegatedUserId).orElse(null)
+        // Feature 073: Use findByIdWithWorkgroups() to load workgroups with LAZY loading
+        val user = userRepository.findByIdWithWorkgroups(delegation.delegatedUserId).orElse(null)
             ?: throw IllegalStateException("Delegated user not found: ${delegation.delegatedUserId}")
 
         val isAdmin = user.roles.contains(User.Role.ADMIN)

@@ -45,10 +45,18 @@ data class User(
     /**
      * Many-to-many relationship with Workgroup
      * Feature: 008-create-an-additional (Workgroup-Based Access Control)
+     * Feature: 073-memory-optimization (LAZY loading)
      * Users can belong to 0..n workgroups
-     * EAGER fetch: workgroup membership checked on every access control operation
+     *
+     * LAZY fetch: Workgroups loaded on-demand to reduce memory for list operations.
+     * Use UserRepository.findByIdWithWorkgroups() when workgroups are needed.
+     * Feature flag MEMORY_LAZY_LOADING controls service-level behavior.
+     *
+     * @JsonIgnore prevents LazyInitializationException during JSON serialization.
+     * Workgroups should be accessed via service layer, not directly from API responses.
      */
-    @ManyToMany(fetch = FetchType.EAGER)
+    @JsonIgnore
+    @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
         name = "user_workgroups",
         joinColumns = [JoinColumn(name = "user_id")],

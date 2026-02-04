@@ -8,7 +8,12 @@
       "mcp__context7__get-library-docs",
       "Bash(java:*)",
       "Bash(env)",
-      "Read(//Users/flake/.sdkman/candidates/java/21.0.8-tem/**)"
+      "Read(//Users/flake/.sdkman/candidates/java/21.0.8-tem/**)",
+      "Bash(./.specify/scripts/bash/create-new-feature.sh:*)",
+      "Bash(git checkout:*)",
+      "Bash(git branch:*)",
+      "Bash(./.specify/scripts/bash/check-prerequisites.sh:*)",
+      "Bash(./.specify/scripts/bash/setup-plan.sh:*)"
     ],
     "deny": []
   }

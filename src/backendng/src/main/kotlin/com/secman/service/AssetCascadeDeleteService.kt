@@ -15,6 +15,7 @@ import jakarta.inject.Singleton
 import jakarta.persistence.EntityManager
 import jakarta.persistence.LockModeType
 import jakarta.persistence.PessimisticLockException
+import org.hibernate.Hibernate
 import org.slf4j.LoggerFactory
 import java.time.LocalDateTime
 
@@ -187,6 +188,8 @@ open class AssetCascadeDeleteService(
 
             // 3d: Clear workgroup associations (ManyToMany join table must be cleared before asset deletion)
             // This removes entries from asset_workgroups join table to prevent FK constraint violations
+            // Feature 073: Initialize lazy workgroups collection before accessing
+            Hibernate.initialize(asset.workgroups)
             if (asset.workgroups.isNotEmpty()) {
                 log.debug("Clearing ${asset.workgroups.size} workgroup associations for asset $assetId")
                 asset.workgroups.clear()

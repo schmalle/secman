@@ -120,6 +120,7 @@ open class WorkgroupService(
     /**
      * Assign users to workgroup
      * FR-007: Allow administrators to assign users to workgroups
+     * Feature 073: Uses findByIdWithWorkgroups() for LAZY loading support.
      *
      * @param workgroupId Workgroup ID
      * @param userIds List of user IDs to assign
@@ -132,7 +133,8 @@ open class WorkgroupService(
         }
 
         userIds.forEach { userId ->
-            val user = userRepository.findById(userId).orElseThrow {
+            // Feature 073: Use findByIdWithWorkgroups() to load workgroups with LAZY loading
+            val user = userRepository.findByIdWithWorkgroups(userId).orElseThrow {
                 IllegalArgumentException("User not found: $userId")
             }
             user.workgroups.add(workgroup)
@@ -143,6 +145,7 @@ open class WorkgroupService(
     /**
      * Remove user from workgroup
      * FR-008: Allow administrators to remove users from workgroups
+     * Feature 073: Uses findByIdWithWorkgroups() for LAZY loading support.
      *
      * @param workgroupId Workgroup ID
      * @param userId User ID
@@ -154,7 +157,8 @@ open class WorkgroupService(
             IllegalArgumentException("Workgroup not found: $workgroupId")
         }
 
-        val user = userRepository.findById(userId).orElseThrow {
+        // Feature 073: Use findByIdWithWorkgroups() to load workgroups with LAZY loading
+        val user = userRepository.findByIdWithWorkgroups(userId).orElseThrow {
             IllegalArgumentException("User not found: $userId")
         }
 
@@ -169,6 +173,7 @@ open class WorkgroupService(
     /**
      * Assign assets to workgroup
      * FR-011: Allow administrators to assign assets to workgroups
+     * Feature 073: Uses findByIdWithWorkgroups() for LAZY loading support.
      *
      * @param workgroupId Workgroup ID
      * @param assetIds List of asset IDs to assign
@@ -181,7 +186,8 @@ open class WorkgroupService(
         }
 
         assetIds.forEach { assetId ->
-            val asset = assetRepository.findById(assetId).orElseThrow {
+            // Feature 073: Use findByIdWithWorkgroups() to load workgroups with LAZY loading
+            val asset = assetRepository.findByIdWithWorkgroups(assetId).orElseThrow {
                 IllegalArgumentException("Asset not found: $assetId")
             }
             asset.workgroups.add(workgroup)
@@ -192,6 +198,7 @@ open class WorkgroupService(
     /**
      * Remove asset from workgroup
      * FR-012: Allow administrators to remove assets from workgroups
+     * Feature 073: Uses findByIdWithWorkgroups() for LAZY loading support.
      *
      * @param workgroupId Workgroup ID
      * @param assetId Asset ID
@@ -203,7 +210,8 @@ open class WorkgroupService(
             IllegalArgumentException("Workgroup not found: $workgroupId")
         }
 
-        val asset = assetRepository.findById(assetId).orElseThrow {
+        // Feature 073: Use findByIdWithWorkgroups() to load workgroups with LAZY loading
+        val asset = assetRepository.findByIdWithWorkgroups(assetId).orElseThrow {
             IllegalArgumentException("Asset not found: $assetId")
         }
 

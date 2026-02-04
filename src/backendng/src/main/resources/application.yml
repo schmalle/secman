@@ -199,6 +199,17 @@ secman:
       max-retries: ${OAUTH_TOKEN_EXCHANGE_MAX_RETRIES:2}
       # Delay between retries in milliseconds
       retry-delay-ms: ${OAUTH_TOKEN_EXCHANGE_RETRY_DELAY:500}
+  # Memory optimization feature flags (Feature 073)
+  # Enables stability-first rollback capability
+  memory:
+    # Enable LAZY loading for entity relationships
+    # When false, reverts to EAGER loading behavior for rollback
+    lazy-loading-enabled: ${MEMORY_LAZY_LOADING:true}
+    # Batch size for large data operations (duplicate cleanup, bulk deletions)
+    batch-size: ${MEMORY_BATCH_SIZE:1000}
+    # Enable streaming exports (write directly to Excel during fetch)
+    # When false, accumulates all records first (original behavior)
+    streaming-exports-enabled: ${MEMORY_STREAMING_EXPORTS:true}
   vulnerability:
     # Use patch publication date for calculating days open
     # When true: days_open = scan_timestamp - patch_publication_date
@@ -301,3 +312,9 @@ app:
     base-url: ${BACKEND_BASE_URL:https://secman.covestro.net}
   frontend:
     base-url: ${FRONTEND_URL:http://localhost:4321}
+
+# Management endpoints (Feature 073: Memory Optimization)
+endpoints:
+  memory:
+    enabled: true
+    sensitive: false

@@ -9,6 +9,40 @@ import java.util.*
 @Repository
 interface UserRepository : JpaRepository<User, Long> {
 
+    // Memory Optimization - Feature 073
+
+    /**
+     * Find user by ID with workgroups eagerly loaded
+     * Used for authentication/authorization operations when LAZY loading is enabled
+     *
+     * Feature: 073-memory-optimization
+     * Task: T007
+     *
+     * @param id The user ID
+     * @return Optional containing the user with workgroups loaded
+     */
+    @Query("""
+        SELECT u FROM User u
+        LEFT JOIN FETCH u.workgroups
+        WHERE u.id = :id
+    """)
+    fun findByIdWithWorkgroups(id: Long): Optional<User>
+
+    /**
+     * Find all users with workgroups eagerly loaded
+     * Used for export operations when LAZY loading is enabled
+     *
+     * Feature: 073-memory-optimization
+     *
+     * @return List of all users with workgroups loaded
+     */
+    @Query("""
+        SELECT DISTINCT u FROM User u
+        LEFT JOIN FETCH u.workgroups
+        ORDER BY u.username ASC
+    """)
+    fun findAllWithWorkgroups(): List<User>
+
     fun findByUsername(username: String): Optional<User>
 
     fun findByEmail(email: String): Optional<User>
