@@ -1,5 +1,6 @@
 package com.secman.service
 
+import com.secman.config.MemoryOptimizationConfig
 import com.secman.domain.Asset
 import com.secman.domain.Scan
 import com.secman.domain.User
@@ -11,11 +12,13 @@ import com.secman.repository.UserRepository
 import com.secman.repository.VulnerabilityRepository
 import io.micronaut.security.authentication.Authentication
 import jakarta.inject.Singleton
+import org.hibernate.Hibernate
 
 /**
  * Centralized service for unified access control filtering
  * Feature: 008-create-an-additional (Workgroup-Based Access Control)
  * Feature: 013-user-mapping-upload (AWS Account Mapping)
+ * Feature: 073-memory-optimization (LAZY loading support)
  *
  * Implements filtering logic for assets, vulnerabilities, and scans based on:
  * - ADMIN role: Full access to all resources
@@ -36,7 +39,8 @@ open class AssetFilterService(
     private val vulnerabilityRepository: VulnerabilityRepository,
     private val scanRepository: ScanRepository,
     private val userRepository: UserRepository,
-    private val userMappingRepository: UserMappingRepository
+    private val userMappingRepository: UserMappingRepository,
+    private val memoryConfig: MemoryOptimizationConfig
 ) {
 
     /**
@@ -51,6 +55,9 @@ open class AssetFilterService(
      * 5. Asset's cloudAccountId matches any of the user's AWS account mappings
      * 6. Asset's adDomain matches any of the user's domain mappings (case-insensitive)
      *
+     * Feature 073: When lazyLoadingEnabled=true, uses unified query for single DB round trip.
+     * Otherwise, falls back to original multi-query approach for stability.
+     *
      * @param authentication Current user authentication
      * @return List of accessible assets (deduplicated and sorted by name)
      */
@@ -60,8 +67,40 @@ open class AssetFilterService(
             return assetRepository.findAll()
         }
 
-        // Regular users and VULN: filter by workgroup membership + ownership
         val userId = getUserId(authentication)
+        val userEmail = getUserEmail(authentication)
+
+        // Feature 073: Use unified query when memory optimization is enabled
+        if (memoryConfig.lazyLoadingEnabled && userEmail != null) {
+            return getAccessibleAssetsUnified(userId, userEmail)
+        }
+
+        // Fallback: Original multi-query approach
+        return getAccessibleAssetsMultiQuery(userId, userEmail)
+    }
+
+    /**
+     * Get accessible assets using unified single-query approach
+     * Feature 073: Combines all access criteria in one database round trip.
+     *
+     * @param userId The user's ID
+     * @param userEmail The user's email
+     * @return List of accessible assets (already distinct and sorted)
+     */
+    private fun getAccessibleAssetsUnified(userId: Long, userEmail: String): List<Asset> {
+        return assetRepository.findAccessibleAssets(userId, userEmail)
+    }
+
+    /**
+     * Get accessible assets using original multi-query approach
+     * Retained for stability and feature flag rollback.
+     *
+     * @param userId The user's ID
+     * @param userEmail The user's email (nullable)
+     * @return List of accessible assets (deduplicated and sorted)
+     */
+    private fun getAccessibleAssetsMultiQuery(userId: Long, userEmail: String?): List<Asset> {
+        // Regular users and VULN: filter by workgroup membership + ownership
         val workgroupAssets = assetRepository.findByWorkgroupsUsersIdOrManualCreatorIdOrScanUploaderIdOrderByNameAsc(
             userId = userId,
             manualCreatorId = userId,
@@ -69,7 +108,6 @@ open class AssetFilterService(
         )
 
         // Get assets accessible via AWS account mapping
-        val userEmail = getUserEmail(authentication)
         val awsAccountAssets = if (userEmail != null) {
             val awsAccountIds = userMappingRepository.findDistinctAwsAccountIdByEmail(userEmail)
             if (awsAccountIds.isNotEmpty()) {
@@ -144,7 +182,9 @@ open class AssetFilterService(
 
         // Regular users and VULN: Get all scans uploaded by users in same workgroups
         val userId = getUserId(authentication)
-        val currentUser = userRepository.findById(userId).orElseThrow {
+
+        // Feature 073: Use findByIdWithWorkgroups() to load workgroups with LAZY loading
+        val currentUser = userRepository.findByIdWithWorkgroups(userId).orElseThrow {
             IllegalStateException("Current user not found: $userId")
         }
 

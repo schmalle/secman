@@ -87,12 +87,14 @@ class McpAuthService {
     /**
      * Extract workgroup IDs from the user associated with this API key.
      * Returns empty set if user has no workgroups.
+     * Feature 073: Uses findByIdWithWorkgroups() for LAZY loading support.
      *
      * @param apiKey The API key
      * @return Set of workgroup IDs the user belongs to
      */
     fun extractWorkgroups(apiKey: McpApiKey): Set<Long> {
-        val user = userRepository.findById(apiKey.userId).orElse(null)
+        // Feature 073: Use findByIdWithWorkgroups() to load workgroups with LAZY loading
+        val user = userRepository.findByIdWithWorkgroups(apiKey.userId).orElse(null)
         if (user == null) {
             logger.warn("User not found for API key: userId={}", apiKey.userId)
             return emptySet()

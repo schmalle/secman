@@ -21,15 +21,18 @@ import {
   getDistinctProducts,
   getDistinctAdDomains,
   getDistinctCloudAccountIds,
+  exportVulnerabilitiesServerSide,
+  cancelExportJob,
+  resetStuckExportJobs,
   type CurrentVulnerability,
   type PaginatedVulnerabilitiesResponse,
   type VulnerabilityCleanupResult,
+  type ExportJob,
 } from "../services/vulnerabilityManagementService";
 import OverdueStatusBadge from "./OverdueStatusBadge";
 import ExceptionRequestModal from "./ExceptionRequestModal";
 import CveLink from "./CveLink";
 import { isAdmin, hasRole, hasVulnAccess } from "../utils/auth";
-import { exportCurrentVulnerabilitiesToExcel } from "../utils/currentVulnerabilityExport";
 import SearchableSelect from "./SearchableSelect";
 
 const CurrentVulnerabilitiesTable: React.FC = () => {
@@ -53,6 +56,8 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
 
   // Export state
   const [exportLoading, setExportLoading] = useState(false);
+  const [exportProgress, setExportProgress] = useState<ExportJob | null>(null);
+  const [exportJobId, setExportJobId] = useState<string | null>(null);
 
   // Filter states
   const [severityFilter, setSeverityFilter] = useState<string>("");
@@ -243,50 +248,76 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
     setCleanupResult(null);
   };
 
+  /**
+   * Handle export of vulnerabilities to Excel
+   * Feature: Vulnerability Export Performance Optimization - Background Job Pattern
+   *
+   * Uses background job pattern with progress tracking:
+   * - Starts export job asynchronously
+   * - Polls for progress (updates UI every 2 seconds)
+   * - Downloads file when complete
+   * - Supports cancellation
+   */
   const handleExport = async () => {
     try {
       setExportLoading(true);
+      setExportProgress(null);
+      setError(null);
 
-      // Fetch all pages of vulnerabilities with current filters
-      const allVulnerabilities: CurrentVulnerability[] = [];
-      let page = 0;
-      let hasMore = true;
-      const batchSize = 500; // Use max page size for efficiency
-
-      while (hasMore) {
-        const response = await getCurrentVulnerabilities(
-          severityFilter || undefined,
-          systemFilter || undefined,
-          exceptionFilter || undefined,
-          productFilter || undefined,
-          adDomainFilter || undefined,
-          cloudAccountIdFilter || undefined,
-          page,
-          batchSize,
-          undefined, // Use default sort for export
-          undefined,
-        );
-
-        allVulnerabilities.push(...response.content);
-        hasMore = response.hasNext;
-        page++;
-      }
-
-      // Generate and download Excel file
-      await exportCurrentVulnerabilitiesToExcel(allVulnerabilities, {
-        exportDate: new Date(),
-        filters: {
-          severity: severityFilter || undefined,
-          system: systemFilter || undefined,
-          exceptionStatus: exceptionFilter || undefined,
-          product: productFilter || undefined,
-          adDomain: adDomainFilter || undefined,
-          cloudAccountId: cloudAccountIdFilter || undefined,
-        },
+      // Use server-side export with progress tracking
+      await exportVulnerabilitiesServerSide((job) => {
+        setExportProgress(job);
+        setExportJobId(job.jobId);
       });
+
+      setSuccessMessage("Export completed successfully!");
+      setTimeout(() => setSuccessMessage(null), 5000);
+
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to export vulnerabilities",
+      );
+    } finally {
+      setExportLoading(false);
+      setExportProgress(null);
+      setExportJobId(null);
+    }
+  };
+
+  /**
+   * Handle cancellation of running export
+   */
+  const handleCancelExport = async () => {
+    if (!exportJobId) return;
+
+    try {
+      await cancelExportJob(exportJobId);
+      setExportLoading(false);
+      setExportProgress(null);
+      setExportJobId(null);
+      setSuccessMessage("Export cancelled");
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to cancel export",
+      );
+    }
+  };
+
+  /**
+   * Handle reset of stuck export jobs
+   * Called when user encounters "already have an export in progress" error
+   */
+  const handleResetStuckExports = async () => {
+    try {
+      setExportLoading(true);
+      const result = await resetStuckExportJobs();
+      setSuccessMessage(result.message);
+      setTimeout(() => setSuccessMessage(null), 5000);
+      setError(null);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to reset stuck exports",
       );
     } finally {
       setExportLoading(false);
@@ -528,28 +559,41 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                 </button>
               )}
               {hasVulnAccess() && (
-                <button
-                  className="btn btn-success"
-                  onClick={handleExport}
-                  disabled={exportLoading}
-                  title="Export filtered vulnerabilities to Excel"
-                >
-                  {exportLoading ? (
-                    <>
-                      <span
-                        className="spinner-border spinner-border-sm me-2"
-                        role="status"
-                        aria-hidden="true"
-                      ></span>
-                      Exporting...
-                    </>
-                  ) : (
-                    <>
-                      <i className="bi bi-download me-2"></i>
-                      Export
-                    </>
+                <>
+                  <button
+                    className="btn btn-success"
+                    onClick={handleExport}
+                    disabled={exportLoading}
+                    title="Export all vulnerabilities to Excel"
+                  >
+                    {exportLoading ? (
+                      <>
+                        <span
+                          className="spinner-border spinner-border-sm me-2"
+                          role="status"
+                          aria-hidden="true"
+                        ></span>
+                        {exportProgress
+                          ? `${exportProgress.progressPercent}%`
+                          : "Starting..."}
+                      </>
+                    ) : (
+                      <>
+                        <i className="bi bi-download me-2"></i>
+                        Export
+                      </>
+                    )}
+                  </button>
+                  {exportLoading && (
+                    <button
+                      className="btn btn-outline-danger"
+                      onClick={handleCancelExport}
+                      title="Cancel export"
+                    >
+                      <i className="bi bi-x-circle"></i>
+                    </button>
                   )}
-                </button>
+                </>
               )}
               <button
                 className="btn btn-outline-primary"
@@ -577,6 +621,38 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                 type="button"
                 className="btn-close"
                 onClick={() => setSuccessMessage(null)}
+                aria-label="Close"
+              ></button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Export Error Message with Reset Option */}
+      {error && error.includes("export") && (
+        <div className="row mb-3">
+          <div className="col-12">
+            <div
+              className="alert alert-warning alert-dismissible fade show"
+              role="alert"
+            >
+              <i className="bi bi-exclamation-triangle me-2"></i>
+              {error}
+              {error.includes("already have an export") && (
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-dark ms-3"
+                  onClick={handleResetStuckExports}
+                  disabled={exportLoading}
+                >
+                  <i className="bi bi-arrow-counterclockwise me-1"></i>
+                  Reset Stuck Exports
+                </button>
+              )}
+              <button
+                type="button"
+                className="btn-close"
+                onClick={() => setError(null)}
                 aria-label="Close"
               ></button>
             </div>

@@ -124,10 +124,18 @@ data class Asset(
     /**
      * Many-to-many relationship with Workgroup
      * Feature: 008-create-an-additional (Workgroup-Based Access Control)
+     * Feature: 073-memory-optimization (LAZY loading)
      * Assets can belong to 0..n workgroups
-     * EAGER fetch: workgroup membership checked for access control filtering
+     *
+     * LAZY fetch: Workgroups loaded on-demand to reduce memory for list operations.
+     * Use AssetRepository.findByIdWithWorkgroups() when workgroups are needed.
+     * Feature flag MEMORY_LAZY_LOADING controls service-level behavior.
+     *
+     * @JsonIgnore prevents LazyInitializationException during JSON serialization.
+     * Workgroups should be accessed via service layer, not directly from API responses.
      */
-    @ManyToMany(fetch = FetchType.EAGER)
+    @JsonIgnore
+    @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
         name = "asset_workgroups",
         joinColumns = [JoinColumn(name = "asset_id")],
@@ -193,7 +201,12 @@ data class Asset(
      * 3. If all workgroups are N/A or asset has no workgroups -> default to MEDIUM
      *
      * Not persisted to database, computed on-demand
+     *
+     * @JsonIgnore: Prevents serialization from triggering LAZY workgroups load.
+     * Feature 073: Call this method only when workgroups are already loaded
+     * (e.g., via findByIdWithWorkgroups() or Hibernate.initialize()).
      */
+    @JsonIgnore
     fun getEffectiveCriticality(): Criticality {
         return criticality ?: workgroups
             .filter { it.criticality != Criticality.NA }  // Filter out N/A workgroups

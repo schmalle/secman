@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete, getUser } from '../utils/auth';
+import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete, getUser, hasVulnAccess } from '../utils/auth';
 import { isAdmin } from '../utils/permissions';
 import PortHistory from './PortHistory';
 import VulnerabilityHistory from './VulnerabilityHistory';
 import { BulkDeleteConfirmModal } from './BulkDeleteConfirmModal';
 import { bulkDeleteAssets, type BulkDeleteResult } from '../services/assetService';
+import { exportVulnerabilitiesServerSide, cancelExportJob, type ExportJob } from '../services/vulnerabilityManagementService';
 
 interface WorkgroupSummary {
   id: number;
@@ -67,6 +68,11 @@ const AssetManagement: React.FC = () => {
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
   const [isDeletingBulk, setIsDeletingBulk] = useState(false);
   const [bulkDeleteSuccess, setBulkDeleteSuccess] = useState<string | null>(null);
+
+  // Export vulnerabilities state
+  const [exportLoading, setExportLoading] = useState(false);
+  const [exportProgress, setExportProgress] = useState<ExportJob | null>(null);
+  const [exportJobId, setExportJobId] = useState<string | null>(null);
 
   // Domain validation state (Feature 043 - User Story 2)
   const [domainError, setDomainError] = useState<string | null>(null);
@@ -273,6 +279,57 @@ const AssetManagement: React.FC = () => {
     }
   };
 
+  /**
+   * Handle export of all vulnerabilities to Excel
+   * Feature: Vulnerability Export Performance Optimization - Background Job Pattern
+   *
+   * Uses background job pattern with progress tracking:
+   * - Starts export job asynchronously
+   * - Polls for progress (updates UI every 2 seconds)
+   * - Downloads file when complete
+   * - Supports cancellation
+   */
+  const handleExportVulnerabilities = async () => {
+    try {
+      setExportLoading(true);
+      setExportProgress(null);
+      setError(null);
+
+      // Use server-side export with progress tracking
+      await exportVulnerabilitiesServerSide((job) => {
+        setExportProgress(job);
+        setExportJobId(job.jobId);
+      });
+
+      // Show brief success message
+      setBulkDeleteSuccess('Export completed successfully!');
+      setTimeout(() => setBulkDeleteSuccess(null), 5000);
+
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to export vulnerabilities');
+    } finally {
+      setExportLoading(false);
+      setExportProgress(null);
+      setExportJobId(null);
+    }
+  };
+
+  /**
+   * Handle cancellation of running export
+   */
+  const handleCancelExport = async () => {
+    if (!exportJobId) return;
+
+    try {
+      await cancelExportJob(exportJobId);
+      setExportLoading(false);
+      setExportProgress(null);
+      setExportJobId(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to cancel export');
+    }
+  };
+
   const resetForm = () => {
     setFormData({
       name: '',
@@ -390,6 +447,42 @@ const AssetManagement: React.FC = () => {
               >
                 {showForm ? 'Cancel' : 'Add New Asset'}
               </button>
+              {/* Export Vulnerabilities Button (ADMIN, VULN, SECCHAMPION roles) */}
+              {hasVulnAccess() && (
+                <>
+                  <button
+                    type="button"
+                    className="btn btn-success"
+                    onClick={handleExportVulnerabilities}
+                    disabled={exportLoading}
+                    title="Export all vulnerabilities to Excel"
+                  >
+                    {exportLoading ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                        {exportProgress
+                          ? `${exportProgress.progressPercent}%`
+                          : 'Starting...'}
+                      </>
+                    ) : (
+                      <>
+                        <i className="bi bi-download me-2"></i>
+                        Export Vulns
+                      </>
+                    )}
+                  </button>
+                  {exportLoading && (
+                    <button
+                      type="button"
+                      className="btn btn-outline-danger"
+                      onClick={handleCancelExport}
+                      title="Cancel export"
+                    >
+                      <i className="bi bi-x-circle"></i>
+                    </button>
+                  )}
+                </>
+              )}
               {/* Feature 029: Bulk Delete Button (ADMIN only, hidden when no assets) */}
               {isAdmin(getUser()?.roles) && getFilteredAssets().length > 0 && (
                 <button

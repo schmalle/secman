@@ -36,7 +36,7 @@ Users access assets if **ANY** is true:
 
 **Assets**: GET/POST /api/assets, DELETE /api/assets/bulk (ADMIN), GET /api/assets/export
 
-**Vulnerabilities**: GET /api/vulnerabilities/current, GET /api/vulnerability-exceptions, POST /api/vulnerability-exception-requests, GET /api/vulnerability-exception-requests/pending/count, GET /api/exception-badge-updates (SSE)
+**Vulnerabilities**: GET /api/vulnerabilities/current, POST /api/vulnerabilities/export (start job), GET /api/vulnerabilities/export/{jobId}/status, GET /api/vulnerabilities/export/{jobId}/download, DELETE /api/vulnerabilities/export/{jobId} (cancel), GET /api/vulnerabilities/export/history (ADMIN/VULN/SECCHAMPION), GET /api/vulnerability-exceptions, POST /api/vulnerability-exception-requests, GET /api/vulnerability-exception-requests/pending/count, GET /api/exception-badge-updates (SSE)
 
 **Outdated Assets**: GET /api/outdated-assets[/{id}[/vulnerabilities]], GET /api/outdated-assets/{last-refresh,count}, POST /api/materialized-view-refresh/trigger (ADMIN), GET /api/materialized-view-refresh/{progress (SSE), status, history}
 
@@ -185,6 +185,16 @@ fun findStateByValueWithRetry(stateToken: String): Optional<OAuthState> {
 - `OAUTH_TOKEN_EXCHANGE_MAX_RETRIES` (default: 2) - Token exchange retry count
 - `OAUTH_TOKEN_EXCHANGE_RETRY_DELAY` (default: 500ms) - Token exchange retry delay
 
+### Memory Optimization Pattern
+**Feature 073**: SQL-level filtering, batched processing, streaming exports
+**Config**: `MemoryOptimizationConfig.kt` reads from `secman.memory.*` in application.yml
+**Environment Variables**:
+- `MEMORY_LAZY_LOADING` (default: true) - Enable LAZY loading for entity relationships
+- `MEMORY_BATCH_SIZE` (default: 1000) - Batch size for duplicate cleanup and streaming operations
+- `MEMORY_STREAMING_EXPORTS` (default: true) - Enable streaming exports to reduce memory footprint
+**Monitoring**: GET /memory endpoint returns JVM heap metrics (used, max, free, total in MB)
+**Rollback**: Set environment variables to `false` to revert to original behavior
+
 ## File Locations
 - Backend: `src/backendng/src/main/kotlin/com/secman/{domain,controller,service,repository,config}/`
 - Frontend: `src/frontend/src/{components,pages,services}/`
@@ -214,6 +224,8 @@ fun findStateByValueWithRetry(stateToken: String): Optional<OAuthState> {
 - MariaDB 11.4 (read-only queries for statistics) (069-enhanced-admin-summary)
 - Kotlin 2.3.0 / Java 25 + Micronaut 4.10, Jakarta Mail (angus-mail 2.0.5), Hibernate JPA (071-ses-smtp-rewrite)
 - MariaDB 11.4 (existing `email_configs` table) (071-ses-smtp-rewrite)
+- Kotlin 2.3.0 / Java 25 + Micronaut 4.10, Hibernate JPA, Apache POI 5.3 (SXSSFWorkbook) (073-memory-optimization)
+- MariaDB 11.4 (HikariCP connection pool, max 20 connections) (073-memory-optimization)
 
 ## Recent Changes
 - 058-ai-norm-mapping: Added Kotlin 2.2.21 / Java 21 (backend), TypeScript/React 19 (frontend) + Micronaut 4.10, Hibernate JPA, Axios, Bootstrap 5.3
