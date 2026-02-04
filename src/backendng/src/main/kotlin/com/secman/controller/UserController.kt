@@ -97,7 +97,11 @@ open class UserController(
      */
     @Get
     fun list(@QueryValue(defaultValue = "false") includeWorkgroups: Boolean): HttpResponse<List<UserResponse>> {
-        val users = userRepository.findAll().map { UserResponse.from(it, includeWorkgroups) }
+        val users = if (includeWorkgroups) {
+            userRepository.findAllWithWorkgroups().map { UserResponse.from(it, true) }
+        } else {
+            userRepository.findAll().map { UserResponse.from(it, false) }
+        }
         return HttpResponse.ok(users)
     }
 
@@ -185,7 +189,7 @@ open class UserController(
      */
     @Get("/{id}")
     fun get(@PathVariable id: Long): HttpResponse<*> {
-        val userOptional = userRepository.findById(id)
+        val userOptional = userRepository.findByIdWithWorkgroups(id)
 
         if (userOptional.isEmpty) {
             return HttpResponse.notFound<Any>().body(mapOf("error" to "User not found"))
