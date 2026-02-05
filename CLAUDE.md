@@ -228,6 +228,8 @@ fun findStateByValueWithRetry(stateToken: String): Optional<OAuthState> {
 - MariaDB 11.4 (HikariCP connection pool, max 20 connections) (073-memory-optimization)
 - Kotlin 2.3.0 / Java 25 (backend), Bash (test script), TypeScript/React 19 (frontend) + Micronaut 4.10, Hibernate JPA, curl, jq, 1Password CLI v2.x (074-mcp-e2e-test)
 - MariaDB 11.4 (existing tables: users, assets, vulnerabilities, workgroups, user_workgroups, asset_workgroups) (074-mcp-e2e-test)
+- TypeScript / React 19 + Astro 5.15, React 19, Bootstrap 5.3 (075-sort-empty-accounts)
+- N/A (no data model changes) (075-sort-empty-accounts)
 
 ## Recent Changes
 - 058-ai-norm-mapping: Added Kotlin 2.2.21 / Java 21 (backend), TypeScript/React 19 (frontend) + Micronaut 4.10, Hibernate JPA, Axios, Bootstrap 5.3
