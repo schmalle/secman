@@ -30,6 +30,7 @@ const AccountVulnsView: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [isAdminRedirect, setIsAdminRedirect] = useState(false);
+    const [emptyAccountsExpanded, setEmptyAccountsExpanded] = useState(false);
 
     const formatImportTimestamp = (timestamp: string): string => {
         const date = new Date(timestamp);
@@ -286,18 +287,12 @@ const AccountVulnsView: React.FC = () => {
                 </div>
             )}
 
-            {/* Account Groups */}
-            {summary.accountGroups.map((group) => {
-                console.log('[AccountVulnsView] Rendering group:', {
-                    awsAccountId: group.awsAccountId,
-                    totalAssets: group.totalAssets,
-                    assetsArray: group.assets,
-                    assetsLength: group.assets?.length,
-                    assetsType: typeof group.assets,
-                    fullGroup: group
-                });
+            {/* Account Groups - Feature 075: Sort empty accounts to bottom */}
+            {(() => {
+                const accountsWithAssets = summary.accountGroups.filter(g => g.totalAssets > 0);
+                const accountsWithoutAssets = summary.accountGroups.filter(g => g.totalAssets === 0);
 
-                return (
+                const renderAccountCard = (group: typeof summary.accountGroups[0]) => (
                     <div key={group.awsAccountId} className="card mb-4 border-0 shadow-sm">
                         <div className="card-header bg-light border-bottom">
                             <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -333,7 +328,36 @@ const AccountVulnsView: React.FC = () => {
                         </div>
                     </div>
                 );
-            })}
+
+                return (
+                    <>
+                        {/* Accounts with assets (always shown first) */}
+                        {accountsWithAssets.map(renderAccountCard)}
+
+                        {/* Accounts without assets (collapsible, collapsed by default) */}
+                        {accountsWithoutAssets.length > 0 && accountsWithAssets.length > 0 && (
+                            <>
+                                <div
+                                    className="d-flex align-items-center gap-2 mb-3 mt-2"
+                                    style={{ cursor: 'pointer' }}
+                                    onClick={() => setEmptyAccountsExpanded(!emptyAccountsExpanded)}
+                                    role="button"
+                                    aria-expanded={emptyAccountsExpanded}
+                                >
+                                    <i className={`bi bi-chevron-${emptyAccountsExpanded ? 'up' : 'down'} text-muted`}></i>
+                                    <h5 className="mb-0 text-muted">
+                                        Accounts with no assets ({accountsWithoutAssets.length})
+                                    </h5>
+                                </div>
+                                {emptyAccountsExpanded && accountsWithoutAssets.map(renderAccountCard)}
+                            </>
+                        )}
+
+                        {/* Edge case: all accounts are empty — render normally without collapsible wrapper */}
+                        {accountsWithAssets.length === 0 && accountsWithoutAssets.map(renderAccountCard)}
+                    </>
+                );
+            })()}
 
             {/* Back to Home button */}
             <div className="mt-4">
