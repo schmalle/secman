@@ -78,7 +78,13 @@ enum class McpPermission {
     /**
      * Read vulnerability data - allows get_vulnerabilities tool
      */
-    VULNERABILITIES_READ;
+    VULNERABILITIES_READ,
+
+    /**
+     * Manage workgroups - allows create_workgroup, delete_workgroup, assign_assets_to_workgroup,
+     * assign_users_to_workgroup MCP tools (admin only)
+     */
+    WORKGROUPS_WRITE;
 
     /**
      * Get display name for UI
@@ -100,6 +106,7 @@ enum class McpPermission {
             ASSETS_READ -> "Read Assets"
             SCANS_READ -> "Read Scans"
             VULNERABILITIES_READ -> "Read Vulnerabilities"
+            WORKGROUPS_WRITE -> "Manage Workgroups"
         }
     }
 
@@ -123,6 +130,7 @@ enum class McpPermission {
             ASSETS_READ -> "View and search asset inventory"
             SCANS_READ -> "View scan data and results"
             VULNERABILITIES_READ -> "View vulnerability information"
+            WORKGROUPS_WRITE -> "Create, delete, and manage workgroup memberships (admin only)"
         }
     }
 
@@ -131,7 +139,7 @@ enum class McpPermission {
      */
     fun requiresAdmin(): Boolean {
         return when (this) {
-            AUDIT_READ, USER_ACTIVITY, SYSTEM_INFO -> true
+            AUDIT_READ, USER_ACTIVITY, SYSTEM_INFO, WORKGROUPS_WRITE -> true
             else -> false
         }
     }

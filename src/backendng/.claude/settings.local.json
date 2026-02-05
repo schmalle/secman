@@ -13,7 +13,13 @@
       "Bash(git checkout:*)",
       "Bash(git branch:*)",
       "Bash(./.specify/scripts/bash/check-prerequisites.sh:*)",
-      "Bash(./.specify/scripts/bash/setup-plan.sh:*)"
+      "Bash(./.specify/scripts/bash/setup-plan.sh:*)",
+      "Bash(git fetch:*)",
+      "Bash(grep:*)",
+      "Bash(./.specify/scripts/bash/update-agent-context.sh:*)",
+      "Bash(DEBUG=1 ./tests/mcp-e2e-workgroup-test.sh:*)",
+      "Bash(op read:*)",
+      "Bash(./tests/mcp-e2e-workgroup-test.sh:*)"
     ],
     "deny": []
   }
