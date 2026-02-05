@@ -62,7 +62,13 @@ class McpToolRegistry(
     @Inject private val startAlignmentTool: StartAlignmentTool,
     @Inject private val submitReviewTool: SubmitReviewTool,
     @Inject private val getAlignmentStatusTool: GetAlignmentStatusTool,
-    @Inject private val finalizeAlignmentTool: FinalizeAlignmentTool
+    @Inject private val finalizeAlignmentTool: FinalizeAlignmentTool,
+    // Feature 074: MCP Tools for Workgroup Management
+    @Inject private val createWorkgroupTool: CreateWorkgroupTool,
+    @Inject private val deleteWorkgroupTool: DeleteWorkgroupTool,
+    @Inject private val assignAssetsToWorkgroupTool: AssignAssetsToWorkgroupTool,
+    @Inject private val assignUsersToWorkgroupTool: AssignUsersToWorkgroupTool,
+    @Inject private val deleteAssetTool: DeleteAssetTool
 ) {
     private val logger = LoggerFactory.getLogger(McpToolRegistry::class.java)
 
@@ -121,7 +127,13 @@ class McpToolRegistry(
             startAlignmentTool,
             submitReviewTool,
             getAlignmentStatusTool,
-            finalizeAlignmentTool
+            finalizeAlignmentTool,
+            // Feature 074: MCP Tools for Workgroup Management
+            createWorkgroupTool,
+            deleteWorkgroupTool,
+            assignAssetsToWorkgroupTool,
+            assignUsersToWorkgroupTool,
+            deleteAssetTool
         ).forEach { tool ->
             toolMap[tool.name] = tool
             logger.debug("Registered MCP tool: {}", tool.name)
@@ -336,6 +348,14 @@ class McpToolRegistry(
             }
             "get_alignment_status" -> {
                 permissions.contains(McpPermission.REQUIREMENTS_READ) // Any authenticated user with delegation
+            }
+
+            // Feature 074: MCP Tools for Workgroup Management (ADMIN only via User Delegation)
+            "create_workgroup", "delete_workgroup", "assign_assets_to_workgroup", "assign_users_to_workgroup" -> {
+                permissions.contains(McpPermission.WORKGROUPS_WRITE) // ADMIN role checked in tool execute()
+            }
+            "delete_asset" -> {
+                permissions.contains(McpPermission.ASSETS_READ) // ADMIN role checked in tool execute()
             }
 
             else -> false

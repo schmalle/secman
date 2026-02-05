@@ -213,6 +213,13 @@ class McpToolPermissionService(
             "add_vulnerability" -> {
                 permissions.contains(McpPermission.VULNERABILITIES_READ)
             }
+            // Feature 074: MCP Tools for Workgroup Management
+            "create_workgroup", "delete_workgroup", "assign_assets_to_workgroup", "assign_users_to_workgroup" -> {
+                permissions.contains(McpPermission.WORKGROUPS_WRITE)
+            }
+            "delete_asset" -> {
+                permissions.contains(McpPermission.ASSETS_READ)
+            }
             else -> false
         }
     }

@@ -1,7 +1,7 @@
 # MCP (Model Context Protocol) Integration Guide
 
-**Last Updated:** 2026-01-14
-**Version:** 3.1
+**Last Updated:** 2026-02-04
+**Version:** 3.2
 
 This guide covers integrating Secman with AI assistants (Claude Desktop, Claude Code, ChatGPT, etc.) using the Model Context Protocol (MCP).
 
@@ -270,6 +270,7 @@ curl -X POST http://localhost:8080/api/mcp/admin/api-keys \
 | `VULNERABILITIES_READ` | Read vulnerability data | `get_vulnerabilities`, `get_all_vulnerabilities_detail`, `get_asset_most_vulnerabilities`, `get_overdue_assets`, `get_my_exception_requests`, `get_pending_exception_requests`, `create_exception_request`, `approve_exception_request`, `reject_exception_request`, `cancel_exception_request` |
 | `SCANS_READ` | Read scan history | `get_scans`, `get_asset_scan_results`, `search_products` |
 | `USER_ACTIVITY` | User management and mappings | `list_users`, `add_user`, `delete_user`, `import_user_mappings`, `list_user_mappings` (all require delegation) |
+| `WORKGROUPS_WRITE` | Workgroup management | `create_workgroup`, `delete_workgroup`, `assign_assets_to_workgroup`, `assign_users_to_workgroup` (all require delegation) |
 
 ### Managing Keys
 
@@ -588,6 +589,57 @@ Add a vulnerability to an asset. Creates the asset if it doesn't exist. **Requir
 | `owner` | string | No | Owner to assign to newly created asset |
 
 Returns vulnerability ID, asset details, and whether the asset/vulnerability were created or updated.
+
+### Workgroup Management
+
+#### `create_workgroup`
+Create a new workgroup. **Requires ADMIN role and User Delegation.**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `name` | string | Yes | Unique name for the workgroup (1-100 chars) |
+| `description` | string | No | Optional description (max 512 chars) |
+
+Returns workgroup ID, name, description, and success message.
+
+#### `delete_workgroup`
+Delete a workgroup by ID. Cascade removes user/asset associations. **Requires ADMIN role and User Delegation.**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workgroupId` | number | Yes | ID of the workgroup to delete |
+
+Returns deleted workgroup ID and name.
+
+#### `assign_assets_to_workgroup`
+Assign one or more assets to a workgroup. **Requires ADMIN role and User Delegation.**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workgroupId` | number | Yes | ID of the target workgroup |
+| `assetIds` | number[] | Yes | List of asset IDs to assign |
+
+Returns workgroup ID and count of assigned assets.
+
+#### `assign_users_to_workgroup`
+Assign one or more users to a workgroup. **Requires ADMIN role and User Delegation.**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `workgroupId` | number | Yes | ID of the target workgroup |
+| `userIds` | number[] | Yes | List of user IDs to assign |
+
+Returns workgroup ID and count of assigned users.
+
+#### `delete_asset`
+Delete a specific asset by ID with cascade deletion. **Requires ADMIN role and User Delegation.**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `assetId` | number | Yes | ID of the asset to delete |
+| `forceTimeout` | boolean | No | Force deletion even if it may exceed timeout (default: false) |
+
+Returns deleted asset ID, name, counts of deleted vulnerabilities/exceptions/requests, and audit log ID.
 
 ### User Mapping Management
 
