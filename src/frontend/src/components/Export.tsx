@@ -16,7 +16,16 @@ const Export = () => {
     const [isLoadingUseCases, setIsLoadingUseCases] = useState<boolean>(false);
     const [selectedLanguage, setSelectedLanguage] = useState<string>('english');
     const [translationConfigured, setTranslationConfigured] = useState<boolean>(false);
-    const [selectedReleaseId, setSelectedReleaseId] = useState<number | null>(null);
+    const [selectedReleaseId, setSelectedReleaseId] = useState<number | null>(() => {
+        if (typeof window !== 'undefined') {
+            const stored = sessionStorage.getItem('secman_selectedReleaseId');
+            if (stored) {
+                const parsed = parseInt(stored, 10);
+                return isNaN(parsed) ? null : parsed;
+            }
+        }
+        return null;
+    });
 
     useEffect(() => {
         const fetchUseCases = async () => {
@@ -126,9 +135,14 @@ const Export = () => {
         setIsExporting(true);
         
         const isTranslated = selectedLanguage !== 'english' && translationConfigured;
-        const endpoint = isTranslated 
+        let endpoint = isTranslated
             ? `/api/requirements/export/docx/usecase/${selectedUseCase}/translated/${selectedLanguage}`
             : `/api/requirements/export/docx/usecase/${selectedUseCase}`;
+
+        // Add releaseId parameter if a release is selected
+        if (selectedReleaseId !== null) {
+            endpoint += `?releaseId=${selectedReleaseId}`;
+        }
         
         const statusMsg = isTranslated 
             ? `Translating and exporting requirements for selected use case to ${selectedLanguage}...`
@@ -181,7 +195,7 @@ const Export = () => {
         } finally {
             setIsExporting(false);
         }
-    }, [selectedUseCase, selectedLanguage, translationConfigured]);
+    }, [selectedUseCase, selectedLanguage, translationConfigured, selectedReleaseId]);
 
     const handleExportToExcel = useCallback(async () => {
         setIsExporting(true);
@@ -255,9 +269,14 @@ const Export = () => {
         setIsExporting(true);
         
         const isTranslated = selectedLanguage !== 'english' && translationConfigured;
-        const endpoint = isTranslated 
+        let endpoint = isTranslated
             ? `/api/requirements/export/xlsx/usecase/${selectedUseCase}/translated/${selectedLanguage}`
             : `/api/requirements/export/xlsx/usecase/${selectedUseCase}`;
+
+        // Add releaseId parameter if a release is selected
+        if (selectedReleaseId !== null) {
+            endpoint += `?releaseId=${selectedReleaseId}`;
+        }
         
         const statusMsg = isTranslated 
             ? `Translating and exporting requirements for selected use case to Excel in ${selectedLanguage}...`
@@ -310,7 +329,7 @@ const Export = () => {
         } finally {
             setIsExporting(false);
         }
-    }, [selectedUseCase, selectedLanguage, translationConfigured]);
+    }, [selectedUseCase, selectedLanguage, translationConfigured, selectedReleaseId]);
 
     /**
      * Handle asset export to Excel

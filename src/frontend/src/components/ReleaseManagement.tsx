@@ -6,7 +6,7 @@ interface Release {
     version: string;
     name: string;
     description: string;
-    status: 'DRAFT' | 'ACTIVE' | 'PUBLISHED' | 'ARCHIVED';
+    status: 'PREPARATION' | 'ALIGNMENT' | 'ACTIVE' | 'ARCHIVED';
     requirementCount: number;
     releaseDate: string | null;
     createdBy: string;
@@ -56,12 +56,12 @@ const ReleaseManagement = () => {
             setReleases(releasesData);
 
             // Calculate stats from releases data
-            const publishedReleases = releasesData.filter((r: Release) => r.status === 'PUBLISHED');
-            const draftReleases = releasesData.filter((r: Release) => r.status === 'DRAFT');
+            const activeReleases = releasesData.filter((r: Release) => r.status === 'ACTIVE');
+            const preparationReleases = releasesData.filter((r: Release) => r.status === 'PREPARATION');
 
             setStats({
-                currentRelease: publishedReleases[0] || null,
-                draftCount: draftReleases.length,
+                currentRelease: activeReleases[0] || null,
+                draftCount: preparationReleases.length,
                 totalReleases: releasesData.length,
                 activeAssessments: 0
             });
@@ -220,9 +220,9 @@ const ReleaseManagement = () => {
 
     const getStatusBadgeClass = (status: string) => {
         switch (status) {
-            case 'DRAFT': return 'bg-warning text-dark';
-            case 'ACTIVE': return 'bg-primary';
-            case 'PUBLISHED': return 'bg-success';
+            case 'PREPARATION': return 'bg-info text-dark';
+            case 'ALIGNMENT': return 'bg-warning text-dark';
+            case 'ACTIVE': return 'bg-success';
             case 'ARCHIVED': return 'bg-secondary';
             default: return 'bg-light text-dark';
         }
@@ -304,7 +304,7 @@ const ReleaseManagement = () => {
                     <div className="col-md-3">
                         <div className="card bg-warning text-dark">
                             <div className="card-body">
-                                <h5 className="card-title">Draft Releases</h5>
+                                <h5 className="card-title">Preparation Releases</h5>
                                 <h3>{stats.draftCount}</h3>
                                 <small>In development</small>
                             </div>
@@ -391,7 +391,7 @@ const ReleaseManagement = () => {
                                                         >
                                                             <i className="bi bi-list-check"></i>
                                                         </button>
-                                                        {release.status === 'DRAFT' && (
+                                                        {(release.status === 'PREPARATION' || release.status === 'ALIGNMENT') && (
                                                             <>
                                                                 <button
                                                                     className="btn btn-outline-primary"

@@ -56,7 +56,7 @@ interface RequirementReviewRepository : JpaRepository<RequirementReview, Long> {
 
     /**
      * Get assessment summary for a snapshot.
-     * Returns counts of MINOR, MAJOR, NOK assessments.
+     * Returns counts of OK, CHANGE, NOGO assessments.
      */
     @Query("""
         SELECT new map(

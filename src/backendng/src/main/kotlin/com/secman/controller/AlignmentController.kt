@@ -4,6 +4,7 @@ import com.secman.domain.AlignmentReviewer.ReviewerStatus
 import com.secman.domain.AlignmentSession.AlignmentStatus
 import com.secman.domain.AlignmentSnapshot.ChangeType
 import com.secman.domain.RequirementReview.ReviewAssessment
+import com.secman.domain.ReviewDecision.Decision
 import com.secman.repository.UserRepository
 import com.secman.service.AlignmentEmailService
 import com.secman.service.AlignmentService
@@ -218,9 +219,9 @@ class AlignmentController(
                             (summary.reviewedCount * 100 / summary.totalCount)
                         } else 0,
                         "assessments" to mapOf(
-                            "minor" to summary.assessments.minorCount,
-                            "major" to summary.assessments.majorCount,
-                            "nok" to summary.assessments.nokCount
+                            "ok" to summary.assessments.okCount,
+                            "change" to summary.assessments.changeCount,
+                            "nogo" to summary.assessments.nogoCount
                         ),
                         "startedAt" to summary.reviewer.startedAt?.toString(),
                         "completedAt" to summary.reviewer.completedAt?.toString(),
@@ -242,10 +243,11 @@ class AlignmentController(
      * GET /api/alignment/{sessionId}/feedback - Get aggregated feedback per requirement
      */
     @Get("/alignment/{sessionId}/feedback")
-    @Secured("ADMIN", "RELEASE_MANAGER")
+    @Secured("ADMIN", "RELEASE_MANAGER", "REQADMIN")
     fun getAlignmentFeedback(@PathVariable sessionId: Long): HttpResponse<Map<String, Any>> {
         try {
             val summaries = alignmentService.getRequirementReviewSummaries(sessionId)
+            val decisions = alignmentService.getDecisionsForSession(sessionId)
 
             return HttpResponse.ok(mapOf(
                 "sessionId" to sessionId,
@@ -257,18 +259,26 @@ class AlignmentController(
                         "changeType" to summary.snapshot.changeType.name,
                         "reviewCount" to summary.reviewCount,
                         "assessments" to mapOf(
-                            "minor" to summary.assessments.minorCount,
-                            "major" to summary.assessments.majorCount,
-                            "nok" to summary.assessments.nokCount
+                            "ok" to summary.assessments.okCount,
+                            "change" to summary.assessments.changeCount,
+                            "nogo" to summary.assessments.nogoCount
                         ),
                         "reviews" to summary.reviews.map { review ->
+                            val decision = decisions[review.id]
                             mapOf(
                                 "id" to review.id,
                                 "reviewerName" to review.reviewer.user.username,
                                 "assessment" to review.assessment.name,
                                 "comment" to review.comment,
                                 "createdAt" to review.createdAt?.toString(),
-                                "updatedAt" to review.updatedAt?.toString()
+                                "updatedAt" to review.updatedAt?.toString(),
+                                "adminDecision" to if (decision != null) mapOf(
+                                    "id" to decision.id,
+                                    "decision" to decision.decision.name,
+                                    "comment" to decision.comment,
+                                    "decidedBy" to decision.decidedByUsername,
+                                    "createdAt" to decision.createdAt?.toString()
+                                ) else null
                             )
                         }
                     )
@@ -279,6 +289,60 @@ class AlignmentController(
             return HttpResponse.notFound(mapOf(
                 "error" to "Not Found",
                 "message" to (e.message ?: "Session not found")
+            ))
+        }
+    }
+
+    /**
+     * PUT /api/alignment/{sessionId}/decisions - Submit admin decision on a review
+     * Authorization: ADMIN or REQADMIN only
+     */
+    @Put("/alignment/{sessionId}/decisions")
+    @Secured("ADMIN", "REQADMIN")
+    fun submitReviewDecision(
+        @PathVariable sessionId: Long,
+        @Body request: SubmitReviewDecisionRequest,
+        authentication: Authentication
+    ): HttpResponse<Map<String, Any>> {
+        logger.debug("Submitting review decision for session {} review {}", sessionId, request.reviewId)
+
+        try {
+            val user = userRepository.findByUsername(authentication.name)
+                .orElseThrow { NoSuchElementException("User not found: ${authentication.name}") }
+
+            val decision = alignmentService.submitReviewDecision(
+                sessionId = sessionId,
+                reviewId = request.reviewId,
+                decision = request.decision,
+                comment = request.comment,
+                adminUser = user
+            )
+
+            return HttpResponse.ok(mapOf(
+                "success" to true,
+                "message" to "Decision submitted successfully",
+                "decision" to mapOf(
+                    "id" to decision.id!!,
+                    "reviewId" to request.reviewId,
+                    "decision" to decision.decision.name,
+                    "comment" to (decision.comment ?: ""),
+                    "decidedBy" to decision.decidedByUsername
+                )
+            ))
+        } catch (e: IllegalStateException) {
+            return HttpResponse.badRequest(mapOf(
+                "error" to "Bad Request",
+                "message" to (e.message ?: "Cannot submit decision")
+            ))
+        } catch (e: IllegalArgumentException) {
+            return HttpResponse.badRequest(mapOf(
+                "error" to "Bad Request",
+                "message" to (e.message ?: "Invalid request")
+            ))
+        } catch (e: NoSuchElementException) {
+            return HttpResponse.notFound(mapOf(
+                "error" to "Not Found",
+                "message" to (e.message ?: "Resource not found")
             ))
         }
     }
@@ -341,6 +405,16 @@ class AlignmentController(
                 activateRelease = request.activateRelease,
                 notes = request.notes
             )
+
+            // Send feedback summary emails to all reviewers after successful activation
+            if (request.activateRelease) {
+                try {
+                    alignmentEmailService.sendFeedbackSummaryEmails(session)
+                } catch (e: Exception) {
+                    logger.error("Failed to send feedback summary emails for session {}: {}", sessionId, e.message)
+                    // Don't fail the finalization if emails fail
+                }
+            }
 
             return HttpResponse.ok(mapOf(
                 "success" to true,
@@ -564,9 +638,9 @@ class AlignmentController(
                 "reviewed" to status.reviewedRequirements
             ),
             "assessments" to mapOf(
-                "minor" to status.assessmentSummary.minorCount,
-                "major" to status.assessmentSummary.majorCount,
-                "nok" to status.assessmentSummary.nokCount
+                "ok" to status.assessmentSummary.okCount,
+                "change" to status.assessmentSummary.changeCount,
+                "nogo" to status.assessmentSummary.nogoCount
             )
         )
     }
@@ -590,4 +664,11 @@ data class FinalizeAlignmentRequest(
 @Serdeable
 data class CancelAlignmentRequest(
     val notes: String? = null
+)
+
+@Serdeable
+data class SubmitReviewDecisionRequest(
+    val reviewId: Long,
+    val decision: Decision,
+    val comment: String? = null
 )

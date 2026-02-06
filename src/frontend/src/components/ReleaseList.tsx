@@ -4,7 +4,7 @@
  * Main list view for browsing releases with filtering, search, and pagination
  *
  * Features:
- * - Status filter (ALL, DRAFT, PUBLISHED, ARCHIVED)
+ * - Status filter (ALL, PREPARATION, ALIGNMENT, ACTIVE, ARCHIVED)
  * - Search by version or name
  * - Pagination (20 items per page)
  * - Empty state handling
@@ -147,7 +147,7 @@ const ReleaseList: React.FC<ReleaseListProps> = () => {
         // Show success toast
         setToast({
             show: true,
-            message: 'Release created successfully! It has been added to the list with DRAFT status.',
+            message: 'Release created successfully! It has been added to the list with PREPARATION status.',
             type: 'success',
         });
 
@@ -281,11 +281,13 @@ const ReleaseList: React.FC<ReleaseListProps> = () => {
     // Get status badge class
     function getStatusBadgeClass(status: string): string {
         switch (status) {
-            case 'DRAFT':
+            case 'PREPARATION':
+                return 'bg-info text-dark';
+            case 'ALIGNMENT':
                 return 'bg-warning text-dark';
             case 'ACTIVE':
                 return 'bg-success';
-            case 'LEGACY':
+            case 'ARCHIVED':
                 return 'bg-secondary';
             default:
                 return 'bg-secondary';
@@ -396,9 +398,10 @@ const ReleaseList: React.FC<ReleaseListProps> = () => {
                         data-testid="status-filter"
                     >
                         <option value="ALL">All Statuses</option>
-                        <option value="DRAFT">Draft</option>
+                        <option value="PREPARATION">Preparation</option>
+                        <option value="ALIGNMENT">Alignment</option>
                         <option value="ACTIVE">Active</option>
-                        <option value="LEGACY">Legacy</option>
+                        <option value="ARCHIVED">Archived</option>
                     </select>
                 </div>
                 <div className="col-md-8">
@@ -478,7 +481,7 @@ const ReleaseList: React.FC<ReleaseListProps> = () => {
                                 </td>
                                 <td onClick={(e) => e.stopPropagation()}>
                                     <div className="d-flex gap-1">
-                                        {release.status === 'DRAFT' && canCreate && (
+                                        {(release.status === 'PREPARATION' || release.status === 'ALIGNMENT') && canCreate && (
                                             <button
                                                 className="btn btn-sm btn-outline-info"
                                                 onClick={(e) => handleActivateClick(release, e)}

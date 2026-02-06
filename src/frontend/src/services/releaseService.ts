@@ -14,7 +14,7 @@ export interface Release {
     version: string;
     name: string;
     description: string;
-    status: 'DRAFT' | 'IN_REVIEW' | 'ACTIVE' | 'LEGACY';
+    status: 'PREPARATION' | 'ALIGNMENT' | 'ACTIVE' | 'ARCHIVED';
     releaseDate: string | null;
     createdBy: string;
     createdAt: string;
@@ -66,15 +66,23 @@ export interface AlignmentSnapshot {
     changeSummary: string;
     existingReview?: {
         id: number;
-        assessment: 'MINOR' | 'MAJOR' | 'NOK';
+        assessment: 'OK' | 'CHANGE' | 'NOGO';
         comment: string | null;
     } | null;
 }
 
 export interface AssessmentCounts {
-    minor: number;
-    major: number;
-    nok: number;
+    ok: number;
+    change: number;
+    nogo: number;
+}
+
+export interface AdminDecision {
+    id: number;
+    decision: 'ACCEPTED' | 'REJECTED';
+    comment: string | null;
+    decidedBy: string;
+    createdAt: string | null;
 }
 
 export interface AlignmentStatus {
@@ -183,7 +191,7 @@ export const releaseService = {
     /**
      * List all releases with optional filtering and pagination
      *
-     * @param status Optional status filter (DRAFT, PUBLISHED, ARCHIVED)
+     * @param status Optional status filter (PREPARATION, ALIGNMENT, ACTIVE, ARCHIVED)
      * @param page Page number (1-indexed)
      * @param pageSize Number of items per page
      * @returns Paginated list of releases
@@ -232,7 +240,7 @@ export const releaseService = {
      * Create a new release
      *
      * @param data Release creation data
-     * @returns Created release (with DRAFT status)
+     * @returns Created release (with PREPARATION status)
      */
     async create(data: CreateReleaseRequest): Promise<Release> {
         const response = await authenticatedFetch('/api/releases', {
@@ -255,7 +263,7 @@ export const releaseService = {
      * Update release status
      *
      * @param id Release ID
-     * @param status New status (PUBLISHED or ARCHIVED)
+     * @param status New status (ACTIVE only)
      * @returns Updated release
      */
     async updateStatus(id: number, status: 'ACTIVE'): Promise<Release> {
@@ -358,7 +366,7 @@ export const releaseService = {
     },
 
     /**
-     * Start alignment process for a DRAFT release
+     * Start alignment process for a PREPARATION release
      *
      * @param releaseId Release ID
      * @returns Alignment start result with session details
@@ -516,7 +524,7 @@ export const releaseService = {
     },
 
     /**
-     * Cancel alignment and return release to DRAFT
+     * Cancel alignment and return release to PREPARATION
      *
      * @param sessionId Alignment session ID
      * @param notes Optional cancellation notes
@@ -537,6 +545,37 @@ export const releaseService = {
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
             throw new Error(errorData.message || `Failed to cancel alignment: ${response.statusText}`);
+        }
+
+        return response.json();
+    },
+
+    /**
+     * Submit an admin decision (ACCEPTED/REJECTED) on a reviewer's assessment
+     *
+     * @param sessionId Alignment session ID
+     * @param reviewId Review ID
+     * @param decision ACCEPTED or REJECTED
+     * @param comment Optional admin comment
+     * @returns Decision result
+     */
+    async submitReviewDecision(
+        sessionId: number,
+        reviewId: number,
+        decision: 'ACCEPTED' | 'REJECTED',
+        comment?: string
+    ): Promise<{ success: boolean; message: string }> {
+        const response = await authenticatedFetch(`/api/alignment/${sessionId}/decisions`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ reviewId, decision, comment }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Failed to submit decision: ${response.statusText}`);
         }
 
         return response.json();

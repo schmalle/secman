@@ -264,7 +264,7 @@ const ReleaseCreateModal: React.FC<ReleaseCreateModalProps> = ({ isOpen, onClose
                                 {/* Info Text */}
                                 <div className="alert alert-info mb-0">
                                     <i className="bi bi-info-circle me-2"></i>
-                                    <strong>Note:</strong> The release will be created with <strong>DRAFT</strong> status.
+                                    <strong>Note:</strong> The release will be created with <strong>PREPARATION</strong> status.
                                     All current requirements will be frozen as snapshots in this release.
                                 </div>
                             </div>

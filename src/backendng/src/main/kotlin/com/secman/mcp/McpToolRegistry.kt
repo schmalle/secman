@@ -68,7 +68,11 @@ class McpToolRegistry(
     @Inject private val deleteWorkgroupTool: DeleteWorkgroupTool,
     @Inject private val assignAssetsToWorkgroupTool: AssignAssetsToWorkgroupTool,
     @Inject private val assignUsersToWorkgroupTool: AssignUsersToWorkgroupTool,
-    @Inject private val deleteAssetTool: DeleteAssetTool
+    @Inject private val deleteAssetTool: DeleteAssetTool,
+    // Feature: MCP Send Admin Summary Tool
+    @Inject private val sendAdminSummaryTool: SendAdminSummaryTool,
+    // Feature: MCP Compare Releases Tool
+    @Inject private val compareReleasesTool: CompareReleasesTool
 ) {
     private val logger = LoggerFactory.getLogger(McpToolRegistry::class.java)
 
@@ -133,7 +137,11 @@ class McpToolRegistry(
             deleteWorkgroupTool,
             assignAssetsToWorkgroupTool,
             assignUsersToWorkgroupTool,
-            deleteAssetTool
+            deleteAssetTool,
+            // Feature: MCP Send Admin Summary Tool
+            sendAdminSummaryTool,
+            // Feature: MCP Compare Releases Tool
+            compareReleasesTool
         ).forEach { tool ->
             toolMap[tool.name] = tool
             logger.debug("Registered MCP tool: {}", tool.name)
@@ -332,7 +340,7 @@ class McpToolRegistry(
             }
 
             // Feature: MCP Release Management (ADMIN or RELEASE_MANAGER via User Delegation)
-            "list_releases", "get_release" -> {
+            "list_releases", "get_release", "compare_releases" -> {
                 permissions.contains(McpPermission.REQUIREMENTS_READ) // ADMIN/RELEASE_MANAGER role checked in tool execute()
             }
             "create_release", "delete_release", "set_release_status" -> {
@@ -356,6 +364,11 @@ class McpToolRegistry(
             }
             "delete_asset" -> {
                 permissions.contains(McpPermission.ASSETS_READ) // ADMIN role checked in tool execute()
+            }
+
+            // Feature: MCP Send Admin Summary Tool (ADMIN only via User Delegation)
+            "send_admin_summary" -> {
+                permissions.contains(McpPermission.NOTIFICATIONS_SEND) // ADMIN role checked in tool execute()
             }
 
             else -> false

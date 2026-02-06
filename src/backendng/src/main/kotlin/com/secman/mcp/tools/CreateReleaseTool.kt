@@ -11,7 +11,7 @@ import jakarta.inject.Singleton
  * MCP tool for creating a new release with requirement snapshots.
  * Feature: MCP Release Management
  *
- * Creates a release in DRAFT status with all current requirements snapshotted.
+ * Creates a release in PREPARATION status with all current requirements snapshotted.
  * Version must follow semantic versioning format (MAJOR.MINOR.PATCH).
  *
  * Accessible by: ADMIN, RELEASE_MANAGER roles (via User Delegation)
@@ -23,7 +23,7 @@ class CreateReleaseTool(
 ) : McpTool {
 
     override val name = "create_release"
-    override val description = "Create a new release with requirement snapshots. Version must follow semantic versioning (MAJOR.MINOR.PATCH). New releases start in DRAFT status."
+    override val description = "Create a new release with requirement snapshots. Version must follow semantic versioning (MAJOR.MINOR.PATCH). New releases start in PREPARATION status."
     override val operation = McpOperation.WRITE
 
     override val inputSchema = mapOf(

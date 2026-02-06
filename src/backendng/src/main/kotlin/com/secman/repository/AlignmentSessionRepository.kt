@@ -51,4 +51,9 @@ interface AlignmentSessionRepository : JpaRepository<AlignmentSession, Long> {
      */
     @Query("SELECT s FROM AlignmentSession s ORDER BY s.createdAt DESC")
     fun findAllOrderByCreatedAtDesc(): List<AlignmentSession>
+
+    /**
+     * Find all sessions that reference a release as baseline.
+     */
+    fun findByBaselineRelease_Id(releaseId: Long): List<AlignmentSession>
 }

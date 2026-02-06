@@ -52,7 +52,8 @@ const McpApiKeyManagement: React.FC = () => {
     'TAGS_READ',
     'SYSTEM_INFO',
     'USER_ACTIVITY',
-    'WORKGROUPS_WRITE'  // Feature 074: Workgroup management via MCP
+    'WORKGROUPS_WRITE',  // Feature 074: Workgroup management via MCP
+    'NOTIFICATIONS_SEND'
   ];
 
   useEffect(() => {

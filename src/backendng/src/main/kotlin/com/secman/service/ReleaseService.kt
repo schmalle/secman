@@ -2,8 +2,12 @@ package com.secman.service
 
 import com.secman.domain.Release
 import com.secman.domain.RequirementSnapshot
+import com.secman.repository.AlignmentReviewerRepository
+import com.secman.repository.AlignmentSessionRepository
+import com.secman.repository.AlignmentSnapshotRepository
 import com.secman.repository.ReleaseRepository
 import com.secman.repository.RequirementRepository
+import com.secman.repository.RequirementReviewRepository
 import com.secman.repository.RequirementSnapshotRepository
 import com.secman.repository.UserRepository
 import io.micronaut.security.authentication.Authentication
@@ -15,7 +19,11 @@ class ReleaseService(
     private val releaseRepository: ReleaseRepository,
     private val requirementRepository: RequirementRepository,
     private val snapshotRepository: RequirementSnapshotRepository,
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val alignmentSessionRepository: AlignmentSessionRepository,
+    private val alignmentSnapshotRepository: AlignmentSnapshotRepository,
+    private val alignmentReviewerRepository: AlignmentReviewerRepository,
+    private val requirementReviewRepository: RequirementReviewRepository
 ) {
     private val logger = LoggerFactory.getLogger(ReleaseService::class.java)
 
@@ -86,7 +94,7 @@ class ReleaseService(
             version = version,
             name = name,
             description = description,
-            status = Release.ReleaseStatus.DRAFT,
+            status = Release.ReleaseStatus.PREPARATION,
             createdBy = user
         )
 
@@ -128,7 +136,26 @@ class ReleaseService(
             throw IllegalStateException("Cannot delete an ACTIVE release. Set another release as active first.")
         }
 
-        // Explicitly delete snapshots first (FK doesn't have ON DELETE CASCADE)
+        // Delete alignment session data (respecting FK order: reviews → snapshots/reviewers → sessions)
+        val sessions = alignmentSessionRepository.findAllByRelease_Id(releaseId)
+        for (session in sessions) {
+            val sessionId = session.id!!
+            requirementReviewRepository.deleteBySession_Id(sessionId)
+            alignmentSnapshotRepository.deleteBySession_Id(sessionId)
+            alignmentReviewerRepository.deleteBySession_Id(sessionId)
+        }
+        if (sessions.isNotEmpty()) {
+            // Null out baseline_release_id references from other sessions pointing to this release
+            val baselineSessions = alignmentSessionRepository.findByBaselineRelease_Id(releaseId)
+            for (session in baselineSessions) {
+                session.baselineRelease = null
+                alignmentSessionRepository.update(session)
+            }
+            alignmentSessionRepository.deleteAll(sessions)
+            logger.info("Deleted ${sessions.size} alignment sessions for release ID=$releaseId")
+        }
+
+        // Explicitly delete requirement snapshots (FK doesn't have ON DELETE CASCADE)
         snapshotRepository.deleteByReleaseId(releaseId)
         logger.info("Deleted snapshots for release ID=$releaseId")
 
@@ -158,10 +185,10 @@ class ReleaseService(
 
     /**
      * Update release status with workflow validation
-     * Enforces workflow: DRAFT → ACTIVE, ACTIVE → LEGACY (automatic)
+     * Enforces workflow: PREPARATION/ALIGNMENT → ACTIVE, ACTIVE → ARCHIVED (automatic)
      *
      * Note: Only one release can be ACTIVE at a time. When setting a release to ACTIVE,
-     * the previously ACTIVE release is automatically set to LEGACY.
+     * the previously ACTIVE release is automatically set to ARCHIVED.
      *
      * @param releaseId ID of release to update
      * @param newStatus New status to transition to (only ACTIVE is allowed manually)
@@ -178,31 +205,31 @@ class ReleaseService(
         val currentStatus = release.status
 
         // Validate status transition workflow
-        // DRAFT → ACTIVE is allowed (direct or after alignment)
-        // IN_REVIEW → ACTIVE is allowed (after alignment completes)
-        // ACTIVE → LEGACY happens automatically when another release becomes ACTIVE
+        // PREPARATION → ACTIVE is allowed (direct activation, skipping alignment)
+        // ALIGNMENT → ACTIVE is allowed (after alignment completes)
+        // ACTIVE → ARCHIVED happens automatically when another release becomes ACTIVE
+        // ARCHIVED → any is not allowed (terminal state)
         val validTransition = when (currentStatus) {
-            Release.ReleaseStatus.DRAFT -> newStatus == Release.ReleaseStatus.ACTIVE
-            Release.ReleaseStatus.IN_REVIEW -> newStatus == Release.ReleaseStatus.ACTIVE // Allow activation after alignment
+            Release.ReleaseStatus.PREPARATION -> newStatus == Release.ReleaseStatus.ACTIVE
+            Release.ReleaseStatus.ALIGNMENT -> newStatus == Release.ReleaseStatus.ACTIVE
             Release.ReleaseStatus.ACTIVE -> false // Cannot manually change ACTIVE status
-            Release.ReleaseStatus.LEGACY -> false // No transitions from LEGACY
-            Release.ReleaseStatus.PUBLISHED -> false // Cannot manually change PUBLISHED status
+            Release.ReleaseStatus.ARCHIVED -> false // Terminal state, no transitions
         }
 
         if (!validTransition) {
             throw IllegalStateException(
                 "Invalid status transition from $currentStatus to $newStatus. " +
-                "Only DRAFT releases can be set to ACTIVE."
+                "Only PREPARATION or ALIGNMENT releases can be set to ACTIVE."
             )
         }
 
-        // When setting to ACTIVE, move all other ACTIVE releases to LEGACY (only one can be active)
+        // When setting to ACTIVE, move all other ACTIVE releases to ARCHIVED (only one can be active)
         if (newStatus == Release.ReleaseStatus.ACTIVE) {
             val currentlyActiveReleases = releaseRepository.findByStatus(Release.ReleaseStatus.ACTIVE)
             for (activeRelease in currentlyActiveReleases) {
                 if (activeRelease.id != releaseId) {
-                    logger.info("Moving release ${activeRelease.id} (${activeRelease.version}) to LEGACY")
-                    activeRelease.status = Release.ReleaseStatus.LEGACY
+                    logger.info("Moving release ${activeRelease.id} (${activeRelease.version}) to ARCHIVED")
+                    activeRelease.status = Release.ReleaseStatus.ARCHIVED
                     releaseRepository.update(activeRelease)
                 }
             }

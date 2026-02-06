@@ -431,17 +431,15 @@ open class RequirementController(
     }
 
     @Get("/export/docx/usecase/{usecaseId}")
-    fun exportToDocxByUseCase(@PathVariable usecaseId: Long): HttpResponse<*> {
+    fun exportToDocxByUseCase(@PathVariable usecaseId: Long, @Nullable @QueryValue("releaseId") releaseId: Long?): HttpResponse<*> {
         val useCaseOptional = useCaseRepository.findById(usecaseId)
-        
+
         if (useCaseOptional.isEmpty) {
             return HttpResponse.notFound<Any>().body(mapOf("error" to "UseCase not found"))
         }
 
         val useCase = useCaseOptional.get()
-        val requirements = requirementRepository.findByUsecaseId(usecaseId).sortedWith(
-            compareBy<Requirement> { it.chapter ?: "" }.thenBy { it.id ?: 0 }
-        )
+        val requirements = getRequirementsByUseCase(usecaseId, releaseId)
 
         if (requirements.isEmpty()) {
             return HttpResponse.ok(mapOf("message" to "No requirements found for this use case"))
@@ -454,7 +452,7 @@ open class RequirementController(
 
         val inputStream = ByteArrayInputStream(outputStream.toByteArray())
         val filename = "requirements_usecase_${useCase.name.replace(" ", "_")}.docx"
-        
+
         return HttpResponse.ok(StreamedFile(inputStream, MediaType.of("application/vnd.openxmlformats-officedocument.wordprocessingml.document")))
             .header("Content-Disposition", "attachment; filename=\"$filename\"")
     }
@@ -501,17 +499,15 @@ open class RequirementController(
     }
 
     @Get("/export/xlsx/usecase/{usecaseId}")
-    fun exportToExcelByUseCase(@PathVariable usecaseId: Long): HttpResponse<*> {
+    fun exportToExcelByUseCase(@PathVariable usecaseId: Long, @Nullable @QueryValue("releaseId") releaseId: Long?): HttpResponse<*> {
         val useCaseOptional = useCaseRepository.findById(usecaseId)
-        
+
         if (useCaseOptional.isEmpty) {
             return HttpResponse.notFound<Any>().body(mapOf("error" to "UseCase not found"))
         }
 
         val useCase = useCaseOptional.get()
-        val requirements = requirementRepository.findByUsecaseId(usecaseId).sortedWith(
-            compareBy<Requirement> { it.chapter ?: "" }.thenBy { it.id ?: 0 }
-        )
+        val requirements = getRequirementsByUseCase(usecaseId, releaseId)
 
         if (requirements.isEmpty()) {
             return HttpResponse.ok(mapOf("message" to "No requirements found for this use case"))
@@ -759,7 +755,7 @@ open class RequirementController(
     }
 
     @Get("/export/docx/usecase/{usecaseId}/translated/{language}")
-    fun exportToDocxTranslatedByUseCase(@PathVariable usecaseId: Long, @PathVariable language: String): HttpResponse<*> {
+    fun exportToDocxTranslatedByUseCase(@PathVariable usecaseId: Long, @PathVariable language: String, @Nullable @QueryValue("releaseId") releaseId: Long?): HttpResponse<*> {
         val activeConfig = translationService.getActiveConfig()
         if (activeConfig == null) {
             return HttpResponse.badRequest(mapOf(
@@ -774,9 +770,7 @@ open class RequirementController(
         }
 
         val useCase = useCaseOptional.get()
-        val requirements = requirementRepository.findByUsecaseId(usecaseId).sortedWith(
-            compareBy<Requirement> { it.chapter ?: "" }.thenBy { it.id ?: 0 }
-        )
+        val requirements = getRequirementsByUseCase(usecaseId, releaseId)
 
         if (requirements.isEmpty()) {
             return HttpResponse.ok(mapOf("message" to "No requirements found for this use case"))
@@ -1022,7 +1016,7 @@ open class RequirementController(
     }
 
     @Get("/export/xlsx/usecase/{usecaseId}/translated/{language}")
-    fun exportToExcelTranslatedByUseCase(@PathVariable usecaseId: Long, @PathVariable language: String): HttpResponse<*> {
+    fun exportToExcelTranslatedByUseCase(@PathVariable usecaseId: Long, @PathVariable language: String, @Nullable @QueryValue("releaseId") releaseId: Long?): HttpResponse<*> {
         val activeConfig = translationService.getActiveConfig()
         if (activeConfig == null) {
             return HttpResponse.badRequest(mapOf(
@@ -1037,9 +1031,7 @@ open class RequirementController(
         }
 
         val useCase = useCaseOptional.get()
-        val requirements = requirementRepository.findByUsecaseId(usecaseId).sortedWith(
-            compareBy<Requirement> { it.chapter ?: "" }.thenBy { it.id ?: 0 }
-        )
+        val requirements = getRequirementsByUseCase(usecaseId, releaseId)
 
         if (requirements.isEmpty()) {
             return HttpResponse.ok(mapOf("message" to "No requirements found for this use case"))
@@ -1151,6 +1143,26 @@ open class RequirementController(
      * Note: This creates a detached Requirement entity (not persisted)
      * The internalId and versionNumber are set from the snapshot for correct ID.Revision display
      */
+    /**
+     * Get requirements for a use case, optionally from a release snapshot.
+     * When releaseId is provided, filters snapshots by usecaseIdsSnapshot JSON field.
+     */
+    private fun getRequirementsByUseCase(usecaseId: Long, releaseId: Long?): List<Requirement> {
+        return if (releaseId != null) {
+            val snapshots = snapshotRepository.findByReleaseId(releaseId)
+            snapshots.filter { snapshot ->
+                val usecaseIds = snapshot.usecaseIdsSnapshot
+                usecaseIds != null && usecaseIds.contains(usecaseId.toString())
+            }.map { snapshotToRequirement(it) }.sortedWith(
+                compareBy<Requirement> { it.chapter ?: "" }.thenBy { it.id ?: 0 }
+            )
+        } else {
+            requirementRepository.findByUsecaseId(usecaseId).sortedWith(
+                compareBy<Requirement> { it.chapter ?: "" }.thenBy { it.id ?: 0 }
+            )
+        }
+    }
+
     private fun snapshotToRequirement(snapshot: RequirementSnapshot): Requirement {
         val requirement = Requirement(
             id = snapshot.originalRequirementId,

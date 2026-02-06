@@ -101,9 +101,10 @@ data class User(
      * - REQ: Requirements access
      * - RISK: Risk assessment access
      * - SECCHAMPION: Security champion (Risk + Req + Vuln, but NOT Admin)
+     * - REQADMIN: Requirements admin (can make decisions on alignment reviews)
      */
     enum class Role {
-        USER, ADMIN, VULN, RELEASE_MANAGER, REQ, RISK, SECCHAMPION
+        USER, ADMIN, VULN, RELEASE_MANAGER, REQ, RISK, SECCHAMPION, REQADMIN
     }
 
     /**

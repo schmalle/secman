@@ -28,7 +28,7 @@ class ListReleasesTool(
             "status" to mapOf(
                 "type" to "string",
                 "description" to "Filter by release status",
-                "enum" to listOf("DRAFT", "ACTIVE", "LEGACY")
+                "enum" to listOf("PREPARATION", "ALIGNMENT", "ACTIVE", "ARCHIVED")
             )
         )
     )
@@ -59,7 +59,7 @@ class ListReleasesTool(
                 } catch (e: IllegalArgumentException) {
                     return McpToolResult.error(
                         "VALIDATION_ERROR",
-                        "Invalid status: $it. Must be one of: DRAFT, ACTIVE, LEGACY"
+                        "Invalid status: $it. Must be one of: PREPARATION, ALIGNMENT, ACTIVE, ARCHIVED"
                     )
                 }
             }

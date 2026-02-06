@@ -11,7 +11,7 @@ import type { ReviewPageData, AlignmentSnapshot } from './releaseService';
 
 const API_BASE = import.meta.env.PUBLIC_API_URL || '';
 
-export type ReviewAssessment = 'MINOR' | 'MAJOR' | 'NOK';
+export type ReviewAssessment = 'OK' | 'CHANGE' | 'NOGO';
 
 export interface SubmitReviewRequest {
     snapshotId: number;
@@ -54,7 +54,7 @@ export const alignmentReviewService = {
      *
      * @param token Review token
      * @param snapshotId ID of the requirement snapshot
-     * @param assessment Assessment (MINOR, MAJOR, NOK)
+     * @param assessment Assessment (OK, CHANGE, NOGO)
      * @param comment Optional comment
      * @returns Submit result
      */

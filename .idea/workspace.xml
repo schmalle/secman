@@ -5,17 +5,31 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="94ada8b3-9f4e-473c-9fea-3bc9651b5bdd" name="Changes" comment="test change">
+      <change afterPath="$PROJECT_DIR$/prompts/release.feature.txt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/CLAUDE.md" beforeDir="false" afterPath="$PROJECT_DIR$/CLAUDE.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/docs/MCP.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/MCP.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/.claude/settings.local.json" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/.claude/settings.local.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/domain/McpPermission.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/domain/McpPermission.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/dto/AddVulnerabilityResponseDto.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/dto/AddVulnerabilityResponseDto.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/mcp/McpToolRegistry.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/mcp/McpToolRegistry.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/mcp/tools/AddVulnerabilityTool.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/mcp/tools/AddVulnerabilityTool.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/VulnerabilityService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/VulnerabilityService.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/test/kotlin/com/secman/service/VulnerabilityServiceTest.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/test/kotlin/com/secman/service/VulnerabilityServiceTest.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/frontend/src/components/McpApiKeyManagement.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/components/McpApiKeyManagement.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/build.gradle.kts" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/build.gradle.kts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/ReleaseController.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/ReleaseController.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/RequirementController.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/RequirementController.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/domain/Release.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/domain/Release.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/mcp/tools/CreateReleaseTool.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/mcp/tools/CreateReleaseTool.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/mcp/tools/ListReleasesTool.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/mcp/tools/ListReleasesTool.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/mcp/tools/SetReleaseStatusTool.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/mcp/tools/SetReleaseStatusTool.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/AlignmentService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/AlignmentService.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/ReleaseService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/ReleaseService.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/resources/application.yml" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/resources/application.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/src/components/AlignmentDashboard.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/components/AlignmentDashboard.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/src/components/Export.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/components/Export.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/src/components/ReleaseCreateModal.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/components/ReleaseCreateModal.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/src/components/ReleaseDetail.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/components/ReleaseDetail.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/src/components/ReleaseIndicator.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/components/ReleaseIndicator.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/src/components/ReleaseList.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/components/ReleaseList.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/src/components/ReleaseManagement.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/components/ReleaseManagement.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/src/components/ReleaseSelector.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/components/ReleaseSelector.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/src/components/ReleaseStatusActions.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/components/ReleaseStatusActions.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/src/components/RequirementManagement.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/components/RequirementManagement.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/src/services/releaseService.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/services/releaseService.ts" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -102,7 +116,7 @@
     "RunOnceActivity.typescript.service.memoryLimit.init": "true",
     "SHARE_PROJECT_CONFIGURATION_FILES": "true",
     "SHELLCHECK.PATH": "/Users/flake/Library/Application Support/JetBrains/IntelliJIdea2025.3/plugins/Shell Script/shellcheck",
-    "git-widget-placeholder": "074-mcp-e2e-test",
+    "git-widget-placeholder": "078-release-rework",
     "junie.onboarding.icon.badge.shown": "true",
     "kotlin-language-version-configured": "true",
     "last_opened_file_path": "/Users/flake/sources/misc/secman",

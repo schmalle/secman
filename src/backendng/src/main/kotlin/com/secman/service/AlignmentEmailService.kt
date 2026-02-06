@@ -2,7 +2,11 @@ package com.secman.service
 
 import com.secman.domain.AlignmentReviewer
 import com.secman.domain.AlignmentSession
+import com.secman.domain.ReviewDecision
 import com.secman.repository.AlignmentReviewerRepository
+import com.secman.repository.AlignmentSnapshotRepository
+import com.secman.repository.RequirementReviewRepository
+import com.secman.repository.ReviewDecisionRepository
 import jakarta.inject.Singleton
 import jakarta.transaction.Transactional
 import kotlinx.coroutines.runBlocking
@@ -18,6 +22,9 @@ import java.io.StringWriter
 open class AlignmentEmailService(
     private val emailService: EmailService,
     private val alignmentReviewerRepository: AlignmentReviewerRepository,
+    private val requirementReviewRepository: RequirementReviewRepository,
+    private val reviewDecisionRepository: ReviewDecisionRepository,
+    private val alignmentSnapshotRepository: AlignmentSnapshotRepository,
     private val emailTemplateService: EmailTemplateService,
     private val appSettingsService: AppSettingsService
 ) {
@@ -386,6 +393,264 @@ open class AlignmentEmailService(
 
             Please continue your review at:
             $reviewUrl
+
+            ---
+            This is an automated notification from SecMan.
+        """.trimIndent()
+    }
+
+    // ========== Feedback Summary Emails (sent on finalization) ==========
+
+    /**
+     * Send feedback summary emails to all reviewers after finalization.
+     * Each reviewer receives a summary of their assessments with admin decisions.
+     *
+     * @param session The completed alignment session
+     */
+    @Transactional
+    open fun sendFeedbackSummaryEmails(session: AlignmentSession) {
+        val sessionId = session.id!!
+        logger.info("Sending feedback summary emails for session {}", sessionId)
+
+        val reviewers = alignmentReviewerRepository.findBySession_Id(sessionId)
+        val decisions = reviewDecisionRepository.findBySession_Id(sessionId)
+            .associateBy { it.review.id!! }
+        val snapshots = alignmentSnapshotRepository.findBySession_Id(sessionId)
+            .associateBy { it.id!! }
+
+        var successCount = 0
+        var failCount = 0
+
+        reviewers.forEach { reviewer ->
+            try {
+                val reviews = requirementReviewRepository.findByReviewer_Id(reviewer.id!!)
+                    .filter { it.session.id == sessionId }
+
+                if (reviews.isEmpty()) {
+                    logger.debug("Skipping feedback email for reviewer {} (no reviews)", reviewer.user.username)
+                    return@forEach
+                }
+
+                val success = sendFeedbackSummaryEmail(session, reviewer, reviews, decisions, snapshots)
+                if (success) successCount++ else failCount++
+            } catch (e: Exception) {
+                logger.error("Failed to send feedback summary to {}: {}", reviewer.user.email, e.message)
+                failCount++
+            }
+        }
+
+        logger.info("Sent {} of {} feedback summary emails successfully (failed: {})",
+            successCount, reviewers.size, failCount)
+    }
+
+    private fun sendFeedbackSummaryEmail(
+        session: AlignmentSession,
+        reviewer: AlignmentReviewer,
+        reviews: List<com.secman.domain.RequirementReview>,
+        decisions: Map<Long, ReviewDecision>,
+        snapshots: Map<Long, com.secman.domain.AlignmentSnapshot>
+    ): Boolean {
+        val release = session.release
+        val user = reviewer.user
+
+        val subject = "Alignment Summary: ${release.name} v${release.version} - Release Activated"
+
+        val htmlContent = buildFeedbackSummaryHtml(
+            recipientName = user.username,
+            releaseName = release.name,
+            releaseVersion = release.version,
+            reviews = reviews,
+            decisions = decisions,
+            snapshots = snapshots
+        )
+
+        val textContent = buildFeedbackSummaryText(
+            recipientName = user.username,
+            releaseName = release.name,
+            releaseVersion = release.version,
+            reviews = reviews,
+            decisions = decisions,
+            snapshots = snapshots
+        )
+
+        return runBlocking {
+            try {
+                emailService.sendEmail(user.email, subject, textContent, htmlContent).get()
+            } catch (e: Exception) {
+                logger.error("Failed to send feedback summary to {}: {}", user.email, e.message)
+                false
+            }
+        }
+    }
+
+    private fun buildFeedbackSummaryHtml(
+        recipientName: String,
+        releaseName: String,
+        releaseVersion: String,
+        reviews: List<com.secman.domain.RequirementReview>,
+        decisions: Map<Long, ReviewDecision>,
+        snapshots: Map<Long, com.secman.domain.AlignmentSnapshot>
+    ): String {
+        val acceptedCount = reviews.count { decisions[it.id]?.decision == ReviewDecision.Decision.ACCEPTED }
+        val rejectedCount = reviews.count { decisions[it.id]?.decision == ReviewDecision.Decision.REJECTED }
+        val pendingCount = reviews.count { decisions[it.id] == null }
+
+        val reviewRows = reviews.joinToString("") { review ->
+            val snapshot = snapshots[review.snapshot.id]
+            val decision = decisions[review.id]
+            val reqId = snapshot?.requirementInternalId ?: "?"
+            val changeType = snapshot?.changeType?.name ?: "?"
+            val changeTypeBg = when (snapshot?.changeType?.name) {
+                "ADDED" -> "#28a745"
+                "DELETED" -> "#dc3545"
+                else -> "#ffc107"
+            }
+            val changeTypeColor = if (snapshot?.changeType?.name == "MODIFIED") "#000" else "#fff"
+            val assessmentBg = when (review.assessment.name) {
+                "OK" -> "#28a745"
+                "CHANGE" -> "#ffc107"
+                else -> "#dc3545"
+            }
+            val assessmentColor = if (review.assessment.name == "CHANGE") "#000" else "#fff"
+            val decisionBg = when (decision?.decision?.name) {
+                "ACCEPTED" -> "#28a745"
+                "REJECTED" -> "#dc3545"
+                else -> "#6c757d"
+            }
+            val decisionText = decision?.decision?.name ?: "Pending"
+            val adminComment = decision?.comment?.let { "<br><small style=\"color: #6c757d;\">$it</small>" } ?: ""
+
+            """
+            <tr>
+                <td style="padding: 10px; border-bottom: 1px solid #e9ecef;">
+                    <strong>$reqId</strong><br>
+                    <small style="color: #6c757d;">${snapshot?.shortreq ?: ""}</small>
+                </td>
+                <td style="padding: 10px; border-bottom: 1px solid #e9ecef; text-align: center;">
+                    <span style="display: inline-block; padding: 2px 8px; border-radius: 4px; background: $changeTypeBg; color: $changeTypeColor; font-size: 12px;">$changeType</span>
+                </td>
+                <td style="padding: 10px; border-bottom: 1px solid #e9ecef; text-align: center;">
+                    <span style="display: inline-block; padding: 2px 8px; border-radius: 4px; background: $assessmentBg; color: $assessmentColor; font-size: 12px;">${review.assessment.name}</span>
+                    ${review.comment?.let { "<br><small style=\"color: #6c757d;\">$it</small>" } ?: ""}
+                </td>
+                <td style="padding: 10px; border-bottom: 1px solid #e9ecef; text-align: center;">
+                    <span style="display: inline-block; padding: 2px 8px; border-radius: 4px; background: $decisionBg; color: #fff; font-size: 12px;">$decisionText</span>
+                    $adminComment
+                </td>
+            </tr>
+            """.trimIndent()
+        }
+
+        return """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Alignment Feedback Summary</title>
+            </head>
+            <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #1a1a2e; margin: 0; padding: 0; background-color: #f8f9fa;">
+                <div style="max-width: 700px; margin: 0 auto; padding: 40px 20px;">
+                    <div style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
+                        <h1 style="color: white; margin: 0; font-size: 24px; font-weight: 600;">Alignment Complete</h1>
+                        <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0; font-size: 14px;">Release Activated</p>
+                    </div>
+
+                    <div style="background: white; padding: 30px; border-radius: 0 0 12px 12px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+                        <p style="font-size: 16px; margin-bottom: 20px;">Hello <strong>$recipientName</strong>,</p>
+
+                        <p style="margin-bottom: 20px;">The alignment process for <strong>$releaseName v$releaseVersion</strong> has been completed and the release has been activated. Below is a summary of your assessments and the admin decisions.</p>
+
+                        <div style="background: #f8f9fa; border-radius: 8px; padding: 20px; margin: 20px 0;">
+                            <h3 style="margin: 0 0 15px 0; color: #495057; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">Summary</h3>
+                            <table style="width: 100%; border-collapse: collapse;">
+                                <tr>
+                                    <td style="padding: 8px 0; color: #6c757d; width: 40%;">Total Assessments:</td>
+                                    <td style="padding: 8px 0; font-weight: 600;">${reviews.size}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 8px 0; color: #6c757d;">Accepted:</td>
+                                    <td style="padding: 8px 0; font-weight: 600; color: #28a745;">$acceptedCount</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 8px 0; color: #6c757d;">Rejected:</td>
+                                    <td style="padding: 8px 0; font-weight: 600; color: #dc3545;">$rejectedCount</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 8px 0; color: #6c757d;">No Decision:</td>
+                                    <td style="padding: 8px 0; font-weight: 600; color: #6c757d;">$pendingCount</td>
+                                </tr>
+                            </table>
+                        </div>
+
+                        <h3 style="margin: 25px 0 15px 0; color: #495057; font-size: 16px;">Detailed Results</h3>
+                        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                            <thead>
+                                <tr style="background: #f8f9fa;">
+                                    <th style="padding: 10px; text-align: left; border-bottom: 2px solid #dee2e6;">Requirement</th>
+                                    <th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Change</th>
+                                    <th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Your Assessment</th>
+                                    <th style="padding: 10px; text-align: center; border-bottom: 2px solid #dee2e6;">Admin Decision</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                $reviewRows
+                            </tbody>
+                        </table>
+
+                        <hr style="border: none; border-top: 1px solid #e9ecef; margin: 30px 0;">
+
+                        <p style="font-size: 12px; color: #adb5bd; text-align: center; margin: 0;">
+                            This is an automated notification from SecMan.
+                        </p>
+                    </div>
+                </div>
+            </body>
+            </html>
+        """.trimIndent()
+    }
+
+    private fun buildFeedbackSummaryText(
+        recipientName: String,
+        releaseName: String,
+        releaseVersion: String,
+        reviews: List<com.secman.domain.RequirementReview>,
+        decisions: Map<Long, ReviewDecision>,
+        snapshots: Map<Long, com.secman.domain.AlignmentSnapshot>
+    ): String {
+        val acceptedCount = reviews.count { decisions[it.id]?.decision == ReviewDecision.Decision.ACCEPTED }
+        val rejectedCount = reviews.count { decisions[it.id]?.decision == ReviewDecision.Decision.REJECTED }
+        val pendingCount = reviews.count { decisions[it.id] == null }
+
+        val reviewLines = reviews.joinToString("\n") { review ->
+            val snapshot = snapshots[review.snapshot.id]
+            val reqId = snapshot?.requirementInternalId ?: "?"
+            val changeType = snapshot?.changeType?.name ?: "?"
+            val decision = decisions[review.id]
+            val decisionText = decision?.decision?.name ?: "Pending"
+            val adminComment = decision?.comment?.let { " ($it)" } ?: ""
+            val reviewerComment = review.comment?.let { " - $it" } ?: ""
+
+            "  $reqId [$changeType] | Your assessment: ${review.assessment.name}$reviewerComment | Decision: $decisionText$adminComment"
+        }
+
+        return """
+            ALIGNMENT FEEDBACK SUMMARY
+            ==========================
+
+            Hello $recipientName,
+
+            The alignment process for $releaseName v$releaseVersion has been completed
+            and the release has been activated.
+
+            Summary:
+            - Total Assessments: ${reviews.size}
+            - Accepted: $acceptedCount
+            - Rejected: $rejectedCount
+            - No Decision: $pendingCount
+
+            Detailed Results:
+            $reviewLines
 
             ---
             This is an automated notification from SecMan.

@@ -298,9 +298,11 @@ const ReleaseDetail: React.FC<ReleaseDetailProps> = ({ releaseId }) => {
     // Get status badge class
     function getStatusBadgeClass(status: string): string {
         switch (status) {
-            case 'DRAFT':
+            case 'PREPARATION':
+                return 'bg-info text-dark';
+            case 'ALIGNMENT':
                 return 'bg-warning text-dark';
-            case 'PUBLISHED':
+            case 'ACTIVE':
                 return 'bg-success';
             case 'ARCHIVED':
                 return 'bg-secondary';

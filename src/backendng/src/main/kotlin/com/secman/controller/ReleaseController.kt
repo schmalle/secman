@@ -2,7 +2,9 @@ package com.secman.controller
 
 import com.secman.domain.Release
 import com.secman.domain.RequirementSnapshot
+import com.secman.repository.NormRepository
 import com.secman.repository.RequirementSnapshotRepository
+import com.secman.repository.UseCaseRepository
 import com.secman.service.ReleaseService
 import io.micronaut.core.annotation.Introspected
 import io.micronaut.http.HttpResponse
@@ -19,7 +21,9 @@ import org.slf4j.LoggerFactory
 @Secured(SecurityRule.IS_AUTHENTICATED)
 class ReleaseController(
     @Inject private val releaseService: ReleaseService,
-    @Inject private val snapshotRepository: RequirementSnapshotRepository
+    @Inject private val snapshotRepository: RequirementSnapshotRepository,
+    @Inject private val useCaseRepository: UseCaseRepository,
+    @Inject private val normRepository: NormRepository
 ) {
     private val logger = LoggerFactory.getLogger(ReleaseController::class.java)
 
@@ -196,7 +200,14 @@ class ReleaseController(
 
             // Get snapshots
             val snapshots = snapshotRepository.findByReleaseId(id)
-            val responseDtos = snapshots.map { toSnapshotResponse(it) }
+
+            // Batch-resolve use case and norm IDs to full objects for display
+            val allUsecaseIds = snapshots.flatMap { parseJsonIds(it.usecaseIdsSnapshot) }.distinct().toSet()
+            val allNormIds = snapshots.flatMap { parseJsonIds(it.normIdsSnapshot) }.distinct().toSet()
+            val useCaseMap = if (allUsecaseIds.isNotEmpty()) useCaseRepository.findAll().filter { it.id!! in allUsecaseIds }.associateBy { it.id!! } else emptyMap()
+            val normMap = if (allNormIds.isNotEmpty()) normRepository.findAll().filter { it.id!! in allNormIds }.associateBy { it.id!! } else emptyMap()
+
+            val responseDtos = snapshots.map { toSnapshotResponse(it, useCaseMap, normMap) }
 
             // Paginate the response
             val currentPage = page ?: 1
@@ -253,14 +264,30 @@ class ReleaseController(
     /**
      * Convert RequirementSnapshot to response DTO
      */
-    private fun toSnapshotResponse(snapshot: RequirementSnapshot): Map<String, Any> {
+    private fun toSnapshotResponse(
+        snapshot: RequirementSnapshot,
+        useCaseMap: Map<Long, com.secman.domain.UseCase>,
+        normMap: Map<Long, com.secman.domain.Norm>
+    ): Map<String, Any> {
         // Parse JSON arrays for usecase and norm IDs
         val usecaseIds = parseJsonIds(snapshot.usecaseIdsSnapshot)
         val normIds = parseJsonIds(snapshot.normIdsSnapshot)
 
+        // Resolve IDs to full objects for frontend display
+        val usecases = usecaseIds.mapNotNull { id -> useCaseMap[id]?.let { mapOf("id" to it.id!!, "name" to it.name) } }
+        val norms = normIds.mapNotNull { id -> normMap[id]?.let { uc ->
+            val map = mutableMapOf<String, Any>("id" to uc.id!!, "name" to uc.name)
+            if (uc.version.isNotBlank()) map["version"] = uc.version
+            if (uc.year != null) map["year"] = uc.year!!
+            map
+        }}
+
         return mapOf(
             "id" to snapshot.id!!,
             "originalRequirementId" to snapshot.originalRequirementId,
+            "internalId" to snapshot.internalId,
+            "revision" to snapshot.revision,
+            "idRevision" to snapshot.idRevision,
             "shortreq" to snapshot.shortreq,
             "details" to (snapshot.details ?: ""),
             "language" to (snapshot.language ?: ""),
@@ -271,6 +298,8 @@ class ReleaseController(
             "chapter" to (snapshot.chapter ?: ""),
             "usecaseIds" to usecaseIds,
             "normIds" to normIds,
+            "usecases" to usecases,
+            "norms" to norms,
             "snapshotTimestamp" to snapshot.snapshotTimestamp.toString()
         )
     }

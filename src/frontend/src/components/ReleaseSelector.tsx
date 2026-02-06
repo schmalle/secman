@@ -16,6 +16,8 @@ interface ReleaseSelectorProps {
     className?: string;
 }
 
+const SESSION_STORAGE_KEY = 'secman_selectedReleaseId';
+
 const ReleaseSelector: React.FC<ReleaseSelectorProps> = ({
     onReleaseChange,
     selectedReleaseId = null,
@@ -25,12 +27,39 @@ const ReleaseSelector: React.FC<ReleaseSelectorProps> = ({
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [error, setError] = useState<string>('');
     const [selectedId, setSelectedId] = useState<number | null>(selectedReleaseId);
+    const [initialized, setInitialized] = useState(false);
 
     useEffect(() => {
         if (typeof window !== 'undefined') {
             fetchReleases();
         }
     }, []);
+
+    // After releases load, default to ACTIVE release or restore from sessionStorage
+    useEffect(() => {
+        if (releases.length === 0 || initialized) return;
+
+        // Try restoring from sessionStorage first
+        const stored = sessionStorage.getItem(SESSION_STORAGE_KEY);
+        if (stored) {
+            const storedId = parseInt(stored, 10);
+            if (!isNaN(storedId) && releases.some(r => r.id === storedId)) {
+                setSelectedId(storedId);
+                onReleaseChange(storedId);
+                setInitialized(true);
+                return;
+            }
+        }
+
+        // Default to ACTIVE release
+        const activeRelease = releases.find(r => r.status === 'ACTIVE');
+        if (activeRelease) {
+            setSelectedId(activeRelease.id);
+            sessionStorage.setItem(SESSION_STORAGE_KEY, activeRelease.id.toString());
+            onReleaseChange(activeRelease.id);
+        }
+        setInitialized(true);
+    }, [releases]);
 
     const fetchReleases = async () => {
         setIsLoading(true);
@@ -74,6 +103,11 @@ const ReleaseSelector: React.FC<ReleaseSelectorProps> = ({
         const newReleaseId = value === '' ? null : parseInt(value, 10);
 
         setSelectedId(newReleaseId);
+        if (newReleaseId !== null) {
+            sessionStorage.setItem(SESSION_STORAGE_KEY, newReleaseId.toString());
+        } else {
+            sessionStorage.removeItem(SESSION_STORAGE_KEY);
+        }
         onReleaseChange(newReleaseId);
     };
 
@@ -121,6 +155,12 @@ const ReleaseSelector: React.FC<ReleaseSelectorProps> = ({
             {selectedId !== null && (
                 <small className="form-text text-muted mt-1">
                     You are viewing a historical snapshot. Changes to requirements will not affect this release.
+                </small>
+            )}
+            {selectedId === null && initialized && !isLoading && (
+                <small className="form-text text-warning mt-1">
+                    <i className="bi bi-info-circle me-1"></i>
+                    Showing live requirements (no active release selected)
                 </small>
             )}
         </div>

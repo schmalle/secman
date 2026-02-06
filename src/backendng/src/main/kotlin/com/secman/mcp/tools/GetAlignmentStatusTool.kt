@@ -116,12 +116,12 @@ class GetAlignmentStatusTool(
                     "reviewedRequirements" to status.reviewedRequirements
                 ),
                 "assessments" to mapOf(
-                    "minor" to status.assessmentSummary.minorCount,
-                    "major" to status.assessmentSummary.majorCount,
-                    "nok" to status.assessmentSummary.nokCount,
-                    "total" to (status.assessmentSummary.minorCount +
-                                status.assessmentSummary.majorCount +
-                                status.assessmentSummary.nokCount)
+                    "ok" to status.assessmentSummary.okCount,
+                    "change" to status.assessmentSummary.changeCount,
+                    "nogo" to status.assessmentSummary.nogoCount,
+                    "total" to (status.assessmentSummary.okCount +
+                                status.assessmentSummary.changeCount +
+                                status.assessmentSummary.nogoCount)
                 )
             )
 
@@ -137,9 +137,9 @@ class GetAlignmentStatusTool(
                         "reviewedCount" to summary.reviewedCount,
                         "totalCount" to summary.totalCount,
                         "assessments" to mapOf(
-                            "minor" to summary.assessments.minorCount,
-                            "major" to summary.assessments.majorCount,
-                            "nok" to summary.assessments.nokCount
+                            "ok" to summary.assessments.okCount,
+                            "change" to summary.assessments.changeCount,
+                            "nogo" to summary.assessments.nogoCount
                         )
                     )
                 }
@@ -156,9 +156,9 @@ class GetAlignmentStatusTool(
                         "shortreq" to summary.snapshot.shortreq.take(100),
                         "reviewCount" to summary.reviewCount,
                         "assessments" to mapOf(
-                            "minor" to summary.assessments.minorCount,
-                            "major" to summary.assessments.majorCount,
-                            "nok" to summary.assessments.nokCount
+                            "ok" to summary.assessments.okCount,
+                            "change" to summary.assessments.changeCount,
+                            "nogo" to summary.assessments.nogoCount
                         )
                     )
                 }

@@ -12,7 +12,7 @@ import jakarta.inject.Singleton
  * MCP tool for submitting a review on a requirement change.
  * Feature: 068-requirements-alignment-process
  *
- * Allows REQ-role users to submit their assessment (MINOR/MAJOR/NOK)
+ * Allows REQ-role users to submit their assessment (OK/CHANGE/NOGO)
  * and optional comments on requirement changes.
  *
  * Accessible by: REQ role users (via User Delegation)
@@ -24,7 +24,7 @@ class SubmitReviewTool(
 ) : McpTool {
 
     override val name = "submit_review"
-    override val description = "Submit a review assessment for a requirement change in an alignment session. Assessment can be MINOR (acceptable), MAJOR (significant concern), or NOK (not acceptable)."
+    override val description = "Submit a review assessment for a requirement change in an alignment session. Assessment can be OK (acceptable), CHANGE (needs rework), or NOGO (not acceptable)."
     override val operation = McpOperation.WRITE
 
     override val inputSchema = mapOf(
@@ -40,8 +40,8 @@ class SubmitReviewTool(
             ),
             "assessment" to mapOf(
                 "type" to "string",
-                "description" to "Assessment of the change: MINOR (acceptable), MAJOR (significant concern), or NOK (not acceptable)",
-                "enum" to listOf("MINOR", "MAJOR", "NOK")
+                "description" to "Assessment of the change: OK (acceptable), CHANGE (needs rework), or NOGO (not acceptable)",
+                "enum" to listOf("OK", "CHANGE", "NOGO")
             ),
             "comment" to mapOf(
                 "type" to "string",
@@ -89,7 +89,7 @@ class SubmitReviewTool(
         } catch (e: IllegalArgumentException) {
             return McpToolResult.error(
                 "VALIDATION_ERROR",
-                "Invalid assessment. Must be one of: MINOR, MAJOR, NOK"
+                "Invalid assessment. Must be one of: OK, CHANGE, NOGO"
             )
         }
 
