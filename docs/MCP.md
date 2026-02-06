@@ -696,7 +696,7 @@ List all releases with optional status filtering. **Requires ADMIN or RELEASE_MA
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `status` | enum | No | Filter by status: `DRAFT`, `ACTIVE`, `LEGACY` |
+| `status` | enum | No | Filter by status: `PREPARATION`, `ALIGNMENT`, `ACTIVE`, `ARCHIVED` |
 
 Returns list of releases with version, name, status, description, and metadata.
 
@@ -719,7 +719,7 @@ Create a new release with requirement snapshots. **Requires ADMIN or RELEASE_MAN
 | `name` | string | Yes | Human-readable release name |
 | `description` | string | No | Detailed description of the release |
 
-Creates a new release in DRAFT status and snapshots all current requirements. Returns the created release with snapshot count.
+Creates a new release in PREPARATION status and snapshots all current requirements. Returns the created release with snapshot count.
 
 #### `delete_release`
 Delete a release and its requirement snapshots. **Requires ADMIN or RELEASE_MANAGER role and User Delegation.**
@@ -728,7 +728,7 @@ Delete a release and its requirement snapshots. **Requires ADMIN or RELEASE_MANA
 |-----------|------|----------|-------------|
 | `releaseId` | number | Yes | ID of the release to delete |
 
-**Note:** ACTIVE releases cannot be deleted. Set another release as active first, or wait until it becomes LEGACY.
+**Note:** ACTIVE releases cannot be deleted. Set another release as active first, or wait until it becomes ARCHIVED.
 
 #### `set_release_status`
 Set a release to ACTIVE status. **Requires ADMIN or RELEASE_MANAGER role and User Delegation.**
@@ -739,10 +739,10 @@ Set a release to ACTIVE status. **Requires ADMIN or RELEASE_MANAGER role and Use
 | `status` | enum | Yes | Must be `ACTIVE` |
 
 **Status Workflow:**
-- Only DRAFT releases can be manually set to ACTIVE
-- When a release becomes ACTIVE, any previously ACTIVE release automatically becomes LEGACY
+- Only PREPARATION or ALIGNMENT releases can be manually set to ACTIVE
+- When a release becomes ACTIVE, any previously ACTIVE release automatically becomes ARCHIVED
 - Only one release can be ACTIVE at a time
-- LEGACY releases cannot be transitioned to other states
+- ARCHIVED releases cannot be transitioned to other states (terminal state)
 
 #### `compare_releases`
 Compare two releases and show requirement differences. **Requires ADMIN or RELEASE_MANAGER role and User Delegation.**
@@ -845,7 +845,7 @@ All MCP operations are logged with:
 **Releases:**
 - "List all releases" → `list_releases`
 - "Show only active releases" → `list_releases` with `status: "ACTIVE"`
-- "Show draft releases" → `list_releases` with `status: "DRAFT"`
+- "Show preparation releases" → `list_releases` with `status: "PREPARATION"`
 - "Get release details" → `get_release` with `releaseId: 1`
 - "Get release with requirements" → `get_release` with `releaseId: 1, includeRequirements: true`
 - "Create a new release version 2.0.0" → `create_release` with `version: "2.0.0", name: "Q1 2026 Release"`

@@ -1,0 +1,59 @@
+Preconditions:
+
+Requirements are existing.
+Initial release definition and implementation is existing
+Every requirement has a unique ID.
+Every requirement can have different versions stored in secman.
+A release describes a defined state of requirements at a given time.
+
+Examples for Releases:
+
+Release 1.0
+
+Requirement 1 Version 1
+Requirement 2 Version 1
+Requirement 3 Version 3
+
+Release 2.0
+
+Requirement 1 Version 2
+Requirement 2 Version 1
+Requirement 3 Version 4
+
+
+**Updated concept:
+
+A release can have the following states
+
+ACTIVE = Current active release
+ARCHIVED = Oudated Release, saved
+PREPARATION = if a new release is created it is always in mode PREPARATION
+ALIGNMENT = Requirements have been updated where necessary and alignment has started
+
+Per default secman starts always with the active release.
+
+If the user switches from e.g. from the active release 1 to the release 2 (which is preparation) and
+i want to export requirements, i would get an export with
+
+Requirement 1 Version 2
+Requirement 2 Version 1
+Requirement 3 Version 4
+
+switching back to release 1, i would see
+
+Requirement 1 Version 1
+Requirement 2 Version 1
+Requirement 3 Version 3
+
+
+**Deliverables
+
+
+Switch logic for release and UI elements
+Added / validated export logic
+Full end2end test suite for releases, assuming SECMAN_USERNAME,SECMAN_PASSWORD, SECMAN_API_KEY are set
+as environment variables.
+
+
+
+

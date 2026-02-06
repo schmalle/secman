@@ -94,7 +94,7 @@ class ReleaseService(
             version = version,
             name = name,
             description = description,
-            status = Release.ReleaseStatus.DRAFT,
+            status = Release.ReleaseStatus.PREPARATION,
             createdBy = user
         )
 
@@ -185,10 +185,10 @@ class ReleaseService(
 
     /**
      * Update release status with workflow validation
-     * Enforces workflow: DRAFT → ACTIVE, ACTIVE → LEGACY (automatic)
+     * Enforces workflow: PREPARATION/ALIGNMENT → ACTIVE, ACTIVE → ARCHIVED (automatic)
      *
      * Note: Only one release can be ACTIVE at a time. When setting a release to ACTIVE,
-     * the previously ACTIVE release is automatically set to LEGACY.
+     * the previously ACTIVE release is automatically set to ARCHIVED.
      *
      * @param releaseId ID of release to update
      * @param newStatus New status to transition to (only ACTIVE is allowed manually)
@@ -205,31 +205,31 @@ class ReleaseService(
         val currentStatus = release.status
 
         // Validate status transition workflow
-        // DRAFT → ACTIVE is allowed (direct or after alignment)
-        // IN_REVIEW → ACTIVE is allowed (after alignment completes)
-        // ACTIVE → LEGACY happens automatically when another release becomes ACTIVE
+        // PREPARATION → ACTIVE is allowed (direct activation, skipping alignment)
+        // ALIGNMENT → ACTIVE is allowed (after alignment completes)
+        // ACTIVE → ARCHIVED happens automatically when another release becomes ACTIVE
+        // ARCHIVED → any is not allowed (terminal state)
         val validTransition = when (currentStatus) {
-            Release.ReleaseStatus.DRAFT -> newStatus == Release.ReleaseStatus.ACTIVE
-            Release.ReleaseStatus.IN_REVIEW -> newStatus == Release.ReleaseStatus.ACTIVE // Allow activation after alignment
+            Release.ReleaseStatus.PREPARATION -> newStatus == Release.ReleaseStatus.ACTIVE
+            Release.ReleaseStatus.ALIGNMENT -> newStatus == Release.ReleaseStatus.ACTIVE
             Release.ReleaseStatus.ACTIVE -> false // Cannot manually change ACTIVE status
-            Release.ReleaseStatus.LEGACY -> false // No transitions from LEGACY
-            Release.ReleaseStatus.PUBLISHED -> false // Cannot manually change PUBLISHED status
+            Release.ReleaseStatus.ARCHIVED -> false // Terminal state, no transitions
         }
 
         if (!validTransition) {
             throw IllegalStateException(
                 "Invalid status transition from $currentStatus to $newStatus. " +
-                "Only DRAFT releases can be set to ACTIVE."
+                "Only PREPARATION or ALIGNMENT releases can be set to ACTIVE."
             )
         }
 
-        // When setting to ACTIVE, move all other ACTIVE releases to LEGACY (only one can be active)
+        // When setting to ACTIVE, move all other ACTIVE releases to ARCHIVED (only one can be active)
         if (newStatus == Release.ReleaseStatus.ACTIVE) {
             val currentlyActiveReleases = releaseRepository.findByStatus(Release.ReleaseStatus.ACTIVE)
             for (activeRelease in currentlyActiveReleases) {
                 if (activeRelease.id != releaseId) {
-                    logger.info("Moving release ${activeRelease.id} (${activeRelease.version}) to LEGACY")
-                    activeRelease.status = Release.ReleaseStatus.LEGACY
+                    logger.info("Moving release ${activeRelease.id} (${activeRelease.version}) to ARCHIVED")
+                    activeRelease.status = Release.ReleaseStatus.ARCHIVED
                     releaseRepository.update(activeRelease)
                 }
             }

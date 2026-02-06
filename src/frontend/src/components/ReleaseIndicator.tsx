@@ -40,7 +40,7 @@ const ReleaseIndicator: React.FC<ReleaseIndicatorProps> = ({
                     <>
                         v{selectedRelease.version}
                         <span className="text-muted ms-2 fw-normal" style={{ fontSize: '0.85em' }}>
-                            (Historical)
+                            ({selectedRelease.status === 'ACTIVE' ? 'Active' : 'Historical'})
                         </span>
                     </>
                 ) : (

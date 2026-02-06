@@ -6,6 +6,28 @@ import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
 import java.time.Instant
 
+/**
+ * Converts between ReleaseStatus enum and database string values.
+ * Handles legacy status names (DRAFT, IN_REVIEW, LEGACY, PUBLISHED) for backward
+ * compatibility during migration, mapping them to the new status names.
+ */
+@Converter
+class ReleaseStatusConverter : AttributeConverter<Release.ReleaseStatus, String> {
+    override fun convertToDatabaseColumn(attribute: Release.ReleaseStatus?): String? {
+        return attribute?.name
+    }
+
+    override fun convertToEntityAttribute(dbData: String?): Release.ReleaseStatus? {
+        if (dbData == null) return null
+        return when (dbData) {
+            "DRAFT" -> Release.ReleaseStatus.PREPARATION
+            "IN_REVIEW" -> Release.ReleaseStatus.ALIGNMENT
+            "LEGACY", "PUBLISHED" -> Release.ReleaseStatus.ARCHIVED
+            else -> Release.ReleaseStatus.valueOf(dbData)
+        }
+    }
+}
+
 @Entity
 @Table(name = "releases")
 @Serdeable
@@ -26,9 +48,9 @@ data class Release(
     @Lob
     var description: String? = null,
 
-    @Enumerated(EnumType.STRING)
+    @Convert(converter = ReleaseStatusConverter::class)
     @Column(nullable = false)
-    var status: ReleaseStatus = ReleaseStatus.DRAFT,
+    var status: ReleaseStatus = ReleaseStatus.PREPARATION,
 
     @Column(name = "release_date")
     var releaseDate: Instant? = null,
@@ -45,16 +67,15 @@ data class Release(
 ) {
     /**
      * Release lifecycle statuses
-     * Feature: 068-requirements-alignment-process
+     * Feature: 078-release-rework
      *
-     * - DRAFT: Initial state, can be edited, alignment can be started
-     * - IN_REVIEW: Alignment process active, requirements under review
+     * - PREPARATION: Initial state, can be edited, alignment can be started
+     * - ALIGNMENT: Alignment process active, requirements under review
      * - ACTIVE: Current active release (only one can be ACTIVE at a time)
-     * - LEGACY: Previously active release, replaced by newer ACTIVE
-     * - PUBLISHED: Archived/published release
+     * - ARCHIVED: Previously active release, replaced by newer ACTIVE
      */
     enum class ReleaseStatus {
-        DRAFT, IN_REVIEW, ACTIVE, LEGACY, PUBLISHED
+        PREPARATION, ALIGNMENT, ACTIVE, ARCHIVED
     }
 
     @PrePersist

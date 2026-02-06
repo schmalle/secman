@@ -2,13 +2,13 @@
  * ReleaseStatusActions Component
  *
  * Provides status transition buttons for releases
- * Enforces workflow: DRAFT → IN_REVIEW → ACTIVE, ACTIVE → LEGACY (automatic)
+ * Enforces workflow: PREPARATION → ALIGNMENT → ACTIVE, ACTIVE → ARCHIVED (automatic)
  *
  * Features:
- * - Shows "Start Alignment" button for DRAFT releases (ADMIN/RELEASE_MANAGER only)
- * - Shows alignment dashboard link for IN_REVIEW releases
- * - Shows "Set Active" button for IN_REVIEW releases after alignment
- * - When a release is set to ACTIVE, the previously ACTIVE release becomes LEGACY
+ * - Shows "Start Alignment" button for PREPARATION releases (ADMIN/RELEASE_MANAGER only)
+ * - Shows alignment dashboard link for ALIGNMENT releases
+ * - Shows "Set Active" button for ALIGNMENT releases after alignment
+ * - When a release is set to ACTIVE, the previously ACTIVE release becomes ARCHIVED
  * - Confirmation modal before transitions
  * - Loading state during API calls
  * - Error handling with user feedback
@@ -105,7 +105,7 @@ const StatusTransitionModal: React.FC<StatusTransitionModalProps> = ({
                             </p>
                             <p className="text-muted mb-0">
                                 This will mark this release as the currently active version.
-                                Any previously active release will be moved to LEGACY status.
+                                Any previously active release will be moved to ARCHIVED status.
                             </p>
                         </div>
 
@@ -160,18 +160,18 @@ export const ReleaseStatusActions: React.FC<ReleaseStatusActionsProps> = ({
     // Check user permissions
     const canManageStatus = typeof window !== 'undefined' && hasRole(['ADMIN', 'RELEASE_MANAGER']);
 
-    // Check for changes when in DRAFT status
+    // Check for changes when in PREPARATION status
     useEffect(() => {
-        if (release.status === 'DRAFT' && canManageStatus) {
+        if (release.status === 'PREPARATION' && canManageStatus) {
             releaseService.checkAlignmentRequired(release.id)
                 .then(result => setHasChanges(result.hasChanges))
                 .catch(() => setHasChanges(null));
         }
     }, [release.id, release.status, canManageStatus]);
 
-    // Get alignment status when IN_REVIEW
+    // Get alignment status when ALIGNMENT
     useEffect(() => {
-        if (release.status === 'IN_REVIEW' && canManageStatus) {
+        if (release.status === 'ALIGNMENT' && canManageStatus) {
             releaseService.getAlignmentStatus(release.id)
                 .then(status => setAlignmentStatus(status))
                 .catch(() => setAlignmentStatus(null));
@@ -183,8 +183,8 @@ export const ReleaseStatusActions: React.FC<ReleaseStatusActionsProps> = ({
         return null;
     }
 
-    // Don't show actions for ACTIVE or LEGACY releases
-    if (release.status === 'ACTIVE' || release.status === 'LEGACY') {
+    // Don't show actions for ACTIVE or ARCHIVED releases
+    if (release.status === 'ACTIVE' || release.status === 'ARCHIVED') {
         return null;
     }
 
@@ -202,7 +202,7 @@ export const ReleaseStatusActions: React.FC<ReleaseStatusActionsProps> = ({
             onAlignmentStart?.();
 
             // Update release status locally
-            onStatusChange({ ...release, status: 'IN_REVIEW' });
+            onStatusChange({ ...release, status: 'ALIGNMENT' });
 
             setShowAlignmentModal(false);
         } catch (err) {
@@ -262,8 +262,8 @@ export const ReleaseStatusActions: React.FC<ReleaseStatusActionsProps> = ({
                 </div>
             )}
 
-            {/* DRAFT status: Show Start Alignment button */}
-            {release.status === 'DRAFT' && (
+            {/* PREPARATION status: Show Start Alignment button */}
+            {release.status === 'PREPARATION' && (
                 <div className="d-flex flex-column gap-2">
                     <div className="d-flex gap-2">
                         <button
@@ -294,8 +294,8 @@ export const ReleaseStatusActions: React.FC<ReleaseStatusActionsProps> = ({
                 </div>
             )}
 
-            {/* IN_REVIEW status: Show alignment progress and dashboard link */}
-            {release.status === 'IN_REVIEW' && alignmentStatus && (
+            {/* ALIGNMENT status: Show alignment progress and dashboard link */}
+            {release.status === 'ALIGNMENT' && alignmentStatus && (
                 <div className="d-flex flex-column gap-2">
                     <div className="d-flex gap-2 align-items-center">
                         <span className="badge bg-info">
@@ -352,7 +352,7 @@ export const ReleaseStatusActions: React.FC<ReleaseStatusActionsProps> = ({
                                         This will:
                                     </p>
                                     <ul className="text-muted">
-                                        <li>Change release status to IN_REVIEW</li>
+                                        <li>Change release status to ALIGNMENT</li>
                                         <li>Send email notifications to all users with REQ role</li>
                                         <li>Allow reviewers to submit feedback on requirement changes</li>
                                     </ul>

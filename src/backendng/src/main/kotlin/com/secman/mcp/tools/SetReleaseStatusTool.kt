@@ -12,9 +12,10 @@ import jakarta.inject.Singleton
  * Feature: MCP Release Management
  *
  * Status transitions follow this workflow:
- * - DRAFT -> ACTIVE: Allowed. When set, the previously ACTIVE release automatically becomes LEGACY.
- * - ACTIVE -> LEGACY: Automatic when another release becomes ACTIVE
- * - LEGACY -> *: Not allowed
+ * - PREPARATION -> ACTIVE: Allowed (direct activation, skipping alignment).
+ * - ALIGNMENT -> ACTIVE: Allowed (after alignment completes).
+ * - ACTIVE -> ARCHIVED: Automatic when another release becomes ACTIVE.
+ * - ARCHIVED -> *: Not allowed (terminal state).
  *
  * Only one release can be ACTIVE at a time.
  *
@@ -26,7 +27,7 @@ class SetReleaseStatusTool(
 ) : McpTool {
 
     override val name = "set_release_status"
-    override val description = "Set a release status. Only DRAFT releases can be set to ACTIVE. When a release becomes ACTIVE, the previously ACTIVE release automatically becomes LEGACY."
+    override val description = "Set a release status. Only PREPARATION or ALIGNMENT releases can be set to ACTIVE. When a release becomes ACTIVE, the previously ACTIVE release automatically becomes ARCHIVED."
     override val operation = McpOperation.WRITE
 
     override val inputSchema = mapOf(
@@ -82,7 +83,7 @@ class SetReleaseStatusTool(
         if (newStatus != Release.ReleaseStatus.ACTIVE) {
             return McpToolResult.error(
                 "VALIDATION_ERROR",
-                "Only 'ACTIVE' status can be set manually. LEGACY status is automatically assigned when another release becomes ACTIVE."
+                "Only 'ACTIVE' status can be set manually. ARCHIVED status is automatically assigned when another release becomes ACTIVE."
             )
         }
 
@@ -98,7 +99,7 @@ class SetReleaseStatusTool(
                     "status" to updatedRelease.status.name,
                     "updatedAt" to updatedRelease.updatedAt?.toString()
                 ),
-                "message" to "Release ${updatedRelease.version} is now ACTIVE. Any previously active release has been set to LEGACY."
+                "message" to "Release ${updatedRelease.version} is now ACTIVE. Any previously active release has been set to ARCHIVED."
             )
 
             return McpToolResult.success(result)

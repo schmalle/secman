@@ -13,6 +13,7 @@ import {
     type Release,
     type AlignmentStatus,
     type AlignmentReviewer,
+    type AdminDecision,
 } from '../services/releaseService';
 import { hasRole } from '../utils/auth';
 
@@ -33,6 +34,9 @@ export const AlignmentDashboard: React.FC<AlignmentDashboardProps> = ({ releaseI
     const [actionLoading, setActionLoading] = useState<string | null>(null);
 
     const canManage = typeof window !== 'undefined' && hasRole(['ADMIN', 'RELEASE_MANAGER']);
+    const canDecide = typeof window !== 'undefined' && hasRole(['ADMIN', 'REQADMIN']);
+    const [decisionComments, setDecisionComments] = useState<Record<number, string>>({});
+    const [decisionLoading, setDecisionLoading] = useState<number | null>(null);
 
     // Load data
     useEffect(() => {
@@ -101,7 +105,7 @@ export const AlignmentDashboard: React.FC<AlignmentDashboardProps> = ({ releaseI
     const handleCancel = async () => {
         if (!alignmentStatus?.session.id) return;
 
-        if (!confirm('Are you sure you want to cancel this alignment? The release will return to DRAFT status.')) return;
+        if (!confirm('Are you sure you want to cancel this alignment? The release will return to PREPARATION status.')) return;
 
         setActionLoading('cancel');
         try {
@@ -110,6 +114,30 @@ export const AlignmentDashboard: React.FC<AlignmentDashboardProps> = ({ releaseI
         } catch (err) {
             alert(err instanceof Error ? err.message : 'Failed to cancel');
             setActionLoading(null);
+        }
+    };
+
+    const handleDecision = async (reviewId: number, decision: 'ACCEPTED' | 'REJECTED') => {
+        if (!alignmentStatus?.session.id) return;
+
+        setDecisionLoading(reviewId);
+        try {
+            await releaseService.submitReviewDecision(
+                alignmentStatus.session.id,
+                reviewId,
+                decision,
+                decisionComments[reviewId] || undefined
+            );
+            setDecisionComments(prev => {
+                const next = { ...prev };
+                delete next[reviewId];
+                return next;
+            });
+            loadData();
+        } catch (err) {
+            alert(err instanceof Error ? err.message : 'Failed to submit decision');
+        } finally {
+            setDecisionLoading(null);
         }
     };
 
@@ -218,16 +246,16 @@ export const AlignmentDashboard: React.FC<AlignmentDashboardProps> = ({ releaseI
                         <div className="card-body">
                             <div className="d-flex justify-content-around text-center">
                                 <div>
-                                    <h4 className="mb-0 text-success">{assessments.minor}</h4>
-                                    <small className="text-muted">Minor</small>
+                                    <h4 className="mb-0 text-success">{assessments.ok}</h4>
+                                    <small className="text-muted">OK</small>
                                 </div>
                                 <div>
-                                    <h4 className="mb-0 text-warning">{assessments.major}</h4>
-                                    <small className="text-muted">Major</small>
+                                    <h4 className="mb-0 text-warning">{assessments.change}</h4>
+                                    <small className="text-muted">Change</small>
                                 </div>
                                 <div>
-                                    <h4 className="mb-0 text-danger">{assessments.nok}</h4>
-                                    <small className="text-muted">NOK</small>
+                                    <h4 className="mb-0 text-danger">{assessments.nogo}</h4>
+                                    <small className="text-muted">NOGO</small>
                                 </div>
                             </div>
                         </div>
@@ -329,9 +357,9 @@ export const AlignmentDashboard: React.FC<AlignmentDashboardProps> = ({ releaseI
                                                 </div>
                                             </td>
                                             <td>
-                                                <span className="text-success me-2">{reviewer.assessments.minor} Minor</span>
-                                                <span className="text-warning me-2">{reviewer.assessments.major} Major</span>
-                                                <span className="text-danger">{reviewer.assessments.nok} NOK</span>
+                                                <span className="text-success me-2">{reviewer.assessments.ok} OK</span>
+                                                <span className="text-warning me-2">{reviewer.assessments.change} Change</span>
+                                                <span className="text-danger">{reviewer.assessments.nogo} NOGO</span>
                                             </td>
                                             <td>
                                                 <small className="text-muted">
@@ -364,27 +392,106 @@ export const AlignmentDashboard: React.FC<AlignmentDashboardProps> = ({ releaseI
                                 </thead>
                                 <tbody>
                                     {feedback.map((item: any) => (
-                                        <tr key={item.snapshotId}>
-                                            <td>
-                                                <strong>{item.requirementId}</strong>
-                                                <br />
-                                                <small className="text-muted">{item.shortreq}</small>
-                                            </td>
-                                            <td>
-                                                <span className={`badge bg-${
-                                                    item.changeType === 'ADDED' ? 'success' :
-                                                    item.changeType === 'DELETED' ? 'danger' : 'warning'
-                                                }`}>
-                                                    {item.changeType}
-                                                </span>
-                                            </td>
-                                            <td>{item.reviewCount}</td>
-                                            <td>
-                                                <span className="text-success me-2">{item.assessments.minor} Minor</span>
-                                                <span className="text-warning me-2">{item.assessments.major} Major</span>
-                                                <span className="text-danger">{item.assessments.nok} NOK</span>
-                                            </td>
-                                        </tr>
+                                        <React.Fragment key={item.snapshotId}>
+                                            <tr>
+                                                <td>
+                                                    <strong>{item.requirementId}</strong>
+                                                    <br />
+                                                    <small className="text-muted">{item.shortreq}</small>
+                                                </td>
+                                                <td>
+                                                    <span className={`badge bg-${
+                                                        item.changeType === 'ADDED' ? 'success' :
+                                                        item.changeType === 'DELETED' ? 'danger' : 'warning'
+                                                    }`}>
+                                                        {item.changeType}
+                                                    </span>
+                                                </td>
+                                                <td>{item.reviewCount}</td>
+                                                <td>
+                                                    <span className="text-success me-2">{item.assessments.ok} OK</span>
+                                                    <span className="text-warning me-2">{item.assessments.change} Change</span>
+                                                    <span className="text-danger">{item.assessments.nogo} NOGO</span>
+                                                </td>
+                                            </tr>
+                                            {item.reviews && item.reviews.length > 0 && (
+                                                <tr>
+                                                    <td colSpan={4} className="ps-4 pt-0 pb-3" style={{ borderTop: 'none' }}>
+                                                        {item.reviews.map((review: any) => (
+                                                            <div key={review.id} className="mb-2 p-2 border rounded">
+                                                                <div className="d-flex align-items-start gap-2 mb-1">
+                                                                    <span className={`badge bg-${
+                                                                        review.assessment === 'OK' ? 'success' :
+                                                                        review.assessment === 'CHANGE' ? 'warning' : 'danger'
+                                                                    } ${review.assessment === 'CHANGE' ? 'text-dark' : ''}`}>
+                                                                        {review.assessment}
+                                                                    </span>
+                                                                    <strong className="small">{review.reviewerName}</strong>
+                                                                    {review.comment && (
+                                                                        <span className="small text-muted">— {review.comment}</span>
+                                                                    )}
+                                                                </div>
+
+                                                                {/* Admin Decision Display */}
+                                                                {review.adminDecision && (
+                                                                    <div className="d-flex align-items-start gap-2 mt-1 ms-3">
+                                                                        <span className={`badge bg-${
+                                                                            review.adminDecision.decision === 'ACCEPTED' ? 'success' : 'danger'
+                                                                        }`}>
+                                                                            {review.adminDecision.decision}
+                                                                        </span>
+                                                                        <small className="text-muted">
+                                                                            by {review.adminDecision.decidedBy}
+                                                                        </small>
+                                                                        {review.adminDecision.comment && (
+                                                                            <small className="text-muted">— {review.adminDecision.comment}</small>
+                                                                        )}
+                                                                    </div>
+                                                                )}
+
+                                                                {/* Admin Decision Controls */}
+                                                                {!review.adminDecision && canDecide && isOpen && (
+                                                                    <div className="mt-2 ms-3">
+                                                                        <div className="d-flex align-items-center gap-2">
+                                                                            <input
+                                                                                type="text"
+                                                                                className="form-control form-control-sm"
+                                                                                placeholder="Comment (optional)"
+                                                                                style={{ maxWidth: '300px' }}
+                                                                                value={decisionComments[review.id] || ''}
+                                                                                onChange={(e) => setDecisionComments(prev => ({
+                                                                                    ...prev,
+                                                                                    [review.id]: e.target.value
+                                                                                }))}
+                                                                                disabled={decisionLoading === review.id}
+                                                                            />
+                                                                            <button
+                                                                                className="btn btn-success btn-sm"
+                                                                                onClick={() => handleDecision(review.id, 'ACCEPTED')}
+                                                                                disabled={decisionLoading !== null}
+                                                                            >
+                                                                                {decisionLoading === review.id ? (
+                                                                                    <span className="spinner-border spinner-border-sm"></span>
+                                                                                ) : 'Accept'}
+                                                                            </button>
+                                                                            <button
+                                                                                className="btn btn-danger btn-sm"
+                                                                                onClick={() => handleDecision(review.id, 'REJECTED')}
+                                                                                disabled={decisionLoading !== null}
+                                                                            >
+                                                                                {decisionLoading === review.id ? (
+                                                                                    <span className="spinner-border spinner-border-sm"></span>
+                                                                                ) : 'Reject'}
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        ))}
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </React.Fragment>
                                     ))}
                                 </tbody>
                             </table>

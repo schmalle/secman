@@ -81,27 +81,25 @@ data class AlignmentSnapshot(
     /**
      * Current details text.
      */
-    @Lob
-    @Column(name = "details")
+    @Column(name = "details", columnDefinition = "LONGTEXT")
     var details: String? = null,
 
     /**
      * Previous details text (for MODIFIED only).
      */
-    @Lob
-    @Column(name = "previous_details")
+    @Column(name = "previous_details", columnDefinition = "LONGTEXT")
     var previousDetails: String? = null,
 
     /**
      * Current chapter reference.
      */
-    @Column(name = "chapter", length = 50)
+    @Column(name = "chapter", columnDefinition = "TEXT")
     var chapter: String? = null,
 
     /**
      * Previous chapter reference (for MODIFIED only).
      */
-    @Column(name = "previous_chapter", length = 50)
+    @Column(name = "previous_chapter", columnDefinition = "TEXT")
     var previousChapter: String? = null,
 
     /**

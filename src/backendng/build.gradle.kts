@@ -38,6 +38,7 @@ dependencies {
 
 	implementation("io.micronaut.flyway:micronaut-flyway:7.9.2")
 	runtimeOnly("org.flywaydb:flyway-core:11.20.3")
+	runtimeOnly("org.flywaydb:flyway-mysql:11.20.3")
 	
     // Security
     implementation("io.micronaut.security:micronaut-security-jwt:4.16.1")

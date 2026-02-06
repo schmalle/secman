@@ -8,7 +8,7 @@ import java.time.Instant
  * Individual feedback on a requirement change within an alignment session.
  * Feature: 068-requirements-alignment-process
  *
- * Each reviewer can provide an assessment (Minor/Major/NOK) and optional
+ * Each reviewer can provide an assessment (OK/Change/NOGO) and optional
  * comments for each changed requirement in the alignment session.
  */
 @Entity
@@ -76,17 +76,17 @@ data class RequirementReview(
     /**
      * Assessment values for requirement changes.
      *
-     * - MINOR: Change is acceptable, minor impact
-     * - MAJOR: Significant concern, needs attention
-     * - NOK: Not acceptable, blocks release
+     * - OK: Change is acceptable
+     * - CHANGE: Change request, needs rework
+     * - NOGO: Not acceptable, blocks release
      */
     enum class ReviewAssessment {
-        /** Change is acceptable, minor or no impact */
-        MINOR,
-        /** Significant concern requiring attention */
-        MAJOR,
-        /** Not acceptable, change blocks release */
-        NOK
+        /** Change is acceptable */
+        OK,
+        /** Change request, needs rework */
+        CHANGE,
+        /** Not acceptable, blocks release */
+        NOGO
     }
 
     @PrePersist

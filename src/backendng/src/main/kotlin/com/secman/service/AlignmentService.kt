@@ -5,6 +5,7 @@ import com.secman.domain.AlignmentReviewer.ReviewerStatus
 import com.secman.domain.AlignmentSession.AlignmentStatus
 import com.secman.domain.AlignmentSnapshot.ChangeType
 import com.secman.domain.Release.ReleaseStatus
+import com.secman.domain.ReviewDecision.Decision
 import com.secman.domain.RequirementReview.ReviewAssessment
 import com.secman.repository.*
 import jakarta.inject.Singleton
@@ -17,7 +18,7 @@ import java.time.Instant
  * Feature: 068-requirements-alignment-process
  *
  * Handles:
- * - Starting alignment sessions for DRAFT releases
+ * - Starting alignment sessions for PREPARATION releases
  * - Detecting changed requirements between releases
  * - Managing reviewers and their feedback
  * - Finalizing alignment and activating releases
@@ -28,6 +29,7 @@ open class AlignmentService(
     private val alignmentReviewerRepository: AlignmentReviewerRepository,
     private val alignmentSnapshotRepository: AlignmentSnapshotRepository,
     private val requirementReviewRepository: RequirementReviewRepository,
+    private val reviewDecisionRepository: ReviewDecisionRepository,
     private val releaseRepository: ReleaseRepository,
     private val requirementSnapshotRepository: RequirementSnapshotRepository,
     private val requirementRepository: RequirementRepository,
@@ -59,9 +61,9 @@ open class AlignmentService(
     )
 
     data class AssessmentSummary(
-        val minorCount: Int,
-        val majorCount: Int,
-        val nokCount: Int
+        val okCount: Int,
+        val changeCount: Int,
+        val nogoCount: Int
     )
 
     data class ReviewerSummary(
@@ -81,12 +83,12 @@ open class AlignmentService(
     // ========== Alignment Session Management ==========
 
     /**
-     * Start an alignment process for a DRAFT release.
+     * Start an alignment process for a PREPARATION release.
      *
      * @param releaseId The release to start alignment for
      * @param initiatorId The user initiating the alignment
      * @return AlignmentStartResult with session details
-     * @throws IllegalArgumentException if release is not in DRAFT status
+     * @throws IllegalArgumentException if release is not in PREPARATION status
      * @throws IllegalStateException if no REQ-role users exist
      */
     @Transactional
@@ -96,8 +98,8 @@ open class AlignmentService(
         val release = releaseRepository.findById(releaseId)
             .orElseThrow { NoSuchElementException("Release not found: $releaseId") }
 
-        if (release.status != ReleaseStatus.DRAFT) {
-            throw IllegalArgumentException("Can only start alignment for DRAFT releases. Current status: ${release.status}")
+        if (release.status != ReleaseStatus.PREPARATION) {
+            throw IllegalArgumentException("Can only start alignment for PREPARATION releases. Current status: ${release.status}")
         }
 
         if (alignmentSessionRepository.hasOpenSession(releaseId)) {
@@ -138,8 +140,8 @@ open class AlignmentService(
             alignmentReviewerRepository.save(reviewer)
         }
 
-        // Update release status to IN_REVIEW
-        release.status = ReleaseStatus.IN_REVIEW
+        // Update release status to ALIGNMENT
+        release.status = ReleaseStatus.ALIGNMENT
         releaseRepository.update(release)
 
         logger.info("Alignment started for release {}: {} changed requirements, {} reviewers",
@@ -166,7 +168,7 @@ open class AlignmentService(
         currentRelease: Release,
         baselineRelease: Release?
     ): Quadruple<List<AlignmentSnapshot>, Int, Int, Int> {
-        // Get LIVE current requirements instead of frozen DRAFT snapshots
+        // Get LIVE current requirements instead of frozen PREPARATION snapshots
         val currentRequirements = requirementRepository.findCurrentRequirements()
             .associateBy { it.internalId }
 
@@ -246,7 +248,7 @@ open class AlignmentService(
      *
      * @param reviewerId The reviewer's AlignmentReviewer ID
      * @param snapshotId The AlignmentSnapshot ID being reviewed
-     * @param assessment The assessment (MINOR, MAJOR, NOK)
+     * @param assessment The assessment (OK, CHANGE, NOGO)
      * @param comment Optional comment text
      * @return The saved RequirementReview
      */
@@ -361,9 +363,9 @@ open class AlignmentService(
             reviewers.maxOfOrNull { it.reviewedCount } ?: 0
         } else 0
 
-        val minorCount = requirementReviewRepository.countBySession_IdAndAssessment(sessionId, ReviewAssessment.MINOR).toInt()
-        val majorCount = requirementReviewRepository.countBySession_IdAndAssessment(sessionId, ReviewAssessment.MAJOR).toInt()
-        val nokCount = requirementReviewRepository.countBySession_IdAndAssessment(sessionId, ReviewAssessment.NOK).toInt()
+        val okCount = requirementReviewRepository.countBySession_IdAndAssessment(sessionId, ReviewAssessment.OK).toInt()
+        val changeCount = requirementReviewRepository.countBySession_IdAndAssessment(sessionId, ReviewAssessment.CHANGE).toInt()
+        val nogoCount = requirementReviewRepository.countBySession_IdAndAssessment(sessionId, ReviewAssessment.NOGO).toInt()
 
         return AlignmentStatusResult(
             session = session,
@@ -373,7 +375,7 @@ open class AlignmentService(
             pendingReviewers = pendingReviewers,
             totalRequirements = totalRequirements,
             reviewedRequirements = reviewedRequirements,
-            assessmentSummary = AssessmentSummary(minorCount, majorCount, nokCount)
+            assessmentSummary = AssessmentSummary(okCount, changeCount, nogoCount)
         )
     }
 
@@ -400,15 +402,15 @@ open class AlignmentService(
 
         return reviewers.map { reviewer ->
             val reviews = requirementReviewRepository.findByReviewer_Id(reviewer.id!!)
-            val minorCount = reviews.count { it.assessment == ReviewAssessment.MINOR }
-            val majorCount = reviews.count { it.assessment == ReviewAssessment.MAJOR }
-            val nokCount = reviews.count { it.assessment == ReviewAssessment.NOK }
+            val okCount = reviews.count { it.assessment == ReviewAssessment.OK }
+            val changeCount = reviews.count { it.assessment == ReviewAssessment.CHANGE }
+            val nogoCount = reviews.count { it.assessment == ReviewAssessment.NOGO }
 
             ReviewerSummary(
                 reviewer = reviewer,
                 reviewedCount = reviews.size,
                 totalCount = totalRequirements,
-                assessments = AssessmentSummary(minorCount, majorCount, nokCount)
+                assessments = AssessmentSummary(okCount, changeCount, nogoCount)
             )
         }
     }
@@ -422,14 +424,14 @@ open class AlignmentService(
 
         return snapshots.map { snapshot ->
             val reviews = requirementReviewRepository.findBySnapshot_Id(snapshot.id!!)
-            val minorCount = reviews.count { it.assessment == ReviewAssessment.MINOR }
-            val majorCount = reviews.count { it.assessment == ReviewAssessment.MAJOR }
-            val nokCount = reviews.count { it.assessment == ReviewAssessment.NOK }
+            val okCount = reviews.count { it.assessment == ReviewAssessment.OK }
+            val changeCount = reviews.count { it.assessment == ReviewAssessment.CHANGE }
+            val nogoCount = reviews.count { it.assessment == ReviewAssessment.NOGO }
 
             RequirementReviewSummary(
                 snapshot = snapshot,
                 reviewCount = reviews.size,
-                assessments = AssessmentSummary(minorCount, majorCount, nokCount),
+                assessments = AssessmentSummary(okCount, changeCount, nogoCount),
                 reviews = reviews
             )
         }
@@ -464,10 +466,10 @@ open class AlignmentService(
             releaseService.updateReleaseStatus(release.id!!, ReleaseStatus.ACTIVE)
             logger.info("Release {} activated after alignment finalization", release.id)
         } else {
-            // Return to DRAFT status
-            release.status = ReleaseStatus.DRAFT
+            // Return to PREPARATION status
+            release.status = ReleaseStatus.PREPARATION
             releaseRepository.update(release)
-            logger.info("Release {} returned to DRAFT after alignment finalization", release.id)
+            logger.info("Release {} returned to PREPARATION after alignment finalization", release.id)
         }
 
         logger.info("Alignment session {} finalized (activate={})", sessionId, activateRelease)
@@ -490,9 +492,9 @@ open class AlignmentService(
         session.cancel(notes)
         alignmentSessionRepository.update(session)
 
-        // Return release to DRAFT status
+        // Return release to PREPARATION status
         val release = session.release
-        release.status = ReleaseStatus.DRAFT
+        release.status = ReleaseStatus.PREPARATION
         releaseRepository.update(release)
 
         logger.info("Alignment session {} cancelled", sessionId)
@@ -540,7 +542,7 @@ open class AlignmentService(
      * Used to determine if "Start Alignment" should be enabled.
      *
      * Compares LIVE requirements against the ACTIVE release's snapshots to detect
-     * changes made after the DRAFT release was created.
+     * changes made after the PREPARATION release was created.
      */
     @Transactional
     open fun hasChangesToReview(releaseId: Long): Boolean {
@@ -607,6 +609,80 @@ open class AlignmentService(
     @Transactional
     open fun getIncompleteReviewers(sessionId: Long): List<AlignmentReviewer> {
         return alignmentReviewerRepository.findIncompleteReviewers(sessionId)
+    }
+
+    // ========== Admin Review Decisions ==========
+
+    /**
+     * Submit or update an admin decision on a reviewer's assessment.
+     * Uses upsert pattern: creates new decision or updates existing one.
+     *
+     * @param sessionId The alignment session ID
+     * @param reviewId The requirement review ID being decided on
+     * @param decision ACCEPTED or REJECTED
+     * @param comment Optional admin comment
+     * @param adminUser The admin/REQADMIN user making the decision
+     * @return The saved ReviewDecision
+     */
+    @Transactional
+    open fun submitReviewDecision(
+        sessionId: Long,
+        reviewId: Long,
+        decision: Decision,
+        comment: String?,
+        adminUser: User
+    ): ReviewDecision {
+        val session = alignmentSessionRepository.findById(sessionId)
+            .orElseThrow { NoSuchElementException("Alignment session not found: $sessionId") }
+
+        if (!session.isOpen()) {
+            throw IllegalStateException("Cannot submit decisions for closed alignment session")
+        }
+
+        val review = requirementReviewRepository.findById(reviewId)
+            .orElseThrow { NoSuchElementException("Review not found: $reviewId") }
+
+        if (review.session.id != sessionId) {
+            throw IllegalArgumentException("Review does not belong to this alignment session")
+        }
+
+        // Upsert: find existing decision or create new
+        val existingDecision = reviewDecisionRepository.findByReview_Id(reviewId)
+
+        val reviewDecision = if (existingDecision.isPresent) {
+            val existing = existingDecision.get()
+            existing.decision = decision
+            existing.comment = comment
+            existing.decidedBy = adminUser
+            existing.decidedByUsername = adminUser.username
+            reviewDecisionRepository.update(existing)
+        } else {
+            val newDecision = ReviewDecision(
+                review = review,
+                session = session,
+                decision = decision,
+                comment = comment,
+                decidedBy = adminUser,
+                decidedByUsername = adminUser.username
+            )
+            reviewDecisionRepository.save(newDecision)
+        }
+
+        logger.debug("Review decision submitted: reviewId={}, decision={}, by={}", reviewId, decision, adminUser.username)
+
+        return reviewDecision
+    }
+
+    /**
+     * Get all admin decisions for a session, keyed by review ID.
+     *
+     * @param sessionId The alignment session ID
+     * @return Map of review ID to ReviewDecision
+     */
+    @Transactional
+    open fun getDecisionsForSession(sessionId: Long): Map<Long, ReviewDecision> {
+        return reviewDecisionRepository.findBySession_Id(sessionId)
+            .associateBy { it.review.id!! }
     }
 
     // ========== Helper Classes ==========

@@ -274,6 +274,17 @@ datasources:
     connection-test-query: SELECT 1
     validation-timeout: 5000       # 5 seconds - timeout for connection validation
 
+flyway:
+  datasources:
+    default:
+      enabled: true
+      locations:
+        - classpath:db/migration
+      baseline-on-migrate: true
+      baseline-version: '185'
+      out-of-order: true
+      validate-on-migrate: false
+
 jpa:
   default:
     properties:

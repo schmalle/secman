@@ -84,10 +84,22 @@ export default function RequirementManagement() {
         errors: Array<{ batchNumber: number; errorType: string; errorMessage: string }>;
     } | null>(null);
 
-    // Feature 067: Release viewing state
-    const [selectedReleaseId, setSelectedReleaseId] = useState<number | null>(null);
+    // Feature 067/078: Release viewing state — restore from sessionStorage
+    const [selectedReleaseId, setSelectedReleaseId] = useState<number | null>(() => {
+        if (typeof window !== 'undefined') {
+            const stored = sessionStorage.getItem('secman_selectedReleaseId');
+            if (stored) {
+                const parsed = parseInt(stored, 10);
+                return isNaN(parsed) ? null : parsed;
+            }
+        }
+        return null;
+    });
     const [selectedRelease, setSelectedRelease] = useState<Release | null>(null);
     const [isViewingHistorical, setIsViewingHistorical] = useState(false);
+    // Feature 078: Track if editing should be blocked (ARCHIVED/ACTIVE releases)
+    const isEditingBlocked = selectedRelease !== null &&
+        (selectedRelease.status === 'ARCHIVED' || selectedRelease.status === 'ACTIVE');
 
     // Fetch requirements, use cases, and norms from backend
     useEffect(() => {
@@ -132,7 +144,7 @@ export default function RequirementManagement() {
         try {
             if (selectedReleaseId !== null) {
                 // Feature 067: Fetch historical requirements from release snapshot
-                const response = await authenticatedGet(`/api/releases/${selectedReleaseId}/requirements`);
+                const response = await authenticatedGet(`/api/releases/${selectedReleaseId}/requirements?pageSize=10000`);
                 const data = await response.json();
                 // Transform snapshot data to requirement format
                 const snapshots = Array.isArray(data) ? data : (data.data || []);
@@ -146,8 +158,8 @@ export default function RequirementManagement() {
                     language: snapshot.language,
                     example: snapshot.example,
                     motivation: snapshot.motivation,
-                    usecases: [],  // Snapshots don't store full objects
-                    norms: []      // Snapshots don't store full objects
+                    usecases: snapshot.usecases || [],
+                    norms: snapshot.norms || []
                 }));
                 setRequirements(transformedRequirements);
                 setIsViewingHistorical(true);
@@ -473,13 +485,22 @@ export default function RequirementManagement() {
                 </div>
             </div>
 
-            {/* Historical view warning banner */}
-            {isViewingHistorical && (
+            {/* Historical/read-only view warning banner */}
+            {isViewingHistorical && isEditingBlocked && (
                 <div className="alert alert-warning d-flex align-items-center mb-3" role="alert">
                     <i className="bi bi-info-circle me-2"></i>
                     <div>
-                        <strong>Historical View:</strong> You are viewing requirements from release <strong>v{selectedRelease?.version}</strong>.
-                        Editing is disabled. <a href="#" onClick={(e) => { e.preventDefault(); handleClearRelease(); }} className="alert-link">Return to current requirements</a>.
+                        <strong>Read-Only View:</strong> You are viewing requirements from release <strong>v{selectedRelease?.version}</strong> ({selectedRelease?.status}).
+                        Editing is disabled for {selectedRelease?.status} releases. <a href="#" onClick={(e) => { e.preventDefault(); handleClearRelease(); }} className="alert-link">Return to current requirements</a>.
+                    </div>
+                </div>
+            )}
+            {isViewingHistorical && !isEditingBlocked && (
+                <div className="alert alert-info d-flex align-items-center mb-3" role="alert">
+                    <i className="bi bi-pencil-square me-2"></i>
+                    <div>
+                        <strong>Release View ({selectedRelease?.status}):</strong> You are viewing requirements from release <strong>v{selectedRelease?.version}</strong>.
+                        Edits will update the live requirement. <a href="#" onClick={(e) => { e.preventDefault(); handleClearRelease(); }} className="alert-link">Return to current requirements</a>.
                     </div>
                 </div>
             )}
@@ -488,8 +509,8 @@ export default function RequirementManagement() {
                 <div className="col-12">
                     <div className="d-flex justify-content-between align-items-center mb-4">
                         <h2>Requirement Management</h2>
-                        {/* Hide action buttons when viewing historical release */}
-                        {!isViewingHistorical && (
+                        {/* Hide action buttons when editing is blocked (ARCHIVED/ACTIVE) */}
+                        {!isEditingBlocked && (
                             <div className="d-flex gap-2">
                                 <button
                                     className="btn btn-outline-primary"
@@ -596,7 +617,7 @@ export default function RequirementManagement() {
                 </div>
             )}
 
-            {isAddingRequirement && !isViewingHistorical && (
+            {isAddingRequirement && !isEditingBlocked && (
                 <div className="row mb-4">
                     <div className="col-12">
                         <div className="card">
@@ -899,7 +920,7 @@ export default function RequirementManagement() {
                                 <tr>
                                     <th style={{ width: '100px' }}>ID.Rev</th>
                                     <th>Short Requirement</th>
-                                    {!isViewingHistorical && <th style={{ width: '120px' }}>Actions</th>}
+                                    {!isEditingBlocked && <th style={{ width: '120px' }}>Actions</th>}
                                 </tr>
                             </thead>
                             <tbody>
@@ -931,7 +952,7 @@ export default function RequirementManagement() {
                                                 </div>
                                             )}
                                         </td>
-                                        {!isViewingHistorical && (
+                                        {!isEditingBlocked && (
                                             <td>
                                                 <div className="btn-group" role="group">
                                                     <button

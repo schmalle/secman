@@ -2,7 +2,7 @@
  * AlignmentReviewPage Component
  *
  * Review page for users accessing via email token link.
- * Allows reviewers to assess requirement changes (MINOR/MAJOR/NOK).
+ * Allows reviewers to assess requirement changes (OK/CHANGE/NOGO).
  *
  * Feature: 068-requirements-alignment-process
  */
@@ -309,12 +309,12 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
     const getAssessmentBadge = () => {
         if (!review) return null;
         switch (review.assessment) {
-            case 'MINOR':
-                return <span className="badge bg-success">Minor</span>;
-            case 'MAJOR':
-                return <span className="badge bg-warning text-dark">Major</span>;
-            case 'NOK':
-                return <span className="badge bg-danger">NOK</span>;
+            case 'OK':
+                return <span className="badge bg-success">OK</span>;
+            case 'CHANGE':
+                return <span className="badge bg-warning text-dark">Change</span>;
+            case 'NOGO':
+                return <span className="badge bg-danger">NOGO</span>;
         }
     };
 
@@ -371,28 +371,28 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
                                 <h6 className="mb-2">Your Assessment</h6>
                                 <div className="d-flex gap-2 mb-3">
                                     <button
-                                        className={`btn ${selectedAssessment === 'MINOR' ? 'btn-success' : 'btn-outline-success'}`}
-                                        onClick={() => setSelectedAssessment('MINOR')}
+                                        className={`btn ${selectedAssessment === 'OK' ? 'btn-success' : 'btn-outline-success'}`}
+                                        onClick={() => setSelectedAssessment('OK')}
                                         disabled={isSaving}
                                     >
                                         <i className="bi bi-check me-1"></i>
-                                        Minor
+                                        OK
                                     </button>
                                     <button
-                                        className={`btn ${selectedAssessment === 'MAJOR' ? 'btn-warning' : 'btn-outline-warning'}`}
-                                        onClick={() => setSelectedAssessment('MAJOR')}
+                                        className={`btn ${selectedAssessment === 'CHANGE' ? 'btn-warning' : 'btn-outline-warning'}`}
+                                        onClick={() => setSelectedAssessment('CHANGE')}
                                         disabled={isSaving}
                                     >
                                         <i className="bi bi-exclamation-triangle me-1"></i>
-                                        Major
+                                        Change
                                     </button>
                                     <button
-                                        className={`btn ${selectedAssessment === 'NOK' ? 'btn-danger' : 'btn-outline-danger'}`}
-                                        onClick={() => setSelectedAssessment('NOK')}
+                                        className={`btn ${selectedAssessment === 'NOGO' ? 'btn-danger' : 'btn-outline-danger'}`}
+                                        onClick={() => setSelectedAssessment('NOGO')}
                                         disabled={isSaving}
                                     >
                                         <i className="bi bi-x-circle me-1"></i>
-                                        NOK
+                                        NOGO
                                     </button>
                                 </div>
 
