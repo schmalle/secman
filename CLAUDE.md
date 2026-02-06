@@ -45,6 +45,7 @@ Users access assets if **ANY** is true:
 **Workgroups**: POST/GET /api/workgroups (ADMIN), POST /api/workgroups/{id}/{users,assets} (ADMIN)
 
 **Releases**: POST /api/releases (ADMIN/RELEASE_MANAGER), GET /api/releases, GET /api/releases/compare
+- MCP tools: `list_releases`, `get_release`, `create_release`, `delete_release`, `set_release_status`, `compare_releases` (all require ADMIN/RELEASE_MANAGER + User Delegation)
 
 **Auth**: POST /api/auth/login, GET /oauth/{authorize,callback}
 

@@ -5,16 +5,9 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="94ada8b3-9f4e-473c-9fea-3bc9651b5bdd" name="Changes" comment="test change">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/CLAUDE.md" beforeDir="false" afterPath="$PROJECT_DIR$/CLAUDE.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/MCP.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/MCP.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/.claude/settings.local.json" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/.claude/settings.local.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/domain/McpPermission.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/domain/McpPermission.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/dto/AddVulnerabilityResponseDto.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/dto/AddVulnerabilityResponseDto.kt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/mcp/McpToolRegistry.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/mcp/McpToolRegistry.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/mcp/tools/AddVulnerabilityTool.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/mcp/tools/AddVulnerabilityTool.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/VulnerabilityService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/VulnerabilityService.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/test/kotlin/com/secman/service/VulnerabilityServiceTest.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/test/kotlin/com/secman/service/VulnerabilityServiceTest.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/mcp/ToolCategories.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/mcp/ToolCategories.kt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/frontend/src/components/McpApiKeyManagement.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/components/McpApiKeyManagement.tsx" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -102,7 +95,7 @@
     "RunOnceActivity.typescript.service.memoryLimit.init": "true",
     "SHARE_PROJECT_CONFIGURATION_FILES": "true",
     "SHELLCHECK.PATH": "/Users/flake/Library/Application Support/JetBrains/IntelliJIdea2025.3/plugins/Shell Script/shellcheck",
-    "git-widget-placeholder": "074-mcp-e2e-test",
+    "git-widget-placeholder": "main",
     "junie.onboarding.icon.badge.shown": "true",
     "kotlin-language-version-configured": "true",
     "last_opened_file_path": "/Users/flake/sources/misc/secman",

@@ -2,8 +2,12 @@ package com.secman.service
 
 import com.secman.domain.Release
 import com.secman.domain.RequirementSnapshot
+import com.secman.repository.AlignmentReviewerRepository
+import com.secman.repository.AlignmentSessionRepository
+import com.secman.repository.AlignmentSnapshotRepository
 import com.secman.repository.ReleaseRepository
 import com.secman.repository.RequirementRepository
+import com.secman.repository.RequirementReviewRepository
 import com.secman.repository.RequirementSnapshotRepository
 import com.secman.repository.UserRepository
 import io.micronaut.security.authentication.Authentication
@@ -15,7 +19,11 @@ class ReleaseService(
     private val releaseRepository: ReleaseRepository,
     private val requirementRepository: RequirementRepository,
     private val snapshotRepository: RequirementSnapshotRepository,
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val alignmentSessionRepository: AlignmentSessionRepository,
+    private val alignmentSnapshotRepository: AlignmentSnapshotRepository,
+    private val alignmentReviewerRepository: AlignmentReviewerRepository,
+    private val requirementReviewRepository: RequirementReviewRepository
 ) {
     private val logger = LoggerFactory.getLogger(ReleaseService::class.java)
 
@@ -128,7 +136,26 @@ class ReleaseService(
             throw IllegalStateException("Cannot delete an ACTIVE release. Set another release as active first.")
         }
 
-        // Explicitly delete snapshots first (FK doesn't have ON DELETE CASCADE)
+        // Delete alignment session data (respecting FK order: reviews → snapshots/reviewers → sessions)
+        val sessions = alignmentSessionRepository.findAllByRelease_Id(releaseId)
+        for (session in sessions) {
+            val sessionId = session.id!!
+            requirementReviewRepository.deleteBySession_Id(sessionId)
+            alignmentSnapshotRepository.deleteBySession_Id(sessionId)
+            alignmentReviewerRepository.deleteBySession_Id(sessionId)
+        }
+        if (sessions.isNotEmpty()) {
+            // Null out baseline_release_id references from other sessions pointing to this release
+            val baselineSessions = alignmentSessionRepository.findByBaselineRelease_Id(releaseId)
+            for (session in baselineSessions) {
+                session.baselineRelease = null
+                alignmentSessionRepository.update(session)
+            }
+            alignmentSessionRepository.deleteAll(sessions)
+            logger.info("Deleted ${sessions.size} alignment sessions for release ID=$releaseId")
+        }
+
+        // Explicitly delete requirement snapshots (FK doesn't have ON DELETE CASCADE)
         snapshotRepository.deleteByReleaseId(releaseId)
         logger.info("Deleted snapshots for release ID=$releaseId")
 

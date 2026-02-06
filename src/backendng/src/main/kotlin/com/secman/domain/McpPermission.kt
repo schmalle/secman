@@ -84,7 +84,12 @@ enum class McpPermission {
      * Manage workgroups - allows create_workgroup, delete_workgroup, assign_assets_to_workgroup,
      * assign_users_to_workgroup MCP tools (admin only)
      */
-    WORKGROUPS_WRITE;
+    WORKGROUPS_WRITE,
+
+    /**
+     * Send notifications - allows send_admin_summary tool (admin only)
+     */
+    NOTIFICATIONS_SEND;
 
     /**
      * Get display name for UI
@@ -107,6 +112,7 @@ enum class McpPermission {
             SCANS_READ -> "Read Scans"
             VULNERABILITIES_READ -> "Read Vulnerabilities"
             WORKGROUPS_WRITE -> "Manage Workgroups"
+            NOTIFICATIONS_SEND -> "Send Notifications"
         }
     }
 
@@ -131,6 +137,7 @@ enum class McpPermission {
             SCANS_READ -> "View scan data and results"
             VULNERABILITIES_READ -> "View vulnerability information"
             WORKGROUPS_WRITE -> "Create, delete, and manage workgroup memberships (admin only)"
+            NOTIFICATIONS_SEND -> "Send admin summary emails and trigger notifications (admin only)"
         }
     }
 
@@ -139,7 +146,7 @@ enum class McpPermission {
      */
     fun requiresAdmin(): Boolean {
         return when (this) {
-            AUDIT_READ, USER_ACTIVITY, SYSTEM_INFO, WORKGROUPS_WRITE -> true
+            AUDIT_READ, USER_ACTIVITY, SYSTEM_INFO, WORKGROUPS_WRITE, NOTIFICATIONS_SEND -> true
             else -> false
         }
     }

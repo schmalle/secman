@@ -263,7 +263,7 @@ curl -X POST http://localhost:8080/api/mcp/admin/api-keys \
 
 | Permission | Description | Tools Enabled |
 |------------|-------------|---------------|
-| `REQUIREMENTS_READ` | Read security requirements and releases | `get_requirements`, `export_requirements`, `list_releases`, `get_release`, `create_release`, `delete_release`, `set_release_status` (release tools require ADMIN/RELEASE_MANAGER role and delegation) |
+| `REQUIREMENTS_READ` | Read security requirements and releases | `get_requirements`, `export_requirements`, `list_releases`, `get_release`, `compare_releases`, `create_release`, `delete_release`, `set_release_status` (release tools require ADMIN/RELEASE_MANAGER role and delegation) |
 | `REQUIREMENTS_WRITE` | Create/modify requirements | `add_requirement` |
 | `REQUIREMENTS_DELETE` | Delete requirements | `delete_all_requirements` |
 | `ASSETS_READ` | Read asset inventory | `get_assets`, `get_all_assets_detail`, `get_asset_profile`, `get_asset_complete_profile` |
@@ -744,6 +744,20 @@ Set a release to ACTIVE status. **Requires ADMIN or RELEASE_MANAGER role and Use
 - Only one release can be ACTIVE at a time
 - LEGACY releases cannot be transitioned to other states
 
+#### `compare_releases`
+Compare two releases and show requirement differences. **Requires ADMIN or RELEASE_MANAGER role and User Delegation.**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `fromReleaseId` | number | Yes | Baseline release ID (older release) |
+| `toReleaseId` | number | Yes | Target release ID (newer release) |
+
+Returns a detailed diff including:
+- **summary**: Counts of added, deleted, modified, and unchanged requirements
+- **added**: Requirements present in the target release but not in the baseline
+- **deleted**: Requirements present in the baseline but removed in the target
+- **modified**: Requirements that changed between releases, with field-level diffs (shortreq, details, chapter, etc.)
+
 ---
 
 ## Authentication & Security
@@ -837,6 +851,8 @@ All MCP operations are logged with:
 - "Create a new release version 2.0.0" → `create_release` with `version: "2.0.0", name: "Q1 2026 Release"`
 - "Make release 5 active" → `set_release_status` with `releaseId: 5, status: "ACTIVE"`
 - "Delete draft release 3" → `delete_release` with `releaseId: 3`
+- "Compare release 1.0.0 with 2.0.0" → `compare_releases` with `fromReleaseId: 1, toReleaseId: 5`
+- "What changed between the last two releases?" → `list_releases` then `compare_releases`
 
 ### Programmatic Access
 
