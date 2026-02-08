@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { authenticatedFetch } from '../utils/auth';
+import { authenticatedFetch, hasRole } from '../utils/auth';
 
 interface Release {
     id: number;
@@ -29,6 +29,9 @@ const ReleaseManagement = () => {
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [selectedRelease, setSelectedRelease] = useState<Release | null>(null);
     const [showEditModal, setShowEditModal] = useState(false);
+
+    // RBAC: Only ADMIN or REQADMIN can create/delete releases
+    const canCreate = typeof window !== 'undefined' && (hasRole('ADMIN') || hasRole('REQADMIN'));
 
     // Form state
     const [formData, setFormData] = useState({
@@ -260,12 +263,14 @@ const ReleaseManagement = () => {
                             <h2><i className="bi bi-tags me-2"></i>Release Management</h2>
                             <p className="text-muted">Manage system versions and releases</p>
                         </div>
-                        <button 
-                            className="btn btn-primary"
-                            onClick={() => setShowCreateModal(true)}
-                        >
-                            <i className="bi bi-plus-circle me-2"></i>Create New Release
-                        </button>
+                        {canCreate && (
+                            <button
+                                className="btn btn-primary"
+                                onClick={() => setShowCreateModal(true)}
+                            >
+                                <i className="bi bi-plus-circle me-2"></i>Create New Release
+                            </button>
+                        )}
                     </div>
                 </div>
             </div>
@@ -391,7 +396,7 @@ const ReleaseManagement = () => {
                                                         >
                                                             <i className="bi bi-list-check"></i>
                                                         </button>
-                                                        {(release.status === 'PREPARATION' || release.status === 'ALIGNMENT') && (
+                                                        {canCreate && (release.status === 'PREPARATION' || release.status === 'ALIGNMENT') && (
                                                             <>
                                                                 <button
                                                                     className="btn btn-outline-primary"

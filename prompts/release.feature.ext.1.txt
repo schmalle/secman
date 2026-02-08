@@ -1,0 +1,16 @@
+Preconditions:
+
+All features from ./prompts/release.feature.txt are implemented.
+
+**Updated concept:
+
+Add a role REQADMIN
+Only users with REQADMIN role and/or ADMIN role are allowed to add / delete releases.
+
+**Deliverables
+
+Ensure that this role feature is fully implemented in the UI, all endpoints and in MCP code.
+Release feature must be also fully reflected in MCP.
+MCP docu must be updated accordingly.
+Extendedn Full end2end test suite (./scripts/release-e2e-test.sh for releases, assuming SECMAN_USERNAME,SECMAN_PASSWORD, SECMAN_API_KEY are set)
+as environment variables.

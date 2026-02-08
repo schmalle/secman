@@ -263,7 +263,7 @@ curl -X POST http://localhost:8080/api/mcp/admin/api-keys \
 
 | Permission | Description | Tools Enabled |
 |------------|-------------|---------------|
-| `REQUIREMENTS_READ` | Read security requirements and releases | `get_requirements`, `export_requirements`, `list_releases`, `get_release`, `compare_releases`, `create_release`, `delete_release`, `set_release_status` (release tools require ADMIN/RELEASE_MANAGER role and delegation) |
+| `REQUIREMENTS_READ` | Read security requirements and releases | `get_requirements`, `export_requirements`, `list_releases`, `get_release`, `compare_releases`, `create_release`, `delete_release`, `set_release_status` (create/delete require ADMIN/REQADMIN role; status management requires ADMIN/RELEASE_MANAGER role; all release tools require delegation) |
 | `REQUIREMENTS_WRITE` | Create/modify requirements | `add_requirement` |
 | `REQUIREMENTS_DELETE` | Delete requirements | `delete_all_requirements` |
 | `ASSETS_READ` | Read asset inventory | `get_assets`, `get_all_assets_detail`, `get_asset_profile`, `get_asset_complete_profile` |
@@ -329,6 +329,7 @@ User roles are mapped to MCP permissions:
 | `ADMIN` | All permissions |
 | `VULN` | `VULNERABILITIES_READ`, `SCANS_READ`, `ASSETS_READ` |
 | `RELEASE_MANAGER` | `REQUIREMENTS_READ`, `ASSESSMENTS_READ` |
+| `REQADMIN` | `REQUIREMENTS_READ`, `REQUIREMENTS_WRITE`, `FILES_READ`, `TAGS_READ` |
 | `REQ` | `REQUIREMENTS_READ`, `REQUIREMENTS_WRITE`, `FILES_READ`, `TAGS_READ` |
 | `SECCHAMPION` | `REQUIREMENTS_READ`, `ASSETS_READ`, `VULNERABILITIES_READ`, `SCANS_READ` |
 
@@ -711,7 +712,7 @@ Get details of a specific release including requirement snapshots. **Requires AD
 Returns release metadata and optionally the full list of requirement snapshots captured at release time.
 
 #### `create_release`
-Create a new release with requirement snapshots. **Requires ADMIN or RELEASE_MANAGER role and User Delegation.**
+Create a new release with requirement snapshots. **Requires ADMIN or REQADMIN role and User Delegation.**
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
@@ -722,7 +723,7 @@ Create a new release with requirement snapshots. **Requires ADMIN or RELEASE_MAN
 Creates a new release in PREPARATION status and snapshots all current requirements. Returns the created release with snapshot count.
 
 #### `delete_release`
-Delete a release and its requirement snapshots. **Requires ADMIN or RELEASE_MANAGER role and User Delegation.**
+Delete a release and its requirement snapshots. **Requires ADMIN or REQADMIN role and User Delegation.**
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|

@@ -68,7 +68,7 @@ const ReleaseList: React.FC<ReleaseListProps> = () => {
     // User/Role info
     const user = typeof window !== 'undefined' ? getUser() : null;
     const userRoles = user?.roles || [];
-    const canCreate = typeof window !== 'undefined' && (hasRole('ADMIN') || hasRole('RELEASE_MANAGER'));
+    const canCreate = typeof window !== 'undefined' && (hasRole('ADMIN') || hasRole('REQADMIN'));
 
     // Debounce search query (300ms)
     useEffect(() => {

@@ -13,7 +13,7 @@ import jakarta.inject.Singleton
  * Note: ACTIVE releases cannot be deleted. Set another release to ACTIVE first,
  * or set this release to LEGACY before deletion.
  *
- * Accessible by: ADMIN, RELEASE_MANAGER roles (via User Delegation)
+ * Accessible by: ADMIN, REQADMIN roles (via User Delegation)
  */
 @Singleton
 class DeleteReleaseTool(
@@ -36,7 +36,7 @@ class DeleteReleaseTool(
     )
 
     override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
-        // Check authorization - require User Delegation with ADMIN or RELEASE_MANAGER role
+        // Check authorization - require User Delegation with ADMIN or REQADMIN role
         if (!context.hasDelegation()) {
             return McpToolResult.error(
                 "DELEGATION_REQUIRED",
@@ -45,10 +45,10 @@ class DeleteReleaseTool(
         }
 
         val userRoles = context.delegatedUserRoles?.map { it.uppercase() } ?: emptyList()
-        if (!userRoles.contains("ADMIN") && !userRoles.contains("RELEASE_MANAGER")) {
+        if (!userRoles.contains("ADMIN") && !userRoles.contains("REQADMIN")) {
             return McpToolResult.error(
                 "AUTHORIZATION_ERROR",
-                "ADMIN or RELEASE_MANAGER role required to delete releases"
+                "ADMIN or REQADMIN role required to delete releases"
             )
         }
 
