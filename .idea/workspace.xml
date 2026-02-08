@@ -5,16 +5,8 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="94ada8b3-9f4e-473c-9fea-3bc9651b5bdd" name="Changes" comment="test change">
-      <change afterPath="$PROJECT_DIR$/prompts/release.feature.ext.1.txt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/CLAUDE.md" beforeDir="false" afterPath="$PROJECT_DIR$/CLAUDE.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/MCP.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/MCP.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/ReleaseController.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/ReleaseController.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/mcp/tools/CreateReleaseTool.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/mcp/tools/CreateReleaseTool.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/mcp/tools/DeleteReleaseTool.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/mcp/tools/DeleteReleaseTool.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/frontend/src/components/ReleaseList.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/components/ReleaseList.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/frontend/src/components/ReleaseManagement.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/components/ReleaseManagement.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/frontend/src/utils/permissions.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/utils/permissions.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/mcp-e2e-workgroup-test.sh" beforeDir="false" afterPath="$PROJECT_DIR$/tests/mcp-e2e-workgroup-test.sh" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -101,7 +93,7 @@
     "RunOnceActivity.typescript.service.memoryLimit.init": "true",
     "SHARE_PROJECT_CONFIGURATION_FILES": "true",
     "SHELLCHECK.PATH": "/Users/flake/Library/Application Support/JetBrains/IntelliJIdea2025.3/plugins/Shell Script/shellcheck",
-    "git-widget-placeholder": "079-reqadmin-release-role",
+    "git-widget-placeholder": "main",
     "junie.onboarding.icon.badge.shown": "true",
     "kotlin-language-version-configured": "true",
     "last_opened_file_path": "/Users/flake/sources/misc/secman",

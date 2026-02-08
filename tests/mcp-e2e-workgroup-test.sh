@@ -24,11 +24,12 @@ set -euo pipefail
 export SECMAN_USERNAME="op://test/secman/SECMAN_USERNAME"
 export SECMAN_PASSWORD="op://test/secman/SECMAN_PASSWORD"
 export SECMAN_API_KEY="op://test/secman/SECMAN_API_KEY"
+export SECMAN_TEST_DOMAIN="op://test/secman/SECMAN_TEST_DOMAIN"
 
 # Configuration
 BASE_URL="${SECMAN_BASE_URL:-http://localhost:8080}"
 TEST_USER_NAME="E2E_TEST_USER_$(date +%s)"
-TEST_USER_EMAIL="e2e-test-$(date +%s)@schmall.io"
+TEST_USER_EMAIL=""  # Set after SECMAN_TEST_DOMAIN is resolved
 TEST_ASSET_NAME="E2E_TEST_ASSET_$(date +%s)"
 TEST_WORKGROUP_NAME="E2E-TEST-WORKGROUP-$(date +%s)"
 TEST_CVE="CVE-2024-$(printf '%05d' $((RANDOM % 99999)))"
@@ -111,7 +112,12 @@ check_prerequisites() {
         log_info "Create an MCP API key via the UI with these settings:"
         log_info "  - Permissions: WORKGROUPS_WRITE, ASSETS_READ, VULNERABILITIES_READ"
         log_info "  - User Delegation: ENABLED"
-        log_info "  - Allowed Domains: @example.com (to match test user email)"
+        log_info "  - Allowed Domains: @<your-domain> (to match test user email)"
+        exit 1
+    fi
+
+    if [[ -z "${SECMAN_TEST_DOMAIN:-}" ]]; then
+        log_error "SECMAN_TEST_DOMAIN environment variable not set"
         exit 1
     fi
 
@@ -150,6 +156,19 @@ resolve_credentials() {
     else
         API_KEY="${SECMAN_API_KEY}"
     fi
+
+    # Resolve test domain
+    if [[ "${SECMAN_TEST_DOMAIN}" == op://* ]]; then
+        RESOLVED_TEST_DOMAIN=$(op read "${SECMAN_TEST_DOMAIN}" 2>/dev/null) || {
+            log_error "Failed to resolve SECMAN_TEST_DOMAIN from 1Password"
+            exit 1
+        }
+    else
+        RESOLVED_TEST_DOMAIN="${SECMAN_TEST_DOMAIN}"
+    fi
+
+    # Now set the test user email using the resolved domain
+    TEST_USER_EMAIL="e2e-test-$(date +%s)@${RESOLVED_TEST_DOMAIN}"
 
     log_success "Credentials resolved"
 }
