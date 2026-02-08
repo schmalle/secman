@@ -29,10 +29,10 @@ class ReleaseController(
 
     /**
      * POST /api/releases - Create new release
-     * Authorization: ADMIN or RELEASE_MANAGER only
+     * Authorization: ADMIN or REQADMIN only
      */
     @Post
-    @Secured("ADMIN", "RELEASE_MANAGER")
+    @Secured("ADMIN", "REQADMIN")
     fun createRelease(
         @Body request: ReleaseCreateRequest,
         authentication: Authentication
@@ -130,10 +130,10 @@ class ReleaseController(
 
     /**
      * DELETE /api/releases/{id} - Delete release
-     * Authorization: ADMIN or RELEASE_MANAGER only
+     * Authorization: ADMIN or REQADMIN only
      */
     @Delete("/{id}")
-    @Secured("ADMIN", "RELEASE_MANAGER")
+    @Secured("ADMIN", "REQADMIN")
     fun deleteRelease(@PathVariable id: Long): HttpResponse<Void> {
         logger.info("Deleting release: $id")
 

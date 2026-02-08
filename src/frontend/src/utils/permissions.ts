@@ -36,6 +36,15 @@ export function isReleaseManager(roles: string[] | undefined): boolean {
 }
 
 /**
+ * Check if user has REQADMIN role
+ * Feature: 079-reqadmin-release-role
+ */
+export function isReqAdmin(roles: string[] | undefined): boolean {
+  if (!roles || !Array.isArray(roles)) return false;
+  return roles.includes('REQADMIN');
+}
+
+/**
  * Check if user has CHAMPION role (DEPRECATED)
  * @deprecated Use isSecChampion() instead - CHAMPION renamed to SECCHAMPION
  */
@@ -162,7 +171,8 @@ export function canAccessCompareReleases(roles: string[] | undefined): boolean {
  * Rules:
  * - ACTIVE releases cannot be deleted (must set another release as active first)
  * - ADMIN can delete any non-ACTIVE release
- * - RELEASE_MANAGER can delete only releases they created (if not ACTIVE)
+ * - REQADMIN can delete only releases they created (if not ACTIVE)
+ * - RELEASE_MANAGER cannot delete (only status management)
  * - USER cannot delete releases
  *
  * @param release - The release to check permissions for
@@ -187,25 +197,26 @@ export function canDeleteRelease(
     return true;
   }
 
-  // RELEASE_MANAGER can delete only their own releases
-  if (isReleaseManager(currentUserRoles)) {
+  // REQADMIN can delete only their own releases
+  if (isReqAdmin(currentUserRoles)) {
     return release.createdBy === currentUser.username;
   }
 
-  // USER (or no role) cannot delete
+  // RELEASE_MANAGER and USER cannot delete
   return false;
 }
 
 /**
  * Check if user can create a release
- * 
+ *
  * Rules:
  * - ADMIN can create
- * - RELEASE_MANAGER can create
+ * - REQADMIN can create
+ * - RELEASE_MANAGER cannot create (only status management)
  * - USER cannot create
  */
 export function canCreateRelease(roles: string[] | undefined): boolean {
-  return isAdmin(roles) || isReleaseManager(roles);
+  return isAdmin(roles) || isReqAdmin(roles);
 }
 
 /**

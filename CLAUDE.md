@@ -10,7 +10,7 @@
 - Backend: `src/backendng/` - Domain (JPA) → Repository → Service → Controller (REST)
 - Frontend: `src/frontend/` - Astro + React islands, Axios, sessionStorage JWT
 - CLI: `src/cli/` - CrowdStrike API queries, notification emails
-- Security: JWT auth, OAuth2/OIDC, RBAC (USER, ADMIN, VULN, RELEASE_MANAGER, SECCHAMPION)
+- Security: JWT auth, OAuth2/OIDC, RBAC (USER, ADMIN, VULN, RELEASE_MANAGER, REQADMIN, SECCHAMPION)
 
 ## Key Entities
 
@@ -44,9 +44,9 @@ Users access assets if **ANY** is true:
 
 **Workgroups**: POST/GET /api/workgroups (ADMIN), POST /api/workgroups/{id}/{users,assets} (ADMIN)
 
-**Releases**: POST /api/releases (ADMIN/RELEASE_MANAGER), GET /api/releases, GET /api/releases/compare
+**Releases**: POST /api/releases (ADMIN/REQADMIN), GET /api/releases, GET /api/releases/compare, DELETE /api/releases/{id} (ADMIN/REQADMIN)
 - Statuses: PREPARATION, ALIGNMENT, ACTIVE, ARCHIVED
-- MCP tools: `list_releases`, `get_release`, `create_release`, `delete_release`, `set_release_status`, `compare_releases` (all require ADMIN/RELEASE_MANAGER + User Delegation)
+- MCP tools: `list_releases`, `get_release`, `create_release`, `delete_release`, `set_release_status`, `compare_releases` (create/delete require ADMIN/REQADMIN; status management requires ADMIN/RELEASE_MANAGER; all require User Delegation)
 
 **Auth**: POST /api/auth/login, GET /oauth/{authorize,callback}
 
@@ -234,6 +234,8 @@ fun findStateByValueWithRetry(stateToken: String): Optional<OAuthState> {
 - N/A (no data model changes) (075-sort-empty-accounts)
 - Kotlin 2.3.0 / Java 25 (backend), TypeScript / React 19 (frontend) + Micronaut 4.10, Hibernate JPA, Astro 5.15, Bootstrap 5.3, Axios (078-release-rework)
 - MariaDB 11.4 (existing `releases` table, `requirement_snapshot` table) (078-release-rework)
+- Kotlin 2.3.0 / Java 25 (backend), TypeScript / React 19 (frontend), Bash (e2e test) + Micronaut 4.10, Hibernate JPA, Astro 5.15, Bootstrap 5.3 (079-reqadmin-release-role)
+- MariaDB 11.4 (no schema changes needed - authorization-only change) (079-reqadmin-release-role)
 
 ## Recent Changes
 - 058-ai-norm-mapping: Added Kotlin 2.2.21 / Java 21 (backend), TypeScript/React 19 (frontend) + Micronaut 4.10, Hibernate JPA, Axios, Bootstrap 5.3
