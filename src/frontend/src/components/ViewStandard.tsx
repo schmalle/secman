@@ -265,6 +265,11 @@ const ViewStandard: React.FC<ViewStandardProps> = ({ standardId }) => {
                     <dd className="col-sm-8">
                       {standard.updatedAt ? new Date(standard.updatedAt).toLocaleString() : '-'}
                     </dd>
+
+                    <dt className="col-sm-4">Total Requirements:</dt>
+                    <dd className="col-sm-8">
+                      <span className="badge bg-secondary">{requirements.length}</span>
+                    </dd>
                   </dl>
                 </div>
                 
