@@ -82,6 +82,15 @@ data class AlignmentSession(
     @Column(name = "completion_notes")
     var completionNotes: String? = null,
 
+    /**
+     * Which review scope was chosen when alignment was started.
+     * CHANGED = only requirements that differ from baseline.
+     * ALL = all current requirements treated as ADDED.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "review_scope", nullable = false, length = 10)
+    var reviewScope: ReviewScope = ReviewScope.CHANGED,
+
     @Column(name = "created_at", updatable = false)
     var createdAt: Instant? = null,
 
@@ -98,6 +107,16 @@ data class AlignmentSession(
         COMPLETED,
         /** Session was cancelled by Release Manager */
         CANCELLED
+    }
+
+    /**
+     * Review scope selection made when alignment was started.
+     */
+    enum class ReviewScope {
+        /** Only requirements that differ from baseline */
+        CHANGED,
+        /** All current requirements (treated as ADDED) */
+        ALL
     }
 
     @PrePersist

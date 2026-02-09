@@ -92,8 +92,8 @@ open class AlignmentService(
      * @throws IllegalStateException if no REQ-role users exist
      */
     @Transactional
-    open fun startAlignment(releaseId: Long, initiatorId: Long): AlignmentStartResult {
-        logger.info("Starting alignment for release {} by user {}", releaseId, initiatorId)
+    open fun startAlignment(releaseId: Long, initiatorId: Long, reviewAll: Boolean = false): AlignmentStartResult {
+        logger.info("Starting alignment for release {} by user {} (reviewAll={})", releaseId, initiatorId, reviewAll)
 
         val release = releaseRepository.findById(releaseId)
             .orElseThrow { NoSuchElementException("Release not found: $releaseId") }
@@ -118,16 +118,21 @@ open class AlignmentService(
         // Find baseline release (last ACTIVE)
         val baselineRelease = releaseRepository.findByStatus(ReleaseStatus.ACTIVE).firstOrNull()
 
-        // Create alignment session
+        // Create alignment session — always record the actual baseline for audit
         val session = AlignmentSession(
             release = release,
             initiatedBy = initiator,
-            baselineRelease = baselineRelease
+            baselineRelease = baselineRelease,
+            reviewScope = if (reviewAll) AlignmentSession.ReviewScope.ALL else AlignmentSession.ReviewScope.CHANGED
         )
         alignmentSessionRepository.save(session)
 
+        // When reviewAll=true, pass null as effective baseline so detectChangedRequirements
+        // treats all current requirements as ADDED (existing behavior for null baseline)
+        val effectiveBaseline = if (reviewAll) null else baselineRelease
+
         // Detect changed requirements
-        val (snapshots, addedCount, modifiedCount, deletedCount) = detectChangedRequirements(session, release, baselineRelease)
+        val (snapshots, addedCount, modifiedCount, deletedCount) = detectChangedRequirements(session, release, effectiveBaseline)
         session.changedRequirementsCount = snapshots.size
         alignmentSessionRepository.update(session)
 

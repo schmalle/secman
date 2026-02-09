@@ -29,6 +29,14 @@ export interface SubmitReviewResult {
 /**
  * Alignment Review Service for token-based reviewer access
  */
+export interface ImportReviewResult {
+    success: boolean;
+    imported: number;
+    skipped: number;
+    errors: string[];
+    message: string;
+}
+
 export const alignmentReviewService = {
     /**
      * Get review page data using token
@@ -98,6 +106,33 @@ export const alignmentReviewService = {
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
             throw new Error(errorData.message || `Failed to complete review: ${response.statusText}`);
+        }
+
+        return response.json();
+    },
+
+    /**
+     * Get the URL for downloading the review export Excel file
+     */
+    getExportUrl(token: string): string {
+        return `${API_BASE}/api/alignment/review/${token}/export`;
+    },
+
+    /**
+     * Import reviews from an Excel file
+     */
+    async importReviews(token: string, file: File): Promise<ImportReviewResult> {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await fetch(`${API_BASE}/api/alignment/review/${token}/import`, {
+            method: 'POST',
+            body: formData,
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Failed to import reviews: ${response.statusText}`);
         }
 
         return response.json();

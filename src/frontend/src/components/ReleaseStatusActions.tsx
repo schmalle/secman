@@ -156,6 +156,7 @@ export const ReleaseStatusActions: React.FC<ReleaseStatusActionsProps> = ({
     const [error, setError] = useState<string | null>(null);
     const [hasChanges, setHasChanges] = useState<boolean | null>(null);
     const [alignmentStatus, setAlignmentStatus] = useState<AlignmentStatus | null>(null);
+    const [reviewAll, setReviewAll] = useState(false);
 
     // Check user permissions
     const canManageStatus = typeof window !== 'undefined' && hasRole(['ADMIN', 'RELEASE_MANAGER']);
@@ -196,7 +197,7 @@ export const ReleaseStatusActions: React.FC<ReleaseStatusActionsProps> = ({
         setError(null);
 
         try {
-            const result = await releaseService.startAlignment(release.id);
+            const result = await releaseService.startAlignment(release.id, reviewAll);
 
             // Notify parent
             onAlignmentStart?.();
@@ -243,6 +244,7 @@ export const ReleaseStatusActions: React.FC<ReleaseStatusActionsProps> = ({
         if (!isLoading) {
             setShowModal(false);
             setShowAlignmentModal(false);
+            setReviewAll(false);
             setError(null);
         }
     };
@@ -348,6 +350,39 @@ export const ReleaseStatusActions: React.FC<ReleaseStatusActionsProps> = ({
                                         Starting the alignment process for{' '}
                                         <strong>{release.version} - {release.name}</strong>
                                     </p>
+
+                                    <div className="mb-3">
+                                        <label className="form-label fw-semibold">Review Scope</label>
+                                        <div className="form-check">
+                                            <input
+                                                type="radio"
+                                                className="form-check-input"
+                                                name="reviewScope"
+                                                id="scopeChanged"
+                                                checked={!reviewAll}
+                                                onChange={() => setReviewAll(false)}
+                                            />
+                                            <label className="form-check-label" htmlFor="scopeChanged">
+                                                Review changed requirements
+                                                <small className="d-block text-muted">Only requirements added, modified, or deleted since the last active release</small>
+                                            </label>
+                                        </div>
+                                        <div className="form-check mt-2">
+                                            <input
+                                                type="radio"
+                                                className="form-check-input"
+                                                name="reviewScope"
+                                                id="scopeAll"
+                                                checked={reviewAll}
+                                                onChange={() => setReviewAll(true)}
+                                            />
+                                            <label className="form-check-label" htmlFor="scopeAll">
+                                                Review all requirements
+                                                <small className="d-block text-muted">Include every current requirement for a full review</small>
+                                            </label>
+                                        </div>
+                                    </div>
+
                                     <p className="text-muted">
                                         This will:
                                     </p>

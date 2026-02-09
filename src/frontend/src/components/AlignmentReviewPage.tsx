@@ -3,14 +3,16 @@
  *
  * Review page for users accessing via email token link.
  * Allows reviewers to assess requirement changes (OK/CHANGE/NOGO).
+ * Supports Excel export/import for offline review.
  *
  * Feature: 068-requirements-alignment-process
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     alignmentReviewService,
     type ReviewAssessment,
+    type ImportReviewResult,
 } from '../services/alignmentReviewService';
 import type { ReviewPageData, AlignmentSnapshot } from '../services/releaseService';
 
@@ -25,6 +27,9 @@ export const AlignmentReviewPage: React.FC<AlignmentReviewPageProps> = ({ token 
     const [savingSnapshot, setSavingSnapshot] = useState<number | null>(null);
     const [filter, setFilter] = useState<'all' | 'ADDED' | 'MODIFIED' | 'DELETED' | 'pending'>('all');
     const [expandedSnapshot, setExpandedSnapshot] = useState<number | null>(null);
+    const [importResult, setImportResult] = useState<ImportReviewResult | null>(null);
+    const [isImporting, setIsImporting] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Track local reviews for optimistic updates
     const [localReviews, setLocalReviews] = useState<Map<number, { assessment: ReviewAssessment; comment: string | null }>>(new Map());
@@ -96,6 +101,44 @@ export const AlignmentReviewPage: React.FC<AlignmentReviewPageProps> = ({ token 
         }
     };
 
+    const handleExport = () => {
+        window.location.href = alignmentReviewService.getExportUrl(token);
+    };
+
+    const handleImportClick = () => {
+        fileInputRef.current?.click();
+    };
+
+    const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setIsImporting(true);
+        setImportResult(null);
+
+        try {
+            const result = await alignmentReviewService.importReviews(token, file);
+            setImportResult(result);
+            if (result.imported > 0) {
+                await loadData();
+            }
+        } catch (err) {
+            setImportResult({
+                success: false,
+                imported: 0,
+                skipped: 0,
+                errors: [err instanceof Error ? err.message : 'Import failed'],
+                message: err instanceof Error ? err.message : 'Import failed',
+            });
+        } finally {
+            setIsImporting(false);
+            // Reset file input so the same file can be re-selected
+            if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+            }
+        }
+    };
+
     const getFilteredSnapshots = (): AlignmentSnapshot[] => {
         if (!pageData) return [];
 
@@ -136,64 +179,144 @@ export const AlignmentReviewPage: React.FC<AlignmentReviewPageProps> = ({ token 
     const progressPercent = totalCount > 0 ? Math.round((reviewedCount / totalCount) * 100) : 0;
     const filteredSnapshots = getFilteredSnapshots();
 
+    const getStatusBadgeClass = (status: string) => {
+        switch (status) {
+            case 'COMPLETED': return 'bg-success';
+            case 'IN_PROGRESS': return 'bg-primary';
+            default: return 'bg-secondary';
+        }
+    };
+
     return (
         <div className="alignment-review-page bg-light min-vh-100">
-            {/* Header */}
-            <div className="bg-primary text-white py-4 mb-4">
-                <div className="container">
-                    <h1 className="h3 mb-1">
-                        <i className="bi bi-clipboard-check me-2"></i>
-                        Requirements Review
-                    </h1>
-                    <p className="mb-0 opacity-75">
-                        {session.releaseName} v{session.releaseVersion}
-                    </p>
-                </div>
-            </div>
-
-            <div className="container pb-5">
-                {/* Status Card */}
-                <div className="card mb-4 shadow-sm">
+            <div className="container py-4">
+                {/* Review Metadata Card */}
+                <div className="card mb-4">
+                    <div className="card-header bg-primary text-white">
+                        <h2 className="mb-0">
+                            <i className="bi bi-clipboard-check me-2"></i>
+                            Requirements Review
+                            {!isOpen && (
+                                <span className="badge bg-secondary ms-3">Closed</span>
+                            )}
+                        </h2>
+                    </div>
                     <div className="card-body">
-                        <div className="row align-items-center">
-                            <div className="col-md-4">
-                                <h5 className="mb-1">Welcome, {reviewer.username}</h5>
-                                <p className="text-muted mb-0 small">
-                                    Status: <span className={`badge bg-${
-                                        reviewer.status === 'COMPLETED' ? 'success' :
-                                        reviewer.status === 'IN_PROGRESS' ? 'primary' : 'secondary'
-                                    }`}>{reviewer.status}</span>
-                                </p>
+                        <div className="row">
+                            <div className="col-md-6">
+                                <dl className="row mb-0">
+                                    <dt className="col-sm-4">Release:</dt>
+                                    <dd className="col-sm-8">{session.releaseName}</dd>
+
+                                    <dt className="col-sm-4">Version:</dt>
+                                    <dd className="col-sm-8">{session.releaseVersion}</dd>
+
+                                    <dt className="col-sm-4">Reviewer:</dt>
+                                    <dd className="col-sm-8">{reviewer.username}</dd>
+
+                                    <dt className="col-sm-4">Status:</dt>
+                                    <dd className="col-sm-8">
+                                        <span className={`badge ${getStatusBadgeClass(reviewer.status)}`}>
+                                            {reviewer.status}
+                                        </span>
+                                    </dd>
+                                </dl>
                             </div>
-                            <div className="col-md-5">
-                                <div className="d-flex align-items-center gap-2">
-                                    <div className="progress flex-grow-1" style={{ height: '10px' }}>
-                                        <div
-                                            className="progress-bar bg-success"
-                                            style={{ width: `${progressPercent}%` }}
-                                        ></div>
-                                    </div>
-                                    <span className="text-muted">
-                                        {reviewedCount}/{totalCount} reviewed
-                                    </span>
-                                </div>
-                            </div>
-                            <div className="col-md-3 text-end">
-                                {isOpen && reviewer.status !== 'COMPLETED' && (
-                                    <button
-                                        className="btn btn-success"
-                                        onClick={handleCompleteReview}
-                                        disabled={reviewedCount === 0}
-                                    >
-                                        <i className="bi bi-check-circle me-2"></i>
-                                        Mark Complete
-                                    </button>
-                                )}
-                                {!isOpen && (
-                                    <span className="badge bg-secondary">Review Closed</span>
-                                )}
+                            <div className="col-md-6">
+                                <dl className="row mb-0">
+                                    <dt className="col-sm-5">Changed Requirements:</dt>
+                                    <dd className="col-sm-7">
+                                        <span className="badge bg-info">{session.changedCount}</span>
+                                    </dd>
+
+                                    <dt className="col-sm-5">Progress:</dt>
+                                    <dd className="col-sm-7">
+                                        <div className="d-flex align-items-center gap-2">
+                                            <div className="progress flex-grow-1" style={{ height: '8px' }}>
+                                                <div
+                                                    className="progress-bar bg-success"
+                                                    style={{ width: `${progressPercent}%` }}
+                                                ></div>
+                                            </div>
+                                            <small className="text-muted text-nowrap">
+                                                {reviewedCount}/{totalCount}
+                                            </small>
+                                        </div>
+                                    </dd>
+
+                                    {session.startedAt && (
+                                        <>
+                                            <dt className="col-sm-5">Started At:</dt>
+                                            <dd className="col-sm-7">
+                                                {new Date(session.startedAt).toLocaleDateString()}
+                                            </dd>
+                                        </>
+                                    )}
+                                </dl>
                             </div>
                         </div>
+
+                        {/* Action Buttons */}
+                        <div className="mt-4">
+                            <div className="btn-group me-3" role="group">
+                                <button
+                                    className="btn btn-primary"
+                                    onClick={handleExport}
+                                >
+                                    <i className="bi bi-download me-2"></i>
+                                    Export to Excel
+                                </button>
+                                <button
+                                    className="btn btn-outline-primary"
+                                    onClick={handleImportClick}
+                                    disabled={!isOpen || isImporting}
+                                >
+                                    {isImporting ? (
+                                        <>
+                                            <span className="spinner-border spinner-border-sm me-2"></span>
+                                            Importing...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <i className="bi bi-upload me-2"></i>
+                                            Import from Excel
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept=".xlsx"
+                                className="d-none"
+                                onChange={handleImportFile}
+                            />
+
+                            {isOpen && reviewer.status !== 'COMPLETED' && (
+                                <button
+                                    className="btn btn-success"
+                                    onClick={handleCompleteReview}
+                                    disabled={reviewedCount === 0}
+                                >
+                                    <i className="bi bi-check-circle me-2"></i>
+                                    Mark Complete
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Import Result Alert */}
+                        {importResult && (
+                            <div className={`alert ${importResult.success && importResult.errors.length === 0 ? 'alert-success' : importResult.imported > 0 ? 'alert-warning' : 'alert-danger'} mt-3 mb-0`}>
+                                <strong>{importResult.message}</strong>
+                                {importResult.errors.length > 0 && (
+                                    <ul className="mb-0 mt-2">
+                                        {importResult.errors.map((err, i) => (
+                                            <li key={i}>{err}</li>
+                                        ))}
+                                    </ul>
+                                )}
+                            </div>
+                        )}
                     </div>
                 </div>
 

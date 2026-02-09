@@ -10,13 +10,21 @@ import com.secman.service.AlignmentEmailService
 import com.secman.service.AlignmentService
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.HttpStatus
+import io.micronaut.http.MediaType
 import io.micronaut.http.annotation.*
+import io.micronaut.http.multipart.CompletedFileUpload
+import io.micronaut.http.server.types.files.StreamedFile
 import io.micronaut.security.annotation.Secured
 import io.micronaut.security.authentication.Authentication
 import io.micronaut.security.rules.SecurityRule
 import io.micronaut.serde.annotation.Serdeable
 import jakarta.inject.Inject
+import org.apache.poi.ss.usermodel.DataValidationConstraint
+import org.apache.poi.ss.util.CellRangeAddressList
+import org.apache.poi.xssf.usermodel.XSSFWorkbook
 import org.slf4j.LoggerFactory
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 
 /**
  * REST controller for the Requirements Alignment Process.
@@ -46,15 +54,16 @@ class AlignmentController(
     @Secured("ADMIN", "RELEASE_MANAGER")
     fun startAlignment(
         @PathVariable releaseId: Long,
+        @Body request: StartAlignmentRequest?,
         authentication: Authentication
     ): HttpResponse<Map<String, Any>> {
-        logger.info("Starting alignment for release {} by user {}", releaseId, authentication.name)
+        logger.info("Starting alignment for release {} by user {} (reviewAll={})", releaseId, authentication.name, request?.reviewAll)
 
         try {
             val user = userRepository.findByUsername(authentication.name)
                 .orElseThrow { NoSuchElementException("User not found: ${authentication.name}") }
 
-            val result = alignmentService.startAlignment(releaseId, user.id!!)
+            val result = alignmentService.startAlignment(releaseId, user.id!!, request?.reviewAll ?: false)
 
             // Send notification emails to all reviewers
             alignmentEmailService.sendReviewRequestEmails(result.session, result.reviewers)
@@ -223,6 +232,7 @@ class AlignmentController(
                             "change" to summary.assessments.changeCount,
                             "nogo" to summary.assessments.nogoCount
                         ),
+                        "reviewToken" to summary.reviewer.reviewToken,
                         "startedAt" to summary.reviewer.startedAt?.toString(),
                         "completedAt" to summary.reviewer.completedAt?.toString(),
                         "notifiedAt" to summary.reviewer.notifiedAt?.toString(),
@@ -603,6 +613,283 @@ class AlignmentController(
         }
     }
 
+    // ========== Review Export/Import Endpoints ==========
+
+    /**
+     * GET /api/alignment/review/{token}/export - Export review as Excel
+     * Returns .xlsx with assessment dropdown validation for offline review.
+     */
+    @Get("/alignment/review/{token}/export")
+    @Secured(SecurityRule.IS_ANONYMOUS)
+    fun exportReviewToExcel(@PathVariable token: String): HttpResponse<*> {
+        try {
+            val reviewer = alignmentService.getReviewerByToken(token)
+            val session = reviewer.session
+            val snapshots = alignmentService.getSnapshotsForSession(session.id!!)
+            val existingReviews = alignmentService.getReviewsByReviewer(reviewer.id!!)
+                .associateBy { it.snapshot.id }
+
+            val workbook = createReviewExcelWorkbook(snapshots, existingReviews)
+            val outputStream = ByteArrayOutputStream()
+            workbook.write(outputStream)
+            workbook.close()
+
+            val inputStream = ByteArrayInputStream(outputStream.toByteArray())
+            val filename = "review_${session.release.name}_v${session.release.version}.xlsx"
+                .replace(" ", "_")
+
+            return HttpResponse.ok(StreamedFile(inputStream, MediaType.of("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")))
+                .header("Content-Disposition", "attachment; filename=\"$filename\"")
+        } catch (e: NoSuchElementException) {
+            return HttpResponse.notFound(mapOf(
+                "error" to "Not Found",
+                "message" to "Invalid or expired review token"
+            ))
+        }
+    }
+
+    /**
+     * POST /api/alignment/review/{token}/import - Import reviews from Excel
+     * Parses .xlsx and submits reviews for each row with a non-empty Assessment.
+     *
+     * Validation layers:
+     * 1. File-level: size, extension, content-type
+     * 2. Structure: "Review" sheet required, all expected headers present
+     * 3. Row-level: snapshot ID cross-reference, assessment enum, comment length, duplicate detection
+     * 4. Limits: max 1000 data rows, max 50 reported errors
+     */
+    @Post("/alignment/review/{token}/import", consumes = [MediaType.MULTIPART_FORM_DATA])
+    @Secured(SecurityRule.IS_ANONYMOUS)
+    fun importReviewsFromExcel(
+        @PathVariable token: String,
+        @Part file: CompletedFileUpload
+    ): HttpResponse<Map<String, Any>> {
+        logger.info("Importing reviews from Excel for token")
+
+        try {
+            // --- File-level validation ---
+            val originalFilename = file.filename
+            if (file.size > 10 * 1024 * 1024) {
+                return HttpResponse.badRequest(mapOf(
+                    "success" to false,
+                    "message" to "File size exceeds 10MB limit"
+                ))
+            }
+            if (!originalFilename.endsWith(".xlsx", ignoreCase = true)) {
+                return HttpResponse.badRequest(mapOf(
+                    "success" to false,
+                    "message" to "Only .xlsx files are supported"
+                ))
+            }
+            val contentType = file.contentType.map { it.toString() }.orElse("")
+            if (contentType.isNotEmpty()
+                && !contentType.contains("spreadsheetml.sheet", ignoreCase = true)
+                && !contentType.contains("excel", ignoreCase = true)
+                && !contentType.contains("octet-stream", ignoreCase = true)) {
+                return HttpResponse.badRequest(mapOf(
+                    "success" to false,
+                    "message" to "Invalid file type. Please upload a valid .xlsx Excel file"
+                ))
+            }
+
+            val reviewer = alignmentService.getReviewerByToken(token)
+            val session = reviewer.session
+
+            if (!session.isOpen()) {
+                return HttpResponse.badRequest(mapOf(
+                    "success" to false,
+                    "message" to "Review session is closed"
+                ))
+            }
+
+            // Build snapshot lookup: ID -> requirementInternalId (for cross-reference)
+            val snapshots = alignmentService.getSnapshotsForSession(session.id!!)
+            val snapshotById = snapshots.associateBy { it.id }
+            val validSnapshotIds = snapshotById.keys.filterNotNull().toSet()
+
+            val workbook = XSSFWorkbook(file.inputStream)
+
+            // --- Structural validation: require "Review" sheet ---
+            val sheet = workbook.getSheet("Review")
+            if (sheet == null) {
+                workbook.close()
+                return HttpResponse.badRequest(mapOf(
+                    "success" to false,
+                    "message" to "Excel file must contain a sheet named 'Review'. " +
+                        "Please use the exported file as a template."
+                ))
+            }
+
+            val headerRow = sheet.getRow(0)
+            if (headerRow == null) {
+                workbook.close()
+                return HttpResponse.badRequest(mapOf(
+                    "success" to false,
+                    "message" to "Excel file has no header row"
+                ))
+            }
+
+            // Map headers case-insensitively
+            val headerMap = mutableMapOf<String, Int>()
+            for (i in 0 until headerRow.lastCellNum) {
+                val cell = headerRow.getCell(i) ?: continue
+                val cellValue = try { cell.stringCellValue.trim().lowercase() } catch (e: Exception) { continue }
+                headerMap[cellValue] = i
+            }
+
+            // Validate ALL expected headers are present
+            val expectedHeaders = listOf(
+                "snapshot id", "requirement id", "change type", "chapter",
+                "short req", "details", "previous short req", "previous details",
+                "assessment", "comment"
+            )
+            val missingHeaders = expectedHeaders.filter { it !in headerMap }
+            if (missingHeaders.isNotEmpty()) {
+                workbook.close()
+                return HttpResponse.badRequest(mapOf(
+                    "success" to false,
+                    "message" to "Missing required columns: ${missingHeaders.joinToString(", ") { "'${it}'" }}. " +
+                        "Please use the exported file as a template without modifying the header row."
+                ))
+            }
+
+            val snapshotIdCol = headerMap["snapshot id"]!!
+            val requirementIdCol = headerMap["requirement id"]!!
+            val assessmentCol = headerMap["assessment"]!!
+            val commentCol = headerMap["comment"]!!
+
+            // --- Row count limit ---
+            val maxRows = 1000
+            val dataRowCount = sheet.lastRowNum // row 0 is header
+            if (dataRowCount > maxRows) {
+                workbook.close()
+                return HttpResponse.badRequest(mapOf(
+                    "success" to false,
+                    "message" to "File contains $dataRowCount data rows, exceeding the limit of $maxRows"
+                ))
+            }
+
+            var imported = 0
+            var skipped = 0
+            val errors = mutableListOf<String>()
+            val maxErrors = 50
+            val seenSnapshotIds = mutableSetOf<Long>()
+            val maxCommentLength = 2000
+
+            for (rowNum in 1..sheet.lastRowNum) {
+                val row = sheet.getRow(rowNum) ?: continue
+
+                // Read assessment value safely (handle non-string cells)
+                val assessmentValue = try {
+                    val cell = row.getCell(assessmentCol)
+                    cell?.stringCellValue?.trim() ?: ""
+                } catch (e: Exception) {
+                    try {
+                        row.getCell(assessmentCol)?.toString()?.trim() ?: ""
+                    } catch (e2: Exception) { "" }
+                }
+                if (assessmentValue.isEmpty()) {
+                    skipped++
+                    continue
+                }
+
+                // Stop collecting error details after limit (still process rows)
+                val canAddError = errors.size < maxErrors
+
+                // Parse Snapshot ID (numeric or string)
+                val snapshotId = try {
+                    row.getCell(snapshotIdCol)?.numericCellValue?.toLong()
+                } catch (e: Exception) {
+                    try {
+                        row.getCell(snapshotIdCol)?.stringCellValue?.trim()?.toLongOrNull()
+                    } catch (e2: Exception) { null }
+                }
+
+                if (snapshotId == null) {
+                    if (canAddError) errors.add("Row ${rowNum + 1}: Invalid or missing Snapshot ID")
+                    continue
+                }
+
+                // Validate snapshot belongs to session
+                if (snapshotId !in validSnapshotIds) {
+                    if (canAddError) errors.add("Row ${rowNum + 1}: Snapshot ID $snapshotId does not belong to this review session")
+                    continue
+                }
+
+                // Cross-reference: verify Requirement ID matches the snapshot
+                val expectedReqId = snapshotById[snapshotId]?.requirementInternalId
+                val rowReqId = try {
+                    row.getCell(requirementIdCol)?.stringCellValue?.trim()
+                } catch (e: Exception) {
+                    try { row.getCell(requirementIdCol)?.toString()?.trim() } catch (e2: Exception) { null }
+                }
+                if (rowReqId != null && rowReqId.isNotEmpty() && rowReqId != expectedReqId) {
+                    if (canAddError) errors.add("Row ${rowNum + 1}: Requirement ID '$rowReqId' does not match Snapshot ID $snapshotId (expected '$expectedReqId'). Row data may have been modified.")
+                    continue
+                }
+
+                // Duplicate detection within file
+                if (snapshotId in seenSnapshotIds) {
+                    if (canAddError) errors.add("Row ${rowNum + 1}: Duplicate Snapshot ID $snapshotId (already processed earlier in file)")
+                    continue
+                }
+                seenSnapshotIds.add(snapshotId)
+
+                // Validate assessment enum strictly
+                val assessment = try {
+                    ReviewAssessment.valueOf(assessmentValue.uppercase())
+                } catch (e: IllegalArgumentException) {
+                    if (canAddError) errors.add("Row ${rowNum + 1}: Invalid assessment '$assessmentValue' (must be OK, CHANGE, or NOGO)")
+                    continue
+                }
+
+                // Read and validate comment length
+                val rawComment = try {
+                    row.getCell(commentCol)?.stringCellValue?.trim()
+                } catch (e: Exception) {
+                    try { row.getCell(commentCol)?.toString()?.trim() } catch (e2: Exception) { null }
+                }
+                val comment = if (rawComment.isNullOrEmpty()) null else rawComment
+                if (comment != null && comment.length > maxCommentLength) {
+                    if (canAddError) errors.add("Row ${rowNum + 1}: Comment exceeds $maxCommentLength character limit (${comment.length} chars)")
+                    continue
+                }
+
+                try {
+                    alignmentService.submitReviewByToken(token, snapshotId, assessment, comment)
+                    imported++
+                } catch (e: Exception) {
+                    if (canAddError) errors.add("Row ${rowNum + 1}: ${e.message}")
+                }
+            }
+
+            workbook.close()
+
+            if (errors.size >= maxErrors) {
+                errors.add("... (showing first $maxErrors errors only)")
+            }
+
+            return HttpResponse.ok(mapOf(
+                "success" to true,
+                "imported" to imported,
+                "skipped" to skipped,
+                "errors" to errors,
+                "message" to "Imported $imported review(s), skipped $skipped, ${errors.size} error(s)"
+            ))
+        } catch (e: NoSuchElementException) {
+            return HttpResponse.notFound(mapOf(
+                "success" to false,
+                "message" to "Invalid or expired review token"
+            ))
+        } catch (e: Exception) {
+            logger.error("Failed to import reviews from Excel", e)
+            return HttpResponse.badRequest(mapOf(
+                "success" to false,
+                "message" to "Failed to parse Excel file: ${e.message}"
+            ))
+        }
+    }
+
     // ========== Helper Methods ==========
 
     private fun toSessionResponse(session: com.secman.domain.AlignmentSession): Map<String, Any?> {
@@ -615,10 +902,77 @@ class AlignmentController(
             "changedRequirementsCount" to session.changedRequirementsCount,
             "initiatedBy" to session.initiatedBy.username,
             "baselineReleaseId" to session.baselineRelease?.id,
+            "reviewScope" to session.reviewScope.name,
             "startedAt" to session.startedAt?.toString(),
             "completedAt" to session.completedAt?.toString(),
             "completionNotes" to session.completionNotes
         )
+    }
+
+    private fun createReviewExcelWorkbook(
+        snapshots: List<com.secman.domain.AlignmentSnapshot>,
+        existingReviews: Map<Long?, com.secman.domain.RequirementReview>
+    ): XSSFWorkbook {
+        val workbook = XSSFWorkbook()
+        val sheet = workbook.createSheet("Review")
+
+        val headers = arrayOf(
+            "Snapshot ID", "Requirement ID", "Change Type", "Chapter",
+            "Short Req", "Details", "Previous Short Req", "Previous Details",
+            "Assessment", "Comment"
+        )
+
+        // Header style
+        val headerStyle = workbook.createCellStyle()
+        val headerFont = workbook.createFont()
+        headerFont.bold = true
+        headerStyle.setFont(headerFont)
+
+        val headerRow = sheet.createRow(0)
+        headers.forEachIndexed { index, header ->
+            val cell = headerRow.createCell(index)
+            cell.setCellValue(header)
+            cell.cellStyle = headerStyle
+        }
+
+        // Data rows
+        snapshots.forEachIndexed { index, snapshot ->
+            val row = sheet.createRow(index + 1)
+            row.createCell(0).setCellValue(snapshot.id?.toDouble() ?: 0.0)
+            row.createCell(1).setCellValue(snapshot.requirementInternalId)
+            row.createCell(2).setCellValue(snapshot.changeType.name)
+            row.createCell(3).setCellValue(snapshot.chapter ?: "")
+            row.createCell(4).setCellValue(snapshot.shortreq)
+            row.createCell(5).setCellValue(snapshot.details ?: "")
+            row.createCell(6).setCellValue(snapshot.previousShortreq ?: "")
+            row.createCell(7).setCellValue(snapshot.previousDetails ?: "")
+
+            // Pre-populate from existing reviews
+            val review = existingReviews[snapshot.id]
+            row.createCell(8).setCellValue(review?.assessment?.name ?: "")
+            row.createCell(9).setCellValue(review?.comment ?: "")
+        }
+
+        // Add data validation dropdown for Assessment column (column 8)
+        if (snapshots.isNotEmpty()) {
+            val validationHelper = sheet.dataValidationHelper
+            val constraint = validationHelper.createExplicitListConstraint(arrayOf("OK", "CHANGE", "NOGO"))
+            val addressList = CellRangeAddressList(1, snapshots.size, 8, 8)
+            val validation = validationHelper.createValidation(constraint, addressList)
+            validation.showErrorBox = true
+            validation.createErrorBox("Invalid Assessment", "Please select OK, CHANGE, or NOGO")
+            sheet.addValidationData(validation)
+        }
+
+        // Auto-size columns
+        for (i in headers.indices) {
+            sheet.autoSizeColumn(i)
+            if (sheet.getColumnWidth(i) < 3000) {
+                sheet.setColumnWidth(i, 3000)
+            }
+        }
+
+        return workbook
     }
 
     private fun toAlignmentStatusResponse(status: AlignmentService.AlignmentStatusResult): Map<String, Any?> {
@@ -647,6 +1001,11 @@ class AlignmentController(
 }
 
 // ========== Request DTOs ==========
+
+@Serdeable
+data class StartAlignmentRequest(
+    val reviewAll: Boolean = false
+)
 
 @Serdeable
 data class SubmitReviewRequest(

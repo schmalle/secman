@@ -37,6 +37,12 @@ data class CrowdStrikeQueryResponse(
     val deviceCount: Int? = null,
 
     /**
+     * AWS account ID associated with the asset (from cloudAccountId field).
+     * Null if not available (e.g., non-AWS assets or CrowdStrike API queries).
+     */
+    val cloudAccountId: String? = null,
+
+    /**
      * List of vulnerabilities found (empty if none)
      */
     @field:NotNull

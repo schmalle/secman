@@ -32,6 +32,7 @@ export interface AlignmentSession {
     changedRequirementsCount: number;
     initiatedBy: string;
     baselineReleaseId: number | null;
+    reviewScope: 'CHANGED' | 'ALL';
     startedAt: string;
     completedAt: string | null;
     completionNotes: string | null;
@@ -369,11 +370,16 @@ export const releaseService = {
      * Start alignment process for a PREPARATION release
      *
      * @param releaseId Release ID
+     * @param reviewAll If true, include all requirements (not just changed ones)
      * @returns Alignment start result with session details
      */
-    async startAlignment(releaseId: number): Promise<AlignmentStartResult> {
+    async startAlignment(releaseId: number, reviewAll: boolean = false): Promise<AlignmentStartResult> {
         const response = await authenticatedFetch(`/api/releases/${releaseId}/alignment/start`, {
             method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ reviewAll }),
         });
 
         if (!response.ok) {

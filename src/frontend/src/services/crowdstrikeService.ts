@@ -35,6 +35,7 @@ export interface CrowdStrikeQueryResponse {
     hostname: string;
     instanceId?: string | null;
     deviceCount?: number | null;
+    cloudAccountId?: string | null;
     vulnerabilities: CrowdStrikeVulnerabilityDto[];
     totalCount: number;
     queriedAt: string;
