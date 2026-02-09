@@ -26,6 +26,7 @@ interface Requirement {
     language?: string; // New optional field
     example?: string;  // New optional field
     motivation?: string; // New optional field
+    chapter?: string; // Chapter/section grouping
     createdAt?: string; // Assuming backend sends these as strings
     updatedAt?: string;
     usecases?: UseCase[]; // Added for associated use cases
@@ -56,6 +57,7 @@ export default function RequirementManagement() {
         language: '',
         example: '',
         motivation: '',
+        chapter: '',
         usecases: [],
         norms: []
     });
@@ -450,6 +452,7 @@ export default function RequirementManagement() {
             language: '',
             example: '',
             motivation: '',
+            chapter: '',
             usecases: [],
             norms: []
         });
@@ -626,6 +629,19 @@ export default function RequirementManagement() {
                                     {selectedRequirement ? 'Edit Requirement' : 'Add New Requirement'}
                                 </h5>
                                 <form onSubmit={handleSubmit}>
+                                    <div className="mb-3">
+                                        <label htmlFor="chapter" className="form-label">Chapter</label>
+                                        <input
+                                            type="text"
+                                            className="form-control"
+                                            id="chapter"
+                                            name="chapter"
+                                            value={formData.chapter || ''}
+                                            onChange={handleInputChange}
+                                            placeholder="e.g., Asset Management, Access Control"
+                                        />
+                                    </div>
+
                                     <div className="mb-3">
                                         <label htmlFor="shortreq" className="form-label">Short Requirement</label>
                                         <input
