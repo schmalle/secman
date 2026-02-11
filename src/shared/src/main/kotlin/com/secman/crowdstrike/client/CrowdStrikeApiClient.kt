@@ -102,4 +102,32 @@ interface CrowdStrikeApiClient {
         config: FalconConfigDto,
         limit: Int = 1000
     ): CrowdStrikeQueryResponse
+
+    /**
+     * Query servers with filters, processing results in streaming batches to reduce peak memory usage.
+     *
+     * Instead of accumulating all vulnerabilities in memory, this method processes device ID
+     * batches incrementally and passes each batch's results to the batchProcessor callback.
+     * This reduces peak memory from O(all_vulns) to O(batch_vulns).
+     *
+     * @param deviceType Device type filter (e.g., "SERVER")
+     * @param severity Severity filter (e.g., "HIGH,CRITICAL")
+     * @param minDaysOpen Minimum days open filter (e.g., 30)
+     * @param config CrowdStrike Falcon configuration
+     * @param limit Page size for pagination
+     * @param lastSeenDays Only include devices seen within N days (0 = all)
+     * @param deviceBatchSize Number of device IDs to process per streaming batch
+     * @param batchProcessor Callback invoked with each batch of filtered vulnerabilities
+     * @return Total number of vulnerabilities processed across all batches
+     */
+    fun queryServersWithFiltersStreaming(
+        deviceType: String = "SERVER",
+        severity: String = "HIGH,CRITICAL",
+        minDaysOpen: Int = 30,
+        config: FalconConfigDto,
+        limit: Int = 100,
+        lastSeenDays: Int = 0,
+        deviceBatchSize: Int = 200,
+        batchProcessor: (List<CrowdStrikeVulnerabilityDto>) -> Unit
+    ): Int
 }

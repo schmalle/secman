@@ -17,6 +17,9 @@ data class UseCase(
     @NotBlank
     var name: String,
 
+    @Column(name = "system_protected", nullable = false)
+    var systemProtected: Boolean = false,
+
     @Column(name = "created_at", updatable = false)
     var createdAt: Instant? = null,
 

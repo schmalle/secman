@@ -96,6 +96,93 @@ class ServersCommand {
                 }
             }
 
+            // When --save is specified and no specific hostnames, use streaming mode
+            // to avoid holding all vulnerabilities in memory at once
+            if (save && hostnames.isNullOrEmpty()) {
+                System.out.println("Querying and importing in streaming mode...")
+
+                var totalServersProcessed = 0
+                var totalServersCreated = 0
+                var totalServersUpdated = 0
+                var totalVulnsImported = 0
+                var totalVulnsWithPatchDate = 0
+                var totalVulnsSkipped = 0
+                val allErrors = mutableListOf<String>()
+                var streamBatchNum = 0
+
+                val totalVulns = apiClient.queryServersWithFiltersStreaming(
+                    deviceType = deviceType,
+                    severity = severity,
+                    minDaysOpen = minDaysOpen,
+                    config = config,
+                    limit = limit,
+                    lastSeenDays = lastSeenDays,
+                    deviceBatchSize = 200
+                ) { batchVulns ->
+                    streamBatchNum++
+                    val byHostname = batchVulns.groupBy { it.hostname }
+                    System.out.println("  Stream batch $streamBatchNum: ${batchVulns.size} vulns across ${byHostname.size} hosts")
+
+                    val batches = byHostname.map { (hostname, vulns) ->
+                        val firstVuln = vulns.firstOrNull()
+                        CrowdStrikeVulnerabilityBatchDto(
+                            hostname = hostname,
+                            groups = null,
+                            cloudAccountId = firstVuln?.cloudAccountId,
+                            cloudInstanceId = firstVuln?.cloudInstanceId,
+                            adDomain = firstVuln?.adDomain,
+                            osVersion = null,
+                            ip = firstVuln?.ip,
+                            vulnerabilities = vulns.map { vuln ->
+                                VulnerabilityDto(
+                                    cveId = vuln.cveId ?: "",
+                                    severity = vuln.severity,
+                                    affectedProduct = vuln.affectedProduct,
+                                    daysOpen = parseDaysOpenToInt(vuln.daysOpen),
+                                    patchPublicationDate = vuln.patchPublicationDate
+                                )
+                            }
+                        )
+                    }
+
+                    val result = importService.importServerVulnerabilities(batches, "CLI", triggerRefresh = false)
+                    totalServersProcessed += result.serversProcessed
+                    totalServersCreated += result.serversCreated
+                    totalServersUpdated += result.serversUpdated
+                    totalVulnsImported += result.vulnerabilitiesImported
+                    totalVulnsWithPatchDate += result.vulnerabilitiesWithPatchDate
+                    totalVulnsSkipped += result.vulnerabilitiesSkipped
+                    allErrors.addAll(result.errors)
+                }
+
+                if (totalVulns == 0) {
+                    System.out.println("No vulnerabilities found matching criteria")
+                    return 0
+                }
+
+                val deviceLabel = parsedDeviceType.displayName().replaceFirstChar { it.uppercase() }
+                System.out.println("\n--- Import Statistics ---")
+                System.out.println("$deviceLabel processed: $totalServersProcessed")
+                System.out.println("  - New $deviceLabel created: $totalServersCreated")
+                System.out.println("  - Existing $deviceLabel updated: $totalServersUpdated")
+                System.out.println("Vulnerabilities imported: $totalVulnsImported")
+                System.out.println("  - With patch publication date: $totalVulnsWithPatchDate")
+                System.out.println("Vulnerabilities skipped: $totalVulnsSkipped")
+
+                if (allErrors.isNotEmpty()) {
+                    System.err.println("\n--- Errors (${allErrors.size}) ---")
+                    allErrors.take(20).forEach { error ->
+                        System.err.println("  - $error")
+                    }
+                    if (allErrors.size > 20) {
+                        System.err.println("  ... and ${allErrors.size - 20} more errors")
+                    }
+                }
+
+                return if (allErrors.isNotEmpty()) 1 else 0
+            }
+
+            // Non-streaming mode: query all at once (for dry-run, display, or hostname-specific queries)
             val response = apiClient.queryServersWithFilters(
                 hostnames = hostnames,
                 deviceType = deviceType,
@@ -135,7 +222,7 @@ class ServersCommand {
                 return 0
             }
 
-            // Import directly to database via import service
+            // Import directly to database via import service (hostname-specific queries)
             System.out.println("\nImporting to database...")
 
             // Map CrowdStrike DTOs to backend batch DTOs

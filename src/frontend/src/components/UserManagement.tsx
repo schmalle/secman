@@ -1,7 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import type { FormEvent } from 'react';
 import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete } from '../utils/auth';
 import { getUserMappings, createMapping, updateMapping, deleteMapping, type UserMapping, type CreateMappingRequest, type UpdateMappingRequest } from '../api/userMappings';
+
+type SortField = 'username' | 'email' | 'roles' | 'lastLogin' | 'workgroups';
+type SortDirection = 'asc' | 'desc';
 
 // Define an interface for the user data expected from the backend
 interface User {
@@ -56,6 +59,13 @@ const UserManagement = () => {
     const [addUserError, setAddUserError] = useState<string | null>(null);
     const [isSubmittingUser, setIsSubmittingUser] = useState(false);
     const [deletingUserId, setDeletingUserId] = useState<number | null>(null);
+
+    // State for search, sort, pagination
+    const [searchQuery, setSearchQuery] = useState('');
+    const [sortField, setSortField] = useState<SortField>('username');
+    const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(25);
 
     // State for Edit User Modal
     const [showEditUserModal, setShowEditUserModal] = useState(false);
@@ -547,6 +557,80 @@ const UserManagement = () => {
     };
 
 
+    // --- Filtering, Sorting, Pagination ---
+    const filteredAndSortedUsers = useMemo(() => {
+        let result = [...users];
+
+        // Filter
+        if (searchQuery.trim()) {
+            const q = searchQuery.toLowerCase();
+            result = result.filter(u =>
+                u.username.toLowerCase().includes(q) ||
+                u.email.toLowerCase().includes(q) ||
+                (u.roles ?? []).some(r => r.toLowerCase().includes(q)) ||
+                (u.workgroups ?? []).some(wg => wg.name.toLowerCase().includes(q))
+            );
+        }
+
+        // Sort
+        result.sort((a, b) => {
+            let cmp = 0;
+            switch (sortField) {
+                case 'username':
+                    cmp = a.username.localeCompare(b.username);
+                    break;
+                case 'email':
+                    cmp = a.email.localeCompare(b.email);
+                    break;
+                case 'roles':
+                    cmp = (a.roles ?? []).join(',').localeCompare((b.roles ?? []).join(','));
+                    break;
+                case 'lastLogin': {
+                    const aTime = a.lastLogin ? new Date(a.lastLogin).getTime() : 0;
+                    const bTime = b.lastLogin ? new Date(b.lastLogin).getTime() : 0;
+                    cmp = aTime - bTime;
+                    break;
+                }
+                case 'workgroups': {
+                    const aWg = (a.workgroups ?? []).map(w => w.name).join(',');
+                    const bWg = (b.workgroups ?? []).map(w => w.name).join(',');
+                    cmp = aWg.localeCompare(bWg);
+                    break;
+                }
+            }
+            return sortDirection === 'asc' ? cmp : -cmp;
+        });
+
+        return result;
+    }, [users, searchQuery, sortField, sortDirection]);
+
+    const totalPages = Math.max(1, Math.ceil(filteredAndSortedUsers.length / pageSize));
+    const safePage = Math.min(currentPage, totalPages);
+    const paginatedUsers = filteredAndSortedUsers.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+    // Reset to page 1 when search changes
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchQuery, pageSize]);
+
+    const handleSort = (field: SortField) => {
+        if (sortField === field) {
+            setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+        } else {
+            setSortField(field);
+            setSortDirection('asc');
+        }
+    };
+
+    const renderSortIcon = (field: SortField) => {
+        if (sortField !== field) {
+            return <i className="bi bi-chevron-expand text-muted ms-1" style={{ fontSize: '0.75em' }}></i>;
+        }
+        return sortDirection === 'asc'
+            ? <i className="bi bi-sort-up ms-1"></i>
+            : <i className="bi bi-sort-down ms-1"></i>;
+    };
+
     // --- Render Logic ---
     if (isLoading) {
         return <div className="alert alert-info">Checking permissions and loading user data...</div>;
@@ -1036,20 +1120,70 @@ const UserManagement = () => {
                 </div>
             )}
 
+            {/* Search and page size controls */}
+            <div className="d-flex justify-content-between align-items-center mb-3">
+                <div className="d-flex align-items-center gap-3">
+                    <div className="input-group" style={{ maxWidth: '350px' }}>
+                        <span className="input-group-text"><i className="bi bi-search"></i></span>
+                        <input
+                            type="text"
+                            className="form-control"
+                            placeholder="Search users..."
+                            value={searchQuery}
+                            onChange={e => setSearchQuery(e.target.value)}
+                        />
+                        {searchQuery && (
+                            <button className="btn btn-outline-secondary" type="button" onClick={() => setSearchQuery('')}>
+                                <i className="bi bi-x-lg"></i>
+                            </button>
+                        )}
+                    </div>
+                    <small className="text-muted text-nowrap">
+                        {filteredAndSortedUsers.length === users.length
+                            ? `${users.length} users`
+                            : `${filteredAndSortedUsers.length} of ${users.length} users`}
+                    </small>
+                </div>
+                <div className="d-flex align-items-center gap-2">
+                    <label htmlFor="page-size" className="form-label mb-0 text-nowrap small">Per page:</label>
+                    <select
+                        id="page-size"
+                        className="form-select form-select-sm"
+                        style={{ width: 'auto' }}
+                        value={pageSize}
+                        onChange={e => setPageSize(Number(e.target.value))}
+                    >
+                        <option value={25}>25</option>
+                        <option value={50}>50</option>
+                        <option value={100}>100</option>
+                    </select>
+                </div>
+            </div>
+
             <table className="table table-striped table-hover">
                 <thead>
                     <tr>
-                        <th>Username</th>
-                        <th>Email</th>
-                        <th>Roles</th>
-                        <th>Last Login</th>
-                        <th>Workgroups</th>
+                        <th role="button" onClick={() => handleSort('username')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                            Username{renderSortIcon('username')}
+                        </th>
+                        <th role="button" onClick={() => handleSort('email')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                            Email{renderSortIcon('email')}
+                        </th>
+                        <th role="button" onClick={() => handleSort('roles')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                            Roles{renderSortIcon('roles')}
+                        </th>
+                        <th role="button" onClick={() => handleSort('lastLogin')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                            Last Login{renderSortIcon('lastLogin')}
+                        </th>
+                        <th role="button" onClick={() => handleSort('workgroups')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                            Workgroups{renderSortIcon('workgroups')}
+                        </th>
                         <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {users.length > 0 ? (
-                        users.map(user => (
+                    {paginatedUsers.length > 0 ? (
+                        paginatedUsers.map(user => (
                             <tr key={user.id}>
                                 <td>{user.username}</td>
                                 <td>{user.email}</td>
@@ -1100,13 +1234,64 @@ const UserManagement = () => {
                     ) : (
                         <tr>
                             <td colSpan={6} className="text-center">
-                                {/* Show different message based on whether there was an error or just no users */}
-                                {error && !error.includes("Access Denied") ? "Could not load users." : "No users found."}
+                                {searchQuery
+                                    ? `No users matching "${searchQuery}"`
+                                    : (error && !error.includes("Access Denied") ? "Could not load users." : "No users found.")}
                             </td>
                         </tr>
                     )}
                 </tbody>
             </table>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+                <nav aria-label="User list pagination">
+                    <ul className="pagination justify-content-center mb-0">
+                        <li className={`page-item ${safePage <= 1 ? 'disabled' : ''}`}>
+                            <button className="page-link" onClick={() => setCurrentPage(1)} disabled={safePage <= 1}>
+                                <i className="bi bi-chevron-double-left"></i>
+                            </button>
+                        </li>
+                        <li className={`page-item ${safePage <= 1 ? 'disabled' : ''}`}>
+                            <button className="page-link" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={safePage <= 1}>
+                                <i className="bi bi-chevron-left"></i>
+                            </button>
+                        </li>
+                        {Array.from({ length: totalPages }, (_, i) => i + 1)
+                            .filter(page => page === 1 || page === totalPages || Math.abs(page - safePage) <= 2)
+                            .reduce<(number | 'ellipsis')[]>((acc, page, idx, arr) => {
+                                if (idx > 0 && page - (arr[idx - 1] as number) > 1) {
+                                    acc.push('ellipsis');
+                                }
+                                acc.push(page);
+                                return acc;
+                            }, [])
+                            .map((item, idx) =>
+                                item === 'ellipsis' ? (
+                                    <li key={`ellipsis-${idx}`} className="page-item disabled">
+                                        <span className="page-link">&hellip;</span>
+                                    </li>
+                                ) : (
+                                    <li key={item} className={`page-item ${safePage === item ? 'active' : ''}`}>
+                                        <button className="page-link" onClick={() => setCurrentPage(item as number)}>
+                                            {item}
+                                        </button>
+                                    </li>
+                                )
+                            )}
+                        <li className={`page-item ${safePage >= totalPages ? 'disabled' : ''}`}>
+                            <button className="page-link" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages}>
+                                <i className="bi bi-chevron-right"></i>
+                            </button>
+                        </li>
+                        <li className={`page-item ${safePage >= totalPages ? 'disabled' : ''}`}>
+                            <button className="page-link" onClick={() => setCurrentPage(totalPages)} disabled={safePage >= totalPages}>
+                                <i className="bi bi-chevron-double-right"></i>
+                            </button>
+                        </li>
+                    </ul>
+                </nav>
+            )}
         </div>
     );
 };

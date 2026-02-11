@@ -23,4 +23,4 @@ if [ ! -f "$JAR_PATH" ]; then
     exit 1
 fi
 
-gradle :cli:run --args="query servers --severity CRITICAL,HIGH --min-days-open 1 --save" 
+java -Xmx512m -jar "$JAR_PATH" query servers --severity CRITICAL,HIGH --min-days-open 1 --save

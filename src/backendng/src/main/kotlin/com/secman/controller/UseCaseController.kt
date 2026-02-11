@@ -136,14 +136,20 @@ open class UseCaseController(
             
             val useCase = useCaseRepository.findById(id).orElse(null)
                 ?: return HttpResponse.notFound(ErrorResponse("UseCase not found"))
-            
+
             val trimmedName = request.name.trim()
-            
+
             // Check for empty name after trimming
             if (trimmedName.isBlank()) {
                 return HttpResponse.badRequest(ErrorResponse("Name is required"))
             }
-            
+
+            // Block renaming of system-protected use cases
+            if (useCase.systemProtected && trimmedName != useCase.name) {
+                log.warn("Attempted to rename system use case '{}'", useCase.name)
+                return HttpResponse.badRequest(ErrorResponse("System use case '${useCase.name}' cannot be renamed"))
+            }
+
             // Check for case-insensitive name uniqueness excluding current entity
             val existingUseCase = useCaseRepository.findByNameIgnoreCaseExcludingId(trimmedName, id).orElse(null)
             if (existingUseCase != null) {
@@ -173,7 +179,13 @@ open class UseCaseController(
             
             val useCase = useCaseRepository.findById(id).orElse(null)
                 ?: return HttpResponse.notFound(ErrorResponse("UseCase not found"))
-            
+
+            // Block deletion of system-protected use cases
+            if (useCase.systemProtected) {
+                log.warn("Attempted to delete system use case '{}'", useCase.name)
+                return HttpResponse.badRequest(ErrorResponse("System use case '${useCase.name}' cannot be deleted"))
+            }
+
             // Check if UseCase is associated with Requirements (critical constraint validation)
             val requirementCount = useCaseRepository.countRequirementsByUseCaseId(id)
             

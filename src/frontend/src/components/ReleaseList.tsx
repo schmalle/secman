@@ -336,16 +336,20 @@ const ReleaseList: React.FC<ReleaseListProps> = () => {
                     <div className="col">
                         <h2>Releases</h2>
                     </div>
-                    {canCreate && (
-                        <div className="col-auto">
+                    <div className="col-auto d-flex gap-2">
+                        <a href="/releases/compare" className="btn btn-outline-primary">
+                            <i className="bi bi-arrow-left-right me-2"></i>
+                            Compare Releases
+                        </a>
+                        {canCreate && (
                             <button className="btn btn-primary" onClick={handleCreateClick}>
                                 <i className="bi bi-plus-circle me-2"></i>
                                 Create New Release
                             </button>
-                        </div>
-                    )}
+                        )}
+                    </div>
                 </div>
-                
+
                 <div className="empty-state text-center py-5">
                     <i className="bi bi-inbox" style={{ fontSize: '4rem', color: '#6c757d' }}></i>
                     <h4 className="mt-3">No releases found</h4>
@@ -374,14 +378,18 @@ const ReleaseList: React.FC<ReleaseListProps> = () => {
                         Manage requirement version snapshots for compliance and audit purposes
                     </p>
                 </div>
-                {canCreate && (
-                    <div className="col-auto">
+                <div className="col-auto d-flex gap-2">
+                    <a href="/releases/compare" className="btn btn-outline-primary">
+                        <i className="bi bi-arrow-left-right me-2"></i>
+                        Compare Releases
+                    </a>
+                    {canCreate && (
                         <button className="btn btn-primary" onClick={handleCreateClick}>
                             <i className="bi bi-plus-circle me-2"></i>
                             Create New Release
                         </button>
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
 
             {/* Filters and Search */}

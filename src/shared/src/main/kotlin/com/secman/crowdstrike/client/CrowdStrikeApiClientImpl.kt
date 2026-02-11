@@ -451,6 +451,70 @@ open class CrowdStrikeApiClientImpl(
     }
 
     /**
+     * Streaming variant of queryServersWithFilters that processes device batches incrementally.
+     *
+     * Reduces peak memory by not accumulating all vulnerabilities in a single list.
+     * Device IDs are queried first, then chunked into groups of deviceBatchSize.
+     * Each chunk's vulnerabilities are queried and passed to the batchProcessor callback,
+     * allowing the caller to import/process and discard before the next chunk loads.
+     *
+     * @return Total number of vulnerabilities processed
+     */
+    override fun queryServersWithFiltersStreaming(
+        deviceType: String,
+        severity: String,
+        minDaysOpen: Int,
+        config: FalconConfigDto,
+        limit: Int,
+        lastSeenDays: Int,
+        deviceBatchSize: Int,
+        batchProcessor: (List<CrowdStrikeVulnerabilityDto>) -> Unit
+    ): Int {
+        val parsedDeviceType = DeviceType.fromString(deviceType)
+        log.info("Streaming query for {} devices: severity={}, minDaysOpen={}", parsedDeviceType.name, severity, minDaysOpen)
+
+        // Stage 1: Get all device IDs
+        val token = getAuthToken(config)
+        val serverDeviceIds = getDeviceIdsFiltered(token, parsedDeviceType, limit, lastSeenDays)
+
+        if (serverDeviceIds.isEmpty()) {
+            log.info("No {} devices found in CrowdStrike", parsedDeviceType.name)
+            return 0
+        }
+
+        log.info("Found {} {} devices, processing in batches of {}", serverDeviceIds.size, parsedDeviceType.name, deviceBatchSize)
+
+        // Stage 2: Process device IDs in streaming batches
+        val deviceChunks = serverDeviceIds.chunked(deviceBatchSize)
+        var totalVulnerabilities = 0
+
+        deviceChunks.forEachIndexed { index, chunk ->
+            log.info("Streaming batch {}/{}: querying vulnerabilities for {} devices",
+                index + 1, deviceChunks.size, chunk.size)
+
+            val batchVulns = queryVulnerabilitiesByDeviceIds(
+                deviceIds = chunk,
+                severity = severity,
+                minDaysOpen = minDaysOpen,
+                config = config,
+                limit = limit
+            )
+
+            if (batchVulns.isNotEmpty()) {
+                totalVulnerabilities += batchVulns.size
+                batchProcessor(batchVulns)
+                log.info("Streaming batch {}/{}: processed {} vulnerabilities (total: {})",
+                    index + 1, deviceChunks.size, batchVulns.size, totalVulnerabilities)
+            }
+        }
+
+        log.info("Streaming query completed: {} total vulnerabilities across {} batches",
+            totalVulnerabilities, deviceChunks.size)
+
+        return totalVulnerabilities
+    }
+
+    /**
      * Get all server device IDs from CrowdStrike
      *
      * Feature: 032-servers-query-import

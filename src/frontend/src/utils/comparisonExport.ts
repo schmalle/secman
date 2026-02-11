@@ -5,10 +5,11 @@
  *
  * Features:
  * - Generates Excel workbook with comparison data
+ * - Summary sheet with release info and statistics
+ * - Consolidated "All Changes" sheet with color-coded rows
  * - Separate sheets for Added, Deleted, Modified requirements
- * - Change Type column for easy identification
+ * - Auto-filter, frozen headers, alternating row colors, data borders
  * - Field-level diff display for modified requirements
- * - Formatted headers and styling
  *
  * Related to: Feature 012-build-ui-for, User Story 4 (Compare Releases)
  */
@@ -35,6 +36,7 @@ export interface RequirementSnapshotSummary {
     motivation?: string | null;
     example?: string | null;
     usecase?: string | null;
+    language?: string | null;
 }
 
 export interface FieldChange {
@@ -64,31 +66,84 @@ export interface ComparisonResult {
     unchanged: number;
 }
 
+const COLORS = {
+    headerBlue: 'FF4472C4',
+    addedGreen: 'FF70AD47',
+    addedRowLight: 'FFE2EFDA',
+    deletedRed: 'FFE74C3C',
+    deletedRowLight: 'FFFCE4EC',
+    modifiedYellow: 'FFFFC000',
+    modifiedRowLight: 'FFFFF8E1',
+    alternateGray: 'FFF2F2F2',
+    white: 'FFFFFFFF',
+    black: 'FF000000',
+};
+
+const THIN_BORDER: Partial<ExcelJS.Borders> = {
+    top: { style: 'thin' },
+    left: { style: 'thin' },
+    bottom: { style: 'thin' },
+    right: { style: 'thin' },
+};
+
 /**
  * Export comparison results to Excel file
- * 
- * @param comparison Comparison result data
- * @returns Promise that resolves when file is generated and downloaded
  */
 export async function exportComparisonToExcel(comparison: ComparisonResult): Promise<void> {
     const workbook = new ExcelJS.Workbook();
-    
-    // Set workbook properties
+
     workbook.creator = 'Secman';
     workbook.created = new Date();
     workbook.modified = new Date();
     workbook.lastModifiedBy = 'Secman';
 
-    // Create summary sheet
-    const summarySheet = workbook.addWorksheet('Summary');
-    
-    // Add summary information
-    summarySheet.columns = [
+    // Normalize arrays - API may return undefined/null for empty lists
+    const added = comparison.added ?? [];
+    const deleted = comparison.deleted ?? [];
+    const modified = comparison.modified ?? [];
+    const safe = { ...comparison, added, deleted, modified };
+
+    createSummarySheet(workbook, safe);
+    createAllChangesSheet(workbook, safe);
+
+    if (added.length > 0) {
+        createSnapshotSheet(workbook, 'Added', added, 'ADDED', COLORS.addedGreen, COLORS.addedRowLight);
+    }
+    if (deleted.length > 0) {
+        createSnapshotSheet(workbook, 'Deleted', deleted, 'DELETED', COLORS.deletedRed, COLORS.deletedRowLight);
+    }
+    if (modified.length > 0) {
+        createModifiedSheet(workbook, modified);
+    }
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+
+    const fromVersion = comparison.fromRelease.version.replace(/[^a-zA-Z0-9._-]/g, '');
+    const toVersion = comparison.toRelease.version.replace(/[^a-zA-Z0-9._-]/g, '');
+    const dateStr = new Date().toISOString().split('T')[0];
+
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Release_Comparison_${fromVersion}_vs_${toVersion}_${dateStr}.xlsx`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+}
+
+function createSummarySheet(workbook: ExcelJS.Workbook, comparison: ComparisonResult): void {
+    const sheet = workbook.addWorksheet('Summary');
+
+    sheet.columns = [
         { header: 'Property', key: 'property', width: 30 },
         { header: 'Value', key: 'value', width: 50 },
     ];
 
-    summarySheet.addRows([
+    sheet.addRows([
         { property: 'Comparison Date', value: new Date().toLocaleString() },
         { property: '', value: '' },
         { property: 'From Release', value: '' },
@@ -102,174 +157,228 @@ export async function exportComparisonToExcel(comparison: ComparisonResult): Pro
         { property: '  Created', value: new Date(comparison.toRelease.createdAt).toLocaleString() },
         { property: '', value: '' },
         { property: 'Summary', value: '' },
-        { property: '  Added Requirements', value: comparison.added.length },
-        { property: '  Deleted Requirements', value: comparison.deleted.length },
-        { property: '  Modified Requirements', value: comparison.modified.length },
-        { property: '  Unchanged Requirements', value: comparison.unchanged },
-        { property: '  Total', value: comparison.added.length + comparison.deleted.length + comparison.modified.length + comparison.unchanged },
+        { property: '  Added Requirements', value: (comparison.added ?? []).length },
+        { property: '  Deleted Requirements', value: (comparison.deleted ?? []).length },
+        { property: '  Modified Requirements', value: (comparison.modified ?? []).length },
+        { property: '  Unchanged Requirements', value: comparison.unchanged ?? 0 },
+        {
+            property: '  Total',
+            value:
+                (comparison.added ?? []).length +
+                (comparison.deleted ?? []).length +
+                (comparison.modified ?? []).length +
+                (comparison.unchanged ?? 0),
+        },
     ]);
 
-    // Style summary sheet
-    summarySheet.getRow(1).font = { bold: true, size: 12 };
-    summarySheet.getRow(1).fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FF4472C4' },
-    };
-    summarySheet.getRow(1).font = { ...summarySheet.getRow(1).font, color: { argb: 'FFFFFFFF' } };
+    // Style header row
+    const headerRow = sheet.getRow(1);
+    headerRow.font = { bold: true, size: 12, color: { argb: COLORS.white } };
+    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLORS.headerBlue } };
 
-    // Create Added sheet
-    if (comparison.added.length > 0) {
-        const addedSheet = workbook.addWorksheet('Added');
-        addedSheet.columns = [
-            { header: 'Change Type', key: 'changeType', width: 15 },
-            { header: 'ID.Revision', key: 'idRevision', width: 15 },
-            { header: 'Short Req', key: 'shortreq', width: 20 },
-            { header: 'Chapter', key: 'chapter', width: 15 },
-            { header: 'Norm', key: 'norm', width: 15 },
-            { header: 'Details', key: 'details', width: 50 },
-            { header: 'Motivation', key: 'motivation', width: 40 },
-            { header: 'Example', key: 'example', width: 40 },
-            { header: 'Use Case', key: 'usecase', width: 30 },
-        ];
-
-        comparison.added.forEach((req) => {
-            addedSheet.addRow({
-                changeType: 'ADDED',
-                idRevision: req.idRevision,
-                shortreq: req.shortreq,
-                chapter: req.chapter || '',
-                norm: req.norm || '',
-                details: req.details || '',
-                motivation: req.motivation || '',
-                example: req.example || '',
-                usecase: req.usecase || '',
-            });
-        });
-
-        // Style header
-        styleHeaderRow(addedSheet, 'FF70AD47'); // Green
-    }
-
-    // Create Deleted sheet
-    if (comparison.deleted.length > 0) {
-        const deletedSheet = workbook.addWorksheet('Deleted');
-        deletedSheet.columns = [
-            { header: 'Change Type', key: 'changeType', width: 15 },
-            { header: 'ID.Revision', key: 'idRevision', width: 15 },
-            { header: 'Short Req', key: 'shortreq', width: 20 },
-            { header: 'Chapter', key: 'chapter', width: 15 },
-            { header: 'Norm', key: 'norm', width: 15 },
-            { header: 'Details', key: 'details', width: 50 },
-            { header: 'Motivation', key: 'motivation', width: 40 },
-            { header: 'Example', key: 'example', width: 40 },
-            { header: 'Use Case', key: 'usecase', width: 30 },
-        ];
-
-        comparison.deleted.forEach((req) => {
-            deletedSheet.addRow({
-                changeType: 'DELETED',
-                idRevision: req.idRevision,
-                shortreq: req.shortreq,
-                chapter: req.chapter || '',
-                norm: req.norm || '',
-                details: req.details || '',
-                motivation: req.motivation || '',
-                example: req.example || '',
-                usecase: req.usecase || '',
-            });
-        });
-
-        // Style header
-        styleHeaderRow(deletedSheet, 'FFE74C3C'); // Red
-    }
-
-    // Create Modified sheet
-    if (comparison.modified.length > 0) {
-        const modifiedSheet = workbook.addWorksheet('Modified');
-        modifiedSheet.columns = [
-            { header: 'Change Type', key: 'changeType', width: 15 },
-            { header: 'ID', key: 'internalId', width: 12 },
-            { header: 'Old Rev', key: 'oldRevision', width: 10 },
-            { header: 'New Rev', key: 'newRevision', width: 10 },
-            { header: 'Short Req', key: 'shortreq', width: 20 },
-            { header: 'Chapter', key: 'chapter', width: 15 },
-            { header: 'Norm', key: 'norm', width: 15 },
-            { header: 'Field Changed', key: 'field', width: 20 },
-            { header: 'Old Value', key: 'oldValue', width: 40 },
-            { header: 'New Value', key: 'newValue', width: 40 },
-        ];
-
-        comparison.modified.forEach((req) => {
-            // Add a row for each field change
-            req.changes.forEach((change, index) => {
-                modifiedSheet.addRow({
-                    changeType: index === 0 ? 'MODIFIED' : '',
-                    internalId: index === 0 ? req.internalId : '',
-                    oldRevision: index === 0 ? req.oldRevision : '',
-                    newRevision: index === 0 ? req.newRevision : '',
-                    shortreq: index === 0 ? req.shortreq : '',
-                    chapter: index === 0 ? req.chapter || '' : '',
-                    norm: index === 0 ? req.norm || '' : '',
-                    field: change.fieldName,
-                    oldValue: change.oldValue || '',
-                    newValue: change.newValue || '',
-                });
-            });
-
-            // Add blank row between requirements
-            modifiedSheet.addRow({});
-        });
-
-        // Style header
-        styleHeaderRow(modifiedSheet, 'FFFFC000'); // Orange/Yellow
-    }
-
-    // Generate buffer and trigger download
-    const buffer = await workbook.xlsx.writeBuffer();
-    const blob = new Blob([buffer], { 
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+    // Bold section headers
+    [4, 9, 14].forEach((rowNum) => {
+        const row = sheet.getRow(rowNum);
+        row.font = { bold: true, size: 11 };
     });
 
-    // Create download link
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `Release_Comparison_${comparison.fromRelease.version}_to_${comparison.toRelease.version}_${new Date().toISOString().split('T')[0]}.xlsx`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
+    // Bold totals row
+    const totalRow = sheet.getRow(19);
+    totalRow.font = { bold: true };
+}
+
+function createAllChangesSheet(workbook: ExcelJS.Workbook, comparison: ComparisonResult): void {
+    const added = comparison.added ?? [];
+    const deleted = comparison.deleted ?? [];
+    const modified = comparison.modified ?? [];
+    const totalChanges = added.length + deleted.length + modified.length;
+    if (totalChanges === 0) return;
+
+    const sheet = workbook.addWorksheet('All Changes');
+
+    sheet.columns = [
+        { header: 'Change Type', key: 'changeType', width: 14 },
+        { header: 'ID.Revision', key: 'idRevision', width: 15 },
+        { header: 'Short Req', key: 'shortreq', width: 30 },
+        { header: 'Chapter', key: 'chapter', width: 15 },
+        { header: 'Norm', key: 'norm', width: 15 },
+        { header: 'Details', key: 'details', width: 40 },
+        { header: 'Motivation', key: 'motivation', width: 30 },
+        { header: 'Example', key: 'example', width: 30 },
+        { header: 'Use Case', key: 'usecase', width: 25 },
+    ];
+
+    // Add added rows
+    added.forEach((req) => {
+        const row = sheet.addRow({
+            changeType: 'ADDED',
+            idRevision: req.idRevision,
+            shortreq: req.shortreq,
+            chapter: req.chapter || '',
+            norm: req.norm || '',
+            details: req.details || '',
+            motivation: req.motivation || '',
+            example: req.example || '',
+            usecase: req.usecase || '',
+        });
+        applyRowFill(row, COLORS.addedRowLight);
+    });
+
+    // Add deleted rows
+    deleted.forEach((req) => {
+        const row = sheet.addRow({
+            changeType: 'DELETED',
+            idRevision: req.idRevision,
+            shortreq: req.shortreq,
+            chapter: req.chapter || '',
+            norm: req.norm || '',
+            details: req.details || '',
+            motivation: req.motivation || '',
+            example: req.example || '',
+            usecase: req.usecase || '',
+        });
+        applyRowFill(row, COLORS.deletedRowLight);
+    });
+
+    // Add modified rows
+    modified.forEach((req) => {
+        const row = sheet.addRow({
+            changeType: 'MODIFIED',
+            idRevision: `${req.internalId}.${req.newRevision}`,
+            shortreq: req.shortreq,
+            chapter: req.chapter || '',
+            norm: req.norm || '',
+            details: req.changes.map((c) => `${c.fieldName}: "${c.oldValue || ''}" -> "${c.newValue || ''}"`).join('; '),
+            motivation: '',
+            example: '',
+            usecase: '',
+        });
+        applyRowFill(row, COLORS.modifiedRowLight);
+    });
+
+    applySheetFormatting(sheet, COLORS.headerBlue);
+}
+
+function createSnapshotSheet(
+    workbook: ExcelJS.Workbook,
+    name: string,
+    items: RequirementSnapshotSummary[],
+    changeType: string,
+    headerColor: string,
+    rowTintColor: string
+): void {
+    const sheet = workbook.addWorksheet(name);
+
+    sheet.columns = [
+        { header: 'Change Type', key: 'changeType', width: 14 },
+        { header: 'ID.Revision', key: 'idRevision', width: 15 },
+        { header: 'Short Req', key: 'shortreq', width: 30 },
+        { header: 'Chapter', key: 'chapter', width: 15 },
+        { header: 'Norm', key: 'norm', width: 15 },
+        { header: 'Details', key: 'details', width: 40 },
+        { header: 'Motivation', key: 'motivation', width: 30 },
+        { header: 'Example', key: 'example', width: 30 },
+        { header: 'Use Case', key: 'usecase', width: 25 },
+    ];
+
+    items.forEach((req, index) => {
+        const row = sheet.addRow({
+            changeType: changeType,
+            idRevision: req.idRevision,
+            shortreq: req.shortreq,
+            chapter: req.chapter || '',
+            norm: req.norm || '',
+            details: req.details || '',
+            motivation: req.motivation || '',
+            example: req.example || '',
+            usecase: req.usecase || '',
+        });
+
+        // Alternating row colors
+        if (index % 2 === 1) {
+            applyRowFill(row, COLORS.alternateGray);
+        }
+    });
+
+    applySheetFormatting(sheet, headerColor);
+}
+
+function createModifiedSheet(workbook: ExcelJS.Workbook, modified: RequirementDiff[]): void {
+    const sheet = workbook.addWorksheet('Modified');
+
+    sheet.columns = [
+        { header: 'Change Type', key: 'changeType', width: 14 },
+        { header: 'ID', key: 'internalId', width: 12 },
+        { header: 'Old Rev', key: 'oldRevision', width: 10 },
+        { header: 'New Rev', key: 'newRevision', width: 10 },
+        { header: 'Short Req', key: 'shortreq', width: 30 },
+        { header: 'Chapter', key: 'chapter', width: 15 },
+        { header: 'Norm', key: 'norm', width: 15 },
+        { header: 'Field Changed', key: 'field', width: 18 },
+        { header: 'Old Value', key: 'oldValue', width: 35 },
+        { header: 'New Value', key: 'newValue', width: 35 },
+    ];
+
+    modified.forEach((req) => {
+        req.changes.forEach((change, index) => {
+            const row = sheet.addRow({
+                changeType: index === 0 ? 'MODIFIED' : '',
+                internalId: index === 0 ? req.internalId : '',
+                oldRevision: index === 0 ? req.oldRevision : '',
+                newRevision: index === 0 ? req.newRevision : '',
+                shortreq: index === 0 ? req.shortreq : '',
+                chapter: index === 0 ? req.chapter || '' : '',
+                norm: index === 0 ? req.norm || '' : '',
+                field: change.fieldName,
+                oldValue: change.oldValue || '',
+                newValue: change.newValue || '',
+            });
+
+            // Tint the summary row for each requirement
+            if (index === 0) {
+                applyRowFill(row, COLORS.modifiedRowLight);
+                row.font = { bold: true };
+            }
+        });
+    });
+
+    applySheetFormatting(sheet, COLORS.modifiedYellow);
 }
 
 /**
- * Style the header row of a worksheet
+ * Apply common formatting to a data sheet: header styling, auto-filter, frozen header, borders, text wrap
  */
-function styleHeaderRow(sheet: ExcelJS.Worksheet, color: string): void {
+function applySheetFormatting(sheet: ExcelJS.Worksheet, headerColor: string): void {
     const headerRow = sheet.getRow(1);
-    headerRow.font = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } };
-    headerRow.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: color },
-    };
+    headerRow.font = { bold: true, size: 11, color: { argb: COLORS.white } };
+    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: headerColor } };
     headerRow.alignment = { vertical: 'middle', horizontal: 'left' };
-    headerRow.height = 20;
+    headerRow.height = 22;
 
-    // Add borders
-    headerRow.eachCell((cell) => {
-        cell.border = {
-            top: { style: 'thin' },
-            left: { style: 'thin' },
-            bottom: { style: 'thin' },
-            right: { style: 'thin' },
+    // Auto-filter
+    const lastCol = sheet.columns.length;
+    const lastRow = sheet.rowCount;
+    if (lastRow > 1) {
+        sheet.autoFilter = {
+            from: { row: 1, column: 1 },
+            to: { row: lastRow, column: lastCol },
         };
-    });
+    }
 
-    // Enable text wrap for all cells
+    // Frozen header
+    sheet.views = [{ state: 'frozen', ySplit: 1 }];
+
+    // Borders + text wrap on all cells
     sheet.eachRow((row) => {
         row.eachCell((cell) => {
+            cell.border = THIN_BORDER;
             cell.alignment = { ...cell.alignment, wrapText: true, vertical: 'top' };
         });
+    });
+}
+
+function applyRowFill(row: ExcelJS.Row, color: string): void {
+    row.eachCell({ includeEmpty: true }, (cell) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: color } };
     });
 }

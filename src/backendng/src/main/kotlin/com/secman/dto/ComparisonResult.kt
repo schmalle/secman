@@ -38,7 +38,13 @@ data class RequirementSnapshotSummary(
     val revision: Int,
     val idRevision: String,
     val shortreq: String,
-    val details: String?
+    val chapter: String?,
+    val norm: String?,
+    val details: String?,
+    val motivation: String?,
+    val example: String?,
+    val usecase: String?,
+    val language: String?
 )
 
 /**
@@ -47,10 +53,13 @@ data class RequirementSnapshotSummary(
 @Serdeable
 data class RequirementDiff(
     val id: Long,  // originalRequirementId
+    val originalRequirementId: Long?,
     val internalId: String,
     val oldRevision: Int,
     val newRevision: Int,
     val shortreq: String,
+    val chapter: String?,
+    val norm: String?,
     val changes: List<FieldChange>
 )
 

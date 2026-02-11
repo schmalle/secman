@@ -4,6 +4,7 @@ import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDel
 interface UseCase {
   id: number;
   name: string;
+  systemProtected: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -201,22 +202,31 @@ const UseCaseManagement: React.FC = () => {
                   <tbody>
                     {useCases.map((useCase) => (
                       <tr key={useCase.id}>
-                        <td>{useCase.name}</td>
+                        <td>
+                          {useCase.name}
+                          {useCase.systemProtected && (
+                            <span className="badge bg-secondary ms-2">System</span>
+                          )}
+                        </td>
                         <td>{new Date(useCase.createdAt).toLocaleDateString()}</td>
                         <td>{new Date(useCase.updatedAt).toLocaleDateString()}</td>
                         <td>
-                          <button 
-                            onClick={() => handleEdit(useCase)} 
-                            className="btn btn-sm btn-warning me-2"
-                          >
-                            Edit
-                          </button>
-                          <button 
-                            onClick={() => handleDelete(useCase.id)} 
-                            className="btn btn-sm btn-danger"
-                          >
-                            Delete
-                          </button>
+                          {!useCase.systemProtected && (
+                            <>
+                              <button
+                                onClick={() => handleEdit(useCase)}
+                                className="btn btn-sm btn-warning me-2"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => handleDelete(useCase.id)}
+                                className="btn btn-sm btn-danger"
+                              >
+                                Delete
+                              </button>
+                            </>
+                          )}
                         </td>
                       </tr>
                     ))}
