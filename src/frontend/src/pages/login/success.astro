@@ -41,32 +41,36 @@
 
     <script>
         // Extract URL parameters
+        // Note: JWT token is delivered solely via HttpOnly cookie (secman_auth) set by backend.
+        // Only user metadata is passed in the URL for client-side state.
         const urlParams = new URLSearchParams(window.location.search);
-        const token = urlParams.get('token');
         const userJson = urlParams.get('user');
 
-        if (token && userJson) {
+        if (userJson) {
             try {
                 // Decode and parse user data
                 const userData = JSON.parse(decodeURIComponent(userJson));
-                
-                // Store authentication data
-                localStorage.setItem('authToken', token);
 
-                // Also store token in a cookie for server-side middleware access
-                document.cookie = `authToken=${token}; path=/; max-age=86400; SameSite=Strict`;
+                // Clean up any legacy token storage from previous versions
+                localStorage.removeItem('authToken');
+                document.cookie = 'authToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
 
+                // Store user metadata only (non-sensitive, for UI display and role checks)
+                // Authentication is handled entirely via the HttpOnly secman_auth cookie
                 localStorage.setItem('user', JSON.stringify(userData));
 
                 // Set global user state for Header component
                 window.currentUser = userData;
                 window.dispatchEvent(new CustomEvent('userLoaded'));
-                
+
+                // Clean sensitive data from URL before redirect (prevents token in browser history)
+                window.history.replaceState({}, '', '/login/success');
+
                 // Small delay to ensure data is stored, then redirect
                 setTimeout(() => {
                     window.location.href = '/';
-                }, 1000);
-                
+                }, 500);
+
             } catch (error) {
                 console.error('Error processing login success:', error);
                 alert('Login successful, but there was an error processing your data. Redirecting to login...');
@@ -75,7 +79,7 @@
                 }, 2000);
             }
         } else {
-            console.error('Missing token or user data');
+            console.error('Missing user data in OAuth callback');
             alert('Login data missing. Redirecting to login...');
             setTimeout(() => {
                 window.location.href = '/login';

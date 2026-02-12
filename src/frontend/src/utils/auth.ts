@@ -1,24 +1,14 @@
 // Authentication utility functions
+//
+// Authentication is handled via the HttpOnly secman_auth cookie set by the backend.
+// The cookie is sent automatically with credentials: 'include' on fetch requests
+// and withCredentials: true on axios requests. No JavaScript token access needed.
 
 export interface User {
     id: number;
     username: string;
     email: string;
     roles: string[];
-}
-
-/**
- * Get the stored JWT token.
- * Note: With HttpOnly cookies, the token is not accessible via JavaScript.
- * This function now returns null for new logins, but may return a token
- * for users who logged in before the security update.
- * @deprecated Use cookie-based authentication with credentials: 'include' instead
- */
-export function getAuthToken(): string | null {
-    if (typeof window === 'undefined') return null;
-    // For backward compatibility during migration, check localStorage
-    // New logins don't store tokens in localStorage (XSS protection)
-    return localStorage.getItem('authToken');
 }
 
 /**
@@ -86,41 +76,25 @@ export function clearAuth(): void {
     if (typeof window === 'undefined') return;
     // Clear user data
     localStorage.removeItem('user');
-    // Clear legacy token storage (for backward compatibility during migration)
+    // Clean up any legacy token storage from previous versions
     localStorage.removeItem('authToken');
+    document.cookie = 'authToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
 }
 
 /**
- * Create authenticated fetch request headers
- */
-export function getAuthHeaders(): Record<string, string> {
-    const token = getAuthToken();
-    const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-    };
-    
-    if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-    }
-    
-    return headers;
-}
-
-/**
- * Make an authenticated API request
+ * Make an authenticated API request.
+ * Authentication is handled via the HttpOnly secman_auth cookie sent automatically.
  */
 export async function authenticatedFetch(url: string, options: RequestInit = {}): Promise<Response> {
-    const authHeaders = getAuthHeaders();
-    
     const response = await fetch(url, {
         ...options,
         headers: {
-            ...authHeaders,
+            'Content-Type': 'application/json',
             ...options.headers,
         },
         credentials: 'include',
     });
-    
+
     // If we get 401, clear auth data and redirect to login
     if (response.status === 401) {
         clearAuth();
@@ -128,7 +102,7 @@ export async function authenticatedFetch(url: string, options: RequestInit = {})
             window.location.href = '/login';
         }
     }
-    
+
     return response;
 }
 
@@ -146,18 +120,10 @@ export async function authenticatedGet(url: string): Promise<Response> {
  * Convenience method for POST requests
  */
 export async function authenticatedPost(url: string, data?: any): Promise<Response> {
-    const token = getAuthToken();
-    const headers: Record<string, string> = {};
-
-    if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-    }
-
     // Handle FormData (file uploads) differently - don't set Content-Type, let browser handle it
     if (data instanceof FormData) {
         const response = await fetch(url, {
             method: 'POST',
-            headers: headers,
             body: data,
             credentials: 'include',
         });
@@ -184,7 +150,7 @@ export async function authenticatedPost(url: string, data?: any): Promise<Respon
  */
 export async function authenticatedPut(url: string, data?: any): Promise<Response> {
     return authenticatedFetch(url, {
-        method: 'PUT', 
+        method: 'PUT',
         body: data ? JSON.stringify(data) : undefined,
     });
 }

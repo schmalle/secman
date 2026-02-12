@@ -145,12 +145,13 @@ class OAuthController(
                 is OAuthService.CallbackResult.Success -> {
                     logger.info("OAuth login successful for user: {}", result.user.username)
 
-                    // Create user info JSON
+                    // Create user info JSON (non-sensitive metadata only, token is in HttpOnly cookie)
                     val userInfoJson = """{"id":${result.user.id},"username":"${result.user.username}","email":"${result.user.email}","roles":[${result.user.roles.joinToString(",") { "\"$it\"" }}]}"""
 
-                    // Pass token and user data as URL parameters as expected by the frontend
+                    // Only pass user metadata in URL - JWT is delivered solely via HttpOnly cookie
+                    // This prevents token exposure in browser history, proxy logs, and referrer headers
                     val encodedUser = java.net.URLEncoder.encode(userInfoJson, "UTF-8")
-                    val redirectUrl = "$frontendBaseUrl/login/success?token=${result.token}&user=$encodedUser"
+                    val redirectUrl = "$frontendBaseUrl/login/success?user=$encodedUser"
 
                     logger.debug("Redirecting to: {}", redirectUrl)
                     // Set HttpOnly cookie for authentication (same as local login)

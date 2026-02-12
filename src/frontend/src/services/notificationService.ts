@@ -1,5 +1,4 @@
 import axios from 'axios';
-import { getAuthToken } from '../utils/auth';
 
 // API base URL - uses relative URLs in production to avoid CORS issues
 const API_BASE_URL = import.meta.env.PUBLIC_API_URL ||
@@ -43,12 +42,7 @@ export interface PagedResponse<T> {
  * Get current user's notification preferences
  */
 export async function getUserPreferences(): Promise<NotificationPreference> {
-  const token = getAuthToken();
-  const response = await axios.get(`${API_BASE_URL}/api/notification-preferences`, {
-    headers: {
-      Authorization: `Bearer ${token}`
-    }
-  });
+  const response = await axios.get(`${API_BASE_URL}/api/notification-preferences`);
   return response.data;
 }
 
@@ -58,13 +52,11 @@ export async function getUserPreferences(): Promise<NotificationPreference> {
 export async function updateUserPreferences(
   request: UpdatePreferenceRequest
 ): Promise<NotificationPreference> {
-  const token = getAuthToken();
   const response = await axios.put(
     `${API_BASE_URL}/api/notification-preferences`,
     request,
     {
       headers: {
-        Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json'
       }
     }
@@ -85,12 +77,8 @@ export async function listNotificationLogs(params: {
   endDate?: string;
   sort?: string;
 }): Promise<PagedResponse<NotificationLog>> {
-  const token = getAuthToken();
   const response = await axios.get(`${API_BASE_URL}/api/notification-logs`, {
     params,
-    headers: {
-      Authorization: `Bearer ${token}`
-    }
   });
   return response.data;
 }
@@ -106,14 +94,9 @@ export async function exportNotificationLogs(params: {
   startDate?: string;
   endDate?: string;
 }): Promise<void> {
-  const token = getAuthToken();
-
-  // Use axios to properly send Authorization header with the request
+  // Authentication via HttpOnly cookie (withCredentials set globally)
   const response = await axios.get(`${API_BASE_URL}/api/notification-logs/export`, {
     params,
-    headers: {
-      Authorization: `Bearer ${token}`
-    },
     responseType: 'blob' // Important: handle binary data
   });
 

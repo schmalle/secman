@@ -1,4 +1,4 @@
-import { getAuthToken } from '../utils/auth';
+// Authentication is handled via HttpOnly secman_auth cookie with credentials: 'include'
 
 /**
  * Service for AI-Powered Norm Mapping API operations
@@ -140,17 +140,12 @@ export interface FailedRequirementInfo {
 export async function suggestMappings(
   request?: NormMappingSuggestionRequest
 ): Promise<NormMappingSuggestionResponse> {
-  const token = getAuthToken();
-  if (!token) {
-    throw new Error('Not authenticated');
-  }
-
   const response = await fetch('/api/norm-mapping/suggest', {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
+    credentials: 'include',
     body: JSON.stringify(request || {}),
   });
 
@@ -189,17 +184,12 @@ export async function suggestMappings(
 export async function applyMappings(
   request: ApplyMappingsRequest
 ): Promise<ApplyMappingsResponse> {
-  const token = getAuthToken();
-  if (!token) {
-    throw new Error('Not authenticated');
-  }
-
   const response = await fetch('/api/norm-mapping/apply', {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
+    credentials: 'include',
     body: JSON.stringify(request),
   });
 
@@ -234,17 +224,12 @@ export async function applyMappings(
  * @throws Error if API call fails or user is not authenticated
  */
 export async function getUnmappedCount(): Promise<number> {
-  const token = getAuthToken();
-  if (!token) {
-    throw new Error('Not authenticated');
-  }
-
   const response = await fetch('/api/norm-mapping/unmapped-count', {
     method: 'GET',
     headers: {
-      'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
+    credentials: 'include',
   });
 
   if (!response.ok) {

@@ -60,14 +60,12 @@ const McpDashboard: React.FC = () => {
 
   const fetchDashboardData = async () => {
     try {
-      const token = localStorage.getItem('authToken');
-
-      // Fetch system statistics
+      // Authentication via HttpOnly secman_auth cookie (sent automatically with credentials: 'include')
       const statsResponse = await fetch('/api/mcp/admin/statistics', {
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
-        }
+        },
+        credentials: 'include',
       });
 
       if (statsResponse.ok) {
@@ -78,9 +76,9 @@ const McpDashboard: React.FC = () => {
       // Fetch recent activity
       const activityResponse = await fetch('/api/mcp/admin/audit-logs?pageSize=10', {
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
-        }
+        },
+        credentials: 'include',
       });
 
       if (activityResponse.ok) {
