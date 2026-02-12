@@ -1,7 +1,7 @@
 # MCP (Model Context Protocol) Integration Guide
 
-**Last Updated:** 2026-02-04
-**Version:** 3.2
+**Last Updated:** 2026-02-12
+**Version:** 4.0
 
 This guide covers integrating Secman with AI assistants (Claude Desktop, Claude Code, ChatGPT, etc.) using the Model Context Protocol (MCP).
 
@@ -329,9 +329,11 @@ User roles are mapped to MCP permissions:
 | `ADMIN` | All permissions |
 | `VULN` | `VULNERABILITIES_READ`, `SCANS_READ`, `ASSETS_READ` |
 | `RELEASE_MANAGER` | `REQUIREMENTS_READ`, `ASSESSMENTS_READ` |
-| `REQADMIN` | `REQUIREMENTS_READ`, `REQUIREMENTS_WRITE`, `FILES_READ`, `TAGS_READ` |
 | `REQ` | `REQUIREMENTS_READ`, `REQUIREMENTS_WRITE`, `FILES_READ`, `TAGS_READ` |
-| `SECCHAMPION` | `REQUIREMENTS_READ`, `ASSETS_READ`, `VULNERABILITIES_READ`, `SCANS_READ` |
+| `RISK` | `ASSESSMENTS_READ`, `ASSESSMENTS_WRITE`, `ASSESSMENTS_EXECUTE` |
+| `SECCHAMPION` | `REQUIREMENTS_READ`, `ASSESSMENTS_READ`, `ASSETS_READ`, `VULNERABILITIES_READ`, `SCANS_READ` |
+
+**Note:** The `REQADMIN` role is used for release create/delete operations at the REST API level, but is not currently mapped in MCP delegation. Users with only the `REQADMIN` role should also have another role (e.g., `USER`) for MCP delegation to work.
 
 **Example:** User has `VULN` role, API key has `[ASSETS_READ, VULNERABILITIES_READ, REQUIREMENTS_READ]`:
 - User's implied permissions: `[VULNERABILITIES_READ, SCANS_READ, ASSETS_READ]`
@@ -346,6 +348,27 @@ User roles are mapped to MCP permissions:
 | `DELEGATION_DOMAIN_REJECTED` | Email domain not in allowed list |
 | `DELEGATION_USER_NOT_FOUND` | User with email doesn't exist |
 | `DELEGATION_USER_INACTIVE` | User account is disabled |
+| `DELEGATION_INVALID_EMAIL` | Email format is invalid |
+| `DELEGATION_FAILED` | General delegation failure |
+
+### Fallback Behavior
+
+- **No `X-MCP-User-Email` header**: Request uses API key's base permissions (backward compatible)
+- **Empty header**: Same as no header
+- **Non-delegation key**: `X-MCP-User-Email` header is ignored
+
+### Delegation Security Alerts
+
+Configure alert thresholds for failed delegation attempts in `application.yml`:
+
+```yaml
+secman:
+  mcp:
+    delegation:
+      alert:
+        threshold: 10        # failures to trigger alert
+        window-minutes: 5    # time window
+```
 
 ---
 
@@ -770,6 +793,14 @@ Returns a detailed diff including:
 - Set reasonable expiration dates (30-90 days)
 - Rotate keys regularly
 - Monitor usage via audit logs
+
+### Rate Limiting
+
+| Limit Type | Default |
+|------------|---------|
+| Per API Key | 1000 requests/hour |
+| Burst Limit | 100 requests |
+| Concurrent Sessions | 10 per API key |
 
 ### Origin Validation
 
