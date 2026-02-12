@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { getAuthHeaders } from '../utils/auth';
 import { csrfPost } from '../utils/csrf';
 
 // Define an interface for the user data expected from the backend
@@ -118,7 +117,7 @@ const ClassificationRuleManager: React.FC = () => {
     setLoading(true);
     try {
       const response = await fetch('/api/classification/rules', {
-        headers: getAuthHeaders()
+        credentials: 'include',
       });
       if (response.ok) {
         const data = await response.json();
@@ -167,9 +166,9 @@ const ClassificationRuleManager: React.FC = () => {
       const response = await fetch(url, {
         method,
         headers: {
-          ...getAuthHeaders(),
           'Content-Type': 'application/json'
         },
+        credentials: 'include',
         body: JSON.stringify({
           name: selectedRule.name,
           description: selectedRule.description,
@@ -203,7 +202,7 @@ const ClassificationRuleManager: React.FC = () => {
     try {
       const response = await fetch(`/api/classification/rules/${ruleId}`, {
         method: 'DELETE',
-        headers: getAuthHeaders()
+        credentials: 'include',
       });
 
       if (response.ok) {
@@ -227,9 +226,9 @@ const ClassificationRuleManager: React.FC = () => {
       const response = await fetch('/api/classification/test', {
         method: 'POST',
         headers: {
-          ...getAuthHeaders(),
           'Content-Type': 'application/json'
         },
+        credentials: 'include',
         body: JSON.stringify({
           input: testInput,
           ruleId: selectedRule?.id
@@ -252,7 +251,7 @@ const ClassificationRuleManager: React.FC = () => {
   const exportRules = async () => {
     try {
       const response = await fetch('/api/classification/rules/export', {
-        headers: getAuthHeaders()
+        credentials: 'include',
       });
 
       if (response.ok) {

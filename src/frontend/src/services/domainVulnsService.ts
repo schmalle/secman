@@ -96,17 +96,13 @@ export async function getDomainVulns(): Promise<DomainVulnsSummary> {
  * @throws Error if sync fails
  */
 export async function syncDomainFromCrowdStrike(domain: string): Promise<DomainSyncResult> {
-  const token = localStorage.getItem('authToken');
-  if (!token) {
-    throw new Error('Not authenticated');
-  }
-
+  // Authentication via HttpOnly secman_auth cookie (sent automatically with credentials: 'include')
   const response = await fetch(`/api/domain-vulns/sync/${encodeURIComponent(domain)}`, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json'
-    }
+    },
+    credentials: 'include',
   });
 
   if (!response.ok) {

@@ -59,11 +59,11 @@ const Login = () => {
         // Clear any stale authentication data before starting fresh OAuth flow
         // This prevents issues with cached OAuth states in corporate AAD environments
         console.log('[OAuth] Clearing stale authentication data...');
-        localStorage.removeItem('authToken');
+        localStorage.removeItem('authToken'); // Legacy cleanup
         localStorage.removeItem('user');
         sessionStorage.clear(); // Clear any cached OAuth-related data
 
-        // Delete auth cookies to ensure fresh OAuth flow
+        // Delete legacy auth cookies to ensure fresh OAuth flow
         document.cookie = 'authToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
 
         // Generate a fresh login nonce to ensure state uniqueness

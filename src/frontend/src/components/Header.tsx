@@ -29,9 +29,11 @@ const Header = () => {
             });
             if (response.ok) {
                 // Clear client-side authentication data
-                // Note: The HttpOnly cookie is cleared by the server response
+                // Note: The HttpOnly secman_auth cookie is cleared by the server response
                 localStorage.removeItem('user');
-                localStorage.removeItem('authToken'); // Legacy cleanup
+                // Clean up legacy token storage from previous versions
+                localStorage.removeItem('authToken');
+                document.cookie = 'authToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
 
                 window.currentUser = null;
                 setUser(null);

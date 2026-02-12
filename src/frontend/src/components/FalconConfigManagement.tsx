@@ -50,10 +50,7 @@ const FalconConfigManagement = () => {
             setLoading(true);
             setError(null);
             
-            const token = localStorage.getItem('authToken');
-            const response = await axios.get('/api/falcon-config', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const response = await axios.get('/api/falcon-config');
             
             setConfigs(response.data);
         } catch (err: any) {
@@ -70,10 +67,7 @@ const FalconConfigManagement = () => {
             setError(null);
             setSuccess(null);
             
-            const token = localStorage.getItem('authToken');
-            await axios.post('/api/falcon-config', formData, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            await axios.post('/api/falcon-config', formData);
             
             setSuccess('Falcon configuration created successfully');
             setShowCreateForm(false);
@@ -93,8 +87,6 @@ const FalconConfigManagement = () => {
             setError(null);
             setSuccess(null);
             
-            const token = localStorage.getItem('authToken');
-            
             // Only send fields that are not masked
             const updateData: any = {
                 cloudRegion: formData.cloudRegion
@@ -108,9 +100,7 @@ const FalconConfigManagement = () => {
                 updateData.clientSecret = formData.clientSecret;
             }
             
-            await axios.put(`/api/falcon-config/${editingConfig.id}`, updateData, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            await axios.put(`/api/falcon-config/${editingConfig.id}`, updateData);
             
             setSuccess('Falcon configuration updated successfully');
             setEditingConfig(null);
@@ -130,10 +120,7 @@ const FalconConfigManagement = () => {
             setError(null);
             setSuccess(null);
             
-            const token = localStorage.getItem('authToken');
-            await axios.delete(`/api/falcon-config/${id}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            await axios.delete(`/api/falcon-config/${id}`);
             
             setSuccess('Falcon configuration deleted successfully');
             await loadConfigs();
@@ -147,10 +134,7 @@ const FalconConfigManagement = () => {
             setError(null);
             setSuccess(null);
             
-            const token = localStorage.getItem('authToken');
-            await axios.post(`/api/falcon-config/${id}/activate`, {}, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            await axios.post(`/api/falcon-config/${id}/activate`, {});
             
             setSuccess('Falcon configuration activated successfully');
             await loadConfigs();

@@ -97,6 +97,11 @@ const requiresRedirect = !user && !isPublicPage;
             // Define a global variable to hold user info
             window.currentUser = null;
 
+            // Migration cleanup: remove legacy authToken from localStorage and cookies.
+            // Authentication is now handled solely via the HttpOnly secman_auth cookie.
+            localStorage.removeItem('authToken');
+            document.cookie = 'authToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+
             async function checkAuthAndRedirect() {
                 if (isPublicPage) {
                     // Don't redirect if on a public page like /login or /about

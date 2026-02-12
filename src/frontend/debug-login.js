@@ -32,7 +32,7 @@ import { chromium } from 'playwright';
     console.log('Current URL:', page.url());
     console.log('LocalStorage:', await page.evaluate(() => {
       return {
-        authToken: localStorage.getItem('authToken'),
+        authToken: localStorage.getItem('authToken') || '(migrated to HttpOnly cookie)',
         user: localStorage.getItem('user')
       };
     }));
