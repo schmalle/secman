@@ -236,6 +236,7 @@ fun findStateByValueWithRetry(stateToken: String): Optional<OAuthState> {
 - MariaDB 11.4 (existing `releases` table, `requirement_snapshot` table) (078-release-rework)
 - Kotlin 2.3.0 / Java 25 (backend), TypeScript / React 19 (frontend), Bash (e2e test) + Micronaut 4.10, Hibernate JPA, Astro 5.15, Bootstrap 5.3 (079-reqadmin-release-role)
 - MariaDB 11.4 (no schema changes needed - authorization-only change) (079-reqadmin-release-role)
+- MariaDB 11.4 (existing `user_roles` table, no schema changes) (080-default-user-roles)
 
 ## Recent Changes
 - 058-ai-norm-mapping: Added Kotlin 2.2.21 / Java 21 (backend), TypeScript/React 19 (frontend) + Micronaut 4.10, Hibernate JPA, Axios, Bootstrap 5.3
