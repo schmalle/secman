@@ -32,26 +32,25 @@ const RequirementsAdmin = () => {
 
     useEffect(() => {
         let isMounted = true;
-        const listener = async () => {
-            await checkAdminAndFetchCount();
-        };
+        let resolved = false;
 
         const checkAdminAndFetchCount = async () => {
-            let userIsAdmin = false;
-            if (window.currentUser) {
-                userIsAdmin = window.currentUser.roles?.includes('ADMIN') ?? false;
-                if (isMounted) {
-                    setIsAdmin(userIsAdmin);
-                    setIsLoading(false);
-                }
-
-                // If admin, fetch requirements count
-                if (userIsAdmin) {
-                    await fetchRequirementsCount(isMounted);
-                } else {
-                    if (isMounted) setIsLoading(false);
-                }
+            if (!window.currentUser) return;
+            resolved = true;
+            const userIsAdmin = window.currentUser.roles?.includes('ADMIN') ?? false;
+            if (isMounted) {
+                setIsAdmin(userIsAdmin);
+                setIsLoading(false);
             }
+
+            // If admin, fetch requirements count
+            if (userIsAdmin) {
+                await fetchRequirementsCount(isMounted);
+            }
+        };
+
+        const listener = async () => {
+            await checkAdminAndFetchCount();
         };
 
         // Check immediately if user data is already loaded
@@ -63,7 +62,7 @@ const RequirementsAdmin = () => {
 
             // Set a timeout as a fallback
             const timeoutId = setTimeout(() => {
-                if (isLoading && isMounted) {
+                if (!resolved && isMounted) {
                     setIsLoading(false);
                     setIsAdmin(false);
                     if (!window.currentUser) {
