@@ -591,7 +591,7 @@ open class RequirementController(
                 shd.fill = "C1D5C0"  // Soft sage green (Scandinavian style)
 
                 val reqHeaderRun = reqHeaderParagraph.createRun()
-                reqHeaderRun.setText("${requirement.idRevision}: ${requirement.shortreq}")
+                reqHeaderRun.setText("${requirement.internalId}: ${requirement.shortreq}")
                 reqHeaderRun.fontSize = 12
                 reqHeaderRun.isBold = true
                 
@@ -631,7 +631,30 @@ open class RequirementController(
                     val normValueRun = normParagraph.createRun()
                     normValueRun.setText(norm)
                 }
-                
+
+                // Internal ID with use cases - small, non-dominant font
+                // Only include the canonical use case IDs: IT, OT, NT
+                val canonicalUseCases = setOf("IT", "OT", "NT")
+                val idSuffix = buildString {
+                    append(requirement.internalId.removePrefix("REQ-"))
+                    append(".")
+                    append(requirement.versionNumber)
+                    val usecaseNames = requirement.usecases
+                        .map { it.name }
+                        .filter { it in canonicalUseCases }
+                        .sorted()
+                    for (uc in usecaseNames) {
+                        append(".")
+                        append(uc)
+                    }
+                }
+                val idParagraph = document.createParagraph()
+                idParagraph.alignment = org.apache.poi.xwpf.usermodel.ParagraphAlignment.LEFT
+                val idRun = idParagraph.createRun()
+                idRun.setText("ID $idSuffix")
+                idRun.fontSize = 8
+                idRun.color = "999999"
+
                 document.createParagraph() // Empty line between requirements
                 requirementNumber++
             }
@@ -968,7 +991,25 @@ open class RequirementController(
                 val normValueRun = normParagraph.createRun()
                 normValueRun.setText(requirement.norms.joinToString(", ") { it.name })
             }
-            
+
+            // Internal ID with use cases - small, non-dominant font
+            val idSuffix = buildString {
+                append(requirement.internalId.removePrefix("REQ-"))
+                append(".")
+                append(requirement.versionNumber)
+                val usecaseNames = requirement.usecases.map { it.name }.sorted()
+                for (uc in usecaseNames) {
+                    append(".")
+                    append(uc)
+                }
+            }
+            val idParagraph = document.createParagraph()
+            idParagraph.alignment = org.apache.poi.xwpf.usermodel.ParagraphAlignment.LEFT
+            val idRun = idParagraph.createRun()
+            idRun.setText("ID $idSuffix")
+            idRun.fontSize = 8
+            idRun.color = "999999"
+
             // Add space between requirements
             document.createParagraph()
             document.createParagraph()

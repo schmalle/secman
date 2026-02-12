@@ -260,8 +260,8 @@ export default function RequirementManagement() {
         try {
             const requirementDataToSubmit = {
                 ...formData,
-                usecases: Array.from(selectedUseCaseIds).map(id => ({ id })), // Send only IDs of selected use cases
-                norms: Array.from(selectedNormIds).map(id => ({ id })) // Send only IDs of selected norms
+                usecaseIds: Array.from(selectedUseCaseIds),
+                normIds: Array.from(selectedNormIds)
             };
 
             const url = selectedRequirement 
