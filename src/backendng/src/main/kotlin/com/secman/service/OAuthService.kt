@@ -966,7 +966,7 @@ open class OAuthService(
             username = username,
             email = email,
             passwordHash = passwordEncoder.encode(UUID.randomUUID().toString())!!, // Random password for OIDC users
-            roles = mutableSetOf(User.Role.USER, User.Role.VULN), // FR-001, FR-002: Default roles
+            roles = mutableSetOf(User.Role.USER, User.Role.VULN, User.Role.REQ), // Default roles: USER, VULN, REQ
             authSource = User.AuthSource.OAUTH // Feature 051: Mark as OAuth user (cannot change password)
         )
 
@@ -974,7 +974,7 @@ open class OAuthService(
         logger.info("User created successfully: ${savedUser.id}, username: ${savedUser.username}")
 
         // FR-010: Audit logging
-        auditRoleAssignment(savedUser, "USER,VULN", idpName)
+        auditRoleAssignment(savedUser, "USER,VULN,REQ", idpName)
 
         // FR-011: Notify admins (async, best-effort per FR-012)
         notifyAdminsNewUser(savedUser, idpName)

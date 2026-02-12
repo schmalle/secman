@@ -133,9 +133,9 @@ open class UserController(
                 }
             }
             
-            // Default to USER role if none provided
+            // Default to USER, VULN, REQ roles if none provided
             if (roles.isEmpty()) {
-                roles.add(User.Role.USER)
+                roles.addAll(setOf(User.Role.USER, User.Role.VULN, User.Role.REQ))
             }
 
             val user = User(
