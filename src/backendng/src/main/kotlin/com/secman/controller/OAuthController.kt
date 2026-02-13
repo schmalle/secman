@@ -135,11 +135,11 @@ class OAuthController(
                 return HttpResponse.redirect<Any>(URI.create("$frontendBaseUrl/login?error=${java.net.URLEncoder.encode("Invalid or expired state parameter. Please try logging in again.", "UTF-8")}"))
             }
 
-            val providerId = stateOpt.get().providerId
-            logger.debug("OAuth state validated successfully for provider {}", providerId)
+            val oauthState = stateOpt.get()
+            logger.debug("OAuth state validated successfully for provider {}", oauthState.providerId)
 
-            // Process OAuth callback
-            val result = oauthService.handleCallback(providerId, code, state)
+            // Process OAuth callback with the already-validated state
+            val result = oauthService.handleCallback(oauthState, code)
 
             when (result) {
                 is OAuthService.CallbackResult.Success -> {
@@ -189,8 +189,8 @@ class OAuthController(
                 return HttpResponse.badRequest(ErrorResponse("Invalid or expired state parameter. Please try again."))
             }
 
-            val providerId = stateOpt.get().providerId
-            val result = oauthService.handleCallback(providerId, callbackRequest.code, callbackRequest.state)
+            val oauthState = stateOpt.get()
+            val result = oauthService.handleCallback(oauthState, callbackRequest.code)
             
             when (result) {
                 is OAuthService.CallbackResult.Success -> {

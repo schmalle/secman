@@ -294,20 +294,15 @@ open class OAuthService(
             return null
         }
 
-        // AGGRESSIVE CLEANUP: Delete ALL existing states for this provider
-        // This prevents "state" errors in corporate AAD environments where:
-        // 1. User has multiple tabs/windows open
-        // 2. Browser cached old OAuth redirects
-        // 3. Previous login attempts left orphaned states
-        val existingStateCount = oauthStateRepository.countByProviderId(providerId)
-        if (existingStateCount > 0) {
-            logger.info("Cleaning up {} existing OAuth states for provider {} before generating new one",
-                existingStateCount, providerId)
-            oauthStateRepository.deleteByProviderId(providerId)
-        }
-
-        // Also clean up expired states from all providers
+        // Clean up expired states from all providers (states auto-expire after 10 min)
         oauthStateRepository.deleteExpiredStates()
+
+        // Log active state count for observability (do NOT delete other users' states)
+        val activeStateCount = oauthStateRepository.countByProviderId(providerId)
+        if (activeStateCount > 0) {
+            logger.debug("{} active OAuth states exist for provider {} (concurrent logins in progress)",
+                activeStateCount, providerId)
+        }
 
         // Generate state parameter
         val state = generateState()
@@ -354,7 +349,16 @@ open class OAuthService(
         val encodedState = URLEncoder.encode(state, StandardCharsets.UTF_8)
         val scopes = URLEncoder.encode(provider.scopes ?: "user:email", StandardCharsets.UTF_8)
 
-        return "$authUrl?client_id=$clientId&redirect_uri=$encodedRedirectUri&scope=$scopes&state=$encodedState&response_type=code"
+        val authorizationUrl = "$authUrl?client_id=$clientId&redirect_uri=$encodedRedirectUri&scope=$scopes&state=$encodedState&response_type=code"
+
+        // For Microsoft providers, force account picker to prevent silent SSO.
+        // Without this, Microsoft redirects back in 100-500ms with cached sessions,
+        // giving users no chance to pick an account and maximizing timing issues.
+        if (!tenantId.isNullOrBlank()) {
+            return "$authorizationUrl&prompt=select_account"
+        }
+
+        return authorizationUrl
     }
 
     /**
@@ -362,8 +366,21 @@ open class OAuthService(
      *
      * Includes correlation ID logging for tracking OAuth flow through logs.
      */
+    /**
+     * Handle OAuth callback and exchange code for token.
+     *
+     * Accepts the already-validated OAuthState directly from the controller,
+     * avoiding a redundant state lookup that could fail if the state was
+     * consumed or expired between the controller's retry-based lookup and this call.
+     *
+     * @param oauthState The validated OAuth state (already found via findStateByValueWithRetry)
+     * @param code The authorization code from the OAuth provider
+     */
     @Transactional
-    open fun handleCallback(providerId: Long, code: String, state: String): CallbackResult {
+    open fun handleCallback(oauthState: OAuthState, code: String): CallbackResult {
+        val providerId = oauthState.providerId
+        val state = oauthState.stateToken
+
         // Generate correlation ID for tracking this OAuth flow through logs
         val correlationId = UUID.randomUUID().toString().take(8)
         MDC.put("oauth_correlation_id", correlationId)
@@ -373,24 +390,9 @@ open class OAuthService(
             logger.info("[{}] OAuth callback started for provider {}, state={}",
                 correlationId, providerId, state.take(10) + "...")
 
-        // Validate state
-        val stateOpt = oauthStateRepository.findByStateToken(state)
-        if (!stateOpt.isPresent) {
-            logger.error("OAuth state not found in database for state token: {}", state.take(10) + "...")
-            logger.error("Callback timestamp: {}, Provider ID: {}", callbackStartTime, providerId)
-            logger.error("This may indicate: 1) State was never saved (transaction timing issue), 2) State was already used/deleted, 3) State expired and was cleaned up")
-            return CallbackResult.Error(OAuthErrorCode.STATE_NOT_FOUND.userMessage)
-        }
-
-        val oauthState = stateOpt.get()
         val stateAge = java.time.Duration.between(oauthState.createdAt, callbackStartTime).toMillis()
         logger.info("OAuth state found: created at {}, callback at {}, age={}ms",
             oauthState.createdAt, callbackStartTime, stateAge)
-
-        if (oauthState.providerId != providerId) {
-            logger.error("State provider mismatch: state belongs to provider {}, but callback is for provider {}", oauthState.providerId, providerId)
-            return CallbackResult.Error(OAuthErrorCode.STATE_MISMATCH.userMessage)
-        }
 
         if (oauthState.expiresAt.isBefore(LocalDateTime.now())) {
             logger.error("Expired OAuth state: created at {}, expired at {}, current time {}",

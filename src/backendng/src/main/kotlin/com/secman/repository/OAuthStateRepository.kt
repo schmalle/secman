@@ -18,14 +18,7 @@ interface OAuthStateRepository : JpaRepository<OAuthState, Long> {
     fun deleteByStateToken(stateToken: String)
 
     /**
-     * Delete all OAuth states for a specific provider.
-     * Used to clean up stale states before generating new ones,
-     * preventing "state" errors in corporate AAD environments.
-     */
-    fun deleteByProviderId(providerId: Long)
-
-    /**
-     * Count existing states for a provider (for debugging/logging)
+     * Count active states for a provider (for observability/debugging)
      */
     fun countByProviderId(providerId: Long): Long
 }
