@@ -8,8 +8,11 @@ import software.amazon.awssdk.core.exception.SdkClientException
 import software.amazon.awssdk.regions.Region
 import software.amazon.awssdk.services.s3.S3Client
 import software.amazon.awssdk.services.s3.model.*
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Request
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.attribute.PosixFilePermission
+import java.time.Instant
 
 /**
  * Service for downloading files from AWS S3 (Feature 065)
@@ -65,6 +68,16 @@ class S3DownloadService {
             // Create temp file with appropriate extension
             val extension = getFileExtension(key)
             val tempFile = Files.createTempFile("s3-import-", extension)
+
+            // Restrict temp file to owner-only access (rw-------)
+            try {
+                Files.setPosixFilePermissions(tempFile, setOf(
+                    PosixFilePermission.OWNER_READ,
+                    PosixFilePermission.OWNER_WRITE
+                ))
+            } catch (e: UnsupportedOperationException) {
+                log.debug("POSIX file permissions not supported on this platform")
+            }
 
             log.info("Downloading s3://$bucket/$key to temp file: $tempFile")
 
@@ -190,6 +203,19 @@ class S3DownloadService {
     }
 
     /**
+     * Validate prefix for listing operations
+     * Same constraints as object keys: max 1024 chars, no null bytes
+     */
+    private fun validatePrefix(prefix: String) {
+        if (prefix.length > 1024) {
+            throw S3DownloadException("Invalid prefix: exceeds 1024 character limit")
+        }
+        if (prefix.contains('\u0000')) {
+            throw S3DownloadException("Invalid prefix: cannot contain null characters")
+        }
+    }
+
+    /**
      * Validate object key
      * AWS keys can be up to 1024 bytes, should not contain null bytes
      */
@@ -218,6 +244,95 @@ class S3DownloadService {
     }
 
     /**
+     * List objects in an S3 bucket with optional prefix filter
+     *
+     * @param bucket S3 bucket name
+     * @param prefix Optional key prefix to filter results
+     * @param region AWS region (null = use SDK default resolution)
+     * @param profile AWS credential profile name (null = use default credential chain)
+     * @return List of S3ObjectInfo for matching objects
+     * @throws S3DownloadException on S3 or authentication errors
+     */
+    fun listObjects(
+        bucket: String,
+        prefix: String? = null,
+        region: String? = null,
+        profile: String? = null
+    ): List<S3ObjectInfo> {
+        validateBucketName(bucket)
+        if (prefix != null) {
+            validatePrefix(prefix)
+        }
+
+        val s3Client = buildS3Client(region, profile)
+
+        try {
+            val requestBuilder = ListObjectsV2Request.builder()
+                .bucket(bucket)
+                .maxKeys(1000)
+            if (prefix != null) {
+                requestBuilder.prefix(prefix)
+            }
+
+            val response = s3Client.listObjectsV2(requestBuilder.build())
+
+            if (response.isTruncated) {
+                log.warn("Results truncated: bucket contains more than 1,000 objects matching the prefix. Use a more specific --prefix to narrow results.")
+            }
+
+            return response.contents().map { obj ->
+                S3ObjectInfo(
+                    key = obj.key(),
+                    size = obj.size(),
+                    lastModified = obj.lastModified()
+                )
+            }
+        } catch (e: NoSuchBucketException) {
+            throw S3DownloadException("Bucket '$bucket' does not exist or is not accessible")
+        } catch (e: S3Exception) {
+            if (e.statusCode() == 403) {
+                throw S3DownloadException(
+                    "Access denied. Check IAM permissions for bucket '$bucket'. " +
+                    "Required permissions: s3:ListBucket"
+                )
+            }
+            throw S3DownloadException("S3 error: ${e.awsErrorDetails()?.errorMessage() ?: e.message}")
+        } catch (e: SdkClientException) {
+            val message = e.message ?: "Unknown error"
+            when {
+                message.contains("credentials", ignoreCase = true) ||
+                message.contains("Unable to load", ignoreCase = true) -> {
+                    throw S3DownloadException(
+                        "AWS credentials not found. Configure via:\n" +
+                        "  - Environment variables (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)\n" +
+                        "  - AWS credentials file (~/.aws/credentials)\n" +
+                        "  - IAM role (for EC2/ECS deployments)\n" +
+                        "  - Use --aws-profile to specify a named profile"
+                    )
+                }
+                message.contains("network", ignoreCase = true) ||
+                message.contains("connect", ignoreCase = true) ||
+                message.contains("timeout", ignoreCase = true) -> {
+                    throw S3DownloadException(
+                        "Network error connecting to S3. Check:\n" +
+                        "  - Internet connectivity\n" +
+                        "  - AWS region (use --aws-region if bucket is in a different region)\n" +
+                        "  - Firewall/proxy settings"
+                    )
+                }
+                else -> throw S3DownloadException("S3 client error: $message")
+            }
+        } catch (e: S3DownloadException) {
+            throw e
+        } catch (e: Exception) {
+            log.error("Unexpected error listing S3 objects", e)
+            throw S3DownloadException("Unexpected error: ${e.message}")
+        } finally {
+            s3Client.close()
+        }
+    }
+
+    /**
      * Clean up a temporary file
      * Call this in a finally block after processing
      */
@@ -238,3 +353,12 @@ class S3DownloadService {
  * Exception for S3 download errors with user-friendly messages
  */
 class S3DownloadException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
+
+/**
+ * Info about an S3 object returned by listObjects
+ */
+data class S3ObjectInfo(
+    val key: String,
+    val size: Long,
+    val lastModified: Instant
+)

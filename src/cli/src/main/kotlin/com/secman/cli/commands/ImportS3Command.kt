@@ -3,6 +3,7 @@ package com.secman.cli.commands
 import com.secman.cli.service.S3DownloadException
 import com.secman.cli.service.S3DownloadService
 import com.secman.cli.service.UserMappingCliService
+import org.slf4j.LoggerFactory
 import picocli.CommandLine.*
 import jakarta.inject.Singleton
 
@@ -49,6 +50,8 @@ class ImportS3Command(
     private val s3DownloadService: S3DownloadService,
     private val userMappingCliService: UserMappingCliService
 ) : Runnable {
+
+    private val log = LoggerFactory.getLogger(ImportS3Command::class.java)
 
     @Option(
         names = ["--bucket", "-b"],
@@ -202,7 +205,7 @@ class ImportS3Command(
             // Exit code 3: unexpected error
             println()
             System.err.println("Unexpected error: ${e.message}")
-            e.printStackTrace(System.err)
+            log.debug("Stack trace for unexpected error", e)
             System.exit(3)
         } finally {
             // Clean up temp file

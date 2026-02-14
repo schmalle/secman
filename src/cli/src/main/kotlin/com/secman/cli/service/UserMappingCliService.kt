@@ -30,6 +30,10 @@ class UserMappingCliService(
 ) {
     private val log = LoggerFactory.getLogger(UserMappingCliService::class.java)
 
+    companion object {
+        const val MAX_IMPORT_ROWS = 100_000
+    }
+
     // Validation regex patterns (from spec FR-003, FR-004, FR-006)
     private val emailRegex = Regex("^[^@]+@[^@]+\\.[^@]+$")
     private val awsAccountIdRegex = Regex("^\\d{12}$")
@@ -372,6 +376,12 @@ class UserMappingCliService(
 
                 csvParser.forEach { record ->
                     lineNumber++
+                    if (lineNumber - 1 > MAX_IMPORT_ROWS) {
+                        throw IllegalArgumentException(
+                            "File exceeds maximum of $MAX_IMPORT_ROWS records. " +
+                            "Split the file into smaller batches."
+                        )
+                    }
                     try {
                         val email = record.get("email") ?: record.get("Email") ?: record.get("EMAIL")
                         val type = record.get("type") ?: record.get("Type") ?: record.get("TYPE")
@@ -520,6 +530,13 @@ class UserMappingCliService(
 
         try {
             val mappingsData: List<Map<String, Any>> = objectMapper.readValue(file)
+
+            if (mappingsData.size > MAX_IMPORT_ROWS) {
+                throw IllegalArgumentException(
+                    "File contains ${mappingsData.size} records, exceeding maximum of $MAX_IMPORT_ROWS. " +
+                    "Split the file into smaller batches."
+                )
+            }
 
             mappingsData.forEach { mapping ->
                 val email = mapping["email"] as? String
