@@ -1018,6 +1018,41 @@ export SECMAN_LOG_LEVEL=DEBUG
 
 ---
 
+## MCP Availability Requirement
+
+**Every new or changed backend function that exposes data or performs actions MUST be made available as an MCP tool.** This is a constitutional requirement (Principle X).
+
+### When to Add MCP Tools
+
+You MUST add or update an MCP tool when:
+
+- A new service function is created that queries, creates, updates, or deletes data
+- An existing service function's signature or behavior changes
+- A new REST API endpoint is added that exposes functionality
+- An existing endpoint's parameters or response format changes
+
+### How to Add an MCP Tool
+
+1. **Register the tool** in the appropriate MCP controller (`McpController.kt` or `McpAdminController.kt`)
+2. **Define tool metadata**: name, description, and parameter schema with clear descriptions
+3. **Set permissions**: MCP tool permissions MUST align with the REST API's `@Secured` annotations
+4. **Enforce delegation**: Tools requiring user context MUST use User Delegation
+5. **Update this document**: Add the tool to the appropriate section above with full parameter documentation
+6. **Test the tool**: Verify the tool works via the MCP endpoint using curl or an MCP client
+
+### MCP Tool Checklist (for PRs)
+
+- [ ] MCP tool registered in MCP controller
+- [ ] Tool name follows convention: `verb_noun` (e.g., `get_assets`, `create_release`)
+- [ ] Tool description clearly explains what it does
+- [ ] All parameters documented with types and descriptions
+- [ ] Permission checks match REST API @Secured annotations
+- [ ] User Delegation enforced where needed
+- [ ] docs/MCP.md updated with tool documentation
+- [ ] Tool tested via MCP endpoint
+
+---
+
 ## See Also
 
 - [Environment Variables](./ENVIRONMENT.md) - Configuration reference

@@ -600,6 +600,96 @@ fun cleanup() {
 
 ---
 
+## Mandatory Test Scripts
+
+**Every code change MUST include a corresponding test script.** This is a constitutional requirement (Principle IX).
+
+### Requirements
+
+- Every code change MUST include a runnable test script in `scripts/test/` that validates the changed functionality
+- Test scripts MUST be executable standalone (no manual setup beyond starting the backend)
+- Test scripts MUST document expected inputs, expected outputs, and success/failure criteria
+- Test scripts MUST cover the happy path and at least one error case
+- Test scripts MUST exit with code 0 on success and non-zero on failure
+- Existing test scripts MUST be updated when the tested functionality changes
+
+### Test Script Template
+
+```bash
+#!/bin/bash
+# Test script for: <feature-name>
+# Prerequisites: Backend running on localhost:8080
+# Expected: <describe expected outcomes>
+set -euo pipefail
+
+BASE_URL="${SECMAN_BASE_URL:-http://localhost:8080}"
+PASS=0
+FAIL=0
+
+echo "=== Testing <feature-name> ==="
+
+# Get auth token
+TOKEN=$(curl -s -X POST "$BASE_URL/api/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{"username": "adminuser", "password": "password"}' | jq -r '.token // .access_token')
+
+if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
+  echo "FAIL: Could not obtain auth token"
+  exit 1
+fi
+
+# Happy path test
+echo -n "Test 1: <describe happy path>... "
+RESPONSE=$(curl -s -w "\n%{http_code}" -X GET "$BASE_URL/api/<endpoint>" \
+  -H "Authorization: Bearer $TOKEN")
+HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+if [ "$HTTP_CODE" = "200" ]; then
+  echo "PASS"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL (HTTP $HTTP_CODE)"
+  FAIL=$((FAIL + 1))
+fi
+
+# Error case test
+echo -n "Test 2: <describe error case>... "
+RESPONSE=$(curl -s -w "\n%{http_code}" -X GET "$BASE_URL/api/<invalid-endpoint>" \
+  -H "Authorization: Bearer $TOKEN")
+HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+if [ "$HTTP_CODE" = "400" ] || [ "$HTTP_CODE" = "404" ]; then
+  echo "PASS"
+  PASS=$((PASS + 1))
+else
+  echo "FAIL (HTTP $HTTP_CODE)"
+  FAIL=$((FAIL + 1))
+fi
+
+# Summary
+echo ""
+echo "=== Results: $PASS passed, $FAIL failed ==="
+if [ "$FAIL" -gt 0 ]; then
+  exit 1
+fi
+exit 0
+```
+
+### Naming Convention
+
+- `test-<feature-name>.sh` (e.g., `test-release-management.sh`, `test-vuln-import.sh`)
+- Place in `scripts/test/` directory
+- Make executable: `chmod +x scripts/test/test-<feature-name>.sh`
+
+### Existing Test Scripts
+
+| Script | Purpose |
+|--------|---------|
+| `scripts/test/addvuln.sh` | Test vulnerability addition |
+| `scripts/test/scanserv.sh` | Test scan server functionality |
+| `scripts/release-e2e-test.sh` | Release end-to-end test |
+| `bin/test-e2e-exception-workflow.sh` | Exception workflow e2e test |
+
+---
+
 ## See Also
 
 - [Architecture](./ARCHITECTURE.md) - System design and patterns

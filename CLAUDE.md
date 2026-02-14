@@ -89,7 +89,11 @@ Users access assets if **ANY** is true:
 3. RBAC: @Secured on endpoints, role checks in UI
 4. Schema Evolution: Hibernate auto-migration
 5. Never write testcases
-6. A feature is only complete. if gradlew build is showing no errors anymore
+6. A feature is only complete if gradlew build is showing no errors anymore
+7. **Mandatory Security Review**: Every code change MUST undergo a security review before merge. Review covers OWASP Top 10, input validation, authentication/authorization, data exposure, and injection vectors. Document findings in the PR description.
+8. **Mandatory Documentation**: Every code change MUST be documented. Update CLAUDE.md (entities, endpoints, patterns), relevant docs/ files, and inline code comments where logic is non-obvious. API changes require updated endpoint documentation. A change without documentation is incomplete.
+9. **Mandatory Test Script**: Every code change MUST include a corresponding test script (shell script, curl-based, or e2e) in `scripts/test/` that validates the change works end-to-end. The script must be runnable standalone and document expected inputs/outputs.
+10. **Mandatory MCP Availability**: Every new or changed backend function that exposes data or performs actions MUST be made available as an MCP tool. Update the MCP controller, register the tool with proper permissions, and document it in `docs/MCP.md`.
 
 ## Common Patterns
 

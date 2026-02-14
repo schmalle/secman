@@ -1,24 +1,25 @@
 <!--
 Sync Impact Report:
-- Version change: v1.0.0 → v2.0.0
-- Principles removed:
-  * Principle IV: Docker-First (REMOVED - all containerization requirements dropped)
+- Version change: v2.0.0 → v3.0.0
 - Principles added:
-  * Principle IV: User-Requested Testing (NEW - testing prepared only when explicitly requested)
-- Principles renumbered:
-  * Former Principle V (RBAC) → now Principle V
-  * Former Principle VI (Schema Evolution) → now Principle VI
+  * Principle VII: Mandatory Security Review (NEW - every code change requires security review)
+  * Principle VIII: Mandatory Documentation (NEW - every change requires documentation updates)
+  * Principle IX: Mandatory Test Scripts (NEW - every change requires runnable test script)
+  * Principle X: Mandatory MCP Availability (NEW - new/changed functions must be MCP tools)
 - Development Workflow updated:
-  * Removed Docker build gate from Pull Requests section
-  * Removed Docker-related testing gates
-- Infrastructure section updated:
-  * Removed Docker Compose deployment requirement
-  * Removed multi-arch requirement
+  * Added security review gate to Pull Requests
+  * Added documentation update gate to Pull Requests
+  * Added test script gate to Pull Requests
+  * Added MCP availability gate to Pull Requests
 - Templates requiring updates:
-  ✅ plan-template.md - Constitution Check references updated
-  ✅ spec-template.md - Requirements align with new testing principle
-  ✅ tasks-template.md - Test task warnings align with new testing principle
-- Follow-up TODOs: Update CLAUDE.md to reference constitution and remove Docker-First mentions
+  ✅ CLAUDE.md - Principles updated with new requirements
+  ✅ AGENTS.md - Guidelines updated with new requirements
+  ✅ .github/copilot-instructions.md - Instructions updated
+  ✅ .github/PULL_REQUEST_TEMPLATE.md - Created with compliance checklist
+  ✅ docs/TESTING.md - Updated with mandatory test script section
+  ✅ docs/MCP.md - Updated with MCP availability requirement
+  ✅ SECURITY.md - Updated with mandatory review process
+- Follow-up TODOs: None
 -->
 
 # Secman Constitution
@@ -95,6 +96,66 @@ Database schema changes MUST be managed through automated migration with appropr
 
 **Rationale**: Automated migration reduces deployment errors and ensures schema-code consistency.
 
+### VII. Mandatory Security Review
+
+Every code change MUST undergo a security review before it is considered complete.
+
+**Requirements**:
+- All code changes MUST be reviewed against OWASP Top 10 vulnerabilities before merge
+- Security review MUST cover: input validation, authentication/authorization checks, data exposure risks, injection vectors (SQL, command, XSS), and sensitive data handling
+- Security findings MUST be documented in the pull request description under a "Security Review" section
+- Changes to authentication, authorization, or data access patterns require explicit security sign-off
+- New API endpoints MUST document their security model (authentication requirement, role restrictions, input validation)
+- File upload changes MUST verify size limits, content-type validation, and path traversal prevention
+
+**Rationale**: A security management tool must hold itself to the highest security standards. Every change is an opportunity to introduce vulnerabilities, and systematic review prevents regression.
+
+### VIII. Mandatory Documentation
+
+Every code change MUST include corresponding documentation updates.
+
+**Requirements**:
+- CLAUDE.md MUST be updated when adding or changing entities, endpoints, patterns, or configuration
+- docs/ files MUST be updated for user-facing changes (API → MCP.md, tests → TESTING.md, deployment → DEPLOYMENT.md, env → ENVIRONMENT.md)
+- New API endpoints MUST be documented with method, path, authentication, request/response format, and role restrictions
+- Changes to existing APIs MUST update corresponding documentation
+- Configuration changes MUST be documented in ENVIRONMENT.md with variable names, defaults, and descriptions
+- A code change without documentation is incomplete and MUST NOT be merged
+
+**Rationale**: Undocumented changes create knowledge gaps that compound over time, making the system harder to maintain and onboard new contributors.
+
+### IX. Mandatory Test Scripts
+
+Every code change MUST include a corresponding test script that validates the change end-to-end.
+
+**Requirements**:
+- Every code change MUST include a runnable test script in `scripts/test/` that validates the changed functionality
+- Test scripts MUST be executable standalone (no manual setup beyond starting the backend)
+- Test scripts MUST document expected inputs, expected outputs, and success/failure criteria
+- Test scripts MUST cover the happy path and at least one error case
+- Test scripts SHOULD use curl/httpie for API testing and shell scripts for CLI testing
+- Test script naming convention: `test-<feature-name>.sh`
+- Test scripts MUST exit with code 0 on success and non-zero on failure
+- Existing test scripts MUST be updated when tested functionality changes
+
+**Rationale**: Automated test scripts provide repeatable verification that catches regressions early and serves as executable documentation of expected behavior.
+
+### X. Mandatory MCP Availability
+
+Every new or changed backend function that exposes data or performs actions MUST be available as an MCP tool.
+
+**Requirements**:
+- New service functions that query, create, update, or delete data MUST have a corresponding MCP tool
+- MCP tools MUST be registered in the appropriate MCP controller with proper permission checks
+- MCP tool parameters MUST match the service function's input requirements
+- MCP tools MUST include clear descriptions for the tool and each parameter
+- MCP tool permissions MUST align with the REST API endpoint's @Secured annotations
+- docs/MCP.md MUST be updated with new tool documentation (parameters, permissions, examples)
+- Existing MCP tools MUST be updated when underlying service function signature or behavior changes
+- MCP tools requiring user context MUST enforce User Delegation
+
+**Rationale**: MCP availability ensures all functionality is accessible to AI assistants and automation, maintaining parity between REST API and MCP interfaces.
+
 ## Technology Stack
 
 **Backend**:
@@ -122,6 +183,10 @@ Database schema changes MUST be managed through automated migration with appropr
   - All tests passing (backend + frontend + helper)
   - Linting passing
   - Code review approved
+  - Security review completed and documented in PR description
+  - Documentation updated (CLAUDE.md, docs/, API docs as applicable)
+  - Test script included in `scripts/test/` for the changed functionality
+  - MCP tools added/updated for new/changed backend functions
 
 
 ### Documentation
@@ -162,4 +227,4 @@ Database schema changes MUST be managed through automated migration with appropr
 
 For detailed implementation patterns and examples, see `CLAUDE.md`.
 
-**Version**: 2.0.0 | **Ratified**: 2025-10-07 | **Last Amended**: 2025-10-19
+**Version**: 3.0.0 | **Ratified**: 2025-10-07 | **Last Amended**: 2026-02-14

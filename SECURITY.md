@@ -41,9 +41,40 @@ SecMan implements the following security measures:
 - **Input Validation**: File size limits, content-type validation, header validation on imports
 - **Audit**: MCP operation audit logging, notification logging
 
-## Security Review
+## Mandatory Security Review Process
 
-For a detailed security assessment, see [SECURITY_REVIEW.md](SECURITY_REVIEW.md).
+**Every code change MUST undergo a security review before merge.** This is a constitutional requirement (Principle VII).
+
+### What Must Be Reviewed
+
+Every pull request must include a "Security Review" section in its description covering:
+
+| Check | Description |
+|-------|-------------|
+| OWASP Top 10 | Review against all OWASP Top 10 vulnerability categories |
+| Input Validation | No unsanitized user input reaches database, shell, or HTML |
+| Authentication | @Secured annotations present on all endpoints, correct auth requirements |
+| Authorization | Role checks enforced at service layer, not just controller |
+| Data Exposure | No sensitive data in logs, error messages, or API responses |
+| Injection | No SQL injection, command injection, XSS, or path traversal vectors |
+| File Uploads | Size limits, content-type validation, path traversal prevention |
+| Secrets | No hardcoded credentials, tokens, or encryption keys |
+
+### When Enhanced Review Is Required
+
+The following changes require explicit security sign-off from a reviewer with security expertise:
+
+- Changes to authentication or authorization logic
+- Changes to OAuth/OIDC flows
+- Changes to encryption or secret handling
+- New file upload or import endpoints
+- Changes to MCP delegation or permission logic
+- Changes to CORS, CSP, or other security headers
+- New external API integrations
+
+### Security Review in SECURITY_REVIEW.md
+
+For a detailed security assessment of the full codebase, see [SECURITY_REVIEW.md](SECURITY_REVIEW.md).
 
 ## Contact
 
