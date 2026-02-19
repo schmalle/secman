@@ -72,7 +72,11 @@ class McpToolRegistry(
     // Feature: MCP Send Admin Summary Tool
     @Inject private val sendAdminSummaryTool: SendAdminSummaryTool,
     // Feature: MCP Compare Releases Tool
-    @Inject private val compareReleasesTool: CompareReleasesTool
+    @Inject private val compareReleasesTool: CompareReleasesTool,
+    // Feature: AWS Account Sharing
+    @Inject private val listAwsAccountSharingTool: ListAwsAccountSharingTool,
+    @Inject private val createAwsAccountSharingTool: CreateAwsAccountSharingTool,
+    @Inject private val deleteAwsAccountSharingTool: DeleteAwsAccountSharingTool
 ) {
     private val logger = LoggerFactory.getLogger(McpToolRegistry::class.java)
 
@@ -141,7 +145,11 @@ class McpToolRegistry(
             // Feature: MCP Send Admin Summary Tool
             sendAdminSummaryTool,
             // Feature: MCP Compare Releases Tool
-            compareReleasesTool
+            compareReleasesTool,
+            // Feature: AWS Account Sharing
+            listAwsAccountSharingTool,
+            createAwsAccountSharingTool,
+            deleteAwsAccountSharingTool
         ).forEach { tool ->
             toolMap[tool.name] = tool
             logger.debug("Registered MCP tool: {}", tool.name)
@@ -369,6 +377,11 @@ class McpToolRegistry(
             // Feature: MCP Send Admin Summary Tool (ADMIN only via User Delegation)
             "send_admin_summary" -> {
                 permissions.contains(McpPermission.NOTIFICATIONS_SEND) // ADMIN role checked in tool execute()
+            }
+
+            // Feature: AWS Account Sharing (ADMIN only via User Delegation)
+            "list_aws_account_sharing", "create_aws_account_sharing", "delete_aws_account_sharing" -> {
+                permissions.contains(McpPermission.USER_ACTIVITY) // ADMIN role checked in tool execute()
             }
 
             else -> false

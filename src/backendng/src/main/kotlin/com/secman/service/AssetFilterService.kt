@@ -40,7 +40,8 @@ open class AssetFilterService(
     private val scanRepository: ScanRepository,
     private val userRepository: UserRepository,
     private val userMappingRepository: UserMappingRepository,
-    private val memoryConfig: MemoryOptimizationConfig
+    private val memoryConfig: MemoryOptimizationConfig,
+    private val awsAccountSharingService: AwsAccountSharingService
 ) {
 
     /**
@@ -136,8 +137,20 @@ open class AssetFilterService(
             emptyList()
         }
 
+        // Get assets accessible via AWS account sharing (shared accounts from other users)
+        val sharedAwsAccountAssets = if (userEmail != null) {
+            val sharedIds = awsAccountSharingService.getSharedAwsAccountIdsByEmail(userEmail)
+            if (sharedIds.isNotEmpty()) {
+                assetRepository.findByCloudAccountIdIn(sharedIds)
+            } else {
+                emptyList()
+            }
+        } else {
+            emptyList()
+        }
+
         // Combine and deduplicate by asset ID, then sort by name
-        return (workgroupAssets + awsAccountAssets + domainAssets)
+        return (workgroupAssets + awsAccountAssets + domainAssets + sharedAwsAccountAssets)
             .distinctBy { it.id }
             .sortedBy { it.name }
     }
