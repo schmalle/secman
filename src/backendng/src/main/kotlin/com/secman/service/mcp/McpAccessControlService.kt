@@ -8,6 +8,7 @@ import com.secman.dto.mcp.McpExecutionContext
 import com.secman.repository.AssetRepository
 import com.secman.repository.UserMappingRepository
 import com.secman.repository.UserRepository
+import com.secman.service.AwsAccountSharingService
 import io.micronaut.cache.annotation.Cacheable
 import jakarta.inject.Singleton
 import org.slf4j.LoggerFactory
@@ -34,7 +35,8 @@ import org.slf4j.LoggerFactory
 open class McpAccessControlService(
     private val assetRepository: AssetRepository,
     private val userMappingRepository: UserMappingRepository,
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val awsAccountSharingService: AwsAccountSharingService
 ) {
     private val logger = LoggerFactory.getLogger(McpAccessControlService::class.java)
 
@@ -171,11 +173,19 @@ open class McpAccessControlService(
             emptyList()
         }
 
-        val allAccessibleIds = (workgroupAssets + awsAssets + domainAssets).toSet()
+        // Criteria 6: AWS account sharing (shared accounts from other users)
+        val sharedAwsAccountIds = awsAccountSharingService.getSharedAwsAccountIds(userId)
+        val sharedAssets = if (sharedAwsAccountIds.isNotEmpty()) {
+            assetRepository.findByCloudAccountIdIn(sharedAwsAccountIds).mapNotNull { it.id }
+        } else {
+            emptyList()
+        }
+
+        val allAccessibleIds = (workgroupAssets + awsAssets + domainAssets + sharedAssets).toSet()
 
         logger.info(
-            "Computed accessible assets: userId={}, email={}, workgroup={}, aws={}, domain={}, total={}",
-            userId, userEmail, workgroupAssets.size, awsAssets.size, domainAssets.size, allAccessibleIds.size
+            "Computed accessible assets: userId={}, email={}, workgroup={}, aws={}, domain={}, shared={}, total={}",
+            userId, userEmail, workgroupAssets.size, awsAssets.size, domainAssets.size, sharedAssets.size, allAccessibleIds.size
         )
 
         return allAccessibleIds

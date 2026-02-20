@@ -228,6 +228,21 @@ const AdminPage = () => {
                     <div className="card">
                         <div className="card-body">
                             <h5 className="card-title">
+                                <i className="bi bi-share-fill me-2"></i>
+                                AWS Account Sharing
+                            </h5>
+                            <p className="card-text">Share AWS account visibility between users for cross-team asset access.</p>
+                            <a href="/admin/aws-account-sharing" className="btn btn-primary">
+                                Manage Sharing
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="col-md-4 mb-3">
+                    <div className="card">
+                        <div className="card-body">
+                            <h5 className="card-title">
                                 <i className="bi bi-bell-fill me-2"></i>
                                 Notification Settings
                             </h5>

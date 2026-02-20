@@ -64,6 +64,13 @@ interface AssetRepository : JpaRepository<Asset, Long> {
                     SELECT LOWER(um.domain) FROM user_mapping um
                     WHERE um.email = :userEmail AND um.domain IS NOT NULL
                 )
+                OR a.cloud_account_id IN (
+                    SELECT DISTINCT um2.aws_account_id
+                    FROM aws_account_sharing acs
+                    JOIN users u_source ON u_source.id = acs.source_user_id
+                    JOIN user_mapping um2 ON um2.email = u_source.email AND um2.aws_account_id IS NOT NULL
+                    WHERE acs.target_user_id = :userId
+                )
             ORDER BY a.name ASC
         """,
         nativeQuery = true

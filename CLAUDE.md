@@ -19,6 +19,11 @@
 - **Metadata**: groups, cloudAccountId, cloudInstanceId, adDomain, osVersion
 - **Relations**: vulnerabilities, scanResults, workgroups, manualCreator, scanUploader
 
+### AWS Account Sharing
+- **Core**: id, sourceUser, targetUser, createdBy, createdAt
+- **Semantics**: Directional, non-transitive sharing of AWS account visibility between users
+- **Access**: ADMIN-only management via REST API, MCP tools, and admin UI
+
 ## Unified Access Control
 
 Users access assets if **ANY** is true:
@@ -28,6 +33,7 @@ Users access assets if **ANY** is true:
 4. Asset discovered via user's scan upload
 5. Asset's cloudAccountId matches user's AWS mappings (UserMapping)
 6. Asset's adDomain matches user's domain mappings (case-insensitive, UserMapping)
+7. Asset's cloudAccountId matches shared AWS accounts via AwsAccountSharing (directional, non-transitive)
 
 
 ## API Endpoints
@@ -51,6 +57,9 @@ Users access assets if **ANY** is true:
 **Auth**: POST /api/auth/login, GET /oauth/{authorize,callback}
 
 **User Mappings**: GET /api/user-mappings/{current,applied-history} (ADMIN), POST/PUT/DELETE /api/user-mappings[/{id}] (ADMIN)
+
+**AWS Account Sharing**: GET/POST /api/aws-account-sharing (ADMIN), DELETE /api/aws-account-sharing/{id} (ADMIN)
+- MCP tools: `list_aws_account_sharing`, `create_aws_account_sharing`, `delete_aws_account_sharing` (all require ADMIN + User Delegation)
 
 **Identity Providers**: GET /api/identity-providers[/{enabled,{id}}], POST/PUT/DELETE /api/identity-providers[/{id}], POST /api/identity-providers/{id}/test
 

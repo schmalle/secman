@@ -269,7 +269,7 @@ curl -X POST http://localhost:8080/api/mcp/admin/api-keys \
 | `ASSETS_READ` | Read asset inventory | `get_assets`, `get_all_assets_detail`, `get_asset_profile`, `get_asset_complete_profile` |
 | `VULNERABILITIES_READ` | Read vulnerability data | `get_vulnerabilities`, `get_all_vulnerabilities_detail`, `get_asset_most_vulnerabilities`, `get_overdue_assets`, `get_my_exception_requests`, `get_pending_exception_requests`, `create_exception_request`, `approve_exception_request`, `reject_exception_request`, `cancel_exception_request` |
 | `SCANS_READ` | Read scan history | `get_scans`, `get_asset_scan_results`, `search_products` |
-| `USER_ACTIVITY` | User management and mappings | `list_users`, `add_user`, `delete_user`, `import_user_mappings`, `list_user_mappings` (all require delegation) |
+| `USER_ACTIVITY` | User management and mappings | `list_users`, `add_user`, `delete_user`, `import_user_mappings`, `list_user_mappings`, `list_aws_account_sharing`, `create_aws_account_sharing`, `delete_aws_account_sharing` (all require delegation) |
 | `WORKGROUPS_WRITE` | Workgroup management | `create_workgroup`, `delete_workgroup`, `assign_assets_to_workgroup`, `assign_users_to_workgroup` (all require delegation) |
 
 ### Managing Keys
@@ -713,6 +713,59 @@ List user mappings with pagination and filtering. **Requires ADMIN role and User
 - `totalElements`: Total number of mappings
 - `totalPages`: Total number of pages
 
+### AWS Account Sharing
+
+#### `list_aws_account_sharing`
+List AWS account sharing rules with pagination. **Requires ADMIN role and User Delegation.**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `page` | number | No | Page number (0-indexed, default: 0) |
+| `size` | number | No | Page size (default: 20, max: 100) |
+
+**Returns:**
+- `content`: List of sharing rule DTOs containing:
+  - `id`: Sharing rule ID
+  - `sourceUserId`: ID of the user whose AWS accounts are shared
+  - `sourceUserEmail`: Email of the source user
+  - `sourceUserUsername`: Username of the source user
+  - `targetUserId`: ID of the user who receives visibility
+  - `targetUserEmail`: Email of the target user
+  - `targetUserUsername`: Username of the target user
+  - `createdById`: ID of the admin who created the rule
+  - `createdByUsername`: Username of the admin
+  - `sharedAwsAccountCount`: Number of AWS accounts being shared
+  - `createdAt`: Creation timestamp
+  - `updatedAt`: Last update timestamp
+- `page`, `size`, `totalElements`, `totalPages`
+
+#### `create_aws_account_sharing`
+Create a new AWS account sharing rule. **Requires ADMIN role and User Delegation.**
+
+Sharing is directional (source -> target) and non-transitive.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `sourceUserId` | number | Yes | ID of the user whose AWS accounts will be shared |
+| `targetUserId` | number | Yes | ID of the user who will receive visibility |
+
+**Validations:**
+- Source and target users must be different
+- Both users must exist
+- Source user must have at least one AWS account mapping
+- No duplicate sharing rules allowed
+
+**Returns:** Created sharing rule DTO with message.
+
+#### `delete_aws_account_sharing`
+Delete an AWS account sharing rule. **Requires ADMIN role and User Delegation.**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `id` | number | Yes | ID of the sharing rule to delete |
+
+**Returns:** Success confirmation message.
+
 ### Release Management
 
 #### `list_releases`
@@ -873,6 +926,11 @@ All MCP operations are logged with:
 - "Validate mappings before import" → `import_user_mappings` with `dryRun: true`
 - "List all user mappings" → `list_user_mappings`
 - "Find mappings for user@company.com" → `list_user_mappings` with `email: "user@company.com"`
+
+**AWS Account Sharing:**
+- "List all sharing rules" → `list_aws_account_sharing`
+- "Share user 5's AWS accounts with user 12" → `create_aws_account_sharing` with `sourceUserId: 5, targetUserId: 12`
+- "Remove sharing rule 3" → `delete_aws_account_sharing` with `id: 3`
 
 **Releases:**
 - "List all releases" → `list_releases`
