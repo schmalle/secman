@@ -50,7 +50,7 @@ open class DefaultAdminBootstrapper(
             val admin = User(
                 username = DEFAULT_ADMIN_USERNAME,
                 email = DEFAULT_ADMIN_EMAIL,
-                passwordHash = passwordEncoder.encode(DEFAULT_ADMIN_PASSWORD),
+                passwordHash = passwordEncoder.encode(DEFAULT_ADMIN_PASSWORD)!!,
                 roles = mutableSetOf(User.Role.ADMIN, User.Role.USER),
                 authSource = User.AuthSource.LOCAL
             )

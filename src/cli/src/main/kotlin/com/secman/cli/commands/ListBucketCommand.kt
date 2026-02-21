@@ -62,6 +62,24 @@ class ListBucketCommand(
     )
     var awsProfile: String? = null
 
+    @Option(
+        names = ["--aws-access-key-id"],
+        description = ["AWS access key ID (or set AWS_ACCESS_KEY_ID env var)"]
+    )
+    var awsAccessKeyId: String? = null
+
+    @Option(
+        names = ["--aws-secret-access-key"],
+        description = ["AWS secret access key (or set AWS_SECRET_ACCESS_KEY env var)"]
+    )
+    var awsSecretAccessKey: String? = null
+
+    @Option(
+        names = ["--aws-session-token"],
+        description = ["AWS session token for temporary credentials (or set AWS_SESSION_TOKEN env var)"]
+    )
+    var awsSessionToken: String? = null
+
     @ParentCommand
     lateinit var parent: ManageUserMappingsCommand
 
@@ -91,6 +109,19 @@ class ListBucketCommand(
             if (awsProfile != null) {
                 println("AWS Profile: $awsProfile")
             }
+
+            // Resolve AWS credentials: CLI args take priority, then env vars
+            val resolvedAccessKeyId = awsAccessKeyId ?: System.getenv("AWS_ACCESS_KEY_ID")
+            val resolvedSecretAccessKey = awsSecretAccessKey ?: System.getenv("AWS_SECRET_ACCESS_KEY")
+            val resolvedSessionToken = awsSessionToken ?: System.getenv("AWS_SESSION_TOKEN")
+
+            if (resolvedAccessKeyId != null) {
+                println("AWS Credentials: explicit (access key ${resolvedAccessKeyId.take(4)}...)")
+            } else if (awsProfile != null) {
+                println("AWS Credentials: profile '$awsProfile'")
+            } else {
+                println("AWS Credentials: default chain (env/config/IAM)")
+            }
             println()
 
             println("Listing objects...")
@@ -98,7 +129,10 @@ class ListBucketCommand(
                 bucket = bucket,
                 prefix = prefix,
                 region = awsRegion,
-                profile = awsProfile
+                profile = awsProfile,
+                accessKeyId = resolvedAccessKeyId,
+                secretAccessKey = resolvedSecretAccessKey,
+                sessionToken = resolvedSessionToken
             )
 
             if (objects.isEmpty()) {
@@ -136,15 +170,19 @@ class ListBucketCommand(
 
         } catch (e: S3DownloadException) {
             println()
-            System.err.println("S3 Error: ${e.message}")
+            System.err.println("ERROR: ${e.message}")
+            System.err.println()
+            System.err.println("Usage: manage-user-mappings list-bucket --bucket <bucket-name> [--prefix <prefix>]")
+            System.err.println("  The --bucket value must be a plain S3 bucket name (e.g. 'my-bucket'),")
+            System.err.println("  not a URL or ARN.")
             System.exit(2)
         } catch (e: IllegalArgumentException) {
             println()
-            System.err.println("Error: ${e.message}")
+            System.err.println("ERROR: ${e.message}")
             System.exit(2)
         } catch (e: Exception) {
             println()
-            System.err.println("Unexpected error: ${e.message}")
+            System.err.println("ERROR: Unexpected error: ${e.message}")
             log.debug("Stack trace for unexpected error", e)
             System.exit(3)
         }

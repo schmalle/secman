@@ -15,6 +15,14 @@ import jakarta.inject.Singleton
  *   ./bin/secman manage-user-mappings import-s3 --bucket my-bucket --key data/users.json --aws-profile prod
  *   ./bin/secman manage-user-mappings import-s3 --bucket my-bucket --key mappings.csv --aws-region eu-west-1
  *   ./bin/secman manage-user-mappings import-s3 --bucket my-bucket --key mappings.csv --dry-run
+ *   ./bin/secman manage-user-mappings import-s3 --bucket my-bucket --key mappings.csv \
+ *       --aws-access-key-id AKIA... --aws-secret-access-key ...
+ *
+ * AWS Credential Resolution (highest priority first):
+ *   1. Explicit CLI flags: --aws-access-key-id + --aws-secret-access-key [+ --aws-session-token]
+ *   2. Environment variables: AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY [+ AWS_SESSION_TOKEN]
+ *   3. Named profile: --aws-profile (reads ~/.aws/credentials)
+ *   4. Default credential chain: IAM role, SSO, etc.
  *
  * CSV Format:
  *   email,type,value
@@ -80,6 +88,24 @@ class ImportS3Command(
     var awsProfile: String? = null
 
     @Option(
+        names = ["--aws-access-key-id"],
+        description = ["AWS access key ID (or set AWS_ACCESS_KEY_ID env var)"]
+    )
+    var awsAccessKeyId: String? = null
+
+    @Option(
+        names = ["--aws-secret-access-key"],
+        description = ["AWS secret access key (or set AWS_SECRET_ACCESS_KEY env var)"]
+    )
+    var awsSecretAccessKey: String? = null
+
+    @Option(
+        names = ["--aws-session-token"],
+        description = ["AWS session token for temporary credentials (or set AWS_SESSION_TOKEN env var)"]
+    )
+    var awsSessionToken: String? = null
+
+    @Option(
         names = ["--format"],
         description = ["File format: CSV, JSON, or AUTO (default: AUTO for auto-detection)"],
         defaultValue = "AUTO"
@@ -114,6 +140,20 @@ class ImportS3Command(
             if (awsProfile != null) {
                 println("AWS Profile: $awsProfile")
             }
+
+            // Resolve AWS credentials: CLI args take priority, then env vars
+            val resolvedAccessKeyId = awsAccessKeyId ?: System.getenv("AWS_ACCESS_KEY_ID")
+            val resolvedSecretAccessKey = awsSecretAccessKey ?: System.getenv("AWS_SECRET_ACCESS_KEY")
+            val resolvedSessionToken = awsSessionToken ?: System.getenv("AWS_SESSION_TOKEN")
+
+            if (resolvedAccessKeyId != null) {
+                println("AWS Credentials: explicit (access key ${resolvedAccessKeyId.take(4)}...)")
+            } else if (awsProfile != null) {
+                println("AWS Credentials: profile '$awsProfile'")
+            } else {
+                println("AWS Credentials: default chain (env/config/IAM)")
+            }
+
             println("Format: $format")
             if (dryRun) {
                 println("Mode: DRY-RUN (validation only, no changes will be made)")
@@ -126,7 +166,10 @@ class ImportS3Command(
                 bucket = bucket,
                 key = key,
                 region = awsRegion,
-                profile = awsProfile
+                profile = awsProfile,
+                accessKeyId = resolvedAccessKeyId,
+                secretAccessKey = resolvedSecretAccessKey,
+                sessionToken = resolvedSessionToken
             )
             println("Download complete.")
             println()
@@ -194,17 +237,21 @@ class ImportS3Command(
         } catch (e: S3DownloadException) {
             // Exit code 2: fatal S3 error
             println()
-            System.err.println("S3 Error: ${e.message}")
+            System.err.println("ERROR: ${e.message}")
+            System.err.println()
+            System.err.println("Usage: manage-user-mappings import-s3 --bucket <bucket-name> --key <object-key>")
+            System.err.println("  The --bucket value must be a plain S3 bucket name (e.g. 'my-bucket'),")
+            System.err.println("  not a URL or ARN.")
             System.exit(2)
         } catch (e: IllegalArgumentException) {
             // Exit code 2: configuration/argument error
             println()
-            System.err.println("Error: ${e.message}")
+            System.err.println("ERROR: ${e.message}")
             System.exit(2)
         } catch (e: Exception) {
             // Exit code 3: unexpected error
             println()
-            System.err.println("Unexpected error: ${e.message}")
+            System.err.println("ERROR: Unexpected error: ${e.message}")
             log.debug("Stack trace for unexpected error", e)
             System.exit(3)
         } finally {

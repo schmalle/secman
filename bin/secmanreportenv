@@ -9,6 +9,8 @@ SECMAN_USERNAME=op://test/secman/SECMAN_USERNAME
 SECMAN_PASSWORD=op://test/secman/SECMAN_PASSWORD
 API_KEY=op://test/secman/API_KEY
 SECMAN_ADMIN_EMAIL=op://test/secman/SECMAN_ADMIN_EMAIL
+AWS_ACCESS_KEY_ID=op://test/secman/AWS_ACCESS_KEY_ID
+AWS_SECRET_ACCESS_KEY=op://test/secman/AWS_SECRET_ACCESS_KEY
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"

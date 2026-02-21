@@ -10,5 +10,6 @@ export SECMAN_PASSWORD="op://test/secman/SECMAN_PASSWORD"
 export API_KEY="op://test/secman/API_KEY"
 export SECMAN_ADMIN_EMAIL="op://test/secman/SECMAN_ADMIN_EMAIL"
 
+
 ./gradlew cli:build
 op run -- java -jar ./src/cli/build/libs/cli-0.1.0-all.jar "$@"

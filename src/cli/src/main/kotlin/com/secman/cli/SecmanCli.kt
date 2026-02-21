@@ -177,15 +177,19 @@ class SecmanCli {
             }
             args[0] == "manage-user-mappings" -> {
                 // Use Picocli with Micronaut DI for user mapping commands
+                // Drop the first argument (command name) before passing to PicocliRunner
+                val subArgs = args.drop(1).toTypedArray()
                 ApplicationContext.run().use { ctx ->
-                    PicocliRunner.run(ManageUserMappingsCommand::class.java, ctx, *args)
+                    PicocliRunner.run(ManageUserMappingsCommand::class.java, ctx, *subArgs)
                 }
                 0
             }
             args[0] == "send-notifications" -> {
                 // Use Picocli with Micronaut DI for notification command
+                // Drop the first argument (command name) before passing to PicocliRunner
+                val subArgs = args.drop(1).toTypedArray()
                 ApplicationContext.run().use { ctx ->
-                    PicocliRunner.run(SendNotificationsCommand::class.java, ctx, *args)
+                    PicocliRunner.run(SendNotificationsCommand::class.java, ctx, *subArgs)
                 }
                 0
             }
@@ -252,7 +256,25 @@ class SecmanCli {
                 0
             }
             else -> {
-                System.err.println("Unknown command: ${args[0]}")
+                System.err.println("ERROR: Unknown command: '${args[0]}'")
+
+                // Suggest parent command for known subcommands used at the wrong level
+                val subcommandHints = mapOf(
+                    "list-bucket" to "manage-user-mappings",
+                    "import-s3" to "manage-user-mappings",
+                    "add-domain" to "manage-user-mappings",
+                    "add-aws" to "manage-user-mappings",
+                    "assign-assets" to "manage-workgroups",
+                    "remove-assets" to "manage-workgroups",
+                    "servers" to "query"
+                )
+                val parentCommand = subcommandHints[args[0]]
+                if (parentCommand != null) {
+                    System.err.println()
+                    System.err.println("Did you mean: secman $parentCommand ${args.joinToString(" ")}")
+                    System.err.println()
+                }
+
                 showHelp()
                 1
             }
@@ -372,9 +394,42 @@ class SecmanCli {
               --dry-run                Preview planned recipients without sending emails
               --verbose, -v            Detailed logging (show per-recipient status)
 
+            Manage User Mappings - S3 Import Options (Feature 065):
+              import-s3:
+                --bucket, -b <name>    S3 bucket name (required)
+                --key, -k <path>       S3 object key / path to file (required)
+                --aws-region <region>  AWS region (default: SDK auto-resolution)
+                --aws-profile <name>   AWS credential profile name
+                --aws-access-key-id    AWS access key ID (or set AWS_ACCESS_KEY_ID env var)
+                --aws-secret-access-key AWS secret access key (or set AWS_SECRET_ACCESS_KEY env var)
+                --aws-session-token    AWS session token for temporary credentials (or set AWS_SESSION_TOKEN env var)
+                --format <type>        File format: CSV, JSON, or AUTO (default: AUTO)
+                --dry-run              Validate file without creating mappings
+                --admin-user, -u       Admin email (or set SECMAN_ADMIN_EMAIL env var)
+              list-bucket:
+                --bucket, -b <name>    S3 bucket name (required)
+                --prefix, -p <prefix>  Filter objects by key prefix
+                --aws-region <region>  AWS region (default: SDK auto-resolution)
+                --aws-profile <name>   AWS credential profile name
+                --aws-access-key-id    AWS access key ID (or set AWS_ACCESS_KEY_ID env var)
+                --aws-secret-access-key AWS secret access key (or set AWS_SECRET_ACCESS_KEY env var)
+                --aws-session-token    AWS session token for temporary credentials (or set AWS_SESSION_TOKEN env var)
+                --admin-user, -u       Admin email (or set SECMAN_ADMIN_EMAIL env var)
+
+              AWS Credential Resolution Priority (highest to lowest):
+                1. Explicit CLI flags (--aws-access-key-id + --aws-secret-access-key)
+                2. Environment variables (AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY)
+                3. Named profile (--aws-profile, reads from ~/.aws/credentials)
+                4. Default credential chain (IAM role, SSO, etc.)
+
             Environment Variables:
               SECMAN_USERNAME          Backend username for authentication
               SECMAN_PASSWORD          Backend password for authentication (recommended over --password)
+              SECMAN_ADMIN_EMAIL       Admin email for S3 import operations
+              AWS_ACCESS_KEY_ID        AWS access key ID for S3 operations (or use --aws-access-key-id)
+              AWS_SECRET_ACCESS_KEY    AWS secret access key for S3 operations (or use --aws-secret-access-key)
+              AWS_SESSION_TOKEN        AWS session token for temporary credentials (or use --aws-session-token)
+              AWS_REGION               Default AWS region for S3 operations (or use --aws-region)
 
             Examples:
               # Configure CrowdStrike credentials
@@ -433,6 +488,28 @@ class SecmanCli {
               secman manage-user-mappings add-domain --emails user@example.com --domains example.com --admin-user admin@company.com
               secman manage-user-mappings add-aws --emails user@example.com --accounts 123456789012 --admin-user admin@company.com
               secman manage-user-mappings --help
+
+              # Import user mappings from S3 (Feature 065)
+              # Using environment variables (recommended):
+              export AWS_ACCESS_KEY_ID=AKIA...
+              export AWS_SECRET_ACCESS_KEY=...
+              secman manage-user-mappings import-s3 --bucket my-bucket --key mappings.csv -u admin@company.com
+
+              # Using explicit CLI flags:
+              secman manage-user-mappings import-s3 --bucket my-bucket --key mappings.csv \
+                --aws-access-key-id AKIA... --aws-secret-access-key ... -u admin@company.com
+
+              # Using temporary credentials (STS):
+              secman manage-user-mappings import-s3 --bucket my-bucket --key mappings.csv \
+                --aws-access-key-id ASIA... --aws-secret-access-key ... \
+                --aws-session-token ... -u admin@company.com
+
+              # Using AWS profile:
+              secman manage-user-mappings import-s3 --bucket my-bucket --key data/users.json --aws-profile prod -u admin@company.com
+              secman manage-user-mappings import-s3 --bucket my-bucket --key mappings.csv --dry-run -u admin@company.com
+              secman manage-user-mappings list-bucket --bucket my-bucket -u admin@company.com
+              secman manage-user-mappings list-bucket --bucket my-bucket --prefix user-mappings/ -u admin@company.com
+              secman manage-user-mappings import-s3 --help
 
               # Manage workgroup assets
               secman manage-workgroups list                                    # List all workgroups
