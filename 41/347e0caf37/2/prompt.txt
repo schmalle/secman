@@ -1,0 +1,73 @@
+Implement the following plan:
+
+# Plan: Increase CrowdStrike Vulnerability Lookup Limit to 20000
+
+## Context
+After adding the `severity=HIGH,CRITICAL` default filter, the query still returns only 100 results. The limit is enforced at **three levels**, all of which need to be raised to 20000:
+
+1. **Component** (`CrowdStrikeVulnerabilityLookup.tsx:80`): `const pageSize = 100` — hardcoded, passed to every `queryVulnerabilities()` call
+2. **Controller** (`CrowdStrikeController.kt:96-104`): defaults to 100 when null, rejects values > 1000 with `IllegalArgumentException`
+3. **Frontend service** (`crowdstrikeService.ts:86`): default param already changed to 20000, but the component overrides it by explicitly passing `pageSize`
+
+## Changes
+
+### 1. Component: Increase `pageSize` to 20000
+**File:** `src/frontend/src/components/CrowdStrikeVulnerabilityLookup.tsx:80`
+```tsx
+// Before:
+const pageSize = 100;
+// After:
+const pageSize = 20000;
+```
+
+### 2. Controller: Raise max limit from 1000 to 20000
+**File:** `src/backendng/src/main/kotlin/com/secman/controller/CrowdStrikeController.kt:96-104`
+```kotlin
+// Before:
+limit == null -> 100
+// ...
+limit > 1000 -> throw IllegalArgumentException("Limit cannot exceed 1000")
+
+// After:
+limit == null -> 20000
+// ...
+limit > 20000 -> throw IllegalArgumentException("Limit cannot exceed 20000")
+```
+
+### 3. Service: Update default limit parameters
+**File:** `src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeQueryService.kt`
+- Line 75: `queryByHostname(..., limit: Int = 100)` → `limit: Int = 20000`
+- Line 214: `queryByInstanceId(..., limit: Int = 100)` → `limit: Int = 20000`
+- Line 402: `invalidateCacheForHostname(..., limit: Int = 100)` → `limit: Int = 20000`
+- Line 424: `invalidateCacheForInstanceId(..., limit: Int = 100)` → `limit: Int = 20000`
+
+## Verification
+1. `./gradlew build` must pass
+2. Open `/vulnerabilities/system`, search for a host
+3. Backend logs should show `limit=20000`
+4. All HIGH+CRITICAL findings should be returned (not capped at 100)
+
+
+If you need specific details from before exiting plan mode (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/flake/.claude/projects/-Users-flake-sources-misc-secman/c25996ae-b8fb-439f-9b33-eed28e2fb984.jsonl
+
+---
+
+you implemented a function, so that the mapping of AWS accounts to user a can be transferred to user b. Please explain how this feature can be accessed from the UI.
+
+---
+
+[Request interrupted by user for tool use]
+
+---
+
+as admin i have created an AWS Account sharing , if i login as user test1 i get the error, that no mapping is existing. Please carefully analyze the problem and fix it.
+
+---
+
+[Image: source: REDACTED 2026-02-22 at 20.49.22.png]
+
+[Image: source: REDACTED 2026-02-22 at 20.49.49.png]
+
+---
+
+[Request interrupted by user for tool use]

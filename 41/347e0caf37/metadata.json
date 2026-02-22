@@ -3,9 +3,12 @@
   "checkpoint_id": "41347e0caf37",
   "strategy": "manual-commit",
   "branch": "main",
-  "checkpoints_count": 2,
+  "checkpoints_count": 3,
   "files_touched": [
+    "src/backendng/src/main/kotlin/com/secman/controller/CrowdStrikeController.kt",
     "src/backendng/src/main/kotlin/com/secman/service/AccountVulnsService.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeQueryService.kt",
+    "src/frontend/src/components/CrowdStrikeVulnerabilityLookup.tsx",
     "src/frontend/src/components/ReleaseList.tsx"
   ],
   "sessions": [
@@ -22,13 +25,20 @@
       "context": "/41/347e0caf37/1/context.md",
       "content_hash": "/41/347e0caf37/1/content_hash.txt",
       "prompt": "/41/347e0caf37/1/prompt.txt"
+    },
+    {
+      "metadata": "/41/347e0caf37/2/metadata.json",
+      "transcript": "/41/347e0caf37/2/full.jsonl",
+      "context": "/41/347e0caf37/2/context.md",
+      "content_hash": "/41/347e0caf37/2/content_hash.txt",
+      "prompt": "/41/347e0caf37/2/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 1445,
-    "cache_creation_tokens": 110975,
-    "cache_read_tokens": 1256734,
-    "output_tokens": 1556,
-    "api_call_count": 26
+    "input_tokens": 1694,
+    "cache_creation_tokens": 150041,
+    "cache_read_tokens": 1885679,
+    "output_tokens": 4320,
+    "api_call_count": 42
   }
 }
