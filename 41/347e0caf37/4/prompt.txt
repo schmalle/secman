@@ -1,0 +1,90 @@
+Implement the following plan:
+
+# Plan: Default CrowdStrike UI Lookups to HIGH+CRITICAL Severity
+
+## Context
+When searching for system vulnerabilities via the CrowdStrike Vulnerability Lookup page (`/vulnerabilities/system`), the severity filter is never sent to the backend — the log shows `severity=null`. This causes the query to return **all** severities (including Low, Medium, Informational), which is not what users want. The user always wants to search for **HIGH and CRITICAL** vulnerabilities from this UI.
+
+The severity parameter plumbing already exists end-to-end:
+- Controller accepts `@QueryValue severity: String?`
+- `CrowdStrikeQueryService.applyFilters()` filters results by severity when non-null
+- But the frontend never passes it
+
+**The fix**: Pass `severity=HIGH,CRITICAL` as the default from the frontend. The backend `applyFilters` already supports comma-separated... wait — actually it only does `==` comparison (single value). We need to fix that too.
+
+## Analysis of Filtering
+
+The current `applyFilters` in `CrowdStrikeQueryService.kt:372-403` only matches a **single** severity:
+```kotlin
+filtered = filtered.filter {
+    it.severity.lowercase() == severity.lowercase()
+}
+```
+
+This won't work for `"HIGH,CRITICAL"` — it needs to support comma-separated values (matching the `buildSeverityFilter` pattern already used by the bulk endpoint).
+
+## Changes
+
+### 1. Frontend: Add severity parameter to `queryVulnerabilities`
+**File:** `src/frontend/src/services/crowdstrikeService.ts`
+
+- Add `severity` parameter (default: `"HIGH,CRITICAL"`) to `queryVulnerabilities()`
+- Append `&severity=HIGH,CRITICAL` to the API URL
+
+### 2. Frontend: Pass severity from component
+**File:** `src/frontend/src/components/CrowdStrikeVulnerabilityLookup.tsx`
+
+- No changes needed — the service function default handles it. But if the user selects a specific severity in the filter dropdown (e.g., "Critical" only), that should be passed through too.
+- Actually the severity filter dropdown currently only does **client-side** filtering on already-returned results. That's fine — we keep it as-is. The API-level default of HIGH,CRITICAL restricts what comes back; the dropdown further narrows within those results.
+
+### 3. Backend: Fix `applyFilters` to support comma-separated severity
+**File:** `src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeQueryService.kt`
+
+Update the severity filter in `applyFilters()` to parse comma-separated values:
+```kotlin
+// Before:
+it.severity.lowercase() == severity.lowercase()
+
+// After:
+val severityValues = severity.split(",").map { s -> s.trim().lowercase() }
+it.severity.lowercase() in severityValues
+```
+
+## Files to Modify
+1. `src/frontend/src/services/crowdstrikeService.ts` — Add `severity` param defaulting to `"HIGH,CRITICAL"`
+2. `src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeQueryService.kt` — Fix `applyFilters` to support comma-separated severity
+
+## Files NOT Modified
+- `CrowdStrikeApiClientImpl.kt` — The CrowdStrike API call still fetches all severities; filtering happens post-response in `applyFilters`. Adding FQL-level severity filtering would be a performance optimization but is out of scope.
+- `CrowdStrikeController.kt` — No changes needed, it already passes severity through.
+- `CrowdStrikeVulnerabilityLookup.tsx` — The severity dropdown stays as client-side filter on the already-filtered results.
+
+## Verification
+1. `./gradlew build` must pass
+2. Open `/vulnerabilities/system`, search for `antpctfwd01`
+3. Check backend logs: should show `severity=HIGH,CRITICAL` instead of `severity=null`
+4. Verify only HIGH and CRITICAL vulnerabilities are returned
+5. Verify the severity dropdown still works to further filter (e.g., show only Critical)
+
+
+If you need specific details from before exiting plan mode (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/flake/.REDACTED.jsonl
+
+---
+
+currently there is a limit of 100 findings, please increase this to 20000
+
+---
+
+[Image: source: REDACTED 2026-02-22 at 20.31.40.png]
+
+---
+
+i still see the limit of 100, please reevaluate how to change the limit to 20000
+
+---
+
+[Image: source: REDACTED 2026-02-22 at 20.33.46.png]
+
+---
+
+[Request interrupted by user for tool use]
