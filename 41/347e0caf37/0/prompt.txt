@@ -1,0 +1,44 @@
+Implement the following plan:
+
+# Plan: Fix Account Vulns to Include Shared AWS Accounts
+
+## Context
+When an admin creates an AWS Account Sharing rule (e.g., sharing **harald's** 77 AWS accounts with **test1**), the target user (`test1`) still sees "No AWS accounts are mapped to your user account" on the `/account-vulns` page.
+
+**Root cause:** `AccountVulnsService.getAccountVulnsSummary()` (line 173) only queries the user's **own** mappings via `userMappingRepository.findDistinctAwsAccountIdByEmail()`. It completely ignores `AwsAccountSharing` records. Other services like `AssetFilterService` already handle this correctly.
+
+## Change: `AccountVulnsService.kt`
+**File:** `src/backendng/src/main/kotlin/com/secman/service/AccountVulnsService.kt`
+
+### 1. Inject `AwsAccountSharingService` into the constructor (line 31-37)
+Add `private val awsAccountSharingService: AwsAccountSharingService` to constructor parameters.
+
+### 2. Merge shared AWS accounts into the account list (lines 172-179)
+After fetching the user's own AWS account IDs, also fetch shared ones and combine:
+
+```kotlin
+// Get user's own AWS account IDs
+val ownAwsAccountIds = userMappingRepository.findDistinctAwsAccountIdByEmail(userEmail)
+
+// Get AWS account IDs shared to this user via AwsAccountSharing
+val sharedAwsAccountIds = awsAccountSharingService.getSharedAwsAccountIdsByEmail(userEmail)
+
+// Combine and deduplicate
+val awsAccountIds = (ownAwsAccountIds + sharedAwsAccountIds).distinct()
+
+if (awsAccountIds.isEmpty()) {
+    throw NoSuchElementException("No AWS accounts are mapped or shared with your user account...")
+}
+
+logger.debug("User {} has access to {} AWS accounts ({} own, {} shared)",
+    userEmail, awsAccountIds.size, ownAwsAccountIds.size, sharedAwsAccountIds.size)
+```
+
+No other files need changes — the frontend, controller, and DTO structures all work with whatever accounts the service returns.
+
+## Verification
+1. `./gradlew build` must pass
+2. Login as `test1`, navigate to `/account-vulns` → should see harald's 77 shared AWS accounts and their assets
+
+
+If you need specific details from before exiting plan mode (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/flake/.REDACTED.jsonl
