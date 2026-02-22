@@ -1,0 +1,89 @@
+Implement the following plan:
+
+# Plan: Export CHANGE/NOGO Reviews as Excel from Alignment Dashboard
+
+## Context
+The Alignment Dashboard (`/releases/{id}/alignment`) shows reviewer feedback on requirement changes, but there's no way to download a summary of problematic reviews (CHANGE or NOGO assessments with their comments). The user wants a **"Download Reviews"** button that exports only CHANGE/NOGO reviews as an Excel file named `Review.{version}.{date}.xlsx`.
+
+## Changes
+
+### 1. Backend: New export endpoint in AlignmentController
+**File:** `src/backendng/src/main/kotlin/com/secman/controller/AlignmentController.kt`
+
+Add a new endpoint:
+```
+GET /api/alignment/{sessionId}/export-reviews
+@Secured("ADMIN", "RELEASE_MANAGER", "REQADMIN")
+```
+
+This endpoint will:
+- Load all requirement review summaries via existing `alignmentService.getRequirementReviewSummaries(sessionId)`
+- Load admin decisions via existing `alignmentService.getDecisionsForSession(sessionId)`
+- Filter to only reviews with assessment = CHANGE or NOGO
+- Look up the session to get the release version for the filename
+- Generate Excel using XSSFWorkbook (small dataset, no need for SXSSFWorkbook streaming)
+- Return with filename `Review.{version}.{date}.xlsx` (e.g., `Review.1.0.4.2026-02-22.xlsx`)
+
+**Excel columns:**
+| Requirement ID | Requirement Text | Change Type | Reviewer | Assessment | Comment | Admin Decision | Admin Comment |
+|---|---|---|---|---|---|---|---|
+
+**Pattern:** Follows existing `exportReviewToExcel` pattern in the same controller (lines 697-724) — XSSFWorkbook → ByteArrayOutputStream → StreamedFile with Content-Disposition header.
+
+### 2. Frontend: Add download button to AlignmentDashboard
+**File:** `src/frontend/src/components/AlignmentDashboard.tsx`
+
+Add a "Download Reviews" button in the header area (next to "Back to Release" button, line ~179-184). The button will:
+- Be visible when there are CHANGE or NOGO assessments (assessments.change > 0 || assessments.nogo > 0)
+- Trigger a direct file download via `window.open()` or `authenticatedFetch` + blob download
+- Use the existing `alignmentStatus.session.id` for the API call
+
+### 3. Frontend: Add service method
+**File:** `src/frontend/src/services/releaseService.ts`
+
+Add `exportAlignmentReviews(sessionId: number)` method that triggers the download via authenticated fetch + blob pattern.
+
+## Files to Modify
+1. `src/backendng/src/main/kotlin/com/secman/controller/AlignmentController.kt` — Add export endpoint
+2. `src/frontend/src/components/AlignmentDashboard.tsx` — Add download button
+3. `src/frontend/src/services/releaseService.ts` — Add service method
+
+## Existing Code to Reuse
+- `alignmentService.getRequirementReviewSummaries(sessionId)` — already aggregates reviews per requirement
+- `alignmentService.getDecisionsForSession(sessionId)` — returns admin decisions map
+- `AlignmentSession.release.version` — for filename
+- Existing Excel export pattern from `exportReviewToExcel()` in AlignmentController (line 697)
+- Header styling pattern from `AssetExportService.createAssetStyles()` (bold header with gray background)
+
+## Verification
+1. Build: `./gradlew build` must pass
+2. Navigate to an alignment dashboard with CHANGE/NOGO reviews
+3. Click "Download Reviews" button
+4. Verify Excel file downloads with correct name format `Review.{version}.{date}.xlsx`
+5. Verify only CHANGE and NOGO reviews appear in the file
+6. Verify all columns are populated correctly (requirement ID, text, reviewer, assessment, comment, admin decision)
+
+
+If you need specific details from before exiting plan mode (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/flake/.REDACTED.jsonl
+
+---
+
+whenever the cached data is older than 120 minutes in this UI, execute the query against Crowdstrike and do not rely on the cached data for the system (here the system starting with ant)
+
+---
+
+[Image: source: REDACTED 2026-02-22 at 17.05.35.png]
+
+---
+
+when i want to search via the UI vulnerabilities for a system i always want to search for HIGH and CRITICAL vulnerabilities, the logfile entry suggests a NULL is passed for severity, this maybe is simply a logging failure. Please analyze and ensure, that i always search for HIGH and CRITICAL vulnerabilities.
+
+---
+
+[Image: source: REDACTED 2026-02-22 at 18.57.52.png]
+
+[Image: source: REDACTED 2026-02-22 at 18.58.06.png]
+
+---
+
+[Request interrupted by user for tool use]

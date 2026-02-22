@@ -1,0 +1,32 @@
+{
+  "cli_version": "0.4.2",
+  "checkpoint_id": "41347e0caf37",
+  "session_id": "b8158bec-a768-425e-9f2c-17c660ac784d",
+  "strategy": "manual-commit",
+  "created_at": "2026-02-22T20:05:02.112302Z",
+  "branch": "main",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "src/backendng/src/main/kotlin/com/secman/controller/AlignmentController.kt",
+    "src/frontend/src/components/AlignmentDashboard.tsx",
+    "src/frontend/src/components/CrowdStrikeVulnerabilityLookup.tsx",
+    "src/frontend/src/services/releaseService.ts"
+  ],
+  "agent": "Claude Code",
+  "token_usage": {
+    "input_tokens": 22202,
+    "cache_creation_tokens": 232717,
+    "cache_read_tokens": 3714505,
+    "output_tokens": 4396,
+    "api_call_count": 44
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-02-22T20:05:01.921105Z",
+    "agent_lines": 272,
+    "human_added": 1494,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 1766,
+    "agent_percentage": 15.402038505096263
+  }
+}
