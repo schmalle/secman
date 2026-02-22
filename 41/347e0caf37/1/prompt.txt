@@ -1,0 +1,17 @@
+the buttons "Create new release" and "Compare releases" should be small in height
+
+---
+
+[Image: source: REDACTED 2026-02-22 at 16.06.38.png]
+
+---
+
+i want to be able to download all reviews (if a reviewer answered CHANGE or NOGO including comments) in an Excel speedsheet, named Review.(ReleaseNumber).Date.xlsx (Use the relevant release number)
+
+---
+
+[Image: source: REDACTED 2026-02-22 at 16.12.24.png]
+
+---
+
+[Request interrupted by user for tool use]

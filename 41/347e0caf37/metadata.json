@@ -3,9 +3,10 @@
   "checkpoint_id": "41347e0caf37",
   "strategy": "manual-commit",
   "branch": "main",
-  "checkpoints_count": 1,
+  "checkpoints_count": 2,
   "files_touched": [
-    "src/backendng/src/main/kotlin/com/secman/service/AccountVulnsService.kt"
+    "src/backendng/src/main/kotlin/com/secman/service/AccountVulnsService.kt",
+    "src/frontend/src/components/ReleaseList.tsx"
   ],
   "sessions": [
     {
@@ -14,13 +15,20 @@
       "context": "/41/347e0caf37/0/context.md",
       "content_hash": "/41/347e0caf37/0/content_hash.txt",
       "prompt": "/41/347e0caf37/0/prompt.txt"
+    },
+    {
+      "metadata": "/41/347e0caf37/1/metadata.json",
+      "transcript": "/41/347e0caf37/1/full.jsonl",
+      "context": "/41/347e0caf37/1/context.md",
+      "content_hash": "/41/347e0caf37/1/content_hash.txt",
+      "prompt": "/41/347e0caf37/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 10,
-    "cache_creation_tokens": 19275,
-    "cache_read_tokens": 278732,
-    "output_tokens": 495,
-    "api_call_count": 8
+    "input_tokens": 1445,
+    "cache_creation_tokens": 110975,
+    "cache_read_tokens": 1256734,
+    "output_tokens": 1556,
+    "api_call_count": 26
   }
 }
