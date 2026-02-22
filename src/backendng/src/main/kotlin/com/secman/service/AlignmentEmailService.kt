@@ -3,10 +3,12 @@ package com.secman.service
 import com.secman.domain.AlignmentReviewer
 import com.secman.domain.AlignmentSession
 import com.secman.domain.ReviewDecision
+import com.secman.domain.User
 import com.secman.repository.AlignmentReviewerRepository
 import com.secman.repository.AlignmentSnapshotRepository
 import com.secman.repository.RequirementReviewRepository
 import com.secman.repository.ReviewDecisionRepository
+import com.secman.repository.UserRepository
 import jakarta.inject.Singleton
 import jakarta.transaction.Transactional
 import kotlinx.coroutines.runBlocking
@@ -26,7 +28,8 @@ open class AlignmentEmailService(
     private val reviewDecisionRepository: ReviewDecisionRepository,
     private val alignmentSnapshotRepository: AlignmentSnapshotRepository,
     private val emailTemplateService: EmailTemplateService,
-    private val appSettingsService: AppSettingsService
+    private val appSettingsService: AppSettingsService,
+    private val userRepository: UserRepository
 ) {
     private val logger = LoggerFactory.getLogger(AlignmentEmailService::class.java)
 
@@ -651,6 +654,213 @@ open class AlignmentEmailService(
 
             Detailed Results:
             $reviewLines
+
+            ---
+            This is an automated notification from SecMan.
+        """.trimIndent()
+    }
+
+    // ========== Finalization Notification Emails (sent to REQ + REQADMIN users) ==========
+
+    /**
+     * Send finalization notification emails to all users with REQ or REQADMIN roles.
+     * Each recipient receives a link to the public alignment results page.
+     *
+     * @param session The completed alignment session
+     */
+    @Transactional
+    open fun sendFinalizationNotificationEmails(session: AlignmentSession) {
+        val sessionId = session.id!!
+        logger.info("Sending finalization notification emails for session {}", sessionId)
+
+        // Find all users with REQ or REQADMIN roles, deduplicated
+        val reqUsers = userRepository.findByRolesContaining(User.Role.REQ)
+        val reqAdminUsers = userRepository.findByRolesContaining(User.Role.REQADMIN)
+        val recipients = (reqUsers + reqAdminUsers).distinctBy { it.id }
+
+        if (recipients.isEmpty()) {
+            logger.info("No REQ/REQADMIN users found for finalization notification")
+            return
+        }
+
+        val release = session.release
+        val baseUrl = appSettingsService.getBaseUrl()
+        val resultsUrl = "$baseUrl/alignment/results/${session.resultsToken}"
+
+        // Compute summary stats from snapshots and decisions
+        val snapshots = alignmentSnapshotRepository.findBySession_Id(sessionId)
+        val allReviews = requirementReviewRepository.findBySession_Id(sessionId)
+        val decisions = reviewDecisionRepository.findBySession_Id(sessionId)
+        val decisionsByReviewId = decisions.associateBy { it.review.id!! }
+        val reviewsBySnapshot = allReviews.groupBy { it.snapshot.id }
+
+        // Per-snapshot decision: pick the first review's decision for each snapshot
+        var acceptedCount = 0
+        var rejectedCount = 0
+        var noDecisionCount = 0
+        snapshots.forEach { snapshot ->
+            val snapshotReviews = reviewsBySnapshot[snapshot.id] ?: emptyList()
+            val decision = snapshotReviews.firstNotNullOfOrNull { review ->
+                decisionsByReviewId[review.id]
+            }
+            when (decision?.decision) {
+                ReviewDecision.Decision.ACCEPTED -> acceptedCount++
+                ReviewDecision.Decision.REJECTED -> rejectedCount++
+                else -> noDecisionCount++
+            }
+        }
+
+        val subject = "Release Activated: ${release.name} v${release.version} — Alignment Results"
+
+        var successCount = 0
+        var failCount = 0
+
+        recipients.forEach { user ->
+            try {
+                val htmlContent = buildFinalizationNotificationHtml(
+                    recipientName = user.username,
+                    releaseName = release.name,
+                    releaseVersion = release.version,
+                    totalChanges = snapshots.size,
+                    acceptedCount = acceptedCount,
+                    rejectedCount = rejectedCount,
+                    noDecisionCount = noDecisionCount,
+                    resultsUrl = resultsUrl
+                )
+
+                val textContent = buildFinalizationNotificationText(
+                    recipientName = user.username,
+                    releaseName = release.name,
+                    releaseVersion = release.version,
+                    totalChanges = snapshots.size,
+                    acceptedCount = acceptedCount,
+                    rejectedCount = rejectedCount,
+                    noDecisionCount = noDecisionCount,
+                    resultsUrl = resultsUrl
+                )
+
+                val success = runBlocking {
+                    try {
+                        emailService.sendEmail(user.email, subject, textContent, htmlContent).get()
+                    } catch (e: Exception) {
+                        logger.error("Failed to send finalization notification to {}: {}", user.email, e.message)
+                        false
+                    }
+                }
+
+                if (success) successCount++ else failCount++
+            } catch (e: Exception) {
+                logger.error("Failed to send finalization notification to {}: {}", user.email, e.message)
+                failCount++
+            }
+        }
+
+        logger.info("Sent {} of {} finalization notification emails successfully (failed: {})",
+            successCount, recipients.size, failCount)
+    }
+
+    private fun buildFinalizationNotificationHtml(
+        recipientName: String,
+        releaseName: String,
+        releaseVersion: String,
+        totalChanges: Int,
+        acceptedCount: Int,
+        rejectedCount: Int,
+        noDecisionCount: Int,
+        resultsUrl: String
+    ): String {
+        return """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Release Activated - Alignment Results</title>
+            </head>
+            <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #1a1a2e; margin: 0; padding: 0; background-color: #f8f9fa;">
+                <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+                    <div style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%); padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
+                        <h1 style="color: white; margin: 0; font-size: 24px; font-weight: 600;">Release Activated</h1>
+                        <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0; font-size: 14px;">$releaseName v$releaseVersion</p>
+                    </div>
+
+                    <div style="background: white; padding: 30px; border-radius: 0 0 12px 12px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+                        <p style="font-size: 16px; margin-bottom: 20px;">Hello <strong>$recipientName</strong>,</p>
+
+                        <p style="margin-bottom: 20px;">The alignment process for <strong>$releaseName v$releaseVersion</strong> has been completed and the release has been activated.</p>
+
+                        <div style="background: #f8f9fa; border-radius: 8px; padding: 20px; margin: 20px 0;">
+                            <h3 style="margin: 0 0 15px 0; color: #495057; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">Alignment Summary</h3>
+                            <table style="width: 100%; border-collapse: collapse;">
+                                <tr>
+                                    <td style="padding: 8px 0; color: #6c757d; width: 40%;">Total Changes:</td>
+                                    <td style="padding: 8px 0; font-weight: 600;">$totalChanges</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 8px 0; color: #6c757d;">Accepted:</td>
+                                    <td style="padding: 8px 0; font-weight: 600; color: #28a745;">$acceptedCount</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 8px 0; color: #6c757d;">Rejected:</td>
+                                    <td style="padding: 8px 0; font-weight: 600; color: #dc3545;">$rejectedCount</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 8px 0; color: #6c757d;">No Decision:</td>
+                                    <td style="padding: 8px 0; font-weight: 600; color: #6c757d;">$noDecisionCount</td>
+                                </tr>
+                            </table>
+                        </div>
+
+                        <div style="text-align: center; margin: 30px 0;">
+                            <a href="$resultsUrl" style="display: inline-block; background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 15px rgba(40, 167, 69, 0.4);">
+                                View Alignment Results
+                            </a>
+                        </div>
+
+                        <p style="font-size: 14px; color: #6c757d; margin-top: 20px;">
+                            Click the button above to view the full alignment results, including individual requirement decisions and reviewer assessments. No login is required.
+                        </p>
+
+                        <hr style="border: none; border-top: 1px solid #e9ecef; margin: 30px 0;">
+
+                        <p style="font-size: 12px; color: #adb5bd; text-align: center; margin: 0;">
+                            This is an automated notification from SecMan.<br>
+                            If you cannot access the link, copy and paste this URL: $resultsUrl
+                        </p>
+                    </div>
+                </div>
+            </body>
+            </html>
+        """.trimIndent()
+    }
+
+    private fun buildFinalizationNotificationText(
+        recipientName: String,
+        releaseName: String,
+        releaseVersion: String,
+        totalChanges: Int,
+        acceptedCount: Int,
+        rejectedCount: Int,
+        noDecisionCount: Int,
+        resultsUrl: String
+    ): String {
+        return """
+            RELEASE ACTIVATED: $releaseName v$releaseVersion
+            ================================================
+
+            Hello $recipientName,
+
+            The alignment process for $releaseName v$releaseVersion has been completed
+            and the release has been activated.
+
+            Alignment Summary:
+            - Total Changes: $totalChanges
+            - Accepted: $acceptedCount
+            - Rejected: $rejectedCount
+            - No Decision: $noDecisionCount
+
+            View the full alignment results (no login required):
+            $resultsUrl
 
             ---
             This is an automated notification from SecMan.

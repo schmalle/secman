@@ -72,7 +72,7 @@ open class CrowdStrikeQueryService(
         hostname: String,
         severity: String? = null,
         product: String? = null,
-        limit: Int = 100,
+        limit: Int = 20000,
         page: Int = 0
     ): CrowdStrikeQueryResponse {
         require(hostname.isNotBlank()) { "Hostname cannot be blank" }
@@ -211,7 +211,7 @@ open class CrowdStrikeQueryService(
         instanceId: String,
         severity: String? = null,
         product: String? = null,
-        limit: Int = 100,
+        limit: Int = 20000,
         page: Int = 0
     ): CrowdStrikeQueryResponse {
         require(instanceId.isNotBlank()) { "Instance ID cannot be blank" }
@@ -381,10 +381,11 @@ open class CrowdStrikeQueryService(
 
         var filtered = response.vulnerabilities
 
-        // Filter by severity
+        // Filter by severity (supports comma-separated values, e.g. "HIGH,CRITICAL")
         if (!severity.isNullOrBlank()) {
+            val severityValues = severity.split(",").map { s -> s.trim().lowercase() }
             filtered = filtered.filter {
-                it.severity.lowercase() == severity.lowercase()
+                it.severity.lowercase() in severityValues
             }
         }
 

@@ -94,12 +94,12 @@ open class CrowdStrikeController(
 
             // Validate limit
             val pageSize = when {
-                limit == null -> 100
+                limit == null -> 20000
                 limit < 1 -> {
                     throw IllegalArgumentException("Limit must be greater than 0")
                 }
-                limit > 1000 -> {
-                    throw IllegalArgumentException("Limit cannot exceed 1000")
+                limit > 20000 -> {
+                    throw IllegalArgumentException("Limit cannot exceed 20000")
                 }
                 else -> limit
             }

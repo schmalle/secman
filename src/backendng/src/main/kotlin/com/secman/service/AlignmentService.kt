@@ -690,6 +690,73 @@ open class AlignmentService(
             .associateBy { it.review.id!! }
     }
 
+    // ========== Public Results Access ==========
+
+    data class AlignmentResultsData(
+        val session: AlignmentSession,
+        val requirements: List<RequirementResultItem>,
+        val totalCount: Int,
+        val acceptedCount: Int,
+        val rejectedCount: Int,
+        val noDecisionCount: Int
+    )
+
+    data class RequirementResultItem(
+        val snapshot: AlignmentSnapshot,
+        val reviews: List<RequirementReview>,
+        val assessments: AssessmentSummary,
+        val adminDecision: ReviewDecision?
+    )
+
+    /**
+     * Get alignment results by public results token.
+     * Returns session info, requirement snapshots with aggregated reviews and admin decisions.
+     */
+    @Transactional
+    open fun getAlignmentResultsByToken(resultsToken: String): AlignmentResultsData {
+        val session = alignmentSessionRepository.findByResultsToken(resultsToken)
+            .orElseThrow { NoSuchElementException("Invalid results token") }
+
+        val sessionId = session.id!!
+        val snapshots = alignmentSnapshotRepository.findBySession_Id(sessionId)
+        val allReviews = requirementReviewRepository.findBySession_Id(sessionId)
+        val reviewsBySnapshot = allReviews.groupBy { it.snapshot.id }
+        val decisions = reviewDecisionRepository.findBySession_Id(sessionId)
+        val decisionsByReviewId = decisions.associateBy { it.review.id!! }
+
+        val requirements = snapshots.map { snapshot ->
+            val snapshotReviews = reviewsBySnapshot[snapshot.id] ?: emptyList()
+            val okCount = snapshotReviews.count { it.assessment == ReviewAssessment.OK }
+            val changeCount = snapshotReviews.count { it.assessment == ReviewAssessment.CHANGE }
+            val nogoCount = snapshotReviews.count { it.assessment == ReviewAssessment.NOGO }
+
+            // Find the admin decision for this snapshot (any review's decision applies)
+            val adminDecision = snapshotReviews.firstNotNullOfOrNull { review ->
+                decisionsByReviewId[review.id]
+            }
+
+            RequirementResultItem(
+                snapshot = snapshot,
+                reviews = snapshotReviews,
+                assessments = AssessmentSummary(okCount, changeCount, nogoCount),
+                adminDecision = adminDecision
+            )
+        }
+
+        val acceptedCount = requirements.count { it.adminDecision?.decision == Decision.ACCEPTED }
+        val rejectedCount = requirements.count { it.adminDecision?.decision == Decision.REJECTED }
+        val noDecisionCount = requirements.count { it.adminDecision == null }
+
+        return AlignmentResultsData(
+            session = session,
+            requirements = requirements,
+            totalCount = requirements.size,
+            acceptedCount = acceptedCount,
+            rejectedCount = rejectedCount,
+            noDecisionCount = noDecisionCount
+        )
+    }
+
     // ========== Helper Classes ==========
 
     data class Quadruple<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)

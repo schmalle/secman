@@ -35,6 +35,7 @@ export const AlignmentDashboard: React.FC<AlignmentDashboardProps> = ({ releaseI
 
     const canManage = typeof window !== 'undefined' && hasRole(['ADMIN', 'RELEASE_MANAGER']);
     const canDecide = typeof window !== 'undefined' && hasRole(['ADMIN', 'REQADMIN']);
+    const canExportReviews = typeof window !== 'undefined' && hasRole(['ADMIN', 'RELEASE_MANAGER', 'REQADMIN']);
     const [decisionComments, setDecisionComments] = useState<Record<number, string>>({});
     const [decisionLoading, setDecisionLoading] = useState<number | null>(null);
 
@@ -117,6 +118,19 @@ export const AlignmentDashboard: React.FC<AlignmentDashboardProps> = ({ releaseI
         }
     };
 
+    const handleExportReviews = async () => {
+        if (!alignmentStatus?.session.id) return;
+
+        setActionLoading('export');
+        try {
+            await releaseService.exportAlignmentReviews(alignmentStatus.session.id);
+        } catch (err) {
+            alert(err instanceof Error ? err.message : 'Failed to export reviews');
+        } finally {
+            setActionLoading(null);
+        }
+    };
+
     const handleDecision = async (reviewId: number, decision: 'ACCEPTED' | 'REJECTED') => {
         if (!alignmentStatus?.session.id) return;
 
@@ -177,6 +191,20 @@ export const AlignmentDashboard: React.FC<AlignmentDashboardProps> = ({ releaseI
                     </p>
                 </div>
                 <div className="d-flex gap-2">
+                    {canExportReviews && (assessments.change > 0 || assessments.nogo > 0) && (
+                        <button
+                            className="btn btn-outline-primary"
+                            onClick={handleExportReviews}
+                            disabled={actionLoading !== null}
+                        >
+                            {actionLoading === 'export' ? (
+                                <span className="spinner-border spinner-border-sm me-1"></span>
+                            ) : (
+                                <i className="bi bi-download me-1"></i>
+                            )}
+                            Download Reviews
+                        </button>
+                    )}
                     <a href={`/releases/${releaseId}`} className="btn btn-outline-secondary">
                         <i className="bi bi-arrow-left me-1"></i>
                         Back to Release

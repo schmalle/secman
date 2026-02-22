@@ -83,7 +83,8 @@ export async function queryVulnerabilities(
     hostname: string,
     force: boolean = false,
     page: number = 0,
-    limit: number = 100
+    limit: number = 20000,
+    severity: string = 'HIGH,CRITICAL'
 ): Promise<CrowdStrikeQueryResponse> {
     console.log('[CrowdStrikeService] queryVulnerabilities called');
     console.log('[CrowdStrikeService] Hostname:', hostname);
@@ -93,7 +94,8 @@ export async function queryVulnerabilities(
     // Use new endpoint that supports both hostname and instance ID (Feature 041)
     const forceParam = force ? '&force=true' : '';
     const pageParam = `&page=${page}&limit=${limit}`;
-    const url = `/api/vulnerabilities?hostname=${encodeURIComponent(hostname)}${forceParam}${pageParam}`;
+    const severityParam = severity ? `&severity=${encodeURIComponent(severity)}` : '';
+    const url = `/api/vulnerabilities?hostname=${encodeURIComponent(hostname)}${forceParam}${pageParam}${severityParam}`;
     console.log('[CrowdStrikeService] Calling API:', url);
 
     try {

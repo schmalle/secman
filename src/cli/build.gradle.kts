@@ -44,12 +44,12 @@ dependencies {
     implementation("org.apache.commons:commons-csv:1.14.1")
 
     // AWS SDK for S3 (Feature 065 - S3 User Mapping Import)
-    implementation(platform("software.amazon.awssdk:bom:2.41.18"))
+    implementation(platform("software.amazon.awssdk:bom:2.41.33"))
     implementation("software.amazon.awssdk:s3")
     
     // Kotlin
-    implementation("org.jetbrains.kotlin:kotlin-reflect:2.3.0")
-    implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.3.0")
+    implementation("org.jetbrains.kotlin:kotlin-reflect:2.3.10")
+    implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.3.10")
     
     // Logging
     runtimeOnly("ch.qos.logback:logback-classic")
@@ -59,10 +59,10 @@ dependencies {
     ksp("io.micronaut:micronaut-http-validation")
 
     // Test dependencies - Feature 056
-    testImplementation("org.junit.jupiter:junit-jupiter-api:6.0.2")
-    testImplementation("org.junit.jupiter:junit-jupiter-engine:6.0.2")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher:6.0.2")
-    testImplementation("io.mockk:mockk:1.14.7")
+    testImplementation("org.junit.jupiter:junit-jupiter-api:6.0.3")
+    testImplementation("org.junit.jupiter:junit-jupiter-engine:6.0.3")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher:6.0.3")
+    testImplementation("io.mockk:mockk:1.14.9")
     testImplementation("org.assertj:assertj-core:3.27.7")
 }
 

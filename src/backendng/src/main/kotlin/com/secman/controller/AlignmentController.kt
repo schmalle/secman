@@ -25,6 +25,7 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook
 import org.slf4j.LoggerFactory
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.time.LocalDate
 
 /**
  * REST controller for the Requirements Alignment Process.
@@ -424,6 +425,14 @@ class AlignmentController(
                     logger.error("Failed to send feedback summary emails for session {}: {}", sessionId, e.message)
                     // Don't fail the finalization if emails fail
                 }
+
+                // Send finalization notification to REQ + REQADMIN users with results link
+                try {
+                    alignmentEmailService.sendFinalizationNotificationEmails(session)
+                } catch (e: Exception) {
+                    logger.error("Failed to send finalization notification emails for session {}: {}", sessionId, e.message)
+                    // Don't fail the finalization if emails fail
+                }
             }
 
             return HttpResponse.ok(mapOf(
@@ -476,6 +485,73 @@ class AlignmentController(
             return HttpResponse.notFound(mapOf(
                 "error" to "Not Found",
                 "message" to (e.message ?: "Session not found")
+            ))
+        }
+    }
+
+    // ========== Public Results Endpoint ==========
+
+    /**
+     * GET /api/alignment/results/{token} - Get alignment results via public token
+     * No authentication required - token serves as access control.
+     * Used by finalization notification emails to show accepted/rejected decisions.
+     */
+    @Get("/alignment/results/{token}")
+    @Secured(SecurityRule.IS_ANONYMOUS)
+    fun getAlignmentResults(@PathVariable token: String): HttpResponse<Map<String, Any?>> {
+        try {
+            val results = alignmentService.getAlignmentResultsByToken(token)
+            val session = results.session
+
+            return HttpResponse.ok(mapOf(
+                "session" to mapOf(
+                    "id" to session.id,
+                    "releaseName" to session.release.name,
+                    "releaseVersion" to session.release.version,
+                    "status" to session.status.name,
+                    "changedRequirementsCount" to session.changedRequirementsCount,
+                    "startedAt" to session.startedAt?.toString(),
+                    "completedAt" to session.completedAt?.toString(),
+                    "completionNotes" to session.completionNotes
+                ),
+                "summary" to mapOf(
+                    "total" to results.totalCount,
+                    "accepted" to results.acceptedCount,
+                    "rejected" to results.rejectedCount,
+                    "noDecision" to results.noDecisionCount
+                ),
+                "requirements" to results.requirements.map { item ->
+                    mapOf(
+                        "snapshotId" to item.snapshot.id,
+                        "requirementId" to item.snapshot.requirementInternalId,
+                        "shortreq" to item.snapshot.shortreq,
+                        "details" to item.snapshot.details,
+                        "changeType" to item.snapshot.changeType.name,
+                        "chapter" to item.snapshot.chapter,
+                        "assessments" to mapOf(
+                            "ok" to item.assessments.okCount,
+                            "change" to item.assessments.changeCount,
+                            "nogo" to item.assessments.nogoCount
+                        ),
+                        "reviews" to item.reviews.map { review ->
+                            mapOf(
+                                "reviewerName" to review.reviewer.user.username,
+                                "assessment" to review.assessment.name,
+                                "comment" to review.comment
+                            )
+                        },
+                        "adminDecision" to if (item.adminDecision != null) mapOf(
+                            "decision" to item.adminDecision.decision.name,
+                            "comment" to item.adminDecision.comment,
+                            "decidedBy" to item.adminDecision.decidedByUsername
+                        ) else null
+                    )
+                }
+            ))
+        } catch (e: NoSuchElementException) {
+            return HttpResponse.notFound(mapOf(
+                "error" to "Not Found",
+                "message" to "Invalid or expired results token"
             ))
         }
     }
@@ -886,6 +962,116 @@ class AlignmentController(
             return HttpResponse.badRequest(mapOf(
                 "success" to false,
                 "message" to "Failed to parse Excel file: ${e.message}"
+            ))
+        }
+    }
+
+    /**
+     * GET /api/alignment/{sessionId}/export-reviews - Export CHANGE/NOGO reviews as Excel
+     * Returns .xlsx containing only reviews with CHANGE or NOGO assessments,
+     * including admin decisions where available.
+     * Authorization: ADMIN, RELEASE_MANAGER, or REQADMIN
+     */
+    @Get("/alignment/{sessionId}/export-reviews")
+    @Secured("ADMIN", "RELEASE_MANAGER", "REQADMIN")
+    fun exportReviews(@PathVariable sessionId: Long): HttpResponse<*> {
+        try {
+            val summaries = alignmentService.getRequirementReviewSummaries(sessionId)
+            val decisions = alignmentService.getDecisionsForSession(sessionId)
+
+            // Flatten to individual reviews, keeping only CHANGE and NOGO
+            data class ReviewRow(
+                val requirementId: String,
+                val shortreq: String,
+                val changeType: String,
+                val reviewerName: String,
+                val assessment: String,
+                val comment: String?,
+                val adminDecision: String?,
+                val adminComment: String?
+            )
+
+            val rows = summaries.flatMap { summary ->
+                summary.reviews
+                    .filter { it.assessment == ReviewAssessment.CHANGE || it.assessment == ReviewAssessment.NOGO }
+                    .map { review ->
+                        val decision = decisions[review.id]
+                        ReviewRow(
+                            requirementId = summary.snapshot.requirementInternalId,
+                            shortreq = summary.snapshot.shortreq,
+                            changeType = summary.snapshot.changeType.name,
+                            reviewerName = review.reviewer.user.username,
+                            assessment = review.assessment.name,
+                            comment = review.comment,
+                            adminDecision = decision?.decision?.name,
+                            adminComment = decision?.comment
+                        )
+                    }
+            }
+
+            // Look up session for filename
+            val status = alignmentService.getAlignmentStatus(sessionId)
+            val version = status.session.release.version
+            val date = LocalDate.now().toString()
+
+            val workbook = XSSFWorkbook()
+            val sheet = workbook.createSheet("Reviews")
+
+            val headers = arrayOf(
+                "Requirement ID", "Requirement Text", "Change Type",
+                "Reviewer", "Assessment", "Comment",
+                "Admin Decision", "Admin Comment"
+            )
+
+            // Header style (bold + gray background)
+            val headerStyle = workbook.createCellStyle()
+            val headerFont = workbook.createFont()
+            headerFont.bold = true
+            headerStyle.setFont(headerFont)
+            headerStyle.fillForegroundColor = org.apache.poi.ss.usermodel.IndexedColors.GREY_25_PERCENT.index
+            headerStyle.fillPattern = org.apache.poi.ss.usermodel.FillPatternType.SOLID_FOREGROUND
+
+            val headerRow = sheet.createRow(0)
+            headers.forEachIndexed { index, header ->
+                val cell = headerRow.createCell(index)
+                cell.setCellValue(header)
+                cell.cellStyle = headerStyle
+            }
+
+            // Data rows
+            rows.forEachIndexed { index, row ->
+                val excelRow = sheet.createRow(index + 1)
+                excelRow.createCell(0).setCellValue(row.requirementId)
+                excelRow.createCell(1).setCellValue(row.shortreq)
+                excelRow.createCell(2).setCellValue(row.changeType)
+                excelRow.createCell(3).setCellValue(row.reviewerName)
+                excelRow.createCell(4).setCellValue(row.assessment)
+                excelRow.createCell(5).setCellValue(row.comment ?: "")
+                excelRow.createCell(6).setCellValue(row.adminDecision ?: "")
+                excelRow.createCell(7).setCellValue(row.adminComment ?: "")
+            }
+
+            // Auto-size columns
+            for (i in headers.indices) {
+                sheet.autoSizeColumn(i)
+                if (sheet.getColumnWidth(i) < 3000) {
+                    sheet.setColumnWidth(i, 3000)
+                }
+            }
+
+            val outputStream = ByteArrayOutputStream()
+            workbook.write(outputStream)
+            workbook.close()
+
+            val inputStream = ByteArrayInputStream(outputStream.toByteArray())
+            val filename = "Review.${version}.${date}.xlsx".replace(" ", "_")
+
+            return HttpResponse.ok(StreamedFile(inputStream, MediaType.of("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")))
+                .header("Content-Disposition", "attachment; filename=\"$filename\"")
+        } catch (e: NoSuchElementException) {
+            return HttpResponse.notFound(mapOf(
+                "error" to "Not Found",
+                "message" to (e.message ?: "Session not found")
             ))
         }
     }

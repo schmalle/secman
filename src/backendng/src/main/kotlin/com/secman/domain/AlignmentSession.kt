@@ -17,7 +17,8 @@ import java.time.Instant
     name = "alignment_session",
     indexes = [
         Index(name = "idx_alignment_session_release", columnList = "release_id"),
-        Index(name = "idx_alignment_session_status", columnList = "status")
+        Index(name = "idx_alignment_session_status", columnList = "status"),
+        Index(name = "idx_alignment_session_results_token", columnList = "results_token")
     ]
 )
 @Serdeable
@@ -90,6 +91,13 @@ data class AlignmentSession(
     @Enumerated(EnumType.STRING)
     @Column(name = "review_scope", nullable = false, length = 10)
     var reviewScope: ReviewScope = ReviewScope.CHANGED,
+
+    /**
+     * Shared token for public access to alignment results page.
+     * Generated on creation, used in finalization notification emails.
+     */
+    @Column(name = "results_token", unique = true, length = 36)
+    var resultsToken: String = java.util.UUID.randomUUID().toString(),
 
     @Column(name = "created_at", updatable = false)
     var createdAt: Instant? = null,

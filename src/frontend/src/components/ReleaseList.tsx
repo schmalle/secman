@@ -336,13 +336,13 @@ const ReleaseList: React.FC<ReleaseListProps> = () => {
                     <div className="col">
                         <h2>Releases</h2>
                     </div>
-                    <div className="col-auto d-flex gap-2">
-                        <a href="/releases/compare" className="btn btn-outline-primary">
+                    <div className="col-auto d-flex gap-2 align-items-start">
+                        <a href="/releases/compare" className="btn btn-sm btn-outline-primary">
                             <i className="bi bi-arrow-left-right me-2"></i>
                             Compare Releases
                         </a>
                         {canCreate && (
-                            <button className="btn btn-primary" onClick={handleCreateClick}>
+                            <button className="btn btn-sm btn-primary" onClick={handleCreateClick}>
                                 <i className="bi bi-plus-circle me-2"></i>
                                 Create New Release
                             </button>
@@ -378,13 +378,13 @@ const ReleaseList: React.FC<ReleaseListProps> = () => {
                         Manage requirement version snapshots for compliance and audit purposes
                     </p>
                 </div>
-                <div className="col-auto d-flex gap-2">
-                    <a href="/releases/compare" className="btn btn-outline-primary">
+                <div className="col-auto d-flex gap-2 align-items-start">
+                    <a href="/releases/compare" className="btn btn-sm btn-outline-primary">
                         <i className="bi bi-arrow-left-right me-2"></i>
                         Compare Releases
                     </a>
                     {canCreate && (
-                        <button className="btn btn-primary" onClick={handleCreateClick}>
+                        <button className="btn btn-sm btn-primary" onClick={handleCreateClick}>
                             <i className="bi bi-plus-circle me-2"></i>
                             Create New Release
                         </button>

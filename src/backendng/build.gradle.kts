@@ -22,31 +22,31 @@ dependencies {
     implementation(project(":shared"))
     
     // Micronaut Core
-    implementation("io.micronaut:micronaut-http-client:4.10.14")
-    implementation("io.micronaut:micronaut-http-server-netty:4.10.14")
-    implementation("io.micronaut:micronaut-jackson-databind:4.10.14")
+    implementation("io.micronaut:micronaut-http-client:4.10.15")
+    implementation("io.micronaut:micronaut-http-server-netty:4.10.15")
+    implementation("io.micronaut:micronaut-jackson-databind:4.10.15")
     implementation("io.micronaut.kotlin:micronaut-kotlin-runtime")
     implementation("io.micronaut.kotlin:micronaut-kotlin-extension-functions")
-    implementation("io.micronaut:micronaut-retry:4.10.14")
+    implementation("io.micronaut:micronaut-retry:4.10.15")
     implementation("io.micronaut.cache:micronaut-cache-caffeine")
     
     // Database
-    implementation("io.micronaut.data:micronaut-data-hibernate-jpa:4.14.2")
+    implementation("io.micronaut.data:micronaut-data-hibernate-jpa:4.14.3")
     implementation("io.micronaut.sql:micronaut-hibernate-jpa:7.0.0")
     implementation("io.micronaut.sql:micronaut-jdbc-hikari:7.0.0")
     runtimeOnly("org.mariadb.jdbc:mariadb-java-client:3.5.7")
 
 	implementation("io.micronaut.flyway:micronaut-flyway:7.9.2")
-	runtimeOnly("org.flywaydb:flyway-core:11.20.3")
-	runtimeOnly("org.flywaydb:flyway-mysql:11.20.3")
+	runtimeOnly("org.flywaydb:flyway-core:12.0.2")
+	runtimeOnly("org.flywaydb:flyway-mysql:12.0.2")
 	
     // Security
-    implementation("io.micronaut.security:micronaut-security-jwt:4.16.1")
-    implementation("io.micronaut.security:micronaut-security-oauth2:4.16.1")
+    implementation("io.micronaut.security:micronaut-security-jwt:4.17.1")
+    implementation("io.micronaut.security:micronaut-security-oauth2:4.17.1")
 
     // WebAuthn/Passkey support
-    implementation("com.webauthn4j:webauthn4j-core:0.30.2.RELEASE")
-    implementation("com.webauthn4j:webauthn4j-metadata:0.30.2.RELEASE")
+    implementation("com.webauthn4j:webauthn4j-core:0.31.0.RELEASE")
+    implementation("com.webauthn4j:webauthn4j-metadata:0.31.0.RELEASE")
 
     // Validation
     implementation("io.micronaut.validation:micronaut-validation")
@@ -80,7 +80,7 @@ dependencies {
     implementation("io.micronaut.reactor:micronaut-reactor-http-client")
     
     // Logging
-    runtimeOnly("ch.qos.logback:logback-classic:1.5.26")
+    runtimeOnly("ch.qos.logback:logback-classic:1.5.32")
     // Bridge Log4j to Logback (required for Apache POI)
     runtimeOnly("org.apache.logging.log4j:log4j-to-slf4j:2.25.3")
     // Logstash encoder for JSON logging (Feature 046)
@@ -92,7 +92,7 @@ dependencies {
     runtimeOnly("org.yaml:snakeyaml:2.5")
     
     // Password encoding
-    implementation("org.springframework.security:spring-security-crypto:7.0.2")
+    implementation("org.springframework.security:spring-security-crypto:7.0.3")
     implementation("commons-logging:commons-logging:1.3.5")
     
     // Document generation (Apache POI)
@@ -116,11 +116,11 @@ dependencies {
 
     // Test dependencies - Feature 056
     kspTest("io.micronaut:micronaut-inject-java")
-    testImplementation("org.junit.jupiter:junit-jupiter-api:6.0.2")
-    testImplementation("org.junit.jupiter:junit-jupiter-engine:6.0.2")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher:6.0.2")
+    testImplementation("org.junit.jupiter:junit-jupiter-api:6.0.3")
+    testImplementation("org.junit.jupiter:junit-jupiter-engine:6.0.3")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher:6.0.3")
     testImplementation("io.micronaut.test:micronaut-test-junit5:4.10.2")
-    testImplementation("io.mockk:mockk:1.14.7")
+    testImplementation("io.mockk:mockk:1.14.9")
     testImplementation("org.testcontainers:testcontainers:2.0.3")
     testImplementation("org.testcontainers:mariadb:1.21.4")
     testImplementation("org.testcontainers:junit-jupiter:1.21.4")

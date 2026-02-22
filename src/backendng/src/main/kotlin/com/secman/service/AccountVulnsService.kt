@@ -33,7 +33,8 @@ class AccountVulnsService(
     private val assetRepository: AssetRepository,
     private val vulnerabilityRepository: VulnerabilityRepository,
     private val entityManager: EntityManager,
-    private val importHistoryRepository: CrowdStrikeImportHistoryRepository
+    private val importHistoryRepository: CrowdStrikeImportHistoryRepository,
+    private val awsAccountSharingService: AwsAccountSharingService
 ) {
 
     private val logger = LoggerFactory.getLogger(AccountVulnsService::class.java)
@@ -169,16 +170,23 @@ class AccountVulnsService(
             throw IllegalStateException("Admin users should use System Vulns view instead")
         }
 
-        // Get user's AWS account IDs from user_mapping table
-        val awsAccountIds = userMappingRepository.findDistinctAwsAccountIdByEmail(userEmail)
+        // Get user's own AWS account IDs from user_mapping table
+        val ownAwsAccountIds = userMappingRepository.findDistinctAwsAccountIdByEmail(userEmail)
 
-        // Check if user has any AWS account mappings
+        // Get AWS account IDs shared to this user via AwsAccountSharing
+        val sharedAwsAccountIds = awsAccountSharingService.getSharedAwsAccountIdsByEmail(userEmail)
+
+        // Combine and deduplicate
+        val awsAccountIds = (ownAwsAccountIds + sharedAwsAccountIds).distinct()
+
+        // Check if user has any AWS account mappings or shared accounts
         if (awsAccountIds.isEmpty()) {
-            logger.warn("User {} has no AWS account mappings", userEmail)
-            throw NoSuchElementException("No AWS accounts are mapped to your user account. Please contact your administrator.")
+            logger.warn("User {} has no AWS account mappings or shared accounts", userEmail)
+            throw NoSuchElementException("No AWS accounts are mapped or shared with your user account. Please contact your administrator.")
         }
 
-        logger.debug("User {} has access to {} AWS accounts", userEmail, awsAccountIds.size)
+        logger.debug("User {} has access to {} AWS accounts ({} own, {} shared)",
+            userEmail, awsAccountIds.size, ownAwsAccountIds.size, sharedAwsAccountIds.size)
 
         // Get all assets in user's AWS accounts
         val assets = assetRepository.findByCloudAccountIdIn(awsAccountIds)

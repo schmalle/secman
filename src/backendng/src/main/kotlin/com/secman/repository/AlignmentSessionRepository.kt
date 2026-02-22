@@ -56,4 +56,10 @@ interface AlignmentSessionRepository : JpaRepository<AlignmentSession, Long> {
      * Find all sessions that reference a release as baseline.
      */
     fun findByBaselineRelease_Id(releaseId: Long): List<AlignmentSession>
+
+    /**
+     * Find alignment session by its public results token.
+     * Used for anonymous access to the alignment results page.
+     */
+    fun findByResultsToken(resultsToken: String): Optional<AlignmentSession>
 }

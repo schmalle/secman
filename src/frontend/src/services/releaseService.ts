@@ -565,6 +565,35 @@ export const releaseService = {
      * @param comment Optional admin comment
      * @returns Decision result
      */
+    /**
+     * Export CHANGE/NOGO reviews as Excel file
+     *
+     * @param sessionId Alignment session ID
+     * @returns Triggers file download
+     */
+    async exportAlignmentReviews(sessionId: number): Promise<void> {
+        const response = await authenticatedFetch(`/api/alignment/${sessionId}/export-reviews`);
+
+        if (!response.ok) {
+            throw new Error(`Failed to export reviews: ${response.statusText}`);
+        }
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+
+        // Extract filename from Content-Disposition header, or use fallback
+        const disposition = response.headers.get('Content-Disposition');
+        const filenameMatch = disposition?.match(/filename="?([^"]+)"?/);
+        link.download = filenameMatch?.[1] || `Review.${sessionId}.xlsx`;
+
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+    },
+
     async submitReviewDecision(
         sessionId: number,
         reviewId: number,
