@@ -3,27 +3,29 @@
   "checkpoint_id": "41347e0caf37",
   "session_id": "2f0e706a-1891-4661-91b1-b7c9294b2fe6",
   "strategy": "manual-commit",
-  "created_at": "2026-02-22T20:05:00.750606Z",
+  "created_at": "2026-02-23T19:44:35.134464Z",
   "branch": "main",
-  "checkpoints_count": 1,
+  "checkpoints_count": 0,
   "files_touched": [
     "src/backendng/src/main/kotlin/com/secman/service/AccountVulnsService.kt"
   ],
   "agent": "Claude Code",
+  "checkpoint_transcript_start": 133,
+  "transcript_lines_at_start": 133,
   "token_usage": {
-    "input_tokens": 10,
-    "cache_creation_tokens": 19275,
-    "cache_read_tokens": 278732,
-    "output_tokens": 495,
-    "api_call_count": 8
+    "input_tokens": 121,
+    "cache_creation_tokens": 52074,
+    "cache_read_tokens": 892251,
+    "output_tokens": 2065,
+    "api_call_count": 13
   },
   "initial_attribution": {
-    "calculated_at": "2026-02-22T20:05:00.720279Z",
-    "agent_lines": 15,
-    "human_added": 1751,
+    "calculated_at": "2026-02-23T19:44:34.966207Z",
+    "agent_lines": 0,
+    "human_added": 377,
     "human_modified": 0,
     "human_removed": 0,
-    "total_committed": 1766,
-    "agent_percentage": 0.8493771234428085
+    "total_committed": 377,
+    "agent_percentage": 0
   }
 }

@@ -13,3 +13,11 @@ When an admin creates an AWS Account Sharing rule (e.g., sharing **harald's** 77
 
 **Root cause:** `AccountVulnsService.getAccountVulnsSummary()` (line 173) only queries the user's **own** mappings via `userMappingRepository.findDistinctAwsAccountIdByEma...
 
+### Prompt 2
+
+please carefully analyze how the memory footprint for the command line interface import of crowdstrike can be reduced , i fear that eg 800000 vulnerabilities will generate quite some memory overhead
+
+### Prompt 3
+
+[Request interrupted by user for tool use]
+

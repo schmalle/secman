@@ -3,7 +3,7 @@
   "checkpoint_id": "41347e0caf37",
   "strategy": "manual-commit",
   "branch": "main",
-  "checkpoints_count": 7,
+  "checkpoints_count": 6,
   "files_touched": [
     "src/backendng/src/main/kotlin/com/secman/controller/AlignmentController.kt",
     "src/backendng/src/main/kotlin/com/secman/controller/CrowdStrikeController.kt",
@@ -53,10 +53,10 @@
     }
   ],
   "token_usage": {
-    "input_tokens": 24555,
-    "cache_creation_tokens": 453919,
-    "cache_read_tokens": 6189360,
-    "output_tokens": 9751,
-    "api_call_count": 102
+    "input_tokens": 24666,
+    "cache_creation_tokens": 486718,
+    "cache_read_tokens": 6802879,
+    "output_tokens": 11321,
+    "api_call_count": 107
   }
 }
