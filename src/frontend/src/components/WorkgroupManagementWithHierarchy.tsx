@@ -232,7 +232,7 @@ const WorkgroupManagementWithHierarchy: React.FC = () => {
                   </div>
 
                   {/* Ancestor Path */}
-                  {selectedWorkgroup.ancestors.length > 0 && (
+                  {selectedWorkgroup.ancestors?.length > 0 && (
                     <div className="border-top pt-3 mt-3">
                       <h6 className="text-muted">Ancestor Path</h6>
                       <div className="d-flex flex-wrap gap-2">

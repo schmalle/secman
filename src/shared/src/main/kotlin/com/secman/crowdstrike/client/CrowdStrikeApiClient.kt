@@ -6,6 +6,15 @@ import com.secman.crowdstrike.dto.FalconConfigDto
 import com.secman.crowdstrike.model.AuthToken
 
 /**
+ * Summary of a streaming vulnerability query, retaining only hostname→count statistics.
+ * Used for dry-run/display mode to avoid loading all vulnerability DTOs into memory.
+ */
+data class StreamingSummary(
+    val totalVulnerabilities: Int,
+    val hostCounts: Map<String, Int>  // hostname -> vuln count
+)
+
+/**
  * Interface for CrowdStrike Falcon API client
  *
  * Defines contract for querying CrowdStrike Spotlight API for vulnerabilities
@@ -130,4 +139,28 @@ interface CrowdStrikeApiClient {
         deviceBatchSize: Int = 200,
         batchProcessor: (List<CrowdStrikeVulnerabilityDto>) -> Unit
     ): Int
+
+    /**
+     * Query servers with filters in streaming batches but only retain summary statistics
+     * (hostname → vulnerability count). Used for dry-run/display mode to avoid holding
+     * all vulnerability DTOs in memory.
+     *
+     * @param deviceType Device type filter (e.g., "SERVER")
+     * @param severity Severity filter (e.g., "HIGH,CRITICAL")
+     * @param minDaysOpen Minimum days open filter (e.g., 30)
+     * @param config CrowdStrike Falcon configuration
+     * @param limit Page size for pagination
+     * @param lastSeenDays Only include devices seen within N days (0 = all)
+     * @param deviceBatchSize Number of device IDs to process per streaming batch
+     * @return StreamingSummary with total count and per-host counts
+     */
+    fun queryServersWithFiltersSummary(
+        deviceType: String = "SERVER",
+        severity: String = "HIGH,CRITICAL",
+        minDaysOpen: Int = 30,
+        config: FalconConfigDto,
+        limit: Int = 100,
+        lastSeenDays: Int = 0,
+        deviceBatchSize: Int = 200
+    ): StreamingSummary
 }

@@ -25,9 +25,11 @@ import { vulnerabilityStatisticsApi, type MostVulnerableProductDto, type AssetsB
 interface MostVulnerableProductsProps {
   /** Optional AD domain filter (null = all domains) */
   domain?: string | null;
+  /** Optional AWS hosted filter (true = only cloud-hosted assets) */
+  awsHosted?: boolean;
 }
 
-export default function MostVulnerableProducts({ domain }: MostVulnerableProductsProps = {}) {
+export default function MostVulnerableProducts({ domain, awsHosted }: MostVulnerableProductsProps = {}) {
   const [data, setData] = useState<MostVulnerableProductDto[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -51,7 +53,7 @@ export default function MostVulnerableProducts({ domain }: MostVulnerableProduct
     setModalData(null);
 
     try {
-      const result = await vulnerabilityStatisticsApi.getAssetsByProduct(product, domain);
+      const result = await vulnerabilityStatisticsApi.getAssetsByProduct(product, domain, awsHosted);
       setModalData(result);
     } catch (err) {
       console.error('Error fetching assets with product:', err);
@@ -132,7 +134,7 @@ export default function MostVulnerableProducts({ domain }: MostVulnerableProduct
       try {
         setLoading(true);
         setError(null);
-        const result = await vulnerabilityStatisticsApi.getMostVulnerableProducts(domain);
+        const result = await vulnerabilityStatisticsApi.getMostVulnerableProducts(domain, awsHosted);
         setData(result);
       } catch (err) {
         console.error('Error fetching most vulnerable products:', err);
@@ -143,7 +145,7 @@ export default function MostVulnerableProducts({ domain }: MostVulnerableProduct
     };
 
     fetchData();
-  }, [domain]); // Re-fetch when domain changes
+  }, [domain, awsHosted]); // Re-fetch when domain or awsHosted changes
 
   // Loading state
   if (loading) {

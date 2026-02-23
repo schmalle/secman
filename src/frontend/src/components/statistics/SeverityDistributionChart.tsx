@@ -53,9 +53,11 @@ const handleSegmentClick = (severity: string) => {
 interface SeverityDistributionChartProps {
   /** Optional AD domain filter (null = all domains) */
   domain?: string | null;
+  /** Optional AWS hosted filter (true = only cloud-hosted assets) */
+  awsHosted?: boolean;
 }
 
-export default function SeverityDistributionChart({ domain }: SeverityDistributionChartProps = {}) {
+export default function SeverityDistributionChart({ domain, awsHosted }: SeverityDistributionChartProps = {}) {
   const [data, setData] = useState<SeverityDistributionDto | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -65,7 +67,7 @@ export default function SeverityDistributionChart({ domain }: SeverityDistributi
       try {
         setLoading(true);
         setError(null);
-        const result = await vulnerabilityStatisticsApi.getSeverityDistribution(domain);
+        const result = await vulnerabilityStatisticsApi.getSeverityDistribution(domain, awsHosted);
         setData(result);
       } catch (err) {
         console.error('Error fetching severity distribution:', err);
@@ -76,7 +78,7 @@ export default function SeverityDistributionChart({ domain }: SeverityDistributi
     };
 
     fetchData();
-  }, [domain]); // Re-fetch when domain changes
+  }, [domain, awsHosted]); // Re-fetch when domain or awsHosted changes
 
   // Loading state
   if (loading) {

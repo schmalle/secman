@@ -2,6 +2,7 @@ package com.secman.cli.commands
 
 import com.secman.cli.config.ConfigLoader
 import com.secman.crowdstrike.client.CrowdStrikeApiClient
+import com.secman.crowdstrike.client.StreamingSummary
 import com.secman.crowdstrike.dto.DeviceType
 import com.secman.crowdstrike.dto.FalconConfigDto
 import com.secman.crowdstrike.exception.AuthenticationException
@@ -31,6 +32,10 @@ import org.slf4j.LoggerFactory
  * Feature: 032-servers-query-import, 073-cli-direct-db
  */
 class ServersCommand {
+    companion object {
+        private const val MAX_RETAINED_ERRORS = 100
+    }
+
     private val log = LoggerFactory.getLogger(ServersCommand::class.java)
     private val configLoader = ConfigLoader()
     private val appContext = ApplicationContext.run()
@@ -86,6 +91,7 @@ class ServersCommand {
             if (verbose) {
                 log.info("Configuration loaded successfully")
             }
+            logMemoryUsage("after config load")
 
             // Query CrowdStrike API with filters
             System.out.println("Querying CrowdStrike for ${parsedDeviceType.displayName()}...")
@@ -108,6 +114,7 @@ class ServersCommand {
                 var totalVulnsWithPatchDate = 0
                 var totalVulnsSkipped = 0
                 val allErrors = mutableListOf<String>()
+                var totalErrorCount = 0
                 var streamBatchNum = 0
 
                 val totalVulns = apiClient.queryServersWithFiltersStreaming(
@@ -152,7 +159,12 @@ class ServersCommand {
                     totalVulnsImported += result.vulnerabilitiesImported
                     totalVulnsWithPatchDate += result.vulnerabilitiesWithPatchDate
                     totalVulnsSkipped += result.vulnerabilitiesSkipped
-                    allErrors.addAll(result.errors)
+                    totalErrorCount += result.errors.size
+                    if (allErrors.size < MAX_RETAINED_ERRORS) {
+                        val remaining = MAX_RETAINED_ERRORS - allErrors.size
+                        allErrors.addAll(result.errors.take(remaining))
+                    }
+                    logMemoryUsage("after stream batch $streamBatchNum")
                 }
 
                 if (totalVulns == 0) {
@@ -160,6 +172,7 @@ class ServersCommand {
                     return 0
                 }
 
+                logMemoryUsage("streaming complete")
                 val deviceLabel = parsedDeviceType.displayName().replaceFirstChar { it.uppercase() }
                 System.out.println("\n--- Import Statistics ---")
                 System.out.println("$deviceLabel processed: $totalServersProcessed")
@@ -169,20 +182,58 @@ class ServersCommand {
                 System.out.println("  - With patch publication date: $totalVulnsWithPatchDate")
                 System.out.println("Vulnerabilities skipped: $totalVulnsSkipped")
 
-                if (allErrors.isNotEmpty()) {
-                    System.err.println("\n--- Errors (${allErrors.size}) ---")
+                if (totalErrorCount > 0) {
+                    System.err.println("\n--- Errors ($totalErrorCount) ---")
                     allErrors.take(20).forEach { error ->
                         System.err.println("  - $error")
                     }
-                    if (allErrors.size > 20) {
-                        System.err.println("  ... and ${allErrors.size - 20} more errors")
+                    if (totalErrorCount > 20) {
+                        System.err.println("  ... and ${totalErrorCount - 20} more errors")
                     }
                 }
 
-                return if (allErrors.isNotEmpty()) 1 else 0
+                return if (totalErrorCount > 0) 1 else 0
             }
 
-            // Non-streaming mode: query all at once (for dry-run, display, or hostname-specific queries)
+            // When no specific hostnames: use streaming summary to avoid loading all vulns into memory.
+            // This only retains hostname→count stats instead of 800K+ vulnerability DTOs (~320MB).
+            if (hostnames.isNullOrEmpty()) {
+                val summary = apiClient.queryServersWithFiltersSummary(
+                    deviceType = deviceType,
+                    severity = severity,
+                    minDaysOpen = minDaysOpen,
+                    config = config,
+                    limit = limit,
+                    lastSeenDays = lastSeenDays,
+                    deviceBatchSize = 200
+                )
+
+                System.out.println("Found ${summary.totalVulnerabilities} vulnerabilities across ${parsedDeviceType.displayName()}")
+
+                if (summary.totalVulnerabilities == 0) {
+                    System.out.println("No vulnerabilities found matching criteria")
+                    return 0
+                }
+
+                System.out.println("${parsedDeviceType.displayName().replaceFirstChar { it.uppercase() }} with vulnerabilities: ${summary.hostCounts.size}")
+                logMemoryUsage("after summary query")
+
+                if (verbose) {
+                    summary.hostCounts.entries.sortedByDescending { it.value }.forEach { (hostname, count) ->
+                        System.out.println("  - $hostname: $count vulnerabilities")
+                    }
+                }
+
+                if (dryRun) {
+                    System.out.println("\n[DRY-RUN MODE] Would import ${summary.hostCounts.size} ${parsedDeviceType.displayName()} with ${summary.totalVulnerabilities} vulnerabilities")
+                }
+                if (!save || dryRun) {
+                    System.out.println("\nQuery completed successfully. Use --save to import directly to database.")
+                }
+                return 0
+            }
+
+            // Hostname-specific queries: load full DTOs (bounded by the number of specified hosts)
             val response = apiClient.queryServersWithFilters(
                 hostnames = hostnames,
                 deviceType = deviceType,
@@ -331,6 +382,14 @@ class ServersCommand {
             }
             1
         }
+    }
+
+    private fun logMemoryUsage(label: String) {
+        if (!verbose) return
+        val runtime = Runtime.getRuntime()
+        val usedMB = (runtime.totalMemory() - runtime.freeMemory()) / (1024 * 1024)
+        val maxMB = runtime.maxMemory() / (1024 * 1024)
+        System.out.println("  [Memory $label] ${usedMB}MB / ${maxMB}MB (${usedMB * 100 / maxMB}%)")
     }
 
     /**

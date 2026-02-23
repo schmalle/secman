@@ -515,6 +515,62 @@ open class CrowdStrikeApiClientImpl(
     }
 
     /**
+     * Streaming summary: processes device batches incrementally but only retains
+     * hostname → vulnerability count statistics. Reduces memory from O(all_vulns)
+     * to O(batch_vulns) + O(host_count_map).
+     */
+    override fun queryServersWithFiltersSummary(
+        deviceType: String,
+        severity: String,
+        minDaysOpen: Int,
+        config: FalconConfigDto,
+        limit: Int,
+        lastSeenDays: Int,
+        deviceBatchSize: Int
+    ): StreamingSummary {
+        val parsedDeviceType = DeviceType.fromString(deviceType)
+        log.info("Streaming summary query for {} devices: severity={}, minDaysOpen={}", parsedDeviceType.name, severity, minDaysOpen)
+
+        val token = getAuthToken(config)
+        val serverDeviceIds = getDeviceIdsFiltered(token, parsedDeviceType, limit, lastSeenDays)
+
+        if (serverDeviceIds.isEmpty()) {
+            log.info("No {} devices found in CrowdStrike", parsedDeviceType.name)
+            return StreamingSummary(totalVulnerabilities = 0, hostCounts = emptyMap())
+        }
+
+        log.info("Found {} {} devices, summarizing in batches of {}", serverDeviceIds.size, parsedDeviceType.name, deviceBatchSize)
+
+        val hostCounts = mutableMapOf<String, Int>()
+        var totalVulns = 0
+        val deviceChunks = serverDeviceIds.chunked(deviceBatchSize)
+
+        deviceChunks.forEachIndexed { index, chunk ->
+            log.info("Summary batch {}/{}: querying vulnerabilities for {} devices",
+                index + 1, deviceChunks.size, chunk.size)
+
+            val batchVulns = queryVulnerabilitiesByDeviceIds(
+                deviceIds = chunk,
+                severity = severity,
+                minDaysOpen = minDaysOpen,
+                config = config,
+                limit = limit
+            )
+
+            batchVulns.groupBy { it.hostname }.forEach { (host, vulns) ->
+                hostCounts.merge(host, vulns.size) { a, b -> a + b }
+            }
+            totalVulns += batchVulns.size
+            // batchVulns eligible for GC after this iteration
+        }
+
+        log.info("Streaming summary completed: {} total vulnerabilities across {} hosts",
+            totalVulns, hostCounts.size)
+
+        return StreamingSummary(totalVulnerabilities = totalVulns, hostCounts = hostCounts)
+    }
+
+    /**
      * Get all server device IDs from CrowdStrike
      *
      * Feature: 032-servers-query-import

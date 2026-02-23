@@ -105,9 +105,10 @@ async function exportToExcel(data: TopAssetByVulnerabilitiesDto[]): Promise<void
 
 interface TopAssetsByVulnerabilitiesProps {
   domain?: string | null;
+  awsHosted?: boolean;
 }
 
-export default function TopAssetsByVulnerabilities({ domain }: TopAssetsByVulnerabilitiesProps) {
+export default function TopAssetsByVulnerabilities({ domain, awsHosted }: TopAssetsByVulnerabilitiesProps) {
   const [data, setData] = useState<TopAssetByVulnerabilitiesDto[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -118,7 +119,7 @@ export default function TopAssetsByVulnerabilities({ domain }: TopAssetsByVulner
       try {
         setLoading(true);
         setError(null);
-        const result = await vulnerabilityStatisticsApi.getTopAssetsByVulnerabilities(domain);
+        const result = await vulnerabilityStatisticsApi.getTopAssetsByVulnerabilities(domain, awsHosted);
         setData(result);
       } catch (err) {
         console.error('Error fetching top assets by vulnerabilities:', err);
@@ -129,7 +130,7 @@ export default function TopAssetsByVulnerabilities({ domain }: TopAssetsByVulner
     };
 
     fetchData();
-  }, [domain]);
+  }, [domain, awsHosted]);
 
   const handleExport = async () => {
     try {

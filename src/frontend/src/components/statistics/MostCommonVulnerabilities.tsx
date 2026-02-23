@@ -47,9 +47,11 @@ const severityBadgeClass = (severity: string): string => {
 interface MostCommonVulnerabilitiesProps {
   /** Optional AD domain filter (null = all domains) */
   domain?: string | null;
+  /** Optional AWS hosted filter (true = only cloud-hosted assets) */
+  awsHosted?: boolean;
 }
 
-export default function MostCommonVulnerabilities({ domain }: MostCommonVulnerabilitiesProps = {}) {
+export default function MostCommonVulnerabilities({ domain, awsHosted }: MostCommonVulnerabilitiesProps = {}) {
   const [data, setData] = useState<MostCommonVulnerabilityDto[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -70,7 +72,7 @@ export default function MostCommonVulnerabilities({ domain }: MostCommonVulnerab
     setModalData(null);
 
     try {
-      const result = await vulnerabilityStatisticsApi.getAffectedAssetsByCve(cveId, domain);
+      const result = await vulnerabilityStatisticsApi.getAffectedAssetsByCve(cveId, domain, awsHosted);
       setModalData(result);
     } catch (err) {
       console.error('Error fetching affected assets:', err);
@@ -152,7 +154,7 @@ export default function MostCommonVulnerabilities({ domain }: MostCommonVulnerab
       try {
         setLoading(true);
         setError(null);
-        const result = await vulnerabilityStatisticsApi.getMostCommonVulnerabilities(domain);
+        const result = await vulnerabilityStatisticsApi.getMostCommonVulnerabilities(domain, awsHosted);
         setData(result);
       } catch (err) {
         console.error('Error fetching most common vulnerabilities:', err);
@@ -163,7 +165,7 @@ export default function MostCommonVulnerabilities({ domain }: MostCommonVulnerab
     };
 
     fetchData();
-  }, [domain]); // Re-fetch when domain changes
+  }, [domain, awsHosted]); // Re-fetch when domain or awsHosted changes
 
   // Loading state
   if (loading) {
