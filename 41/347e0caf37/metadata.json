@@ -3,17 +3,21 @@
   "checkpoint_id": "41347e0caf37",
   "strategy": "manual-commit",
   "branch": "main",
-  "checkpoints_count": 6,
+  "checkpoints_count": 7,
   "files_touched": [
     "src/backendng/src/main/kotlin/com/secman/controller/AlignmentController.kt",
     "src/backendng/src/main/kotlin/com/secman/controller/CrowdStrikeController.kt",
     "src/backendng/src/main/kotlin/com/secman/service/AccountVulnsService.kt",
     "src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeQueryService.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeVulnerabilityImportService.kt",
+    "src/cli/src/main/kotlin/com/secman/cli/commands/ServersCommand.kt",
     "src/frontend/src/components/AlignmentDashboard.tsx",
     "src/frontend/src/components/CrowdStrikeVulnerabilityLookup.tsx",
     "src/frontend/src/components/ReleaseList.tsx",
     "src/frontend/src/services/crowdstrikeService.ts",
-    "src/frontend/src/services/releaseService.ts"
+    "src/frontend/src/services/releaseService.ts",
+    "src/shared/src/main/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClient.kt",
+    "src/shared/src/main/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClientImpl.kt"
   ],
   "sessions": [
     {
@@ -50,13 +54,20 @@
       "context": "/41/347e0caf37/4/context.md",
       "content_hash": "/41/347e0caf37/4/content_hash.txt",
       "prompt": "/41/347e0caf37/4/prompt.txt"
+    },
+    {
+      "metadata": "/41/347e0caf37/5/metadata.json",
+      "transcript": "/41/347e0caf37/5/full.jsonl",
+      "context": "/41/347e0caf37/5/context.md",
+      "content_hash": "/41/347e0caf37/5/content_hash.txt",
+      "prompt": "/41/347e0caf37/5/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 24666,
-    "cache_creation_tokens": 486718,
-    "cache_read_tokens": 6802879,
-    "output_tokens": 11321,
-    "api_call_count": 107
+    "input_tokens": 24712,
+    "cache_creation_tokens": 535574,
+    "cache_read_tokens": 9072438,
+    "output_tokens": 16872,
+    "api_call_count": 151
   }
 }

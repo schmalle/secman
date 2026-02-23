@@ -1,0 +1,136 @@
+Implement the following plan:
+
+# Plan: Reduce Memory Footprint for CrowdStrike CLI Import
+
+## Context
+
+The CrowdStrike CLI import (`secman query servers --save`) can process 800,000+ vulnerabilities. While the **streaming mode** (the production `--save` path) already processes in batches of 200 devices (~8 MB peak), two other areas cause excessive memory usage:
+
+1. **Non-streaming mode** (dry-run/display without hostnames): Accumulates ALL 800K vulnerability DTOs in one list (~320 MB), exceeding default JVM heap (256 MB). Yet this path only needs **summary counts**.
+2. **Import service entity creation**: Creates ALL `Vulnerability` JPA entities for a server at once (up to 5,000), then iterates chunks for saving. The full Kotlin list stays in memory even after Hibernate session clears.
+
+## Change 1: Streaming summary for dry-run/display mode (highest impact)
+
+**Problem**: `queryServersWithFilters()` at `CrowdStrikeApiClientImpl.kt:375` accumulates all vulns into `allVulnerabilities`. With 800K vulns = ~320 MB → OOM.
+
+**Solution**: Add a `queryServersWithFiltersSummary()` method that processes device batches incrementally but only retains hostname→count statistics. Use it in `ServersCommand` for dry-run/display paths (no `--save`, or `--dry-run`).
+
+### Files:
+- `src/shared/src/main/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClient.kt` — add interface method + `StreamingSummary` data class
+- `src/shared/src/main/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClientImpl.kt` — implement: reuse `getDeviceIdsFiltered()` + `queryVulnerabilitiesByDeviceIds()` in 200-device chunks, accumulate only `Map<String, Int>` (hostname → vuln count)
+- `src/cli/src/main/kotlin/com/secman/cli/commands/ServersCommand.kt` — lines 185-222: when `(!save || dryRun) && hostnames.isNullOrEmpty()`, call summary method instead of full query
+
+**Memory reduction**: 320 MB → ~8 MB (one batch at a time) + ~400 KB (hostname count map)
+
+```kotlin
+// New data class
+data class StreamingSummary(
+    val totalVulnerabilities: Int,
+    val hostCounts: Map<String, Int>  // hostname -> vuln count
+)
+
+// New method implementation pattern
+fun queryServersWithFiltersSummary(..., deviceBatchSize: Int = 200): StreamingSummary {
+    val token = getAuthToken(config)
+    val deviceIds = getDeviceIdsFiltered(token, parsedDeviceType, limit, lastSeenDays)
+    val hostCounts = mutableMapOf<String, Int>()
+    var totalVulns = 0
+
+    deviceIds.chunked(deviceBatchSize).forEach { chunk ->
+        val batchVulns = queryVulnerabilitiesByDeviceIds(chunk, severity, minDaysOpen, config, limit)
+        batchVulns.groupBy { it.hostname }.forEach { (host, vulns) ->
+            hostCounts.merge(host, vulns.size) { a, b -> a + b }
+        }
+        totalVulns += batchVulns.size
+        // batchVulns eligible for GC here
+    }
+    return StreamingSummary(totalVulns, hostCounts)
+}
+```
+
+## Change 2: Lazy entity creation in import service (medium impact)
+
+**Problem**: `CrowdStrikeVulnerabilityImportService.kt:281` — `vulnsWithCve.map { ... }` creates ALL entities upfront, then the chunk loop at line 326 saves in groups of 500. The full `vulnerabilities` list (~2.5 MB for 5,000 vulns) stays in memory.
+
+**Solution**: Merge entity creation into the chunk loop — create entities directly from DTO chunks. Only 500 entities live at any time.
+
+### File:
+- `src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeVulnerabilityImportService.kt` — lines 277-338
+
+**Before** (simplified):
+```kotlin
+val vulnerabilities = vulnsWithCve.map { vulnDto -> Vulnerability(...) }  // ALL at once
+vulnerabilities.chunked(500).forEach { chunk -> saveAll(chunk); flush(); clear() }
+```
+
+**After** (simplified):
+```kotlin
+var totalCreated = 0
+vulnsWithCve.chunked(chunkSize).forEachIndexed { index, dtoChunk ->
+    val entities = dtoChunk.map { vulnDto ->
+        if (vulnDto.patchPublicationDate != null) vulnerabilitiesWithPatchDateCount++
+        // ... same timestamp calculation ...
+        Vulnerability(asset = asset, ...)
+    }
+    vulnerabilityRepository.saveAll(entities)
+    totalCreated += entities.size
+    if (index < (vulnsWithCve.size + chunkSize - 1) / chunkSize - 1) {
+        entityManager.flush()
+        entityManager.clear()
+        entityManager.merge(asset)
+    }
+}
+```
+
+**Memory reduction**: O(all_vulns_per_server) → O(chunk_size) for entity objects.
+
+## Change 3: Cap error list in ServersCommand (low impact, trivial)
+
+**Problem**: `ServersCommand.kt:110` — `allErrors` list grows unbounded across all streaming batches. Display capped at 20 but underlying list has no limit.
+
+### File:
+- `src/cli/src/main/kotlin/com/secman/cli/commands/ServersCommand.kt` — lines 110, 155, 172-180
+
+**Solution**: Add a `totalErrorCount` counter and cap `allErrors` at 100 entries.
+
+## Change 4: Memory usage logging (observability)
+
+**Problem**: No visibility into actual memory usage during CLI execution.
+
+### File:
+- `src/cli/src/main/kotlin/com/secman/cli/commands/ServersCommand.kt`
+
+**Solution**: Add a `logMemoryUsage(label)` helper. Log at key points when `--verbose` is set: after Stage 1, after each streaming batch, after completion.
+
+```kotlin
+private fun logMemoryUsage(label: String) {
+    val runtime = Runtime.getRuntime()
+    val usedMB = (runtime.totalMemory() - runtime.freeMemory()) / (1024 * 1024)
+    val maxMB = runtime.maxMemory() / (1024 * 1024)
+    System.out.println("  [Memory $label] ${usedMB}MB / ${maxMB}MB (${usedMB * 100 / maxMB}%)")
+}
+```
+
+## What NOT to change
+
+- **Streaming mode architecture** — 200-device batches with callback pattern already excellent
+- **Parallel sub-batch querying** (4 threads × 20 devices) — good balance
+- **Hibernate flush/clear pattern** — correct for bulk inserts
+- **@Transactional per-server** — correct for delete-insert pattern
+- **CrowdStrikeVulnerabilityBatchDto @Size(max=5000)** — natural per-server cap
+
+## Implementation order
+
+1. **Change 1** — prevents real OOM crash in dry-run/display mode
+2. **Change 3** — trivial, prevents theoretical unbounded growth
+3. **Change 2** — reduces steady-state memory in import service
+4. **Change 4** — adds monitoring visibility
+
+## Verification
+
+1. `./gradlew build` must pass with no errors
+2. `./bin/secman query servers --dry-run --verbose` — should show memory usage and summary stats without loading all vulns
+3. `./bin/secman query servers --save --verbose` — should show memory logging at each batch, confirming bounded usage
+
+
+If you need specific details from before exiting plan mode (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/flake/.REDACTED.jsonl

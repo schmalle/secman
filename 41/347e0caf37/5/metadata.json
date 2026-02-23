@@ -1,0 +1,32 @@
+{
+  "cli_version": "0.4.2",
+  "checkpoint_id": "41347e0caf37",
+  "session_id": "3e2a3008-28b7-40cc-a823-6174241cc8d1",
+  "strategy": "manual-commit",
+  "created_at": "2026-02-23T19:44:35.528045Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeVulnerabilityImportService.kt",
+    "src/cli/src/main/kotlin/com/secman/cli/commands/ServersCommand.kt",
+    "src/shared/src/main/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClient.kt",
+    "src/shared/src/main/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClientImpl.kt"
+  ],
+  "agent": "Claude Code",
+  "token_usage": {
+    "input_tokens": 46,
+    "cache_creation_tokens": 48856,
+    "cache_read_tokens": 2269559,
+    "output_tokens": 5551,
+    "api_call_count": 44
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-02-23T19:44:35.457679Z",
+    "agent_lines": 198,
+    "human_added": 179,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 377,
+    "agent_percentage": 52.51989389920424
+  }
+}
