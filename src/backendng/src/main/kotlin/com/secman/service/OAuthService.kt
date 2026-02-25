@@ -211,19 +211,24 @@ open class OAuthService(
         var currentDelayMs = config.initialDelayMs
         var totalDelayMs = 0L
 
+        logger.info("Looking up OAuth state (first 10 chars: {}), maxAttempts={}, initialDelay={}ms",
+            stateToken.take(10) + "...", config.maxAttempts, config.initialDelayMs)
+
         while (attempt <= config.maxAttempts) {
             val result = oauthStateRepository.findByStateToken(stateToken)
             if (result.isPresent) {
                 if (attempt > 0) {
-                    logger.info("OAuth state found after {} retry attempts ({}ms total delay)",
+                    logger.info("OAuth state found after {} retry attempts ({}ms total delay) - race condition resolved",
                         attempt, totalDelayMs)
+                } else {
+                    logger.info("OAuth state found on first attempt (no retry needed)")
                 }
                 return result
             }
 
             if (attempt < config.maxAttempts) {
-                logger.debug("OAuth state not found, retry {}/{} after {}ms delay (exponential backoff)",
-                    attempt + 1, config.maxAttempts, currentDelayMs)
+                logger.info("OAuth state not found on attempt {}/{}, retrying after {}ms (exponential backoff)",
+                    attempt + 1, config.maxAttempts + 1, currentDelayMs)
                 try {
                     Thread.sleep(currentDelayMs)
                     totalDelayMs += currentDelayMs
@@ -233,6 +238,7 @@ open class OAuthService(
                         config.maxDelayMs
                     )
                 } catch (e: InterruptedException) {
+                    logger.warn("OAuth state retry interrupted after {} attempts", attempt)
                     Thread.currentThread().interrupt()
                     break
                 }
@@ -240,8 +246,10 @@ open class OAuthService(
             attempt++
         }
 
-        logger.warn("OAuth state not found after {} retries ({}ms total delay with exponential backoff)",
-            config.maxAttempts, totalDelayMs)
+        logger.error("OAuth state NOT FOUND after {} attempts ({}ms total delay). " +
+            "State token (first 10): {}. Possible causes: state never saved, expired (>10min), " +
+            "already consumed by duplicate callback, or database visibility issue.",
+            config.maxAttempts + 1, totalDelayMs, stateToken.take(10) + "...")
         return Optional.empty()
     }
 
@@ -387,170 +395,211 @@ open class OAuthService(
 
         try {
             val callbackStartTime = LocalDateTime.now()
-            logger.info("[{}] OAuth callback started for provider {}, state={}",
+            logger.info("[{}] === OAuth Callback START === provider={}, state={}",
                 correlationId, providerId, state.take(10) + "...")
 
-        val stateAge = java.time.Duration.between(oauthState.createdAt, callbackStartTime).toMillis()
-        logger.info("OAuth state found: created at {}, callback at {}, age={}ms",
-            oauthState.createdAt, callbackStartTime, stateAge)
+            val stateAge = java.time.Duration.between(oauthState.createdAt, callbackStartTime).toMillis()
+            logger.info("[{}] OAuth state age: {}ms (created={}, callback={})",
+                correlationId, stateAge, oauthState.createdAt, callbackStartTime)
 
-        if (oauthState.expiresAt.isBefore(LocalDateTime.now())) {
-            logger.error("Expired OAuth state: created at {}, expired at {}, current time {}",
-                oauthState.createdAt, oauthState.expiresAt, LocalDateTime.now())
-            oauthStateRepository.deleteByStateToken(state)
-            return CallbackResult.Error(OAuthErrorCode.STATE_EXPIRED.userMessage)
-        }
-
-        val providerOpt = identityProviderRepository.findById(providerId)
-        if (!providerOpt.isPresent) {
-            logger.error("Identity provider not found: {}", providerId)
-            return CallbackResult.Error(OAuthErrorCode.PROVIDER_NOT_FOUND.userMessage)
-        }
-
-        val provider = providerOpt.get()
-        
-        logger.debug("Processing OAuth callback for provider: {}", provider.name)
-
-        try {
-            // Exchange code for access token (with retry for transient failures)
-            val tokenResponse = exchangeCodeForTokenWithRetry(provider, code, oauthState.redirectUri!!)
-            if (tokenResponse == null) {
+            if (oauthState.expiresAt.isBefore(LocalDateTime.now())) {
+                logger.error("[{}] EXPIRED OAuth state: created={}, expired={}, now={}",
+                    correlationId, oauthState.createdAt, oauthState.expiresAt, LocalDateTime.now())
                 oauthStateRepository.deleteByStateToken(state)
-                return CallbackResult.Error(OAuthErrorCode.TOKEN_EXCHANGE_FAILED.userMessage)
+                return CallbackResult.Error(OAuthErrorCode.STATE_EXPIRED.userMessage)
             }
 
-            // For OIDC providers (Microsoft), validate ID token signature and parse claims
-            var emailFromIdToken: String? = null
-            if (tokenResponse.idToken != null) {
-                // Validate JWT signature using JWKS and parse claims
-                val idTokenClaims = jwksValidationService.validateAndParseJwt(
-                    tokenResponse.idToken,
-                    provider.jwksUri,
-                    provider.issuer
-                )
-                if (idTokenClaims == null) {
+            val providerOpt = identityProviderRepository.findById(providerId)
+            if (!providerOpt.isPresent) {
+                logger.error("[{}] Identity provider not found: id={}", correlationId, providerId)
+                return CallbackResult.Error(OAuthErrorCode.PROVIDER_NOT_FOUND.userMessage)
+            }
+
+            val provider = providerOpt.get()
+            logger.info("[{}] Processing callback for provider: name='{}', type={}, autoProvision={}",
+                correlationId, provider.name, provider.type, provider.autoProvision)
+
+            try {
+                // Step 1: Exchange code for access token (with retry for transient failures)
+                logger.info("[{}] Step 1: Exchanging authorization code for token...", correlationId)
+                val tokenResponse = exchangeCodeForTokenWithRetry(provider, code, oauthState.redirectUri!!)
+                if (tokenResponse == null) {
+                    logger.error("[{}] Token exchange FAILED - no token received from provider", correlationId)
                     oauthStateRepository.deleteByStateToken(state)
                     return CallbackResult.Error(OAuthErrorCode.TOKEN_EXCHANGE_FAILED.userMessage)
                 }
+                logger.info("[{}] Token exchange successful: hasAccessToken={}, hasIdToken={}",
+                    correlationId, tokenResponse.accessToken.isNotBlank(), tokenResponse.idToken != null)
 
-                // Log all claims for debugging
-                logger.info("=== ID Token Claims Debug ===")
-                logger.info("Provider: {}", provider.name)
-                logger.info("All claims in ID token:")
-                idTokenClaims.forEach { (key, value) ->
-                    logger.info("  {}: {}", key, value)
-                }
-
-                // Validate tenant ID for Microsoft providers
-                if (!validateTenantId(provider, idTokenClaims)) {
-                    oauthStateRepository.deleteByStateToken(state)
-                    val errorMessage = if (microsoftErrorMapper.isTenantMismatchError("AADSTS50128")) {
-                        microsoftErrorMapper.mapError("AADSTS50128")
-                    } else {
-                        "User account not found in the configured tenant. Please contact your administrator."
+                // Step 2: For OIDC providers (Microsoft), validate ID token signature and parse claims
+                var emailFromIdToken: String? = null
+                if (tokenResponse.idToken != null) {
+                    logger.info("[{}] Step 2: Validating ID token (OIDC flow)...", correlationId)
+                    val idTokenClaims = jwksValidationService.validateAndParseJwt(
+                        tokenResponse.idToken,
+                        provider.jwksUri,
+                        provider.issuer
+                    )
+                    if (idTokenClaims == null) {
+                        logger.error("[{}] ID token validation FAILED - JWKS signature verification failed", correlationId)
+                        oauthStateRepository.deleteByStateToken(state)
+                        return CallbackResult.Error(OAuthErrorCode.TOKEN_EXCHANGE_FAILED.userMessage)
                     }
-                    return CallbackResult.Error(errorMessage)
-                }
 
-                // Extract email from ID token
-                emailFromIdToken = extractEmailFromIdToken(idTokenClaims)
-                logger.info("Extracted email from ID token: {}", emailFromIdToken ?: "NULL")
+                    logger.info("[{}] ID token validated successfully. Claims: {}", correlationId,
+                        idTokenClaims.keys.joinToString(", "))
 
-                // For Microsoft providers, email is required
-                if (provider.name.contains("Microsoft", ignoreCase = true) && emailFromIdToken.isNullOrBlank()) {
-                    logger.error("Email extraction failed - checking available claims for email-like values...")
+                    // Log all claims for debugging
+                    logger.info("[{}] === ID Token Claims ===", correlationId)
                     idTokenClaims.forEach { (key, value) ->
-                        if (key.contains("mail", ignoreCase = true) ||
-                            key.contains("email", ignoreCase = true) ||
-                            key.contains("upn", ignoreCase = true) ||
-                            key.contains("unique_name", ignoreCase = true)) {
-                            logger.error("  Found potential email claim: {} = {}", key, value)
-                        }
+                        logger.info("[{}]   {}: {}", correlationId, key, value)
                     }
-                    oauthStateRepository.deleteByStateToken(state)
-                    return CallbackResult.Error(OAuthErrorCode.EMAIL_REQUIRED.userMessage)
-                }
-            }
 
-            // Get user info (for GitHub and other providers without ID token)
-            val userInfo = if (emailFromIdToken != null) {
-                // For OIDC providers with ID token, create minimal UserInfoResponse
-                UserInfoResponse(
-                    id = "oidc-user",
-                    login = emailFromIdToken.substringBefore("@"),
-                    email = emailFromIdToken,
-                    name = emailFromIdToken.substringBefore("@")
+                    // Validate tenant ID for Microsoft providers
+                    if (!validateTenantId(provider, idTokenClaims)) {
+                        logger.error("[{}] Tenant ID validation FAILED", correlationId)
+                        oauthStateRepository.deleteByStateToken(state)
+                        val errorMessage = if (microsoftErrorMapper.isTenantMismatchError("AADSTS50128")) {
+                            microsoftErrorMapper.mapError("AADSTS50128")
+                        } else {
+                            "User account not found in the configured tenant. Please contact your administrator."
+                        }
+                        return CallbackResult.Error(errorMessage)
+                    }
+
+                    // Extract email from ID token
+                    emailFromIdToken = extractEmailFromIdToken(idTokenClaims)
+                    logger.info("[{}] Email extracted from ID token: {}", correlationId,
+                        emailFromIdToken ?: "NULL (no email claim found)")
+
+                    // For Microsoft providers, email is required
+                    if (provider.name.contains("Microsoft", ignoreCase = true) && emailFromIdToken.isNullOrBlank()) {
+                        logger.error("[{}] Email extraction FAILED for Microsoft provider - checking available claims...", correlationId)
+                        idTokenClaims.forEach { (key, value) ->
+                            if (key.contains("mail", ignoreCase = true) ||
+                                key.contains("email", ignoreCase = true) ||
+                                key.contains("upn", ignoreCase = true) ||
+                                key.contains("unique_name", ignoreCase = true)) {
+                                logger.error("[{}]   Found potential email claim: {} = {}", correlationId, key, value)
+                            }
+                        }
+                        oauthStateRepository.deleteByStateToken(state)
+                        return CallbackResult.Error(OAuthErrorCode.EMAIL_REQUIRED.userMessage)
+                    }
+                } else {
+                    logger.info("[{}] Step 2: No ID token (OAuth 2.0 flow, not OIDC)", correlationId)
+                }
+
+                // Step 3: Get user info
+                logger.info("[{}] Step 3: Resolving user info...", correlationId)
+                val userInfo = if (emailFromIdToken != null) {
+                    // For OIDC providers with ID token, create minimal UserInfoResponse
+                    val info = UserInfoResponse(
+                        id = "oidc-user",
+                        login = emailFromIdToken.substringBefore("@"),
+                        email = emailFromIdToken,
+                        name = emailFromIdToken.substringBefore("@")
+                    )
+                    logger.info("[{}] UserInfo from ID token: email={}, login={}", correlationId, info.email, info.login)
+                    info
+                } else {
+                    // For OAuth 2.0 providers (GitHub), fetch from userinfo endpoint
+                    logger.info("[{}] Fetching user info from provider's userinfo endpoint...", correlationId)
+                    val info = getUserInfo(provider, tokenResponse.accessToken)
+                    if (info == null) {
+                        logger.error("[{}] Failed to fetch user info from provider", correlationId)
+                        oauthStateRepository.deleteByStateToken(state)
+                        return CallbackResult.Error(OAuthErrorCode.USER_INFO_FAILED.userMessage)
+                    }
+                    logger.info("[{}] UserInfo from endpoint: email={}, login={}, name={}", correlationId,
+                        info.email, info.login, info.name)
+                    info
+                }
+
+                // Step 4: Find or create user
+                logger.info("[{}] Step 4: Finding or creating user for email={}...", correlationId, userInfo.email)
+                val userResult = findOrCreateUser(provider, userInfo)
+                if (userResult == null) {
+                    logger.error("[{}] User find/create FAILED for email={}", correlationId, userInfo.email)
+                    oauthStateRepository.deleteByStateToken(state)
+                    return CallbackResult.Error(OAuthErrorCode.USER_CREATION_FAILED.userMessage)
+                }
+                val user = userResult.user
+                logger.info("[{}] User resolved: id={}, username={}, isNew={}, roles={}",
+                    correlationId, user.id, user.username, userResult.isNewUser, user.roles)
+
+                // Send notification if user was newly created via OAuth (Feature 027)
+                if (userResult.isNewUser) {
+                    try {
+                        adminNotificationService.sendNewUserNotificationForOAuth(user, provider.name)
+                    } catch (e: Exception) {
+                        // Log but don't fail OAuth flow if notification fails
+                        logger.error("[{}] Failed to send OAuth user notification (non-fatal): {}",
+                            correlationId, e.message, e)
+                    }
+                } else {
+                    // Feature 046: Log existing user login (roles preserved per FR-006)
+                    logger.info("[{}] Existing user login: email={}, roles preserved: {}",
+                        correlationId, userInfo.email, user.roles)
+                }
+
+                // Step 5: Generate JWT token
+                logger.info("[{}] Step 5: Generating JWT token...", correlationId)
+                val userDetails = mapOf(
+                    "sub" to user.username,
+                    "username" to user.username,
+                    "email" to user.email,
+                    "roles" to user.roles.map { it.name },
+                    "iss" to "secman-backend-ng",
+                    "userId" to user.id.toString()
                 )
-            } else {
-                // For OAuth 2.0 providers (GitHub), fetch from userinfo endpoint
-                val info = getUserInfo(provider, tokenResponse.accessToken)
-                if (info == null) {
+
+                val tokenOptional = tokenGenerator.generateToken(userDetails)
+                if (tokenOptional.isEmpty) {
+                    logger.error("[{}] JWT token generation FAILED for user: {}", correlationId, user.username)
                     oauthStateRepository.deleteByStateToken(state)
-                    return CallbackResult.Error(OAuthErrorCode.USER_INFO_FAILED.userMessage)
+                    return CallbackResult.Error("Unable to complete login process. Please try again.")
                 }
-                info
-            }
+                logger.info("[{}] JWT token generated successfully", correlationId)
 
-            // Find or create user
-            val userResult = findOrCreateUser(provider, userInfo)
-            if (userResult == null) {
-                oauthStateRepository.deleteByStateToken(state)
-                return CallbackResult.Error(OAuthErrorCode.USER_CREATION_FAILED.userMessage)
-            }
-            val user = userResult.user
-
-            // Send notification if user was newly created via OAuth (Feature 027)
-            if (userResult.isNewUser) {
+                // Update last login timestamp
                 try {
-                    adminNotificationService.sendNewUserNotificationForOAuth(user, provider.name)
+                    user.lastLogin = Instant.now()
+                    userRepository.update(user)
+                    logger.info("[{}] Last login updated for user: {}", correlationId, user.username)
                 } catch (e: Exception) {
-                    // Log but don't fail OAuth flow if notification fails
-                    logger.error("Failed to send OAuth user notification: ${e.message}", e)
+                    // Don't fail the login if last login update fails
+                    logger.error("[{}] Failed to update last login (non-fatal): {}", correlationId, e.message, e)
                 }
-            } else {
-                // Feature 046: Log existing user login (roles preserved per FR-006)
-                logger.info("Existing OIDC user logged in: ${userInfo.email}, roles preserved")
-            }
 
-            // Generate JWT token
-            val userDetails = mapOf(
-                "sub" to user.username,
-                "username" to user.username,
-                "email" to user.email,
-                "roles" to user.roles.map { it.name },
-                "iss" to "secman-backend-ng",
-                "userId" to user.id.toString()
-            )
-
-            val tokenOptional = tokenGenerator.generateToken(userDetails)
-            if (tokenOptional.isEmpty) {
+                // Clean up used state only after successful processing
                 oauthStateRepository.deleteByStateToken(state)
-                return CallbackResult.Error("Unable to complete login process. Please try again.")
-            }
 
-            // Update last login timestamp
-            user.lastLogin = Instant.now()
-            userRepository.update(user)
+                val totalDurationMs = java.time.Duration.between(callbackStartTime, LocalDateTime.now()).toMillis()
+                logger.info("[{}] === OAuth Callback SUCCESS === user={}, email={}, isNew={}, duration={}ms",
+                    correlationId, user.username, user.email, userResult.isNewUser, totalDurationMs)
 
-            // Clean up used state only after successful processing
-            oauthStateRepository.deleteByStateToken(state)
-
-            return CallbackResult.Success(
-                token = tokenOptional.get(),
-                user = UserInfo(
-                    id = user.id!!,
-                    username = user.username,
-                    email = user.email,
-                    roles = user.roles.map { it.name }
+                return CallbackResult.Success(
+                    token = tokenOptional.get(),
+                    user = UserInfo(
+                        id = user.id!!,
+                        username = user.username,
+                        email = user.email,
+                        roles = user.roles.map { it.name }
+                    )
                 )
-            )
 
-        } catch (e: Exception) {
-            logger.error("[{}] OAuth callback error: {}", correlationId, e.message, e)
-            // Clean up state on error to prevent accumulation
-            oauthStateRepository.deleteByStateToken(state)
-            return CallbackResult.Error(OAuthErrorCode.UNEXPECTED_ERROR.userMessage)
-        }
+            } catch (e: Exception) {
+                logger.error("[{}] === OAuth Callback FAILED === error={}: {}",
+                    correlationId, e.javaClass.simpleName, e.message, e)
+                // Clean up state on error to prevent accumulation
+                try {
+                    oauthStateRepository.deleteByStateToken(state)
+                } catch (cleanupEx: Exception) {
+                    logger.error("[{}] Failed to clean up OAuth state after error: {}", correlationId, cleanupEx.message)
+                }
+                return CallbackResult.Error(OAuthErrorCode.UNEXPECTED_ERROR.userMessage)
+            }
         } finally {
             // Clean up MDC correlation ID
             MDC.remove("oauth_correlation_id")
@@ -822,38 +871,94 @@ open class OAuthService(
     }
 
     private fun findOrCreateUser(provider: IdentityProvider, userInfo: UserInfoResponse): UserCreationResult? {
-        val email = userInfo.email ?: return null
-
-        // Try to find existing user by email
-        val existingUserOpt = userRepository.findByEmail(email)
-        if (existingUserOpt.isPresent) {
-            // FR-006: Existing users preserve their roles; no modification on re-authentication
-            return UserCreationResult(user = existingUserOpt.get(), isNewUser = false)
+        val email = userInfo.email
+        if (email.isNullOrBlank()) {
+            logger.error("OAuth user info has no email address - cannot find or create user. Provider: {}, login: {}",
+                provider.name, userInfo.login)
+            return null
         }
+
+        logger.info("Finding or creating user for email: {}, provider: {}", email, provider.name)
+
+        // Try to find existing user by email (case-insensitive to handle OAuth providers
+        // returning emails in varying cases, e.g., "John.Doe@company.com" vs "john.doe@company.com")
+        val existingUserOpt = userRepository.findByEmailIgnoreCase(email)
+        if (existingUserOpt.isPresent) {
+            val existingUser = existingUserOpt.get()
+            // FR-006: Existing users preserve their roles; no modification on re-authentication
+            logger.info("Found existing user by email (case-insensitive): id={}, username={}, email={}, roles={}",
+                existingUser.id, existingUser.username, existingUser.email, existingUser.roles)
+            return UserCreationResult(user = existingUser, isNewUser = false)
+        }
+
+        logger.info("No existing user found for email: {} - attempting auto-provisioning", email)
 
         // Auto-provision user if enabled
         if (!provider.autoProvision) {
-            logger.warn("User not found and auto-provisioning is disabled for provider: {}", provider.name)
+            logger.warn("User not found and auto-provisioning is disabled for provider: {}. " +
+                "Enable autoProvision on the identity provider to allow automatic user creation.", provider.name)
             return null
         }
 
         // Create new user with default roles (Feature 046: OIDC Default Roles)
-        val username = userInfo.login ?: userInfo.email.substringBefore("@")
+        val baseUsername = userInfo.login ?: email.substringBefore("@")
+
+        // Handle username collisions: if the email-prefix username already exists
+        // (e.g., a locally created user or another OAuth user with the same prefix),
+        // append a numeric suffix to ensure uniqueness.
+        val username = resolveUniqueUsername(baseUsername)
+        logger.info("Resolved username for new OAuth user: base='{}', resolved='{}'", baseUsername, username)
 
         return try {
             // FR-001, FR-002: Create user with USER and VULN roles via transactional method
+            // Uses REQUIRES_NEW to ensure user creation commits independently of the callback transaction
             val savedUser = createNewOidcUser(email, username, provider.name)
-            logger.info("Created new user via OAuth: username={}, email={}, provider={}",
-                savedUser.username, savedUser.email, provider.name)
+            logger.info("Created new user via OAuth: id={}, username={}, email={}, roles={}, provider={}",
+                savedUser.id, savedUser.username, savedUser.email, savedUser.roles, provider.name)
 
             // Feature 042: Publish event to trigger automatic application of future user mappings
             eventPublisher.publishEvent(UserCreatedEvent(user = savedUser, source = "OAUTH"))
 
             UserCreationResult(user = savedUser, isNewUser = true)
+        } catch (e: jakarta.persistence.PersistenceException) {
+            logger.error("Database error creating OAuth user (email={}, username={}): {} - {}",
+                email, username, e.javaClass.simpleName, e.message, e)
+            null
         } catch (e: Exception) {
-            logger.error("Failed to create user: {}", e.message, e)
+            logger.error("Unexpected error creating OAuth user (email={}, username={}): {} - {}",
+                email, username, e.javaClass.simpleName, e.message, e)
             null
         }
+    }
+
+    /**
+     * Resolve a unique username by appending a numeric suffix if the base username already exists.
+     *
+     * For OAuth users, the username is derived from the email prefix (e.g., "john.smith" from
+     * "john.smith@company.com"). If a user with that username already exists (e.g., a locally
+     * created user), this method appends a suffix: "john.smith2", "john.smith3", etc.
+     *
+     * @param baseUsername The desired username (typically the email prefix)
+     * @return A unique username that doesn't conflict with existing users
+     */
+    private fun resolveUniqueUsername(baseUsername: String): String {
+        if (!userRepository.existsByUsername(baseUsername)) {
+            return baseUsername
+        }
+
+        logger.info("Username '{}' already exists, generating unique variant", baseUsername)
+        for (suffix in 2..99) {
+            val candidate = "$baseUsername$suffix"
+            if (!userRepository.existsByUsername(candidate)) {
+                logger.info("Resolved unique username: '{}'", candidate)
+                return candidate
+            }
+        }
+
+        // Fallback: use UUID suffix (extremely unlikely to reach here)
+        val fallback = "${baseUsername}_${UUID.randomUUID().toString().take(6)}"
+        logger.warn("Could not resolve username after 98 attempts, using UUID fallback: '{}'", fallback)
+        return fallback
     }
 
     /**
@@ -948,20 +1053,23 @@ open class OAuthService(
     }
 
     /**
-     * Create new OIDC user with default roles (USER, VULN)
+     * Create new OIDC user with default roles (USER, VULN, REQ)
      * Feature: 046-oidc-default-roles (FR-001, FR-002, FR-009)
      *
-     * Transaction-wrapped method ensures atomicity: user creation + role assignment succeed together or rollback entirely.
-     * Includes audit logging and async admin notifications.
+     * CRITICAL: Uses REQUIRES_NEW to ensure user creation commits independently of the
+     * outer handleCallback transaction. This prevents a scenario where the user is created
+     * but rolled back if a later step in handleCallback fails (e.g., lastLogin update,
+     * token generation). Without this, the user appears never created on the first attempt,
+     * but the second attempt succeeds because the transient failure is resolved.
      *
      * @param email User email from OIDC claims
-     * @param username Derived from email or OIDC login claim
+     * @param username Derived from email or OIDC login claim (uniqueness already resolved)
      * @param idpName Identity provider name for audit trail
      * @return Saved User entity with default roles
      */
-    @Transactional
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
     open fun createNewOidcUser(email: String, username: String, idpName: String): User {
-        logger.info("Creating new OIDC user: $email from provider: $idpName")
+        logger.info("Creating new OIDC user: email={}, username={}, provider={}", email, username, idpName)
 
         // FR-004, FR-005: Default roles applied before identity provider role mappings; consistent across all providers
         val newUser = User(
@@ -973,7 +1081,9 @@ open class OAuthService(
         )
 
         val savedUser = userRepository.save(newUser)
-        logger.info("User created successfully: ${savedUser.id}, username: ${savedUser.username}")
+        entityManager.flush() // Ensure user is persisted before returning
+        logger.info("User created and committed: id={}, username={}, email={}, roles={}",
+            savedUser.id, savedUser.username, savedUser.email, savedUser.roles)
 
         // FR-010: Audit logging
         auditRoleAssignment(savedUser, "USER,VULN,REQ", idpName)
