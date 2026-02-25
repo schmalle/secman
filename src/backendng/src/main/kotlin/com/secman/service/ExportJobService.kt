@@ -439,7 +439,7 @@ open class ExportJobService(
                     isAdmin = isAdmin,
                     severity = null,
                     system = null,
-                    exceptionStatus = null,
+                    exceptionStatus = "not_excepted",
                     product = null,
                     adDomain = null,
                     cloudAccountId = null,

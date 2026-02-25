@@ -3,6 +3,7 @@ package com.secman.mcp.tools
 import com.secman.domain.McpOperation
 import com.secman.dto.mcp.McpExecutionContext
 import com.secman.repository.VulnerabilityRepository
+import com.secman.service.VulnerabilityExceptionService
 import io.micronaut.data.model.Pageable
 import jakarta.inject.Inject
 import jakarta.inject.Singleton
@@ -18,7 +19,8 @@ import jakarta.inject.Singleton
  */
 @Singleton
 class GetAllVulnerabilitiesDetailTool(
-    @Inject private val vulnerabilityRepository: VulnerabilityRepository
+    @Inject private val vulnerabilityRepository: VulnerabilityRepository,
+    @Inject private val vulnerabilityExceptionService: VulnerabilityExceptionService
 ) : McpTool {
 
     override val name = "get_all_vulnerabilities_detail"
@@ -67,6 +69,11 @@ class GetAllVulnerabilitiesDetailTool(
                 "minimum" to 1,
                 "maximum" to 1000,
                 "default" to 100
+            ),
+            "includeExcepted" to mapOf(
+                "type" to "boolean",
+                "description" to "Include vulnerabilities that are covered by active exceptions (default: false). Set to true to see all vulnerabilities including excepted ones.",
+                "default" to false
             )
         )
     )
@@ -79,6 +86,7 @@ class GetAllVulnerabilitiesDetailTool(
             val severityFilter = arguments["severity"] as? String
             val assetIdFilter = (arguments["assetId"] as? Number)?.toLong()
             val minDaysOpen = (arguments["minDaysOpen"] as? Number)?.toInt()
+            val includeExcepted = arguments["includeExcepted"] as? Boolean ?: false
 
             // Validate page size
             if (pageSize < 1 || pageSize > 1000) {
@@ -165,6 +173,14 @@ class GetAllVulnerabilitiesDetailTool(
                     // daysOpen is a String like "58 days", need to parse it
                     val days = vuln.daysOpen?.split(" ")?.firstOrNull()?.toIntOrNull() ?: 0
                     days >= minDaysOpenValue
+                }
+            }
+
+            // Filter out excepted vulnerabilities unless explicitly included
+            if (!includeExcepted) {
+                val activeExceptions = vulnerabilityExceptionService.getActiveExceptions()
+                filteredContent = filteredContent.filter { vuln ->
+                    activeExceptions.none { ex -> ex.matches(vuln, vuln.asset) }
                 }
             }
 

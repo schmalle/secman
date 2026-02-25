@@ -62,7 +62,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
   // Filter states
   const [severityFilter, setSeverityFilter] = useState<string>("");
   const [systemFilter, setSystemFilter] = useState<string>("");
-  const [exceptionFilter, setExceptionFilter] = useState<string>("");
+  const [exceptionFilter, setExceptionFilter] = useState<string>("not_excepted");
   const [productFilter, setProductFilter] = useState<string>("");
   const [adDomainFilter, setAdDomainFilter] = useState<string>("");
   const [cloudAccountIdFilter, setCloudAccountIdFilter] = useState<string>("");
@@ -717,7 +717,8 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
               handleFilterChange();
             }}
           >
-            <option value="">All Statuses</option>
+            <option value="not_excepted">Not Excepted</option>
+            <option value="">All (incl. Excepted)</option>
             <option value="overdue">🔴 Overdue Only</option>
             <option value="excepted">🛡️ Excepted Only</option>
             <option value="ok">✅ OK Only</option>

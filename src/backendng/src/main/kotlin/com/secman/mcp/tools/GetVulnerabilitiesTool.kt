@@ -3,6 +3,7 @@ package com.secman.mcp.tools
 import com.secman.domain.McpOperation
 import com.secman.dto.mcp.McpExecutionContext
 import com.secman.repository.VulnerabilityRepository
+import com.secman.service.VulnerabilityExceptionService
 import io.micronaut.data.model.Pageable
 import jakarta.inject.Inject
 import jakarta.inject.Singleton
@@ -16,7 +17,8 @@ import java.time.format.DateTimeFormatter
  */
 @Singleton
 class GetVulnerabilitiesTool(
-    @Inject private val vulnerabilityRepository: VulnerabilityRepository
+    @Inject private val vulnerabilityRepository: VulnerabilityRepository,
+    @Inject private val vulnerabilityExceptionService: VulnerabilityExceptionService
 ) : McpTool {
 
     override val name = "get_vulnerabilities"
@@ -62,6 +64,11 @@ class GetVulnerabilitiesTool(
                 "type" to "string",
                 "description" to "Filter vulnerabilities scanned before this date (ISO-8601)",
                 "format" to "date-time"
+            ),
+            "includeExcepted" to mapOf(
+                "type" to "boolean",
+                "description" to "Include vulnerabilities that are covered by active exceptions (default: false). Set to true to see all vulnerabilities including excepted ones.",
+                "default" to false
             )
         )
     )
@@ -74,6 +81,7 @@ class GetVulnerabilitiesTool(
         val assetIdFilter = (arguments["assetId"] as? Number)?.toLong()
         val startDateStr = arguments["startDate"] as? String
         val endDateStr = arguments["endDate"] as? String
+        val includeExcepted = arguments["includeExcepted"] as? Boolean ?: false
 
         // Validate parameters
         if (pageSize < 1 || pageSize > 500) {
@@ -174,8 +182,19 @@ class GetVulnerabilitiesTool(
                 }
             }
 
+            // Filter out excepted vulnerabilities unless explicitly included
+            val filteredContent = if (!includeExcepted) {
+                val activeExceptions = vulnerabilityExceptionService.getActiveExceptions()
+                resultPage.content.filter { vuln ->
+                    val asset = vuln.asset ?: return@filter true
+                    activeExceptions.none { ex -> ex.matches(vuln, asset) }
+                }
+            } else {
+                resultPage.content
+            }
+
             // Map vulnerabilities to response format
-            val vulnerabilities = resultPage.content.map { vuln ->
+            val vulnerabilities = filteredContent.map { vuln ->
                 mapOf(
                     "id" to vuln.id,
                     "assetId" to vuln.asset?.id,
@@ -191,10 +210,11 @@ class GetVulnerabilitiesTool(
 
             val response = mapOf(
                 "vulnerabilities" to vulnerabilities,
-                "total" to resultPage.totalSize,
+                "total" to if (!includeExcepted) vulnerabilities.size.toLong() else resultPage.totalSize,
                 "page" to page,
                 "pageSize" to pageSize,
-                "totalPages" to resultPage.totalPages
+                "totalPages" to resultPage.totalPages,
+                "exceptedFiltered" to !includeExcepted
             )
 
             return McpToolResult.success(response)
