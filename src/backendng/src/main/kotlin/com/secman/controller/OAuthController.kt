@@ -72,6 +72,12 @@ class OAuthController(
             logger.info("Request URI: {}", request.uri)
             logger.info("Request remote address: {}", request.remoteAddress.toString())
 
+            // Log whether a stale auth cookie is present (helps diagnose new-user failures)
+            val hasExistingCookie = request.cookies.get(AuthCookieService.AUTH_COOKIE_NAME) != null
+            if (hasExistingCookie) {
+                logger.info("Stale secman_auth cookie detected - will be cleared on redirect to prevent interference")
+            }
+
             val authUrl = oauthService.buildAuthorizationUrl(providerId, backendBaseUrl)
 
             if (authUrl != null) {
@@ -79,7 +85,12 @@ class OAuthController(
                 logger.info("Full authorization URL: {}", authUrl)
                 logger.info("Redirecting to OAuth provider {} with URL: {}", providerId, authUrl)
                 logger.info("=== OAuth Authorization Request END ===")
+                // Clear any existing secman_auth cookie before redirecting to OAuth provider.
+                // This prevents stale cookies from a previous session (shared browser, expired session,
+                // or failed prior OAuth attempt) from being sent with the callback request.
+                // The HttpOnly cookie cannot be cleared by frontend JavaScript, so we must clear it here.
                 HttpResponse.redirect<Any>(URI.create(authUrl))
+                    .cookie(authCookieService.createLogoutCookie())
             } else {
                 logger.error("Failed to build authorization URL for provider: {}", providerId)
                 HttpResponse.badRequest(ErrorResponse("Failed to build authorization URL"))
@@ -100,12 +111,22 @@ class OAuthController(
     fun callbackWithoutProvider(
         @QueryValue code: String?,
         @QueryValue state: String?,
-        @QueryValue error: String?
+        @QueryValue error: String?,
+        request: HttpRequest<*>
     ): HttpResponse<*> {
         return try {
+            logger.info("=== OAuth Callback Received === hasCode={}, hasState={}, hasError={}, remoteAddr={}",
+                !code.isNullOrBlank(), !state.isNullOrBlank(), error != null, request.remoteAddress.toString())
+
+            // Log whether the request carries a stale auth cookie (aids debugging new-user issues)
+            val hasExistingCookie = request.cookies.get(AuthCookieService.AUTH_COOKIE_NAME) != null
+            if (hasExistingCookie) {
+                logger.info("OAuth callback received with existing secman_auth cookie (will be overwritten on success)")
+            }
+
             // Check for OAuth error
             if (error != null) {
-                logger.error("OAuth error: {}", error)
+                logger.error("OAuth provider returned error: {}", error)
                 val errorMessage = when (error) {
                     "access_denied" -> "Access was denied. Please try again if you wish to log in."
                     "unauthorized_client" -> "OAuth application is not properly configured. Please contact support."
@@ -121,9 +142,13 @@ class OAuthController(
 
             // Validate required parameters
             if (code.isNullOrBlank() || state.isNullOrBlank()) {
-                logger.error("Missing required OAuth parameters")
+                logger.error("Missing required OAuth parameters: code={}, state={}",
+                    if (code.isNullOrBlank()) "MISSING" else "present",
+                    if (state.isNullOrBlank()) "MISSING" else "present(${state?.take(10)}...)")
                 return HttpResponse.redirect<Any>(URI.create("$frontendBaseUrl/login?error=${java.net.URLEncoder.encode("Invalid OAuth callback parameters", "UTF-8")}"))
             }
+
+            logger.info("Looking up OAuth state: {}...", state.take(10))
 
             // Find provider ID from state with retry mechanism
             // Microsoft Azure with cached SSO can return in 100-500ms, potentially before
@@ -136,14 +161,16 @@ class OAuthController(
             }
 
             val oauthState = stateOpt.get()
-            logger.debug("OAuth state validated successfully for provider {}", oauthState.providerId)
+            logger.info("OAuth state validated: providerId={}, createdAt={}, expiresAt={}",
+                oauthState.providerId, oauthState.createdAt, oauthState.expiresAt)
 
             // Process OAuth callback with the already-validated state
             val result = oauthService.handleCallback(oauthState, code)
 
             when (result) {
                 is OAuthService.CallbackResult.Success -> {
-                    logger.info("OAuth login successful for user: {}", result.user.username)
+                    logger.info("OAuth login successful: user={}, email={}, roles={}",
+                        result.user.username, result.user.email, result.user.roles)
 
                     // Create user info JSON (non-sensitive metadata only, token is in HttpOnly cookie)
                     val userInfoJson = """{"id":${result.user.id},"username":"${result.user.username}","email":"${result.user.email}","roles":[${result.user.roles.joinToString(",") { "\"$it\"" }}]}"""
@@ -153,19 +180,19 @@ class OAuthController(
                     val encodedUser = java.net.URLEncoder.encode(userInfoJson, "UTF-8")
                     val redirectUrl = "$frontendBaseUrl/login/success?user=$encodedUser"
 
-                    logger.debug("Redirecting to: {}", redirectUrl)
+                    logger.info("Redirecting to success page with auth cookie")
                     // Set HttpOnly cookie for authentication (same as local login)
                     HttpResponse.redirect<Any>(URI.create(redirectUrl))
                         .cookie(authCookieService.createAuthCookie(result.token))
                 }
 
                 is OAuthService.CallbackResult.Error -> {
-                    logger.error("OAuth callback error: {}", result.message)
+                    logger.error("OAuth callback failed: {}", result.message)
                     HttpResponse.redirect<Any>(URI.create("$frontendBaseUrl/login?error=${java.net.URLEncoder.encode(result.message, "UTF-8")}"))
                 }
             }
         } catch (e: Exception) {
-            logger.error("OAuth callback processing error: {}", e.message, e)
+            logger.error("OAuth callback processing exception: {} - {}", e.javaClass.simpleName, e.message, e)
             val errorMsg = "An unexpected error occurred during login. Please try again."
             HttpResponse.redirect<Any>(URI.create("$frontendBaseUrl/login?error=${java.net.URLEncoder.encode(errorMsg, "UTF-8")}"))
         }
