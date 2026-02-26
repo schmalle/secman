@@ -29,6 +29,7 @@ object JsonRpcErrorCodes {
     const val SESSION_INVALID = -32004
     const val TOOL_NOT_FOUND = -32005
     const val RATE_LIMITED = -32006
+    const val DELEGATION_REQUIRED = -32007
 }
 
 /**
@@ -103,6 +104,11 @@ data class JsonRpcResponse(
 
         fun permissionDenied(id: Any?, message: String = "Permission denied"): JsonRpcResponse {
             return error(id, JsonRpcErrorCodes.PERMISSION_DENIED, message)
+        }
+
+        fun delegationRequired(id: Any?): JsonRpcResponse {
+            return error(id, JsonRpcErrorCodes.DELEGATION_REQUIRED,
+                "User delegation required: X-MCP-User-Email header must be provided for data-accessing endpoints")
         }
     }
 }

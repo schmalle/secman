@@ -27,7 +27,7 @@ import org.slf4j.LoggerFactory
  * Endpoint: POST /mcp
  *
  * Authentication: X-MCP-API-Key header (required)
- * User Delegation: X-MCP-User-Email header (optional, requires delegation-enabled API key)
+ * User Delegation: X-MCP-User-Email header (mandatory for tools/list and tools/call)
  *
  * @see https://modelcontextprotocol.io/specification/2024-11-05/basic/transports
  */
@@ -260,20 +260,27 @@ class McpStreamableHttpController(
 
         val mcpApiKey = authResult.apiKey!!
 
-        // Handle user delegation
-        val effectivePermissions = if (!delegatedUserEmail.isNullOrBlank() && mcpApiKey.delegationEnabled) {
-            val validationResult = delegationService.validateDelegation(mcpApiKey, delegatedUserEmail)
-            if (validationResult.success) {
-                validationResult.effectivePermissions
-            } else {
-                return JsonRpcResponse.permissionDenied(
-                    request.id,
-                    validationResult.errorMessage ?: "Delegation validation failed"
-                )
-            }
-        } else {
-            mcpApiKey.getPermissionSet()
+        // SECURITY: User delegation is mandatory for tools/list
+        if (delegatedUserEmail.isNullOrBlank()) {
+            return JsonRpcResponse.delegationRequired(request.id)
         }
+
+        if (!mcpApiKey.delegationEnabled) {
+            return JsonRpcResponse.permissionDenied(
+                request.id,
+                "User delegation is not enabled for this API key. Enable delegation in API key settings."
+            )
+        }
+
+        val validationResult = delegationService.validateDelegation(mcpApiKey, delegatedUserEmail)
+        if (!validationResult.success) {
+            return JsonRpcResponse.permissionDenied(
+                request.id,
+                validationResult.errorMessage ?: "Delegation validation failed"
+            )
+        }
+
+        val effectivePermissions = validationResult.effectivePermissions
 
         // Get authorized tools
         val authorizedTools = toolRegistry.getAuthorizedTools(effectivePermissions)
@@ -332,27 +339,33 @@ class McpStreamableHttpController(
 
         val mcpApiKey = authResult.apiKey!!
 
-        // Handle user delegation
-        val delegation = if (!delegatedUserEmail.isNullOrBlank() && mcpApiKey.delegationEnabled) {
-            val validationResult = delegationService.validateDelegation(mcpApiKey, delegatedUserEmail)
-            if (validationResult.success) {
-                DelegationContext(
-                    delegatedUserEmail = delegatedUserEmail,
-                    delegatedUserId = validationResult.user!!.id!!,
-                    effectivePermissions = validationResult.effectivePermissions
-                )
-            } else {
-                return JsonRpcResponse.permissionDenied(
-                    request.id,
-                    validationResult.errorMessage ?: "Delegation validation failed"
-                )
-            }
-        } else {
-            null
+        // SECURITY: User delegation is mandatory for tools/call
+        if (delegatedUserEmail.isNullOrBlank()) {
+            return JsonRpcResponse.delegationRequired(request.id)
         }
 
-        // Determine effective permissions
-        val effectivePermissions = delegation?.effectivePermissions ?: mcpApiKey.getPermissionSet()
+        if (!mcpApiKey.delegationEnabled) {
+            return JsonRpcResponse.permissionDenied(
+                request.id,
+                "User delegation is not enabled for this API key. Enable delegation in API key settings."
+            )
+        }
+
+        val delegationValidation = delegationService.validateDelegation(mcpApiKey, delegatedUserEmail)
+        if (!delegationValidation.success) {
+            return JsonRpcResponse.permissionDenied(
+                request.id,
+                delegationValidation.errorMessage ?: "Delegation validation failed"
+            )
+        }
+
+        val delegation = DelegationContext(
+            delegatedUserEmail = delegatedUserEmail,
+            delegatedUserId = delegationValidation.user!!.id!!,
+            effectivePermissions = delegationValidation.effectivePermissions
+        )
+
+        val effectivePermissions = delegation.effectivePermissions
 
         // Check tool permission
         val permissionCheck = toolPermissionService.hasPermissionWithSet(
@@ -417,8 +430,8 @@ class McpStreamableHttpController(
             errorCode = if (toolResult.isError) (toolResult as ToolResult.Error).code else null,
             errorMessage = if (toolResult.isError) (toolResult as ToolResult.Error).message else null,
             requestId = request.id?.toString(),
-            delegatedUserEmail = delegation?.delegatedUserEmail,
-            delegatedUserId = delegation?.delegatedUserId
+            delegatedUserEmail = delegation.delegatedUserEmail,
+            delegatedUserId = delegation.delegatedUserId
         )
 
         // Build response

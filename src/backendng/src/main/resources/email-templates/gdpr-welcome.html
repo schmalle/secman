@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Welcome to SecMan - Data Processing Notice</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                line-height: 1.6;
+                color: #333;
+                max-width: 600px;
+                margin: 0 auto;
+                padding: 20px;
+            }
+            .header {
+                background-color: #0d6efd;
+                color: white;
+                padding: 20px;
+                text-align: center;
+                border-radius: 5px 5px 0 0;
+            }
+            .content {
+                background-color: #f8f9fa;
+                padding: 20px;
+                border-radius: 0 0 5px 5px;
+            }
+            .info-box {
+                background-color: #cfe2ff;
+                border-left: 4px solid #0d6efd;
+                padding: 15px;
+                margin: 20px 0;
+            }
+            .data-box {
+                background-color: white;
+                border-radius: 5px;
+                padding: 20px;
+                margin: 20px 0;
+            }
+            .data-item {
+                padding: 10px 0;
+                border-bottom: 1px solid #e9ecef;
+            }
+            .data-item:last-child {
+                border-bottom: none;
+            }
+            .rights-box {
+                background-color: #d1e7dd;
+                border-left: 4px solid #198754;
+                padding: 15px;
+                margin: 20px 0;
+            }
+            .footer {
+                text-align: center;
+                color: #6c757d;
+                font-size: 12px;
+                margin-top: 30px;
+                padding-top: 20px;
+                border-top: 1px solid #ddd;
+            }
+        </style>
+    </head>
+    <body>
+        <img
+            src="https://secman.covestro.net/SecManLogo.png"
+            alt="SecMan Logo"
+        />
+        <div class="header">
+            <h1>Welcome to SecMan</h1>
+            <p style="margin: 0">Data Processing Notice</p>
+        </div>
+
+        <div class="content">
+            <p>Hello ${username},</p>
+
+            <p>
+                Your account has been created in the SecMan Security Management System.
+                In accordance with the General Data Protection Regulation (GDPR), we want
+                to inform you about how your personal data is processed.
+            </p>
+
+            <div class="info-box">
+                <strong>Why are we contacting you?</strong><br />
+                Under GDPR Article 13/14, we are required to inform you when your
+                personal data is collected and processed. This email serves as that
+                notification.
+            </div>
+
+            <div class="data-box">
+                <h3 style="margin-top: 0; color: #495057">Data We Process</h3>
+
+                <div class="data-item">
+                    <strong>Email Address:</strong> ${email}<br />
+                    <span style="color: #6c757d; font-size: 0.9em">
+                        Used for authentication, notifications, and communication.
+                    </span>
+                </div>
+
+                <div class="data-item">
+                    <strong>Username:</strong> ${username}<br />
+                    <span style="color: #6c757d; font-size: 0.9em">
+                        Used for identification within the system and audit logging.
+                    </span>
+                </div>
+
+                <div class="data-item">
+                    <strong>Role Assignments</strong><br />
+                    <span style="color: #6c757d; font-size: 0.9em">
+                        Your assigned roles determine which security data you can access.
+                    </span>
+                </div>
+
+                <div class="data-item">
+                    <strong>Activity Logs</strong><br />
+                    <span style="color: #6c757d; font-size: 0.9em">
+                        Login times and actions are logged for security audit purposes.
+                    </span>
+                </div>
+            </div>
+
+            <div class="data-box">
+                <h3 style="margin-top: 0; color: #495057">Purpose of Processing</h3>
+                <ul style="margin: 0; padding-left: 20px">
+                    <li>Providing access to security management functionality</li>
+                    <li>Sending security-related notifications (vulnerability alerts, remediation reminders)</li>
+                    <li>Maintaining audit trails for compliance and security purposes</li>
+                    <li>Role-based access control to protect sensitive security data</li>
+                </ul>
+            </div>
+
+            <div class="data-box">
+                <h3 style="margin-top: 0; color: #495057">Legal Basis</h3>
+                <p style="margin: 0">
+                    Processing is based on <strong>legitimate interest</strong> (GDPR Art. 6(1)(f))
+                    for maintaining the security posture of the organization, and
+                    <strong>contractual necessity</strong> (GDPR Art. 6(1)(b)) where your
+                    employment requires access to security management tools.
+                </p>
+            </div>
+
+            <div class="rights-box">
+                <strong>Your Rights Under GDPR</strong>
+                <ul style="margin: 5px 0 0 0; padding-left: 20px">
+                    <li><strong>Right of Access</strong> - Request a copy of your personal data</li>
+                    <li><strong>Right to Rectification</strong> - Request correction of inaccurate data</li>
+                    <li><strong>Right to Erasure</strong> - Request deletion of your data (subject to retention requirements)</li>
+                    <li><strong>Right to Restriction</strong> - Request limitation of processing</li>
+                    <li><strong>Right to Object</strong> - Object to processing based on legitimate interest</li>
+                </ul>
+                <p style="margin: 10px 0 0 0">
+                    To exercise any of these rights, please contact your system administrator.
+                </p>
+            </div>
+
+            <p>
+                If you did not expect this account creation, or if you have any questions
+                about how your data is processed, please contact your system administrator.
+            </p>
+        </div>
+
+        <div class="footer">
+            <p>
+                This is an automated notification from the SecMan Security Management System.
+            </p>
+            <p>Please do not reply to this email.</p>
+        </div>
+    </body>
+</html>

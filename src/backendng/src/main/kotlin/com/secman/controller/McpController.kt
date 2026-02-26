@@ -12,7 +12,6 @@ import io.micronaut.security.annotation.Secured
 import io.micronaut.security.rules.SecurityRule
 import jakarta.inject.Inject
 import org.slf4j.LoggerFactory
-import java.time.LocalDateTime
 
 /**
  * Delegation context passed through the request when X-MCP-User-Email header is present.
@@ -48,11 +47,10 @@ class McpController(
 
     /**
      * Get MCP server capabilities.
-     * Returns available tools based on API key permissions.
+     * Returns available tools based on effective permissions (user roles ∩ API key permissions).
      *
-     * Supports user delegation via X-MCP-User-Email header (Feature: 050-mcp-user-delegation):
-     * - When header is present and API key has delegation enabled, returns tools based on effective permissions
-     * - Falls back to API key permissions if header is absent
+     * SECURITY: User delegation via X-MCP-User-Email header is mandatory.
+     * Requests without this header are rejected with DELEGATION_HEADER_REQUIRED.
      */
     @Get("/capabilities")
     @Secured(SecurityRule.IS_ANONYMOUS)
@@ -74,36 +72,43 @@ class McpController(
 
             val mcpApiKey = authResult.apiKey!!
 
-            // Handle user delegation (Feature: 050-mcp-user-delegation)
-            val effectivePermissions = if (!delegatedUserEmail.isNullOrBlank() && mcpApiKey.delegationEnabled) {
-                val validationResult = delegationService.validateDelegation(mcpApiKey, delegatedUserEmail)
-                if (validationResult.success) {
-                    validationResult.effectivePermissions
-                } else {
-                    // Return error for delegation failure
-                    return HttpResponse.status<McpCapabilitiesResponse>(HttpStatus.FORBIDDEN)
-                        .body(McpCapabilitiesResponse(error = McpErrorResponse(
-                            validationResult.errorCode ?: DelegationErrorCodes.DELEGATION_FAILED,
-                            validationResult.errorMessage ?: "Delegation validation failed"
-                        )))
-                }
-            } else {
-                mcpApiKey.getPermissionSet()
+            // SECURITY: User delegation is mandatory
+            if (delegatedUserEmail.isNullOrBlank()) {
+                return HttpResponse.badRequest(
+                    McpCapabilitiesResponse(error = McpErrorResponse(
+                        DelegationErrorCodes.DELEGATION_HEADER_REQUIRED,
+                        "X-MCP-User-Email header is required for all data-accessing endpoints"
+                    ))
+                )
             }
 
+            if (!mcpApiKey.delegationEnabled) {
+                return HttpResponse.status<McpCapabilitiesResponse>(HttpStatus.FORBIDDEN)
+                    .body(McpCapabilitiesResponse(error = McpErrorResponse(
+                        DelegationErrorCodes.DELEGATION_NOT_ENABLED,
+                        "User delegation is not enabled for this API key. Enable delegation in API key settings."
+                    )))
+            }
+
+            val validationResult = delegationService.validateDelegation(mcpApiKey, delegatedUserEmail)
+            if (!validationResult.success) {
+                return HttpResponse.status<McpCapabilitiesResponse>(HttpStatus.FORBIDDEN)
+                    .body(McpCapabilitiesResponse(error = McpErrorResponse(
+                        validationResult.errorCode ?: DelegationErrorCodes.DELEGATION_FAILED,
+                        validationResult.errorMessage ?: "Delegation validation failed"
+                    )))
+            }
+
+            val effectivePermissions = validationResult.effectivePermissions
             val toolCapabilities = toolRegistry.getToolCapabilities(effectivePermissions)
 
             val serverInfo = mutableMapOf<String, Any>(
                 "name" to "Secman MCP Server",
                 "version" to "1.0.0",
-                "protocol" to "mcp/1.0"
+                "protocol" to "mcp/1.0",
+                "delegationActive" to true,
+                "delegatedUser" to delegatedUserEmail
             )
-
-            // Include delegation info in response if delegation was used
-            if (!delegatedUserEmail.isNullOrBlank() && mcpApiKey.delegationEnabled) {
-                serverInfo["delegationActive"] = true
-                serverInfo["delegatedUser"] = delegatedUserEmail
-            }
 
             val response = McpCapabilitiesResponse(
                 capabilities = mapOf(
@@ -232,10 +237,8 @@ class McpController(
     /**
      * Execute an MCP tool.
      *
-     * Supports user delegation via X-MCP-User-Email header (Feature: 050-mcp-user-delegation):
-     * - When header is present and API key has delegation enabled, validates email domain
-     * - Looks up user and computes effective permissions (intersection of user roles and API key permissions)
-     * - Falls back to API key permissions if header is absent or API key doesn't have delegation enabled
+     * SECURITY: User delegation via X-MCP-User-Email header is mandatory.
+     * Computes effective permissions as intersection of user roles and API key permissions.
      */
     @Post("/tools/call")
     @Secured(SecurityRule.IS_ANONYMOUS)
@@ -300,15 +303,56 @@ class McpController(
                 )
             }
 
-            // Handle user delegation (Feature: 050-mcp-user-delegation)
-            val delegationContext = processDelegation(mcpApiKey, delegatedUserEmail, request.id, request.jsonrpc)
-            if (delegationContext is DelegationProcessResult.Error) {
-                return delegationContext.response
+            // SECURITY: User delegation is mandatory
+            if (delegatedUserEmail.isNullOrBlank()) {
+                return HttpResponse.badRequest(
+                    McpToolCallResponse(
+                        jsonrpc = request.jsonrpc,
+                        id = request.id,
+                        error = McpErrorResponse(
+                            DelegationErrorCodes.DELEGATION_HEADER_REQUIRED,
+                            "X-MCP-User-Email header is required for all data-accessing endpoints"
+                        )
+                    )
+                )
             }
-            val delegation = (delegationContext as? DelegationProcessResult.Success)?.context
 
-            // Determine effective permissions
-            val effectivePermissions = delegation?.effectivePermissions ?: mcpApiKey.getPermissionSet()
+            if (!mcpApiKey.delegationEnabled) {
+                return HttpResponse.status<McpToolCallResponse>(HttpStatus.FORBIDDEN)
+                    .body(McpToolCallResponse(
+                        jsonrpc = request.jsonrpc,
+                        id = request.id,
+                        error = McpErrorResponse(
+                            DelegationErrorCodes.DELEGATION_NOT_ENABLED,
+                            "User delegation is not enabled for this API key. Enable delegation in API key settings."
+                        )
+                    ))
+            }
+
+            val delegationValidation = delegationService.validateDelegation(mcpApiKey, delegatedUserEmail)
+            if (!delegationValidation.success) {
+                logger.warn(
+                    "Delegation failed for email={}, key={}, error={}",
+                    delegatedUserEmail, mcpApiKey.keyId, delegationValidation.errorCode
+                )
+                return HttpResponse.status<McpToolCallResponse>(HttpStatus.FORBIDDEN)
+                    .body(McpToolCallResponse(
+                        jsonrpc = request.jsonrpc,
+                        id = request.id,
+                        error = McpErrorResponse(
+                            delegationValidation.errorCode ?: DelegationErrorCodes.DELEGATION_FAILED,
+                            delegationValidation.errorMessage ?: "Delegation validation failed"
+                        )
+                    ))
+            }
+
+            val delegation = DelegationContext(
+                delegatedUserEmail = delegatedUserEmail,
+                delegatedUserId = delegationValidation.user!!.id!!,
+                effectivePermissions = delegationValidation.effectivePermissions
+            )
+
+            val effectivePermissions = delegation.effectivePermissions
 
             val toolName = request.params.name
             val arguments = request.params.arguments
@@ -383,8 +427,8 @@ class McpController(
                 errorCode = if (toolResult.isError) (toolResult as com.secman.mcp.tools.McpToolResult.Error).code else null,
                 errorMessage = if (toolResult.isError) (toolResult as com.secman.mcp.tools.McpToolResult.Error).message else null,
                 requestId = request.id,
-                delegatedUserEmail = delegation?.delegatedUserEmail,
-                delegatedUserId = delegation?.delegatedUserId
+                delegatedUserEmail = delegation.delegatedUserEmail,
+                delegatedUserId = delegation.delegatedUserId
             )
 
             val response = if (toolResult.isError) {
@@ -444,88 +488,6 @@ class McpController(
                     error = McpErrorResponse("SYSTEM_ERROR", "Tool execution failed")
                 ))
         }
-    }
-
-    /**
-     * Result of delegation processing.
-     * Feature: 050-mcp-user-delegation
-     */
-    private sealed class DelegationProcessResult {
-        /** No delegation requested or delegation not enabled - use API key permissions */
-        object None : DelegationProcessResult()
-
-        /** Delegation successful - use effective permissions */
-        data class Success(val context: DelegationContext) : DelegationProcessResult()
-
-        /** Delegation failed - return error response */
-        data class Error(val response: HttpResponse<McpToolCallResponse>) : DelegationProcessResult()
-    }
-
-    /**
-     * Process delegation header and return delegation context or error.
-     * Feature: 050-mcp-user-delegation
-     *
-     * @param mcpApiKey The authenticated API key
-     * @param delegatedUserEmail The email from X-MCP-User-Email header (nullable)
-     * @param requestId The JSON-RPC request ID
-     * @param jsonrpc The JSON-RPC version string
-     * @return DelegationProcessResult indicating success, none, or error
-     */
-    private fun processDelegation(
-        mcpApiKey: McpApiKey,
-        delegatedUserEmail: String?,
-        requestId: String,
-        jsonrpc: String
-    ): DelegationProcessResult {
-        // No delegation header provided - fallback to API key permissions
-        if (delegatedUserEmail.isNullOrBlank()) {
-            if (mcpApiKey.delegationEnabled) {
-                logger.debug("Delegation-enabled key {} used without email header, using API key permissions", mcpApiKey.keyId)
-            }
-            return DelegationProcessResult.None
-        }
-
-        // Delegation header provided but key doesn't have delegation enabled - ignore header
-        if (!mcpApiKey.delegationEnabled) {
-            logger.debug("Delegation header ignored for non-delegation key {}", mcpApiKey.keyId)
-            return DelegationProcessResult.None
-        }
-
-        // Validate delegation
-        val validationResult = delegationService.validateDelegation(mcpApiKey, delegatedUserEmail)
-
-        if (!validationResult.success) {
-            logger.warn(
-                "Delegation failed for email={}, key={}, error={}",
-                delegatedUserEmail, mcpApiKey.keyId, validationResult.errorCode
-            )
-
-            return DelegationProcessResult.Error(
-                HttpResponse.status<McpToolCallResponse>(HttpStatus.FORBIDDEN)
-                    .body(McpToolCallResponse(
-                        jsonrpc = jsonrpc,
-                        id = requestId,
-                        error = McpErrorResponse(
-                            validationResult.errorCode ?: DelegationErrorCodes.DELEGATION_FAILED,
-                            validationResult.errorMessage ?: "Delegation validation failed"
-                        )
-                    ))
-            )
-        }
-
-        // Delegation successful
-        logger.info(
-            "Delegation successful: email={}, key={}, effectivePermissions={}",
-            delegatedUserEmail, mcpApiKey.keyId, validationResult.effectivePermissions.size
-        )
-
-        return DelegationProcessResult.Success(
-            DelegationContext(
-                delegatedUserEmail = delegatedUserEmail,
-                delegatedUserId = validationResult.user!!.id!!,
-                effectivePermissions = validationResult.effectivePermissions
-            )
-        )
     }
 
     private fun validateSessionRequest(request: McpSessionCreateRequest): String? {

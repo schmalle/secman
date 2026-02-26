@@ -1,7 +1,7 @@
 # MCP (Model Context Protocol) Integration Guide
 
-**Last Updated:** 2026-02-12
-**Version:** 4.0
+**Last Updated:** 2026-02-24
+**Version:** 5.0
 
 This guide covers integrating Secman with AI assistants (Claude Desktop, Claude Code, ChatGPT, etc.) using the Model Context Protocol (MCP).
 
@@ -201,7 +201,7 @@ Uses the included Node.js MCP server (legacy method, full-featured):
 Test the MCP endpoint directly:
 
 ```bash
-# Test initialize handshake
+# Test initialize handshake (does not require X-MCP-User-Email)
 curl -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
   -H "X-MCP-API-Key: sk-your-api-key-here" \
@@ -219,10 +219,11 @@ curl -X POST http://localhost:8080/mcp \
     }
   }'
 
-# List available tools
+# List available tools (X-MCP-User-Email is mandatory)
 curl -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
   -H "X-MCP-API-Key: sk-your-api-key-here" \
+  -H "X-MCP-User-Email: your.email@company.com" \
   -d '{
     "jsonrpc": "2.0",
     "id": "2",
@@ -291,11 +292,13 @@ curl -X DELETE \
 
 ## User Delegation
 
-User delegation allows MCP requests to be made on behalf of specific Secman users, maintaining role-based access control (RBAC) even when requests come through a shared API key.
+User delegation is **mandatory** for all data-accessing MCP endpoints (`tools/list`, `tools/call`, `/capabilities`). Every MCP request that accesses data must include the `X-MCP-User-Email` header to identify the user on whose behalf the request is made.
+
+> **Note:** The `initialize` and `ping` methods do not require the `X-MCP-User-Email` header, as they only perform handshake and health check operations without accessing data.
 
 ### How It Works
 
-When enabled, a delegation-enabled API key can include the `X-MCP-User-Email` header. Secman will:
+The `X-MCP-User-Email` header is required on every data-accessing request. Secman will:
 
 1. Look up the user by email
 2. Validate the email domain against allowed domains
@@ -342,20 +345,22 @@ User roles are mapped to MCP permissions:
 
 ### Delegation Error Codes
 
-| Error Code | Description |
-|------------|-------------|
-| `DELEGATION_NOT_ENABLED` | API key doesn't have delegation enabled |
-| `DELEGATION_DOMAIN_REJECTED` | Email domain not in allowed list |
-| `DELEGATION_USER_NOT_FOUND` | User with email doesn't exist |
-| `DELEGATION_USER_INACTIVE` | User account is disabled |
-| `DELEGATION_INVALID_EMAIL` | Email format is invalid |
-| `DELEGATION_FAILED` | General delegation failure |
+| Error Code | JSON-RPC Code | Description |
+|------------|---------------|-------------|
+| `DELEGATION_HEADER_REQUIRED` | -32007 | `X-MCP-User-Email` header is missing (mandatory) |
+| `DELEGATION_NOT_ENABLED` | -32003 | API key doesn't have delegation enabled |
+| `DELEGATION_DOMAIN_REJECTED` | -32003 | Email domain not in allowed list |
+| `DELEGATION_USER_NOT_FOUND` | -32003 | User with email doesn't exist |
+| `DELEGATION_USER_INACTIVE` | -32003 | User account is disabled |
+| `DELEGATION_INVALID_EMAIL` | -32003 | Email format is invalid |
+| `DELEGATION_FAILED` | -32003 | General delegation failure |
 
-### Fallback Behavior
+### Mandatory Delegation
 
-- **No `X-MCP-User-Email` header**: Request uses API key's base permissions (backward compatible)
-- **Empty header**: Same as no header
-- **Non-delegation key**: `X-MCP-User-Email` header is ignored
+- **No `X-MCP-User-Email` header**: Request is rejected with `DELEGATION_HEADER_REQUIRED` error
+- **Empty header**: Same as no header — rejected
+- **Non-delegation key with header**: Request is rejected with `DELEGATION_NOT_ENABLED` error
+- **`initialize` and `ping` methods**: These do not require the header (no data access)
 
 ### Delegation Security Alerts
 
@@ -952,11 +957,13 @@ All MCP operations are logged with:
 import requests
 
 api_key = "sk-your-api-key"
+user_email = "admin@company.com"  # mandatory
 base_url = "http://localhost:8080/mcp"
 
 response = requests.post(base_url,
     headers={
         "X-MCP-API-Key": api_key,
+        "X-MCP-User-Email": user_email,
         "Content-Type": "application/json"
     },
     json={
@@ -971,6 +978,8 @@ response = requests.post(base_url,
 )
 print(response.json())
 ```
+
+See `examples/mcp/` for complete Python client examples.
 
 #### Node.js
 
@@ -988,6 +997,7 @@ const response = await axios.post('http://localhost:8080/mcp', {
 }, {
   headers: {
     'X-MCP-API-Key': process.env.SECMAN_API_KEY,
+    'X-MCP-User-Email': process.env.SECMAN_USER_EMAIL,  // mandatory
     'Content-Type': 'application/json'
   }
 });
@@ -1040,9 +1050,15 @@ Ensure backup includes MCP-related tables:
 - Verify the API key is valid and active
 - Check the API key hasn't expired
 
+### "Delegation required" / `DELEGATION_HEADER_REQUIRED` error
+- The `X-MCP-User-Email` header is mandatory for all data-accessing endpoints (`tools/list`, `tools/call`)
+- Add the header with a valid Secman user email
+- Ensure the API key has delegation enabled
+- Note: `initialize` and `ping` do not require this header
+
 ### "Permission denied" error
 - Verify your API key has the required permissions
-- For admin tools, ensure User Delegation is enabled and `X-MCP-User-Email` is set
+- Ensure `X-MCP-User-Email` is set to a valid user email
 - The delegated user must have the required role
 
 ### "Origin not allowed" error
@@ -1063,9 +1079,10 @@ Ensure backup includes MCP-related tables:
 
 ### Debug Commands
 
-**Test API key:**
+**Test API key with delegation:**
 ```bash
 curl -H "X-MCP-API-Key: your-key" \
+  -H "X-MCP-User-Email: your.email@company.com" \
   http://localhost:8080/api/mcp/capabilities
 ```
 

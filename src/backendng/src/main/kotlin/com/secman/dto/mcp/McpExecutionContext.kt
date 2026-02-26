@@ -7,12 +7,16 @@ import io.micronaut.serde.annotation.Serdeable
  * Execution context for MCP tool calls.
  *
  * Contains all information needed for a tool to:
- * 1. Know who is making the request (API key + optional delegated user)
+ * 1. Know who is making the request (API key + delegated user)
  * 2. Check permissions
  * 3. Apply access control filtering
  *
  * Feature: 052-mcp-access-control
  * Implements row-level access control for MCP tools based on User Delegation.
+ *
+ * SECURITY: User delegation is mandatory for all data-accessing endpoints.
+ * The controller layer enforces this before tools are called. The defense-in-depth
+ * checks here protect against future refactoring mistakes.
  *
  * Access Control Rules (from CLAUDE.md - Unified Access Control):
  * Users can access assets if ANY of these is true:
@@ -59,15 +63,17 @@ data class McpExecutionContext(
      *
      * Access is granted if:
      * - User is ADMIN (isAdmin = true), OR
-     * - Asset ID is in the pre-computed accessible set, OR
-     * - No delegation (API key acts as service account with full access)
+     * - Asset ID is in the pre-computed accessible set
+     *
+     * SECURITY: Delegation is mandatory. If no delegation is present (programming error),
+     * access is denied by default (defense-in-depth).
      */
     fun canAccessAsset(assetId: Long): Boolean {
         // ADMIN has universal access
         if (isAdmin) return true
 
-        // No delegation = API key is trusted service account
-        if (!hasDelegation()) return true
+        // Defense-in-depth: deny access if no delegation (should never happen - controller enforces this)
+        if (!hasDelegation()) return false
 
         // Check pre-computed accessible assets
         return accessibleAssetIds?.contains(assetId) == true
@@ -75,10 +81,11 @@ data class McpExecutionContext(
 
     /**
      * Check if access control filtering should be applied.
-     * Returns false for ADMIN or non-delegated requests.
+     * Returns false only for ADMIN users (who have universal access).
+     * Delegation is always present since it's mandatory for data-accessing endpoints.
      */
     fun shouldApplyAccessControl(): Boolean {
-        return hasDelegation() && !isAdmin
+        return !isAdmin
     }
 
     /**
@@ -90,29 +97,8 @@ data class McpExecutionContext(
 
     companion object {
         /**
-         * Create a context for non-delegated API key (trusted service account).
-         * No access control filtering will be applied.
-         */
-        fun forApiKey(
-            apiKeyId: Long,
-            apiKeyName: String,
-            permissions: Set<McpPermission>
-        ): McpExecutionContext {
-            return McpExecutionContext(
-                apiKeyId = apiKeyId,
-                apiKeyName = apiKeyName,
-                delegatedUserId = null,
-                delegatedUserEmail = null,
-                delegatedUserRoles = null,
-                effectivePermissions = permissions,
-                isAdmin = false,  // API key alone doesn't grant ADMIN
-                accessibleAssetIds = null,  // No filtering for service accounts
-                accessibleWorkgroupIds = null
-            )
-        }
-
-        /**
          * Create a context for delegated user with pre-computed access control.
+         * This is the only factory method — delegation is mandatory for all data-accessing endpoints.
          */
         fun forDelegatedUser(
             apiKeyId: Long,

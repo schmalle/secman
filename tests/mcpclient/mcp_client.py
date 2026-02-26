@@ -2,26 +2,26 @@
 """
 MCP Test Client for Secman
 
-A command-line tool to test MCP API endpoints, including the user delegation feature.
+A command-line tool to test MCP API endpoints with mandatory user delegation.
 Uses only Python standard library (no external dependencies).
 
 Feature: 050-mcp-user-delegation
 
-Usage:
-    # Get capabilities (no delegation)
-    python mcp_client.py --api-key YOUR_KEY capabilities
+Note: X-MCP-User-Email is mandatory for all data-accessing endpoints.
+The --delegate flag is required for all commands.
 
-    # Get capabilities with delegation
+Usage:
+    # Get capabilities
     python mcp_client.py --api-key YOUR_KEY --delegate user@company.com capabilities
 
     # Call a tool
-    python mcp_client.py --api-key YOUR_KEY call get_requirements --args '{"limit": 5}'
-
-    # Call a tool with delegation
-    python mcp_client.py --api-key YOUR_KEY --delegate user@company.com call get_requirements
+    python mcp_client.py --api-key YOUR_KEY --delegate user@company.com call get_requirements --args '{"limit": 5}'
 
     # Run delegation tests
-    python mcp_client.py --api-key YOUR_KEY test-delegation --delegate user@company.com
+    python mcp_client.py --api-key YOUR_KEY --delegate user@company.com test-delegation
+
+    # Test invalid delegation scenarios
+    python mcp_client.py --api-key YOUR_KEY --delegate user@company.com test-invalid
 """
 
 import argparse
@@ -400,8 +400,8 @@ def cmd_test_delegation(client: McpClient, args: argparse.Namespace):
 
     print()
 
-    # Test 3: Compare with non-delegated request
-    print(f"{Colors.BOLD}Test 3: Compare capabilities (delegation vs no delegation){Colors.END}")
+    # Test 3: Verify requests without delegation are rejected
+    print(f"{Colors.BOLD}Test 3: Verify mandatory delegation enforcement{Colors.END}")
 
     # Create a client without delegation
     non_delegate_client = McpClient(
@@ -412,28 +412,15 @@ def cmd_test_delegation(client: McpClient, args: argparse.Namespace):
     )
 
     response_no_delegate = non_delegate_client.get_capabilities()
-    response_with_delegate = client.get_capabilities()
 
-    if response_no_delegate.success and response_with_delegate.success:
-        tools_no_delegate = len(response_no_delegate.data.get('capabilities', {}).get('tools', []))
-        tools_with_delegate = len(response_with_delegate.data.get('capabilities', {}).get('tools', []))
-
-        print_result(
-            "Capabilities comparison",
-            True,
-            f"Without delegation: {tools_no_delegate} tools, With delegation: {tools_with_delegate} tools"
-        )
-
-        if tools_with_delegate <= tools_no_delegate:
-            print_result("Permission intersection", True, "Delegated permissions <= API key permissions")
+    if not response_no_delegate.success:
+        error_code = response_no_delegate.data.get('error', {}).get('code', '') if response_no_delegate.data else ''
+        if error_code == 'DELEGATION_HEADER_REQUIRED':
+            print_result("No-delegation rejected", True, f"Server returned {error_code} as expected")
         else:
-            print_result("Permission intersection", False, "Delegated permissions > API key permissions (unexpected)")
-            all_passed = False
+            print_result("No-delegation rejected", True, f"Server rejected with: {error_code or response_no_delegate.error}")
     else:
-        if not response_no_delegate.success:
-            print_result("Non-delegated request", False, response_no_delegate.error)
-        if not response_with_delegate.success:
-            print_result("Delegated request", False, response_with_delegate.error)
+        print_result("No-delegation rejected", False, "Request succeeded without delegation (should have been rejected)")
         all_passed = False
 
     # Summary
@@ -488,13 +475,8 @@ def cmd_test_invalid_delegation(client: McpClient, args: argparse.Namespace):
             else:
                 print_result(f"Email: {email}", True, f"Rejected with {error_code or response.error}")
         else:
-            # If delegation isn't enabled on the key, header is ignored
-            server_info = response.data.get('serverInfo', {})
-            if not server_info.get('delegationActive'):
-                print_result(f"Email: {email}", True, "Header ignored (delegation not enabled on key)")
-            else:
-                print_result(f"Email: {email}", False, "Request succeeded (expected rejection)")
-                all_expected = False
+            print_result(f"Email: {email}", False, "Request succeeded (expected rejection)")
+            all_expected = False
 
         print()
 
@@ -517,22 +499,19 @@ def main():
         epilog="""
 Examples:
   # Get server capabilities
-  %(prog)s --api-key sk-xxx capabilities
-
-  # Get capabilities with user delegation
   %(prog)s --api-key sk-xxx --delegate user@company.com capabilities
 
   # Call a tool
-  %(prog)s --api-key sk-xxx call get_requirements --args '{"limit": 5}'
+  %(prog)s --api-key sk-xxx --delegate user@company.com call get_requirements --args '{"limit": 5}'
 
-  # Call a tool with delegation
+  # Call a tool
   %(prog)s --api-key sk-xxx --delegate user@company.com call get_tags
 
   # Run delegation tests
   %(prog)s --api-key sk-xxx --delegate user@company.com test-delegation
 
   # Test invalid delegation scenarios
-  %(prog)s --api-key sk-xxx test-invalid
+  %(prog)s --api-key sk-xxx --delegate user@company.com test-invalid
         """
     )
 
@@ -550,7 +529,8 @@ Examples:
     parser.add_argument(
         '--delegate', '-d',
         metavar='EMAIL',
-        help='Email address for user delegation (X-MCP-User-Email header)'
+        required=True,
+        help='Email address for user delegation (X-MCP-User-Email header, mandatory)'
     )
     parser.add_argument(
         '--verbose', '-v',

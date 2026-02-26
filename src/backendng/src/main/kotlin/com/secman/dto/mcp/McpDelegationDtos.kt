@@ -72,6 +72,9 @@ object DelegationErrorCodes {
 
     /** General delegation failure */
     const val DELEGATION_FAILED = "DELEGATION_FAILED"
+
+    /** X-MCP-User-Email header is required but was not provided */
+    const val DELEGATION_HEADER_REQUIRED = "DELEGATION_HEADER_REQUIRED"
 }
 
 /**

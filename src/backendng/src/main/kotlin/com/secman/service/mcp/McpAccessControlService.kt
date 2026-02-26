@@ -43,38 +43,24 @@ open class McpAccessControlService(
     /**
      * Build execution context for MCP tool execution.
      *
+     * SECURITY: Delegation is mandatory for all data-accessing endpoints.
+     * The controller layer enforces this; this null check is defense-in-depth.
+     *
      * @param apiKey The authenticated MCP API key
-     * @param delegation The delegation context (null if no delegation)
+     * @param delegation The delegation context (must not be null)
      * @return McpExecutionContext with pre-computed access control data
+     * @throws IllegalStateException if delegation is null (programming error)
      */
     fun buildExecutionContext(
         apiKey: McpApiKey,
-        delegation: DelegationContext?
+        delegation: DelegationContext
     ): McpExecutionContext {
         logger.debug(
-            "Building execution context: apiKeyId={}, delegation={}",
-            apiKey.id, delegation != null
+            "Building execution context: apiKeyId={}, delegatedUser={}",
+            apiKey.id, delegation.delegatedUserEmail
         )
 
-        return if (delegation != null) {
-            buildDelegatedContext(apiKey, delegation)
-        } else {
-            buildApiKeyContext(apiKey)
-        }
-    }
-
-    /**
-     * Build context for non-delegated API key (trusted service account).
-     * No access control filtering will be applied - returns all data.
-     */
-    private fun buildApiKeyContext(apiKey: McpApiKey): McpExecutionContext {
-        logger.debug("Building API key context (no delegation): {}", apiKey.keyId)
-
-        return McpExecutionContext.forApiKey(
-            apiKeyId = apiKey.id,
-            apiKeyName = apiKey.name,
-            permissions = apiKey.getPermissionSet()
-        )
+        return buildDelegatedContext(apiKey, delegation)
     }
 
     /**

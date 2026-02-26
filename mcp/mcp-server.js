@@ -23,11 +23,22 @@ const {
 
 // Configuration
 const SECMAN_BASE_URL = process.env.SECMAN_BASE_URL || 'http://localhost:8080';
-const API_KEY = process.env.SECMAN_API_KEY
-// User identifier for MCP User Delegation (required for admin tools like list_users)
-// Set this to the email or username of a Secman user with appropriate roles (e.g., ADMIN)
-// Examples: "admin@example.com" or "adminuser"
-const USER_EMAIL = process.env.SECMAN_USER_EMAIL || '';
+const API_KEY = process.env.SECMAN_API_KEY;
+// User identifier for MCP User Delegation (mandatory for all data-accessing endpoints)
+// Must be set to the email of a Secman user with appropriate roles
+const USER_EMAIL = process.env.SECMAN_USER_EMAIL;
+
+if (!API_KEY) {
+  console.error('FATAL: SECMAN_API_KEY environment variable is required');
+  process.exit(1);
+}
+
+if (!USER_EMAIL) {
+  console.error('FATAL: SECMAN_USER_EMAIL environment variable is required');
+  console.error('Set this to the email of a Secman user (e.g., admin@company.com)');
+  console.error('The server requires X-MCP-User-Email for all data-accessing endpoints');
+  process.exit(1);
+}
 
 class SecmanMCPServer {
   constructor() {
@@ -821,16 +832,12 @@ class SecmanMCPServer {
   async callSecmanAPI(endpoint, data) {
     const fetch = (await import('node-fetch')).default;
 
-    // Build headers with API key and optional user delegation
+    // Build headers with API key and mandatory user delegation
     const headers = {
       'Content-Type': 'application/json',
-      'X-MCP-API-Key': API_KEY
+      'X-MCP-API-Key': API_KEY,
+      'X-MCP-User-Email': USER_EMAIL
     };
-
-    // Add User Delegation header if configured (required for admin tools like list_users)
-    if (USER_EMAIL) {
-      headers['X-MCP-User-Email'] = USER_EMAIL;
-    }
 
     const response = await fetch(`${SECMAN_BASE_URL}/api/mcp${endpoint}`, {
       method: 'POST',
@@ -848,9 +855,9 @@ class SecmanMCPServer {
   async run() {
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
-    console.error('Secman MCP Server v0.2.0 running on stdio');
+    console.error('Secman MCP Server v0.3.0 running on stdio');
     console.error(`Backend URL: ${SECMAN_BASE_URL}`);
-    console.error(`User Delegation: ${USER_EMAIL ? `enabled (${USER_EMAIL})` : 'disabled (set SECMAN_USER_EMAIL for admin tools)'}`);
+    console.error(`User Delegation: ${USER_EMAIL} (mandatory)`);
     console.error('Available tools: 15 (requirements, assets, vulnerabilities, scans, admin)');
   }
 }

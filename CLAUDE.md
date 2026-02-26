@@ -11,6 +11,7 @@
 - Frontend: `src/frontend/` - Astro + React islands, Axios, sessionStorage JWT
 - CLI: `src/cli/` - CrowdStrike API queries, notification emails
 - Security: JWT auth, OAuth2/OIDC, RBAC (USER, ADMIN, VULN, RELEASE_MANAGER, REQADMIN, SECCHAMPION)
+- MCP: `X-MCP-User-Email` header is **mandatory** for `tools/list` and `tools/call` endpoints (only `initialize` and `ping` are exempt)
 
 ## Key Entities
 

@@ -1,0 +1,54 @@
+WELCOME TO SECMAN - DATA PROCESSING NOTICE
+==================================================
+
+Hello ${username},
+
+Your account has been created in the SecMan Security Management System.
+In accordance with the General Data Protection Regulation (GDPR), we want
+to inform you about how your personal data is processed.
+
+DATA WE PROCESS
+--------------------------------------------------
+- Email Address: ${email}
+  Used for authentication, notifications, and communication.
+
+- Username: ${username}
+  Used for identification within the system and audit logging.
+
+- Role Assignments
+  Your assigned roles determine which security data you can access.
+
+- Activity Logs
+  Login times and actions are logged for security audit purposes.
+
+PURPOSE OF PROCESSING
+--------------------------------------------------
+- Providing access to security management functionality
+- Sending security-related notifications (vulnerability alerts, remediation reminders)
+- Maintaining audit trails for compliance and security purposes
+- Role-based access control to protect sensitive security data
+
+LEGAL BASIS
+--------------------------------------------------
+Processing is based on legitimate interest (GDPR Art. 6(1)(f)) for
+maintaining the security posture of the organization, and contractual
+necessity (GDPR Art. 6(1)(b)) where your employment requires access
+to security management tools.
+
+YOUR RIGHTS UNDER GDPR
+--------------------------------------------------
+- Right of Access - Request a copy of your personal data
+- Right to Rectification - Request correction of inaccurate data
+- Right to Erasure - Request deletion of your data (subject to retention requirements)
+- Right to Restriction - Request limitation of processing
+- Right to Object - Object to processing based on legitimate interest
+
+To exercise any of these rights, please contact your system administrator.
+
+--------------------------------------------------
+If you did not expect this account creation, or if you have any questions
+about how your data is processed, please contact your system administrator.
+
+---
+This is an automated notification from the SecMan Security Management System.
+Do not reply to this email.
