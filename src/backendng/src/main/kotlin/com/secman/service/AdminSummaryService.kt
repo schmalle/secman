@@ -128,8 +128,8 @@ class AdminSummaryService(
                 .take(10)
                 .map { row ->
                     ServerSummary(
-                        name = row["assetName"] as? String ?: "",
-                        vulnerabilityCount = (row["totalVulnerabilityCount"] as? Number)?.toLong() ?: 0L
+                        name = row.assetName ?: "",
+                        vulnerabilityCount = row.totalVulnerabilityCount?.toLong() ?: 0L
                     )
                 }
         } catch (e: Exception) {

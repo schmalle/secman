@@ -3,6 +3,7 @@ package com.secman.mcp.tools
 import com.secman.domain.McpOperation
 import com.secman.dto.mcp.McpExecutionContext
 import com.secman.repository.VulnerabilityRepository
+import com.secman.repository.projection.TopAssetByVulnerabilitiesRow
 import jakarta.inject.Inject
 import jakarta.inject.Singleton
 
@@ -88,9 +89,9 @@ class GetAssetMostVulnerabilitiesTool(
      * Transform raw query result to provide better display names.
      * When assetName is a CrowdStrike device ID (hex string), prefer showing IP as identifier.
      */
-    private fun transformAssetResult(asset: Map<String, Any>): Map<String, Any> {
-        val assetName = asset["assetName"]?.toString() ?: ""
-        val assetIp = asset["assetIp"]?.toString()
+    private fun transformAssetResult(asset: TopAssetByVulnerabilitiesRow): Map<String, Any?> {
+        val assetName = asset.assetName ?: ""
+        val assetIp = asset.assetIp
 
         // Detect if name looks like a CrowdStrike device ID (uppercase hex, no dots/hyphens typical of hostnames)
         val looksLikeDeviceId = assetName.isNotBlank() &&
@@ -104,12 +105,22 @@ class GetAssetMostVulnerabilitiesTool(
             else -> "Unknown"
         }
 
-        return asset.toMutableMap().apply {
-            put("displayName", displayName)
-            if (looksLikeDeviceId) {
-                put("deviceId", assetName)  // Preserve original device ID
-                put("nameIsDeviceId", true)
-            }
+        val result = mutableMapOf<String, Any?>(
+            "assetId" to asset.assetId?.toLong(),
+            "assetName" to assetName,
+            "assetType" to asset.assetType,
+            "assetIp" to assetIp,
+            "totalVulnerabilityCount" to (asset.totalVulnerabilityCount?.toLong() ?: 0L),
+            "criticalCount" to (asset.criticalCount?.toLong() ?: 0L),
+            "highCount" to (asset.highCount?.toLong() ?: 0L),
+            "mediumCount" to (asset.mediumCount?.toLong() ?: 0L),
+            "lowCount" to (asset.lowCount?.toLong() ?: 0L),
+            "displayName" to displayName
+        )
+        if (looksLikeDeviceId) {
+            result["deviceId"] = assetName  // Preserve original device ID
+            result["nameIsDeviceId"] = true
         }
+        return result
     }
 }

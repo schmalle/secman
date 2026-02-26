@@ -193,6 +193,14 @@ class OAuthController(
             }
         } catch (e: Exception) {
             logger.error("OAuth callback processing exception: {} - {}", e.javaClass.simpleName, e.message, e)
+            // Walk the exception cause chain to reveal RollbackException -> PersistenceException etc.
+            var cause: Throwable? = e.cause
+            var depth = 1
+            while (cause != null && depth <= 5) {
+                logger.error("  Cause chain [{}]: {} - {}", depth, cause.javaClass.simpleName, cause.message)
+                cause = cause.cause
+                depth++
+            }
             val errorMsg = "An unexpected error occurred during login. Please try again."
             HttpResponse.redirect<Any>(URI.create("$frontendBaseUrl/login?error=${java.net.URLEncoder.encode(errorMsg, "UTF-8")}"))
         }

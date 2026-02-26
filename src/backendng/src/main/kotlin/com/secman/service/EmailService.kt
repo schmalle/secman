@@ -51,7 +51,10 @@ open class EmailService(
             runBlocking {
                 try {
                     val activeConfig = getActiveEmailConfig()
-                        ?: throw IllegalStateException("No active email configuration found")
+                    if (activeConfig == null) {
+                        log.warn("No active email configuration found. Skipping email to {}", to)
+                        return@runBlocking false
+                    }
                     
                     sendEmailWithConfig(activeConfig, to, subject, textContent, htmlContent)
                 } catch (e: Exception) {

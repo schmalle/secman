@@ -87,8 +87,8 @@
                         if (response.ok) {
                             window.location.href = '/';
                         } else {
-                            console.error('Auth verification failed, status:', response.status);
-                            showError('Authentication cookie was not set properly. Please try logging in again.');
+                            console.error('Auth verification failed, status:', response.status, 'statusText:', response.statusText);
+                            showError('Authentication cookie was not set properly (HTTP ' + response.status + '). Please try logging in again.');
                         }
                     })
                     .catch(function(err) {

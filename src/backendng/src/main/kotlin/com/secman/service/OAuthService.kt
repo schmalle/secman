@@ -370,12 +370,13 @@ open class OAuthService(
     }
 
     /**
-     * Handle OAuth callback and exchange code for token
-     *
-     * Includes correlation ID logging for tracking OAuth flow through logs.
-     */
-    /**
      * Handle OAuth callback and exchange code for token.
+     *
+     * IMPORTANT: This method is intentionally NOT @Transactional. Each DB operation
+     * (provider lookup, user find/create, lastLogin update, state cleanup) uses its
+     * own transaction. This prevents the detached-entity problem where a new user
+     * created in REQUIRES_NEW becomes detached from the outer persistence context,
+     * causing merge() to taint the Hibernate Session with rollback-only on commit.
      *
      * Accepts the already-validated OAuthState directly from the controller,
      * avoiding a redundant state lookup that could fail if the state was
@@ -384,7 +385,6 @@ open class OAuthService(
      * @param oauthState The validated OAuth state (already found via findStateByValueWithRetry)
      * @param code The authorization code from the OAuth provider
      */
-    @Transactional
     open fun handleCallback(oauthState: OAuthState, code: String): CallbackResult {
         val providerId = oauthState.providerId
         val state = oauthState.stateToken
@@ -405,7 +405,7 @@ open class OAuthService(
             if (oauthState.expiresAt.isBefore(LocalDateTime.now())) {
                 logger.error("[{}] EXPIRED OAuth state: created={}, expired={}, now={}",
                     correlationId, oauthState.createdAt, oauthState.expiresAt, LocalDateTime.now())
-                oauthStateRepository.deleteByStateToken(state)
+                deleteOAuthStateQuietly(state)
                 return CallbackResult.Error(OAuthErrorCode.STATE_EXPIRED.userMessage)
             }
 
@@ -425,7 +425,7 @@ open class OAuthService(
                 val tokenResponse = exchangeCodeForTokenWithRetry(provider, code, oauthState.redirectUri!!)
                 if (tokenResponse == null) {
                     logger.error("[{}] Token exchange FAILED - no token received from provider", correlationId)
-                    oauthStateRepository.deleteByStateToken(state)
+                    deleteOAuthStateQuietly(state)
                     return CallbackResult.Error(OAuthErrorCode.TOKEN_EXCHANGE_FAILED.userMessage)
                 }
                 logger.info("[{}] Token exchange successful: hasAccessToken={}, hasIdToken={}",
@@ -442,7 +442,7 @@ open class OAuthService(
                     )
                     if (idTokenClaims == null) {
                         logger.error("[{}] ID token validation FAILED - JWKS signature verification failed", correlationId)
-                        oauthStateRepository.deleteByStateToken(state)
+                        deleteOAuthStateQuietly(state)
                         return CallbackResult.Error(OAuthErrorCode.TOKEN_EXCHANGE_FAILED.userMessage)
                     }
 
@@ -458,7 +458,7 @@ open class OAuthService(
                     // Validate tenant ID for Microsoft providers
                     if (!validateTenantId(provider, idTokenClaims)) {
                         logger.error("[{}] Tenant ID validation FAILED", correlationId)
-                        oauthStateRepository.deleteByStateToken(state)
+                        deleteOAuthStateQuietly(state)
                         val errorMessage = if (microsoftErrorMapper.isTenantMismatchError("AADSTS50128")) {
                             microsoftErrorMapper.mapError("AADSTS50128")
                         } else {
@@ -483,7 +483,7 @@ open class OAuthService(
                                 logger.error("[{}]   Found potential email claim: {} = {}", correlationId, key, value)
                             }
                         }
-                        oauthStateRepository.deleteByStateToken(state)
+                        deleteOAuthStateQuietly(state)
                         return CallbackResult.Error(OAuthErrorCode.EMAIL_REQUIRED.userMessage)
                     }
                 } else {
@@ -508,7 +508,7 @@ open class OAuthService(
                     val info = getUserInfo(provider, tokenResponse.accessToken)
                     if (info == null) {
                         logger.error("[{}] Failed to fetch user info from provider", correlationId)
-                        oauthStateRepository.deleteByStateToken(state)
+                        deleteOAuthStateQuietly(state)
                         return CallbackResult.Error(OAuthErrorCode.USER_INFO_FAILED.userMessage)
                     }
                     logger.info("[{}] UserInfo from endpoint: email={}, login={}, name={}", correlationId,
@@ -521,7 +521,7 @@ open class OAuthService(
                 val userResult = findOrCreateUser(provider, userInfo)
                 if (userResult == null) {
                     logger.error("[{}] User find/create FAILED for email={}", correlationId, userInfo.email)
-                    oauthStateRepository.deleteByStateToken(state)
+                    deleteOAuthStateQuietly(state)
                     return CallbackResult.Error(OAuthErrorCode.USER_CREATION_FAILED.userMessage)
                 }
                 val user = userResult.user
@@ -530,6 +530,9 @@ open class OAuthService(
 
                 // Send notification if user was newly created via OAuth (Feature 027)
                 if (userResult.isNewUser) {
+                    logger.info("[{}] New user path: user id={} created via REQUIRES_NEW (committed independently). " +
+                        "lastLogin will be updated via fresh entity load to avoid detached-entity merge issues.",
+                        correlationId, user.id)
                     try {
                         adminNotificationService.sendNewUserNotificationForOAuth(user, provider.name)
                     } catch (e: Exception) {
@@ -557,23 +560,16 @@ open class OAuthService(
                 val tokenOptional = tokenGenerator.generateToken(userDetails)
                 if (tokenOptional.isEmpty) {
                     logger.error("[{}] JWT token generation FAILED for user: {}", correlationId, user.username)
-                    oauthStateRepository.deleteByStateToken(state)
+                    deleteOAuthStateQuietly(state)
                     return CallbackResult.Error("Unable to complete login process. Please try again.")
                 }
                 logger.info("[{}] JWT token generated successfully", correlationId)
 
-                // Update last login timestamp
-                try {
-                    user.lastLogin = Instant.now()
-                    userRepository.update(user)
-                    logger.info("[{}] Last login updated for user: {}", correlationId, user.username)
-                } catch (e: Exception) {
-                    // Don't fail the login if last login update fails
-                    logger.error("[{}] Failed to update last login (non-fatal): {}", correlationId, e.message, e)
-                }
+                // Update last login timestamp (loads fresh entity in its own transaction)
+                updateLastLoginSafely(user.id!!)
 
                 // Clean up used state only after successful processing
-                oauthStateRepository.deleteByStateToken(state)
+                deleteOAuthStateQuietly(state)
 
                 val totalDurationMs = java.time.Duration.between(callbackStartTime, LocalDateTime.now()).toMillis()
                 logger.info("[{}] === OAuth Callback SUCCESS === user={}, email={}, isNew={}, duration={}ms",
@@ -593,11 +589,7 @@ open class OAuthService(
                 logger.error("[{}] === OAuth Callback FAILED === error={}: {}",
                     correlationId, e.javaClass.simpleName, e.message, e)
                 // Clean up state on error to prevent accumulation
-                try {
-                    oauthStateRepository.deleteByStateToken(state)
-                } catch (cleanupEx: Exception) {
-                    logger.error("[{}] Failed to clean up OAuth state after error: {}", correlationId, cleanupEx.message)
-                }
+                deleteOAuthStateQuietly(state)
                 return CallbackResult.Error(OAuthErrorCode.UNEXPECTED_ERROR.userMessage)
             }
         } finally {
@@ -608,6 +600,50 @@ open class OAuthService(
 
     private fun generateState(): String {
         return UUID.randomUUID().toString().replace("-", "")
+    }
+
+    /**
+     * Update lastLogin timestamp safely in its own transaction.
+     *
+     * Loads the user fresh by ID so it is a managed entity in this persistence context,
+     * avoiding the detached-entity merge problem that occurs when a user created in
+     * REQUIRES_NEW is updated in the outer transaction's persistence context.
+     *
+     * Non-fatal: failure is logged but does not affect the login flow.
+     */
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    open fun updateLastLoginSafely(userId: Long) {
+        try {
+            val userOpt = userRepository.findById(userId)
+            if (userOpt.isPresent) {
+                val freshUser = userOpt.get()
+                freshUser.lastLogin = Instant.now()
+                userRepository.update(freshUser)
+                logger.info("Last login updated for user id={} (fresh entity load in REQUIRES_NEW)", userId)
+            } else {
+                logger.warn("Could not update lastLogin: user id={} not found", userId)
+            }
+        } catch (e: Exception) {
+            // Non-fatal: don't fail the login if lastLogin update fails
+            logger.error("Failed to update lastLogin for user id={} (non-fatal): {}", userId, e.message, e)
+        }
+    }
+
+    /**
+     * Delete OAuth state token quietly in its own transaction.
+     *
+     * Commits independently so state cleanup never interferes with the main flow.
+     * Non-fatal: orphaned states are cleaned up by the scheduled job every 5 minutes.
+     */
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    open fun deleteOAuthStateQuietly(stateToken: String) {
+        try {
+            oauthStateRepository.deleteByStateToken(stateToken)
+            logger.debug("OAuth state deleted: {}...", stateToken.take(10))
+        } catch (e: Exception) {
+            logger.warn("Failed to delete OAuth state {}... (non-fatal, scheduled cleanup will handle): {}",
+                stateToken.take(10), e.message)
+        }
     }
 
     private fun exchangeCodeForToken(provider: IdentityProvider, code: String, redirectUri: String): TokenResponse? {
