@@ -132,6 +132,17 @@ open class AuthController(
             .cookie(authCookieService.createLogoutCookie())
     }
 
+    /**
+     * Clear the auth session cookie without requiring authentication.
+     * Used by the frontend before initiating OAuth flows to prevent stale-cookie login loops.
+     */
+    @Post("/clear-session")
+    @Secured(SecurityRule.IS_ANONYMOUS)
+    fun clearSession(): HttpResponse<*> {
+        return HttpResponse.ok(mapOf("message" to "Session cleared"))
+            .cookie(authCookieService.createLogoutCookie())
+    }
+
     @Get("/status")
     @Secured(SecurityRule.IS_AUTHENTICATED)
     fun status(authentication: Authentication): HttpResponse<*> {

@@ -75,6 +75,9 @@ micronaut:
       - pattern: /api/auth/login
         access:
           - isAnonymous()
+      - pattern: /api/auth/clear-session
+        access:
+          - isAnonymous()
       - pattern: /api/identity-providers/enabled
         access:
           - isAnonymous()

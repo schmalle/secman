@@ -48,7 +48,7 @@ const Login = () => {
         }
     };
 
-    const handleExternalLogin = (providerId: number) => {
+    const handleExternalLogin = async (providerId: number) => {
         const provider = externalProviders.find(p => p.id === providerId);
         console.log('=== OAuth Login Flow START ===');
         console.log('[OAuth] Provider ID:', providerId);
@@ -65,6 +65,18 @@ const Login = () => {
 
         // Delete legacy auth cookies to ensure fresh OAuth flow
         document.cookie = 'authToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+
+        // Clear the HttpOnly auth cookie via backend endpoint.
+        // This is the primary defense against the stale-cookie login loop where an expired
+        // secman_auth cookie causes Micronaut to reject OAuth requests before the controller runs.
+        try {
+            console.log('[OAuth] Clearing HttpOnly auth cookie via /api/auth/clear-session...');
+            await fetch('/api/auth/clear-session', { method: 'POST', credentials: 'include' });
+            console.log('[OAuth] HttpOnly auth cookie cleared successfully');
+        } catch (err) {
+            // Non-fatal: CookieTokenReader path-skip is the primary fix
+            console.warn('[OAuth] Failed to clear session cookie (non-fatal):', err);
+        }
 
         // Generate a fresh login nonce to ensure state uniqueness
         const loginNonce = Date.now().toString(36) + Math.random().toString(36).substr(2);

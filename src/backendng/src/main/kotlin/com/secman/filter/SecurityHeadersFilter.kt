@@ -95,8 +95,12 @@ class SecurityHeadersFilter : HttpServerFilter {
 
         // Cross-Origin Isolation headers for defense-in-depth
         // These headers prevent various cross-origin attacks
-        response.header("Cross-Origin-Opener-Policy", CROSS_ORIGIN_OPENER_POLICY)
-        response.header("Cross-Origin-Resource-Policy", CROSS_ORIGIN_RESOURCE_POLICY)
+        // Excluded for OAuth paths: COOP/CORP interfere with cross-origin redirect chains
+        // (secman → Microsoft/Google → secman) in some browsers
+        if (!request.uri.path.startsWith("/oauth/")) {
+            response.header("Cross-Origin-Opener-Policy", CROSS_ORIGIN_OPENER_POLICY)
+            response.header("Cross-Origin-Resource-Policy", CROSS_ORIGIN_RESOURCE_POLICY)
+        }
         
         // Strict Transport Security (HSTS) - only for HTTPS
         if (request.uri.scheme == "https") {

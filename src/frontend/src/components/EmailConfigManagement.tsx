@@ -206,6 +206,12 @@ const EmailConfigManagement: React.FC = () => {
         } catch (activationError) {
           console.warn('Failed to activate configuration', activationError);
         }
+      } else if (!activateOnSave && editingConfig?.isActive && savedConfig.id) {
+        try {
+          await authenticatedPost(`/api/email-provider-configs/${savedConfig.id}/deactivate`, {});
+        } catch (deactivationError) {
+          console.warn('Failed to deactivate configuration', deactivationError);
+        }
       }
 
       await fetchConfigs();

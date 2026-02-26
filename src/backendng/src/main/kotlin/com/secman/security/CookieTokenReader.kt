@@ -38,7 +38,20 @@ class CookieTokenReader : TokenReader<HttpRequest<*>> {
      * @param request The HTTP request
      * @return Optional containing token string from cookie, or empty if not found
      */
+    companion object {
+        /** Paths where cookie-based auth must be skipped to prevent stale-cookie login loops */
+        private val SKIP_COOKIE_PATH_PREFIXES = listOf("/oauth/", "/api/auth/clear-session")
+    }
+
     override fun findToken(request: HttpRequest<*>): Optional<String> {
+        // Skip cookie reading for OAuth and session-clearing paths.
+        // Stale/expired cookies would cause Micronaut's security pipeline to reject
+        // these requests before the controller (marked IS_ANONYMOUS) can execute.
+        val path = request.uri.path
+        if (SKIP_COOKIE_PATH_PREFIXES.any { path.startsWith(it) }) {
+            return Optional.empty()
+        }
+
         val cookies = request.cookies
         val authCookie = cookies.get(AuthCookieService.AUTH_COOKIE_NAME)
 

@@ -27,11 +27,17 @@
                             <h3 class="card-title">Login Successful</h3>
                         </div>
                         
-                        <div class="mb-4">
+                        <div id="login-spinner" class="mb-4">
                             <div class="spinner-border text-primary" role="status">
                                 <span class="visually-hidden">Loading...</span>
                             </div>
                             <p class="mt-3 text-muted">Redirecting you to the application...</p>
+                        </div>
+                        <div id="login-error" class="mb-4" style="display: none;">
+                            <div class="alert alert-danger" role="alert">
+                                <strong>Login Error:</strong> <span id="login-error-message"></span>
+                            </div>
+                            <a href="/login" class="btn btn-primary">Back to Login</a>
                         </div>
                     </div>
                 </div>
@@ -40,16 +46,25 @@
     </div>
 
     <script>
+        function showError(message) {
+            var spinner = document.getElementById('login-spinner');
+            var errorDiv = document.getElementById('login-error');
+            var errorMsg = document.getElementById('login-error-message');
+            if (spinner) spinner.style.display = 'none';
+            if (errorDiv) errorDiv.style.display = 'block';
+            if (errorMsg) errorMsg.textContent = message;
+        }
+
         // Extract URL parameters
         // Note: JWT token is delivered solely via HttpOnly cookie (secman_auth) set by backend.
         // Only user metadata is passed in the URL for client-side state.
-        const urlParams = new URLSearchParams(window.location.search);
-        const userJson = urlParams.get('user');
+        var urlParams = new URLSearchParams(window.location.search);
+        var userJson = urlParams.get('user');
 
         if (userJson) {
             try {
                 // Decode and parse user data
-                const userData = JSON.parse(decodeURIComponent(userJson));
+                var userData = JSON.parse(decodeURIComponent(userJson));
 
                 // Clean up any legacy token storage from previous versions
                 localStorage.removeItem('authToken');
@@ -66,24 +81,29 @@
                 // Clean sensitive data from URL before redirect (prevents token in browser history)
                 window.history.replaceState({}, '', '/login/success');
 
-                // Small delay to ensure data is stored, then redirect
-                setTimeout(() => {
-                    window.location.href = '/';
-                }, 500);
+                // Verify the auth cookie is working before redirecting
+                fetch('/api/auth/status', { credentials: 'include' })
+                    .then(function(response) {
+                        if (response.ok) {
+                            window.location.href = '/';
+                        } else {
+                            console.error('Auth verification failed, status:', response.status);
+                            showError('Authentication cookie was not set properly. Please try logging in again.');
+                        }
+                    })
+                    .catch(function(err) {
+                        console.error('Auth verification request failed:', err);
+                        // Network error - try redirecting anyway, the cookie might still work
+                        window.location.href = '/';
+                    });
 
             } catch (error) {
                 console.error('Error processing login success:', error);
-                alert('Login successful, but there was an error processing your data. Redirecting to login...');
-                setTimeout(() => {
-                    window.location.href = '/login';
-                }, 2000);
+                showError('Login succeeded, but there was an error processing your data. Please try again.');
             }
         } else {
             console.error('Missing user data in OAuth callback');
-            alert('Login data missing. Redirecting to login...');
-            setTimeout(() => {
-                window.location.href = '/login';
-            }, 2000);
+            showError('Login data was not received. Please try logging in again.');
         }
     </script>
 </body>
