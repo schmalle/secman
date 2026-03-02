@@ -3,15 +3,20 @@
   "checkpoint_id": "6b095b199232",
   "strategy": "manual-commit",
   "branch": "main",
-  "checkpoints_count": 1,
+  "checkpoints_count": 2,
   "files_touched": [
+    "docs/S3_USER_MAPPING_IMPORT.md",
     "src/backendng/src/main/kotlin/com/secman/config/DefaultAdminBootstrapper.kt",
     "src/backendng/src/main/kotlin/com/secman/config/FlywayRepairCallback.kt",
     "src/backendng/src/main/kotlin/com/secman/config/SystemUseCaseInitializer.kt",
     "src/backendng/src/main/kotlin/com/secman/service/ProviderInitializationService.kt",
     "src/backendng/src/main/kotlin/com/secman/service/RequirementIdMigrationService.kt",
     "src/cli/src/main/kotlin/com/secman/cli/SecmanCli.kt",
-    "src/cli/src/main/resources/application-cli.yml"
+    "src/cli/src/main/kotlin/com/secman/cli/commands/ImportS3Command.kt",
+    "src/cli/src/main/kotlin/com/secman/cli/commands/ListBucketCommand.kt",
+    "src/cli/src/main/kotlin/com/secman/cli/service/S3DownloadService.kt",
+    "src/cli/src/main/resources/application-cli.yml",
+    "tests/s3usermapping/StartS3Sim.md"
   ],
   "sessions": [
     {
@@ -20,13 +25,20 @@
       "context": "/6b/095b199232/0/context.md",
       "content_hash": "/6b/095b199232/0/content_hash.txt",
       "prompt": "/6b/095b199232/0/prompt.txt"
+    },
+    {
+      "metadata": "/6b/095b199232/1/metadata.json",
+      "transcript": "/6b/095b199232/1/full.jsonl",
+      "context": "/6b/095b199232/1/context.md",
+      "content_hash": "/6b/095b199232/1/content_hash.txt",
+      "prompt": "/6b/095b199232/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 6287,
-    "cache_creation_tokens": 107180,
-    "cache_read_tokens": 1468650,
-    "output_tokens": 7555,
-    "api_call_count": 27
+    "input_tokens": 25953,
+    "cache_creation_tokens": 400894,
+    "cache_read_tokens": 4608610,
+    "output_tokens": 22270,
+    "api_call_count": 70
   }
 }

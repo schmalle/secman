@@ -1,0 +1,94 @@
+Implement the following plan:
+
+# Add `--endpoint-url` to CLI S3 Commands
+
+## Context
+
+The secman CLI can import user mappings from S3 (`import-s3`) and list bucket contents (`list-bucket`), but currently only connects to real AWS S3 endpoints. To enable local testing with [Adobe S3Mock](https://github.com/adobe/S3Mock) (or MinIO, LocalStack), we need a `--endpoint-url` option that overrides the S3 endpoint, plus `forcePathStyle(true)` since local simulators don't support virtual-hosted-style bucket addressing.
+
+## Files to Modify
+
+| File | Change |
+|------|--------|
+| `src/cli/src/main/kotlin/com/secman/cli/service/S3DownloadService.kt` | Add `endpointUrl` param to `buildS3Client`, `downloadToTempFile`, `listObjects` |
+| `src/cli/src/main/kotlin/com/secman/cli/commands/ImportS3Command.kt` | Add `--endpoint-url` PicoCLI option, resolve from `AWS_ENDPOINT_URL` env var, pass through |
+| `src/cli/src/main/kotlin/com/secman/cli/commands/ListBucketCommand.kt` | Same as ImportS3Command |
+| `tests/s3usermapping/StartS3Sim.md` | Add secman CLI usage examples |
+| `docs/S3_USER_MAPPING_IMPORT.md` | Document new option in tables, add S3Mock testing section |
+
+## Implementation Steps
+
+### 1. S3DownloadService.kt — Thread endpoint URL through
+
+- Add `import java.net.URI`
+- Add `endpointUrl: String? = null` parameter to `buildS3Client()`, `downloadToTempFile()`, and `listObjects()`
+- In `buildS3Client()`, before `return builder.build()`:
+  ```kotlin
+  if (endpointUrl != null) {
+      log.info("Using custom S3 endpoint: $endpointUrl")
+      builder.endpointOverride(URI.create(endpointUrl))
+      builder.forcePathStyle(true)
+  }
+  ```
+- Pass `endpointUrl` from both public methods to `buildS3Client()`
+
+### 2. ImportS3Command.kt — Add CLI option
+
+- Add `@Option(names = ["--endpoint-url"])` field after `awsSessionToken`
+- In `run()`: resolve via `endpointUrl ?: System.getenv("AWS_ENDPOINT_URL")`
+- Display endpoint in status output when set
+- Pass to `s3DownloadService.downloadToTempFile(..., endpointUrl = resolvedEndpointUrl)`
+
+### 3. ListBucketCommand.kt — Same pattern
+
+- Add `@Option(names = ["--endpoint-url"])` field
+- Resolve from env var, display, pass to `s3DownloadService.listObjects(..., endpointUrl = resolvedEndpointUrl)`
+
+### 4. StartS3Sim.md — Add secman CLI examples
+
+Append secman CLI commands showing `list-bucket` and `import-s3` with `--endpoint-url http://localhost:9090`, plus `AWS_ENDPOINT_URL` env var usage.
+
+### 5. S3_USER_MAPPING_IMPORT.md — Document the option
+
+- Add `AWS_ENDPOINT_URL` to Environment Variables table
+- Add `--endpoint-url` to both `import-s3` and `list-bucket` option tables
+- Add "Testing with S3Mock" section with docker/CLI examples
+
+## Design Decisions
+
+- **`AWS_ENDPOINT_URL`** — standard AWS SDK/CLI env var name (since AWS CLI v2.13.0)
+- **`forcePathStyle(true)` always when endpoint is set** — S3Mock, MinIO, LocalStack all require path-style
+- **Manual env var fallback** — follows existing `cliOption ?: System.getenv()` pattern in the codebase
+- **No new dependencies** — `endpointOverride()` and `forcePathStyle()` are built into AWS SDK v2
+
+## Verification
+
+```bash
+# Build
+./gradlew build
+
+# Start S3Mock and test
+docker run -p 9090:9090 adobe/s3mock
+aws s3api create-bucket --bucket test --endpoint-url http://localhost:9090
+aws s3api put-object --bucket test --key mappings.csv --body ./test-mappings.csv --endpoint-url http://localhost:9090
+
+./bin/secman manage-user-mappings list-bucket --bucket test --endpoint-url http://localhost:9090
+./bin/secman manage-user-mappings import-s3 --bucket test --key mappings.csv --endpoint-url http://localhost:9090 --dry-run
+```
+
+
+If you need specific details from before exiting plan mode (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/flake/.REDACTED.jsonl
+
+---
+
+please carefully analyze this misbehavior, i just wanted from the command line to list a bucket with mappings and i get after the listing an error in regards of a failed requirement ID migration at start. When using the CLI i dont expect after executing the s3 related behavior to see any requirement related migrations. Please carefully create a plan how to this fix. Propose options, give recommendations.
+
+---
+
+[Image: source: REDACTED 2026-03-01 at 08.33.35.png]
+
+[Image: source: REDACTED 2026-03-01 at 08.33.58.png]
+
+---
+
+[Request interrupted by user for tool use]
