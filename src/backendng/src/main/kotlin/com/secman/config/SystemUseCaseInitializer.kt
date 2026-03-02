@@ -4,10 +4,12 @@ import com.secman.domain.UseCase
 import com.secman.repository.UseCaseRepository
 import io.micronaut.context.event.ApplicationEventListener
 import io.micronaut.runtime.event.ApplicationStartupEvent
+import io.micronaut.context.annotation.Requires
 import io.micronaut.transaction.annotation.Transactional
 import jakarta.inject.Singleton
 import org.slf4j.LoggerFactory
 
+@Requires(notEnv = ["cli"])
 @Singleton
 open class SystemUseCaseInitializer(
     private val useCaseRepository: UseCaseRepository

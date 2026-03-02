@@ -1,5 +1,6 @@
 package com.secman.config
 
+import io.micronaut.context.annotation.Requires
 import io.micronaut.flyway.FlywayConfigurationCustomizer
 import jakarta.inject.Named
 import jakarta.inject.Singleton
@@ -14,6 +15,7 @@ import org.slf4j.LoggerFactory
  * This handles the case where Flyway is introduced to an existing database
  * where Hibernate hbm2ddl.auto:update had previously managed the schema.
  */
+@Requires(notEnv = ["cli"])
 @Singleton
 @Named("default")
 class FlywayRepairCustomizer : FlywayConfigurationCustomizer {

@@ -4,6 +4,7 @@ import com.secman.domain.User
 import com.secman.repository.UserRepository
 import io.micronaut.context.event.ApplicationEventListener
 import io.micronaut.runtime.event.ApplicationStartupEvent
+import io.micronaut.context.annotation.Requires
 import io.micronaut.transaction.annotation.Transactional
 import jakarta.inject.Singleton
 import org.slf4j.LoggerFactory
@@ -20,6 +21,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
  *
  * IMPORTANT: Change the default password immediately after first login in production.
  */
+@Requires(notEnv = ["cli"])
 @Singleton
 open class DefaultAdminBootstrapper(
     private val userRepository: UserRepository

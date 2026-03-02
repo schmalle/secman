@@ -6,6 +6,7 @@ import com.secman.repository.RequirementRepository
 import io.micronaut.context.event.StartupEvent
 import io.micronaut.runtime.event.annotation.EventListener
 import io.micronaut.scheduling.annotation.Async
+import io.micronaut.context.annotation.Requires
 import io.micronaut.transaction.annotation.Transactional
 import jakarta.inject.Inject
 import jakarta.inject.Singleton
@@ -20,6 +21,7 @@ import java.time.Instant
  *
  * Related to: Fix for requirements Excel export showing only revision numbers.
  */
+@Requires(notEnv = ["cli"])
 @Singleton
 open class RequirementIdMigrationService(
     @Inject private val requirementRepository: RequirementRepository,

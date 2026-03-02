@@ -30,6 +30,10 @@ import org.slf4j.LoggerFactory
 class SecmanCli {
     private val log = LoggerFactory.getLogger(SecmanCli::class.java)
 
+    private fun createCliContext(): ApplicationContext {
+        return ApplicationContext.builder().environments("cli").start()
+    }
+
     fun execute(args: Array<String>): Int {
         return when {
             args.isEmpty() || args[0] == "help" || args[0] == "--help" || args[0] == "-h" -> showHelp()
@@ -179,7 +183,7 @@ class SecmanCli {
                 // Use Picocli with Micronaut DI for user mapping commands
                 // Drop the first argument (command name) before passing to PicocliRunner
                 val subArgs = args.drop(1).toTypedArray()
-                ApplicationContext.run().use { ctx ->
+                createCliContext().use { ctx ->
                     PicocliRunner.run(ManageUserMappingsCommand::class.java, ctx, *subArgs)
                 }
                 0
@@ -188,7 +192,7 @@ class SecmanCli {
                 // Use Picocli with Micronaut DI for notification command
                 // Drop the first argument (command name) before passing to PicocliRunner
                 val subArgs = args.drop(1).toTypedArray()
-                ApplicationContext.run().use { ctx ->
+                createCliContext().use { ctx ->
                     PicocliRunner.run(SendNotificationsCommand::class.java, ctx, *subArgs)
                 }
                 0
@@ -197,7 +201,7 @@ class SecmanCli {
                 // Use Picocli with Micronaut DI for workgroup commands
                 // Drop the first argument (command name) before passing to PicocliRunner
                 val subArgs = args.drop(1).toTypedArray()
-                ApplicationContext.run().use { ctx ->
+                createCliContext().use { ctx ->
                     PicocliRunner.run(ManageWorkgroupsCommand::class.java, ctx, *subArgs)
                 }
                 0
@@ -206,7 +210,7 @@ class SecmanCli {
                 // Use Picocli with Micronaut DI for add-vulnerability command
                 // Feature: 052-cli-add-vulnerability
                 val subArgs = args.drop(1).toTypedArray()
-                ApplicationContext.run().use { ctx ->
+                createCliContext().use { ctx ->
                     PicocliRunner.run(AddVulnerabilityCommand::class.java, ctx, *subArgs)
                 }
                 0
@@ -215,7 +219,7 @@ class SecmanCli {
                 // Use Picocli with Micronaut DI for export-requirements command
                 // Feature: 057-cli-mcp-requirements
                 val subArgs = args.drop(1).toTypedArray()
-                ApplicationContext.run().use { ctx ->
+                createCliContext().use { ctx ->
                     PicocliRunner.run(ExportRequirementsCommand::class.java, ctx, *subArgs)
                 }
                 0
@@ -224,7 +228,7 @@ class SecmanCli {
                 // Use Picocli with Micronaut DI for add-requirement command
                 // Feature: 057-cli-mcp-requirements
                 val subArgs = args.drop(1).toTypedArray()
-                ApplicationContext.run().use { ctx ->
+                createCliContext().use { ctx ->
                     PicocliRunner.run(AddRequirementCommand::class.java, ctx, *subArgs)
                 }
                 0
@@ -233,7 +237,7 @@ class SecmanCli {
                 // Use Picocli with Micronaut DI for delete-all-requirements command
                 // Feature: 057-cli-mcp-requirements
                 val subArgs = args.drop(1).toTypedArray()
-                ApplicationContext.run().use { ctx ->
+                createCliContext().use { ctx ->
                     PicocliRunner.run(DeleteAllRequirementsCommand::class.java, ctx, *subArgs)
                 }
                 0
@@ -242,7 +246,7 @@ class SecmanCli {
                 // Use Picocli with Micronaut DI for send-admin-summary command
                 // Feature: 070-admin-summary-email
                 val subArgs = args.drop(1).toTypedArray()
-                ApplicationContext.run().use { ctx ->
+                createCliContext().use { ctx ->
                     PicocliRunner.run(SendAdminSummaryCommand::class.java, ctx, *subArgs)
                 }
                 0
@@ -250,7 +254,7 @@ class SecmanCli {
             args[0] == "deduplicate-vulnerabilities" -> {
                 // Remove duplicate vulnerability records from the database
                 val subArgs = args.drop(1).toTypedArray()
-                ApplicationContext.run().use { ctx ->
+                createCliContext().use { ctx ->
                     PicocliRunner.run(DeduplicateVulnerabilitiesCommand::class.java, ctx, *subArgs)
                 }
                 0

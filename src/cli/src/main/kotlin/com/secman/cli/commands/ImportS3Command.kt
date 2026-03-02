@@ -106,6 +106,12 @@ class ImportS3Command(
     var awsSessionToken: String? = null
 
     @Option(
+        names = ["--endpoint-url"],
+        description = ["Custom S3 endpoint URL for local testing (e.g. http://localhost:9090 for S3Mock). Also reads AWS_ENDPOINT_URL env var."]
+    )
+    var endpointUrl: String? = null
+
+    @Option(
         names = ["--format"],
         description = ["File format: CSV, JSON, or AUTO (default: AUTO for auto-detection)"],
         defaultValue = "AUTO"
@@ -141,6 +147,12 @@ class ImportS3Command(
                 println("AWS Profile: $awsProfile")
             }
 
+            // Resolve endpoint URL: CLI arg takes priority, then env var
+            val resolvedEndpointUrl = endpointUrl ?: System.getenv("AWS_ENDPOINT_URL")
+            if (resolvedEndpointUrl != null) {
+                println("S3 Endpoint: $resolvedEndpointUrl")
+            }
+
             // Resolve AWS credentials: CLI args take priority, then env vars
             val resolvedAccessKeyId = awsAccessKeyId ?: System.getenv("AWS_ACCESS_KEY_ID")
             val resolvedSecretAccessKey = awsSecretAccessKey ?: System.getenv("AWS_SECRET_ACCESS_KEY")
@@ -166,7 +178,6 @@ class ImportS3Command(
                 bucket = bucket,
                 key = key,
                 region = awsRegion,
-                profile = awsProfile,
                 accessKeyId = resolvedAccessKeyId,
                 secretAccessKey = resolvedSecretAccessKey,
                 sessionToken = resolvedSessionToken

@@ -3,10 +3,12 @@ package com.secman.service
 import com.secman.domain.IdentityProvider
 import com.secman.repository.IdentityProviderRepository
 import io.micronaut.context.event.ApplicationEventListener
+import io.micronaut.context.annotation.Requires
 import io.micronaut.runtime.event.ApplicationStartupEvent
 import jakarta.inject.Singleton
 import org.slf4j.LoggerFactory
 
+@Requires(notEnv = ["cli"])
 @Singleton
 class ProviderInitializationService(
     private val identityProviderRepository: IdentityProviderRepository

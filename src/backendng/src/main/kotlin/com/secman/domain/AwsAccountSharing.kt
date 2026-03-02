@@ -21,7 +21,7 @@ import java.time.Instant
  * - sourceUser and targetUser must be different users
  * - Unique constraint on (source_user_id, target_user_id) prevents duplicates
  * - Only ADMIN users can create/manage sharing rules
- * - ON DELETE CASCADE ensures cleanup when users are deleted
+ * - Application-level cleanup in UserController.delete() removes sharing rules before user deletion
  * - createdBy tracks which admin created the rule for audit purposes
  */
 @Entity

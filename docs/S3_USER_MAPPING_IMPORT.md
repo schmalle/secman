@@ -73,6 +73,7 @@ Verify the command is available:
 | `SECMAN_ADMIN_EMAIL` | Yes* | - | Admin email for audit logging (alternative: `--admin-user` flag) |
 | `AWS_ACCESS_KEY_ID` | Conditional | - | AWS access key (if not using profile/IAM role) |
 | `AWS_SECRET_ACCESS_KEY` | Conditional | - | AWS secret key (if not using profile/IAM role) |
+| `AWS_ENDPOINT_URL` | No | - | Custom S3 endpoint URL for local testing (e.g. `http://localhost:9090` for S3Mock) |
 | `AWS_REGION` | No | SDK default | Default AWS region (can be overridden with `--aws-region`) |
 
 *Either `SECMAN_ADMIN_EMAIL` env var or `--admin-user` flag is required.
@@ -145,6 +146,7 @@ Total: 3 object(s)
 | `--prefix` | `-p` | No | - | Filter objects by key prefix |
 | `--aws-region` | - | No | SDK default | AWS region |
 | `--aws-profile` | - | No | default chain | AWS credential profile name |
+| `--endpoint-url` | - | No | `$AWS_ENDPOINT_URL` | Custom S3 endpoint URL for local testing |
 | `--admin-user` | `-u` | No* | `$SECMAN_ADMIN_EMAIL` | Admin email (inherited from parent) |
 
 ### Required IAM Permissions
@@ -229,6 +231,7 @@ The `list-bucket` command requires the `s3:ListBucket` permission on the target 
 | `--aws-profile` | - | No | default chain | AWS credential profile name |
 | `--format` | - | No | `AUTO` | File format: `CSV`, `JSON`, or `AUTO` |
 | `--dry-run` | - | No | `false` | Validate without creating mappings |
+| `--endpoint-url` | - | No | `$AWS_ENDPOINT_URL` | Custom S3 endpoint URL for local testing |
 | `--admin-user` | `-u` | No* | `$SECMAN_ADMIN_EMAIL` | Admin email for audit |
 
 ---
@@ -407,6 +410,50 @@ Split the file into multiple files with fewer records each. Import them sequenti
 - **Stack traces**: Internal error details are only logged at debug level, not exposed to stdout/stderr
 - **Audit logging**: All import operations are logged with admin email, operation type, and mapping details
 - **Input validation**: Bucket names, object keys, email addresses, domains, and AWS account IDs are validated before processing
+
+---
+
+## Testing with S3Mock
+
+You can use [Adobe S3Mock](https://github.com/adobe/S3Mock) (or MinIO, LocalStack) to test S3 imports locally without an AWS account.
+
+### Setup
+
+```bash
+# Start S3Mock
+docker run -p 9090:9090 adobe/s3mock
+
+# Create a test bucket and upload a mapping file
+aws s3api create-bucket --bucket test --endpoint-url http://localhost:9090
+aws s3api put-object --bucket test --key mappings.csv --body ./test-mappings.csv --endpoint-url http://localhost:9090
+```
+
+### Using --endpoint-url
+
+```bash
+# List bucket contents
+./bin/secman manage-user-mappings list-bucket \
+  --bucket test \
+  --endpoint-url http://localhost:9090
+
+# Dry-run import
+./bin/secman manage-user-mappings import-s3 \
+  --bucket test \
+  --key mappings.csv \
+  --endpoint-url http://localhost:9090 \
+  --dry-run
+```
+
+### Using AWS_ENDPOINT_URL Environment Variable
+
+```bash
+export AWS_ENDPOINT_URL=http://localhost:9090
+
+./bin/secman manage-user-mappings list-bucket --bucket test
+./bin/secman manage-user-mappings import-s3 --bucket test --key mappings.csv --dry-run
+```
+
+When `--endpoint-url` is set (or `AWS_ENDPOINT_URL`), the CLI automatically enables path-style S3 access, which is required by local S3 simulators.
 
 ---
 

@@ -24,7 +24,9 @@ open class UserController(
     private val workgroupRepository: com.secman.repository.WorkgroupRepository,
     private val userMappingService: UserMappingService,
     private val adminNotificationService: com.secman.service.AdminNotificationService,
-    private val alignmentReviewerRepository: com.secman.repository.AlignmentReviewerRepository
+    private val alignmentReviewerRepository: com.secman.repository.AlignmentReviewerRepository,
+    private val awsAccountSharingRepository: com.secman.repository.AwsAccountSharingRepository,
+    private val passkeyCredentialRepository: com.secman.repository.PasskeyCredentialRepository
 ) {
 
     private val passwordEncoder = BCryptPasswordEncoder()
@@ -332,6 +334,10 @@ open class UserController(
         }
 
         try {
+            awsAccountSharingRepository.deleteBySourceUserId(id)
+            awsAccountSharingRepository.deleteByTargetUserId(id)
+            awsAccountSharingRepository.deleteByCreatedBy_Id(id)
+            passkeyCredentialRepository.deleteByUserId(id)
             alignmentReviewerRepository.deleteByUser_Id(id)
             userRepository.deleteById(id)
             return HttpResponse.ok(mapOf("message" to "User deleted successfully"))

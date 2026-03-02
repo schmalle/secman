@@ -5,11 +5,19 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="94ada8b3-9f4e-473c-9fea-3bc9651b5bdd" name="Changes" comment="test change">
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/mcp/tools/GetAssetMostVulnerabilitiesTool.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/mcp/tools/GetAssetMostVulnerabilitiesTool.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/repository/VulnerabilityRepository.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/repository/VulnerabilityRepository.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/AdminSummaryService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/AdminSummaryService.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/EmailService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/EmailService.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/VulnerabilityStatisticsService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/VulnerabilityStatisticsService.kt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/tests/s3usermapping/StartS3Sim.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/S3_USER_MAPPING_IMPORT.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/S3_USER_MAPPING_IMPORT.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/config/DefaultAdminBootstrapper.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/config/DefaultAdminBootstrapper.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/config/FlywayRepairCallback.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/config/FlywayRepairCallback.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/config/SystemUseCaseInitializer.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/config/SystemUseCaseInitializer.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/UserController.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/UserController.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/domain/AwsAccountSharing.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/domain/AwsAccountSharing.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/repository/AwsAccountSharingRepository.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/repository/AwsAccountSharingRepository.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/ProviderInitializationService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/ProviderInitializationService.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/RequirementIdMigrationService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/RequirementIdMigrationService.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/SecmanCli.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/SecmanCli.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/commands/ImportS3Command.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/commands/ImportS3Command.kt" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -176,6 +184,17 @@
       <RunAsTest>false</RunAsTest>
       <GradleProfilingDisabled>false</GradleProfilingDisabled>
       <GradleCoverageDisabled>false</GradleCoverageDisabled>
+      <method v="2" />
+    </configuration>
+    <configuration default="true" type="JetRunConfigurationType">
+      <module name="secman" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <configuration default="true" type="KotlinStandaloneScriptRunConfigurationType">
+      <module name="secman" />
+      <option name="filePath" />
       <method v="2" />
     </configuration>
     <configuration name="ApplicationKt (1)" type="MicronautRunConfigurationType" factoryName="Micronaut" nameIsGenerated="true">
