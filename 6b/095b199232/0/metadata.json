@@ -1,0 +1,35 @@
+{
+  "cli_version": "0.4.2",
+  "checkpoint_id": "6b095b199232",
+  "session_id": "47363866-c622-4cd2-9057-4bdd08c92be7",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-02T15:19:36.156474Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/backendng/src/main/kotlin/com/secman/config/DefaultAdminBootstrapper.kt",
+    "src/backendng/src/main/kotlin/com/secman/config/FlywayRepairCallback.kt",
+    "src/backendng/src/main/kotlin/com/secman/config/SystemUseCaseInitializer.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/ProviderInitializationService.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/RequirementIdMigrationService.kt",
+    "src/cli/src/main/kotlin/com/secman/cli/SecmanCli.kt",
+    "src/cli/src/main/resources/application-cli.yml"
+  ],
+  "agent": "Claude Code",
+  "token_usage": {
+    "input_tokens": 6287,
+    "cache_creation_tokens": 107180,
+    "cache_read_tokens": 1468650,
+    "output_tokens": 7555,
+    "api_call_count": 27
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-02T15:19:36.086257Z",
+    "agent_lines": 27,
+    "human_added": 134,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 161,
+    "agent_percentage": 16.77018633540373
+  }
+}

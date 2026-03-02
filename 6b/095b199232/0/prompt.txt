@@ -1,0 +1,120 @@
+Implement the following plan:
+
+# Fix: CLI Startup Triggers Backend Migration Services
+
+## Context
+
+Running `./bin/secman manage-user-mappings list-bucket` boots the **full Micronaut application context** — including Flyway, Hibernate, HikariCP, and 4 backend startup listeners — even though the command only needs `S3DownloadService`. The `RequirementIdMigrationService` fires @Async on a background thread; by the time it executes, the `.use { }` block has already closed the context, causing a "Session/EntityManager is closed" stack trace after the S3 listing completes successfully.
+
+**Root cause**: `SecmanCli.kt` line 182 calls `ApplicationContext.run()` which triggers full bean scanning of the `backendng` module. No mechanism distinguishes CLI mode from backend mode.
+
+**Affected startup listeners** (all in backendng, all do DB operations on every CLI invocation):
+1. `RequirementIdMigrationService` — @Async @EventListener(StartupEvent), queries+updates all requirements (**crashes**)
+2. `DefaultAdminBootstrapper` — creates default admin user if none exist
+3. `SystemUseCaseInitializer` — creates IT/OT/NT use cases
+4. `ProviderInitializationService` — creates GitHub/Microsoft identity providers with placeholder credentials
+5. `FlywayRepairCustomizer` — connects to DB to inspect/repair `flyway_schema_history`
+
+None of these are needed by any CLI command.
+
+## Recommended Approach: Micronaut "cli" Environment
+
+Use `ApplicationContext.builder().environments("cli").start()` instead of `ApplicationContext.run()`. Then suppress backend-only startup beans with `@Requires(notEnv = ["cli"])` and disable Flyway via environment-specific YAML.
+
+This is the standard Micronaut mechanism for exactly this use case. It fixes the crash, eliminates unnecessary startup work for ALL CLI commands, and is easily maintained (future startup listeners just add the same annotation).
+
+## Files to Modify
+
+| # | File | Change |
+|---|------|--------|
+| 1 | `src/cli/src/main/kotlin/com/secman/cli/SecmanCli.kt` | Replace all 9 `ApplicationContext.run()` → `ApplicationContext.builder().environments("cli").start()` |
+| 2 | `src/cli/src/main/resources/application-cli.yml` | **New file** — disable Flyway in CLI environment |
+| 3 | `src/backendng/.../service/RequirementIdMigrationService.kt` | Add `@Requires(notEnv = ["cli"])` |
+| 4 | `src/backendng/.../config/DefaultAdminBootstrapper.kt` | Add `@Requires(notEnv = ["cli"])` |
+| 5 | `src/backendng/.../config/SystemUseCaseInitializer.kt` | Add `@Requires(notEnv = ["cli"])` |
+| 6 | `src/backendng/.../service/ProviderInitializationService.kt` | Add `@Requires(notEnv = ["cli"])` |
+| 7 | `src/backendng/.../config/FlywayRepairCallback.kt` | Add `@Requires(notEnv = ["cli"])` |
+
+## Implementation Steps
+
+### 1. SecmanCli.kt — Use "cli" environment for all context creations
+
+Extract a helper to avoid repetition across 9 call sites:
+
+```kotlin
+private fun createCliContext(): ApplicationContext {
+    return ApplicationContext.builder().environments("cli").start()
+}
+```
+
+Replace all `ApplicationContext.run().use { ctx ->` with `createCliContext().use { ctx ->`.
+
+Lines to change: 182, 191, 200, 209, 218, 227, 236, 245, 253.
+
+### 2. Create `application-cli.yml`
+
+New file at `src/cli/src/main/resources/application-cli.yml`:
+
+```yaml
+flyway:
+  datasources:
+    default:
+      enabled: false
+```
+
+Micronaut automatically loads `application-{env}.yml` when an environment is active. This disables Flyway migrations when running as CLI (the database is expected to be already migrated by the backend).
+
+### 3–7. Add `@Requires(notEnv = ["cli"])` to 5 backend beans
+
+Each file gets one import + one annotation before `@Singleton`:
+
+```kotlin
+import io.micronaut.context.annotation.Requires
+
+@Requires(notEnv = ["cli"])
+@Singleton
+```
+
+Files:
+- `src/backendng/src/main/kotlin/com/secman/service/RequirementIdMigrationService.kt` (line 23)
+- `src/backendng/src/main/kotlin/com/secman/config/DefaultAdminBootstrapper.kt` (line 23)
+- `src/backendng/src/main/kotlin/com/secman/config/SystemUseCaseInitializer.kt` (line 11)
+- `src/backendng/src/main/kotlin/com/secman/service/ProviderInitializationService.kt` (line 10)
+- `src/backendng/src/main/kotlin/com/secman/config/FlywayRepairCallback.kt` (line 17)
+
+## Why Not the Alternatives
+
+| Approach | Why not |
+|----------|---------|
+| **Bypass context for S3-only commands** | Only fixes `list-bucket`; `import-s3` still needs DB. Creates divergent code paths. Doesn't help other CLI commands. |
+| **Disable beans via custom properties** | Non-standard; Micronaut environments exist for this. Harder to discover/maintain. |
+| **Fix only RequirementIdMigrationService** | Leaves 3 other listeners doing unnecessary DB work every CLI run. `ProviderInitializationService` actually creates identity providers with placeholder credentials — actively harmful. |
+
+## Risk Assessment
+
+- **No CLI command depends on these startup listeners** — verified by grep. CLI commands use repositories directly, not via startup-initialized state.
+- **The "cli" environment is additive** — all beans without `@Requires(notEnv)` continue loading normally. Database, JPA, and repositories remain available for commands that need them.
+- **Backend is unaffected** — the backend does not use the "cli" environment, so all 5 beans continue to load normally there.
+
+## Verification
+
+```bash
+# 1. Build (must pass)
+./gradlew build
+
+# 2. Test list-bucket with S3Mock — should show NO migration errors
+docker run -p 9090:9090 adobe/s3mock
+aws s3api create-bucket --bucket test --endpoint-url http://localhost:9090
+aws s3api put-object --bucket test --key mappings.csv --body ./test-mappings.csv --endpoint-url http://localhost:9090
+./bin/secman manage-user-mappings list-bucket --bucket test --endpoint-url http://localhost:9090
+
+# 3. Test a DB-using command still works (e.g. list mappings)
+./bin/secman manage-user-mappings list -u admin@localhost
+
+# 4. Verify backend still starts normally (startup listeners fire)
+./gradlew :backendng:run
+# Check logs for: "Created system use case", "GitHub OAuth provider", etc.
+```
+
+
+If you need specific details from before exiting plan mode (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/flake/.REDACTED.jsonl
