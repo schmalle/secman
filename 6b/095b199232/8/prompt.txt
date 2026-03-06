@@ -1,0 +1,108 @@
+Implement the following plan:
+
+# Add AWS Account ID Column to Products Overview
+
+## Context
+
+The Products Overview page (`/products`) shows a table of systems running a selected product, with columns: **System Name**, **IP Address**, **Domain**. The `Asset` entity already has a `cloudAccountId` field (populated during CrowdStrike vulnerability imports), but it is not surfaced in the Products view. Adding it as the last column helps users identify which AWS account each system belongs to.
+
+## Changes
+
+### 1. Backend DTO — add `cloudAccountId` field
+
+**File**: `src/backendng/src/main/kotlin/com/secman/dto/ProductDto.kt` (line 23–28)
+
+Add `cloudAccountId: String?` as the last field in `ProductSystemDto`:
+
+```kotlin
+data class ProductSystemDto(
+    val assetId: Long,
+    val name: String,
+    val ip: String?,
+    val adDomain: String?,
+    val cloudAccountId: String?      // AWS Account ID (nullable)
+)
+```
+
+### 2. Backend Service — map the field in both locations
+
+**File**: `src/backendng/src/main/kotlin/com/secman/service/ProductService.kt`
+
+**a) `getProductSystems()` mapping (line 132–139)** — add `cloudAccountId = asset.cloudAccountId`
+
+**b) `exportProductSystems()` mapping (line 191–198)** — add `cloudAccountId = asset.cloudAccountId`
+
+**c) `writeProductSystemsToExcel()` (lines 235, 244–254)** — add "AWS Account ID" header and data cell:
+- Add `"AWS Account ID"` to the headers list (line 235)
+- Add `row.createCell(3).setCellValue(system.cloudAccountId ?: "")` (after line 248)
+- Add `sheet.setColumnWidth(3, 25 * 256)` for the new column (after line 254)
+
+### 3. Frontend Service — update TypeScript interface
+
+**File**: `src/frontend/src/services/productService.ts` (line 16–21)
+
+Add `cloudAccountId` to `ProductSystemDto`:
+
+```typescript
+export interface ProductSystemDto {
+    assetId: number;
+    name: string;
+    ip: string | null;
+    adDomain: string | null;
+    cloudAccountId: string | null;
+}
+```
+
+### 4. Frontend Component — add table column
+
+**File**: `src/frontend/src/components/ProductsOverview.tsx` (lines 482–501)
+
+- Add `<th>AWS Account ID</th>` after the Domain header (line 488)
+- Add `<td>{system.cloudAccountId || '-'}</td>` after the Domain data cell (line 496)
+
+## Files
+
+| File | Action |
+|------|--------|
+| `src/backendng/src/main/kotlin/com/secman/dto/ProductDto.kt` | **Edit** — add `cloudAccountId` to `ProductSystemDto` |
+| `src/backendng/src/main/kotlin/com/secman/service/ProductService.kt` | **Edit** — map field in DTO construction (×2) + Excel export |
+| `src/frontend/src/services/productService.ts` | **Edit** — add field to TS interface |
+| `src/frontend/src/components/ProductsOverview.tsx` | **Edit** — add table column header + data cell |
+
+## Verification
+
+1. `./gradlew build` — must pass with no errors
+2. Start app, navigate to Products Overview, select a product → table should show 4 columns: System Name, IP Address, Domain, AWS Account ID
+3. Systems without a `cloudAccountId` should display "-"
+4. Export to Excel → spreadsheet should include the new "AWS Account ID" column
+
+
+If you need specific details from before exiting plan mode (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/flake/.REDACTED.jsonl
+
+---
+
+rename the Vuln overview into Overview (side bar)
+
+---
+
+[Image: source: REDACTED 2026-03-05 at 08.22.38.png]
+
+---
+
+implement here also an "Export to Excel" function, button should be on the upper right
+
+---
+
+[Image: source: REDACTED 2026-03-05 at 09.02.44.png]
+
+---
+
+plan a fix for this
+
+---
+
+[Image: source: REDACTED 2026-03-05 at 09.27.39.png]
+
+---
+
+[Request interrupted by user for tool use]

@@ -3,7 +3,7 @@
   "checkpoint_id": "6b095b199232",
   "strategy": "manual-commit",
   "branch": "081-playwright-vuln-e2e",
-  "checkpoints_count": 14,
+  "checkpoints_count": 17,
   "files_touched": [
     "CLAUDE.md",
     "docs/S3_USER_MAPPING_IMPORT.md",
@@ -18,9 +18,13 @@
     "src/backendng/src/main/kotlin/com/secman/config/FlywayRepairCallback.kt",
     "src/backendng/src/main/kotlin/com/secman/config/SystemUseCaseInitializer.kt",
     "src/backendng/src/main/kotlin/com/secman/controller/ExceptionBadgeUpdateHandler.kt",
+    "src/backendng/src/main/kotlin/com/secman/controller/OutdatedAssetController.kt",
     "src/backendng/src/main/kotlin/com/secman/controller/UserMappingController.kt",
+    "src/backendng/src/main/kotlin/com/secman/dto/ProductDto.kt",
     "src/backendng/src/main/kotlin/com/secman/filter/SecurityHeadersFilter.kt",
     "src/backendng/src/main/kotlin/com/secman/repository/UserMappingRepository.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/OutdatedAssetService.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/ProductService.kt",
     "src/backendng/src/main/kotlin/com/secman/service/ProviderInitializationService.kt",
     "src/backendng/src/main/kotlin/com/secman/service/RequirementIdMigrationService.kt",
     "src/backendng/src/main/kotlin/com/secman/service/UserMappingService.kt",
@@ -30,12 +34,16 @@
     "src/cli/src/main/kotlin/com/secman/cli/service/S3DownloadService.kt",
     "src/cli/src/main/resources/application-cli.yml",
     "src/frontend/src/components/IpMappingForm.tsx",
+    "src/frontend/src/components/OutdatedAssetsList.tsx",
+    "src/frontend/src/components/ProductsOverview.tsx",
     "src/frontend/src/components/Sidebar.tsx",
     "src/frontend/src/components/UserManagement.tsx",
     "src/frontend/src/components/statistics/MostCommonVulnerabilities.tsx",
     "src/frontend/src/components/statistics/MostVulnerableProducts.tsx",
     "src/frontend/src/components/statistics/TopAssetsByVulnerabilities.tsx",
     "src/frontend/src/services/exceptionBadgeService.ts",
+    "src/frontend/src/services/outdatedAssetsApi.ts",
+    "src/frontend/src/services/productService.ts",
     "src/frontend/src/services/userMappingService.ts",
     "tests/e2e/.gitignore",
     "tests/e2e/package-lock.json",
@@ -101,13 +109,20 @@
       "context": "/6b/095b199232/7/context.md",
       "content_hash": "/6b/095b199232/7/content_hash.txt",
       "prompt": "/6b/095b199232/7/prompt.txt"
+    },
+    {
+      "metadata": "/6b/095b199232/8/metadata.json",
+      "transcript": "/6b/095b199232/8/full.jsonl",
+      "context": "/6b/095b199232/8/context.md",
+      "content_hash": "/6b/095b199232/8/content_hash.txt",
+      "prompt": "/6b/095b199232/8/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 26189,
-    "cache_creation_tokens": 1257593,
-    "cache_read_tokens": 17256788,
-    "output_tokens": 101969,
-    "api_call_count": 249
+    "input_tokens": 26240,
+    "cache_creation_tokens": 1446574,
+    "cache_read_tokens": 20796459,
+    "output_tokens": 117277,
+    "api_call_count": 290
   }
 }

@@ -1,0 +1,37 @@
+{
+  "cli_version": "0.4.2",
+  "checkpoint_id": "6b095b199232",
+  "session_id": "ef88f7d9-e1be-423d-b11a-40d0cc8ec6a5",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-06T09:03:53.305621Z",
+  "branch": "081-playwright-vuln-e2e",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "src/backendng/src/main/kotlin/com/secman/controller/OutdatedAssetController.kt",
+    "src/backendng/src/main/kotlin/com/secman/dto/ProductDto.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/OutdatedAssetService.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/ProductService.kt",
+    "src/frontend/src/components/OutdatedAssetsList.tsx",
+    "src/frontend/src/components/ProductsOverview.tsx",
+    "src/frontend/src/components/Sidebar.tsx",
+    "src/frontend/src/services/outdatedAssetsApi.ts",
+    "src/frontend/src/services/productService.ts"
+  ],
+  "agent": "Claude Code",
+  "token_usage": {
+    "input_tokens": 51,
+    "cache_creation_tokens": 188981,
+    "cache_read_tokens": 3539671,
+    "output_tokens": 15308,
+    "api_call_count": 41
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-06T09:03:53.190115Z",
+    "agent_lines": 118,
+    "human_added": 913,
+    "human_modified": 186,
+    "human_removed": 0,
+    "total_committed": 1217,
+    "agent_percentage": 9.69597370583402
+  }
+}
