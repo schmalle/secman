@@ -1,0 +1,107 @@
+Implement the following plan:
+
+# Fix JWT `alg:none` — Unsigned Token Vulnerability
+
+## Context
+
+JWT tokens are being generated with `{"alg":"none"}` (unsigned). Screenshot evidence confirms tokens have no signature. This is a **critical security vulnerability** — anyone can forge valid tokens.
+
+**Root cause**: `application.yml` has TWO `micronaut:` top-level keys (line 1 and line 138). In YAML, duplicate keys cause the last value to silently overwrite the first. The second block (line 138, containing only `http.services.openrouter-ai`) replaces the first block which contains the entire `security.token.jwt.signatures` configuration. Result: no signing beans are created, `JwtTokenGenerator` produces unsigned tokens, and the validator accepts them.
+
+## Changes
+
+### 1. Merge duplicate `micronaut:` keys in `application.yml` (CRITICAL FIX)
+
+**File**: `src/backendng/src/main/resources/application.yml`
+
+Move the `http.services` block from line 138-144 into the first `micronaut:` block (after the `caches:` section, before line 136). Delete the second `micronaut:` key entirely.
+
+**Before** (line 137-144):
+```yaml
+# Email functionality configuration
+micronaut:
+  http:
+    services:
+      openrouter-ai:
+        url: https://openrouter.ai/api/v1
+        read-timeout: 120s
+        connect-timeout: 10s
+```
+
+**After** — nest under the first `micronaut:` block (e.g. after `caches:` section around line 135):
+```yaml
+  # HTTP client services
+  http:
+    services:
+      openrouter-ai:
+        url: https://openrouter.ai/api/v1
+        read-timeout: 120s
+        connect-timeout: 10s
+```
+
+### 2. Add explicit `jws-algorithm: HS256` and `validation` section
+
+**File**: `src/backendng/src/main/resources/application.yml` (lines 63-66)
+
+**Before**:
+```yaml
+        signatures:
+          secret:
+            generator:
+              secret: ${JWT_SECRET:pleasechangethissecrectokeyproductionforsecurityreasonsmustbe256bits}
+```
+
+**After**:
+```yaml
+        signatures:
+          secret:
+            generator:
+              secret: ${JWT_SECRET:pleasechangethissecrectokeyproductionforsecurityreasonsmustbe256bits}
+              jws-algorithm: HS256
+            validation:
+              secret: ${JWT_SECRET:pleasechangethissecrectokeyproductionforsecurityreasonsmustbe256bits}
+              jws-algorithm: HS256
+```
+
+**Why**: Explicit `jws-algorithm` is defense-in-depth (matches test config). The `validation` section creates a dedicated `SecretSignatureConfiguration` bean so `noSignatures=false` in the validator, which causes it to **reject** unsigned `PlainJWT` tokens.
+
+### 3. Create `JwtSigningValidator` startup bean
+
+**New file**: `src/backendng/src/main/kotlin/com/secman/config/JwtSigningValidator.kt`
+
+Follow the existing `DatasourceUrlValidator.kt` pattern:
+- `@Context` + `@PostConstruct` for eager startup execution
+- `@Requires(notEnv = ["test"])` to skip in test environment
+- Generate a test token at startup, verify it has 3 dot-separated parts and `HS256` in the header
+- Throw `IllegalStateException` (preventing app startup) if tokens are unsigned
+- Log clear error message pointing to duplicate YAML key as likely cause
+
+## Files Modified
+
+| File | Action |
+|------|--------|
+| `src/backendng/src/main/resources/application.yml` | Merge duplicate `micronaut:` keys; add `jws-algorithm` + `validation` |
+| `src/backendng/src/main/kotlin/com/secman/config/JwtSigningValidator.kt` | New: startup validator (pattern from `DatasourceUrlValidator.kt`) |
+
+## Verification
+
+1. `./gradlew build` — must pass with no errors
+2. Start the application — `JwtSigningValidator` should log: "JWT signing validation passed: tokens are signed with HS256"
+3. Login via `/api/auth/login` — decode the returned JWT and verify header is `{"alg":"HS256"}` (not `{"alg":"none"}`)
+4. Existing sessions will be invalidated (expected — unsigned tokens should be rejected)
+
+## Impact
+
+- All currently active sessions using `alg:none` tokens will be invalidated — users must re-login
+- This is correct and expected behavior: unsigned tokens must not be accepted
+
+
+If you need specific details from before exiting plan mode (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/flake/.claude/projects/-Users-flake-sources-misc-secman/32f548cf-60c0-4f04-a4af-282a56d7c3fe.jsonl
+
+---
+
+Tool loaded.
+
+---
+
+Tool loaded.

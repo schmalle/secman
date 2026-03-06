@@ -2,8 +2,8 @@
   "cli_version": "0.4.2",
   "checkpoint_id": "6b095b199232",
   "strategy": "manual-commit",
-  "branch": "081-playwright-vuln-e2e",
-  "checkpoints_count": 17,
+  "branch": "main",
+  "checkpoints_count": 18,
   "files_touched": [
     "CLAUDE.md",
     "docs/S3_USER_MAPPING_IMPORT.md",
@@ -16,6 +16,7 @@
     "src/backendng/src/main/kotlin/com/secman/config/DatasourceUrlValidator.kt",
     "src/backendng/src/main/kotlin/com/secman/config/DefaultAdminBootstrapper.kt",
     "src/backendng/src/main/kotlin/com/secman/config/FlywayRepairCallback.kt",
+    "src/backendng/src/main/kotlin/com/secman/config/JwtSigningValidator.kt",
     "src/backendng/src/main/kotlin/com/secman/config/SystemUseCaseInitializer.kt",
     "src/backendng/src/main/kotlin/com/secman/controller/ExceptionBadgeUpdateHandler.kt",
     "src/backendng/src/main/kotlin/com/secman/controller/OutdatedAssetController.kt",
@@ -28,6 +29,7 @@
     "src/backendng/src/main/kotlin/com/secman/service/ProviderInitializationService.kt",
     "src/backendng/src/main/kotlin/com/secman/service/RequirementIdMigrationService.kt",
     "src/backendng/src/main/kotlin/com/secman/service/UserMappingService.kt",
+    "src/backendng/src/main/resources/application.yml",
     "src/cli/src/main/kotlin/com/secman/cli/SecmanCli.kt",
     "src/cli/src/main/kotlin/com/secman/cli/commands/ImportS3Command.kt",
     "src/cli/src/main/kotlin/com/secman/cli/commands/ListBucketCommand.kt",
@@ -116,13 +118,20 @@
       "context": "/6b/095b199232/8/context.md",
       "content_hash": "/6b/095b199232/8/content_hash.txt",
       "prompt": "/6b/095b199232/8/prompt.txt"
+    },
+    {
+      "metadata": "/6b/095b199232/9/metadata.json",
+      "transcript": "/6b/095b199232/9/full.jsonl",
+      "context": "/6b/095b199232/9/context.md",
+      "content_hash": "/6b/095b199232/9/content_hash.txt",
+      "prompt": "/6b/095b199232/9/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 26240,
-    "cache_creation_tokens": 1446574,
-    "cache_read_tokens": 20796459,
-    "output_tokens": 117277,
-    "api_call_count": 290
+    "input_tokens": 26259,
+    "cache_creation_tokens": 1472508,
+    "cache_read_tokens": 21100248,
+    "output_tokens": 121005,
+    "api_call_count": 303
   }
 }
