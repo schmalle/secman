@@ -1,0 +1,86 @@
+Implement the following plan:
+
+# Fix: JDBC URL Startup Validation
+
+## Context
+
+The backend fails at startup with a cryptic HikariCP stacktrace:
+```
+Caused by: java.lang.RuntimeException: Driver org.mariadb.jdbc.Driver claims to not accept jdbcUrl, 3306/secman
+```
+
+The `DB_CONNECT` environment variable is set to an incomplete value (`3306/secman`) instead of the required full JDBC URL (`jdbc:mariadb://hostname:3306/secman`). The default in `application.yml` is correct, but when `DB_CONNECT` is explicitly set to a malformed value, HikariCP fails with this unhelpful error.
+
+**Goal**: Add a startup validation check that detects a malformed `DB_CONNECT` URL and fails fast with a clear, actionable error message — before HikariCP's cryptic stacktrace.
+
+## Change
+
+### Add `DatasourceUrlValidator.kt`
+
+**File**: `src/backendng/src/main/kotlin/com/secman/config/DatasourceUrlValidator.kt` (new)
+
+Create a `@Context` singleton that validates the datasource URL during eager bean initialization, **before** HikariCP attempts to create its connection pool.
+
+- Use `@Context` annotation for eager initialization (runs before lazy beans like DataSource)
+- Use `@Value("${datasources.default.url}")` to read the resolved URL
+- In `@PostConstruct`, validate the URL starts with `jdbc:mariadb://`
+- Throw `IllegalStateException` with a clear message explaining the expected format and that `DB_CONNECT` needs to be fixed
+- Use `@Requires(notEnv = ["test"])` to skip in test environments (Testcontainers provides its own URL)
+
+**Why `@Context` + `@PostConstruct`**: The DataSource bean is created during bean resolution (triggered by Flyway), which happens before `ApplicationStartupEvent`. `@Context` forces eager creation of our validator during the bean initialization phase, giving us the best chance to run first. Even in the rare case where HikariCP fails before our validator runs, the validator's error message will still appear in logs, making the root cause clear.
+
+**Follows existing pattern**: `DefaultAdminBootstrapper.kt`, `SystemUseCaseInitializer.kt`
+
+```kotlin
+@Context
+@Requires(notEnv = ["test"])
+@Singleton
+class DatasourceUrlValidator(
+    @Value("\${datasources.default.url}") private val jdbcUrl: String
+) {
+    private val logger = LoggerFactory.getLogger(DatasourceUrlValidator::class.java)
+
+    @PostConstruct
+    fun validate() {
+        if (!jdbcUrl.startsWith("jdbc:mariadb://")) {
+            logger.error("=" .repeat(70))
+            logger.error("  INVALID DATABASE URL")
+            logger.error("  DB_CONNECT = '$jdbcUrl'")
+            logger.error("  Expected format: jdbc:mariadb://hostname:3306/secman")
+            logger.error("  Fix the DB_CONNECT environment variable and restart.")
+            logger.error("=".repeat(70))
+            throw IllegalStateException(
+                "Invalid DB_CONNECT: '$jdbcUrl' — must start with 'jdbc:mariadb://'. " +
+                "Expected format: jdbc:mariadb://hostname:3306/secman"
+            )
+        }
+        logger.info("Database URL validated: jdbc:mariadb://****")
+    }
+}
+```
+
+## Files
+
+| File | Action |
+|------|--------|
+| `src/backendng/src/main/kotlin/com/secman/config/DatasourceUrlValidator.kt` | **Create** — startup URL validation |
+
+## Verification
+
+1. `./gradlew build` — must pass (no compilation errors, existing tests unaffected due to `@Requires(notEnv = ["test"])`)
+2. Manual test: set `DB_CONNECT=3306/secman` and start the app → should see the clear `INVALID DATABASE URL` banner in logs before the HikariCP error
+
+
+If you need specific details from before exiting plan mode (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/flake/.claude/projects/-Users-flake-sources-misc-secman/3fdb1b1d-cef3-4c08-b6fe-b5fe996de1b3.jsonl
+
+---
+
+please carefully analyze and add the AWS Account ID if existing also in the table , last element in line
+
+---
+
+[Image: source: REDACTED 2026-03-05 at 08.10.21.png]
+
+---
+
+[Request interrupted by user for tool use]
