@@ -3,13 +3,15 @@
   "checkpoint_id": "6b095b199232",
   "strategy": "manual-commit",
   "branch": "081-playwright-vuln-e2e",
-  "checkpoints_count": 4,
+  "checkpoints_count": 5,
   "files_touched": [
     "docs/S3_USER_MAPPING_IMPORT.md",
     "src/backendng/src/main/kotlin/com/secman/config/DefaultAdminBootstrapper.kt",
     "src/backendng/src/main/kotlin/com/secman/config/FlywayRepairCallback.kt",
     "src/backendng/src/main/kotlin/com/secman/config/SystemUseCaseInitializer.kt",
+    "src/backendng/src/main/kotlin/com/secman/controller/ExceptionBadgeUpdateHandler.kt",
     "src/backendng/src/main/kotlin/com/secman/controller/UserMappingController.kt",
+    "src/backendng/src/main/kotlin/com/secman/filter/SecurityHeadersFilter.kt",
     "src/backendng/src/main/kotlin/com/secman/repository/UserMappingRepository.kt",
     "src/backendng/src/main/kotlin/com/secman/service/ProviderInitializationService.kt",
     "src/backendng/src/main/kotlin/com/secman/service/RequirementIdMigrationService.kt",
@@ -21,6 +23,7 @@
     "src/cli/src/main/resources/application-cli.yml",
     "src/frontend/src/components/IpMappingForm.tsx",
     "src/frontend/src/components/UserManagement.tsx",
+    "src/frontend/src/services/exceptionBadgeService.ts",
     "src/frontend/src/services/userMappingService.ts",
     "tests/s3usermapping/StartS3Sim.md"
   ],
@@ -45,13 +48,20 @@
       "context": "/6b/095b199232/2/context.md",
       "content_hash": "/6b/095b199232/2/content_hash.txt",
       "prompt": "/6b/095b199232/2/prompt.txt"
+    },
+    {
+      "metadata": "/6b/095b199232/3/metadata.json",
+      "transcript": "/6b/095b199232/3/full.jsonl",
+      "context": "/6b/095b199232/3/context.md",
+      "content_hash": "/6b/095b199232/3/content_hash.txt",
+      "prompt": "/6b/095b199232/3/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 25992,
-    "cache_creation_tokens": 454967,
-    "cache_read_tokens": 6112867,
-    "output_tokens": 31031,
-    "api_call_count": 103
+    "input_tokens": 26028,
+    "cache_creation_tokens": 533010,
+    "cache_read_tokens": 7759809,
+    "output_tokens": 41493,
+    "api_call_count": 131
   }
 }

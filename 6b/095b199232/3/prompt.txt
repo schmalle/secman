@@ -1,0 +1,103 @@
+Implement the following plan:
+
+# Fix: ExceptionBadge SSE Connection Errors
+
+## Context
+
+The browser console on production (`https://secman.covestro.net`) shows 6 JavaScript errors from the ExceptionBadge SSE connection in the Sidebar. The pattern repeats: connect → receive initial count (0) → immediate connection error → exponential backoff retry (1s, 2s, 4s, 8s). After 5 failures, the badge gives up and stays at 0.
+
+**Root cause**: After the backend sends the initial count event, the `sink.asFlux()` emits nothing (no exception count changes happening), so the connection goes idle. The corporate reverse proxy (nginx/F5/load balancer) detects the idle SSE stream and terminates it. The backend has **no heartbeat/keep-alive** mechanism to prevent this.
+
+**Secondary issues**:
+- No `X-Accel-Buffering: no` header (nginx buffers SSE responses by default)
+- Frontend logs every retry as `console.error` (will fail the new Playwright E2E test from feature 081)
+- Frontend gives up entirely after 5 errors instead of falling back to HTTP polling
+
+## Changes
+
+### 1. Backend: Add SSE heartbeat (primary fix)
+
+**File**: `src/backendng/src/main/kotlin/com/secman/controller/ExceptionBadgeUpdateHandler.kt`
+
+Add `import java.time.Duration` and modify `streamBadgeUpdates()`:
+- Add `Flux.interval(Duration.ofSeconds(15))` emitting heartbeat events with name `"heartbeat"`
+- Use `Flux.merge(heartbeat, countUpdates)` inside the existing `Flux.concat` so heartbeats interleave with real updates
+- The frontend only listens for `count-update` events, so `heartbeat` events are silently ignored by EventSource
+- Heartbeat uses `CountUpdateData(-1)` to satisfy the generic type constraint
+
+```kotlin
+val heartbeat = Flux.interval(Duration.ofSeconds(15))
+    .map { Event.of(CountUpdateData(-1)).name("heartbeat") }
+
+val countUpdates = sink.asFlux()
+    .map { data -> Event.of(data).name("count-update") }
+
+return Flux.concat(
+    Flux.just(initialEvent),
+    Flux.merge(heartbeat, countUpdates)
+        .doOnCancel { ... }
+        .doOnError { ... }
+)
+```
+
+### 2. Backend: Add SSE proxy headers
+
+**File**: `src/backendng/src/main/kotlin/com/secman/filter/SecurityHeadersFilter.kt`
+
+After the `/api/` cache-control block (line 122), add SSE-specific headers for the two SSE endpoints:
+
+```kotlin
+if (request.uri.path == "/api/exception-badge-updates" ||
+    request.uri.path == "/api/materialized-view-refresh/progress") {
+    response.header("X-Accel-Buffering", "no")
+    response.header("Connection", "keep-alive")
+}
+```
+
+### 3. Frontend: Downgrade retry errors to `console.warn`
+
+**File**: `src/frontend/src/services/exceptionBadgeService.ts`
+
+- Line 158: Change `console.error(...)` → `console.warn(...)` for individual retry errors
+- Line 95: Change `console.error(...)` → `console.warn(...)` for the "too many errors" guard
+- Keep `console.error` only for the final MAX_ERRORS failure (line 168), updating message to mention polling fallback
+
+### 4. Frontend: Add polling fallback after SSE fails
+
+**File**: `src/frontend/src/services/exceptionBadgeService.ts`
+
+- Add `pollingIntervalId` module variable and `startPollingFallback()` function
+- `startPollingFallback()` uses the existing `fetchPendingCount()` (currently unused) to poll every 30s
+- At MAX_ERRORS (line 167-171): call `startPollingFallback(onUpdate)` instead of giving up
+- At the initial guard (line 94-98): return `startPollingFallback(onUpdate)` instead of a no-op
+- Add polling cleanup to the returned cleanup function (clear interval)
+
+## Files to Modify
+
+| File | Change |
+|------|--------|
+| `src/backendng/.../controller/ExceptionBadgeUpdateHandler.kt` | Add heartbeat Flux.interval (15s) |
+| `src/backendng/.../filter/SecurityHeadersFilter.kt` | Add X-Accel-Buffering + Connection headers for SSE paths |
+| `src/frontend/src/services/exceptionBadgeService.ts` | Downgrade errors to warn + add polling fallback |
+
+## Verification
+
+1. `./gradlew build` — must pass (no compilation errors from backend changes)
+2. `npm run build` in `src/frontend/` — must pass (no TS errors from frontend changes)
+3. Manual browser test: open devtools console, navigate to any page with the Sidebar — should see `[ExceptionBadge] SSE connection established` and `Received count update: 0` with NO subsequent error messages (heartbeat keeps connection alive)
+4. E2E test: `cd tests/e2e && SECMAN_ADMIN_USER=... npx playwright test --project=chrome` — should pass with zero console errors (individual SSE retries are now `console.warn`, not `console.error`)
+
+
+If you need specific details from before exiting plan mode (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/flake/.REDACTED.jsonl
+
+---
+
+analyze the error in the picture and propose a fixing plan
+
+---
+
+[Image: source: REDACTED 2026-03-04 at 22.03.42.png]
+
+---
+
+[Request interrupted by user for tool use]

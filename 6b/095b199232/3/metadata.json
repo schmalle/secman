@@ -1,0 +1,31 @@
+{
+  "cli_version": "0.4.2",
+  "checkpoint_id": "6b095b199232",
+  "session_id": "3fdb1b1d-cef3-4c08-b6fe-b5fe996de1b3",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-06T09:03:51.020854Z",
+  "branch": "081-playwright-vuln-e2e",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/backendng/src/main/kotlin/com/secman/controller/ExceptionBadgeUpdateHandler.kt",
+    "src/backendng/src/main/kotlin/com/secman/filter/SecurityHeadersFilter.kt",
+    "src/frontend/src/services/exceptionBadgeService.ts"
+  ],
+  "agent": "Claude Code",
+  "token_usage": {
+    "input_tokens": 36,
+    "cache_creation_tokens": 78043,
+    "cache_read_tokens": 1646942,
+    "output_tokens": 10462,
+    "api_call_count": 28
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-06T09:03:50.962653Z",
+    "agent_lines": 62,
+    "human_added": 1341,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 1403,
+    "agent_percentage": 4.419101924447612
+  }
+}
