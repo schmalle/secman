@@ -92,6 +92,9 @@ Users access assets if **ANY** is true:
 - CLI tests: `./gradlew :cli:test`
 - Integration tests (requires Docker): `./gradlew :backendng:test --tests "*IntegrationTest*"`
 - Specific test class: `./gradlew :backendng:test --tests "VulnerabilityServiceTest"`
+- E2E tests (Playwright): Setup: `cd tests/e2e && npm install && npx playwright install chrome msedge`
+- E2E tests (run with 1Password): `./tests/e2e/run-e2e.sh`
+- E2E tests (run manually): `cd tests/e2e && SECMAN_BASE_URL=http://localhost:4321 SECMAN_ADMIN_USER=... SECMAN_ADMIN_PASS=... SECMAN_USER_USER=... SECMAN_USER_PASS=... npx playwright test`
 
 **Principles**:
 1. Security-First: File validation, input sanitization, RBAC, security review required
@@ -247,6 +250,8 @@ fun findStateByValueWithRetry(stateToken: String): Optional<OAuthState> {
 - Kotlin 2.3.0 / Java 25 (backend), TypeScript / React 19 (frontend), Bash (e2e test) + Micronaut 4.10, Hibernate JPA, Astro 5.15, Bootstrap 5.3 (079-reqadmin-release-role)
 - MariaDB 11.4 (no schema changes needed - authorization-only change) (079-reqadmin-release-role)
 - MariaDB 11.4 (existing `user_roles` table, no schema changes) (080-default-user-roles)
+- TypeScript (Playwright test files), Bash (runner script) + @playwright/test 1.57.0 (Astro-compatible version) (081-playwright-vuln-e2e)
+- N/A (no data persistence — test infrastructure only) (081-playwright-vuln-e2e)
 
 ## Recent Changes
 - 058-ai-norm-mapping: Added Kotlin 2.2.21 / Java 21 (backend), TypeScript/React 19 (frontend) + Micronaut 4.10, Hibernate JPA, Axios, Bootstrap 5.3

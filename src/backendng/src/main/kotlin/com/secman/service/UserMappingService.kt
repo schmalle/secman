@@ -7,6 +7,7 @@ import com.secman.dto.UpdateUserMappingRequest
 import com.secman.dto.UserMappingResponse
 import com.secman.dto.toResponse
 import com.secman.event.UserCreatedEvent
+import com.secman.repository.AssetRepository
 import com.secman.repository.UserMappingRepository
 import com.secman.repository.UserRepository
 import io.micronaut.runtime.event.annotation.EventListener
@@ -20,6 +21,7 @@ import java.time.Instant
 open class UserMappingService(
     private val userRepository: UserRepository,
     private val userMappingRepository: UserMappingRepository,
+    private val assetRepository: AssetRepository,
     private val ipAddressParser: IpAddressParser
 ) {
     private val log = LoggerFactory.getLogger(UserMappingService::class.java)
@@ -27,9 +29,18 @@ open class UserMappingService(
     fun getUserMappings(userId: Long): List<UserMappingResponse> {
         val user = userRepository.findById(userId)
             .orElseThrow { NoSuchElementException("User not found") }
-        
+
         val mappings = userMappingRepository.findByEmail(user.email)
         return mappings.map { it.toResponse() }
+    }
+
+    fun getDistinctDomains(): List<String> {
+        val mappingDomains = userMappingRepository.findDistinctDomains()
+        val assetDomains = assetRepository.findDistinctAdDomains()
+        return (mappingDomains + assetDomains)
+            .map { it.lowercase() }
+            .distinct()
+            .sorted()
     }
     
     @Transactional

@@ -245,6 +245,15 @@ class UserMappingController(
         }
     }
 
+    /**
+     * GET /api/user-mappings/domains - Get all distinct domains
+     */
+    @Get("/domains")
+    @Secured("ADMIN")
+    fun getDistinctDomains(): HttpResponse<List<String>> {
+        return HttpResponse.ok(userMappingService.getDistinctDomains())
+    }
+
     // Feature 042: Future User Mapping Support
 
     /**

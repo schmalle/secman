@@ -178,6 +178,19 @@ export async function downloadCSVTemplate(): Promise<void> {
   }
 }
 
+/**
+ * Get all distinct domains (from user mappings and assets)
+ */
+export async function getDomains(): Promise<string[]> {
+  const response = await authenticatedGet('/api/user-mappings/domains');
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch domains: ${response.status}`);
+  }
+
+  return await response.json();
+}
+
 // ========== IP Mapping CRUD Operations (Feature 020) ==========
 
 /**

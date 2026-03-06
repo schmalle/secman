@@ -86,6 +86,7 @@ const UserManagement = () => {
     const [mappingsSuccess, setMappingsSuccess] = useState<string | null>(null);
     const [isLoadingMappings, setIsLoadingMappings] = useState(false);
     const [isAddingMapping, setIsAddingMapping] = useState(false);
+    const [availableDomains, setAvailableDomains] = useState<string[]>([]);
     const [newMapping, setNewMapping] = useState<CreateMappingRequest>({
         awsAccountId: '',
         domain: '',
@@ -442,6 +443,16 @@ const UserManagement = () => {
             setMappingsError(err.message || 'Failed to load mappings');
         } finally {
             setIsLoadingMappings(false);
+        }
+
+        // Fetch available domains for dropdown
+        try {
+            const resp = await authenticatedGet('/api/user-mappings/domains');
+            if (resp.ok) {
+                setAvailableDomains(await resp.json());
+            }
+        } catch {
+            // Silently fail - dropdown will just be empty
         }
     };
 
@@ -904,20 +915,22 @@ const UserManagement = () => {
                                                                         </td>
                                                                         <td colSpan={3}><small className="text-muted">IP editing not supported in this view</small></td>
                                                                         <td>
-                                                                            <input
-                                                                                type="text"
-                                                                                className="form-control form-control-sm"
+                                                                            <select
+                                                                                className="form-select form-select-sm"
                                                                                 value={editMappingData.domain}
                                                                                 onChange={e => setEditMappingData({...editMappingData, domain: e.target.value})}
-                                                                                onKeyDown={e => {
-                                                                                    if (e.key === 'Enter') handleSaveMapping();
-                                                                                    if (e.key === 'Escape') handleCancelEdit();
-                                                                                }}
-                                                                                placeholder="example.com"
                                                                                 disabled={isLoadingMappings}
                                                                                 aria-label="Domain"
                                                                                 aria-describedby="domain-help"
-                                                                            />
+                                                                            >
+                                                                                <option value="">-- No domain --</option>
+                                                                                {availableDomains.map(d => (
+                                                                                    <option key={d} value={d}>{d}</option>
+                                                                                ))}
+                                                                                {editMappingData.domain && !availableDomains.includes(editMappingData.domain) && (
+                                                                                    <option value={editMappingData.domain}>{editMappingData.domain}</option>
+                                                                                )}
+                                                                            </select>
                                                                         </td>
                                                                         <td>{new Date(mapping.createdAt).toLocaleDateString()}</td>
                                                                         <td>
@@ -1052,25 +1065,20 @@ const UserManagement = () => {
                                                     </div>
                                                     <div className="mb-2">
                                                         <label htmlFor="new-domain" className="form-label">Domain</label>
-                                                        <input
+                                                        <select
                                                             id="new-domain"
-                                                            type="text"
-                                                            className="form-control"
+                                                            className="form-select"
                                                             value={newMapping.domain}
                                                             onChange={e => setNewMapping({...newMapping, domain: e.target.value})}
-                                                            onKeyDown={e => {
-                                                                if (e.key === 'Enter') handleAddMapping();
-                                                                if (e.key === 'Escape') {
-                                                                    setIsAddingMapping(false);
-                                                                    setNewMapping({ awsAccountId: '', domain: '', ipAddress: '' });
-                                                                    setMappingsError(null);
-                                                                }
-                                                            }}
-                                                            placeholder="example.com"
                                                             disabled={isLoadingMappings}
                                                             aria-describedby="domain-help"
-                                                        />
-                                                        <small id="domain-help" className="form-text text-muted">Lowercase letters, numbers, dots, and hyphens</small>
+                                                        >
+                                                            <option value="">-- No domain --</option>
+                                                            {availableDomains.map(d => (
+                                                                <option key={d} value={d}>{d}</option>
+                                                            ))}
+                                                        </select>
+                                                        <small id="domain-help" className="form-text text-muted">Select an organizational domain (optional)</small>
                                                     </div>
                                                     <button 
                                                         type="button"

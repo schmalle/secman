@@ -47,6 +47,7 @@ Complete production deployment guide for the Secman security management applicat
 ```
 
 **Components:**
+
 - **Backend**: Kotlin 2.2.21, Java 21, Micronaut 4.10
 - **Frontend**: Astro 5.15, React 19, Node.js 20.x
 - **Database**: MariaDB 12
@@ -58,12 +59,13 @@ Complete production deployment guide for the Secman security management applicat
 
 ### System Requirements
 
-| Resource | Minimum | Recommended |
-|----------|---------|-------------|
-| CPU | 2 cores | 4+ cores |
-| RAM | 4 GB | 8+ GB |
-| Disk | 20 GB | 50+ GB SSD |
-| OS | Amazon Linux 2023 / Ubuntu 20.04+ / RHEL 8+ | Latest LTS |
+
+| Resource | Minimum                                     | Recommended |
+| -------- | ------------------------------------------- | ----------- |
+| CPU      | 2 cores                                     | 4+ cores    |
+| RAM      | 4 GB                                        | 8+ GB       |
+| Disk     | 20 GB                                       | 50+ GB SSD  |
+| OS       | Amazon Linux 2023 / Ubuntu 20.04+ / RHEL 8+ | Latest LTS  |
 
 ### Network Requirements
 
@@ -79,6 +81,7 @@ Complete production deployment guide for the Secman security management applicat
 ### Install Dependencies
 
 **Amazon Linux 2023:**
+
 ```bash
 sudo dnf update -y
 sudo dnf groupinstall "Development Tools" -y
@@ -93,6 +96,7 @@ sudo dnf install -y nginx
 ```
 
 **Ubuntu/Debian:**
+
 ```bash
 sudo apt update
 sudo apt install -y openjdk-21-jdk git build-essential
@@ -128,12 +132,14 @@ sudo passwd secman  # Set strong password
 ### Install MariaDB
 
 **Amazon Linux / RHEL:**
+
 ```bash
 sudo curl -sS https://downloads.mariadb.com/MariaDB/mariadb_repo_setup | sudo bash -s -- --mariadb-server-version="mariadb-10.11"
 sudo dnf install -y MariaDB-server MariaDB-client
 ```
 
 **Ubuntu/Debian:**
+
 ```bash
 curl -LsS https://r.mariadb.com/downloads/mariadb_repo_setup | sudo bash -s -- --mariadb-server-version=12.0
 sudo apt update && sudo apt install -y mariadb-server mariadb-client
@@ -205,9 +211,11 @@ SMTP_ENABLE_TLS=true
 # URLs
 BACKEND_BASE_URL=https://api.yourdomain.com
 FRONTEND_URL=https://secman.yourdomain.com
+DB_CONNECT=jdbc:mariadb://localhost:3306/secman
 ```
 
 Generate secrets:
+
 ```bash
 # JWT Secret (32 bytes)
 openssl rand -base64 32
@@ -220,6 +228,7 @@ openssl rand -hex 8
 ```
 
 Secure the file:
+
 ```bash
 sudo chown root:secman /etc/secman/backend.env
 sudo chmod 640 /etc/secman/backend.env
@@ -507,6 +516,7 @@ sudo systemctl status secman-backend secman-frontend
 ### Firewall
 
 **Amazon Linux / RHEL:**
+
 ```bash
 sudo systemctl enable firewalld
 sudo systemctl start firewalld
@@ -517,6 +527,7 @@ sudo firewall-cmd --reload
 ```
 
 **Ubuntu:**
+
 ```bash
 sudo ufw allow 22/tcp
 sudo ufw allow 80/tcp
@@ -617,6 +628,7 @@ fi
 ```
 
 Add to cron:
+
 ```bash
 */5 * * * * /opt/secman/bin/monitor.sh
 ```
@@ -658,6 +670,7 @@ find "$BACKUP_DIR" -name "*.sql.gz" -mtime +7 -delete
 ```
 
 Schedule daily:
+
 ```bash
 0 2 * * * /opt/secman/bin/backup-db.sh
 ```

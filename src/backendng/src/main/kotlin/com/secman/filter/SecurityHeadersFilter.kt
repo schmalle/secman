@@ -121,6 +121,15 @@ class SecurityHeadersFilter : HttpServerFilter {
             response.header("Expires", "0")
         }
 
+        // SSE endpoints: disable proxy buffering and keep connection alive
+        // X-Accel-Buffering: no — prevents nginx from buffering SSE responses
+        // Connection: keep-alive — signals proxies (F5, ALB) to maintain the TCP connection
+        if (request.uri.path == "/api/exception-badge-updates" ||
+            request.uri.path == "/api/materialized-view-refresh/progress") {
+            response.header("X-Accel-Buffering", "no")
+            response.header("Connection", "keep-alive")
+        }
+
         // AGGRESSIVE cache control for OAuth endpoints to prevent "state" errors
         // in corporate AAD environments where cached responses cause state mismatches
         if (request.uri.path.startsWith("/oauth/")) {

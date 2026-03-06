@@ -134,7 +134,8 @@ open class ProductService(
                 assetId = asset.id!!,
                 name = asset.name,
                 ip = asset.ip,
-                adDomain = asset.adDomain
+                adDomain = asset.adDomain,
+                cloudAccountId = asset.cloudAccountId
             )
         }
 
@@ -193,7 +194,8 @@ open class ProductService(
                 assetId = asset.id!!,
                 name = asset.name,
                 ip = asset.ip,
-                adDomain = asset.adDomain
+                adDomain = asset.adDomain,
+                cloudAccountId = asset.cloudAccountId
             )
         }
 
@@ -232,7 +234,7 @@ open class ProductService(
 
             // Write header row
             val headerRow = sheet.createRow(0)
-            val headers = listOf("System Name", "IP Address", "Domain")
+            val headers = listOf("System Name", "IP Address", "Domain", "AWS Account ID")
             headers.forEachIndexed { index, header ->
                 headerRow.createCell(index).apply {
                     setCellValue(header)
@@ -246,12 +248,14 @@ open class ProductService(
                 row.createCell(0).setCellValue(system.name)
                 row.createCell(1).setCellValue(system.ip ?: "")
                 row.createCell(2).setCellValue(system.adDomain ?: "")
+                row.createCell(3).setCellValue(system.cloudAccountId ?: "")
             }
 
             // Set fixed column widths
             sheet.setColumnWidth(0, 40 * 256)  // System Name - 40 chars
             sheet.setColumnWidth(1, 20 * 256)  // IP Address - 20 chars
             sheet.setColumnWidth(2, 30 * 256)  // Domain - 30 chars
+            sheet.setColumnWidth(3, 25 * 256)  // AWS Account ID - 25 chars
 
             // Write to output stream
             val outputStream = ByteArrayOutputStream()

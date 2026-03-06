@@ -124,6 +124,9 @@ interface UserMappingRepository : JpaRepository<UserMapping, Long> {
     @Query("SELECT DISTINCT m.domain FROM UserMapping m WHERE m.email = :email AND m.domain IS NOT NULL")
     fun findDistinctDomainByEmail(email: String): List<String>
 
+    @Query("SELECT DISTINCT m.domain FROM UserMapping m WHERE m.domain IS NOT NULL AND m.domain != ''")
+    fun findDistinctDomains(): List<String>
+
     // IP Address Mapping - Feature 020
 
     /**

@@ -16,7 +16,6 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import ExcelJS from 'exceljs';
 import { vulnerabilityStatisticsApi, type TopAssetByVulnerabilitiesDto } from '../../services/api/vulnerabilityStatisticsApi';
 
 /**
@@ -30,6 +29,7 @@ const handleRowClick = (assetName: string) => {
  * Export data to Excel file
  */
 async function exportToExcel(data: TopAssetByVulnerabilitiesDto[]): Promise<void> {
+  const ExcelJS = (await import('exceljs')).default;
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'Secman';
   workbook.created = new Date();

@@ -241,44 +241,44 @@ const Sidebar = () => {
                         </div>
                         {vulnMenuOpen && (
                             <ul className="list-unstyled ps-4">
-                                {/* Vuln overview - ADMIN or SECCHAMPION only */}
+                                {/* Overview - ADMIN or SECCHAMPION only */}
                                 {(userRoles.includes('ADMIN') || userRoles.includes('SECCHAMPION')) && (
                                     <li>
                                         <a href="/vulnerabilities/current" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                            <i className="bi bi-list-ul me-2"></i> Vuln overview
+                                            <i className="bi bi-list-ul me-2"></i> Overview
                                         </a>
                                     </li>
                                 )}
-                                <li>
-                                    <a href="/vulnerabilities/domain" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                        <i className="bi bi-globe me-2"></i> Domain vulns
-                                    </a>
-                                </li>
-                                <li>
-                                    <a href="/vulnerabilities/system" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                        <i className="bi bi-hdd me-2"></i> System vulns
-                                    </a>
-                                </li>
-                                <li>
-                                    <a
-                                        href={isAdmin ? "#" : "/account-vulns"}
-                                        className={`d-flex align-items-center p-2 text-decoration-none rounded ${isAdmin ? 'text-muted' : 'text-dark hover-bg-secondary'}`}
-                                        title={isAdmin ? "Admins should use System Vulns view" : "View vulnerabilities for your AWS accounts"}
-                                        style={isAdmin ? { cursor: 'not-allowed', pointerEvents: 'none' } : {}}
-                                    >
-                                        <i className="bi bi-cloud me-2"></i> Account vulns
-                                    </a>
-                                </li>
-                                <li>
-                                    <a
-                                        href={isAdmin ? "#" : "/wg-vulns"}
-                                        className={`d-flex align-items-center p-2 text-decoration-none rounded ${isAdmin ? 'text-muted' : 'text-dark hover-bg-secondary'}`}
-                                        title={isAdmin ? "Admins should use System Vulns view" : "View vulnerabilities for your workgroups"}
-                                        style={isAdmin ? { cursor: 'not-allowed', pointerEvents: 'none' } : {}}
-                                    >
-                                        <i className="bi bi-people-fill me-2"></i> WG vulns
-                                    </a>
-                                </li>
+                                {!isAdmin && (
+                                    <li>
+                                        <a href="/vulnerabilities/domain" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                            <i className="bi bi-globe me-2"></i> Domain vulns
+                                        </a>
+                                    </li>
+                                )}
+                                {!isAdmin && (
+                                    <li>
+                                        <a href="/vulnerabilities/system" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                            <i className="bi bi-hdd me-2"></i> System vulns
+                                        </a>
+                                    </li>
+                                )}
+                                {!isAdmin && (
+                                    <li>
+                                        <a href="/account-vulns" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary"
+                                            title="View vulnerabilities for your AWS accounts">
+                                            <i className="bi bi-cloud me-2"></i> Account vulns
+                                        </a>
+                                    </li>
+                                )}
+                                {!isAdmin && (
+                                    <li>
+                                        <a href="/wg-vulns" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary"
+                                            title="View vulnerabilities for your workgroups">
+                                            <i className="bi bi-people-fill me-2"></i> WG vulns
+                                        </a>
+                                    </li>
+                                )}
                                 <li>
                                     <a href="/outdated-assets" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
                                         <i className="bi bi-hourglass-split me-2"></i> Outdated Assets
