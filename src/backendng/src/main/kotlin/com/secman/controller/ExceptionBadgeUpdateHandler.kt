@@ -17,6 +17,7 @@ import reactor.core.publisher.Flux
 import reactor.core.publisher.Sinks
 import reactor.core.publisher.Sinks.Many
 import org.slf4j.LoggerFactory
+import java.time.Duration
 
 /**
  * Server-Sent Events (SSE) endpoint for real-time exception badge count updates.
@@ -102,13 +103,17 @@ class ExceptionBadgeUpdateHandler(
         val initialEvent = Event.of(CountUpdateData(currentCount))
             .name("count-update")
 
-        // Merge initial event with future updates from sink
+        // Heartbeat every 15s to prevent corporate proxy idle timeout kills
+        val heartbeat = Flux.interval(Duration.ofSeconds(15))
+            .map { Event.of(CountUpdateData(-1)).name("heartbeat") }
+
+        val countUpdates = sink.asFlux()
+            .map { data -> Event.of(data).name("count-update") }
+
+        // Merge initial event with heartbeat + real updates from sink
         return Flux.concat(
             Flux.just(initialEvent),
-            sink.asFlux()
-                .map { data ->
-                    Event.of(data).name("count-update")
-                }
+            Flux.merge(heartbeat, countUpdates)
                 .doOnCancel {
                     logger.info("SSE client disconnected from exception badge updates")
                 }

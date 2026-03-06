@@ -15,7 +15,6 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import ExcelJS from 'exceljs';
 import { vulnerabilityStatisticsApi, type MostCommonVulnerabilityDto, type AffectedAssetsByCveDto } from '../../services/api/vulnerabilityStatisticsApi';
 import CveLink from '../CveLink';
 
@@ -99,6 +98,7 @@ export default function MostCommonVulnerabilities({ domain, awsHosted }: MostCom
 
     setExporting(true);
     try {
+      const ExcelJS = (await import('exceljs')).default;
       const workbook = new ExcelJS.Workbook();
       workbook.creator = 'Secman';
       workbook.created = new Date();

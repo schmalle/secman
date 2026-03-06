@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import type { CreateUserMappingRequest, UserMapping } from '../services/userMappingService';
+import { getDomains } from '../services/userMappingService';
 
 interface IpMappingFormProps {
   onSubmit: (request: CreateUserMappingRequest) => Promise<void>;
@@ -23,8 +24,23 @@ export default function IpMappingForm({ onSubmit, onCancel, initialData, isEditi
   const [awsAccountId, setAwsAccountId] = useState(initialData?.awsAccountId || '');
   const [domain, setDomain] = useState(initialData?.domain || '');
   const [ipAddress, setIpAddress] = useState(initialData?.ipAddress || '');
+  const [domains, setDomains] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    getDomains()
+      .then((fetched) => {
+        // If editing and current domain not in the list, include it
+        if (initialData?.domain && !fetched.some(d => d.toLowerCase() === initialData.domain!.toLowerCase())) {
+          fetched = [...fetched, initialData.domain.toLowerCase()].sort();
+        }
+        setDomains(fetched);
+      })
+      .catch(() => {
+        // Silently fail - dropdown will just be empty
+      });
+  }, []);
 
   const validateForm = (): boolean => {
     if (!email || !email.includes('@')) {
@@ -153,14 +169,17 @@ export default function IpMappingForm({ onSubmit, onCancel, initialData, isEditi
           <label htmlFor="domain" className="form-label">
             Domain
           </label>
-          <input
-            type="text"
-            className="form-control"
+          <select
+            className="form-select"
             id="domain"
             value={domain}
             onChange={(e) => setDomain(e.target.value)}
-            placeholder="example.com"
-          />
+          >
+            <option value="">-- No domain --</option>
+            {domains.map((d) => (
+              <option key={d} value={d}>{d}</option>
+            ))}
+          </select>
           <small className="form-text text-muted">
             Organizational domain (optional)
           </small>

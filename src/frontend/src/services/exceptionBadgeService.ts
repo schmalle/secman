@@ -38,9 +38,11 @@ let connectionState: 'disconnected' | 'connecting' | 'connected' | 'error' = 'di
 let errorCount = 0;
 const MAX_ERRORS = 5;
 const STABLE_CONNECTION_THRESHOLD = 10000; // Must be connected for 10s before resetting error count
+const POLLING_INTERVAL_MS = 30000; // Poll every 30s when SSE fails
 let reconnectTimeoutId: ReturnType<typeof setTimeout> | null = null;
 let errorResetTimeoutId: ReturnType<typeof setTimeout> | null = null;
 let connectionStartTime: number = 0;
+let pollingIntervalId: ReturnType<typeof setInterval> | null = null;
 
 /**
  * Connect to SSE endpoint for real-time badge count updates.
@@ -83,6 +85,35 @@ let connectionStartTime: number = 0;
  * }, []);
  * ```
  */
+/**
+ * Start HTTP polling fallback when SSE connection permanently fails.
+ * Polls every 30s using the existing fetchPendingCount() endpoint.
+ */
+function startPollingFallback(onUpdate: BadgeCountCallback): () => void {
+  console.warn('[ExceptionBadge] Falling back to HTTP polling (every 30s)');
+
+  // Fetch immediately, then poll
+  fetchPendingCount()
+    .then(count => onUpdate(count))
+    .catch(() => onUpdate(0));
+
+  pollingIntervalId = setInterval(async () => {
+    try {
+      const count = await fetchPendingCount();
+      onUpdate(count);
+    } catch {
+      // Silently ignore polling errors — badge stays at last known value
+    }
+  }, POLLING_INTERVAL_MS);
+
+  return () => {
+    if (pollingIntervalId) {
+      clearInterval(pollingIntervalId);
+      pollingIntervalId = null;
+    }
+  };
+}
+
 export function connectToBadgeUpdates(onUpdate: BadgeCountCallback): () => void {
   // Prevent multiple simultaneous connection attempts
   if (connectionState === 'connecting' || connectionState === 'connected') {
@@ -90,11 +121,10 @@ export function connectToBadgeUpdates(onUpdate: BadgeCountCallback): () => void 
     return () => {}; // No-op cleanup
   }
 
-  // Stop reconnection attempts after too many errors
+  // Stop SSE reconnection after too many errors — fall back to HTTP polling
   if (errorCount >= MAX_ERRORS) {
-    console.error('[ExceptionBadge] Too many connection errors, stopping reconnection attempts. Please refresh the page to retry.');
-    onUpdate(0);
-    return () => {};
+    console.warn('[ExceptionBadge] Too many SSE errors, falling back to HTTP polling.');
+    return startPollingFallback(onUpdate);
   }
 
   connectionState = 'connecting';
@@ -155,7 +185,7 @@ export function connectToBadgeUpdates(onUpdate: BadgeCountCallback): () => void 
     errorCount++;
     connectionState = 'error';
 
-    console.error(`[ExceptionBadge] SSE connection error (${errorCount}/${MAX_ERRORS}):`, error);
+    console.warn(`[ExceptionBadge] SSE connection error (${errorCount}/${MAX_ERRORS}):`, error);
 
     // ALWAYS close EventSource to prevent browser auto-reconnect
     eventSource.close();
@@ -163,10 +193,11 @@ export function connectToBadgeUpdates(onUpdate: BadgeCountCallback): () => void 
     // Fallback to 0 count on error (safe default)
     onUpdate(0);
 
-    // Stop if max errors reached
+    // Stop SSE retries if max errors reached — fall back to HTTP polling
     if (errorCount >= MAX_ERRORS) {
-      console.error('[ExceptionBadge] Maximum errors reached, stopping reconnection. Refresh page to retry.');
+      console.error('[ExceptionBadge] Maximum SSE errors reached, switching to HTTP polling fallback.');
       connectionState = 'disconnected';
+      startPollingFallback(onUpdate);
       return;
     }
 
@@ -198,6 +229,11 @@ export function connectToBadgeUpdates(onUpdate: BadgeCountCallback): () => void 
     if (errorResetTimeoutId) {
       clearTimeout(errorResetTimeoutId);
       errorResetTimeoutId = null;
+    }
+    // Cancel any active polling fallback
+    if (pollingIntervalId) {
+      clearInterval(pollingIntervalId);
+      pollingIntervalId = null;
     }
   };
 }

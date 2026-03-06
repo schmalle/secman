@@ -135,6 +135,70 @@ export async function getOutdatedAssetsCount(): Promise<number> {
   return data.count;
 }
 
+/**
+ * Export outdated assets to Excel with current filters
+ *
+ * @param params Optional filter parameters (searchTerm, minSeverity, adDomain)
+ * @returns Promise<void> - Downloads the Excel file
+ */
+export async function exportOutdatedAssets(
+  params: Pick<OutdatedAssetsParams, 'searchTerm' | 'minSeverity' | 'adDomain'> = {}
+): Promise<void> {
+  const queryParams = new URLSearchParams();
+
+  if (params.searchTerm) {
+    queryParams.append('searchTerm', params.searchTerm);
+  }
+  if (params.minSeverity) {
+    queryParams.append('minSeverity', params.minSeverity);
+  }
+  if (params.adDomain) {
+    queryParams.append('adDomain', params.adDomain);
+  }
+
+  const queryString = queryParams.toString();
+  const url = `/api/outdated-assets/export${queryString ? '?' + queryString : ''}`;
+
+  const response = await fetch(url, {
+    method: 'GET',
+    credentials: 'include'
+  });
+
+  if (!response.ok) {
+    let errorMessage = `Failed to export outdated assets: ${response.status}`;
+    try {
+      const errorBody = await response.json();
+      if (errorBody.error) {
+        errorMessage = errorBody.error;
+      }
+    } catch {
+      // Ignore JSON parse error, use default message
+    }
+    throw new Error(errorMessage);
+  }
+
+  // Get filename from Content-Disposition header or use default
+  const contentDisposition = response.headers.get('Content-Disposition');
+  let filename = 'outdated_assets_export.xlsx';
+  if (contentDisposition) {
+    const match = contentDisposition.match(/filename="([^"]+)"/);
+    if (match) {
+      filename = match[1];
+    }
+  }
+
+  // Create blob and trigger download
+  const blob = await response.blob();
+  const downloadUrl = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = downloadUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(downloadUrl);
+}
+
 // ============================================================================
 // User Story 2: View Asset Details
 // ============================================================================

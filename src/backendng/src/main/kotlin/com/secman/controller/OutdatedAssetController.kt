@@ -13,6 +13,7 @@ import io.micronaut.http.annotation.QueryValue
 import io.micronaut.security.annotation.Secured
 import io.micronaut.security.authentication.Authentication
 import io.micronaut.security.rules.SecurityRule
+import org.slf4j.LoggerFactory
 
 /**
  * REST Controller for Outdated Assets view
@@ -31,6 +32,9 @@ import io.micronaut.security.rules.SecurityRule
 class OutdatedAssetController(
     private val outdatedAssetService: OutdatedAssetService
 ) {
+    private val log = LoggerFactory.getLogger(OutdatedAssetController::class.java)
+
+    data class ErrorResponse(val error: String)
 
     /**
      * GET /api/outdated-assets
@@ -162,6 +166,58 @@ class OutdatedAssetController(
         val count = outdatedAssetService.countOutdatedAssets(authentication)
 
         return HttpResponse.ok(mapOf("count" to count))
+    }
+
+    /**
+     * GET /api/outdated-assets/export
+     *
+     * Export outdated assets to Excel with the same filters as the list view
+     *
+     * Query Parameters:
+     * - searchTerm (optional): Search by asset name
+     * - minSeverity (optional): Minimum severity filter
+     * - adDomain (optional): AD domain filter
+     *
+     * Response:
+     * - 200 OK: Excel file (.xlsx)
+     * - 403 Forbidden: User lacks ADMIN or VULN role
+     */
+    @Get("/export")
+    @Secured("ADMIN", "VULN")
+    fun exportOutdatedAssets(
+        authentication: Authentication,
+        @QueryValue(defaultValue = "") searchTerm: String?,
+        @QueryValue(defaultValue = "") minSeverity: String?,
+        @QueryValue(defaultValue = "") adDomain: String?
+    ): HttpResponse<*> {
+        val hasRequiredRole = authentication.roles.any { it == "ADMIN" || it == "VULN" }
+        if (!hasRequiredRole) {
+            return HttpResponse.status<Any>(HttpStatus.FORBIDDEN)
+        }
+
+        return try {
+            log.info("Outdated assets export request from user: {}", authentication.name)
+
+            val outputStream = outdatedAssetService.exportOutdatedAssets(
+                authentication = authentication,
+                searchTerm = searchTerm.takeIf { !it.isNullOrBlank() },
+                minSeverity = minSeverity.takeIf { !it.isNullOrBlank() },
+                adDomain = adDomain.takeIf { !it.isNullOrBlank() }
+            )
+
+            val dateStr = java.time.LocalDate.now().toString()
+            val filename = "outdated_assets_$dateStr.xlsx"
+
+            log.info("Outdated assets export successful for user: {}", authentication.name)
+
+            HttpResponse.ok(outputStream.toByteArray())
+                .header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                .header("Content-Disposition", "attachment; filename=\"$filename\"")
+        } catch (e: Exception) {
+            log.error("Outdated assets export failed for user: {}", authentication.name, e)
+            HttpResponse.serverError<ErrorResponse>()
+                .body(ErrorResponse("Failed to export outdated assets: ${e.message}"))
+        }
     }
 
     /**

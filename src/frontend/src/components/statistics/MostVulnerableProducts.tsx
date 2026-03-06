@@ -13,7 +13,6 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import ExcelJS from 'exceljs';
 import { vulnerabilityStatisticsApi, type MostVulnerableProductDto, type AssetsByProductDto } from '../../services/api/vulnerabilityStatisticsApi';
 
 /**
@@ -77,6 +76,7 @@ export default function MostVulnerableProducts({ domain, awsHosted }: MostVulner
 
     setExporting(true);
     try {
+      const ExcelJS = (await import('exceljs')).default;
       const workbook = new ExcelJS.Workbook();
       workbook.creator = 'Secman';
       workbook.created = new Date();

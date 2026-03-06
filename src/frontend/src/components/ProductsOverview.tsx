@@ -486,6 +486,7 @@ const ProductsOverview: React.FC = () => {
                                                 <th>System Name</th>
                                                 <th>IP Address</th>
                                                 <th>Domain</th>
+                                                <th>AWS Account ID</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -494,6 +495,7 @@ const ProductsOverview: React.FC = () => {
                                                     <td>{system.name}</td>
                                                     <td>{system.ip || '-'}</td>
                                                     <td>{system.adDomain || '-'}</td>
+                                                    <td>{system.cloudAccountId || '-'}</td>
                                                 </tr>
                                             ))}
                                         </tbody>

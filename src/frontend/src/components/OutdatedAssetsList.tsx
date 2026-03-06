@@ -23,6 +23,7 @@ import {
   getAdDomains,
   triggerRefresh,
   getRefreshStatus,
+  exportOutdatedAssets,
   type OutdatedAsset,
   type OutdatedAssetsPage,
   type OutdatedAssetsParams,
@@ -52,6 +53,9 @@ const OutdatedAssetsList: React.FC = () => {
   const [adDomainOptions, setAdDomainOptions] = useState<string[]>([]);
   const [sortField, setSortField] = useState<string>('assetName');
   const [sortDirection, setSortDirection] = useState<string>('asc');
+
+  // Export state
+  const [exporting, setExporting] = useState<boolean>(false);
 
   /**
    * Fetch outdated assets from API
@@ -240,6 +244,27 @@ const OutdatedAssetsList: React.FC = () => {
   };
 
   /**
+   * Handle export to Excel
+   */
+  const handleExport = async () => {
+    setExporting(true);
+    setError(null);
+
+    try {
+      await exportOutdatedAssets({
+        searchTerm: searchTerm.trim() || undefined,
+        minSeverity: (minSeverity || undefined) as any,
+        adDomain: adDomain || undefined
+      });
+    } catch (err: any) {
+      console.error('Failed to export outdated assets:', err);
+      setError(err.message || 'Failed to export outdated assets');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  /**
    * Get severity badge class
    */
   const getSeverityBadgeClass = (count: number, severity: string): string => {
@@ -301,6 +326,24 @@ const OutdatedAssetsList: React.FC = () => {
               Last updated {formatTimeAgo(lastRefresh)}
             </small>
           )}
+          <button
+            className="btn btn-outline-success me-2"
+            onClick={handleExport}
+            disabled={exporting || loading}
+            title="Export to Excel"
+          >
+            {exporting ? (
+              <>
+                <span className="spinner-border spinner-border-sm me-1" role="status"></span>
+                Exporting...
+              </>
+            ) : (
+              <>
+                <i className="bi bi-file-earmark-excel me-1"></i>
+                Export
+              </>
+            )}
+          </button>
           <button className="btn btn-outline-secondary me-2" onClick={handleRefresh} disabled={loading || refreshing}>
             <i className="bi bi-arrow-clockwise me-1"></i>
             Reload
