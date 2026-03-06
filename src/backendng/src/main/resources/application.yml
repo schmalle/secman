@@ -64,6 +64,10 @@ micronaut:
           secret:
             generator:
               secret: ${JWT_SECRET:pleasechangethissecrectokeyproductionforsecurityreasonsmustbe256bits}
+              jws-algorithm: HS256
+            validation:
+              secret: ${JWT_SECRET:pleasechangethissecrectokeyproductionforsecurityreasonsmustbe256bits}
+              jws-algorithm: HS256
         generator:
           access-token:
             expiration: 28800  # 8 hours - extended for workday coverage
@@ -133,9 +137,7 @@ micronaut:
     mcp_accessible_assets:
       maximum-size: 500
       expire-after-write: 5m
-
-# Email functionality configuration
-micronaut:
+  # HTTP client services (OpenRouter AI)
   http:
     services:
       openrouter-ai:
