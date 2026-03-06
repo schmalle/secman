@@ -3,7 +3,7 @@
   "checkpoint_id": "6b095b199232",
   "strategy": "manual-commit",
   "branch": "081-playwright-vuln-e2e",
-  "checkpoints_count": 10,
+  "checkpoints_count": 11,
   "files_touched": [
     "CLAUDE.md",
     "docs/S3_USER_MAPPING_IMPORT.md",
@@ -30,6 +30,9 @@
     "src/cli/src/main/resources/application-cli.yml",
     "src/frontend/src/components/IpMappingForm.tsx",
     "src/frontend/src/components/UserManagement.tsx",
+    "src/frontend/src/components/statistics/MostCommonVulnerabilities.tsx",
+    "src/frontend/src/components/statistics/MostVulnerableProducts.tsx",
+    "src/frontend/src/components/statistics/TopAssetsByVulnerabilities.tsx",
     "src/frontend/src/services/exceptionBadgeService.ts",
     "src/frontend/src/services/userMappingService.ts",
     "tests/e2e/.gitignore",
@@ -75,13 +78,20 @@
       "context": "/6b/095b199232/4/context.md",
       "content_hash": "/6b/095b199232/4/content_hash.txt",
       "prompt": "/6b/095b199232/4/prompt.txt"
+    },
+    {
+      "metadata": "/6b/095b199232/5/metadata.json",
+      "transcript": "/6b/095b199232/5/full.jsonl",
+      "context": "/6b/095b199232/5/context.md",
+      "content_hash": "/6b/095b199232/5/content_hash.txt",
+      "prompt": "/6b/095b199232/5/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 26133,
-    "cache_creation_tokens": 1012771,
-    "cache_read_tokens": 16156109,
-    "output_tokens": 90196,
-    "api_call_count": 219
+    "input_tokens": 26140,
+    "cache_creation_tokens": 1076790,
+    "cache_read_tokens": 16389764,
+    "output_tokens": 92205,
+    "api_call_count": 224
   }
 }

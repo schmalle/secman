@@ -1,0 +1,80 @@
+Implement the following plan:
+
+# Fix: Vulnerability Statistics Page Fails to Load (Hydration Error)
+
+## Context
+
+The `/vulnerability-statistics` page shows a perpetual "Loading vulnerability statistics..." spinner. The browser console reveals:
+
+1. `ERR_CONTENT_LENGTH_MISMATCH` — the JS bundle is too large and gets truncated (likely by the reverse proxy)
+2. `[astro-island] Error hydrating VulnerabilityStatisticsPage.tsx TypeError: Failed to fetch dynamically imported module`
+
+**Root cause**: Three child components of `VulnerabilityStatisticsPage` import **ExcelJS** (`~1-2MB`) at the top level. This inflates the Astro island's JS bundle beyond what the reverse proxy allows, causing the bundle to be truncated mid-transfer. When the browser can't load the module, Astro hydration fails entirely.
+
+The ExcelJS library is only used inside `exportToExcel()` handlers (triggered on button click), so it should not be part of the initial bundle.
+
+## Fix: Lazy-import ExcelJS in all 3 components
+
+Convert the top-level `import ExcelJS from 'exceljs'` to a dynamic `await import('exceljs')` inside the export handler. This is a standard code-splitting technique — Vite automatically splits the dynamic import into a separate chunk that's only loaded when the user clicks "Export".
+
+### 1. `MostCommonVulnerabilities.tsx` (line 18)
+
+**Remove** top-level import:
+```diff
+- import ExcelJS from 'exceljs';
+```
+
+**Add** dynamic import inside the export handler (around line 101):
+```diff
+  setExporting(true);
+  try {
++   const ExcelJS = (await import('exceljs')).default;
+    const workbook = new ExcelJS.Workbook();
+```
+
+### 2. `MostVulnerableProducts.tsx` (line 16)
+
+**Remove** top-level import:
+```diff
+- import ExcelJS from 'exceljs';
+```
+
+**Add** dynamic import inside the export handler (around line 79):
+```diff
+  setExporting(true);
+  try {
++   const ExcelJS = (await import('exceljs')).default;
+    const workbook = new ExcelJS.Workbook();
+```
+
+### 3. `TopAssetsByVulnerabilities.tsx` (line 19)
+
+**Remove** top-level import:
+```diff
+- import ExcelJS from 'exceljs';
+```
+
+**Add** dynamic import inside the `exportToExcel()` function (around line 33):
+```diff
+  async function exportToExcel(data: TopAssetByVulnerabilitiesDto[]): Promise<void> {
++   const ExcelJS = (await import('exceljs')).default;
+    const workbook = new ExcelJS.Workbook();
+```
+
+## Files
+
+| File | Change |
+|------|--------|
+| `src/frontend/src/components/statistics/MostCommonVulnerabilities.tsx` | Remove top-level ExcelJS import, add dynamic import in handler |
+| `src/frontend/src/components/statistics/MostVulnerableProducts.tsx` | Remove top-level ExcelJS import, add dynamic import in handler |
+| `src/frontend/src/components/statistics/TopAssetsByVulnerabilities.tsx` | Remove top-level ExcelJS import, add dynamic import in function |
+
+## Verification
+
+1. `npm run build` in `src/frontend/` — must succeed
+2. Navigate to `/vulnerability-statistics` — page should load and render charts/tables (no hydration error)
+3. Click "Export" on any of the 3 tables — Excel download should still work correctly
+4. Check browser DevTools Network tab — ExcelJS chunk should only load when Export is clicked
+
+
+If you need specific details from before exiting plan mode (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/flake/.claude/projects/-Users-flake-sources-misc-secman/ef88f7d9-e1be-423d-b11a-40d0cc8ec6a5.jsonl
