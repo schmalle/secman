@@ -1,0 +1,42 @@
+{
+  "cli_version": "0.4.2",
+  "checkpoint_id": "6b095b199232",
+  "session_id": "416bbef0-ccb1-4429-8d45-dc69b97a1216",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-06T09:03:51.473989Z",
+  "branch": "081-playwright-vuln-e2e",
+  "checkpoints_count": 5,
+  "files_touched": [
+    "CLAUDE.md",
+    "specs/081-playwright-vuln-e2e/checklists/requirements.md",
+    "specs/081-playwright-vuln-e2e/plan.md",
+    "specs/081-playwright-vuln-e2e/quickstart.md",
+    "specs/081-playwright-vuln-e2e/research.md",
+    "specs/081-playwright-vuln-e2e/spec.md",
+    "specs/081-playwright-vuln-e2e/tasks.md",
+    "tests/e2e/.gitignore",
+    "tests/e2e/package-lock.json",
+    "tests/e2e/package.json",
+    "tests/e2e/playwright.config.ts",
+    "tests/e2e/run-e2e.sh",
+    "tests/e2e/vuln-lense.spec.ts"
+  ],
+  "agent": "Claude Code",
+  "transcript_identifier_at_start": "881ea6b8-fb1e-45a0-a64c-c23cd276ed28",
+  "token_usage": {
+    "input_tokens": 105,
+    "cache_creation_tokens": 479761,
+    "cache_read_tokens": 8396300,
+    "output_tokens": 48703,
+    "api_call_count": 88
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-06T09:03:51.332699Z",
+    "agent_lines": 385,
+    "human_added": 58,
+    "human_modified": 480,
+    "human_removed": 0,
+    "total_committed": 923,
+    "agent_percentage": 41.71180931744312
+  }
+}

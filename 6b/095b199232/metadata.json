@@ -3,9 +3,16 @@
   "checkpoint_id": "6b095b199232",
   "strategy": "manual-commit",
   "branch": "081-playwright-vuln-e2e",
-  "checkpoints_count": 5,
+  "checkpoints_count": 10,
   "files_touched": [
+    "CLAUDE.md",
     "docs/S3_USER_MAPPING_IMPORT.md",
+    "specs/081-playwright-vuln-e2e/checklists/requirements.md",
+    "specs/081-playwright-vuln-e2e/plan.md",
+    "specs/081-playwright-vuln-e2e/quickstart.md",
+    "specs/081-playwright-vuln-e2e/research.md",
+    "specs/081-playwright-vuln-e2e/spec.md",
+    "specs/081-playwright-vuln-e2e/tasks.md",
     "src/backendng/src/main/kotlin/com/secman/config/DefaultAdminBootstrapper.kt",
     "src/backendng/src/main/kotlin/com/secman/config/FlywayRepairCallback.kt",
     "src/backendng/src/main/kotlin/com/secman/config/SystemUseCaseInitializer.kt",
@@ -25,6 +32,12 @@
     "src/frontend/src/components/UserManagement.tsx",
     "src/frontend/src/services/exceptionBadgeService.ts",
     "src/frontend/src/services/userMappingService.ts",
+    "tests/e2e/.gitignore",
+    "tests/e2e/package-lock.json",
+    "tests/e2e/package.json",
+    "tests/e2e/playwright.config.ts",
+    "tests/e2e/run-e2e.sh",
+    "tests/e2e/vuln-lense.spec.ts",
     "tests/s3usermapping/StartS3Sim.md"
   ],
   "sessions": [
@@ -55,13 +68,20 @@
       "context": "/6b/095b199232/3/context.md",
       "content_hash": "/6b/095b199232/3/content_hash.txt",
       "prompt": "/6b/095b199232/3/prompt.txt"
+    },
+    {
+      "metadata": "/6b/095b199232/4/metadata.json",
+      "transcript": "/6b/095b199232/4/full.jsonl",
+      "context": "/6b/095b199232/4/context.md",
+      "content_hash": "/6b/095b199232/4/content_hash.txt",
+      "prompt": "/6b/095b199232/4/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 26028,
-    "cache_creation_tokens": 533010,
-    "cache_read_tokens": 7759809,
-    "output_tokens": 41493,
-    "api_call_count": 131
+    "input_tokens": 26133,
+    "cache_creation_tokens": 1012771,
+    "cache_read_tokens": 16156109,
+    "output_tokens": 90196,
+    "api_call_count": 219
   }
 }
