@@ -36,7 +36,17 @@ class SecmanCli {
 
     fun execute(args: Array<String>): Int {
         return when {
-            args.isEmpty() || args[0] == "help" || args[0] == "--help" || args[0] == "-h" -> showHelp()
+            args.isEmpty() || args[0] == "--help" || args[0] == "-h" -> showHelp()
+            args[0] == "help" -> {
+                when {
+                    args.size > 2 && args[1] == "query" && args[2] == "servers" -> showCommandHelp("query-servers")
+                    args.size > 2 && args[1] == "manage-user-mappings" && args[2] == "s3" -> showCommandHelp("manage-user-mappings-s3")
+                    args.size > 1 -> showCommandHelp(args[1])
+                    else -> showHelp()
+                }
+            }
+            args[0] == "query" && args.size > 1 && args[1] == "--help" -> showCommandHelp("query")
+            args[0] == "query" && args.size > 1 && args[1] == "servers" && args.any { it == "--help" || it == "-h" } -> showCommandHelp("query-servers")
             args[0] == "query" && args.size > 1 && args[1] == "servers" -> {
                 val serversCommand = ServersCommand()
                 // Parse remaining args into properties
@@ -90,6 +100,7 @@ class SecmanCli {
                 }
                 serversCommand.execute()
             }
+            args[0] == "query" && args.any { it == "--help" || it == "-h" } -> showCommandHelp("query")
             args[0] == "query" -> {
                 val queryCommand = QueryCommand()
                 // Parse remaining args into properties
@@ -135,6 +146,7 @@ class SecmanCli {
                 }
                 queryCommand.execute()
             }
+            args[0] == "config" && args.any { it == "--help" || it == "-h" } -> showCommandHelp("config")
             args[0] == "config" -> {
                 val configCommand = ConfigCommand()
                 // Parse remaining args into properties
@@ -149,6 +161,7 @@ class SecmanCli {
                 }
                 configCommand.execute()
             }
+            args[0] == "monitor" && args.any { it == "--help" || it == "-h" } -> showCommandHelp("monitor")
             args[0] == "monitor" -> {
                 val monitorCommand = MonitorCommand()
                 // Parse remaining args into properties
@@ -287,301 +300,436 @@ class SecmanCli {
 
     private fun showHelp(): Int {
         println("""
-            secman - CrowdStrike Vulnerability Management CLI
+            secman - Security Requirement and Risk Assessment Management CLI
 
-            Usage: secman [command] [options]
+            Usage: secman <command> [options]
+                   secman help <command>       Show detailed help for a command
 
             Commands:
-              query servers          Query and import server vulnerabilities (Feature 032)
-              query                  Query CrowdStrike vulnerabilities
-              monitor                Continuously monitor for HIGH/CRITICAL vulnerabilities
-              config                 Configure CrowdStrike API credentials
-              send-notifications     Send email notifications for outdated assets (Feature 035)
-              send-admin-summary     Send system statistics summary email to ADMIN users (Feature 070)
-              manage-user-mappings   Manage user mappings for domains and AWS accounts (Feature 049)
-              manage-workgroups      Manage workgroup asset assignments (list, assign, remove)
-              add-vulnerability      Add or update a vulnerability for an asset (Feature 052)
-              export-requirements    Export all requirements to Excel or Word (Feature 057)
-              add-requirement        Add a new security requirement (Feature 057)
-              delete-all-requirements  Delete ALL requirements (requires ADMIN, Feature 057)
-              deduplicate-vulnerabilities  Remove duplicate vulnerability records (requires ADMIN)
-              help                   Show this help message
+              CrowdStrike:
+                query                  Query CrowdStrike vulnerabilities for a single host
+                query servers          Batch query and import server vulnerabilities
+                monitor                Continuously monitor for HIGH/CRITICAL vulnerabilities
+                config                 Configure CrowdStrike API credentials
 
-            Query Servers Options (Feature 032, 055, 073):
-              --hostnames <list>       Comma-separated list of hostnames (optional, default: all devices)
-              --device-type <type>     Device type: SERVER, WORKSTATION, or ALL (default: SERVER)
-              --severity <levels>      Severity filter (default: HIGH,CRITICAL)
-              --min-days-open <num>    Minimum days open filter (default: 30)
-              --last-seen-days <num>   Only include devices seen within N days (default: 0 = all devices)
-              --limit <num>            Page size for pagination (default: 800)
-              --client-id <id>         CrowdStrike API client ID (overrides config file)
-              --client-secret <secret> CrowdStrike API client secret (overrides config file)
-              --save                   Save to database (direct access, no backend required)
-              --dry-run                Query but don't import
-              --verbose                Enable verbose logging
+              Notifications:
+                send-notifications     Send email notifications for outdated assets
+                send-admin-summary     Send system statistics summary email to ADMIN users
 
-            Query Options:
-              --hostname <hostname>    Hostname to query vulnerabilities for (required)
-              --severity <levels>      Filter by severity (comma-separated: CRITICAL,HIGH,MEDIUM,LOW)
-              --product <name>         Filter by product name
-              --limit <num>            Maximum results to return (default: 100)
-              --format <json|csv>      Output format (default: json)
-              --output <file>          Output file path
-              --client-id <id>         CrowdStrike API client ID (overrides config file)
-              --client-secret <secret> CrowdStrike API client secret (overrides config file)
-              --save                   Save asset and vulnerabilities to database (direct access, no backend required)
-              --verbose                Enable verbose logging
+              User & Access Management:
+                manage-user-mappings   Manage user mappings for domains and AWS accounts
+                manage-workgroups      Manage workgroup asset assignments (list, assign, remove)
 
-            Monitor Options:
-              --interval <minutes>     Polling interval in minutes (default: 5)
-              --hostnames <list>       Comma-separated list of hostnames to monitor
-              --backend-url <url>      Backend API URL (default: http://localhost:8080)
-              --config <path>          Configuration file path
-              --dry-run                Query but don't store results
-              --no-storage             Disable automatic storage
-              --verbose                Enable verbose logging
+              Vulnerabilities:
+                add-vulnerability      Add or update a vulnerability for an asset
+                deduplicate-vulnerabilities  Remove duplicate vulnerability records (ADMIN)
 
-            Config Options:
-              --client-id <id>         CrowdStrike API client ID (required for save)
-              --client-secret <secret> CrowdStrike API client secret (required for save)
-              --base-url <url>         CrowdStrike API base URL (default: https://api.crowdstrike.com)
-              --show                   Show current CrowdStrike configuration
-              --format <yaml|conf>     Configuration file format (default: yaml)
+              Requirements:
+                export-requirements    Export all requirements to Excel or Word
+                add-requirement        Add a new security requirement
+                delete-all-requirements  Delete ALL requirements (ADMIN)
 
-            Send Notifications Options (Feature 035):
-              --dry-run                Report planned notifications without sending emails
-              --verbose, -v            Detailed logging (show per-asset processing)
-              --outdated-only          Process only outdated asset reminders (skip new vulnerability notifications)
+              General:
+                help                   Show this help message
+                help <command>         Show detailed help for a specific command
 
-            Add Vulnerability Options (Feature 052, 073):
-              --hostname <hostname>    Target asset hostname (required)
-              --cve <cve-id>           CVE identifier or custom vulnerability ID (required)
-              --criticality <level>    Severity: CRITICAL, HIGH, MEDIUM, or LOW (required)
-              --days-open <num>        Days the vulnerability has been open (default: 0)
-              --verbose                Enable verbose output
-
-            Export Requirements Options (Feature 057):
-              --format <xlsx|docx>     Export format: xlsx (Excel) or docx (Word) (required)
-              --output <path>          Output file path (default: requirements_export_YYYYMMDD.{format})
-              --backend-url <url>      Backend API URL (default: http://localhost:8080)
-              --username <user>        Backend username (or set SECMAN_USERNAME env var)
-              --password <pass>        Backend password (or set SECMAN_PASSWORD env var)
-              --verbose                Enable verbose output
-
-            Add Requirement Options (Feature 057):
-              --shortreq <text>        Short requirement text (required)
-              --chapter <name>         Chapter/category for grouping
-              --details <text>         Detailed description
-              --motivation <text>      Why this requirement exists
-              --example <text>         Implementation example
-              --norm <name>            Regulatory norm reference (e.g., ISO 27001)
-              --usecase <name>         Use case description
-              --backend-url <url>      Backend API URL (default: http://localhost:8080)
-              --username <user>        Backend username (or set SECMAN_USERNAME env var)
-              --password <pass>        Backend password (or set SECMAN_PASSWORD env var)
-              --verbose                Enable verbose output
-
-            Delete All Requirements Options (Feature 057):
-              --confirm                Required safety flag to confirm deletion (required)
-              --backend-url <url>      Backend API URL (default: http://localhost:8080)
-              --username <user>        Backend username with ADMIN role (or set SECMAN_USERNAME env var)
-              --password <pass>        Backend password (or set SECMAN_PASSWORD env var)
-              --verbose                Enable verbose output
-
-            Deduplicate Vulnerabilities Options:
-              --backend-url <url>      Backend API URL (default: http://localhost:8080)
-              --username <user>        Backend username with ADMIN role (or set SECMAN_USERNAME env var)
-              --password <pass>        Backend password (or set SECMAN_PASSWORD env var)
-              --verbose, -v            Show per-asset deduplication details
-
-            Send Admin Summary Options (Feature 070):
-              --dry-run                Preview planned recipients without sending emails
-              --verbose, -v            Detailed logging (show per-recipient status)
-
-            Manage User Mappings - S3 Import Options (Feature 065):
-              import-s3:
-                --bucket, -b <name>    S3 bucket name (required)
-                --key, -k <path>       S3 object key / path to file (required)
-                --aws-region <region>  AWS region (default: SDK auto-resolution)
-                --aws-profile <name>   AWS credential profile name
-                --aws-access-key-id    AWS access key ID (or set AWS_ACCESS_KEY_ID env var)
-                --aws-secret-access-key AWS secret access key (or set AWS_SECRET_ACCESS_KEY env var)
-                --aws-session-token    AWS session token for temporary credentials (or set AWS_SESSION_TOKEN env var)
-                --format <type>        File format: CSV, JSON, or AUTO (default: AUTO)
-                --dry-run              Validate file without creating mappings
-                --admin-user, -u       Admin email (or set SECMAN_ADMIN_EMAIL env var)
-              list-bucket:
-                --bucket, -b <name>    S3 bucket name (required)
-                --prefix, -p <prefix>  Filter objects by key prefix
-                --aws-region <region>  AWS region (default: SDK auto-resolution)
-                --aws-profile <name>   AWS credential profile name
-                --aws-access-key-id    AWS access key ID (or set AWS_ACCESS_KEY_ID env var)
-                --aws-secret-access-key AWS secret access key (or set AWS_SECRET_ACCESS_KEY env var)
-                --aws-session-token    AWS session token for temporary credentials (or set AWS_SESSION_TOKEN env var)
-                --admin-user, -u       Admin email (or set SECMAN_ADMIN_EMAIL env var)
-
-              AWS Credential Resolution Priority (highest to lowest):
-                1. Explicit CLI flags (--aws-access-key-id + --aws-secret-access-key)
-                2. Environment variables (AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY)
-                3. Named profile (--aws-profile, reads from ~/.aws/credentials)
-                4. Default credential chain (IAM role, SSO, etc.)
-
-            Environment Variables:
-              SECMAN_USERNAME          Backend username for authentication
-              SECMAN_PASSWORD          Backend password for authentication (recommended over --password)
-              SECMAN_ADMIN_EMAIL       Admin email for S3 import operations
-              AWS_ACCESS_KEY_ID        AWS access key ID for S3 operations (or use --aws-access-key-id)
-              AWS_SECRET_ACCESS_KEY    AWS secret access key for S3 operations (or use --aws-secret-access-key)
-              AWS_SESSION_TOKEN        AWS session token for temporary credentials (or use --aws-session-token)
-              AWS_REGION               Default AWS region for S3 operations (or use --aws-region)
-
-            Examples:
-              # Configure CrowdStrike credentials
-              secman config --client-id <id> --client-secret <secret>
-
-              # Query and display vulnerabilities (no save)
-              secman query --hostname server01
-              secman query --hostname server01 --verbose
-
-              # Query and save to database (direct access)
-              secman query --hostname server01 --save
-
-              # Query with filtering (single severity)
-              secman query --hostname server01 --severity CRITICAL
-
-              # Query with multiple severities
-              secman query --hostname server01 --severity HIGH,CRITICAL
-              secman query --hostname server01 --severity CRITICAL,HIGH,MEDIUM --verbose
-
-              # Query with filtering and save
-              secman query --hostname server01 --severity HIGH,CRITICAL --save
-
-              # Query and export to file
-              secman query --hostname server01 --format csv --output vulns.csv
-              secman query --hostname server01 --limit 50 --format json --output results.json
-
-              # Batch import servers (query only, no save)
-              secman query servers --hostnames server01,server02 --verbose
-              secman query servers --severity CRITICAL --min-days-open 60 --dry-run
-
-              # Query all servers and save to database (direct access)
-              secman query servers --save
-              secman query servers --save --verbose
-
-              # Query specific servers and save to database
-              secman query servers --hostnames server01,server02 --save
-
-              # Query workstations/clients (Feature 055)
-              secman query servers --device-type WORKSTATION --dry-run --verbose
-              secman query servers --device-type WORKSTATION --severity CRITICAL,HIGH --save
-
-              # Query all device types (servers + workstations)
-              secman query servers --device-type ALL --dry-run --verbose
-              secman query servers --device-type ALL --save
-
-              # Monitor continuously
-              secman monitor --interval 10 --hostnames server01,server02,server03
-              secman monitor --dry-run --verbose
-
-              # Send email notifications (Feature 035)
-              secman send-notifications
-              secman send-notifications --dry-run --verbose
-              secman send-notifications --outdated-only
-
-              # Manage user mappings (Feature 049)
-              secman manage-user-mappings add-domain --emails user@example.com --domains example.com --admin-user admin@company.com
-              secman manage-user-mappings add-aws --emails user@example.com --accounts 123456789012 --admin-user admin@company.com
-              secman manage-user-mappings --help
-
-              # Import user mappings from S3 (Feature 065)
-              # Using environment variables (recommended):
-              export AWS_ACCESS_KEY_ID=AKIA...
-              export AWS_SECRET_ACCESS_KEY=...
-              secman manage-user-mappings import-s3 --bucket my-bucket --key mappings.csv -u admin@company.com
-
-              # Using explicit CLI flags:
-              secman manage-user-mappings import-s3 --bucket my-bucket --key mappings.csv \
-                --aws-access-key-id AKIA... --aws-secret-access-key ... -u admin@company.com
-
-              # Using temporary credentials (STS):
-              secman manage-user-mappings import-s3 --bucket my-bucket --key mappings.csv \
-                --aws-access-key-id ASIA... --aws-secret-access-key ... \
-                --aws-session-token ... -u admin@company.com
-
-              # Using AWS profile:
-              secman manage-user-mappings import-s3 --bucket my-bucket --key data/users.json --aws-profile prod -u admin@company.com
-              secman manage-user-mappings import-s3 --bucket my-bucket --key mappings.csv --dry-run -u admin@company.com
-              secman manage-user-mappings list-bucket --bucket my-bucket -u admin@company.com
-              secman manage-user-mappings list-bucket --bucket my-bucket --prefix user-mappings/ -u admin@company.com
-              secman manage-user-mappings import-s3 --help
-
-              # Manage workgroup assets
-              secman manage-workgroups list                                    # List all workgroups
-              secman manage-workgroups list --workgroup Production             # List assets in workgroup
-              secman manage-workgroups list --search-assets "ip-10-*"          # Search assets by pattern
-              secman manage-workgroups assign-assets -w Production -p "ip-10-*" -u admin@company.com  # Assign by pattern
-              secman manage-workgroups assign-assets -w Production -p "*prod*" --type SERVER -u admin@company.com
-              secman manage-workgroups assign-assets -w Production --ids 1,2,3 -u admin@company.com   # Assign by ID
-              secman manage-workgroups remove-assets -w Test -p "*test*" -u admin@company.com        # Remove by pattern
-              secman manage-workgroups remove-assets -w Test --all -u admin@company.com              # Remove all
-              secman manage-workgroups --help
-
-              # Add vulnerability manually (Feature 052, direct DB access)
-              secman add-vulnerability --hostname webserver01 --cve CVE-2024-1234 --criticality HIGH
-              secman add-vulnerability --hostname webserver01 --cve CVE-2024-1234 --criticality HIGH --days-open 30
-              secman add-vulnerability --hostname newserver99 --cve CVE-2023-5678 --criticality CRITICAL --verbose
-              secman add-vulnerability --help
-
-              # Export requirements (Feature 057)
-              # Using environment variables (recommended for security):
-              export SECMAN_USERNAME=admin
-              export SECMAN_PASSWORD=secret
-              secman export-requirements --format xlsx
-              secman export-requirements --format docx --output security_requirements.docx
-              secman export-requirements --format xlsx --output /path/to/export.xlsx --verbose
-
-              # Using command line arguments:
-              secman export-requirements --format xlsx --username admin --password secret
-              secman export-requirements --format docx --output requirements.docx --username admin --password secret
-              secman export-requirements --help
-
-              # Add requirements (Feature 057)
-              # Using environment variables (recommended for security):
-              export SECMAN_USERNAME=admin
-              export SECMAN_PASSWORD=secret
-              secman add-requirement --shortreq "All passwords must be at least 12 characters"
-              secman add-requirement --shortreq "MFA required for admin access" --chapter "Authentication"
-              secman add-requirement --shortreq "Encrypt data at rest" --chapter "Data Protection" --norm "GDPR Article 32" --verbose
-
-              # Using command line arguments:
-              secman add-requirement --shortreq "Log all admin actions" --chapter "Audit" --username admin --password secret
-              secman add-requirement --help
-
-              # Delete all requirements (Feature 057) - REQUIRES ADMIN ROLE
-              # WARNING: This is a destructive operation!
-              export SECMAN_USERNAME=admin
-              export SECMAN_PASSWORD=secret
-              secman delete-all-requirements --confirm
-              secman delete-all-requirements --confirm --verbose
-              secman delete-all-requirements --confirm --backend-url http://test-server:8080
-              secman delete-all-requirements --help
-
-              # Deduplicate vulnerability records (requires ADMIN)
-              secman deduplicate-vulnerabilities --username admin --password secret
-              secman deduplicate-vulnerabilities --verbose
-              secman deduplicate-vulnerabilities --backend-url http://prod:8080
-              secman deduplicate-vulnerabilities --help
-
-              # Send admin summary email (Feature 070)
-              secman send-admin-summary
-              secman send-admin-summary --dry-run
-              secman send-admin-summary --verbose
-              secman send-admin-summary --dry-run --verbose
-              secman send-admin-summary --help
-
+            Run 'secman help <command>' for detailed options and examples.
             For more information, visit: https://github.com/schmalle/secman
         """.trimIndent())
         return 0
+    }
+
+    private fun showCommandHelp(command: String): Int {
+        // Resolve aliases for common variations
+        val resolvedCommand = commandAliases[command] ?: command
+        val helpText = commandHelpTexts[resolvedCommand]
+        if (helpText == null) {
+            System.err.println("ERROR: Unknown command: '$command'")
+            System.err.println()
+            System.err.println("Available commands:")
+            commandHelpTexts.keys.sorted().forEach { cmd ->
+                System.err.println("  $cmd")
+            }
+            System.err.println()
+            System.err.println("Run 'secman help' for an overview.")
+            return 1
+        }
+        println(helpText)
+        return 0
+    }
+
+    companion object {
+        private val commandAliases = mapOf(
+            "servers" to "query-servers",
+            "notifications" to "send-notifications",
+            "admin-summary" to "send-admin-summary",
+            "user-mappings" to "manage-user-mappings",
+            "workgroups" to "manage-workgroups",
+            "env" to "environment",
+            "vars" to "environment",
+            "s3" to "manage-user-mappings-s3",
+        )
+
+        private val commandHelpTexts = mapOf(
+            "query" to """
+                secman query - Query CrowdStrike vulnerabilities for a single host
+
+                Usage: secman query [options]
+
+                Options:
+                  --hostname <hostname>    Hostname to query vulnerabilities for (required)
+                  --severity <levels>      Filter by severity (comma-separated: CRITICAL,HIGH,MEDIUM,LOW)
+                  --product <name>         Filter by product name
+                  --limit <num>            Maximum results to return (default: 100)
+                  --format <json|csv>      Output format (default: json)
+                  --output <file>          Output file path
+                  --client-id <id>         CrowdStrike API client ID (overrides config file)
+                  --client-secret <secret> CrowdStrike API client secret (overrides config file)
+                  --save                   Save asset and vulnerabilities to database (direct access)
+                  --verbose                Enable verbose logging
+
+                Examples:
+                  secman query --hostname server01
+                  secman query --hostname server01 --severity CRITICAL --verbose
+                  secman query --hostname server01 --severity HIGH,CRITICAL --save
+                  secman query --hostname server01 --format csv --output vulns.csv
+                  secman query --hostname server01 --limit 50 --format json --output results.json
+
+                See also: secman help query-servers
+            """.trimIndent(),
+
+            "query-servers" to """
+                secman query servers - Batch query and import server vulnerabilities
+
+                Usage: secman query servers [options]
+
+                Options:
+                  --hostnames <list>       Comma-separated list of hostnames (default: all devices)
+                  --device-type <type>     Device type: SERVER, WORKSTATION, or ALL (default: SERVER)
+                  --severity <levels>      Severity filter (default: HIGH,CRITICAL)
+                  --min-days-open <num>    Minimum days open filter (default: 30)
+                  --last-seen-days <num>   Only include devices seen within N days (default: 0 = all)
+                  --limit <num>            Page size for pagination (default: 800)
+                  --client-id <id>         CrowdStrike API client ID (overrides config file)
+                  --client-secret <secret> CrowdStrike API client secret (overrides config file)
+                  --save                   Save to database (direct access, no backend required)
+                  --dry-run                Query but don't import
+                  --verbose                Enable verbose logging
+
+                Examples:
+                  secman query servers --save
+                  secman query servers --hostnames server01,server02 --save --verbose
+                  secman query servers --severity CRITICAL --min-days-open 60 --dry-run
+                  secman query servers --device-type WORKSTATION --severity CRITICAL,HIGH --save
+                  secman query servers --device-type ALL --dry-run --verbose
+
+                See also: secman help query
+            """.trimIndent(),
+
+            "monitor" to """
+                secman monitor - Continuously monitor for HIGH/CRITICAL vulnerabilities
+
+                Usage: secman monitor [options]
+
+                Options:
+                  --interval <minutes>     Polling interval in minutes (default: 5)
+                  --hostnames <list>       Comma-separated list of hostnames to monitor
+                  --backend-url <url>      Backend API URL (default: http://localhost:8080)
+                  --config <path>          Configuration file path
+                  --dry-run                Query but don't store results
+                  --no-storage             Disable automatic storage
+                  --verbose                Enable verbose logging
+
+                Examples:
+                  secman monitor --interval 10 --hostnames server01,server02,server03
+                  secman monitor --dry-run --verbose
+            """.trimIndent(),
+
+            "config" to """
+                secman config - Configure CrowdStrike API credentials
+
+                Usage: secman config [options]
+
+                Options:
+                  --client-id <id>         CrowdStrike API client ID (required for save)
+                  --client-secret <secret> CrowdStrike API client secret (required for save)
+                  --base-url <url>         CrowdStrike API base URL (default: https://api.crowdstrike.com)
+                  --show                   Show current CrowdStrike configuration
+                  --format <yaml|conf>     Configuration file format (default: yaml)
+
+                Examples:
+                  secman config --client-id <id> --client-secret <secret>
+                  secman config --show
+            """.trimIndent(),
+
+            "send-notifications" to """
+                secman send-notifications - Send email notifications for outdated assets
+
+                Usage: secman send-notifications [options]
+
+                Options:
+                  --dry-run                Report planned notifications without sending emails
+                  --verbose, -v            Detailed logging (show per-asset processing)
+                  --outdated-only          Process only outdated asset reminders (skip new vulnerability notifications)
+
+                Examples:
+                  secman send-notifications
+                  secman send-notifications --dry-run --verbose
+                  secman send-notifications --outdated-only
+            """.trimIndent(),
+
+            "send-admin-summary" to """
+                secman send-admin-summary - Send system statistics summary email to ADMIN users
+
+                Usage: secman send-admin-summary [options]
+
+                Options:
+                  --dry-run                Preview planned recipients without sending emails
+                  --verbose, -v            Detailed logging (show per-recipient status)
+
+                Examples:
+                  secman send-admin-summary
+                  secman send-admin-summary --dry-run
+                  secman send-admin-summary --verbose
+                  secman send-admin-summary --dry-run --verbose
+            """.trimIndent(),
+
+            "manage-user-mappings" to """
+                secman manage-user-mappings - Manage user mappings for domains and AWS accounts
+
+                Usage: secman manage-user-mappings <subcommand> [options]
+
+                Subcommands:
+                  add-domain     Add domain-to-user mappings
+                  add-aws        Add AWS account-to-user mappings
+                  list           List existing user mappings
+                  remove         Remove user mappings
+                  import         Batch import from CSV/JSON file
+                  import-s3      Import user mappings from AWS S3
+                  list-bucket    List S3 bucket contents
+
+                Common Options:
+                  --admin-user, -u <email>  Admin email (or set SECMAN_ADMIN_EMAIL env var)
+
+                Examples:
+                  secman manage-user-mappings add-domain --emails user@example.com --domains example.com -u admin@company.com
+                  secman manage-user-mappings add-aws --emails user@example.com --accounts 123456789012 -u admin@company.com
+                  secman manage-user-mappings list --format TABLE
+                  secman manage-user-mappings remove --email user@example.com --all
+                  secman manage-user-mappings import --file mappings.csv --dry-run
+                  secman manage-user-mappings import-s3 --bucket my-bucket --key mappings.csv -u admin@company.com
+                  secman manage-user-mappings list-bucket --bucket my-bucket --prefix user-mappings/
+
+                Run 'secman manage-user-mappings <subcommand> --help' for subcommand-specific options.
+
+                See also: secman help manage-user-mappings-s3
+            """.trimIndent(),
+
+            "manage-user-mappings-s3" to """
+                secman manage-user-mappings import-s3 / list-bucket - S3 import operations
+
+                Usage:
+                  secman manage-user-mappings import-s3 [options]
+                  secman manage-user-mappings list-bucket [options]
+
+                import-s3 Options:
+                  --bucket, -b <name>        S3 bucket name (required)
+                  --key, -k <path>           S3 object key / path to file (required)
+                  --aws-region <region>      AWS region (default: SDK auto-resolution)
+                  --aws-profile <name>       AWS credential profile name
+                  --aws-access-key-id        AWS access key ID (or AWS_ACCESS_KEY_ID env var)
+                  --aws-secret-access-key    AWS secret access key (or AWS_SECRET_ACCESS_KEY env var)
+                  --aws-session-token        AWS session token for temporary credentials
+                  --format <type>            File format: CSV, JSON, or AUTO (default: AUTO)
+                  --dry-run                  Validate file without creating mappings
+                  --admin-user, -u           Admin email (or SECMAN_ADMIN_EMAIL env var)
+
+                list-bucket Options:
+                  --bucket, -b <name>        S3 bucket name (required)
+                  --prefix, -p <prefix>      Filter objects by key prefix
+                  --aws-region <region>      AWS region (default: SDK auto-resolution)
+                  --aws-profile <name>       AWS credential profile name
+                  --aws-access-key-id        AWS access key ID (or AWS_ACCESS_KEY_ID env var)
+                  --aws-secret-access-key    AWS secret access key (or AWS_SECRET_ACCESS_KEY env var)
+                  --aws-session-token        AWS session token for temporary credentials
+                  --admin-user, -u           Admin email (or SECMAN_ADMIN_EMAIL env var)
+
+                AWS Credential Resolution Priority (highest to lowest):
+                  1. Explicit CLI flags (--aws-access-key-id + --aws-secret-access-key)
+                  2. Environment variables (AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY)
+                  3. Named profile (--aws-profile, reads from ~/.aws/credentials)
+                  4. Default credential chain (IAM role, SSO, etc.)
+
+                Exit Codes (import-s3):
+                  0  All mappings imported successfully
+                  1  Partial import (some mappings skipped)
+                  2+ Fatal error (S3 access, parsing, or authentication failure)
+
+                Examples:
+                  export AWS_ACCESS_KEY_ID=AKIA...
+                  export AWS_SECRET_ACCESS_KEY=...
+                  secman manage-user-mappings import-s3 --bucket my-bucket --key mappings.csv -u admin@company.com
+                  secman manage-user-mappings import-s3 --bucket my-bucket --key mappings.csv --dry-run -u admin@company.com
+                  secman manage-user-mappings import-s3 --bucket my-bucket --key data/users.json --aws-profile prod -u admin@company.com
+                  secman manage-user-mappings list-bucket --bucket my-bucket -u admin@company.com
+                  secman manage-user-mappings list-bucket --bucket my-bucket --prefix user-mappings/ -u admin@company.com
+            """.trimIndent(),
+
+            "manage-workgroups" to """
+                secman manage-workgroups - Manage workgroup asset assignments
+
+                Usage: secman manage-workgroups <subcommand> [options]
+
+                Subcommands:
+                  list             List workgroups and their assets
+                  assign-assets    Assign assets to a workgroup
+                  remove-assets    Remove assets from a workgroup
+
+                Common Options:
+                  --admin-user, -u <email>  Admin email (or set SECMAN_ADMIN_EMAIL env var)
+
+                Examples:
+                  secman manage-workgroups list
+                  secman manage-workgroups list --workgroup Production
+                  secman manage-workgroups list --search-assets "ip-10-*"
+                  secman manage-workgroups assign-assets -w Production -p "ip-10-*" -u admin@company.com
+                  secman manage-workgroups assign-assets -w Production -p "*prod*" --type SERVER -u admin@company.com
+                  secman manage-workgroups assign-assets -w Production --ids 1,2,3 -u admin@company.com
+                  secman manage-workgroups remove-assets -w Test -p "*test*" -u admin@company.com
+                  secman manage-workgroups remove-assets -w Test --all -u admin@company.com
+
+                Run 'secman manage-workgroups <subcommand> --help' for subcommand-specific options.
+            """.trimIndent(),
+
+            "add-vulnerability" to """
+                secman add-vulnerability - Add or update a vulnerability for an asset
+
+                Usage: secman add-vulnerability [options]
+
+                Options:
+                  --hostname <hostname>    Target asset hostname (required)
+                  --cve <cve-id>           CVE identifier or custom vulnerability ID (required)
+                  --criticality <level>    Severity: CRITICAL, HIGH, MEDIUM, or LOW (required)
+                  --days-open <num>        Days the vulnerability has been open (default: 0)
+                  --verbose                Enable verbose output
+
+                If the asset does not exist, it will be created automatically.
+
+                Examples:
+                  secman add-vulnerability --hostname webserver01 --cve CVE-2024-1234 --criticality HIGH
+                  secman add-vulnerability --hostname webserver01 --cve CVE-2024-1234 --criticality HIGH --days-open 30
+                  secman add-vulnerability --hostname newserver99 --cve CVE-2023-5678 --criticality CRITICAL --verbose
+            """.trimIndent(),
+
+            "deduplicate-vulnerabilities" to """
+                secman deduplicate-vulnerabilities - Remove duplicate vulnerability records
+
+                Usage: secman deduplicate-vulnerabilities [options]
+
+                Requires: ADMIN role
+
+                Options:
+                  --backend-url <url>      Backend API URL (default: http://localhost:8080)
+                  --username <user>        Backend username with ADMIN role (or SECMAN_USERNAME env var)
+                  --password <pass>        Backend password (or SECMAN_PASSWORD env var)
+                  --verbose, -v            Show per-asset deduplication details
+
+                Examples:
+                  secman deduplicate-vulnerabilities --username admin --password secret
+                  secman deduplicate-vulnerabilities --verbose
+                  secman deduplicate-vulnerabilities --backend-url http://prod:8080
+            """.trimIndent(),
+
+            "export-requirements" to """
+                secman export-requirements - Export all requirements to Excel or Word
+
+                Usage: secman export-requirements [options]
+
+                Options:
+                  --format <xlsx|docx>     Export format: xlsx (Excel) or docx (Word) (required)
+                  --output <path>          Output file path (default: requirements_export_YYYYMMDD.{format})
+                  --backend-url <url>      Backend API URL (default: http://localhost:8080)
+                  --username <user>        Backend username (or SECMAN_USERNAME env var)
+                  --password <pass>        Backend password (or SECMAN_PASSWORD env var)
+                  --verbose                Enable verbose output
+
+                Examples:
+                  export SECMAN_USERNAME=admin
+                  export SECMAN_PASSWORD=secret
+                  secman export-requirements --format xlsx
+                  secman export-requirements --format docx --output security_requirements.docx
+                  secman export-requirements --format xlsx --output /path/to/export.xlsx --verbose
+                  secman export-requirements --format xlsx --username admin --password secret
+            """.trimIndent(),
+
+            "add-requirement" to """
+                secman add-requirement - Add a new security requirement
+
+                Usage: secman add-requirement [options]
+
+                Options:
+                  --shortreq <text>        Short requirement text (required)
+                  --chapter <name>         Chapter/category for grouping
+                  --details <text>         Detailed description
+                  --motivation <text>      Why this requirement exists
+                  --example <text>         Implementation example
+                  --norm <name>            Regulatory norm reference (e.g., ISO 27001)
+                  --usecase <name>         Use case description
+                  --backend-url <url>      Backend API URL (default: http://localhost:8080)
+                  --username <user>        Backend username (or SECMAN_USERNAME env var)
+                  --password <pass>        Backend password (or SECMAN_PASSWORD env var)
+                  --verbose                Enable verbose output
+
+                Examples:
+                  secman add-requirement --shortreq "All passwords must be at least 12 characters"
+                  secman add-requirement --shortreq "MFA required for admin access" --chapter "Authentication"
+                  secman add-requirement --shortreq "Encrypt data at rest" --chapter "Data Protection" --norm "GDPR Article 32"
+                  secman add-requirement --shortreq "Log all admin actions" --chapter "Audit" --username admin --password secret
+            """.trimIndent(),
+
+            "delete-all-requirements" to """
+                secman delete-all-requirements - Delete ALL requirements from the system
+
+                Usage: secman delete-all-requirements [options]
+
+                WARNING: This is a destructive operation! Requires ADMIN role.
+
+                Options:
+                  --confirm                Required safety flag to confirm deletion (required)
+                  --backend-url <url>      Backend API URL (default: http://localhost:8080)
+                  --username <user>        Backend username with ADMIN role (or SECMAN_USERNAME env var)
+                  --password <pass>        Backend password (or SECMAN_PASSWORD env var)
+                  --verbose                Enable verbose output
+
+                Examples:
+                  secman delete-all-requirements --confirm
+                  secman delete-all-requirements --confirm --verbose
+                  secman delete-all-requirements --confirm --backend-url http://test-server:8080
+            """.trimIndent(),
+
+            "environment" to """
+                secman environment variables reference
+
+                Backend Authentication:
+                  SECMAN_USERNAME          Backend username for authentication
+                  SECMAN_PASSWORD          Backend password (recommended over --password flag)
+
+                Admin Operations:
+                  SECMAN_ADMIN_EMAIL       Admin email for user mapping and S3 import operations
+
+                AWS S3 Operations:
+                  AWS_ACCESS_KEY_ID        AWS access key ID (or use --aws-access-key-id)
+                  AWS_SECRET_ACCESS_KEY    AWS secret access key (or use --aws-secret-access-key)
+                  AWS_SESSION_TOKEN        AWS session token for temporary credentials
+                  AWS_REGION               Default AWS region for S3 operations
+
+                AWS Credential Resolution Priority (highest to lowest):
+                  1. Explicit CLI flags (--aws-access-key-id + --aws-secret-access-key)
+                  2. Environment variables (AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY)
+                  3. Named profile (--aws-profile, reads from ~/.aws/credentials)
+                  4. Default credential chain (IAM role, SSO, etc.)
+            """.trimIndent()
+        )
     }
 }
 
