@@ -79,21 +79,23 @@ const ClassificationRuleManager: React.FC = () => {
   useEffect(() => {
     const checkAdminRole = () => {
       if (window.currentUser) {
-        const isUserAdmin = window.currentUser.roles?.includes('ADMIN') ?? false;
-        setIsAdmin(isUserAdmin);
+        const roles = window.currentUser.roles ?? [];
+        const hasAccess = roles.includes('ADMIN') || roles.includes('SECCHAMPION');
+        setIsAdmin(hasAccess);
         setIsLoadingAuth(false);
-        
-        if (isUserAdmin) {
+
+        if (hasAccess) {
           loadRules();
         }
       } else {
         // If currentUser isn't loaded yet, wait for the event
         const handleUserLoaded = () => {
-          const isUserAdmin = window.currentUser?.roles?.includes('ADMIN') ?? false;
-          setIsAdmin(isUserAdmin);
+          const roles = window.currentUser?.roles ?? [];
+          const hasAccess = roles.includes('ADMIN') || roles.includes('SECCHAMPION');
+          setIsAdmin(hasAccess);
           setIsLoadingAuth(false);
-          
-          if (isUserAdmin) {
+
+          if (hasAccess) {
             loadRules();
           }
         };
