@@ -7,7 +7,8 @@ import {
     canAccessReleases,
     canAccessCompareReleases,
     hasRiskAccess,
-    hasReqAccess
+    hasReqAccess,
+    hasClassificationAccess
 } from '../utils/permissions';
 import { connectToBadgeUpdates } from '../services/exceptionBadgeService';
 
@@ -22,6 +23,7 @@ const Sidebar = () => {
     const [hasVuln, setHasVuln] = useState(false);
     const [hasRisk, setHasRisk] = useState(false);
     const [hasReq, setHasReq] = useState(false);
+    const [hasClassification, setHasClassification] = useState(false);
     const [userRoles, setUserRoles] = useState<string[]>([]);
     const [pendingExceptionCount, setPendingExceptionCount] = useState<number>(0);
 
@@ -81,6 +83,7 @@ const Sidebar = () => {
             setHasVuln(hasVulnAccess());
             setHasRisk(hasRiskAccess(roles));
             setHasReq(hasReqAccess(roles));
+            setHasClassification(hasClassificationAccess(roles));
             setUserRoles(roles);
         }
 
@@ -382,8 +385,8 @@ const Sidebar = () => {
                     </li>
                 )}
 
-                {/* TOOLS Section - ADMIN, RISK, or SECCHAMPION only (Feature: 025-role-based-access-control) */}
-                {hasRisk && (
+                {/* TOOLS Section - ADMIN or SECCHAMPION only */}
+                {hasClassification && (
                     <li>
                         <a href="/public-classification" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
                             <i className="bi bi-funnel me-2"></i> Classification Tool

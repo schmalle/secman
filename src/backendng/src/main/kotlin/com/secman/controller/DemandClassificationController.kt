@@ -103,7 +103,7 @@ open class DemandClassificationController(
     
     // Authenticated endpoints for rule management
     @Get("/rules")
-    @Secured(SecurityRule.IS_AUTHENTICATED)
+    @Secured("ADMIN", "SECCHAMPION")
     @Transactional(readOnly = true)
     open fun listRules(@QueryValue @Nullable active: Boolean?): HttpResponse<List<DemandClassificationRule>> {
         return try {
@@ -122,7 +122,7 @@ open class DemandClassificationController(
     }
     
     @Get("/rules/{id}")
-    @Secured(SecurityRule.IS_AUTHENTICATED)
+    @Secured("ADMIN", "SECCHAMPION")
     @Transactional(readOnly = true)
     open fun getRule(id: Long): HttpResponse<DemandClassificationRule> {
         return ruleRepository.findById(id)
@@ -265,7 +265,7 @@ open class DemandClassificationController(
     }
     
     @Get("/rules/export", produces = [MediaType.APPLICATION_JSON])
-    @Secured(SecurityRule.IS_AUTHENTICATED)
+    @Secured("ADMIN", "SECCHAMPION")
     @Transactional(readOnly = true)
     open fun exportRules(): HttpResponse<String> {
         return try {
@@ -279,7 +279,7 @@ open class DemandClassificationController(
     }
     
     @Post("/test")
-    @Secured(SecurityRule.IS_AUTHENTICATED)
+    @Secured("ADMIN", "SECCHAMPION")
     @Transactional(readOnly = true)
     open fun testClassification(@Valid @Body request: TestClassificationRequest): HttpResponse<ClassificationResponse> {
         return try {
@@ -292,7 +292,7 @@ open class DemandClassificationController(
     }
     
     @Post("/classify-demand")
-    @Secured(SecurityRule.IS_AUTHENTICATED)
+    @Secured("ADMIN", "SECCHAMPION")
     @Transactional
     open fun classifyDemand(@Valid @Body request: ClassifyDemandRequest): HttpResponse<ClassificationResponse> {
         return try {
@@ -320,7 +320,7 @@ open class DemandClassificationController(
     }
     
     @Get("/results")
-    @Secured(SecurityRule.IS_AUTHENTICATED)
+    @Secured("ADMIN", "SECCHAMPION")
     @Transactional(readOnly = true)
     open fun listResults(
         @QueryValue @Nullable classification: Classification?,
@@ -350,7 +350,7 @@ open class DemandClassificationController(
     }
     
     @Get("/statistics")
-    @Secured(SecurityRule.IS_AUTHENTICATED)
+    @Secured("ADMIN", "SECCHAMPION")
     @Transactional(readOnly = true)
     open fun getStatistics(): HttpResponse<Map<String, Any>> {
         return try {

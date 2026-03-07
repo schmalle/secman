@@ -106,6 +106,17 @@ export function hasReqAccess(roles: string[] | undefined): boolean {
 }
 
 /**
+ * Check if user has access to Classification
+ *
+ * Rules:
+ * - ADMIN can access
+ * - SECCHAMPION can access
+ */
+export function hasClassificationAccess(roles: string[] | undefined): boolean {
+  return isAdmin(roles) || isSecChampion(roles);
+}
+
+/**
  * Check if user can access Norm Management
  *
  * Rules:
