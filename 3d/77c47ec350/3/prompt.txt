@@ -1,0 +1,1 @@
+confirming an exception approval results in an javascript error, please propose a fix plan
