@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete, getUser, hasVulnAccess } from '../utils/auth';
-import { isAdmin } from '../utils/permissions';
+import { isAdmin, isSecChampion } from '../utils/permissions';
 import PortHistory from './PortHistory';
 import VulnerabilityHistory from './VulnerabilityHistory';
 import { BulkDeleteConfirmModal } from './BulkDeleteConfirmModal';
@@ -16,6 +16,11 @@ interface Workgroup {
   id: number;
   name: string;
   description?: string;
+}
+
+interface OwnerCandidate {
+  value: string;
+  label: string;
 }
 
 interface Asset {
@@ -74,12 +79,21 @@ const AssetManagement: React.FC = () => {
   const [exportProgress, setExportProgress] = useState<ExportJob | null>(null);
   const [exportJobId, setExportJobId] = useState<string | null>(null);
 
+  // Owner candidates for select dropdown
+  const [ownerCandidates, setOwnerCandidates] = useState<OwnerCandidate[]>([]);
+  const canAssignOwner = isAdmin(getUser()?.roles) || isSecChampion(getUser()?.roles);
+
   // Domain validation state (Feature 043 - User Story 2)
   const [domainError, setDomainError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchAssets();
-    fetchWorkgroups();
+    if (isAdmin(getUser()?.roles)) {
+      fetchWorkgroups();
+    }
+    if (canAssignOwner) {
+      fetchOwnerCandidates();
+    }
   }, []);
 
   const fetchAssets = async () => {
@@ -115,6 +129,18 @@ const AssetManagement: React.FC = () => {
     } catch (err) {
       console.error('Failed to fetch workgroups:', err);
       setWorkgroups([]);
+    }
+  };
+
+  const fetchOwnerCandidates = async () => {
+    try {
+      const response = await authenticatedGet('/api/assets/owner-candidates');
+      if (response.ok) {
+        const data: OwnerCandidate[] = await response.json();
+        setOwnerCandidates(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch owner candidates:', err);
     }
   };
 
@@ -553,16 +579,36 @@ const AssetManagement: React.FC = () => {
                   </div>
                   <div className="mb-3">
                     <label htmlFor="owner" className="form-label">Owner *</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      id="owner"
-                      name="owner"
-                      value={formData.owner}
-                      onChange={handleInputChange}
-                      placeholder="Person or team responsible"
-                      required
-                    />
+                    {canAssignOwner && ownerCandidates.length > 0 ? (
+                      <select
+                        className="form-select"
+                        id="owner"
+                        name="owner"
+                        value={formData.owner}
+                        onChange={handleInputChange}
+                        required
+                      >
+                        <option value="">Select Owner</option>
+                        {/* Show current value if not in candidates list (legacy data) */}
+                        {formData.owner && !ownerCandidates.some(c => c.value === formData.owner) && (
+                          <option value={formData.owner} disabled>{formData.owner} (not in system)</option>
+                        )}
+                        {ownerCandidates.map(candidate => (
+                          <option key={candidate.value} value={candidate.value}>{candidate.label}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        className="form-control"
+                        id="owner"
+                        name="owner"
+                        value={formData.owner}
+                        onChange={handleInputChange}
+                        placeholder="Person or team responsible"
+                        required
+                      />
+                    )}
                   </div>
                   <div className="mb-3">
                     <label htmlFor="adDomain" className="form-label">

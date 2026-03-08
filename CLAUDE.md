@@ -35,6 +35,7 @@ Users access assets if **ANY** is true:
 5. Asset's cloudAccountId matches user's AWS mappings (UserMapping)
 6. Asset's adDomain matches user's domain mappings (case-insensitive, UserMapping)
 7. Asset's cloudAccountId matches shared AWS accounts via AwsAccountSharing (directional, non-transitive)
+8. Asset's owner matches user's username
 
 
 ## API Endpoints

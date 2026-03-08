@@ -37,12 +37,14 @@ interface AssetRepository : JpaRepository<Asset, Long> {
      * 3. Assets discovered via user's scan upload
      * 4. Assets with cloudAccountId matching user's AWS mappings
      * 5. Assets with adDomain matching user's domain mappings
+     * 6. Assets where owner matches the user's username
      *
      * Feature: 073-memory-optimization
      * Task: T031
      *
      * @param userId The user's ID (for workgroup, creator, uploader checks)
      * @param userEmail The user's email (for AWS account and domain mapping lookups)
+     * @param username The user's username (for owner-based access)
      * @return List of distinct accessible assets, ordered by name
      */
     @io.micronaut.data.annotation.Query(
@@ -71,11 +73,12 @@ interface AssetRepository : JpaRepository<Asset, Long> {
                     JOIN user_mapping um2 ON um2.email = u_source.email AND um2.aws_account_id IS NOT NULL
                     WHERE acs.target_user_id = :userId
                 )
+                OR a.owner = :username
             ORDER BY a.name ASC
         """,
         nativeQuery = true
     )
-    fun findAccessibleAssets(userId: Long, userEmail: String): List<Asset>
+    fun findAccessibleAssets(userId: Long, userEmail: String, username: String): List<Asset>
 
     fun findByNameContainingIgnoreCase(name: String): List<Asset>
 

@@ -82,6 +82,29 @@ open class AssetController(
         val error: String
     )
 
+    @Serdeable
+    data class OwnerCandidate(
+        val value: String,
+        val label: String
+    )
+
+    /**
+     * Get list of valid owner candidates for the asset owner select box.
+     * Returns "CrowdStrike Import" plus all system users sorted by username.
+     * Available to ADMIN and SECCHAMPION roles.
+     */
+    @Get("/owner-candidates")
+    @Secured("ADMIN", "SECCHAMPION")
+    fun getOwnerCandidates(): HttpResponse<List<OwnerCandidate>> {
+        val candidates = mutableListOf<OwnerCandidate>()
+        candidates.add(OwnerCandidate("CrowdStrike Import", "CrowdStrike Import"))
+        val users = userRepository.findAll().sortedBy { it.username.lowercase() }
+        for (user in users) {
+            candidates.add(OwnerCandidate(user.username, "${user.username} (${user.email})"))
+        }
+        return HttpResponse.ok(candidates)
+    }
+
     /**
      * List assets accessible to the authenticated user
      * Feature: 008-create-an-additional (Workgroup-Based Access Control)

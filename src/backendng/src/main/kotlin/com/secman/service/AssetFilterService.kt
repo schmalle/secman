@@ -55,6 +55,7 @@ open class AssetFilterService(
      * 4. Asset was discovered via a scan uploaded by the user
      * 5. Asset's cloudAccountId matches any of the user's AWS account mappings
      * 6. Asset's adDomain matches any of the user's domain mappings (case-insensitive)
+     * 7. Asset's owner matches the user's username
      *
      * Feature 073: When lazyLoadingEnabled=true, uses unified query for single DB round trip.
      * Otherwise, falls back to original multi-query approach for stability.
@@ -70,14 +71,15 @@ open class AssetFilterService(
 
         val userId = getUserId(authentication)
         val userEmail = getUserEmail(authentication)
+        val username = authentication.name
 
         // Feature 073: Use unified query when memory optimization is enabled
         if (memoryConfig.lazyLoadingEnabled && userEmail != null) {
-            return getAccessibleAssetsUnified(userId, userEmail)
+            return getAccessibleAssetsUnified(userId, userEmail, username)
         }
 
         // Fallback: Original multi-query approach
-        return getAccessibleAssetsMultiQuery(userId, userEmail)
+        return getAccessibleAssetsMultiQuery(userId, userEmail, username)
     }
 
     /**
@@ -88,8 +90,8 @@ open class AssetFilterService(
      * @param userEmail The user's email
      * @return List of accessible assets (already distinct and sorted)
      */
-    private fun getAccessibleAssetsUnified(userId: Long, userEmail: String): List<Asset> {
-        return assetRepository.findAccessibleAssets(userId, userEmail)
+    private fun getAccessibleAssetsUnified(userId: Long, userEmail: String, username: String): List<Asset> {
+        return assetRepository.findAccessibleAssets(userId, userEmail, username)
     }
 
     /**
@@ -100,7 +102,7 @@ open class AssetFilterService(
      * @param userEmail The user's email (nullable)
      * @return List of accessible assets (deduplicated and sorted)
      */
-    private fun getAccessibleAssetsMultiQuery(userId: Long, userEmail: String?): List<Asset> {
+    private fun getAccessibleAssetsMultiQuery(userId: Long, userEmail: String?, username: String): List<Asset> {
         // Regular users and VULN: filter by workgroup membership + ownership
         val workgroupAssets = assetRepository.findByWorkgroupsUsersIdOrManualCreatorIdOrScanUploaderIdOrderByNameAsc(
             userId = userId,
@@ -149,8 +151,11 @@ open class AssetFilterService(
             emptyList()
         }
 
+        // Get assets where user is the owner
+        val ownerAssets = assetRepository.findByOwner(username)
+
         // Combine and deduplicate by asset ID, then sort by name
-        return (workgroupAssets + awsAccountAssets + domainAssets + sharedAwsAccountAssets)
+        return (workgroupAssets + awsAccountAssets + domainAssets + sharedAwsAccountAssets + ownerAssets)
             .distinctBy { it.id }
             .sortedBy { it.name }
     }
