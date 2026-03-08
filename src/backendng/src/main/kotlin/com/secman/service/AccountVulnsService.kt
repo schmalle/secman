@@ -40,6 +40,26 @@ class AccountVulnsService(
     private val logger = LoggerFactory.getLogger(AccountVulnsService::class.java)
 
     /**
+     * Check if the authenticated user has any AWS accounts (own or shared).
+     * Lightweight check for sidebar visibility.
+     *
+     * @param authentication User authentication details
+     * @return true if user has at least one AWS account mapping or shared account
+     */
+    fun hasAwsAccounts(authentication: Authentication): Boolean {
+        val userEmail = authentication.attributes["email"]?.toString() ?: return false
+        val roles = authentication.roles
+
+        if (roles.contains("ADMIN")) return false
+
+        val ownAwsAccountIds = userMappingRepository.findDistinctAwsAccountIdByEmail(userEmail)
+        if (ownAwsAccountIds.isNotEmpty()) return true
+
+        val sharedAwsAccountIds = awsAccountSharingService.getSharedAwsAccountIdsByEmail(userEmail)
+        return sharedAwsAccountIds.isNotEmpty()
+    }
+
+    /**
      * Vulnerability counts grouped by severity level.
      * Used internally for validation and aggregation (Feature 019).
      * Internal visibility allows testing while keeping encapsulation.

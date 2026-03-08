@@ -39,6 +39,11 @@ open class AccountVulnsController(
     private val logger = LoggerFactory.getLogger(AccountVulnsController::class.java)
 
     @Serdeable
+    data class HasAccountsResponse(
+        val hasAccounts: Boolean
+    )
+
+    @Serdeable
     data class ErrorResponse(
         val message: String,
         val status: Int
@@ -50,6 +55,19 @@ open class AccountVulnsController(
         val redirectUrl: String,
         val status: Int
     )
+
+    /**
+     * Lightweight check if user has any AWS account mappings (own or shared).
+     * Used by the frontend sidebar to conditionally show/hide the Account vulns link.
+     *
+     * GET /api/account-vulns/has-accounts
+     */
+    @Get("/has-accounts")
+    @Transactional(readOnly = true)
+    open fun hasAccounts(authentication: Authentication): HttpResponse<HasAccountsResponse> {
+        val result = accountVulnsService.hasAwsAccounts(authentication)
+        return HttpResponse.ok(HasAccountsResponse(hasAccounts = result))
+    }
 
     /**
      * Get vulnerability overview grouped by AWS accounts

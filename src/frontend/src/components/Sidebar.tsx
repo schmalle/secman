@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { hasVulnAccess } from '../utils/auth';
+import { hasVulnAccess, authenticatedGet } from '../utils/auth';
 import {
     canAccessNormManagement,
     canAccessStandardManagement,
@@ -26,6 +26,7 @@ const Sidebar = () => {
     const [hasClassification, setHasClassification] = useState(false);
     const [userRoles, setUserRoles] = useState<string[]>([]);
     const [pendingExceptionCount, setPendingExceptionCount] = useState<number>(0);
+    const [hasAwsAccounts, setHasAwsAccounts] = useState(false);
 
     const toggleRequirements = () => {
         setRequirementsExpanded(!requirementsExpanded);
@@ -96,6 +97,15 @@ const Sidebar = () => {
         // Cleanup listener on unmount
         return () => window.removeEventListener('userLoaded', checkRoles);
     }, []);
+
+    // Check if user has AWS accounts (for sidebar visibility)
+    useEffect(() => {
+        if (isAdmin) return;
+        authenticatedGet('/api/account-vulns/has-accounts')
+            .then(res => res.ok ? res.json() : null)
+            .then(data => { if (data) setHasAwsAccounts(data.hasAccounts); })
+            .catch(() => setHasAwsAccounts(false));
+    }, [isAdmin]);
 
     // Connect to real-time SSE updates for exception approval badge
     // Feature: 031-vuln-exception-approval, Phase 6: Real-Time Badge Updates
@@ -252,21 +262,17 @@ const Sidebar = () => {
                                         </a>
                                     </li>
                                 )}
-                                {!isAdmin && (
-                                    <li>
-                                        <a href="/vulnerabilities/domain" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                            <i className="bi bi-globe me-2"></i> Domain vulns
-                                        </a>
-                                    </li>
-                                )}
-                                {!isAdmin && (
-                                    <li>
-                                        <a href="/vulnerabilities/system" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                            <i className="bi bi-hdd me-2"></i> System vulns
-                                        </a>
-                                    </li>
-                                )}
-                                {!isAdmin && (
+                                <li>
+                                    <a href="/vulnerabilities/domain" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-globe me-2"></i> Domain vulns
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="/vulnerabilities/system" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-hdd me-2"></i> System vulns
+                                    </a>
+                                </li>
+                                {(isAdmin || userRoles.includes('SECCHAMPION') || hasAwsAccounts) && (
                                     <li>
                                         <a href="/account-vulns" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary"
                                             title="View vulnerabilities for your AWS accounts">
@@ -274,14 +280,12 @@ const Sidebar = () => {
                                         </a>
                                     </li>
                                 )}
-                                {!isAdmin && (
-                                    <li>
-                                        <a href="/wg-vulns" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary"
-                                            title="View vulnerabilities for your workgroups">
-                                            <i className="bi bi-people-fill me-2"></i> WG vulns
-                                        </a>
-                                    </li>
-                                )}
+                                <li>
+                                    <a href="/wg-vulns" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary"
+                                        title="View vulnerabilities for your workgroups">
+                                        <i className="bi bi-people-fill me-2"></i> WG vulns
+                                    </a>
+                                </li>
                                 <li>
                                     <a href="/outdated-assets" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
                                         <i className="bi bi-hourglass-split me-2"></i> Outdated Assets
