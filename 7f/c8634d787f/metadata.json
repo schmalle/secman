@@ -3,7 +3,7 @@
   "checkpoint_id": "7fc8634d787f",
   "strategy": "manual-commit",
   "branch": "main",
-  "checkpoints_count": 1,
+  "checkpoints_count": 4,
   "files_touched": [
     ".idea/workspace.xml",
     "docs/ARCHITECTURE.md",
@@ -74,13 +74,19 @@
       "transcript": "/7f/c8634d787f/0/full.jsonl",
       "content_hash": "/7f/c8634d787f/0/content_hash.txt",
       "prompt": ""
+    },
+    {
+      "metadata": "/7f/c8634d787f/1/metadata.json",
+      "transcript": "/7f/c8634d787f/1/full.jsonl",
+      "content_hash": "/7f/c8634d787f/1/content_hash.txt",
+      "prompt": "/7f/c8634d787f/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 27,
-    "cache_creation_tokens": 44057,
-    "cache_read_tokens": 1092022,
-    "output_tokens": 9127,
-    "api_call_count": 25
+    "input_tokens": 95,
+    "cache_creation_tokens": 415276,
+    "cache_read_tokens": 5270873,
+    "output_tokens": 44325,
+    "api_call_count": 77
   }
 }

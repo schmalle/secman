@@ -1,0 +1,5 @@
+upgrade all dependecnies in the frontend where possible
+
+---
+
+review all docs in /docs if they match the current implementation, if not, please adjust
