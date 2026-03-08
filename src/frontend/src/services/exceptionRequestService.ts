@@ -35,7 +35,7 @@ export interface CreateExceptionRequestDto {
 export interface VulnerabilityExceptionRequestDto {
   id: number;
   vulnerabilityId: number;
-  vulnerabilityCveId: string | null;
+  vulnerabilityCve: string | null;
   assetId: number;
   assetName: string;
   assetIp: string | null;

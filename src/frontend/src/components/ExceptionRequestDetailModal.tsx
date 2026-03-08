@@ -174,7 +174,7 @@ const ExceptionRequestDetailModal: React.FC<ExceptionRequestDetailModalProps> = 
                                             <div className="col-md-6 mb-2">
                                                 <strong>CVE ID:</strong>
                                                 <br />
-                                                <code>{request.vulnerabilityCveId || 'Unknown'}</code>
+                                                <code>{request.vulnerabilityCve || 'Unknown'}</code>
                                             </div>
                                             <div className="col-md-6 mb-2">
                                                 <strong>Asset:</strong>

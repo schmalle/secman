@@ -250,8 +250,8 @@ const Sidebar = () => {
                         </div>
                         {vulnMenuOpen && (
                             <ul className="list-unstyled ps-4">
-                                {/* Overview - ADMIN or SECCHAMPION only */}
-                                {(userRoles.includes('ADMIN') || userRoles.includes('SECCHAMPION')) && (
+                                {/* Overview - ADMIN, SECCHAMPION, or VULN */}
+                                {(userRoles.includes('ADMIN') || userRoles.includes('SECCHAMPION') || userRoles.includes('VULN')) && (
                                     <li>
                                         <a href="/vulnerabilities/current" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
                                             <i className="bi bi-list-ul me-2"></i> Overview

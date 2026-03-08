@@ -225,7 +225,7 @@ const ApprovalDetailModal: React.FC<ApprovalDetailModalProps> = ({
                       {/* Vulnerability Information */}
                       <div className="mb-4">
                         <h6 className="text-muted mb-3">Vulnerability Information</h6>
-                        {!request.vulnerabilityCveId && !request.vulnerabilityId && (
+                        {!request.vulnerabilityCve && !request.vulnerabilityId && (
                           <div className="alert alert-warning mb-3">
                             <i className="bi bi-info-circle me-2"></i>
                             <strong>Vulnerability No Longer Exists</strong>
@@ -236,7 +236,7 @@ const ApprovalDetailModal: React.FC<ApprovalDetailModalProps> = ({
                         )}
                         <div className="mb-2">
                           <strong>CVE ID:</strong><br />
-                          <code>{request.vulnerabilityCveId || 'Unknown'}</code>
+                          <code>{request.vulnerabilityCve || 'Unknown'}</code>
                         </div>
                         <div className="mb-2">
                           <strong>Asset:</strong><br />

@@ -284,7 +284,7 @@ const MyExceptionRequests: React.FC = () => {
                 <div className="col-12">
                     <div className="card">
                         <div className="card-body">
-                            {requests && requests.content.length === 0 ? (
+                            {requests && (!requests.content || requests.content.length === 0) ? (
                                 <div className="text-center py-5">
                                     <i className="bi bi-inbox display-1 text-muted"></i>
                                     <p className="text-muted mt-3">
@@ -312,14 +312,14 @@ const MyExceptionRequests: React.FC = () => {
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {requests?.content.map((request) => (
+                                                {requests?.content?.map((request) => (
                                                     <tr key={request.id}>
                                                         <td>
                                                             <ExceptionStatusBadge status={request.status} autoApproved={request.autoApproved} />
                                                         </td>
                                                         <td>
-                                                            {request.vulnerabilityCveId ? (
-                                                                <code>{request.vulnerabilityCveId}</code>
+                                                            {request.vulnerabilityCve ? (
+                                                                <code>{request.vulnerabilityCve}</code>
                                                             ) : (
                                                                 <span
                                                                     className="text-muted"

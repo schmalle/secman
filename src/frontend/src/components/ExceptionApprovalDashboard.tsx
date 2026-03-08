@@ -100,7 +100,7 @@ const ExceptionApprovalDashboard: React.FC = () => {
   };
 
   const handleQuickApprove = async (request: VulnerabilityExceptionRequestDto) => {
-    if (!confirm(`Approve exception request for ${request.vulnerabilityCveId || 'vulnerability'} on ${request.assetName}?`)) {
+    if (!confirm(`Approve exception request for ${request.vulnerabilityCve || 'vulnerability'} on ${request.assetName}?`)) {
       return;
     }
 
@@ -330,7 +330,7 @@ const ExceptionApprovalDashboard: React.FC = () => {
                 )}
               </h5>
 
-              {pendingRequests && pendingRequests.content.length === 0 ? (
+              {pendingRequests && (!pendingRequests.content || pendingRequests.content.length === 0) ? (
                 <div className="text-center py-5">
                   <i className="bi bi-check-circle display-1 text-success"></i>
                   <p className="text-muted mt-3">
@@ -354,7 +354,7 @@ const ExceptionApprovalDashboard: React.FC = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {pendingRequests?.content.map((request) => {
+                        {pendingRequests?.content?.map((request) => {
                           const submittedDate = new Date(request.createdAt);
                           const now = new Date();
                           const daysPending = Math.floor((now.getTime() - submittedDate.getTime()) / (1000 * 60 * 60 * 24));
@@ -362,7 +362,7 @@ const ExceptionApprovalDashboard: React.FC = () => {
                           return (
                             <tr key={request.id}>
                               <td>
-                                <CveLink cveId={request.vulnerabilityCveId} />
+                                <CveLink cveId={request.vulnerabilityCve} />
                               </td>
                               <td>{request.assetName}</td>
                               <td>{request.requestedByUsername}</td>
