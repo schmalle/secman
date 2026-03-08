@@ -1,0 +1,42 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "0caf0cb919aa",
+  "session_id": "370e3f5e-7c1c-4014-8e1f-84ab3dd67362",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-08T17:59:15.960888Z",
+  "branch": "main",
+  "checkpoints_count": 2,
+  "files_touched": [
+    ".idea/workspace.xml",
+    "src/backendng/src/main/kotlin/com/secman/controller/AuthController.kt",
+    "src/backendng/src/main/kotlin/com/secman/controller/OAuthController.kt",
+    "src/backendng/src/main/kotlin/com/secman/repository/UserRepository.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/OAuthService.kt",
+    "src/frontend/src/components/Login.tsx",
+    "src/frontend/src/components/Sidebar.tsx",
+    "src/frontend/src/utils/auth-init.ts"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "1ff366f71fa6",
+  "checkpoint_transcript_start": 45,
+  "transcript_lines_at_start": 45,
+  "token_usage": {
+    "input_tokens": 55,
+    "cache_creation_tokens": 60215,
+    "cache_read_tokens": 3224261,
+    "output_tokens": 14000,
+    "api_call_count": 49
+  },
+  "session_metrics": {
+    "turn_count": 3
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-08T17:59:15.599005Z",
+    "agent_lines": 0,
+    "human_added": 0,
+    "human_modified": 5,
+    "human_removed": 47,
+    "total_committed": 23,
+    "agent_percentage": 0
+  }
+}

@@ -1,0 +1,12 @@
+if a user, who is not ADMIN or SECCHAMPION, has no workgroups, the subitem "WG vulns" under Vulnerability management must not be shown
+
+---
+
+<task-notification>
+<task-id>biv18cxoy</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-flake-sources-misc-secman/tasks/biv18cxoy.output</output-file>
+<status>completed</status>
+<summary>Background command "Build backend to verify no errors" completed (exit code 0)</summary>
+</task-notification>
+Read the output file to retrieve the result: /private/tmp/claude-501/-Users-flake-sources-misc-secman/tasks/biv18cxoy.output
