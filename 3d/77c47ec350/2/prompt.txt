@@ -1,0 +1,5 @@
+there seems to be a bug. i have asked for an exception for a CVE from 2024, but in the Details view for my exception requests I dont see the number at all, please propose a fix plan
+
+---
+
+A
