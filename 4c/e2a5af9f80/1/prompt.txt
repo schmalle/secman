@@ -1,0 +1,5 @@
+there is a Javascript error, please fix this, i still cannot see the asset
+
+---
+
+please propose a fix for this error, which is ultimatly blocking ownership assignments
