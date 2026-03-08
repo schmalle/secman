@@ -40,7 +40,8 @@ open class AuthController(
         val id: Long,
         val username: String,
         val email: String,
-        val roles: List<String>
+        val roles: List<String>,
+        val workgroupCount: Long = 0
     )
 
     @Serdeable
@@ -48,7 +49,8 @@ open class AuthController(
         val id: Long,
         val username: String,
         val email: String,
-        val roles: List<String>
+        val roles: List<String>,
+        val workgroupCount: Long = 0
     )
 
     @Post("/login")
@@ -115,7 +117,8 @@ open class AuthController(
             id = user.id!!,
             username = user.username,
             email = user.email,
-            roles = user.roles.map { it.name }
+            roles = user.roles.map { it.name },
+            workgroupCount = userRepository.countWorkgroupsByUsername(user.username)
         )
 
         // Set JWT in HttpOnly secure cookie (primary auth mechanism)
@@ -156,7 +159,8 @@ open class AuthController(
             id = user.id!!,
             username = user.username,
             email = user.email,
-            roles = user.roles.map { it.name }
+            roles = user.roles.map { it.name },
+            workgroupCount = userRepository.countWorkgroupsByUsername(user.username)
         )
 
         return HttpResponse.ok(response)

@@ -25,6 +25,7 @@ const Sidebar = () => {
     const [hasReq, setHasReq] = useState(false);
     const [hasClassification, setHasClassification] = useState(false);
     const [userRoles, setUserRoles] = useState<string[]>([]);
+    const [workgroupCount, setWorkgroupCount] = useState<number>(0);
     const [pendingExceptionCount, setPendingExceptionCount] = useState<number>(0);
 
     const toggleRequirements = () => {
@@ -85,6 +86,7 @@ const Sidebar = () => {
             setHasReq(hasReqAccess(roles));
             setHasClassification(hasClassificationAccess(roles));
             setUserRoles(roles);
+            setWorkgroupCount(user?.workgroupCount || 0);
         }
 
         // Check on mount
@@ -274,7 +276,7 @@ const Sidebar = () => {
                                         </a>
                                     </li>
                                 )}
-                                {!isAdmin && (
+                                {!isAdmin && (userRoles.includes('SECCHAMPION') || workgroupCount > 0) && (
                                     <li>
                                         <a href="/wg-vulns" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary"
                                             title="View vulnerabilities for your workgroups">

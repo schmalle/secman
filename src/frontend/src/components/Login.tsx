@@ -117,7 +117,8 @@ const Login = () => {
                     id: data.id,
                     username: data.username,
                     email: data.email,
-                    roles: data.roles
+                    roles: data.roles,
+                    workgroupCount: data.workgroupCount || 0
                 };
                 localStorage.setItem('user', JSON.stringify(userData));
                 // Note: Token is NOT stored in localStorage for security (XSS protection)

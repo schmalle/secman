@@ -581,7 +581,8 @@ open class OAuthService(
                         id = user.id!!,
                         username = user.username,
                         email = user.email,
-                        roles = user.roles.map { it.name }
+                        roles = user.roles.map { it.name },
+                        workgroupCount = userRepository.countWorkgroupsByUsername(user.username)
                     )
                 )
 
@@ -1172,7 +1173,8 @@ open class OAuthService(
         val id: Long,
         val username: String,
         val email: String,
-        val roles: List<String>
+        val roles: List<String>,
+        val workgroupCount: Long = 0
     )
 
     sealed class CallbackResult {

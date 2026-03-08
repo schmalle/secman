@@ -43,6 +43,9 @@ interface UserRepository : JpaRepository<User, Long> {
     """)
     fun findAllWithWorkgroups(): List<User>
 
+    @Query("SELECT COUNT(w) FROM User u JOIN u.workgroups w WHERE u.username = :username")
+    fun countWorkgroupsByUsername(username: String): Long
+
     fun findByUsername(username: String): Optional<User>
 
     fun findByEmail(email: String): Optional<User>
