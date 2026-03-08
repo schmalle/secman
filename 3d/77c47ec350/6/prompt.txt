@@ -1,0 +1,1 @@
+IMAGE 15 shows an exception request, image 16 shows an error, the Exception was already deleted from admin user, hence the error should not appear at all, please analyze and propose a fix
