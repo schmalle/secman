@@ -48,7 +48,8 @@ open class AuthController(
         val id: Long,
         val username: String,
         val email: String,
-        val roles: List<String>
+        val roles: List<String>,
+        val hasWorkgroups: Boolean = false
     )
 
     @Post("/login")
@@ -152,11 +153,14 @@ open class AuthController(
         }
 
         val user = userOptional.get()
+        val userWithWorkgroups = userRepository.findByIdWithWorkgroups(user.id!!)
+        val hasWorkgroups = userWithWorkgroups.isPresent && userWithWorkgroups.get().workgroups.isNotEmpty()
         val response = StatusResponse(
             id = user.id!!,
             username = user.username,
             email = user.email,
-            roles = user.roles.map { it.name }
+            roles = user.roles.map { it.name },
+            hasWorkgroups = hasWorkgroups
         )
 
         return HttpResponse.ok(response)

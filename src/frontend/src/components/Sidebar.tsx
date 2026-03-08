@@ -25,6 +25,7 @@ const Sidebar = () => {
     const [hasReq, setHasReq] = useState(false);
     const [hasClassification, setHasClassification] = useState(false);
     const [userRoles, setUserRoles] = useState<string[]>([]);
+    const [hasWorkgroups, setHasWorkgroups] = useState(false);
     const [pendingExceptionCount, setPendingExceptionCount] = useState<number>(0);
 
     const toggleRequirements = () => {
@@ -85,6 +86,7 @@ const Sidebar = () => {
             setHasReq(hasReqAccess(roles));
             setHasClassification(hasClassificationAccess(roles));
             setUserRoles(roles);
+            setHasWorkgroups(user?.hasWorkgroups || false);
         }
 
         // Check on mount
@@ -252,21 +254,17 @@ const Sidebar = () => {
                                         </a>
                                     </li>
                                 )}
-                                {!isAdmin && (
-                                    <li>
-                                        <a href="/vulnerabilities/domain" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                            <i className="bi bi-globe me-2"></i> Domain vulns
-                                        </a>
-                                    </li>
-                                )}
-                                {!isAdmin && (
-                                    <li>
-                                        <a href="/vulnerabilities/system" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                            <i className="bi bi-hdd me-2"></i> System vulns
-                                        </a>
-                                    </li>
-                                )}
-                                {!isAdmin && (
+                                <li>
+                                    <a href="/vulnerabilities/domain" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-globe me-2"></i> Domain vulns
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="/vulnerabilities/system" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-hdd me-2"></i> System vulns
+                                    </a>
+                                </li>
+                                {(isAdmin || userRoles.includes('SECCHAMPION') || hasWorkgroups) && (
                                     <li>
                                         <a href="/account-vulns" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary"
                                             title="View vulnerabilities for your AWS accounts">
@@ -274,14 +272,12 @@ const Sidebar = () => {
                                         </a>
                                     </li>
                                 )}
-                                {!isAdmin && (
-                                    <li>
-                                        <a href="/wg-vulns" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary"
-                                            title="View vulnerabilities for your workgroups">
-                                            <i className="bi bi-people-fill me-2"></i> WG vulns
-                                        </a>
-                                    </li>
-                                )}
+                                <li>
+                                    <a href="/wg-vulns" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary"
+                                        title="View vulnerabilities for your workgroups">
+                                        <i className="bi bi-people-fill me-2"></i> WG vulns
+                                    </a>
+                                </li>
                                 <li>
                                     <a href="/outdated-assets" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
                                         <i className="bi bi-hourglass-split me-2"></i> Outdated Assets
