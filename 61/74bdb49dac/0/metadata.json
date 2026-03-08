@@ -1,0 +1,46 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "6174bdb49dac",
+  "session_id": "370e3f5e-7c1c-4014-8e1f-84ab3dd67362",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-08T18:21:54.705423Z",
+  "branch": "main",
+  "checkpoints_count": 4,
+  "files_touched": [
+    ".idea/workspace.xml",
+    ".specify/scripts/bash/create-new-feature.sh",
+    ".specify/scripts/bash/update-agent-context.sh",
+    ".specify/templates/plan-template.md",
+    "src/backendng/src/main/kotlin/com/secman/controller/AuthController.kt",
+    "src/backendng/src/main/kotlin/com/secman/controller/OAuthController.kt",
+    "src/backendng/src/main/kotlin/com/secman/repository/AwsAccountSharingRepository.kt",
+    "src/backendng/src/main/kotlin/com/secman/repository/UserMappingRepository.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/OAuthService.kt",
+    "src/frontend/src/components/Login.tsx",
+    "src/frontend/src/components/Sidebar.tsx",
+    "src/frontend/src/utils/auth-init.ts"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "309aa224bc7a",
+  "checkpoint_transcript_start": 294,
+  "transcript_lines_at_start": 294,
+  "token_usage": {
+    "input_tokens": 59,
+    "cache_creation_tokens": 29365,
+    "cache_read_tokens": 5604572,
+    "output_tokens": 14086,
+    "api_call_count": 53
+  },
+  "session_metrics": {
+    "turn_count": 7
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-08T18:21:53.93885Z",
+    "agent_lines": 34,
+    "human_added": 54,
+    "human_modified": 18,
+    "human_removed": 0,
+    "total_committed": 106,
+    "agent_percentage": 32.075471698113205
+  }
+}
