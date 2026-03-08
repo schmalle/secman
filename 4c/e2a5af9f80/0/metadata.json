@@ -1,0 +1,36 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "4ce2a5af9f80",
+  "session_id": "0fa43d35-d049-44a5-9b20-cc5a085745bb",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-08T16:03:23.16239Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/backendng/src/main/kotlin/com/secman/controller/AssetController.kt",
+    "src/frontend/src/components/AssetManagement.tsx"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "69361fec482a",
+  "checkpoint_transcript_start": 284,
+  "transcript_lines_at_start": 284,
+  "token_usage": {
+    "input_tokens": 46,
+    "cache_creation_tokens": 41054,
+    "cache_read_tokens": 2455153,
+    "output_tokens": 8995,
+    "api_call_count": 34
+  },
+  "session_metrics": {
+    "turn_count": 3
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-08T16:03:22.670917Z",
+    "agent_lines": 81,
+    "human_added": 17,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 98,
+    "agent_percentage": 82.6530612244898
+  }
+}

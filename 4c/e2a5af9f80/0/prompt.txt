@@ -1,0 +1,5 @@
+as admin user or secchampion user i can assign the ownership to a new user. Please create a select box for the ownership, which must contain "Crowdstrike Import" and all users, which are existing in the system. Please propose a plan.
+
+---
+
+yes
