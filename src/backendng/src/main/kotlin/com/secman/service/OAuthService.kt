@@ -8,6 +8,8 @@ import com.secman.domain.User
 import com.secman.event.UserCreatedEvent
 import com.secman.repository.IdentityProviderRepository
 import com.secman.repository.OAuthStateRepository
+import com.secman.repository.AwsAccountSharingRepository
+import com.secman.repository.UserMappingRepository
 import com.secman.repository.UserRepository
 import com.secman.util.MicrosoftErrorMapper
 import io.micronaut.context.event.ApplicationEventPublisher
@@ -147,6 +149,8 @@ open class OAuthService(
     private val identityProviderRepository: IdentityProviderRepository,
     private val oauthStateRepository: OAuthStateRepository,
     private val userRepository: UserRepository,
+    private val userMappingRepository: UserMappingRepository,
+    private val awsAccountSharingRepository: AwsAccountSharingRepository,
     private val tokenGenerator: TokenGenerator,
     private val objectMapper: ObjectMapper,
     private val microsoftErrorMapper: MicrosoftErrorMapper,
@@ -575,6 +579,9 @@ open class OAuthService(
                 logger.info("[{}] === OAuth Callback SUCCESS === user={}, email={}, isNew={}, duration={}ms",
                     correlationId, user.username, user.email, userResult.isNewUser, totalDurationMs)
 
+                val directAwsCount = userMappingRepository.countDistinctAwsAccountsByEmail(user.email)
+                val sharedAwsCount = awsAccountSharingRepository.countByTargetUserId(user.id!!)
+
                 return CallbackResult.Success(
                     token = tokenOptional.get(),
                     user = UserInfo(
@@ -582,7 +589,9 @@ open class OAuthService(
                         username = user.username,
                         email = user.email,
                         roles = user.roles.map { it.name },
-                        workgroupCount = userRepository.countWorkgroupsByUsername(user.username)
+                        workgroupCount = userRepository.countWorkgroupsByUsername(user.username),
+                        awsAccountCount = directAwsCount + sharedAwsCount,
+                        domainCount = userMappingRepository.countDistinctDomainsByEmail(user.email)
                     )
                 )
 
@@ -1174,7 +1183,9 @@ open class OAuthService(
         val username: String,
         val email: String,
         val roles: List<String>,
-        val workgroupCount: Long = 0
+        val workgroupCount: Long = 0,
+        val awsAccountCount: Long = 0,
+        val domainCount: Long = 0
     )
 
     sealed class CallbackResult {

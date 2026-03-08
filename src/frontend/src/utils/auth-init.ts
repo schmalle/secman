@@ -6,6 +6,8 @@ export interface User {
     email: string;
     roles: string[];
     workgroupCount?: number;
+    awsAccountCount?: number;
+    domainCount?: number;
 }
 
 declare global {

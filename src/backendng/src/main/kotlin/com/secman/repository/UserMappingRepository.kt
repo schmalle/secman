@@ -113,6 +113,9 @@ interface UserMappingRepository : JpaRepository<UserMapping, Long> {
     @Query("SELECT DISTINCT m.awsAccountId FROM UserMapping m WHERE m.email = :email AND m.awsAccountId IS NOT NULL")
     fun findDistinctAwsAccountIdByEmail(email: String): List<String>
 
+    @Query("SELECT COUNT(DISTINCT m.awsAccountId) FROM UserMapping m WHERE m.email = :email AND m.awsAccountId IS NOT NULL")
+    fun countDistinctAwsAccountsByEmail(email: String): Long
+
     /**
      * Find distinct domains for a user
      *
@@ -123,6 +126,9 @@ interface UserMappingRepository : JpaRepository<UserMapping, Long> {
      */
     @Query("SELECT DISTINCT m.domain FROM UserMapping m WHERE m.email = :email AND m.domain IS NOT NULL")
     fun findDistinctDomainByEmail(email: String): List<String>
+
+    @Query("SELECT COUNT(DISTINCT m.domain) FROM UserMapping m WHERE m.email = :email AND m.domain IS NOT NULL")
+    fun countDistinctDomainsByEmail(email: String): Long
 
     @Query("SELECT DISTINCT m.domain FROM UserMapping m WHERE m.domain IS NOT NULL AND m.domain != ''")
     fun findDistinctDomains(): List<String>

@@ -1,6 +1,8 @@
 package com.secman.controller
 
 import com.secman.domain.User
+import com.secman.repository.AwsAccountSharingRepository
+import com.secman.repository.UserMappingRepository
 import com.secman.repository.UserRepository
 import com.secman.service.AuthCookieService
 import com.secman.service.InputValidationService
@@ -22,6 +24,8 @@ import java.util.*
 @Controller("/api/auth")
 open class AuthController(
     private val userRepository: UserRepository,
+    private val userMappingRepository: UserMappingRepository,
+    private val awsAccountSharingRepository: AwsAccountSharingRepository,
     private val tokenGenerator: TokenGenerator,
     private val inputValidationService: InputValidationService,
     private val authCookieService: AuthCookieService
@@ -41,7 +45,9 @@ open class AuthController(
         val username: String,
         val email: String,
         val roles: List<String>,
-        val workgroupCount: Long = 0
+        val workgroupCount: Long = 0,
+        val awsAccountCount: Long = 0,
+        val domainCount: Long = 0
     )
 
     @Serdeable
@@ -50,7 +56,9 @@ open class AuthController(
         val username: String,
         val email: String,
         val roles: List<String>,
-        val workgroupCount: Long = 0
+        val workgroupCount: Long = 0,
+        val awsAccountCount: Long = 0,
+        val domainCount: Long = 0
     )
 
     @Post("/login")
@@ -113,12 +121,17 @@ open class AuthController(
 
         val token = tokenOptional.get()
 
+        val directAwsCount = userMappingRepository.countDistinctAwsAccountsByEmail(user.email)
+        val sharedAwsCount = awsAccountSharingRepository.countByTargetUserId(user.id!!)
+
         val response = LoginResponse(
             id = user.id!!,
             username = user.username,
             email = user.email,
             roles = user.roles.map { it.name },
-            workgroupCount = userRepository.countWorkgroupsByUsername(user.username)
+            workgroupCount = userRepository.countWorkgroupsByUsername(user.username),
+            awsAccountCount = directAwsCount + sharedAwsCount,
+            domainCount = userMappingRepository.countDistinctDomainsByEmail(user.email)
         )
 
         // Set JWT in HttpOnly secure cookie (primary auth mechanism)
@@ -155,12 +168,17 @@ open class AuthController(
         }
 
         val user = userOptional.get()
+        val directAwsCount = userMappingRepository.countDistinctAwsAccountsByEmail(user.email)
+        val sharedAwsCount = awsAccountSharingRepository.countByTargetUserId(user.id!!)
+
         val response = StatusResponse(
             id = user.id!!,
             username = user.username,
             email = user.email,
             roles = user.roles.map { it.name },
-            workgroupCount = userRepository.countWorkgroupsByUsername(user.username)
+            workgroupCount = userRepository.countWorkgroupsByUsername(user.username),
+            awsAccountCount = directAwsCount + sharedAwsCount,
+            domainCount = userMappingRepository.countDistinctDomainsByEmail(user.email)
         )
 
         return HttpResponse.ok(response)

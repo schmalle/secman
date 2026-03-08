@@ -179,7 +179,9 @@ class OAuthController(
                         "username" to result.user.username,
                         "email" to result.user.email,
                         "roles" to result.user.roles,
-                        "workgroupCount" to result.user.workgroupCount
+                        "workgroupCount" to result.user.workgroupCount,
+                        "awsAccountCount" to result.user.awsAccountCount,
+                        "domainCount" to result.user.domainCount
                     ))
 
                     // Only pass user metadata in URL - JWT is delivered solely via HttpOnly cookie

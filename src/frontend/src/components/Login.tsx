@@ -118,7 +118,9 @@ const Login = () => {
                     username: data.username,
                     email: data.email,
                     roles: data.roles,
-                    workgroupCount: data.workgroupCount || 0
+                    workgroupCount: data.workgroupCount || 0,
+                    awsAccountCount: data.awsAccountCount || 0,
+                    domainCount: data.domainCount || 0
                 };
                 localStorage.setItem('user', JSON.stringify(userData));
                 // Note: Token is NOT stored in localStorage for security (XSS protection)

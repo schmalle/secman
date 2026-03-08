@@ -26,6 +26,8 @@ const Sidebar = () => {
     const [hasClassification, setHasClassification] = useState(false);
     const [userRoles, setUserRoles] = useState<string[]>([]);
     const [workgroupCount, setWorkgroupCount] = useState<number>(0);
+    const [awsAccountCount, setAwsAccountCount] = useState<number>(0);
+    const [domainCount, setDomainCount] = useState<number>(0);
     const [pendingExceptionCount, setPendingExceptionCount] = useState<number>(0);
 
     const toggleRequirements = () => {
@@ -87,6 +89,8 @@ const Sidebar = () => {
             setHasClassification(hasClassificationAccess(roles));
             setUserRoles(roles);
             setWorkgroupCount(user?.workgroupCount || 0);
+            setAwsAccountCount(user?.awsAccountCount || 0);
+            setDomainCount(user?.domainCount || 0);
         }
 
         // Check on mount
@@ -254,7 +258,7 @@ const Sidebar = () => {
                                         </a>
                                     </li>
                                 )}
-                                {!isAdmin && (
+                                {!isAdmin && (userRoles.includes('SECCHAMPION') || domainCount > 0) && (
                                     <li>
                                         <a href="/vulnerabilities/domain" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
                                             <i className="bi bi-globe me-2"></i> Domain vulns
@@ -268,7 +272,7 @@ const Sidebar = () => {
                                         </a>
                                     </li>
                                 )}
-                                {!isAdmin && (
+                                {!isAdmin && (userRoles.includes('SECCHAMPION') || awsAccountCount > 0) && (
                                     <li>
                                         <a href="/account-vulns" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary"
                                             title="View vulnerabilities for your AWS accounts">

@@ -18,6 +18,8 @@ interface AwsAccountSharingRepository : JpaRepository<AwsAccountSharing, Long> {
 
     fun findByTargetUserId(targetUserId: Long): List<AwsAccountSharing>
 
+    fun countByTargetUserId(targetUserId: Long): Long
+
     fun findBySourceUserId(sourceUserId: Long): List<AwsAccountSharing>
 
     fun deleteBySourceUserId(sourceUserId: Long)
