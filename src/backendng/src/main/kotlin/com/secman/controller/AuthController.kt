@@ -1,8 +1,10 @@
 package com.secman.controller
 
 import com.secman.domain.User
+import com.secman.repository.UserMappingRepository
 import com.secman.repository.UserRepository
 import com.secman.service.AuthCookieService
+import com.secman.service.AwsAccountSharingService
 import com.secman.service.InputValidationService
 import io.micronaut.http.HttpRequest
 import io.micronaut.http.HttpResponse
@@ -24,7 +26,9 @@ open class AuthController(
     private val userRepository: UserRepository,
     private val tokenGenerator: TokenGenerator,
     private val inputValidationService: InputValidationService,
-    private val authCookieService: AuthCookieService
+    private val authCookieService: AuthCookieService,
+    private val userMappingRepository: UserMappingRepository,
+    private val awsAccountSharingService: AwsAccountSharingService
 ) {
 
     private val passwordEncoder = BCryptPasswordEncoder()
@@ -48,7 +52,8 @@ open class AuthController(
         val id: Long,
         val username: String,
         val email: String,
-        val roles: List<String>
+        val roles: List<String>,
+        val hasAwsAccounts: Boolean = false
     )
 
     @Post("/login")
@@ -152,11 +157,18 @@ open class AuthController(
         }
 
         val user = userOptional.get()
+
+        // Check if user has any AWS account mappings (own or shared)
+        val ownAwsAccounts = userMappingRepository.findDistinctAwsAccountIdByEmail(user.email)
+        val sharedAwsAccounts = awsAccountSharingService.getSharedAwsAccountIdsByEmail(user.email)
+        val hasAwsAccounts = ownAwsAccounts.isNotEmpty() || sharedAwsAccounts.isNotEmpty()
+
         val response = StatusResponse(
             id = user.id!!,
             username = user.username,
             email = user.email,
-            roles = user.roles.map { it.name }
+            roles = user.roles.map { it.name },
+            hasAwsAccounts = hasAwsAccounts
         )
 
         return HttpResponse.ok(response)
