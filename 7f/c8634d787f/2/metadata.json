@@ -1,0 +1,46 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "7fc8634d787f",
+  "session_id": "53f11e68-7574-4699-8510-5edf02972f26",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-08T15:10:48.723874Z",
+  "branch": "main",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "src/backendng/src/main/kotlin/com/secman/config/JwtSigningValidator.kt",
+    "src/backendng/src/main/kotlin/com/secman/controller/AlignmentController.kt",
+    "src/backendng/src/main/kotlin/com/secman/controller/AssetController.kt",
+    "src/backendng/src/main/kotlin/com/secman/controller/AuthController.kt",
+    "src/backendng/src/main/kotlin/com/secman/controller/DemandController.kt",
+    "src/backendng/src/main/kotlin/com/secman/controller/IdentityProviderController.kt",
+    "src/backendng/src/main/kotlin/com/secman/controller/ImportController.kt",
+    "src/backendng/src/main/kotlin/com/secman/controller/OAuthController.kt",
+    "src/backendng/src/main/kotlin/com/secman/controller/RiskController.kt",
+    "src/backendng/src/main/kotlin/com/secman/exception/GenericExceptionHandler.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/ConfigBundleService.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/EmailService.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/McpDelegationService.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/SecurityService.kt",
+    "src/backendng/src/main/resources/application.yml"
+  ],
+  "agent": "Claude Code",
+  "transcript_identifier_at_start": "059c46a7-5ca5-42be-a2b4-3b608e42517e",
+  "checkpoint_transcript_start": 172,
+  "transcript_lines_at_start": 172,
+  "token_usage": {
+    "input_tokens": 99,
+    "cache_creation_tokens": 268741,
+    "cache_read_tokens": 9142541,
+    "output_tokens": 35851,
+    "api_call_count": 77
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-08T15:10:47.603301Z",
+    "agent_lines": 246,
+    "human_added": 1500,
+    "human_modified": 8,
+    "human_removed": 0,
+    "total_committed": 1754,
+    "agent_percentage": 14.02508551881414
+  }
+}
