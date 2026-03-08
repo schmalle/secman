@@ -3,7 +3,7 @@
   "checkpoint_id": "3d77c47ec350",
   "strategy": "manual-commit",
   "branch": "main",
-  "checkpoints_count": 5,
+  "checkpoints_count": 7,
   "files_touched": [
     ".idea/workspace.xml",
     "src/backendng/src/main/kotlin/com/secman/controller/VulnerabilityExceptionRequestController.kt",
@@ -43,13 +43,19 @@
       "transcript": "/3d/77c47ec350/3/full.jsonl",
       "content_hash": "/3d/77c47ec350/3/content_hash.txt",
       "prompt": "/3d/77c47ec350/3/prompt.txt"
+    },
+    {
+      "metadata": "/3d/77c47ec350/4/metadata.json",
+      "transcript": "/3d/77c47ec350/4/full.jsonl",
+      "content_hash": "/3d/77c47ec350/4/content_hash.txt",
+      "prompt": "/3d/77c47ec350/4/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 72,
-    "cache_creation_tokens": 232059,
-    "cache_read_tokens": 2506259,
-    "output_tokens": 36478,
-    "api_call_count": 48
+    "input_tokens": 96,
+    "cache_creation_tokens": 288986,
+    "cache_read_tokens": 3134785,
+    "output_tokens": 41942,
+    "api_call_count": 62
   }
 }
