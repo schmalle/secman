@@ -44,7 +44,7 @@ class RequirementCliService(
                 .exchange(request, Map::class.java)
 
             if (response.status.code == 200) {
-                val body = response.body() as? Map<*, *>
+                val body = response.body()
                 val token = body?.get("access_token")?.toString()
                     ?: body?.get("token")?.toString()
                     ?: body?.get("accessToken")?.toString()
@@ -196,7 +196,7 @@ class RequirementCliService(
                 .exchange(request, Map::class.java)
 
             if (response.status.code == 200 || response.status.code == 201) {
-                val body = response.body() as? Map<*, *>
+                val body = response.body()
                 val id = (body?.get("id") as? Number)?.toLong()
                 return AddRequirementResult(
                     success = true,
@@ -273,7 +273,7 @@ class RequirementCliService(
                 .exchange(request, Map::class.java)
 
             if (response.status.code == 200) {
-                val body = response.body() as? Map<*, *>
+                val body = response.body()
                 val message = body?.get("message")?.toString() ?: "All requirements deleted successfully"
                 log.info("Successfully deleted all requirements")
                 return DeleteAllResult(

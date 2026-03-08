@@ -267,12 +267,12 @@ open class MaterializedViewRefreshService(
         } ?: 0
 
         // Get workgroup IDs (denormalized for performance) - already loaded via JOIN FETCH
-        val workgroupIds = asset.workgroups?.joinToString(",") { it.id.toString() }
+        val workgroupIds = asset.workgroups.joinToString(",") { it.id.toString() }
 
         return OutdatedAssetMaterializedView(
             assetId = asset.id!!,
             assetName = asset.name,
-            assetType = asset.type ?: "UNKNOWN",
+            assetType = asset.type,
             totalOverdueCount = overdueVulns.size,
             criticalCount = criticalCount,
             highCount = highCount,

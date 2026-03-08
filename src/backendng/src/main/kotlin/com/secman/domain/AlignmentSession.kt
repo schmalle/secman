@@ -44,10 +44,11 @@ data class AlignmentSession(
 
     /**
      * User who initiated the alignment process.
+     * Nullable to allow user deletion without losing session history.
      */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "initiated_by", nullable = false)
-    var initiatedBy: User,
+    @JoinColumn(name = "initiated_by", nullable = true)
+    var initiatedBy: User? = null,
 
     /**
      * Reference to the baseline release for comparison.

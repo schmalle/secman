@@ -106,7 +106,7 @@ class GetScansTool(
                     "id" to scan.id,
                     "scanType" to scan.scanType,
                     "filename" to scan.filename,
-                    "scanDate" to scan.scanDate?.toString(),
+                    "scanDate" to scan.scanDate.toString(),
                     "uploadedBy" to scan.uploadedBy,
                     "hostCount" to scan.hostCount,
                     "duration" to scan.duration,

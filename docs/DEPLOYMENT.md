@@ -1,6 +1,6 @@
 # Secman Deployment Guide
 
-**Last Updated:** 2025-11-26
+**Last Updated:** 2026-03-08
 **Version:** 2.0
 **Platforms:** Amazon Linux 2023, Ubuntu 20.04+, RHEL 8+
 
@@ -48,8 +48,8 @@ Complete production deployment guide for the Secman security management applicat
 
 **Components:**
 
-- **Backend**: Kotlin 2.2.21, Java 21, Micronaut 4.10
-- **Frontend**: Astro 5.15, React 19, Node.js 20.x
+- **Backend**: Kotlin 2.3.10, Java 21, Micronaut 4.10
+- **Frontend**: Astro 5.18, React 19, Node.js 20.x
 - **Database**: MariaDB 12
 - **Reverse Proxy**: Nginx with SSL termination
 
@@ -134,7 +134,7 @@ sudo passwd secman  # Set strong password
 **Amazon Linux / RHEL:**
 
 ```bash
-sudo curl -sS https://downloads.mariadb.com/MariaDB/mariadb_repo_setup | sudo bash -s -- --mariadb-server-version="mariadb-10.11"
+sudo curl -sS https://downloads.mariadb.com/MariaDB/mariadb_repo_setup | sudo bash -s -- --mariadb-server-version="mariadb-12.0"
 sudo dnf install -y MariaDB-server MariaDB-client
 ```
 
@@ -647,7 +647,7 @@ cd /opt/secman/app
 git pull origin main
 
 # Rebuild backend
-./gradlew :src:backendng:shadowJar -x test
+./gradlew :backendng:shadowJar -x test
 
 # Rebuild frontend
 cd src/frontend

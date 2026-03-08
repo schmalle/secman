@@ -272,7 +272,7 @@ class McpController(
             val mcpApiKey = authResult.apiKey!!
 
             // Security: Check rate limits before processing (HIGH-005 fix)
-            val rateLimitInfo = toolPermissionService.checkRateLimitForApiKey(mcpApiKey.id!!, request.id)
+            val rateLimitInfo = toolPermissionService.checkRateLimitForApiKey(mcpApiKey.id, request.id)
             if (rateLimitInfo.exceeded) {
                 auditService.logAuthenticationEvent(
                     McpEventType.RATE_LIMITED,
@@ -462,9 +462,10 @@ class McpController(
                 if (apiKey != null) {
                     val authResult = authService.authenticateApiKey(apiKey)
                     if (authResult.success) {
+                        val apiKeyVal = authResult.apiKey!!
                         auditService.logToolCall(
-                            apiKeyId = authResult.apiKey!!.id,
-                            userId = authResult.apiKey!!.userId,
+                            apiKeyId = apiKeyVal.id,
+                            userId = apiKeyVal.userId,
                             sessionId = "http-${request.id}",
                             toolName = request.params.name,
                             operation = McpOperation.READ, // Default

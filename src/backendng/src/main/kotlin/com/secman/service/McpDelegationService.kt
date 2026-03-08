@@ -168,9 +168,32 @@ class McpDelegationService {
 
             userRepository.findByEmailIgnoreCase(identifier).orElse(null)
         } else {
-            // Username path: skip email validation and domain check
+            // Username path: look up user first, then validate their email against allowed domains
             logger.debug("Using username lookup for delegation: {}", identifier)
-            userRepository.findByUsername(identifier).orElse(null)
+            val foundUser = userRepository.findByUsername(identifier).orElse(null)
+
+            // Enforce domain validation using the user's email (prevents domain bypass via username)
+            if (foundUser != null && !foundUser.email.isNullOrBlank()) {
+                if (!apiKey.isDelegationAllowedForEmail(foundUser.email)) {
+                    logger.warn("Domain rejected for username delegation: username={}, email={}, apiKey={}",
+                        identifier, foundUser.email, apiKey.keyId)
+                    recordFailure(apiKey.id, identifier, DelegationErrorCodes.DELEGATION_DOMAIN_REJECTED)
+                    return DelegationValidationResult.failure(
+                        DelegationErrorCodes.DELEGATION_DOMAIN_REJECTED,
+                        "User's email domain is not in the allowed list for this API key"
+                    )
+                }
+            } else if (foundUser != null && foundUser.email.isNullOrBlank()) {
+                // User has no email — cannot verify domain, reject delegation
+                logger.warn("Username delegation rejected: user {} has no email for domain validation", identifier)
+                recordFailure(apiKey.id, identifier, DelegationErrorCodes.DELEGATION_DOMAIN_REJECTED)
+                return DelegationValidationResult.failure(
+                    DelegationErrorCodes.DELEGATION_DOMAIN_REJECTED,
+                    "User has no email address — cannot validate domain for delegation"
+                )
+            }
+
+            foundUser
         }
 
         if (user == null) {

@@ -23,7 +23,7 @@ import org.slf4j.LoggerFactory
 import java.time.LocalDate
 
 @Controller("/api/risks")
-@Secured(SecurityRule.IS_AUTHENTICATED)
+@Secured("ADMIN", "RISK", "SECCHAMPION")
 @ExecuteOn(TaskExecutors.BLOCKING)
 open class RiskController(
     private val riskRepository: RiskRepository,

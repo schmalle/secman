@@ -123,7 +123,7 @@ class GetVulnerabilitiesTool(
                 cveIdFilter != null -> {
                     val allMatching = vulnerabilityRepository.findByVulnerabilityIdContainingIgnoreCase(cveIdFilter, Pageable.UNPAGED).content
                     val filtered = if (accessibleIds != null) {
-                        allMatching.filter { accessibleIds.contains(it.asset?.id) }
+                        allMatching.filter { accessibleIds.contains(it.asset.id) }
                     } else allMatching
                     val total = filtered.size
                     val start = page * pageSize
@@ -139,7 +139,7 @@ class GetVulnerabilitiesTool(
                 startDate != null && endDate != null -> {
                     val allMatching = vulnerabilityRepository.findByScanTimestampBetween(startDate, endDate, Pageable.UNPAGED).content
                     val filtered = if (accessibleIds != null) {
-                        allMatching.filter { accessibleIds.contains(it.asset?.id) }
+                        allMatching.filter { accessibleIds.contains(it.asset.id) }
                     } else allMatching
                     val total = filtered.size
                     val start = page * pageSize
@@ -157,7 +157,7 @@ class GetVulnerabilitiesTool(
                         vulnerabilityRepository.findByCvssSeverityIn(severities, Pageable.UNPAGED).content
                     }
                     val filtered = if (accessibleIds != null) {
-                        allMatching.filter { accessibleIds.contains(it.asset?.id) }
+                        allMatching.filter { accessibleIds.contains(it.asset.id) }
                     } else allMatching
                     val total = filtered.size
                     val start = page * pageSize
@@ -170,7 +170,7 @@ class GetVulnerabilitiesTool(
                 else -> {
                     if (accessibleIds != null) {
                         val allAccessible = vulnerabilityRepository.findAll()
-                            .filter { accessibleIds.contains(it.asset?.id) }
+                            .filter { accessibleIds.contains(it.asset.id) }
                         val total = allAccessible.size
                         val start = page * pageSize
                         val end = minOf(start + pageSize, total)
@@ -186,7 +186,7 @@ class GetVulnerabilitiesTool(
             val filteredContent = if (!includeExcepted) {
                 val activeExceptions = vulnerabilityExceptionService.getActiveExceptions()
                 resultPage.content.filter { vuln ->
-                    val asset = vuln.asset ?: return@filter true
+                    val asset = vuln.asset
                     activeExceptions.none { ex -> ex.matches(vuln, asset) }
                 }
             } else {
@@ -197,13 +197,13 @@ class GetVulnerabilitiesTool(
             val vulnerabilities = filteredContent.map { vuln ->
                 mapOf(
                     "id" to vuln.id,
-                    "assetId" to vuln.asset?.id,
-                    "assetName" to vuln.asset?.name,
+                    "assetId" to vuln.asset.id,
+                    "assetName" to vuln.asset.name,
                     "vulnerabilityId" to vuln.vulnerabilityId,
                     "cvssSeverity" to vuln.cvssSeverity,
                     "vulnerableProductVersions" to vuln.vulnerableProductVersions,
                     "daysOpen" to vuln.daysOpen,
-                    "scanTimestamp" to vuln.scanTimestamp?.toString(),
+                    "scanTimestamp" to vuln.scanTimestamp.toString(),
                     "createdAt" to vuln.createdAt?.toString()
                 )
             }

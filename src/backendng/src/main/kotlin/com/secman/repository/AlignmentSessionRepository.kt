@@ -62,4 +62,11 @@ interface AlignmentSessionRepository : JpaRepository<AlignmentSession, Long> {
      * Used for anonymous access to the alignment results page.
      */
     fun findByResultsToken(resultsToken: String): Optional<AlignmentSession>
+
+    /**
+     * Nullify the initiatedBy reference when a user is deleted.
+     * Preserves alignment session history without blocking user deletion.
+     */
+    @Query("UPDATE AlignmentSession a SET a.initiatedBy = NULL WHERE a.initiatedBy.id = :userId")
+    fun nullifyInitiatedByForUser(userId: Long): Int
 }

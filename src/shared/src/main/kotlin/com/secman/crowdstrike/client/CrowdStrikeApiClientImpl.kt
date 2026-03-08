@@ -42,7 +42,7 @@ import java.util.concurrent.atomic.AtomicInteger
  */
 @Singleton
 open class CrowdStrikeApiClientImpl(
-    @Client("https://api.crowdstrike.com")
+    @param:Client("https://api.crowdstrike.com")
     private val httpClient: HttpClient,
     private val authService: CrowdStrikeAuthService
 ) : CrowdStrikeApiClient {
@@ -235,7 +235,7 @@ open class CrowdStrikeApiClientImpl(
 
                             // Filter by device type (only if SERVER specified)
                             val meetsDeviceType = if (deviceType.equals("SERVER", ignoreCase = true)) {
-                                val hostname = vuln.hostname?.lowercase() ?: ""
+                                val hostname = vuln.hostname.lowercase()
                                 val isWorkstation = hostname.contains("laptop") ||
                                     hostname.contains("desktop") ||
                                     hostname.contains("workstation") ||

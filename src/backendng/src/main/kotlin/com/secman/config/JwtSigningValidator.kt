@@ -59,6 +59,6 @@ class JwtSigningValidator(
             )
         }
 
-        logger.info("JWT signing validation passed: tokens are signed with HS256")
+        logger.debug("JWT signing validation passed: tokens are signed with HS256")
     }
 }

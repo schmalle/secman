@@ -2,7 +2,7 @@
 
 Security requirement and risk assessment management tool.
 
-**Last Updated:** 2026-01-29
+**Last Updated:** 2026-03-08
 
 ---
 
@@ -18,6 +18,8 @@ Security requirement and risk assessment management tool.
 | [CrowdStrike Import](./CROWDSTRIKE_IMPORT.md) | Vulnerability import technical details         |
 | [Testing Guide](./TESTING.md)                 | Test infrastructure and patterns               |
 | [Troubleshooting](./TROUBLESHOOTING.md)       | Common issues and solutions                    |
+| [E2E Exception Workflow](./E2E_EXCEPTION_WORKFLOW_TEST.md) | End-to-end exception workflow test    |
+| [S3 User Mapping Import](./S3_USER_MAPPING_IMPORT.md) | S3-based user mapping imports            |
 
 ---
 
@@ -74,11 +76,11 @@ Using Secman for security management:
 
 **Technology Stack:**
 
-- **Backend**: Kotlin 2.3.0, Java 21, Micronaut 4.10, Hibernate JPA
-- **Frontend**: Astro 5.16, React 19, Bootstrap 5.3, Axios
+- **Backend**: Kotlin 2.3.10, Java 21, Micronaut 4.10, Hibernate JPA
+- **Frontend**: Astro 5.18, React 19, Bootstrap 5.3, Axios
 - **Database**: MariaDB 12 with auto-migration
-- **CLI**: Picocli 4.7, CrowdStrike API, AWS SDK v2
-- **Build**: Gradle 9.3 (Kotlin DSL)
+- **CLI**: Picocli 4.7.7, CrowdStrike API, AWS SDK v2
+- **Build**: Gradle 9.3.1 (Kotlin DSL)
 
 For detailed architecture, see [ARCHITECTURE.md](./ARCHITECTURE.md).
 
@@ -172,7 +174,8 @@ Connect Claude Desktop, Claude Code, or other MCP clients:
 
 ```bash
 claude mcp add --transport http secman http://localhost:8080/mcp \
-  --header "X-MCP-API-Key: sk-your-api-key"
+  --header "X-MCP-API-Key: sk-your-api-key" \
+  --header "X-MCP-User-Email: your.email@company.com"
 ```
 
 ### Claude Desktop
@@ -183,7 +186,8 @@ claude mcp add --transport http secman http://localhost:8080/mcp \
     "secman": {
       "command": "npx",
       "args": ["-y", "mcp-remote", "http://localhost:8080/mcp",
-               "--header", "X-MCP-API-Key: sk-your-api-key"]
+               "--header", "X-MCP-API-Key: sk-your-api-key",
+               "--header", "X-MCP-User-Email: your.email@company.com"]
     }
   }
 }
@@ -270,7 +274,9 @@ docs/
 ├── MCP.md                 <- AI assistant integration
 ├── CROWDSTRIKE_IMPORT.md  <- Vulnerability import
 ├── TESTING.md             <- Test infrastructure
-└── TROUBLESHOOTING.md     <- Common issues & solutions
+├── TROUBLESHOOTING.md     <- Common issues & solutions
+├── E2E_EXCEPTION_WORKFLOW_TEST.md  <- Exception E2E test
+└── S3_USER_MAPPING_IMPORT.md      <- S3 import guide
 ```
 
 ---

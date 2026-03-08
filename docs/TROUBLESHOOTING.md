@@ -1,6 +1,6 @@
 # Troubleshooting Guide
 
-**Last Updated:** 2026-01-11
+**Last Updated:** 2026-03-08
 
 This guide consolidates common issues and solutions for all Secman components.
 
@@ -287,10 +287,18 @@ echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | node mcp/mcp
 ### Test MCP Endpoint
 
 ```bash
+# Test initialize (does not require X-MCP-User-Email)
 curl -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
   -H "X-MCP-API-Key: sk-your-key" \
-  -d '{"jsonrpc":"2.0","id":"1","method":"tools/list"}'
+  -d '{"jsonrpc":"2.0","id":"1","method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
+
+# List tools (X-MCP-User-Email is mandatory)
+curl -X POST http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -H "X-MCP-API-Key: sk-your-key" \
+  -H "X-MCP-User-Email: your.email@company.com" \
+  -d '{"jsonrpc":"2.0","id":"2","method":"tools/list"}'
 ```
 
 ---

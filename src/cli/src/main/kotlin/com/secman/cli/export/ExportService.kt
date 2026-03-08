@@ -96,6 +96,7 @@ class ExportService {
      * @param promptOverwrite If true, prompts user before overwriting existing file
      * @return true if exported successfully, false if cancelled by user
      */
+    @Suppress("DEPRECATION")
     fun exportToCsv(
         response: CrowdStrikeQueryResponse,
         outputFile: File,

@@ -99,7 +99,7 @@ class GetAlignmentStatusTool(
                     "releaseName" to status.session.release.name,
                     "status" to status.session.status.name,
                     "changedRequirementsCount" to status.session.changedRequirementsCount,
-                    "initiatedBy" to status.session.initiatedBy.username,
+                    "initiatedBy" to (status.session.initiatedBy?.username ?: "deleted user"),
                     "baselineReleaseId" to status.session.baselineRelease?.id,
                     "startedAt" to status.session.startedAt?.toString(),
                     "completedAt" to status.session.completedAt?.toString()

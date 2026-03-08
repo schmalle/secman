@@ -74,6 +74,7 @@ open class ImportController(
     @Post("/upload-xlsx")
     @Consumes(MediaType.MULTIPART_FORM_DATA)
     @Transactional
+    @Secured("ADMIN", "REQADMIN")
     open fun uploadXlsx(@Part xlsxFile: CompletedFileUpload): HttpResponse<*> {
         return try {
             log.debug("Processing Excel file upload: {}", xlsxFile.filename)
@@ -400,6 +401,7 @@ open class ImportController(
     @Post("/upload-vulnerability-xlsx")
     @Consumes(MediaType.MULTIPART_FORM_DATA)
     @Transactional
+    @Secured("ADMIN", "VULN")
     open fun uploadVulnerabilityXlsx(
         @Part xlsxFile: CompletedFileUpload,
         @Part scanDate: String
@@ -709,7 +711,7 @@ open class ImportController(
     @Post("/upload-masscan-xml")
     @Consumes(MediaType.MULTIPART_FORM_DATA)
     @Transactional
-    @Secured(SecurityRule.IS_AUTHENTICATED)
+    @Secured("ADMIN", "VULN")
     open fun uploadMasscanXml(
         @Part xmlFile: CompletedFileUpload,
         authentication: Authentication
@@ -893,6 +895,7 @@ open class ImportController(
      */
     @Post("/upload-assets-xlsx")
     @Consumes(MediaType.MULTIPART_FORM_DATA)
+    @Secured("ADMIN", "VULN")
     open fun uploadAssetsExcel(
         @Part xlsxFile: CompletedFileUpload,
         authentication: Authentication

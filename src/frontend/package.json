@@ -16,8 +16,8 @@
     "@popperjs/core": "^2.11.8",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "astro": "^5.17.3",
-    "axios": "^1.13.5",
+    "astro": "^5.18.0",
+    "axios": "^1.13.6",
     "bootstrap": "^5.3.8",
     "bootstrap-icons": "^1.13.1",
     "chart.js": "^4.5.1",
@@ -30,10 +30,10 @@
     "react-markdown": "^10.1.0"
   },
   "devDependencies": {
-    "@types/node": "^25.3.0",
-    "@typescript-eslint/eslint-plugin": "^8.56.0",
-    "@typescript-eslint/parser": "^8.56.0",
-    "eslint": "^9.39.3",
+    "@types/node": "^25.3.5",
+    "@typescript-eslint/eslint-plugin": "^8.56.1",
+    "@typescript-eslint/parser": "^8.56.1",
+    "eslint": "^9.39.4",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1"
   },

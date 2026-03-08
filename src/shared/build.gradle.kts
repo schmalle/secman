@@ -48,8 +48,9 @@ kotlin {
 
 tasks {
     compileKotlin {
-        // jvmTarget is automatically set by jvmToolchain(21) above
-        // No need for kotlinOptions block
+        compilerOptions {
+            freeCompilerArgs.add("-Xannotation-default-target=param-property")
+        }
     }
     
     // Disable all test tasks

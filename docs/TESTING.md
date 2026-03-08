@@ -1,6 +1,6 @@
 # SecMan Testing Guide
 
-**Last Updated:** 2026-01-29
+**Last Updated:** 2026-03-08
 **Version:** 1.1
 
 Comprehensive guide for testing the SecMan security management platform.
@@ -43,14 +43,14 @@ SecMan uses a comprehensive testing strategy with three test tiers:
 
 ```kotlin
 // build.gradle.kts (backend)
-testImplementation("org.junit.jupiter:junit-jupiter-api:6.0.2")
-testImplementation("org.junit.jupiter:junit-jupiter-engine:6.0.2")
+testImplementation("org.junit.jupiter:junit-jupiter-api:6.0.3")
+testImplementation("org.junit.jupiter:junit-jupiter-engine:6.0.3")
 testImplementation("io.micronaut.test:micronaut-test-junit5")
-testImplementation("io.mockk:mockk:1.14.7")
+testImplementation("io.mockk:mockk:1.14.9")
 testImplementation("org.testcontainers:testcontainers:2.0.3")
 testImplementation("org.testcontainers:mariadb:2.0.3")
 testImplementation("org.testcontainers:junit-jupiter:2.0.3")
-testImplementation("org.assertj:assertj-core:3.27.6")
+testImplementation("org.assertj:assertj-core:3.27.7")
 ```
 
 ### Framework Roles

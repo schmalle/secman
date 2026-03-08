@@ -83,22 +83,31 @@ open class SecurityService(
         if (user.isAdmin()) {
             return true
         }
-        
+
         val riskAssessmentOpt = riskAssessmentRepository.findById(riskAssessmentId)
         if (riskAssessmentOpt.isEmpty) {
             return false
         }
-        
+
         val riskAssessment = riskAssessmentOpt.get()
-        
-        // For now, allow access to all authenticated users for their assessments
-        // In a production system, you would check:
-        // - If user created the assessment
-        // - If user is assigned to the demand/asset
-        // - If user has specific role permissions
-        // This is a simplified implementation
-        
-        return true
+
+        // Check if user is the assessor (person performing the assessment)
+        if (riskAssessment.assessor.id == user.id) {
+            return true
+        }
+
+        // Check if user is the requestor (person who requested the assessment)
+        if (riskAssessment.requestor.id == user.id) {
+            return true
+        }
+
+        // Check if user is the respondent
+        if (riskAssessment.respondent?.id == user.id) {
+            return true
+        }
+
+        logger.debug("User {} denied access to risk assessment {}", user.username, riskAssessmentId)
+        return false
     }
     
     /**

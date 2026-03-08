@@ -72,8 +72,8 @@ class GetRequirementsTool(
                         "usecase" to requirement.usecase,
                         "norm" to requirement.norm,
                         "chapter" to requirement.chapter,
-                        "norms" to requirement.norms.map { it.name ?: "" },
-                        "usecases" to requirement.usecases.map { it.name ?: "" },
+                        "norms" to requirement.norms.map { it.name },
+                        "usecases" to requirement.usecases.map { it.name },
                         "createdAt" to requirement.createdAt?.toString(),
                         "updatedAt" to requirement.updatedAt?.toString()
                     )

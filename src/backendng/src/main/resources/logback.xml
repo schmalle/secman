@@ -10,6 +10,9 @@
         - (not set/other) : Default behavior (INFO level)
     -->
 
+    <!-- Suppress logback's internal status messages -->
+    <statusListener class="ch.qos.logback.core.status.NopStatusListener"/>
+
     <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
             <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
@@ -39,6 +42,7 @@
         <then>
             <logger name="com.secman" level="OFF"/>
             <logger name="io.micronaut" level="OFF"/>
+            <logger name="org.hibernate.orm.incubating" level="OFF"/>
             <logger name="org.hibernate" level="OFF"/>
             <logger name="org.mariadb" level="OFF"/>
             <logger name="com.zaxxer.hikari" level="OFF"/>
@@ -56,6 +60,7 @@
         <then>
             <logger name="com.secman" level="TRACE"/>
             <logger name="io.micronaut" level="DEBUG"/>
+            <logger name="org.hibernate.orm.incubating" level="ERROR"/>
             <logger name="org.hibernate" level="DEBUG"/>
             <logger name="org.mariadb" level="DEBUG"/>
             <logger name="com.zaxxer.hikari" level="DEBUG"/>
@@ -73,6 +78,7 @@
         <then>
             <logger name="com.secman" level="ERROR"/>
             <logger name="io.micronaut" level="ERROR"/>
+            <logger name="org.hibernate.orm.incubating" level="ERROR"/>
             <logger name="org.hibernate" level="ERROR"/>
             <logger name="org.mariadb" level="ERROR"/>
             <logger name="com.zaxxer.hikari" level="ERROR"/>
@@ -90,6 +96,7 @@
         <then>
             <logger name="com.secman" level="INFO"/>
             <logger name="io.micronaut" level="WARN"/>
+            <logger name="org.hibernate.orm.incubating" level="ERROR"/>
             <logger name="org.hibernate" level="WARN"/>
             <logger name="org.mariadb" level="WARN"/>
             <logger name="com.zaxxer.hikari" level="WARN"/>

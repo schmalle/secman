@@ -189,7 +189,7 @@ open class CrowdStrikeController(
         } catch (e: CrowdStrikeError) {
             log.error("CrowdStrike error: {}", e.message)
             HttpResponse.status<Map<String, String>>(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(mapOf("error" to (e.message ?: "CrowdStrike API error")))
+                .body(mapOf("error" to e.message))
         } catch (e: Exception) {
             log.error("Unexpected error", e)
             HttpResponse.serverError(mapOf("error" to "An unexpected error occurred"))

@@ -293,7 +293,7 @@ class OutdatedAssetService(
             workbook.write(outputStream)
             return outputStream
         } finally {
-            workbook.dispose()
+            @Suppress("DEPRECATION") workbook.dispose()
         }
     }
 }

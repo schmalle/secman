@@ -9,6 +9,7 @@ import io.micronaut.http.annotation.*
 import io.micronaut.scheduling.TaskExecutors
 import io.micronaut.scheduling.annotation.ExecuteOn
 import io.micronaut.security.annotation.Secured
+import io.micronaut.security.authentication.Authentication
 import io.micronaut.security.rules.SecurityRule
 import io.micronaut.serde.annotation.Serdeable
 import io.micronaut.transaction.annotation.Transactional
@@ -204,13 +205,18 @@ open class DemandController(
 
     @Post
     @Transactional
-    open fun createDemand(@Valid @Body request: CreateDemandRequest): HttpResponse<*> {
+    open fun createDemand(@Valid @Body request: CreateDemandRequest, authentication: Authentication): HttpResponse<*> {
         return try {
-            log.debug("Creating demand: {}", request.title)
-            
-            // Validate requestor exists
-            val requestor = userRepository.findById(request.requestorId).orElse(null)
-                ?: return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", "Requestor not found"))
+            log.debug("Creating demand: {} by user: {}", request.title, authentication.name)
+
+            // Derive requestor from authenticated user (ignore requestorId from body to prevent impersonation)
+            val userId = authentication.attributes["userId"]?.toString()?.toLongOrNull()
+            val requestor = if (userId != null) {
+                userRepository.findById(userId).orElse(null)
+            } else {
+                null
+            }
+                ?: return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", "Authenticated user not found"))
             
             // Validate asset information based on demand type
             val existingAsset = if (request.demandType == DemandType.CHANGE) {
@@ -270,13 +276,21 @@ open class DemandController(
 
     @Put("/{id}")
     @Transactional
-    open fun updateDemand(id: Long, @Valid @Body request: UpdateDemandRequest): HttpResponse<*> {
+    open fun updateDemand(id: Long, @Valid @Body request: UpdateDemandRequest, authentication: Authentication): HttpResponse<*> {
         return try {
-            log.debug("Updating demand with id: {}", id)
-            
+            log.debug("Updating demand with id: {} by user: {}", id, authentication.name)
+
             val demand = demandRepository.findById(id).orElse(null)
                 ?: return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Demand not found"))
-            
+
+            // Only the requestor or ADMIN can update a demand
+            val userId = authentication.attributes["userId"]?.toString()?.toLongOrNull()
+            val isAdmin = authentication.roles.contains("ADMIN")
+            if (!isAdmin && demand.requestor.id != userId) {
+                return HttpResponse.status<ErrorResponse>(HttpStatus.FORBIDDEN)
+                    .body(ErrorResponse("FORBIDDEN", "Only the requestor or an admin can update this demand"))
+            }
+
             // Update fields if provided
             request.title?.let { demand.title = it.trim() }
             request.description?.let { demand.description = it.trim().takeIf { it.isNotBlank() } }
@@ -323,23 +337,36 @@ open class DemandController(
     }
 
     @Post("/{id}/approve")
+    @Secured("ADMIN")
     @Transactional
-    open fun approveDemand(id: Long, @Valid @Body request: ApproveDemandRequest): HttpResponse<*> {
+    open fun approveDemand(id: Long, @Valid @Body request: ApproveDemandRequest, authentication: Authentication): HttpResponse<*> {
         return try {
-            log.debug("Processing approval for demand: {}", id)
-            
+            log.debug("Processing approval for demand: {} by user: {}", id, authentication.name)
+
             val demand = demandRepository.findById(id).orElse(null)
                 ?: return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Demand not found"))
-            
+
             if (demand.status != DemandStatus.PENDING) {
-                return HttpResponse.badRequest(ErrorResponse("INVALID_STATE", 
+                return HttpResponse.badRequest(ErrorResponse("INVALID_STATE",
                     "Only pending demands can be approved or rejected"))
             }
-            
-            // TODO: Get current user from security context
-            // For now, we'll need to pass approver ID or get from context
-            // This is a simplification - in production, you'd get the approver from the security context
-            
+
+            // Get approver from security context
+            val approverId = authentication.attributes["userId"]?.toString()?.toLongOrNull()
+            val approver = if (approverId != null) {
+                userRepository.findById(approverId).orElse(null)
+            } else {
+                null
+            }
+
+            // Prevent self-approval
+            if (approver != null && demand.requestor.id == approver.id) {
+                return HttpResponse.badRequest(ErrorResponse("SELF_APPROVAL",
+                    "Cannot approve your own demand"))
+            }
+
+            demand.approver = approver
+
             if (request.approved) {
                 demand.status = DemandStatus.APPROVED
                 demand.approvedDate = LocalDateTime.now()
@@ -375,11 +402,12 @@ open class DemandController(
     }
 
     @Delete("/{id}")
+    @Secured("ADMIN")
     @Transactional
-    open fun deleteDemand(id: Long): HttpResponse<*> {
+    open fun deleteDemand(id: Long, authentication: Authentication): HttpResponse<*> {
         return try {
-            log.debug("Deleting demand with id: {}", id)
-            
+            log.debug("Deleting demand with id: {} by user: {}", id, authentication.name)
+
             val demand = demandRepository.findById(id).orElse(null)
                 ?: return HttpResponse.notFound(ErrorResponse("NOT_FOUND", "Demand not found"))
             

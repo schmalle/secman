@@ -1,6 +1,6 @@
 # MCP (Model Context Protocol) Integration Guide
 
-**Last Updated:** 2026-02-24
+**Last Updated:** 2026-03-08
 **Version:** 5.0
 
 This guide covers integrating Secman with AI assistants (Claude Desktop, Claude Code, ChatGPT, etc.) using the Model Context Protocol (MCP).
@@ -34,7 +34,7 @@ Secman supports the Model Context Protocol (MCP), allowing AI assistants to prog
 - **Vulnerability Data** - Search vulnerabilities by severity, CVE, or affected asset
 - **Scan Results** - Review network scan history and discovered services
 
-The MCP server exposes **14+ tools** for comprehensive security management workflows.
+The MCP server exposes **48 tools** for comprehensive security management workflows.
 
 ### Prerequisites
 
@@ -333,10 +333,9 @@ User roles are mapped to MCP permissions:
 | `VULN` | `VULNERABILITIES_READ`, `SCANS_READ`, `ASSETS_READ` |
 | `RELEASE_MANAGER` | `REQUIREMENTS_READ`, `ASSESSMENTS_READ` |
 | `REQ` | `REQUIREMENTS_READ`, `REQUIREMENTS_WRITE`, `FILES_READ`, `TAGS_READ` |
+| `REQADMIN` | `REQUIREMENTS_READ`, `REQUIREMENTS_WRITE` (also enables release create/delete and alignment decisions) |
 | `RISK` | `ASSESSMENTS_READ`, `ASSESSMENTS_WRITE`, `ASSESSMENTS_EXECUTE` |
 | `SECCHAMPION` | `REQUIREMENTS_READ`, `ASSESSMENTS_READ`, `ASSETS_READ`, `VULNERABILITIES_READ`, `SCANS_READ` |
-
-**Note:** The `REQADMIN` role is used for release create/delete operations at the REST API level, but is not currently mapped in MCP delegation. Users with only the `REQADMIN` role should also have another role (e.g., `USER`) for MCP delegation to work.
 
 **Example:** User has `VULN` role, API key has `[ASSETS_READ, VULNERABILITIES_READ, REQUIREMENTS_READ]`:
 - User's implied permissions: `[VULNERABILITIES_READ, SCANS_READ, ASSETS_READ]`
@@ -825,6 +824,7 @@ Set a release to ACTIVE status. **Requires ADMIN or RELEASE_MANAGER role and Use
 - When a release becomes ACTIVE, any previously ACTIVE release automatically becomes ARCHIVED
 - Only one release can be ACTIVE at a time
 - ARCHIVED releases cannot be transitioned to other states (terminal state)
+- To transition to ALIGNMENT status, use `start_alignment` instead of `set_release_status`
 
 #### `compare_releases`
 Compare two releases and show requirement differences. **Requires ADMIN or RELEASE_MANAGER role and User Delegation.**
@@ -839,6 +839,49 @@ Returns a detailed diff including:
 - **added**: Requirements present in the target release but not in the baseline
 - **deleted**: Requirements present in the baseline but removed in the target
 - **modified**: Requirements that changed between releases, with field-level diffs (shortreq, details, chapter, etc.)
+
+### Alignment Management
+
+#### `start_alignment`
+Start the alignment process for a release. **Requires ADMIN or REQADMIN role and User Delegation.**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `releaseId` | number | Yes | ID of the release to start alignment for |
+
+Transitions a PREPARATION release to ALIGNMENT status.
+
+#### `get_alignment_status`
+Get the current alignment status for a release. **Requires User Delegation.**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `releaseId` | number | Yes | ID of the release |
+
+Returns alignment reviews, completion status, and pending reviewers.
+
+#### `submit_review`
+Submit an alignment review for a release. **Requires User Delegation.**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `releaseId` | number | Yes | ID of the release |
+| `approved` | boolean | Yes | Whether the reviewer approves |
+| `comment` | string | No | Review comment |
+
+#### `finalize_alignment`
+Finalize the alignment process and activate a release. **Requires ADMIN or REQADMIN role and User Delegation.**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `releaseId` | number | Yes | ID of the release to finalize |
+
+### System Tools
+
+#### `send_admin_summary`
+Generate and send an admin summary email. **Requires ADMIN role and User Delegation.**
+
+Triggers the same admin summary email that the CLI `send-admin-summary` command sends, but via MCP.
 
 ---
 

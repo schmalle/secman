@@ -105,6 +105,7 @@ open class ConfigBundleController(
             } ?: ImportOptions()
 
             // Parse secrets if provided
+            @Suppress("UNCHECKED_CAST")
             val providedSecrets = secretsJson?.let {
                 objectMapper.readValue(it, Map::class.java) as Map<String, String>
             } ?: emptyMap()

@@ -712,7 +712,7 @@ open class RiskAssessmentController(
             AssessmentBasisType.ASSET -> {
                 assessment.asset?.let { asset ->
                     asset.id?.let { metadata["assetId"] = it }
-                    metadata["assetType"] = asset.type ?: "UNKNOWN"
+                    metadata["assetType"] = asset.type
                     metadata["assetStatus"] = "ACTIVE" // Asset doesn't have status property
                 }
             }

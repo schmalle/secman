@@ -40,8 +40,7 @@ open class AuthController(
         val id: Long,
         val username: String,
         val email: String,
-        val roles: List<String>,
-        val token: String
+        val roles: List<String>
     )
 
     @Serdeable
@@ -116,8 +115,7 @@ open class AuthController(
             id = user.id!!,
             username = user.username,
             email = user.email,
-            roles = user.roles.map { it.name },
-            token = token  // Still included for backward compatibility during transition
+            roles = user.roles.map { it.name }
         )
 
         // Set JWT in HttpOnly secure cookie (primary auth mechanism)

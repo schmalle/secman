@@ -85,6 +85,7 @@ open class CSVUserMappingParser(
      * @return ImportResult with counts and error details
      * @throws IllegalArgumentException if file format is invalid or headers are missing
      */
+    @Suppress("DEPRECATION")
     @Transactional
     open fun parse(file: File): ImportResult {
         log.info("Starting CSV parsing: file={}, size={}", file.name, file.length())

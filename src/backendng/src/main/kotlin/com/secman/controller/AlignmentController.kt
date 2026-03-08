@@ -233,7 +233,6 @@ class AlignmentController(
                             "change" to summary.assessments.changeCount,
                             "nogo" to summary.assessments.nogoCount
                         ),
-                        "reviewToken" to summary.reviewer.reviewToken,
                         "startedAt" to summary.reviewer.startedAt?.toString(),
                         "completedAt" to summary.reviewer.completedAt?.toString(),
                         "notifiedAt" to summary.reviewer.notifiedAt?.toString(),
@@ -1086,7 +1085,7 @@ class AlignmentController(
             "releaseVersion" to session.release.version,
             "status" to session.status.name,
             "changedRequirementsCount" to session.changedRequirementsCount,
-            "initiatedBy" to session.initiatedBy.username,
+            "initiatedBy" to (session.initiatedBy?.username ?: "deleted user"),
             "baselineReleaseId" to session.baselineRelease?.id,
             "reviewScope" to session.reviewScope.name,
             "startedAt" to session.startedAt?.toString(),

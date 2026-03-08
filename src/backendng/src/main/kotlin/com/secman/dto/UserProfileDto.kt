@@ -34,7 +34,7 @@ data class UserProfileDto(
         fun fromUser(user: User): UserProfileDto {
             return UserProfileDto(
                 username = user.username,
-                email = user.email ?: "Not set",
+                email = user.email,
                 roles = user.roles.map { it.name }.toSet(),
                 canChangePassword = user.authSource != User.AuthSource.OAUTH
             )

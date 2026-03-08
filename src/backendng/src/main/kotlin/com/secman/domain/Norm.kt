@@ -3,7 +3,7 @@ package com.secman.domain
 import io.micronaut.serde.annotation.Serdeable
 import jakarta.persistence.*
 import jakarta.validation.constraints.NotBlank
-import java.util.*
+import java.time.Instant
 
 @Entity
 @Table(name = "norm")
@@ -23,25 +23,23 @@ data class Norm(
     @Column
     var year: Int? = null,
 
-    @Temporal(TemporalType.TIMESTAMP)
     @Column(name = "created_at", updatable = false)
-    var createdAt: Date? = null,
+    var createdAt: Instant? = null,
 
-    @Temporal(TemporalType.TIMESTAMP)
     @Column(name = "updated_at")
-    var updatedAt: Date? = null
+    var updatedAt: Instant? = null
 ) : VersionedEntity() {
 
     @PrePersist
     fun onCreate() {
-        val now = Date()
+        val now = Instant.now()
         createdAt = now
         updatedAt = now
     }
 
     @PreUpdate
     fun onUpdate() {
-        updatedAt = Date()
+        updatedAt = Instant.now()
     }
 
     override fun toString(): String {

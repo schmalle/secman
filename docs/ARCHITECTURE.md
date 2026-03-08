@@ -1,6 +1,6 @@
 # Secman Architecture
 
-**Last Updated:** 2026-01-29
+**Last Updated:** 2026-03-08
 
 This document describes the system architecture, data model, and design patterns used in Secman.
 
@@ -59,18 +59,18 @@ Secman is a security requirement and risk assessment management tool consisting 
 
 | Layer        | Technology    | Version              |
 | ------------ | ------------- | -------------------- |
-| **Backend**  | Kotlin        | 2.3.0                |
+| **Backend**  | Kotlin        | 2.3.10               |
 |              | Java          | 21                   |
 |              | Micronaut     | 4.10                 |
 |              | Hibernate JPA | (via Micronaut Data) |
-| **Frontend** | Astro         | 5.16                 |
+| **Frontend** | Astro         | 5.18                 |
 |              | React         | 19                   |
 |              | Bootstrap     | 5.3                  |
 |              | Axios         | (HTTP client)        |
 | **Database** | MariaDB       | 12                   |
-| **CLI**      | Picocli       | 4.7                  |
+| **CLI**      | Picocli       | 4.7.7                |
 |              | AWS SDK       | v2                   |
-| **Build**    | Gradle        | 9.3                  |
+| **Build**    | Gradle        | 9.3.1                |
 
 ---
 
@@ -78,7 +78,7 @@ Secman is a security requirement and risk assessment management tool consisting 
 
 ### Backend (`src/backendng/`)
 
-The backend follows a layered architecture with 52 controllers and 98+ services:
+The backend follows a layered architecture with 57 controllers:
 
 ```
 +-----------------------------------------------------------------+
@@ -120,11 +120,11 @@ The backend follows a layered architecture with 52 controllers and 98+ services:
 - **Import/Export**: Import, RequirementFile, Scan
 - **Email & Notifications**: Notification, NotificationPreference, NotificationLog, TestEmailAccount
 - **MCP**: Mcp, McpAdmin, McpStreamableHttp
-- **Other**: Health, Alignment, ReleaseComparison, Risk, RiskAssessment, Demand, DemandClassification, NormMapping, CrowdStrike, OutdatedAsset, MaterializedViewRefresh
+- **Other**: Health, Alignment, ReleaseComparison, Risk, RiskAssessment, Demand, DemandClassification, NormMapping, CrowdStrike, OutdatedAsset, MaterializedViewRefresh, AwsAccountSharing, GenericExceptionHandler
 
 ### Frontend (`src/frontend/`)
 
-Astro with React islands architecture, 61 pages:
+Astro with React islands architecture, 64 pages:
 
 ```
 +-----------------------------------------------------------------+
@@ -161,7 +161,7 @@ Astro with React islands architecture, 61 pages:
 
 ### CLI (`src/cli/`)
 
-Command-line interface with 21 commands for automated operations:
+Command-line interface with 23 commands for automated operations:
 
 ```
 +-----------------------------------------------------------------+
@@ -192,8 +192,10 @@ Command-line interface with 21 commands for automated operations:
 - `config` - Manage CLI configuration
 - `monitor` - System monitoring
 - `list` - List various entities
+- `list-workgroups` - List workgroups
 - `remove` - Remove assets/data
 - `delete-all-requirements` - Bulk requirement deletion
+- `deduplicate-vulnerabilities` - Remove duplicate vulnerability records
 
 ---
 
@@ -276,6 +278,7 @@ Command-line interface with 21 commands for automated operations:
 | User -> Asset (scanUploader)  | One-to-Many  | Users upload scans discovering assets |
 | Requirement <-> Norm          | Many-to-Many | Requirements map to standards         |
 | Workgroup -> Workgroup        | Self-ref     | Nested workgroup hierarchy            |
+| User -> User (AWS sharing)    | Many-to-Many | Directional AWS account visibility    |
 
 ### Key Tables
 
@@ -304,6 +307,9 @@ mcp_api_keys, mcp_sessions, mcp_audit_logs, mcp_tool_permissions
 -- Email and notifications
 email_configs, notification_logs, notification_preferences
 
+-- AWS account sharing
+aws_account_sharing
+
 -- System
 identity_providers, oauth_states, maintenance_banners, app_settings
 ```
@@ -321,6 +327,8 @@ identity_providers, oauth_states, maintenance_banners, app_settings
 | `VULN`            | Vulnerability manager | Import vulnerabilities, manage scans  |
 | `RELEASE_MANAGER` | Release coordinator   | Manage releases, view requirements    |
 | `REQ`             | Requirements editor   | Create/edit requirements              |
+| `REQADMIN`        | Requirements admin    | Create/delete releases, alignment decisions |
+| `RISK`            | Risk assessor         | Risk assessments read/write/execute   |
 | `SECCHAMPION`     | Security champion     | Extended read access, product listing |
 
 ### Unified Access Control (Asset Visibility)
@@ -333,16 +341,18 @@ Users can access an asset if **ANY** of the following is true:
 4. **Scan Uploader**: User uploaded a scan that discovered the asset
 5. **AWS Mapping**: Asset's `cloudAccountId` matches user's AWS mappings
 6. **AD Domain Mapping**: Asset's `adDomain` matches user's domain mappings (case-insensitive)
+7. **AWS Account Sharing**: Asset's `cloudAccountId` matches shared AWS accounts via `AwsAccountSharing` (directional, non-transitive)
 
 ```kotlin
-// Access check in service layer
+// Access check in service layer (AssetFilterService)
 fun canUserAccessAsset(user: User, asset: Asset): Boolean {
     return user.roles.contains("ADMIN") ||
            assetInUserWorkgroups(asset, user) ||
            asset.manualCreator?.id == user.id ||
            asset.scanUploader?.id == user.id ||
            awsAccountMatches(asset, user) ||
-           adDomainMatches(asset, user)
+           adDomainMatches(asset, user) ||
+           sharedAwsAccountMatches(asset, user)
 }
 ```
 
@@ -532,9 +542,9 @@ secman/
 │   │   └── src/main/kotlin/com/secman/
 │   │       ├── domain/               # JPA entities
 │   │       ├── repository/           # Data access
-│   │       ├── service/              # Business logic (98+ services)
+│   │       ├── service/              # Business logic
 │   │       │   └── mcp/              # MCP-specific services
-│   │       ├── controller/           # REST endpoints (52 controllers)
+│   │       ├── controller/           # REST endpoints (57 controllers)
 │   │       ├── config/               # Configuration
 │   │       ├── dto/                  # DTOs
 │   │       │   └── mcp/              # MCP DTOs
@@ -543,7 +553,7 @@ secman/
 │   │
 │   ├── frontend/                     # Astro/React frontend
 │   │   └── src/
-│   │       ├── pages/                # Astro pages (61 pages)
+│   │       ├── pages/                # Astro pages (64 pages)
 │   │       │   └── admin/            # Admin pages (16 pages)
 │   │       ├── components/           # React components
 │   │       ├── services/             # API services
@@ -551,7 +561,7 @@ secman/
 │   │
 │   └── cli/                          # CLI tool
 │       └── src/main/kotlin/com/secman/cli/
-│           ├── commands/             # Picocli commands (21 commands)
+│           ├── commands/             # Picocli commands (23 commands)
 │           └── service/              # CLI services
 │
 ├── mcp/                              # MCP Node.js bridge

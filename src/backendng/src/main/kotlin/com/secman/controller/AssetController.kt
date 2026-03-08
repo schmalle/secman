@@ -201,10 +201,16 @@ open class AssetController(
 
     @Put("/{id}")
     @Transactional
-    open fun update(id: Long, @Valid @Body request: UpdateAssetRequest): HttpResponse<*> {
+    open fun update(id: Long, @Valid @Body request: UpdateAssetRequest, authentication: Authentication): HttpResponse<*> {
         return try {
-            log.debug("Updating asset with id: {}", id)
-            
+            log.debug("Updating asset with id: {} for user: {}", id, authentication.name)
+
+            // Access control: verify user can access this asset
+            if (!assetFilterService.canAccessAsset(id, authentication)) {
+                log.warn("User {} denied update access to asset {}", authentication.name, id)
+                return HttpResponse.notFound(ErrorResponse("Asset not found"))
+            }
+
             val asset = assetRepository.findById(id).orElse(null)
                 ?: return HttpResponse.notFound(ErrorResponse("Asset not found"))
             
@@ -252,6 +258,13 @@ open class AssetController(
             }
 
             request.workgroupIds?.let { workgroupIds ->
+                // Workgroup reassignment requires ADMIN role
+                val roles = authentication.roles
+                if (!roles.contains("ADMIN")) {
+                    return HttpResponse.status<ErrorResponse>(HttpStatus.FORBIDDEN)
+                        .body(ErrorResponse("Workgroup reassignment requires ADMIN role"))
+                }
+
                 val workgroups = workgroupIds.mapNotNull { id ->
                     workgroupRepository.findById(id).orElse(null)
                 }
@@ -443,9 +456,15 @@ open class AssetController(
      */
     @Get("/{id}/ports")
     @Transactional(readOnly = true)
-    open fun getPortHistory(id: Long): HttpResponse<*> {
+    open fun getPortHistory(id: Long, authentication: Authentication): HttpResponse<*> {
         return try {
-            log.debug("Fetching port history for asset id: {}", id)
+            log.debug("Fetching port history for asset id: {} for user: {}", id, authentication.name)
+
+            // Access control: verify user can access this asset
+            if (!assetFilterService.canAccessAsset(id, authentication)) {
+                log.warn("User {} denied access to port history for asset {}", authentication.name, id)
+                return HttpResponse.notFound(ErrorResponse("Asset not found"))
+            }
 
             val asset = assetRepository.findById(id).orElse(null)
                 ?: return HttpResponse.notFound(ErrorResponse("Asset not found"))

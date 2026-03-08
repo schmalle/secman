@@ -3,6 +3,11 @@ package com.secman.service
 import com.secman.domain.User
 import com.secman.event.UserCreatedEvent
 import com.secman.repository.AlignmentReviewerRepository
+import com.secman.repository.AlignmentSessionRepository
+import com.secman.repository.AwsAccountSharingRepository
+import com.secman.repository.PasskeyCredentialRepository
+import com.secman.repository.RequirementReviewRepository
+import com.secman.repository.ReviewDecisionRepository
 import com.secman.repository.UserRepository
 import io.micronaut.context.event.ApplicationEventPublisher
 import jakarta.inject.Inject
@@ -14,7 +19,12 @@ import java.util.*
 open class UserService(
     @Inject private val userRepository: UserRepository,
     @Inject private val eventPublisher: ApplicationEventPublisher<UserCreatedEvent>,
-    @Inject private val alignmentReviewerRepository: AlignmentReviewerRepository
+    @Inject private val alignmentReviewerRepository: AlignmentReviewerRepository,
+    @Inject private val alignmentSessionRepository: AlignmentSessionRepository,
+    @Inject private val awsAccountSharingRepository: AwsAccountSharingRepository,
+    @Inject private val passkeyCredentialRepository: PasskeyCredentialRepository,
+    @Inject private val requirementReviewRepository: RequirementReviewRepository,
+    @Inject private val reviewDecisionRepository: ReviewDecisionRepository
 ) {
 
     fun getAllUsers(): List<User> {
@@ -58,13 +68,33 @@ open class UserService(
 
     @Transactional
     open fun deleteUser(id: Long): Boolean {
-        return if (userRepository.existsById(id)) {
-            alignmentReviewerRepository.deleteByUser_Id(id)
-            userRepository.deleteById(id)
-            true
-        } else {
-            false
+        if (!userRepository.existsById(id)) return false
+
+        // 1. AWS account sharing cleanup
+        awsAccountSharingRepository.deleteBySourceUserId(id)
+        awsAccountSharingRepository.deleteByTargetUserId(id)
+        awsAccountSharingRepository.deleteByCreatedBy_Id(id)
+
+        // 2. Passkey credentials
+        passkeyCredentialRepository.deleteByUserId(id)
+
+        // 3. Review decisions where this user was the decision-maker
+        reviewDecisionRepository.deleteByDecidedBy_Id(id)
+
+        // 4. Alignment chain (FK order: decisions → reviews → reviewers)
+        val reviewers = alignmentReviewerRepository.findByUser_Id(id)
+        for (reviewer in reviewers) {
+            reviewDecisionRepository.deleteByReviewReviewerId(reviewer.id!!)
+            requirementReviewRepository.deleteByReviewer_Id(reviewer.id!!)
         }
+        alignmentReviewerRepository.deleteByUser_Id(id)
+
+        // 5. Nullify alignment sessions initiated by this user
+        alignmentSessionRepository.nullifyInitiatedByForUser(id)
+
+        // 6. Delete user
+        userRepository.deleteById(id)
+        return true
     }
 
     fun existsByUsername(username: String): Boolean {

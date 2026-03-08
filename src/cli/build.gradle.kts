@@ -81,8 +81,9 @@ kotlin {
 
 tasks {
     compileKotlin {
-        // jvmTarget is automatically set by jvmToolchain(21) above
-        // No need for kotlinOptions block
+        compilerOptions {
+            freeCompilerArgs.add("-Xannotation-default-target=param-property")
+        }
     }
 
     // Enable JUnit 5 platform for tests - Feature 056

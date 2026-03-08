@@ -1,6 +1,6 @@
 # Secman Environment Variables Reference
 
-**Last Updated:** 2025-12-04
+**Last Updated:** 2026-03-08
 **Version:** 1.0
 
 This document provides a comprehensive reference for all environment variables used by Secman components.
@@ -147,6 +147,58 @@ export OAUTH_TOKEN_EXCHANGE_MAX_RETRIES=3
 export OAUTH_TOKEN_EXCHANGE_RETRY_DELAY=1000
 ```
 
+### Memory Optimization (Feature 073)
+
+
+| Variable                  | Description                                | Default | Required |
+| ------------------------- | ------------------------------------------ | ------- | -------- |
+| `MEMORY_LAZY_LOADING`     | Enable LAZY loading for entity relationships | `true`  | No       |
+| `MEMORY_BATCH_SIZE`       | Batch size for duplicate cleanup and streaming operations (100-10000) | `1000`  | No       |
+| `MEMORY_STREAMING_EXPORTS`| Enable streaming exports to reduce memory footprint | `true`  | No       |
+
+**Behavior:**
+
+- When `MEMORY_LAZY_LOADING=true`: Entity relationships use LAZY fetch, reducing initial query overhead
+- When `MEMORY_STREAMING_EXPORTS=true`: Large exports stream data to avoid loading entire result sets into memory
+- `MEMORY_BATCH_SIZE` controls batch processing for operations like duplicate cleanup and vulnerability streaming
+
+**Rollback:** Set any variable to `false` (or a lower batch size) to revert to original behavior.
+
+**Monitoring:** `GET /memory` endpoint returns JVM heap metrics (used, max, free, total in MB).
+
+**Example:**
+
+```bash
+export MEMORY_LAZY_LOADING=true
+export MEMORY_BATCH_SIZE=2000
+export MEMORY_STREAMING_EXPORTS=true
+```
+
+### Logging Configuration
+
+
+| Variable         | Description                                    | Default | Required |
+| ---------------- | ---------------------------------------------- | ------- | -------- |
+| `SECMAN_LOGGING` | Control logging verbosity across all components | (unset) | No       |
+
+**Values:**
+
+| Value   | Behavior                                          |
+| ------- | ------------------------------------------------- |
+| `NO`    | Disable all logging (except security audit)       |
+| `ALL`   | Enable all logging at TRACE/DEBUG level           |
+| `ERROR` | Only show ERROR level logs                        |
+| (unset) | Default behavior (INFO level for app, WARN for frameworks) |
+
+**Note:** Security audit logging (`logs/security-audit.log`) always remains active regardless of this setting, per compliance requirements (NFR-002).
+
+**Example:**
+
+```bash
+export SECMAN_LOGGING=ERROR  # Production: only errors
+export SECMAN_LOGGING=ALL    # Debugging: verbose output
+```
+
 ### Vulnerability Configuration
 
 
@@ -258,7 +310,7 @@ export SECMAN_BACKEND_URL=https://api.yourdomain.com
 
 ### All Variables by Component
 
-#### Backend (29 variables)
+#### Backend (33 variables)
 
 ```
 DB_USERNAME, DB_PASSWORD
@@ -270,6 +322,8 @@ BACKEND_BASE_URL, FRONTEND_URL
 OAUTH_STATE_RETRY_MAX_ATTEMPTS, OAUTH_STATE_RETRY_INITIAL_DELAY
 OAUTH_STATE_RETRY_MAX_DELAY, OAUTH_STATE_RETRY_BACKOFF_MULTIPLIER
 OAUTH_TOKEN_EXCHANGE_MAX_RETRIES, OAUTH_TOKEN_EXCHANGE_RETRY_DELAY
+MEMORY_LAZY_LOADING, MEMORY_BATCH_SIZE, MEMORY_STREAMING_EXPORTS
+SECMAN_LOGGING
 VULN_USE_PATCH_PUBLICATION_DATE, VULN_REQUIRE_PATCH_PUBLICATION_DATE
 ```
 
@@ -328,6 +382,14 @@ FRONTEND_URL=https://secman.yourdomain.com
 # --- Optional: Vulnerability Settings ---
 VULN_USE_PATCH_PUBLICATION_DATE=false
 VULN_REQUIRE_PATCH_PUBLICATION_DATE=false
+
+# --- Optional: Logging ---
+# SECMAN_LOGGING=             # NO, ALL, ERROR, or unset for default (INFO)
+
+# --- Optional: Memory Optimization (Feature 073) ---
+# MEMORY_LAZY_LOADING=true
+# MEMORY_BATCH_SIZE=1000
+# MEMORY_STREAMING_EXPORTS=true
 
 # --- Optional: OAuth Robustness Settings ---
 # Increase these if users experience intermittent OAuth login failures

@@ -93,7 +93,7 @@ open class AlignmentEmailService(
             releaseVersion = release.version,
             changedCount = session.changedRequirementsCount,
             reviewUrl = reviewUrl,
-            initiatorName = session.initiatedBy.username
+            initiatorName = session.initiatedBy?.username ?: "deleted user"
         )
 
         val textContent = buildReviewRequestText(
@@ -102,7 +102,7 @@ open class AlignmentEmailService(
             releaseVersion = release.version,
             changedCount = session.changedRequirementsCount,
             reviewUrl = reviewUrl,
-            initiatorName = session.initiatedBy.username
+            initiatorName = session.initiatedBy?.username ?: "deleted user"
         )
 
         return runBlocking {

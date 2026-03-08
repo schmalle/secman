@@ -119,7 +119,7 @@ class GetAssetProfileTool(
                         "cvssSeverity" to vuln.cvssSeverity,
                         "vulnerableProductVersions" to vuln.vulnerableProductVersions,
                         "daysOpen" to vuln.daysOpen,
-                        "scanTimestamp" to vuln.scanTimestamp?.toString()
+                        "scanTimestamp" to vuln.scanTimestamp.toString()
                     )
                 }
 
@@ -147,7 +147,7 @@ class GetAssetProfileTool(
                 val scanHistory = scanPage.content.map { scanResult ->
                     mapOf(
                         "id" to scanResult.id,
-                        "scanId" to scanResult.scan?.id,
+                        "scanId" to scanResult.scan.id,
                         "ipAddress" to scanResult.ipAddress,
                         "hostname" to scanResult.hostname,
                         "discoveredAt" to scanResult.discoveredAt.toString(),

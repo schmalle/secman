@@ -60,6 +60,69 @@ open class IdentityProviderController(
         return null // Valid
     }
 
+    /**
+     * Validate OAuth endpoint URLs (tokenUrl, userInfoUrl, jwksUri) to prevent SSRF.
+     * Must be HTTPS and not targeting private/internal networks or cloud metadata endpoints.
+     */
+    private fun validateOAuthEndpointUrl(url: String?, fieldName: String): String? {
+        if (url.isNullOrBlank()) return null
+
+        if (url.length > 512) {
+            return "$fieldName must not exceed 512 characters"
+        }
+
+        // Must be HTTPS (no plaintext HTTP to external OAuth providers)
+        if (!url.startsWith("https://")) {
+            return "$fieldName must use HTTPS"
+        }
+
+        // Block cloud metadata endpoints (AWS, GCP, Azure)
+        val blockedHosts = listOf(
+            "169.254.169.254", "metadata.google.internal",
+            "metadata.google", "100.100.100.200"
+        )
+        val lowerUrl = url.lowercase()
+        if (blockedHosts.any { lowerUrl.contains(it) }) {
+            return "$fieldName must not point to cloud metadata endpoints"
+        }
+
+        // Block private/internal IP ranges
+        try {
+            val uri = java.net.URI(url)
+            val host = uri.host?.lowercase() ?: return "$fieldName has invalid host"
+            if (host == "localhost" || host.startsWith("127.") ||
+                host.startsWith("10.") || host.startsWith("192.168.") ||
+                host.startsWith("0.") || host == "[::1]") {
+                return "$fieldName must not point to internal/private addresses"
+            }
+            // Block 172.16.0.0/12 range
+            if (host.startsWith("172.")) {
+                val secondOctet = host.removePrefix("172.").substringBefore(".").toIntOrNull()
+                if (secondOctet != null && secondOctet in 16..31) {
+                    return "$fieldName must not point to internal/private addresses"
+                }
+            }
+        } catch (e: Exception) {
+            return "$fieldName is not a valid URL"
+        }
+
+        return null
+    }
+
+    /**
+     * Validate all OAuth endpoint URLs on an identity provider request.
+     */
+    private fun validateOAuthEndpointUrls(
+        tokenUrl: String?, userInfoUrl: String?,
+        authorizationUrl: String?, jwksUri: String?
+    ): String? {
+        validateOAuthEndpointUrl(tokenUrl, "Token URL")?.let { return it }
+        validateOAuthEndpointUrl(userInfoUrl, "User Info URL")?.let { return it }
+        validateOAuthEndpointUrl(authorizationUrl, "Authorization URL")?.let { return it }
+        validateOAuthEndpointUrl(jwksUri, "JWKS URI")?.let { return it }
+        return null
+    }
+
     @Serdeable
     data class IdentityProviderCreateRequest(
         val name: String,
@@ -202,6 +265,15 @@ open class IdentityProviderController(
                 return HttpResponse.badRequest(ErrorResponse(callbackUrlError))
             }
 
+            // Validate OAuth endpoint URLs (SSRF prevention)
+            val endpointUrlError = validateOAuthEndpointUrls(
+                request.tokenUrl, request.userInfoUrl,
+                request.authorizationUrl, request.jwksUri
+            )
+            if (endpointUrlError != null) {
+                return HttpResponse.badRequest(ErrorResponse(endpointUrlError))
+            }
+
             // Parse and validate type
             val providerType = try {
                 IdentityProvider.ProviderType.valueOf(request.type.uppercase())
@@ -277,6 +349,15 @@ open class IdentityProviderController(
                 if (callbackUrlError != null) {
                     return HttpResponse.badRequest(ErrorResponse(callbackUrlError))
                 }
+            }
+
+            // Validate OAuth endpoint URLs if being updated (SSRF prevention)
+            val endpointUrlError = validateOAuthEndpointUrls(
+                request.tokenUrl, request.userInfoUrl,
+                request.authorizationUrl, request.jwksUri
+            )
+            if (endpointUrlError != null) {
+                return HttpResponse.badRequest(ErrorResponse(endpointUrlError))
             }
 
             // Update fields if provided

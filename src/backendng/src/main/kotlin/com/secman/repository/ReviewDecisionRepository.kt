@@ -28,4 +28,15 @@ interface ReviewDecisionRepository : JpaRepository<ReviewDecision, Long> {
      */
     @Query("SELECT d FROM ReviewDecision d WHERE d.session.id = :sessionId AND d.review.reviewer.id = :reviewerId")
     fun findBySessionAndReviewer(sessionId: Long, reviewerId: Long): List<ReviewDecision>
+
+    /**
+     * Delete all decisions made by a specific user.
+     */
+    fun deleteByDecidedBy_Id(userId: Long)
+
+    /**
+     * Delete all decisions for reviews belonging to a specific reviewer.
+     */
+    @Query("DELETE FROM ReviewDecision d WHERE d.review.reviewer.id = :reviewerId")
+    fun deleteByReviewReviewerId(reviewerId: Long)
 }

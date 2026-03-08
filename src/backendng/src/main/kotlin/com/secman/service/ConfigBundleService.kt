@@ -219,7 +219,7 @@ open class ConfigBundleService(
             if (userRepository.findByUsername(user.username).isPresent) {
                 conflicts.add(ConflictInfo("User", user.username, "already_exists"))
             }
-            if (userRepository.findByEmail(user.email) != null) {
+            if (userRepository.findByEmail(user.email).isPresent) {
                 conflicts.add(ConflictInfo("User", user.email, "duplicate_email"))
             }
         }
@@ -449,7 +449,7 @@ open class ConfigBundleService(
                 val existingByUsername = userRepository.findByUsername(dto.username)
                 val existingByEmail = userRepository.findByEmail(dto.email)
 
-                if (existingByUsername.isPresent || existingByEmail != null) {
+                if (existingByUsername.isPresent || existingByEmail.isPresent) {
                     if (options.skipExisting) {
                         skipped++
                         warnings.add("User '${dto.username}' already exists, skipping")
@@ -516,7 +516,7 @@ open class ConfigBundleService(
             try {
                 // Check if mapping already exists
                 val existing = userMappingRepository.findByEmail(dto.email)
-                if (existing != null) {
+                if (existing.isNotEmpty()) {
                     if (options.skipExisting) {
                         skipped++
                         warnings.add("User mapping for '${dto.email}' already exists, skipping")
@@ -774,10 +774,12 @@ open class ConfigBundleService(
         return ImportMcpResult(imported, skipped, errors, warnings, newKeys)
     }
 
+    private val secureRandom = java.security.SecureRandom()
+
     private fun generateTempPassword(): String {
         val chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*"
         return (1..TEMP_PASSWORD_LENGTH)
-            .map { chars.random() }
+            .map { chars[secureRandom.nextInt(chars.length)] }
             .joinToString("")
     }
 

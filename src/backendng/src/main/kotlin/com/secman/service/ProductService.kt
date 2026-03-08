@@ -263,7 +263,7 @@ open class ProductService(
             return outputStream
 
         } finally {
-            workbook.dispose()
+            @Suppress("DEPRECATION") workbook.dispose()
         }
     }
 

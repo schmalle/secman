@@ -185,6 +185,7 @@ class ListCommand(
         println(objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(output))
     }
 
+    @Suppress("DEPRECATION")
     private fun displayCsv(mappings: List<UserMapping>) {
         val stringWriter = StringWriter()
         val csvPrinter = CSVPrinter(

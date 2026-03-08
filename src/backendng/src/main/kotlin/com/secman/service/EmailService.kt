@@ -244,8 +244,7 @@ open class EmailService(
                     val password = (config.smtpPassword ?: "").trim().replace(" ", "")
 
                     log.debug("Authenticating with username: {} (length: {})", username, username.length)
-                    log.debug("Password length: {} (first char: {})", password.length,
-                        if (password.isNotEmpty()) password[0] else "empty")
+                    log.debug("Password configured: {} (length: {})", password.isNotEmpty(), password.length)
 
                     return PasswordAuthentication(username, password)
                 }

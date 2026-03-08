@@ -23,12 +23,12 @@ class TagService(
         requirements.forEach { requirement ->
             // Add norm names as tags
             requirement.norms.forEach { norm ->
-                norm.name?.let { tags.add(it) }
+                norm.name.let { tags.add(it) }
             }
 
             // Add usecase names as tags
             requirement.usecases.forEach { usecase ->
-                usecase.name?.let { tags.add(it) }
+                usecase.name.let { tags.add(it) }
             }
 
             // Add language as tag
@@ -51,7 +51,7 @@ class TagService(
 
             // Add usecase names as tags
             assessment.useCases.forEach { usecase ->
-                usecase.name?.let { tags.add(it) }
+                usecase.name.let { tags.add(it) }
             }
         }
 
@@ -86,12 +86,12 @@ class TagService(
         val requirements = requirementRepository.findCurrentRequirements()
         requirements.forEach { requirement ->
             requirement.norms.forEach { norm ->
-                norm.name?.let { tag ->
+                norm.name.let { tag ->
                     tagCounts[tag] = tagCounts.getOrDefault(tag, 0) + 1
                 }
             }
             requirement.usecases.forEach { usecase ->
-                usecase.name?.let { tag ->
+                usecase.name.let { tag ->
                     tagCounts[tag] = tagCounts.getOrDefault(tag, 0) + 1
                 }
             }

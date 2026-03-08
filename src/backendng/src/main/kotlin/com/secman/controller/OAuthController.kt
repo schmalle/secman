@@ -11,6 +11,7 @@ import io.micronaut.scheduling.TaskExecutors
 import io.micronaut.scheduling.annotation.ExecuteOn
 import io.micronaut.security.annotation.Secured
 import io.micronaut.security.rules.SecurityRule
+import com.fasterxml.jackson.databind.ObjectMapper
 import io.micronaut.serde.annotation.Serdeable
 import org.slf4j.LoggerFactory
 import java.net.URI
@@ -21,7 +22,8 @@ import java.time.LocalDateTime
 class OAuthController(
     private val oauthService: OAuthService,
     private val appConfig: AppConfig,
-    private val authCookieService: AuthCookieService
+    private val authCookieService: AuthCookieService,
+    private val objectMapper: ObjectMapper
 ) {
     
     private val logger = LoggerFactory.getLogger(OAuthController::class.java)
@@ -52,8 +54,7 @@ class OAuthController(
         val id: Long,
         val username: String,
         val email: String,
-        val roles: List<String>,
-        val token: String
+        val roles: List<String>
     )
 
     /**
@@ -144,7 +145,7 @@ class OAuthController(
             if (code.isNullOrBlank() || state.isNullOrBlank()) {
                 logger.error("Missing required OAuth parameters: code={}, state={}",
                     if (code.isNullOrBlank()) "MISSING" else "present",
-                    if (state.isNullOrBlank()) "MISSING" else "present(${state?.take(10)}...)")
+                    if (state.isNullOrBlank()) "MISSING" else "present(${state.take(10)}...)")
                 return HttpResponse.redirect<Any>(URI.create("$frontendBaseUrl/login?error=${java.net.URLEncoder.encode("Invalid OAuth callback parameters", "UTF-8")}"))
             }
 
@@ -172,8 +173,13 @@ class OAuthController(
                     logger.info("OAuth login successful: user={}, email={}, roles={}",
                         result.user.username, result.user.email, result.user.roles)
 
-                    // Create user info JSON (non-sensitive metadata only, token is in HttpOnly cookie)
-                    val userInfoJson = """{"id":${result.user.id},"username":"${result.user.username}","email":"${result.user.email}","roles":[${result.user.roles.joinToString(",") { "\"$it\"" }}]}"""
+                    // Create user info JSON using ObjectMapper for proper escaping (prevents JSON injection)
+                    val userInfoJson = objectMapper.writeValueAsString(mapOf(
+                        "id" to result.user.id,
+                        "username" to result.user.username,
+                        "email" to result.user.email,
+                        "roles" to result.user.roles
+                    ))
 
                     // Only pass user metadata in URL - JWT is delivered solely via HttpOnly cookie
                     // This prevents token exposure in browser history, proxy logs, and referrer headers
@@ -235,8 +241,7 @@ class OAuthController(
                         id = result.user.id,
                         username = result.user.username,
                         email = result.user.email,
-                        roles = result.user.roles,
-                        token = result.token
+                        roles = result.user.roles
                     )
 
                     HttpResponse.ok(response)

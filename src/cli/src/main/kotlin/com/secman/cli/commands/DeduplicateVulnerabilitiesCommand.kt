@@ -121,7 +121,7 @@ class DeduplicateVulnerabilitiesCommand : Runnable {
                 .exchange(request, Map::class.java)
 
             if (response.status.code == 200) {
-                val body = response.body() as? Map<*, *>
+                val body = response.body()
                 val totalRemoved = (body?.get("totalDuplicatesRemoved") as? Number)?.toInt() ?: 0
                 val assetsAffected = (body?.get("assetsAffected") as? Number)?.toInt() ?: 0
 
@@ -197,7 +197,7 @@ class DeduplicateVulnerabilitiesCommand : Runnable {
                 .exchange(request, Map::class.java)
 
             if (response.status.code == 200) {
-                val body = response.body() as? Map<*, *>
+                val body = response.body()
                 return body?.get("access_token")?.toString()
                     ?: body?.get("token")?.toString()
                     ?: body?.get("accessToken")?.toString()

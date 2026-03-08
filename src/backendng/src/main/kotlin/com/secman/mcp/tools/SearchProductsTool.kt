@@ -126,11 +126,11 @@ class SearchProductsTool(
                 val product = productMap[key]!!
 
                 // Add asset information
-                port.scanResult?.asset?.let { asset ->
+                port.scanResult.asset.let { asset ->
                     (product["assets"] as MutableSet<Map<String, Any>>).add(
                         mapOf(
                             "id" to (asset.id ?: 0),
-                            "name" to (asset.name ?: "unknown"),
+                            "name" to asset.name,
                             "ip" to (asset.ip ?: "unknown")
                         )
                     )

@@ -307,6 +307,8 @@ jpa:
           fetch_size: 50                               # JDBC fetch size for result sets
         order_inserts: true                            # Order INSERT statements for batching
         order_updates: true                            # Order UPDATE statements for batching
+        id:
+          db_structure_naming_strategy: standard       # Silence HHH90006001 incubating warning
         # Second-level cache (disabled by default, enable if needed)
         cache:
           use_second_level_cache: false
@@ -321,7 +323,6 @@ logger:
   levels:
     com.secman: DEBUG
     io.micronaut.security: DEBUG
-    org.hibernate.orm.incubating: ERROR
 
 app:
   backend:

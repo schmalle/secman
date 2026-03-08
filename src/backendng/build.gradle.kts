@@ -168,8 +168,7 @@ micronaut {
 // Configure Kotlin compiler options
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
     compilerOptions {
-        // Compiler options for Kotlin 2.1.0
-        // The -Xannotation-default-target flag is no longer needed in Kotlin 2.1.0
+        freeCompilerArgs.add("-Xannotation-default-target=param-property")
     }
 }
 

@@ -26,7 +26,7 @@ import java.time.Instant
  */
 @Singleton
 open class CrowdStrikeAuthService(
-    @Client("https://api.crowdstrike.com")
+    @param:Client("https://api.crowdstrike.com")
     private val httpClient: HttpClient
 ) {
     private val log = LoggerFactory.getLogger(CrowdStrikeAuthService::class.java)
@@ -76,7 +76,7 @@ open class CrowdStrikeAuthService(
                 )
             }
 
-            val tokenData = response.body() as? Map<*, *>
+            val tokenData = response.body()
                 ?: throw AuthenticationException("Empty response body from CrowdStrike OAuth2 endpoint")
 
             val accessToken = tokenData["access_token"]?.toString()

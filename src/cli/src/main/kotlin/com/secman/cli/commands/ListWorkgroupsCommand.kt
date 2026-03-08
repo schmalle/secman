@@ -162,6 +162,7 @@ class ListWorkgroupsCommand(
         println(objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(data))
     }
 
+    @Suppress("DEPRECATION")
     private fun displayWorkgroupsCsv(workgroups: List<Workgroup>) {
         val stringWriter = StringWriter()
         val csvPrinter = CSVPrinter(
@@ -244,6 +245,7 @@ class ListWorkgroupsCommand(
         println(objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(data))
     }
 
+    @Suppress("DEPRECATION")
     private fun displayAssetsCsv(assets: List<Asset>) {
         val stringWriter = StringWriter()
         val csvPrinter = CSVPrinter(
