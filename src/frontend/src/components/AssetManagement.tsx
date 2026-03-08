@@ -823,57 +823,17 @@ const AssetManagement: React.FC = () => {
                     <thead>
                       <tr>
                         <th>Name</th>
-                        <th>Type</th>
-                        <th>Criticality</th>
                         <th>IP Address</th>
                         <th>AD Domain</th>
                         <th>Owner</th>
-                        <th>Description</th>
                         <th>Workgroups</th>
-                        <th>Created</th>
                         <th>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {getFilteredAssets().map((asset) => {
-                        const getCriticalityBadge = (criticality?: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'NA' | null) => {
-                          if (!criticality) {
-                            return (
-                              <span className="badge bg-secondary" title="Inherited from workgroup or default (MEDIUM)">
-                                <i className="bi bi-arrow-down-circle me-1"></i>Inherited
-                              </span>
-                            );
-                          }
-                          const colorMap = {
-                            'CRITICAL': 'danger',
-                            'HIGH': 'warning',
-                            'MEDIUM': 'info',
-                            'LOW': 'secondary',
-                            'NA': 'light'
-                          };
-                          const iconMap = {
-                            'CRITICAL': '🔴',
-                            'HIGH': '🟠',
-                            'MEDIUM': '🔵',
-                            'LOW': '⚪',
-                            'NA': '➖'
-                          };
-                          const displayText = criticality === 'NA' ? 'N/A' : criticality;
-                          const isLight = colorMap[criticality] === 'light';
-                          return (
-                            <span className={`badge bg-${colorMap[criticality]} ${isLight ? 'text-dark' : ''}`} title="Explicit criticality override">
-                              {iconMap[criticality]} {displayText}
-                            </span>
-                          );
-                        };
-
-                        return (
+                      {getFilteredAssets().map((asset) => (
                         <tr key={asset.id}>
                           <td>{asset.name}</td>
-                          <td>
-                            <span className="badge bg-info">{asset.type}</span>
-                          </td>
-                          <td>{getCriticalityBadge(asset.criticality)}</td>
                           <td>{asset.ip || '-'}</td>
                           <td>
                             {asset.adDomain ? (
@@ -885,7 +845,6 @@ const AssetManagement: React.FC = () => {
                             )}
                           </td>
                           <td>{asset.owner}</td>
-                          <td>{asset.description || '-'}</td>
                           <td>
                             {asset.workgroups && asset.workgroups.length > 0 ? (
                               <div>
@@ -896,9 +855,6 @@ const AssetManagement: React.FC = () => {
                             ) : (
                               <span className="text-muted">None</span>
                             )}
-                          </td>
-                          <td>
-                            {asset.createdAt ? new Date(asset.createdAt).toLocaleDateString() : '-'}
                           </td>
                           <td>
                             <div className="btn-group" role="group">
@@ -941,8 +897,7 @@ const AssetManagement: React.FC = () => {
                             </div>
                           </td>
                         </tr>
-                        );
-                      })}
+                      ))}
                     </tbody>
                   </table>
                 </div>
