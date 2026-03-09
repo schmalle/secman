@@ -1,0 +1,38 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "478bde0e4d9b",
+  "session_id": "f5d7346b-c501-49a5-b9d5-047344dce012",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-09T21:10:38.216104Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/backendng/src/main/kotlin/com/secman/controller/AppSettingsController.kt",
+    "src/backendng/src/main/kotlin/com/secman/domain/AppSettings.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/AppSettingsService.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/VulnerabilityExceptionRequestService.kt",
+    "src/frontend/src/components/AppSettingsAdmin.tsx",
+    "src/frontend/src/services/appSettingsService.ts"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "50cdffa5b056",
+  "token_usage": {
+    "input_tokens": 16,
+    "cache_creation_tokens": 35378,
+    "cache_read_tokens": 579088,
+    "output_tokens": 6204,
+    "api_call_count": 14
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-09T21:10:38.069807Z",
+    "agent_lines": 75,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 75,
+    "agent_percentage": 100
+  }
+}

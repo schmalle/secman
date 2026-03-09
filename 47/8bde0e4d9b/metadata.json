@@ -1,0 +1,30 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "478bde0e4d9b",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/backendng/src/main/kotlin/com/secman/controller/AppSettingsController.kt",
+    "src/backendng/src/main/kotlin/com/secman/domain/AppSettings.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/AppSettingsService.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/VulnerabilityExceptionRequestService.kt",
+    "src/frontend/src/components/AppSettingsAdmin.tsx",
+    "src/frontend/src/services/appSettingsService.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/47/8bde0e4d9b/0/metadata.json",
+      "transcript": "/47/8bde0e4d9b/0/full.jsonl",
+      "content_hash": "/47/8bde0e4d9b/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 16,
+    "cache_creation_tokens": 35378,
+    "cache_read_tokens": 579088,
+    "output_tokens": 6204,
+    "api_call_count": 14
+  }
+}
