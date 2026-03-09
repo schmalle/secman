@@ -24,6 +24,7 @@ open class AppSettingsService(
     @Serdeable
     data class AppSettingsDto(
         val baseUrl: String,
+        val globalCveApprovalAdminOnly: Boolean,
         val updatedBy: String?,
         val updatedAt: String?
     )
@@ -37,6 +38,7 @@ open class AppSettingsService(
         val settings = getOrCreateSettings()
         return AppSettingsDto(
             baseUrl = settings.getNormalizedBaseUrl(),
+            globalCveApprovalAdminOnly = settings.globalCveApprovalAdminOnly,
             updatedBy = settings.updatedBy,
             updatedAt = settings.updatedAt?.toString()
         )
@@ -53,19 +55,29 @@ open class AppSettingsService(
     }
 
     /**
+     * Check if global CVE approval is restricted to ADMIN only.
+     */
+    @Transactional
+    open fun isGlobalCveApprovalAdminOnly(): Boolean {
+        return getOrCreateSettings().globalCveApprovalAdminOnly
+    }
+
+    /**
      * Update application settings.
      *
      * @param baseUrl The new base URL
      * @param updatedBy Username of the admin making the change
+     * @param globalCveApprovalAdminOnly Whether CVE_PATTERN approvals require ADMIN role
      * @return Updated settings DTO
      * @throws IllegalArgumentException if validation fails
      */
     @Transactional
-    open fun updateSettings(baseUrl: String, updatedBy: String): AppSettingsDto {
+    open fun updateSettings(baseUrl: String, updatedBy: String, globalCveApprovalAdminOnly: Boolean = false): AppSettingsDto {
         val settings = getOrCreateSettings()
 
         // Update the base URL
         settings.baseUrl = baseUrl.trimEnd('/')
+        settings.globalCveApprovalAdminOnly = globalCveApprovalAdminOnly
         settings.updatedBy = updatedBy
 
         // Validate
@@ -75,10 +87,11 @@ open class AppSettingsService(
         }
 
         val updated = appSettingsRepository.update(settings)
-        logger.info("App settings updated by {}: baseUrl={}", updatedBy, updated.baseUrl)
+        logger.info("App settings updated by {}: baseUrl={}, globalCveApprovalAdminOnly={}", updatedBy, updated.baseUrl, updated.globalCveApprovalAdminOnly)
 
         return AppSettingsDto(
             baseUrl = updated.getNormalizedBaseUrl(),
+            globalCveApprovalAdminOnly = updated.globalCveApprovalAdminOnly,
             updatedBy = updated.updatedBy,
             updatedAt = updated.updatedAt?.toString()
         )

@@ -30,6 +30,14 @@ data class AppSettings(
     var baseUrl: String = "http://localhost:4321",
 
     /**
+     * When enabled, only ADMIN users can approve CVE_PATTERN (global CVE) exception requests.
+     * SECCHAMPION users will still be able to approve SINGLE_VULNERABILITY scoped requests.
+     * Default: false (current behavior — both ADMIN and SECCHAMPION can approve all scopes)
+     */
+    @Column(nullable = false, name = "global_cve_approval_admin_only")
+    var globalCveApprovalAdminOnly: Boolean = false,
+
+    /**
      * Username of ADMIN who last updated these settings
      */
     @Column(nullable = true, length = 100, name = "updated_by")

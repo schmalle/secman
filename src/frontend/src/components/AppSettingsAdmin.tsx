@@ -21,6 +21,7 @@ const AppSettingsAdmin: React.FC = () => {
 
   // Form state
   const [baseUrl, setBaseUrl] = useState('');
+  const [globalCveApprovalAdminOnly, setGlobalCveApprovalAdminOnly] = useState(false);
 
   // Load settings on component mount
   useEffect(() => {
@@ -38,6 +39,7 @@ const AppSettingsAdmin: React.FC = () => {
       console.log('[AppSettingsAdmin] Settings loaded:', data);
       setSettings(data);
       setBaseUrl(data.baseUrl);
+      setGlobalCveApprovalAdminOnly(data.globalCveApprovalAdminOnly);
     } catch (err) {
       console.error('[AppSettingsAdmin] Failed to load settings:', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to load application settings';
@@ -71,7 +73,7 @@ const AppSettingsAdmin: React.FC = () => {
       setSaving(true);
       console.log('[AppSettingsAdmin] Saving settings:', { baseUrl });
 
-      const updatedSettings = await updateAppSettings(baseUrl.replace(/\/$/, ''));
+      const updatedSettings = await updateAppSettings(baseUrl.replace(/\/$/, ''), globalCveApprovalAdminOnly);
 
       console.log('[AppSettingsAdmin] Settings saved successfully:', updatedSettings);
       setSettings(updatedSettings);
@@ -179,6 +181,29 @@ const AppSettingsAdmin: React.FC = () => {
             <small className="form-text text-muted">
               The base URL of your SecMan installation. This is used for generating links in email
               notifications. Example: <code>https://secman.example.com</code>
+            </small>
+          </div>
+
+          {/* Global CVE Approval Admin-Only Toggle */}
+          <div className="mb-4">
+            <div className="form-check form-switch">
+              <input
+                className="form-check-input"
+                type="checkbox"
+                role="switch"
+                id="globalCveApprovalAdminOnly"
+                checked={globalCveApprovalAdminOnly}
+                onChange={(e) => setGlobalCveApprovalAdminOnly(e.target.checked)}
+                disabled={saving}
+              />
+              <label className="form-check-label" htmlFor="globalCveApprovalAdminOnly">
+                <strong>Restrict Global CVE Approvals to ADMIN Only</strong>
+              </label>
+            </div>
+            <small className="form-text text-muted">
+              When enabled, only ADMIN users can approve CVE_PATTERN (global CVE) exception requests
+              that affect all assets system-wide. SECCHAMPION users will still be able to approve
+              single-vulnerability scoped requests.
             </small>
           </div>
 

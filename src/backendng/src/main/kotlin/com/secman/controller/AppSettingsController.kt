@@ -40,7 +40,8 @@ open class AppSettingsController(
     @Serdeable
     data class UpdateAppSettingsRequest(
         @field:NotBlank(message = "Base URL is required")
-        val baseUrl: String
+        val baseUrl: String,
+        val globalCveApprovalAdminOnly: Boolean = false
     )
 
     /**
@@ -98,7 +99,7 @@ open class AppSettingsController(
             logger.info("PUT /api/settings/app - User '{}' updating app settings: baseUrl={}",
                 username, request.baseUrl)
 
-            val updated = appSettingsService.updateSettings(request.baseUrl, username)
+            val updated = appSettingsService.updateSettings(request.baseUrl, username, request.globalCveApprovalAdminOnly)
 
             logger.info("Application settings updated successfully by user '{}'", username)
             HttpResponse.ok(updated)

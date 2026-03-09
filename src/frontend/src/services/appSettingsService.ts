@@ -15,6 +15,9 @@ export interface AppSettingsDto {
   /** Base URL of the application frontend (e.g., https://secman.example.com) */
   baseUrl: string;
 
+  /** When true, only ADMIN users can approve CVE_PATTERN (global CVE) exception requests */
+  globalCveApprovalAdminOnly: boolean;
+
   /** Username of admin who last updated settings */
   updatedBy: string | null;
 
@@ -72,11 +75,11 @@ export async function getAppSettings(): Promise<AppSettingsDto> {
  * @returns Updated application settings
  * @throws Error if request fails, validation fails, or user lacks ADMIN role
  */
-export async function updateAppSettings(baseUrl: string): Promise<AppSettingsDto> {
-  console.log('[appSettingsService] updateAppSettings called with:', baseUrl);
+export async function updateAppSettings(baseUrl: string, globalCveApprovalAdminOnly: boolean): Promise<AppSettingsDto> {
+  console.log('[appSettingsService] updateAppSettings called with:', { baseUrl, globalCveApprovalAdminOnly });
   console.log('[appSettingsService] Making authenticated PUT to /api/settings/app');
 
-  const response = await authenticatedPut('/api/settings/app', { baseUrl });
+  const response = await authenticatedPut('/api/settings/app', { baseUrl, globalCveApprovalAdminOnly });
 
   console.log('[appSettingsService] Response received:', {
     ok: response.ok,
