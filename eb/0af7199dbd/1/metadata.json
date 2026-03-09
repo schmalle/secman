@@ -1,0 +1,35 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "eb0af7199dbd",
+  "session_id": "15919b47-f0c8-4793-9c63-778e4863f5a0",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-09T15:05:32.385428Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/backendng/src/main/kotlin/com/secman/controller/ConfigBundleController.kt",
+    "src/cli/src/test/kotlin/com/secman/cli/SecmanCliTest.kt",
+    "src/frontend/src/components/ConfigBundleManager.tsx"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "7f06bfbf54ac",
+  "token_usage": {
+    "input_tokens": 3444,
+    "cache_creation_tokens": 95870,
+    "cache_read_tokens": 1718908,
+    "output_tokens": 11757,
+    "api_call_count": 26
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-09T15:05:31.807878Z",
+    "agent_lines": 97,
+    "human_added": 679,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 776,
+    "agent_percentage": 12.5
+  }
+}

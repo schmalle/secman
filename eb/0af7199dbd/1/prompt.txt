@@ -1,0 +1,1 @@
+please check the entire "Request exception" logic. The funcion "Request execption" must only be usable, if the user has role ADMIN, role SECCHAMPION, owns the asset, belongs to a workgroup, which the asset belongs two, asset belongs to an AWS account, which is mapped or shared with the user
