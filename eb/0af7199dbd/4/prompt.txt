@@ -1,0 +1,1 @@
+please add a functionality to make the exception for all systems in one AWS account. Precondition, the user must be mapped / shared to the AWS account.

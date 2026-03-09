@@ -1,9 +1,11 @@
 {
   "cli_version": "0.5.0",
   "checkpoint_id": "eb0af7199dbd",
+  "session_id": "8664043c-efdb-4038-bc96-b6bca578f0e2",
   "strategy": "manual-commit",
+  "created_at": "2026-03-09T15:05:36.512539Z",
   "branch": "main",
-  "checkpoints_count": 16,
+  "checkpoints_count": 2,
   "files_touched": [
     "src/backendng/src/main/kotlin/com/secman/controller/AlignmentController.kt",
     "src/backendng/src/main/kotlin/com/secman/controller/AssetController.kt",
@@ -62,43 +64,25 @@
     "src/frontend/src/components/VulnerabilityExceptionsTable.tsx",
     "src/frontend/src/services/vulnerabilityManagementService.ts"
   ],
-  "sessions": [
-    {
-      "metadata": "/eb/0af7199dbd/0/metadata.json",
-      "transcript": "/eb/0af7199dbd/0/full.jsonl",
-      "content_hash": "/eb/0af7199dbd/0/content_hash.txt",
-      "prompt": "/eb/0af7199dbd/0/prompt.txt"
-    },
-    {
-      "metadata": "/eb/0af7199dbd/1/metadata.json",
-      "transcript": "/eb/0af7199dbd/1/full.jsonl",
-      "content_hash": "/eb/0af7199dbd/1/content_hash.txt",
-      "prompt": "/eb/0af7199dbd/1/prompt.txt"
-    },
-    {
-      "metadata": "/eb/0af7199dbd/2/metadata.json",
-      "transcript": "/eb/0af7199dbd/2/full.jsonl",
-      "content_hash": "/eb/0af7199dbd/2/content_hash.txt",
-      "prompt": "/eb/0af7199dbd/2/prompt.txt"
-    },
-    {
-      "metadata": "/eb/0af7199dbd/3/metadata.json",
-      "transcript": "/eb/0af7199dbd/3/full.jsonl",
-      "content_hash": "/eb/0af7199dbd/3/content_hash.txt",
-      "prompt": "/eb/0af7199dbd/3/prompt.txt"
-    },
-    {
-      "metadata": "/eb/0af7199dbd/4/metadata.json",
-      "transcript": "/eb/0af7199dbd/4/full.jsonl",
-      "content_hash": "/eb/0af7199dbd/4/content_hash.txt",
-      "prompt": "/eb/0af7199dbd/4/prompt.txt"
-    }
-  ],
+  "agent": "Claude Code",
+  "turn_id": "60e7b8a64f0d",
   "token_usage": {
-    "input_tokens": 3843,
-    "cache_creation_tokens": 855302,
-    "cache_read_tokens": 31594882,
-    "output_tokens": 161002,
-    "api_call_count": 358
+    "input_tokens": 81,
+    "cache_creation_tokens": 126702,
+    "cache_read_tokens": 6975259,
+    "output_tokens": 25542,
+    "api_call_count": 73
+  },
+  "session_metrics": {
+    "turn_count": 2
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-09T15:05:35.769575Z",
+    "agent_lines": 776,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 776,
+    "agent_percentage": 100
   }
 }
