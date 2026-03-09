@@ -3,7 +3,7 @@
   "checkpoint_id": "eb0af7199dbd",
   "strategy": "manual-commit",
   "branch": "main",
-  "checkpoints_count": 12,
+  "checkpoints_count": 14,
   "files_touched": [
     "src/backendng/src/main/kotlin/com/secman/controller/AlignmentController.kt",
     "src/backendng/src/main/kotlin/com/secman/controller/AssetController.kt",
@@ -72,13 +72,19 @@
       "transcript": "/eb/0af7199dbd/2/full.jsonl",
       "content_hash": "/eb/0af7199dbd/2/content_hash.txt",
       "prompt": "/eb/0af7199dbd/2/prompt.txt"
+    },
+    {
+      "metadata": "/eb/0af7199dbd/3/metadata.json",
+      "transcript": "/eb/0af7199dbd/3/full.jsonl",
+      "content_hash": "/eb/0af7199dbd/3/content_hash.txt",
+      "prompt": "/eb/0af7199dbd/3/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 3691,
-    "cache_creation_tokens": 610558,
-    "cache_read_tokens": 19220185,
-    "output_tokens": 112477,
-    "api_call_count": 226
+    "input_tokens": 3762,
+    "cache_creation_tokens": 728600,
+    "cache_read_tokens": 24619623,
+    "output_tokens": 135460,
+    "api_call_count": 285
   }
 }
