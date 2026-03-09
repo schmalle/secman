@@ -51,7 +51,8 @@ class JwksValidationService(
     fun validateAndParseJwt(jwt: String, jwksUri: String?, issuer: String? = null): Map<String, Any>? {
         if (jwksUri.isNullOrBlank()) {
             logger.warn("No JWKS URI configured - falling back to unverified parsing (NOT RECOMMENDED)")
-            return parseJwtWithoutVerification(jwt)
+            logger.error("No JWKS URI configured - rejecting JWT (signature cannot be verified)")
+            return null
         }
 
         try {

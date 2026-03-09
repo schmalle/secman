@@ -7,6 +7,7 @@ import io.micronaut.security.annotation.Secured
 import io.micronaut.security.authentication.Authentication
 import io.micronaut.security.rules.SecurityRule
 import jakarta.inject.Singleton
+import jakarta.validation.Valid
 import org.slf4j.LoggerFactory
 import java.time.Instant
 
@@ -17,7 +18,7 @@ import java.time.Instant
 @Singleton
 @Controller("/api/notification-preferences")
 @Secured(SecurityRule.IS_AUTHENTICATED)
-class NotificationPreferenceController(
+open class NotificationPreferenceController(
     private val notificationPreferenceRepository: NotificationPreferenceRepository
 ) {
     private val logger = LoggerFactory.getLogger(NotificationPreferenceController::class.java)
@@ -47,8 +48,8 @@ class NotificationPreferenceController(
      * Update current user's notification preferences
      */
     @Put
-    fun updateUserPreferences(
-        @Body request: UpdatePreferenceRequest,
+    open fun updateUserPreferences(
+        @Valid @Body request: UpdatePreferenceRequest,
         authentication: Authentication
     ): NotificationPreferenceResponse {
         val userId = authentication.name.toLongOrNull()

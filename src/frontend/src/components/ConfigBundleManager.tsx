@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import axios from 'axios';
 import { API_BASE_URL } from '../services/api';
 
@@ -66,14 +66,7 @@ const ConfigBundleManager: React.FC = () => {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    // Set up axios interceptors for auth
-    const token = sessionStorage.getItem('jwt_token');
-    if (token) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-    }
-  }, []);
-
+  // Authentication is handled via HttpOnly cookie (withCredentials set globally in csrf.ts)
   const handleExport = async () => {
     setIsExporting(true);
     setExportError(null);
@@ -83,7 +76,6 @@ const ConfigBundleManager: React.FC = () => {
       const response = await axios.get(`${API_BASE_URL}/api/config-bundle/export`, {
         responseType: 'blob',
         headers: {
-          'Authorization': `Bearer ${sessionStorage.getItem('jwt_token')}`
         }
       });
 
@@ -145,7 +137,6 @@ const ConfigBundleManager: React.FC = () => {
       const response = await axios.post(`${API_BASE_URL}/api/config-bundle/validate`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
-          'Authorization': `Bearer ${sessionStorage.getItem('jwt_token')}`
         }
       });
 
@@ -196,7 +187,6 @@ const ConfigBundleManager: React.FC = () => {
       const response = await axios.post(`${API_BASE_URL}/api/config-bundle/import`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
-          'Authorization': `Bearer ${sessionStorage.getItem('jwt_token')}`
         }
       });
 

@@ -168,6 +168,12 @@ open class ExportJobService(
         }
 
         val file = File(job.filePath!!)
+        // Path traversal prevention
+        val exportDir = File(exportDirectory).canonicalFile
+        if (!file.canonicalFile.startsWith(exportDir)) {
+            log.error("Path traversal attempt in export file: {}", job.filePath)
+            return null
+        }
         if (!file.exists()) {
             log.error("Export file not found: {}", job.filePath)
             // Mark job as expired

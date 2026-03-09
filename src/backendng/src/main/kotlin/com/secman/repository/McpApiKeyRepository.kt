@@ -128,6 +128,9 @@ interface McpApiKeyRepository : JpaRepository<McpApiKey, Long> {
     @Query("UPDATE McpApiKey ak SET ak.lastUsedAt = :lastUsedAt WHERE ak.id = :id")
     fun updateLastUsedAt(id: Long, lastUsedAt: LocalDateTime): Int
 
+    @Query("UPDATE McpApiKey ak SET ak.keyHash = :keyHash WHERE ak.id = :id")
+    fun updateKeyHash(id: Long, keyHash: String): Int
+
 
     /**
      * Find API keys that haven't been used for a specified period.

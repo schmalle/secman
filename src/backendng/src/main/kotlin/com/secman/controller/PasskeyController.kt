@@ -9,6 +9,7 @@ import io.micronaut.security.authentication.Authentication
 import io.micronaut.security.rules.SecurityRule
 import io.micronaut.serde.annotation.Serdeable
 import jakarta.inject.Inject
+import jakarta.validation.Valid
 import org.slf4j.LoggerFactory
 
 /**
@@ -16,7 +17,7 @@ import org.slf4j.LoggerFactory
  * Feature: Passkey MFA Support
  */
 @Controller("/api/passkey")
-class PasskeyController(
+open class PasskeyController(
     private val webAuthnService: WebAuthnService,
     private val userRepository: UserRepository
 ) {
@@ -67,7 +68,7 @@ class PasskeyController(
 
         } catch (e: Exception) {
             logger.error("Failed to generate registration options", e)
-            return HttpResponse.badRequest(mapOf("error" to "Failed to generate registration options: ${e.message}"))
+            return HttpResponse.badRequest(mapOf("error" to "An internal error occurred"))
         }
     }
 
@@ -77,8 +78,8 @@ class PasskeyController(
      */
     @Post("/register")
     @Secured(SecurityRule.IS_AUTHENTICATED)
-    fun registerCredential(
-        @Body request: RegisterCredentialRequest,
+    open fun registerCredential(
+        @Valid @Body request: RegisterCredentialRequest,
         authentication: Authentication
     ): HttpResponse<*> {
         try {
@@ -102,7 +103,7 @@ class PasskeyController(
 
         } catch (e: Exception) {
             logger.error("Failed to register passkey", e)
-            return HttpResponse.badRequest(mapOf("error" to "Failed to register passkey: ${e.message}"))
+            return HttpResponse.badRequest(mapOf("error" to "An internal error occurred"))
         }
     }
 
@@ -112,14 +113,14 @@ class PasskeyController(
      */
     @Post("/login-options")
     @Secured(SecurityRule.IS_ANONYMOUS)
-    fun getAuthenticationOptions(@Body request: AuthenticationOptionsRequest): HttpResponse<*> {
+    open fun getAuthenticationOptions(@Valid @Body request: AuthenticationOptionsRequest): HttpResponse<*> {
         try {
             val options = webAuthnService.generateAuthenticationOptions(request.username)
             return HttpResponse.ok(options)
 
         } catch (e: Exception) {
             logger.error("Failed to generate authentication options", e)
-            return HttpResponse.badRequest(mapOf("error" to "Failed to generate authentication options: ${e.message}"))
+            return HttpResponse.badRequest(mapOf("error" to "An internal error occurred"))
         }
     }
 
@@ -129,7 +130,7 @@ class PasskeyController(
      */
     @Post("/authenticate")
     @Secured(SecurityRule.IS_ANONYMOUS)
-    fun authenticate(@Body request: AuthenticationRequest): HttpResponse<*> {
+    open fun authenticate(@Valid @Body request: AuthenticationRequest): HttpResponse<*> {
         try {
             val credential = webAuthnService.verifyAuthentication(
                 username = request.username,
@@ -151,7 +152,7 @@ class PasskeyController(
 
         } catch (e: Exception) {
             logger.error("Failed to authenticate with passkey", e)
-            return HttpResponse.unauthorized<Any>().body(mapOf("error" to "Authentication failed: ${e.message}"))
+            return HttpResponse.unauthorized<Any>().body(mapOf("error" to "An internal error occurred"))
         }
     }
 
@@ -176,7 +177,7 @@ class PasskeyController(
 
         } catch (e: Exception) {
             logger.error("Failed to list passkeys", e)
-            return HttpResponse.badRequest(mapOf("error" to "Failed to list passkeys: ${e.message}"))
+            return HttpResponse.badRequest(mapOf("error" to "An internal error occurred"))
         }
     }
 
@@ -203,7 +204,7 @@ class PasskeyController(
 
         } catch (e: Exception) {
             logger.error("Failed to delete passkey", e)
-            return HttpResponse.badRequest(mapOf("error" to "Failed to delete passkey: ${e.message}"))
+            return HttpResponse.badRequest(mapOf("error" to "An internal error occurred"))
         }
     }
 }

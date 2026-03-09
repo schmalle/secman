@@ -166,7 +166,7 @@ open class EmailService(
             val message = MimeMessage(session).apply {
                 setFrom(InternetAddress(config.fromEmail, config.fromName))
                 setRecipients(Message.RecipientType.TO, InternetAddress.parse(to))
-                setSubject(subject)
+                setSubject(subject.replace(Regex("[\\r\\n]"), ""))
                 
                 // Create multipart message with both text and HTML
                 val multipart = MimeMultipart("alternative")
@@ -536,7 +536,7 @@ open class EmailService(
             val message = MimeMessage(session).apply {
                 setFrom(InternetAddress(config.fromEmail, config.fromName))
                 setRecipients(Message.RecipientType.TO, InternetAddress.parse(to))
-                setSubject(subject)
+                setSubject(subject.replace(Regex("[\\r\\n]"), ""))
 
                 // Create multipart message with both text and HTML
                 val multipart = MimeMultipart("alternative")

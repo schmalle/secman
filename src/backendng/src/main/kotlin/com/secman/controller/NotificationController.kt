@@ -342,7 +342,7 @@ open class NotificationController(
      * POST /api/notifications/retry
      */
     @Post("/retry")
-    open fun retryFailedNotifications(@Body request: RetryNotificationsRequest): HttpResponse<Map<String, Any>> {
+    open fun retryFailedNotifications(@Body @Valid request: RetryNotificationsRequest): HttpResponse<Map<String, Any>> {
         return try {
             val beforeDate = request.beforeDate?.let { LocalDateTime.parse(it) } ?: LocalDateTime.now().minusHours(24)
 

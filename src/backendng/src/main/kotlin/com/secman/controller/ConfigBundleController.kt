@@ -17,6 +17,7 @@ import org.slf4j.LoggerFactory
 import java.io.ByteArrayOutputStream
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import jakarta.validation.Valid
 
 /**
  * Controller for configuration bundle export and import operations
@@ -66,7 +67,7 @@ open class ConfigBundleController(
 
         } catch (e: Exception) {
             logger.error("Error exporting configuration bundle", e)
-            HttpResponse.serverError(ErrorResponse("Failed to export configuration bundle: ${e.message}"))
+            HttpResponse.serverError(ErrorResponse("An internal error occurred"))
         }
     }
 
@@ -130,7 +131,7 @@ open class ConfigBundleController(
 
         } catch (e: Exception) {
             logger.error("Error importing configuration bundle", e)
-            HttpResponse.serverError(ErrorResponse("Failed to import configuration bundle: ${e.message}"))
+            HttpResponse.serverError(ErrorResponse("An internal error occurred"))
         }
     }
 
@@ -170,7 +171,7 @@ open class ConfigBundleController(
 
         } catch (e: Exception) {
             logger.error("Error validating configuration bundle", e)
-            HttpResponse.badRequest(ErrorResponse("Failed to validate configuration bundle: ${e.message}"))
+            HttpResponse.badRequest(ErrorResponse("An internal error occurred"))
         }
     }
 
@@ -183,7 +184,7 @@ open class ConfigBundleController(
     @Produces(MediaType.APPLICATION_JSON)
     @Transactional
     open fun importBundleJson(
-        @Body request: ImportBundleRequest,
+        @Valid @Body request: ImportBundleRequest,
         authentication: Authentication
     ): HttpResponse<*> {
         logger.info("Configuration bundle import (JSON) requested by user: ${authentication.name}")
@@ -202,7 +203,7 @@ open class ConfigBundleController(
 
         } catch (e: Exception) {
             logger.error("Error importing configuration bundle", e)
-            HttpResponse.serverError(ErrorResponse("Failed to import configuration bundle: ${e.message}"))
+            HttpResponse.serverError(ErrorResponse("An internal error occurred"))
         }
     }
 

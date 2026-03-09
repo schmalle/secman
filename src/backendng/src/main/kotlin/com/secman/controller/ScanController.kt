@@ -102,7 +102,7 @@ open class ScanController(
 
         } catch (e: Exception) {
             logger.error("Nmap upload failed: ${e.message}", e)
-            return HttpResponse.badRequest(mapOf("error" to e.message))
+            return HttpResponse.badRequest(mapOf("error" to "An internal error occurred"))
         }
     }
 

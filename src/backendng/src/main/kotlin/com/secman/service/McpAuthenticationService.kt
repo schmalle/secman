@@ -9,6 +9,7 @@ import java.time.LocalDateTime
 import java.security.MessageDigest
 import java.security.SecureRandom
 import org.slf4j.LoggerFactory
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
 
 /**
  * Service for MCP API key authentication and security management.
@@ -24,6 +25,7 @@ class McpAuthenticationService(
 ) {
     private val logger = LoggerFactory.getLogger(McpAuthenticationService::class.java)
     private val secureRandom = SecureRandom()
+    private val bcryptEncoder = BCryptPasswordEncoder()
 
     // Security configuration
     private val maxFailuresPerIp = 10
@@ -78,15 +80,9 @@ class McpAuthenticationService(
             }
 
             // Try to find an API key by checking hashes for all active keys
-            // We need to get all active keys and check their hashes
-            val activeKeys = apiKeyRepository.findActiveByUserId(1L) // Get for all users
-
-            // Alternative approach: Get all active keys from all users
-            // For now, let's try a different approach using the repository query
             for (apiKey in getAllActiveKeys()) {
-                val hashedSecret = hashApiKeySecret(keySecret, apiKey.keyId)
-                if (apiKey.keyHash == hashedSecret) {
-                    // Found matching key, now validate it
+                if (verifyApiKeySecret(keySecret, apiKey.keyHash, apiKey.keyId)) {
+                    migrateHashIfNeeded(apiKey, keySecret)
                     return validateAndReturnKey(apiKey, clientIp, userAgent, requestId, startTime)
                 }
             }
@@ -156,9 +152,8 @@ class McpAuthenticationService(
 
             val apiKey = apiKeyOpt.get()
 
-            // Verify key hash
-            val hashedSecret = hashApiKeySecret(keySecret, keyId)
-            if (apiKey.keyHash != hashedSecret) {
+            // Verify key hash (supports both BCrypt and legacy SHA-256)
+            if (!verifyApiKeySecret(keySecret, apiKey.keyHash, keyId)) {
                 logAuthFailure(apiKey.id, "HASH_MISMATCH", "API key secret does not match", clientIp, userAgent, requestId)
                 return createFailureResult(
                     "INVALID_CREDENTIALS",
@@ -176,6 +171,8 @@ class McpAuthenticationService(
                     clientIp, userAgent, requestId
                 )
             }
+
+            migrateHashIfNeeded(apiKey, keySecret)
 
             // Update last used timestamp
             apiKeyRepository.updateLastUsedAt(apiKey.id, LocalDateTime.now())
@@ -211,7 +208,7 @@ class McpAuthenticationService(
     fun generateApiKeyPair(): ApiKeyPair {
         val keyId = generateSecureKeyId()
         val keySecret = generateSecureKeySecret()
-        val keyHash = hashApiKeySecret(keySecret, keyId)
+        val keyHash = hashApiKeySecret(keySecret)
 
         return ApiKeyPair(
             keyId = keyId,
@@ -221,18 +218,39 @@ class McpAuthenticationService(
     }
 
     /**
-     * Hash an API key secret using secure hashing algorithm.
-     * Uses salt derived from key ID for additional security.
+     * Hash an API key secret using BCrypt.
      */
-    fun hashApiKeySecret(secret: String, keyId: String): String {
+    fun hashApiKeySecret(secret: String): String {
+        return bcryptEncoder.encode(secret)!!
+    }
+
+    private fun legacyHashApiKeySecret(secret: String, keyId: String): String {
         val salt = keyId.toByteArray(Charsets.UTF_8)
         val secretBytes = secret.toByteArray(Charsets.UTF_8)
-
         val digest = MessageDigest.getInstance("SHA-256")
         digest.update(salt)
         digest.update(secretBytes)
-
         return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    fun verifyApiKeySecret(secret: String, storedHash: String, keyId: String): Boolean {
+        return if (storedHash.startsWith("$2a$") || storedHash.startsWith("$2b$")) {
+            bcryptEncoder.matches(secret, storedHash)
+        } else {
+            legacyHashApiKeySecret(secret, keyId) == storedHash
+        }
+    }
+
+    private fun migrateHashIfNeeded(apiKey: McpApiKey, secret: String) {
+        if (!apiKey.keyHash.startsWith("$2a$") && !apiKey.keyHash.startsWith("$2b$")) {
+            try {
+                val bcryptHash = bcryptEncoder.encode(secret)!!
+                apiKeyRepository.updateKeyHash(apiKey.id, bcryptHash)
+                logger.info("Migrated API key {} from SHA-256 to BCrypt", apiKey.keyId)
+            } catch (e: Exception) {
+                logger.warn("Failed to migrate API key hash: {}", e.message)
+            }
+        }
     }
 
     /**

@@ -9,6 +9,7 @@ import io.micronaut.security.annotation.Secured
 import io.micronaut.security.rules.SecurityRule
 import io.micronaut.serde.annotation.Serdeable
 import jakarta.inject.Singleton
+import jakarta.validation.Valid
 import org.slf4j.LoggerFactory
 
 /**
@@ -18,7 +19,7 @@ import org.slf4j.LoggerFactory
 @Singleton
 @Controller("/api/email-provider-configs")
 @Secured("ADMIN")
-class EmailProviderConfigController(
+open class EmailProviderConfigController(
     private val emailProviderConfigService: EmailProviderConfigService
 ) {
     private val logger = LoggerFactory.getLogger(EmailProviderConfigController::class.java)
@@ -61,7 +62,7 @@ class EmailProviderConfigController(
      * Create new SMTP email configuration
      */
     @Post("/smtp")
-    fun createSmtpConfig(@Body request: CreateSmtpConfigRequest): HttpResponse<*> {
+    open fun createSmtpConfig(@Valid @Body request: CreateSmtpConfigRequest): HttpResponse<*> {
         val result = emailProviderConfigService.createSmtpConfig(
             name = request.name,
             smtpHost = request.smtpHost,
@@ -93,7 +94,7 @@ class EmailProviderConfigController(
      * Create new Amazon SES email configuration
      */
     @Post("/ses")
-    fun createSesConfig(@Body request: CreateSesConfigRequest): HttpResponse<*> {
+    open fun createSesConfig(@Valid @Body request: CreateSesConfigRequest): HttpResponse<*> {
         val result = emailProviderConfigService.createSesConfig(
             name = request.name,
             sesAccessKey = request.sesAccessKey,
@@ -119,7 +120,7 @@ class EmailProviderConfigController(
      * Update email configuration
      */
     @Put("/{id}")
-    fun updateConfig(id: Long, @Body request: UpdateConfigRequest): HttpResponse<*> {
+    open fun updateConfig(id: Long, @Valid @Body request: UpdateConfigRequest): HttpResponse<*> {
         val result = emailProviderConfigService.updateConfig(
             id = id,
             name = request.name,
@@ -212,7 +213,7 @@ class EmailProviderConfigController(
      * Test email configuration
      */
     @Post("/{id}/test")
-    fun testConfig(id: Long, @Body request: TestEmailRequest): HttpResponse<*> {
+    open fun testConfig(id: Long, @Valid @Body request: TestEmailRequest): HttpResponse<*> {
         val result = emailProviderConfigService.testConfig(id, request.testEmailAddress)
 
         return result.fold(

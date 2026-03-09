@@ -15,11 +15,12 @@ import io.micronaut.security.authentication.Authentication
 import io.micronaut.security.rules.SecurityRule
 import io.micronaut.serde.annotation.Serdeable
 import jakarta.inject.Inject
+import jakarta.validation.Valid
 import org.slf4j.LoggerFactory
 
 @Controller("/api/releases")
 @Secured(SecurityRule.IS_AUTHENTICATED)
-class ReleaseController(
+open class ReleaseController(
     @Inject private val releaseService: ReleaseService,
     @Inject private val snapshotRepository: RequirementSnapshotRepository,
     @Inject private val useCaseRepository: UseCaseRepository,
@@ -33,8 +34,8 @@ class ReleaseController(
      */
     @Post
     @Secured("ADMIN", "REQADMIN")
-    fun createRelease(
-        @Body request: ReleaseCreateRequest,
+    open fun createRelease(
+        @Valid @Body request: ReleaseCreateRequest,
         authentication: Authentication
     ): HttpResponse<Map<String, Any>> {
         logger.info("Creating release: version=${request.version}, name=${request.name}")
@@ -153,9 +154,9 @@ class ReleaseController(
      */
     @Put("/{id}/status")
     @Secured("ADMIN", "RELEASE_MANAGER")
-    fun updateReleaseStatus(
+    open fun updateReleaseStatus(
         @PathVariable id: Long,
-        @Body request: ReleaseStatusUpdateRequest
+        @Valid @Body request: ReleaseStatusUpdateRequest
     ): HttpResponse<Map<String, Any>> {
         logger.info("Updating release status: id=$id, newStatus=${request.status}")
 

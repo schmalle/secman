@@ -16,10 +16,11 @@ import io.micronaut.serde.annotation.Serdeable
 import org.slf4j.LoggerFactory
 import java.net.URI
 import java.time.LocalDateTime
+import jakarta.validation.Valid
 
 @Controller("/oauth")
 @Secured(SecurityRule.IS_ANONYMOUS)
-class OAuthController(
+open class OAuthController(
     private val oauthService: OAuthService,
     private val appConfig: AppConfig,
     private val authCookieService: AuthCookieService,
@@ -98,7 +99,7 @@ class OAuthController(
             }
         } catch (e: Exception) {
             logger.error("OAuth authorization error for provider {}: {}", providerId, e.message, e)
-            HttpResponse.serverError(ErrorResponse("OAuth authorization failed: ${e.message}"))
+            HttpResponse.serverError(ErrorResponse("An internal error occurred"))
         }
     }
 
@@ -221,8 +222,8 @@ class OAuthController(
      */
     @Post("/callback")
     @ExecuteOn(TaskExecutors.BLOCKING)
-    fun callbackApi(
-        @Body callbackRequest: CallbackRequest
+    open fun callbackApi(
+        @Valid @Body callbackRequest: CallbackRequest
     ): HttpResponse<*> {
         return try {
             // Find provider ID from state with retry mechanism

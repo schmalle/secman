@@ -17,8 +17,11 @@ import io.micronaut.security.token.generator.TokenGenerator
 import io.micronaut.serde.annotation.Serdeable
 import jakarta.inject.Inject
 import jakarta.transaction.Transactional
+import jakarta.validation.Valid
+import org.slf4j.LoggerFactory
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
 import java.time.Instant
+import java.util.concurrent.ConcurrentHashMap
 import java.util.*
 
 @Controller("/api/auth")
@@ -32,6 +35,45 @@ open class AuthController(
 ) {
 
     private val passwordEncoder = BCryptPasswordEncoder()
+    private val logger = LoggerFactory.getLogger(AuthController::class.java)
+
+    // Login rate limiting: track failed attempts per username
+    private data class LoginAttemptRecord(val count: Int, val firstAttemptAt: Instant)
+    private val loginAttempts = ConcurrentHashMap<String, LoginAttemptRecord>()
+    private val maxLoginAttempts = 5
+    private val lockoutDurationSeconds = 900L // 15 minutes
+
+    private fun isLoginLocked(key: String): Boolean {
+        val record = loginAttempts[key] ?: return false
+        if (record.count >= maxLoginAttempts) {
+            val elapsed = java.time.Duration.between(record.firstAttemptAt, Instant.now()).seconds
+            if (elapsed < lockoutDurationSeconds) {
+                return true
+            }
+            // Lockout expired, reset
+            loginAttempts.remove(key)
+        }
+        return false
+    }
+
+    private fun recordFailedLogin(key: String) {
+        loginAttempts.compute(key) { _, existing ->
+            if (existing == null) {
+                LoginAttemptRecord(1, Instant.now())
+            } else {
+                val elapsed = java.time.Duration.between(existing.firstAttemptAt, Instant.now()).seconds
+                if (elapsed >= lockoutDurationSeconds) {
+                    LoginAttemptRecord(1, Instant.now()) // Reset window
+                } else {
+                    LoginAttemptRecord(existing.count + 1, existing.firstAttemptAt)
+                }
+            }
+        }
+    }
+
+    private fun clearFailedLogins(key: String) {
+        loginAttempts.remove(key)
+    }
 
     @Serdeable
     data class LoginRequest(
@@ -64,7 +106,7 @@ open class AuthController(
     @Post("/login")
     @Secured(SecurityRule.IS_ANONYMOUS)
     @Transactional
-    open fun login(@Body loginRequest: LoginRequest): HttpResponse<*> {
+    open fun login(@Valid @Body loginRequest: LoginRequest): HttpResponse<*> {
         if (loginRequest.username.isBlank() || loginRequest.password.isBlank()) {
             return HttpResponse.badRequest(mapOf("error" to "Username and password are required"))
         }
@@ -87,17 +129,30 @@ open class AuthController(
             return HttpResponse.unauthorized<Any>().body(mapOf("error" to "Invalid credentials"))
         }
 
+        // Rate limiting: check if login is locked for this username
+        val rateLimitKey = loginRequest.username.lowercase()
+        if (isLoginLocked(rateLimitKey)) {
+            logger.warn("Login rate limit exceeded for user: {}", loginRequest.username)
+            return HttpResponse.status<Any>(io.micronaut.http.HttpStatus.TOO_MANY_REQUESTS)
+                .body(mapOf("error" to "Too many failed login attempts. Please try again later."))
+        }
+
         val userOptional = userRepository.findByUsername(loginRequest.username)
         
         if (userOptional.isEmpty) {
+            recordFailedLogin(rateLimitKey)
             return HttpResponse.unauthorized<Any>().body(mapOf("error" to "Invalid credentials"))
         }
 
         val user = userOptional.get()
         
         if (!passwordEncoder.matches(loginRequest.password, user.passwordHash)) {
+            recordFailedLogin(rateLimitKey)
             return HttpResponse.unauthorized<Any>().body(mapOf("error" to "Invalid credentials"))
         }
+
+        // Successful login - clear failed attempts
+        clearFailedLogins(rateLimitKey)
 
         // Generate JWT token
         val userDetails = mapOf(

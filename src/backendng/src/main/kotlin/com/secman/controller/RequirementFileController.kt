@@ -120,7 +120,7 @@ open class RequirementFileController(
 
         } catch (e: Exception) {
             logger.error("Error uploading file: {}", e.message, e)
-            return HttpResponse.serverError(ErrorResponse("Internal server error: ${e.message}"))
+            return HttpResponse.serverError(ErrorResponse("An internal error occurred"))
         }
     }
 
@@ -159,7 +159,7 @@ open class RequirementFileController(
 
         } catch (e: Exception) {
             logger.error("Error listing files: {}", e.message, e)
-            return HttpResponse.serverError(ErrorResponse("Failed to list files: ${e.message}"))
+            return HttpResponse.serverError(ErrorResponse("An internal error occurred while listing files"))
         }
     }
 
@@ -204,12 +204,12 @@ open class RequirementFileController(
             logger.info("User {} downloading file: {}", authentication.name, file.originalFilename)
 
             return HttpResponse.ok(StreamedFile(inputStream, MediaType.of(file.contentType)))
-                .header("Content-Disposition", "attachment; filename=\"${file.originalFilename}\"")
+                .header("Content-Disposition", "attachment; filename=\"${file.originalFilename.replace("\"", "").replace("\r", "").replace("\n", "")}\"")
                 .header("Content-Length", file.fileSize.toString())
 
         } catch (e: Exception) {
             logger.error("Error downloading file {}: {}", fileId, e.message, e)
-            return HttpResponse.serverError(ErrorResponse("Failed to download file: ${e.message}"))
+            return HttpResponse.serverError(ErrorResponse("An internal error occurred while downloading file"))
         }
     }
 
@@ -253,7 +253,7 @@ open class RequirementFileController(
 
         } catch (e: Exception) {
             logger.error("Error getting file metadata {}: {}", fileId, e.message, e)
-            return HttpResponse.serverError(ErrorResponse("Failed to get file metadata: ${e.message}"))
+            return HttpResponse.serverError(ErrorResponse("An internal error occurred while retrieving file metadata"))
         }
     }
 
@@ -299,7 +299,7 @@ open class RequirementFileController(
 
         } catch (e: Exception) {
             logger.error("Error deleting file {}: {}", fileId, e.message, e)
-            return HttpResponse.serverError(ErrorResponse("Failed to delete file: ${e.message}"))
+            return HttpResponse.serverError(ErrorResponse("An internal error occurred while deleting file"))
         }
     }
 
@@ -325,7 +325,7 @@ open class RequirementFileController(
 
         } catch (e: Exception) {
             logger.error("Error getting user files: {}", e.message, e)
-            return HttpResponse.serverError(ErrorResponse("Failed to get user files: ${e.message}"))
+            return HttpResponse.serverError(ErrorResponse("An internal error occurred while retrieving user files"))
         }
     }
 
@@ -349,7 +349,7 @@ open class RequirementFileController(
 
         } catch (e: Exception) {
             logger.error("Error getting file statistics: {}", e.message, e)
-            return HttpResponse.serverError(ErrorResponse("Failed to get file statistics: ${e.message}"))
+            return HttpResponse.serverError(ErrorResponse("An internal error occurred while retrieving file statistics"))
         }
     }
 

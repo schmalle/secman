@@ -13,6 +13,7 @@ import io.micronaut.security.authentication.Authentication
 import io.micronaut.security.rules.SecurityRule
 import io.micronaut.serde.annotation.Serdeable
 import jakarta.transaction.Transactional
+import jakarta.validation.Valid
 import org.slf4j.LoggerFactory
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
 
@@ -134,7 +135,7 @@ open class UserProfileController(
 
         } catch (e: Exception) {
             logger.error("Failed to get MFA status", e)
-            return HttpResponse.badRequest(mapOf("error" to "Failed to get MFA status: ${e.message}"))
+            return HttpResponse.badRequest(mapOf("error" to "An internal error occurred"))
         }
     }
 
@@ -147,7 +148,7 @@ open class UserProfileController(
     @Put("/profile/mfa-toggle")
     @Transactional
     open fun toggleMfa(
-        @Body request: MfaToggleRequest,
+        @Valid @Body request: MfaToggleRequest,
         authentication: Authentication
     ): HttpResponse<*> {
         try {
@@ -180,7 +181,7 @@ open class UserProfileController(
 
         } catch (e: Exception) {
             logger.error("Failed to toggle MFA", e)
-            return HttpResponse.badRequest(mapOf("error" to "Failed to toggle MFA: ${e.message}"))
+            return HttpResponse.badRequest(mapOf("error" to "An internal error occurred"))
         }
     }
 
@@ -204,7 +205,7 @@ open class UserProfileController(
     @Put("/profile/change-password")
     @Transactional
     open fun changePassword(
-        @Body request: ChangePasswordRequest,
+        @Valid @Body request: ChangePasswordRequest,
         authentication: Authentication
     ): HttpResponse<*> {
         val username = authentication.name

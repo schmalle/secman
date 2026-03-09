@@ -123,7 +123,7 @@ open class UseCaseController(
             HttpResponse.status<UseCase>(HttpStatus.CREATED).body(savedUseCase)
         } catch (e: Exception) {
             log.error("Error creating use case", e)
-            HttpResponse.badRequest(ErrorResponse("Error creating use case: ${e.message}"))
+            HttpResponse.badRequest(ErrorResponse("An internal error occurred"))
         }
     }
 
@@ -166,7 +166,7 @@ open class UseCaseController(
             HttpResponse.ok(updatedUseCase)
         } catch (e: Exception) {
             log.error("Error updating use case with id: {}", id, e)
-            HttpResponse.badRequest(ErrorResponse("Error updating use case: ${e.message}"))
+            HttpResponse.badRequest(ErrorResponse("An internal error occurred"))
         }
     }
 
@@ -202,7 +202,7 @@ open class UseCaseController(
             HttpResponse.ok(mapOf("message" to "UseCase deleted successfully"))
         } catch (e: Exception) {
             log.error("Error deleting use case with id: {}", id, e)
-            HttpResponse.serverError<ErrorResponse>().body(ErrorResponse("Error deleting use case: ${e.message}"))
+            HttpResponse.serverError<ErrorResponse>().body(ErrorResponse("An internal error occurred"))
         }
     }
 }

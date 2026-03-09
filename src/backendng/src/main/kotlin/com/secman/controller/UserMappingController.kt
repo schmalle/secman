@@ -14,6 +14,7 @@ import io.micronaut.security.annotation.Secured
 import io.micronaut.security.authentication.Authentication
 import io.micronaut.security.rules.SecurityRule
 import jakarta.inject.Inject
+import jakarta.validation.Valid
 import org.slf4j.LoggerFactory
 
 /**
@@ -27,7 +28,7 @@ import org.slf4j.LoggerFactory
  */
 @Controller("/api/user-mappings")
 @Secured(SecurityRule.IS_AUTHENTICATED)
-class UserMappingController(
+open class UserMappingController(
     @Inject private val userMappingService: UserMappingService,
     @Inject private val userMappingRepository: UserMappingRepository
 ) {
@@ -39,8 +40,8 @@ class UserMappingController(
      */
     @Post
     @Secured("ADMIN")
-    fun createMapping(
-        @Body request: CreateUserMappingRequest,
+    open fun createMapping(
+        @Valid @Body request: CreateUserMappingRequest,
         authentication: Authentication
     ): HttpResponse<*> {
         logger.info("Creating user mapping: email=${request.email}, aws=${request.awsAccountId}, ip=${request.ipAddress}")
@@ -184,9 +185,9 @@ class UserMappingController(
      */
     @Put("/{id}")
     @Secured("ADMIN")
-    fun updateMapping(
+    open fun updateMapping(
         @PathVariable id: Long,
-        @Body request: UpdateUserMappingRequest,
+        @Valid @Body request: UpdateUserMappingRequest,
         authentication: Authentication
     ): HttpResponse<*> {
         logger.info("Updating user mapping: id=$id, email=${request.email}, aws=${request.awsAccountId}, ip=${request.ipAddress}")

@@ -14,6 +14,8 @@ import io.micronaut.security.annotation.Secured
 import io.micronaut.security.rules.SecurityRule
 import io.micronaut.serde.annotation.Serdeable
 import jakarta.transaction.Transactional
+import jakarta.validation.constraints.*
+import jakarta.validation.Valid
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
 
 @Controller("/api/users")
@@ -31,9 +33,9 @@ open class UserController(
 
     @Serdeable
     data class CreateUserRequest(
-        val username: String,
-        val email: String,
-        val password: String,
+        @field:NotBlank @field:Size(min = 2, max = 100) val username: String,
+        @field:NotBlank @field:Email @field:Size(max = 255) val email: String,
+        @field:NotBlank @field:Size(min = 8, max = 200) val password: String,
         val roles: List<String>? = null,
         val workgroupIds: List<Long>? = null,
         val mfaEnabled: Boolean? = null
@@ -41,9 +43,9 @@ open class UserController(
 
     @Serdeable
     data class UpdateUserRequest(
-        val username: String? = null,
-        val email: String? = null,
-        val password: String? = null,
+        @field:Size(min = 2, max = 100) val username: String? = null,
+        @field:Email @field:Size(max = 255) val email: String? = null,
+        @field:Size(min = 8, max = 200) val password: String? = null,
         val roles: List<String>? = null,
         val workgroupIds: List<Long>? = null,
         val mfaEnabled: Boolean? = null
@@ -107,7 +109,7 @@ open class UserController(
 
     @Post
     @Transactional
-    open fun create(@Body request: CreateUserRequest, authentication: io.micronaut.security.authentication.Authentication): HttpResponse<*> {
+    open fun create(@Valid @Body request: CreateUserRequest, authentication: io.micronaut.security.authentication.Authentication): HttpResponse<*> {
         // Validation
         if (request.username.isBlank() || request.email.isBlank() || request.password.isBlank()) {
             return HttpResponse.badRequest(mapOf("error" to "Username, email, and password are required"))
@@ -176,7 +178,7 @@ open class UserController(
             return HttpResponse.ok(UserResponse.from(savedUser, includeWorkgroups = true))
             
         } catch (e: Exception) {
-            return HttpResponse.serverError<Any>().body(mapOf("error" to "Failed to create user: ${e.message}"))
+            return HttpResponse.serverError<Any>().body(mapOf("error" to "An internal error occurred"))
         }
     }
 
@@ -201,7 +203,7 @@ open class UserController(
 
     @Put("/{id}")
     @Transactional
-    open fun update(@PathVariable id: Long, @Body request: UpdateUserRequest): HttpResponse<*> {
+    open fun update(@PathVariable id: Long, @Valid @Body request: UpdateUserRequest): HttpResponse<*> {
         val userOptional = userRepository.findById(id)
         
         if (userOptional.isEmpty) {
@@ -291,7 +293,7 @@ open class UserController(
             return HttpResponse.ok(UserResponse.from(savedUser, includeWorkgroups = true))
             
         } catch (e: Exception) {
-            return HttpResponse.serverError<Any>().body(mapOf("error" to "Failed to update user: ${e.message}"))
+            return HttpResponse.serverError<Any>().body(mapOf("error" to "An internal error occurred"))
         }
     }
 
@@ -334,7 +336,7 @@ open class UserController(
             userService.deleteUser(id)
             return HttpResponse.ok(mapOf("message" to "User deleted successfully"))
         } catch (e: Exception) {
-            return HttpResponse.serverError<Any>().body(mapOf("error" to "Failed to delete user: ${e.message}"))
+            return HttpResponse.serverError<Any>().body(mapOf("error" to "An internal error occurred"))
         }
     }
 
@@ -357,9 +359,9 @@ open class UserController(
      */
     @Post("/{userId}/mappings")
     @Status(HttpStatus.CREATED)
-    fun createUserMapping(
+    open fun createUserMapping(
         @PathVariable userId: Long,
-        @Body request: CreateUserMappingRequest
+        @Valid @Body request: CreateUserMappingRequest
     ): UserMappingResponse {
         return userMappingService.createMapping(userId, request)
     }
@@ -370,10 +372,10 @@ open class UserController(
      * User Story 4: Edit Existing Mapping (P3)
      */
     @Put("/{userId}/mappings/{mappingId}")
-    fun updateUserMapping(
+    open fun updateUserMapping(
         @PathVariable userId: Long,
         @PathVariable mappingId: Long,
-        @Body request: UpdateUserMappingRequest
+        @Valid @Body request: UpdateUserMappingRequest
     ): UserMappingResponse {
         return userMappingService.updateMapping(userId, mappingId, request)
     }

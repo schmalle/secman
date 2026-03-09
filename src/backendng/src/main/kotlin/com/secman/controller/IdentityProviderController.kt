@@ -11,6 +11,7 @@ import io.micronaut.security.annotation.Secured
 import io.micronaut.security.rules.SecurityRule
 import io.micronaut.serde.annotation.Serdeable
 import jakarta.transaction.Transactional
+import jakarta.validation.Valid
 import org.slf4j.LoggerFactory
 import java.time.LocalDateTime
 
@@ -194,7 +195,7 @@ open class IdentityProviderController(
             HttpResponse.ok(providers)
         } catch (e: Exception) {
             logger.error("Error fetching identity providers: {}", e.message, e)
-            HttpResponse.serverError(ErrorResponse("Failed to fetch identity providers: ${e.message}"))
+            HttpResponse.serverError(ErrorResponse("An internal error occurred"))
         }
     }
 
@@ -211,7 +212,7 @@ open class IdentityProviderController(
             HttpResponse.ok(providers)
         } catch (e: Exception) {
             logger.error("Error fetching enabled identity providers: {}", e.message, e)
-            HttpResponse.serverError(ErrorResponse("Failed to fetch enabled identity providers: ${e.message}"))
+            HttpResponse.serverError(ErrorResponse("An internal error occurred"))
         }
     }
 
@@ -230,7 +231,7 @@ open class IdentityProviderController(
             }
         } catch (e: Exception) {
             logger.error("Error fetching identity provider {}: {}", id, e.message, e)
-            HttpResponse.serverError(ErrorResponse("Failed to fetch identity provider: ${e.message}"))
+            HttpResponse.serverError(ErrorResponse("An internal error occurred"))
         }
     }
 
@@ -240,7 +241,7 @@ open class IdentityProviderController(
     @Post
     @Transactional
     @Secured("ADMIN")
-    open fun createProvider(@Body request: IdentityProviderCreateRequest): HttpResponse<*> {
+    open fun createProvider(@Valid @Body request: IdentityProviderCreateRequest): HttpResponse<*> {
         return try {
             // Check if name already exists
             if (identityProviderRepository.existsByNameIgnoreCase(request.name)) {
@@ -309,7 +310,7 @@ open class IdentityProviderController(
 
         } catch (e: Exception) {
             logger.error("Error creating identity provider: {}", e.message, e)
-            HttpResponse.serverError(ErrorResponse("Failed to create identity provider: ${e.message}"))
+            HttpResponse.serverError(ErrorResponse("An internal error occurred"))
         }
     }
 
@@ -319,7 +320,7 @@ open class IdentityProviderController(
     @Put("/{id}")
     @Transactional
     @Secured("ADMIN")
-    open fun updateProvider(@PathVariable id: Long, @Body request: IdentityProviderUpdateRequest): HttpResponse<*> {
+    open fun updateProvider(@PathVariable id: Long, @Valid @Body request: IdentityProviderUpdateRequest): HttpResponse<*> {
         return try {
             val providerOpt = identityProviderRepository.findById(id)
             if (!providerOpt.isPresent) {
@@ -393,7 +394,7 @@ open class IdentityProviderController(
 
         } catch (e: Exception) {
             logger.error("Error updating identity provider {}: {}", id, e.message, e)
-            HttpResponse.serverError(ErrorResponse("Failed to update identity provider: ${e.message}"))
+            HttpResponse.serverError(ErrorResponse("An internal error occurred"))
         }
     }
 
@@ -416,7 +417,7 @@ open class IdentityProviderController(
 
         } catch (e: Exception) {
             logger.error("Error deleting identity provider {}: {}", id, e.message, e)
-            HttpResponse.serverError(ErrorResponse("Failed to delete identity provider: ${e.message}"))
+            HttpResponse.serverError(ErrorResponse("An internal error occurred"))
         }
     }
 
@@ -504,7 +505,7 @@ open class IdentityProviderController(
 
         } catch (e: Exception) {
             logger.error("Error testing identity provider {}: {}", id, e.message, e)
-            HttpResponse.serverError(ErrorResponse("Failed to test identity provider: ${e.message}"))
+            HttpResponse.serverError(ErrorResponse("An internal error occurred"))
         }
     }
 }

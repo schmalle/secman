@@ -89,6 +89,61 @@ open class AssetController(
     )
 
     /**
+     * Response DTO for Asset entity to prevent exposing internal JPA fields.
+     * Security finding HI-8: Excludes ipNumeric, vulnerabilities, scanResults,
+     * workgroup details, manualCreator details, scanUploader details, cloudInstanceId, osVersion.
+     */
+    @Serdeable
+    data class AssetResponse(
+        val id: Long,
+        val name: String,
+        val type: String,
+        val ip: String?,
+        val owner: String,
+        val description: String?,
+        val lastSeen: String?,
+        val groups: String?,
+        val criticality: Criticality?,
+        val cloudAccountId: String?,
+        val adDomain: String?,
+        val createdAt: String?,
+        val workgroups: List<WorkgroupSummary>? = null
+    ) {
+        @Serdeable
+        data class WorkgroupSummary(
+            val id: Long,
+            val name: String
+        )
+
+        companion object {
+            fun from(asset: Asset): AssetResponse {
+                // Access workgroups safely - may be lazy-loaded
+                val workgroupSummaries = try {
+                    asset.workgroups.map { WorkgroupSummary(it.id!!, it.name) }
+                } catch (e: Exception) {
+                    null
+                }
+
+                return AssetResponse(
+                    id = asset.id!!,
+                    name = asset.name,
+                    type = asset.type,
+                    ip = asset.ip,
+                    owner = asset.owner,
+                    description = asset.description,
+                    lastSeen = asset.lastSeen?.toString(),
+                    groups = asset.groups,
+                    criticality = asset.criticality,
+                    cloudAccountId = asset.cloudAccountId,
+                    adDomain = asset.adDomain,
+                    createdAt = asset.createdAt?.toString(),
+                    workgroups = workgroupSummaries
+                )
+            }
+        }
+    }
+
+    /**
      * Get list of valid owner candidates for the asset owner select box.
      * Returns "CrowdStrike Import" plus all system users sorted by username.
      * Available to ADMIN and SECCHAMPION roles.
@@ -114,19 +169,20 @@ open class AssetController(
      */
     @Get
     @Transactional(readOnly = true)
-    open fun list(authentication: Authentication): HttpResponse<List<Asset>> {
+    open fun list(authentication: Authentication): HttpResponse<List<AssetResponse>> {
         return try {
             log.debug("Fetching accessible assets for user: {}", authentication.name)
 
             // Use AssetFilterService for workgroup-based filtering
             val assets = assetFilterService.getAccessibleAssets(authentication)
                 .sortedByDescending { it.createdAt }
+                .map { AssetResponse.from(it) }
 
             log.debug("Found {} accessible assets for user {}", assets.size, authentication.name)
             HttpResponse.ok(assets)
         } catch (e: Exception) {
             log.error("Error fetching assets for user: {}", authentication.name, e)
-            HttpResponse.serverError<List<Asset>>()
+            HttpResponse.serverError<List<AssetResponse>>()
         }
     }
 
@@ -156,7 +212,7 @@ open class AssetController(
             }
 
             log.debug("Found asset: {}", asset.name)
-            HttpResponse.ok(asset)
+            HttpResponse.ok(AssetResponse.from(asset))
         } catch (e: Exception) {
             log.error("Error fetching asset with id: {}", id, e)
             HttpResponse.serverError<Any>()
@@ -215,10 +271,10 @@ open class AssetController(
             val savedAsset = assetRepository.save(asset)
 
             log.info("Created asset: {} with id: {} by user: {}", savedAsset.name, savedAsset.id, authentication.name)
-            HttpResponse.status<Asset>(HttpStatus.CREATED).body(savedAsset)
+            HttpResponse.status<AssetResponse>(HttpStatus.CREATED).body(AssetResponse.from(savedAsset))
         } catch (e: Exception) {
             log.error("Error creating asset", e)
-            HttpResponse.badRequest(ErrorResponse("Error creating asset: ${e.message}"))
+            HttpResponse.badRequest(ErrorResponse("An internal error occurred"))
         }
     }
 
@@ -304,10 +360,10 @@ open class AssetController(
             val updatedAsset = assetRepository.update(asset)
 
             log.info("Updated asset: {} with id: {}", updatedAsset.name, updatedAsset.id)
-            HttpResponse.ok(updatedAsset)
+            HttpResponse.ok(AssetResponse.from(updatedAsset))
         } catch (e: Exception) {
             log.error("Error updating asset with id: {}", id, e)
-            HttpResponse.badRequest(ErrorResponse("Error updating asset: ${e.message}"))
+            HttpResponse.badRequest(ErrorResponse("An internal error occurred"))
         }
     }
 
@@ -349,7 +405,7 @@ open class AssetController(
         } catch (e: Exception) {
             log.error("Error getting cascade summary for asset: {}", id, e)
             HttpResponse.serverError<ErrorResponse>()
-                .body(ErrorResponse("Failed to get cascade summary: ${e.message}"))
+                .body(ErrorResponse("An internal error occurred"))
         }
     }
 
@@ -459,7 +515,7 @@ open class AssetController(
                 assetId = id,
                 assetName = asset?.name ?: "Asset #$id",
                 cause = "Deletion failed due to internal error",
-                technicalDetails = e.message
+                technicalDetails = "An internal error occurred"
             )
             HttpResponse.serverError<DeletionErrorDto>().body(errorDto)
         }
@@ -526,7 +582,7 @@ open class AssetController(
 
         } catch (e: Exception) {
             log.error("Error fetching port history for asset id: {}", id, e)
-            HttpResponse.serverError<ErrorResponse>().body(ErrorResponse("Error fetching port history: ${e.message}"))
+            HttpResponse.serverError<ErrorResponse>().body(ErrorResponse("An internal error occurred"))
         }
     }
 
@@ -570,7 +626,7 @@ open class AssetController(
 
         } catch (e: Exception) {
             log.error("Error fetching vulnerabilities for asset id: {}", assetId, e)
-            HttpResponse.serverError<ErrorResponse>().body(ErrorResponse("Error fetching vulnerabilities: ${e.message}"))
+            HttpResponse.serverError<ErrorResponse>().body(ErrorResponse("An internal error occurred"))
         }
     }
 
@@ -625,7 +681,7 @@ open class AssetController(
         } catch (e: Exception) {
             log.error("Asset export failed for user: {}", authentication.name, e)
             HttpResponse.serverError<ErrorResponse>()
-                .body(ErrorResponse("Failed to export assets: ${e.message}"))
+                .body(ErrorResponse("An internal error occurred"))
         }
     }
 

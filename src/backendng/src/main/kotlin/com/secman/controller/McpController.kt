@@ -11,6 +11,7 @@ import io.micronaut.http.annotation.*
 import io.micronaut.security.annotation.Secured
 import io.micronaut.security.rules.SecurityRule
 import jakarta.inject.Inject
+import jakarta.validation.Valid
 import org.slf4j.LoggerFactory
 
 /**
@@ -29,7 +30,7 @@ data class DelegationContext(
  * Implements the Model Context Protocol for AI assistant integration.
  */
 @Controller("/api/mcp")
-class McpController(
+open class McpController(
     @Inject private val authService: McpAuthenticationService,
     @Inject private val sessionService: McpSessionService,
     @Inject private val auditService: McpAuditService,
@@ -133,9 +134,9 @@ class McpController(
      */
     @Post("/session")
     @Secured(SecurityRule.IS_ANONYMOUS)
-    suspend fun createSession(
+    open suspend fun createSession(
         @Header("X-MCP-API-Key") apiKey: String?,
-        @Body request: McpSessionCreateRequest
+        @Valid @Body request: McpSessionCreateRequest
     ): HttpResponse<McpSessionResponse> {
         return try {
             if (apiKey == null) {
@@ -242,10 +243,10 @@ class McpController(
      */
     @Post("/tools/call")
     @Secured(SecurityRule.IS_ANONYMOUS)
-    suspend fun callTool(
+    open suspend fun callTool(
         @Header("X-MCP-API-Key") apiKey: String?,
         @Header(DELEGATION_HEADER) delegatedUserEmail: String?,
-        @Body request: McpToolCallRequest
+        @Valid @Body request: McpToolCallRequest
     ): HttpResponse<McpToolCallResponse> {
         val startTime = System.currentTimeMillis()
 
@@ -473,7 +474,7 @@ class McpController(
                             success = false,
                             durationMs = duration,
                             errorCode = "SYSTEM_ERROR",
-                            errorMessage = e.message,
+                            errorMessage = "An internal error occurred",
                             requestId = request.id
                         )
                     }

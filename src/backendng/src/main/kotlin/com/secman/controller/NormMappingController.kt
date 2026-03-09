@@ -7,6 +7,7 @@ import io.micronaut.http.annotation.*
 import io.micronaut.scheduling.TaskExecutors
 import io.micronaut.scheduling.annotation.ExecuteOn
 import io.micronaut.security.annotation.Secured
+import jakarta.validation.Valid
 import org.slf4j.LoggerFactory
 
 /**
@@ -40,7 +41,7 @@ open class NormMappingController(
      * suggestions for ISO 27001 and IEC 62443 control mappings.
      */
     @Post("/suggest")
-    open fun suggestMappings(@Body request: NormMappingSuggestionRequest?): HttpResponse<*> {
+    open fun suggestMappings(@Valid @Body request: NormMappingSuggestionRequest?): HttpResponse<*> {
         return try {
             log.info("Received norm mapping suggestion request")
 
@@ -66,7 +67,7 @@ open class NormMappingController(
             log.error("Unexpected error during norm mapping", e)
             HttpResponse.serverError(NormMappingErrorResponse(
                 error = "Unexpected error",
-                details = e.message
+                details = "An internal error occurred"
             ))
         }
     }
@@ -80,7 +81,7 @@ open class NormMappingController(
      * Creates new norm entries if they don't exist in the database.
      */
     @Post("/apply")
-    open fun applyMappings(@Body request: ApplyMappingsRequest): HttpResponse<*> {
+    open fun applyMappings(@Valid @Body request: ApplyMappingsRequest): HttpResponse<*> {
         return try {
             log.info("Received apply mappings request for {} requirements", request.mappings.size)
 
@@ -101,7 +102,7 @@ open class NormMappingController(
             log.error("Error applying norm mappings", e)
             HttpResponse.serverError(NormMappingErrorResponse(
                 error = "Failed to apply mappings",
-                details = e.message
+                details = "An internal error occurred"
             ))
         }
     }
@@ -116,7 +117,7 @@ open class NormMappingController(
      * requirement fails, others continue processing.
      */
     @Post("/auto-apply")
-    open fun autoApplyMappings(@Body request: NormMappingSuggestionRequest?): HttpResponse<*> {
+    open fun autoApplyMappings(@Valid @Body request: NormMappingSuggestionRequest?): HttpResponse<*> {
         return try {
             log.info("Received auto-apply norm mapping request")
 
@@ -136,7 +137,7 @@ open class NormMappingController(
             log.error("Error during auto-apply norm mapping", e)
             HttpResponse.serverError(NormMappingErrorResponse(
                 error = "Failed to auto-apply mappings",
-                details = e.message
+                details = "An internal error occurred"
             ))
         }
     }
@@ -158,7 +159,7 @@ open class NormMappingController(
             log.error("Error getting unmapped count", e)
             HttpResponse.serverError(NormMappingErrorResponse(
                 error = "Failed to get unmapped count",
-                details = e.message
+                details = "An internal error occurred"
             ))
         }
     }

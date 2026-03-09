@@ -152,7 +152,7 @@ class WebAuthnService(
             val registrationParameters = RegistrationParameters(
                 serverProperty,
                 null, // pubKeyCredParams - null means accept any
-                false, // userVerificationRequired
+                true, // userVerificationRequired
                 true  // userPresenceRequired
             )
 
@@ -265,7 +265,7 @@ class WebAuthnService(
                 serverProperty,
                 credentialRecord,
                 null, // allowCredentials - null means accept any
-                false, // userVerificationRequired
+                true, // userVerificationRequired
                 true  // userPresenceRequired
             )
 

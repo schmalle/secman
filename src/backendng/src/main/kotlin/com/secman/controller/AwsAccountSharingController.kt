@@ -7,6 +7,7 @@ import io.micronaut.http.HttpStatus
 import io.micronaut.http.annotation.*
 import io.micronaut.security.annotation.Secured
 import io.micronaut.security.authentication.Authentication
+import jakarta.validation.Valid
 import org.slf4j.LoggerFactory
 
 /**
@@ -20,7 +21,7 @@ import org.slf4j.LoggerFactory
  */
 @Controller("/api/aws-account-sharing")
 @Secured("ADMIN")
-class AwsAccountSharingController(
+open class AwsAccountSharingController(
     private val awsAccountSharingService: AwsAccountSharingService
 ) {
     private val logger = LoggerFactory.getLogger(AwsAccountSharingController::class.java)
@@ -51,8 +52,8 @@ class AwsAccountSharingController(
      * POST /api/aws-account-sharing - Create a new sharing rule.
      */
     @Post
-    fun createSharingRule(
-        @Body request: CreateAwsAccountSharingRequest,
+    open fun createSharingRule(
+        @Valid @Body request: CreateAwsAccountSharingRequest,
         authentication: Authentication
     ): HttpResponse<*> {
         logger.info("Creating AWS account sharing rule: source=${request.sourceUserId}, target=${request.targetUserId}")

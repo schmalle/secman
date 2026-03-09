@@ -279,17 +279,9 @@ open class CrowdStrikeController(
             log.warn("Invalid save request: user={}", username, e)
             HttpResponse.badRequest(mapOf("error" to (e.message ?: "Invalid request")))
         } catch (e: Exception) {
-            // T013: Role-based error messages
-            val isAdmin = authentication.roles.contains("ADMIN")
-            val errorMessage = if (isAdmin) {
-                "Database error: ${e.message ?: "Unable to save vulnerabilities"}"
-            } else {
-                "Database error: Unable to save vulnerabilities"
-            }
-
             log.error("Database error saving vulnerabilities: user={}", username, e)
             HttpResponse.status<Map<String, String>>(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(mapOf("error" to errorMessage))
+                .body(mapOf("error" to "An internal error occurred while saving vulnerabilities"))
         }
     }
 
@@ -334,19 +326,11 @@ open class CrowdStrikeController(
             log.warn("Invalid batch import request: user={}", username, e)
             HttpResponse.badRequest(mapOf("error" to (e.message ?: "Invalid request")))
         } catch (e: Exception) {
-            val isAdmin = authentication.roles.contains("ADMIN")
             val rootCause = generateSequence<Throwable>(e) { it.cause }.last()
-            val errorMessage = if (isAdmin) {
-                "Import error: [${e.javaClass.simpleName}] ${e.message ?: "Unable to import server vulnerabilities"}" +
-                    if (rootCause !== e) " | Root cause: [${rootCause.javaClass.simpleName}] ${rootCause.message}" else ""
-            } else {
-                "Import error: Unable to import server vulnerabilities"
-            }
-
             log.error("Error importing server vulnerabilities: user={}, exception={}, message={}, rootCause=[{}] {}",
                 username, e.javaClass.name, e.message, rootCause.javaClass.simpleName, rootCause.message, e)
             HttpResponse.status<Map<String, String>>(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(mapOf("error" to errorMessage))
+                .body(mapOf("error" to "An internal error occurred while importing server vulnerabilities"))
         }
     }
 

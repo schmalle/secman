@@ -159,7 +159,7 @@ class McpStreamableHttpController(
             }
         } catch (e: Exception) {
             logger.error("Error processing MCP request: method={}", request.method, e)
-            JsonRpcResponse.internalError(request.id, "Internal server error: ${e.message}")
+            JsonRpcResponse.internalError(request.id, "An internal server error occurred")
         }
     }
 
@@ -319,7 +319,7 @@ class McpStreamableHttpController(
             }
         } catch (e: Exception) {
             logger.warn("Failed to parse tools/call params: {}", e.message)
-            return JsonRpcResponse.invalidParams(request.id, "Invalid tool call parameters: ${e.message}")
+            return JsonRpcResponse.invalidParams(request.id, "Invalid parameters")
         }
 
         val toolName = params.name
@@ -412,7 +412,7 @@ class McpStreamableHttpController(
             tool.execute(arguments, executionContext)
         } catch (e: Exception) {
             logger.error("Tool execution failed: tool={}", toolName, e)
-            ToolResult.Error("EXECUTION_ERROR", "Tool execution failed: ${e.message}")
+            ToolResult.Error("EXECUTION_ERROR", "An internal error occurred during tool execution")
         }
 
         val duration = System.currentTimeMillis() - startTime

@@ -216,7 +216,7 @@ class OutdatedAssetController(
         } catch (e: Exception) {
             log.error("Outdated assets export failed for user: {}", authentication.name, e)
             HttpResponse.serverError<ErrorResponse>()
-                .body(ErrorResponse("Failed to export outdated assets: ${e.message}"))
+                .body(ErrorResponse("An internal error occurred"))
         }
     }
 

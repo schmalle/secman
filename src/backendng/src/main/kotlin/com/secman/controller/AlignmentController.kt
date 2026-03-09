@@ -19,6 +19,7 @@ import io.micronaut.security.authentication.Authentication
 import io.micronaut.security.rules.SecurityRule
 import io.micronaut.serde.annotation.Serdeable
 import jakarta.inject.Inject
+import jakarta.validation.Valid
 import org.apache.poi.ss.usermodel.DataValidationConstraint
 import org.apache.poi.ss.util.CellRangeAddressList
 import org.apache.poi.xssf.usermodel.XSSFWorkbook
@@ -38,7 +39,7 @@ import java.time.LocalDate
  * - Finalizing/cancelling alignment sessions
  */
 @Controller("/api")
-class AlignmentController(
+open class AlignmentController(
     @Inject private val alignmentService: AlignmentService,
     @Inject private val alignmentEmailService: AlignmentEmailService,
     @Inject private val userRepository: UserRepository
@@ -53,9 +54,9 @@ class AlignmentController(
      */
     @Post("/releases/{releaseId}/alignment/start")
     @Secured("ADMIN", "RELEASE_MANAGER")
-    fun startAlignment(
+    open fun startAlignment(
         @PathVariable releaseId: Long,
-        @Body request: StartAlignmentRequest?,
+        @Valid @Body request: StartAlignmentRequest?,
         authentication: Authentication
     ): HttpResponse<Map<String, Any>> {
         logger.info("Starting alignment for release {} by user {} (reviewAll={})", releaseId, authentication.name, request?.reviewAll)
@@ -309,9 +310,9 @@ class AlignmentController(
      */
     @Put("/alignment/{sessionId}/decisions")
     @Secured("ADMIN", "REQADMIN")
-    fun submitReviewDecision(
+    open fun submitReviewDecision(
         @PathVariable sessionId: Long,
-        @Body request: SubmitReviewDecisionRequest,
+        @Valid @Body request: SubmitReviewDecisionRequest,
         authentication: Authentication
     ): HttpResponse<Map<String, Any>> {
         logger.debug("Submitting review decision for session {} review {}", sessionId, request.reviewId)
@@ -403,9 +404,9 @@ class AlignmentController(
      */
     @Post("/alignment/{sessionId}/finalize")
     @Secured("ADMIN", "RELEASE_MANAGER")
-    fun finalizeAlignment(
+    open fun finalizeAlignment(
         @PathVariable sessionId: Long,
-        @Body request: FinalizeAlignmentRequest
+        @Valid @Body request: FinalizeAlignmentRequest
     ): HttpResponse<Map<String, Any>> {
         logger.info("Finalizing alignment session {} (activate={})", sessionId, request.activateRelease)
 
@@ -461,9 +462,9 @@ class AlignmentController(
      */
     @Post("/alignment/{sessionId}/cancel")
     @Secured("ADMIN", "RELEASE_MANAGER")
-    fun cancelAlignment(
+    open fun cancelAlignment(
         @PathVariable sessionId: Long,
-        @Body request: CancelAlignmentRequest?
+        @Valid @Body request: CancelAlignmentRequest?
     ): HttpResponse<Map<String, Any>> {
         logger.info("Cancelling alignment session {}", sessionId)
 
@@ -563,9 +564,9 @@ class AlignmentController(
      */
     @Post("/alignment/review/{token}")
     @Secured(SecurityRule.IS_ANONYMOUS)
-    fun submitReviewByToken(
+    open fun submitReviewByToken(
         @PathVariable token: String,
-        @Body request: SubmitReviewRequest
+        @Valid @Body request: SubmitReviewRequest
     ): HttpResponse<Map<String, Any>> {
         logger.debug("Submitting review via token for snapshot {}", request.snapshotId)
 
@@ -711,7 +712,7 @@ class AlignmentController(
 
             val inputStream = ByteArrayInputStream(outputStream.toByteArray())
             val filename = "review_${session.release.name}_v${session.release.version}.xlsx"
-                .replace(" ", "_")
+                .replace(" ", "_").replace("\"", "").replace("\r", "").replace("\n", "")
 
             return HttpResponse.ok(StreamedFile(inputStream, MediaType.of("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")))
                 .header("Content-Disposition", "attachment; filename=\"$filename\"")
@@ -934,7 +935,7 @@ class AlignmentController(
                     alignmentService.submitReviewByToken(token, snapshotId, assessment, comment)
                     imported++
                 } catch (e: Exception) {
-                    if (canAddError) errors.add("Row ${rowNum + 1}: ${e.message}")
+                    if (canAddError) errors.add("Row ${rowNum + 1}: processing error")
                 }
             }
 
@@ -960,7 +961,7 @@ class AlignmentController(
             logger.error("Failed to import reviews from Excel", e)
             return HttpResponse.badRequest(mapOf(
                 "success" to false,
-                "message" to "Failed to parse Excel file: ${e.message}"
+                "message" to "An internal error occurred"
             ))
         }
     }
@@ -1063,7 +1064,7 @@ class AlignmentController(
             workbook.close()
 
             val inputStream = ByteArrayInputStream(outputStream.toByteArray())
-            val filename = "Review.${version}.${date}.xlsx".replace(" ", "_")
+            val filename = "Review.${version}.${date}.xlsx".replace(" ", "_").replace("\"", "").replace("\r", "").replace("\n", "")
 
             return HttpResponse.ok(StreamedFile(inputStream, MediaType.of("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")))
                 .header("Content-Disposition", "attachment; filename=\"$filename\"")

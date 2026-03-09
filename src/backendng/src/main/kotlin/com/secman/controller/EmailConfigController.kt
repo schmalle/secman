@@ -161,7 +161,7 @@ open class EmailConfigController(
             HttpResponse.status<EmailConfig>(HttpStatus.CREATED).body(savedConfig.toSafeResponse())
         } catch (e: Exception) {
             log.error("Error creating email configuration", e)
-            HttpResponse.badRequest(ErrorResponse("Error creating email configuration: ${e.message}"))
+            HttpResponse.badRequest(ErrorResponse("An internal error occurred"))
         }
     }
 
@@ -204,7 +204,7 @@ open class EmailConfigController(
             HttpResponse.ok(savedConfig.toSafeResponse())
         } catch (e: Exception) {
             log.error("Error updating email configuration with id: {}", id, e)
-            HttpResponse.badRequest(ErrorResponse("Error updating email configuration: ${e.message}"))
+            HttpResponse.badRequest(ErrorResponse("An internal error occurred"))
         }
     }
 
@@ -223,7 +223,7 @@ open class EmailConfigController(
             HttpResponse.ok(mapOf("message" to "Email configuration deleted successfully"))
         } catch (e: Exception) {
             log.error("Error deleting email configuration with id: {}", id, e)
-            HttpResponse.serverError<ErrorResponse>().body(ErrorResponse("Error deleting email configuration: ${e.message}"))
+            HttpResponse.serverError<ErrorResponse>().body(ErrorResponse("An internal error occurred"))
         }
     }
 
@@ -262,7 +262,7 @@ open class EmailConfigController(
             
         } catch (e: Exception) {
             log.error("Error testing email configuration with id: {}", id, e)
-            HttpResponse.serverError<ErrorResponse>().body(ErrorResponse("Error testing email configuration: ${e.message}"))
+            HttpResponse.serverError<ErrorResponse>().body(ErrorResponse("An internal error occurred"))
         }
     }
 }

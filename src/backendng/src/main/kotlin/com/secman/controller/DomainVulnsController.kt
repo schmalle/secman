@@ -105,7 +105,7 @@ class DomainVulnsController(
             log.error("Unexpected error getting domain vulns for user {}", email, e)
             HttpResponse.serverError<Any>()
                 .body(mapOf(
-                    "message" to "Failed to retrieve domain vulnerabilities: ${e.message}",
+                    "message" to "An internal error occurred",
                     "error" to "INTERNAL_ERROR"
                 ))
         }
@@ -178,7 +178,7 @@ class DomainVulnsController(
             log.error("Unexpected error syncing domain {} for user {}", domain, email, e)
             HttpResponse.serverError<Any>()
                 .body(mapOf(
-                    "message" to "Failed to sync domain: ${e.message}",
+                    "message" to "An internal error occurred",
                     "error" to "INTERNAL_ERROR"
                 ))
         }

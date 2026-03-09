@@ -458,7 +458,7 @@ open class ResponseController(
                     savedResponses.add(response)
                 } catch (e: Exception) {
                     log.error("Error saving individual response for requirement {}", responseRequest.requirementId, e)
-                    errors.add("Error saving requirement ${responseRequest.requirementId}: ${e.message}")
+                    errors.add("Error saving requirement ${responseRequest.requirementId}: processing error")
                 }
             }
             

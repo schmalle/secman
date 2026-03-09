@@ -174,7 +174,7 @@ open class ProductController(
         } catch (e: Exception) {
             log.error("Product systems export failed for user: {}", authentication.name, e)
             HttpResponse.serverError<ErrorResponse>()
-                .body(ErrorResponse("Failed to export product systems: ${e.message}"))
+                .body(ErrorResponse("An internal error occurred"))
         }
     }
 }

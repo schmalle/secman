@@ -10,7 +10,7 @@ package com.secman.domain
  * Related to: Feature 031-vuln-exception-approval (User Story 4 - Flexible Exception Scope)
  *
  * When approved:
- * - SINGLE_VULNERABILITY → Creates ASSET-type VulnerabilityException (asset_id = request.vulnerability.asset.id)
+ * - SINGLE_VULNERABILITY → Creates CVE-type VulnerabilityException (target_value = CVE ID, asset_id = request.vulnerability.asset.id)
  * - CVE_PATTERN → Creates PRODUCT-type VulnerabilityException (target_value = request.vulnerability.cveId)
  */
 enum class ExceptionScope {

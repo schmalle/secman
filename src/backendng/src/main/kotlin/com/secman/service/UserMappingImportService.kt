@@ -284,19 +284,17 @@ open class UserMappingImportService(
             CellType.BOOLEAN -> cell.booleanCellValue.toString()
             CellType.FORMULA -> {
                 try {
-                    val evaluator = cell.sheet.workbook.creationHelper.createFormulaEvaluator()
-                    val result = evaluator.evaluate(cell)
-                    when (result.cellType) {
-                        CellType.STRING -> result.stringValue
+                    when (cell.cachedFormulaResultType) {
+                        CellType.STRING -> cell.richStringCellValue.string
                         CellType.NUMERIC -> {
                             val formatter = DataFormatter()
                             formatter.formatCellValue(cell)
                         }
-                        CellType.BOOLEAN -> result.booleanValue.toString()
+                        CellType.BOOLEAN -> cell.booleanCellValue.toString()
                         else -> ""
                     }
                 } catch (e: Exception) {
-                    log.warn("Failed to evaluate formula in cell: {}", e.message)
+                    log.warn("Failed to read cached formula result: {}", e.message)
                     ""
                 }
             }

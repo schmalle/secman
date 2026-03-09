@@ -91,7 +91,7 @@ open class TranslationConfigController(
                 HttpResponse.ok(mapOf("message" to "No active translation configuration found"))
             }
         } catch (e: Exception) {
-            HttpResponse.serverError(ErrorResponse("Failed to retrieve active configuration: ${e.message}"))
+            HttpResponse.serverError(ErrorResponse("An internal error occurred"))
         }
     }
 
@@ -105,7 +105,7 @@ open class TranslationConfigController(
                 HttpResponse.notFound(ErrorResponse("Translation configuration not found"))
             }
         } catch (e: Exception) {
-            HttpResponse.serverError(ErrorResponse("Failed to retrieve configuration: ${e.message}"))
+            HttpResponse.serverError(ErrorResponse("An internal error occurred"))
         }
     }
 
@@ -130,7 +130,7 @@ open class TranslationConfigController(
             val savedConfig = translationConfigRepository.save(config)
             HttpResponse.created(savedConfig.toSafeResponse())
         } catch (e: Exception) {
-            HttpResponse.badRequest(ErrorResponse("Failed to create configuration: ${e.message}"))
+            HttpResponse.badRequest(ErrorResponse("An internal error occurred"))
         }
     }
 
@@ -168,7 +168,7 @@ open class TranslationConfigController(
             val updatedConfig = translationConfigRepository.update(config)
             HttpResponse.ok(updatedConfig.toSafeResponse())
         } catch (e: Exception) {
-            HttpResponse.badRequest(ErrorResponse("Failed to update configuration: ${e.message}"))
+            HttpResponse.badRequest(ErrorResponse("An internal error occurred"))
         }
     }
 
@@ -184,7 +184,7 @@ open class TranslationConfigController(
             translationConfigRepository.deleteById(id)
             HttpResponse.ok(mapOf("message" to "Translation configuration deleted successfully"))
         } catch (e: Exception) {
-            HttpResponse.serverError(ErrorResponse("Failed to delete configuration: ${e.message}"))
+            HttpResponse.serverError(ErrorResponse("An internal error occurred"))
         }
     }
 
@@ -199,7 +199,7 @@ open class TranslationConfigController(
             val testResult = translationService.testConfiguration(config.get())
             HttpResponse.ok(testResult)
         } catch (e: Exception) {
-            HttpResponse.serverError(ErrorResponse("Failed to test configuration: ${e.message}"))
+            HttpResponse.serverError(ErrorResponse("An internal error occurred"))
         }
     }
 
@@ -225,7 +225,7 @@ open class TranslationConfigController(
                 "config" to updatedConfig.toSafeResponse()
             ))
         } catch (e: Exception) {
-            HttpResponse.serverError(ErrorResponse("Failed to activate configuration: ${e.message}"))
+            HttpResponse.serverError(ErrorResponse("An internal error occurred"))
         }
     }
 
@@ -247,7 +247,7 @@ open class TranslationConfigController(
                 "config" to updatedConfig.toSafeResponse()
             ))
         } catch (e: Exception) {
-            HttpResponse.serverError(ErrorResponse("Failed to deactivate configuration: ${e.message}"))
+            HttpResponse.serverError(ErrorResponse("An internal error occurred"))
         }
     }
 

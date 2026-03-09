@@ -9,6 +9,7 @@ import io.micronaut.http.annotation.*
 import io.micronaut.security.annotation.Secured
 import io.micronaut.security.authentication.Authentication
 import jakarta.inject.Inject
+import jakarta.validation.Valid
 import org.slf4j.LoggerFactory
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -19,7 +20,7 @@ import java.time.format.DateTimeFormatter
  */
 @Controller("/api/mcp/admin")
 @Secured("ADMIN")
-class McpAdminController(
+open class McpAdminController(
     @Inject private val authService: McpAuthenticationService,
     @Inject private val sessionService: McpSessionService,
     @Inject private val auditService: McpAuditService,
@@ -39,8 +40,8 @@ class McpAdminController(
      * - allowedDelegationDomains: Required if delegation enabled (comma-separated, e.g. "@company.com")
      */
     @Post("/api-keys")
-    suspend fun createApiKey(
-        @Body request: McpApiKeyCreateRequest,
+    open suspend fun createApiKey(
+        @Valid @Body request: McpApiKeyCreateRequest,
         authentication: Authentication?
     ): HttpResponse<McpApiKeyCreateResponse> {
         return try {
@@ -380,8 +381,8 @@ class McpAdminController(
      * Grant tool permission to an API key.
      */
     @Post("/tool-permissions")
-    suspend fun grantToolPermission(
-        @Body request: McpToolPermissionGrantRequest,
+    open suspend fun grantToolPermission(
+        @Valid @Body request: McpToolPermissionGrantRequest,
         authentication: Authentication?
     ): HttpResponse<McpToolPermissionResponse> {
         return try {
@@ -501,7 +502,7 @@ class McpAdminController(
         } catch (e: Exception) {
             logger.error("System maintenance failed", e)
             HttpResponse.status<Map<String, Any>>(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(mapOf("error" to "System maintenance failed: ${e.message}"))
+                .body(mapOf("error" to "An internal error occurred"))
         }
     }
 

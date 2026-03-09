@@ -104,7 +104,7 @@ open class ImportController(
         } catch (e: Exception) {
             log.error("Error processing Excel file", e)
             HttpResponse.status<ErrorResponse>(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ErrorResponse("Error processing file: ${e.message}"))
+                .body(ErrorResponse("An internal error occurred"))
         }
     }
     
@@ -296,16 +296,17 @@ open class ImportController(
             CellType.BOOLEAN -> cell.booleanCellValue.toString()
             CellType.FORMULA -> {
                 try {
-                    val evaluator = cell.sheet.workbook.creationHelper.createFormulaEvaluator()
-                    val result = evaluator.evaluate(cell)
-                    when (result.cellType) {
-                        CellType.STRING -> result.stringValue
-                        CellType.NUMERIC -> result.numberValue.toString()
-                        CellType.BOOLEAN -> result.booleanValue.toString()
+                    when (cell.cachedFormulaResultType) {
+                        CellType.STRING -> cell.richStringCellValue.string
+                        CellType.NUMERIC -> {
+                            val formatter = DataFormatter()
+                            formatter.formatCellValue(cell)
+                        }
+                        CellType.BOOLEAN -> cell.booleanCellValue.toString()
                         else -> ""
                     }
                 } catch (e: Exception) {
-                    log.warn("Failed to evaluate formula in cell: {}", e.message)
+                    log.warn("Failed to read cached formula result: {}", e.message)
                     ""
                 }
             }
@@ -419,7 +420,7 @@ open class ImportController(
             val scanDateTime = try {
                 java.time.LocalDateTime.parse(scanDate)
             } catch (e: Exception) {
-                return HttpResponse.badRequest(ErrorResponse("Invalid scan date format. Expected ISO 8601: ${e.message}"))
+                return HttpResponse.badRequest(ErrorResponse("An internal error occurred"))
             }
 
             // Import vulnerabilities
@@ -433,7 +434,7 @@ open class ImportController(
         } catch (e: Exception) {
             log.error("Error processing vulnerability Excel file", e)
             HttpResponse.status<ErrorResponse>(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ErrorResponse("Error processing file: ${e.message}"))
+                .body(ErrorResponse("An internal error occurred"))
         }
     }
 
@@ -520,7 +521,7 @@ open class ImportController(
         } catch (e: Exception) {
             log.error("Error processing user mapping Excel file", e)
             HttpResponse.status<ErrorResponse>(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ErrorResponse("Error processing file: ${e.message}"))
+                .body(ErrorResponse("An internal error occurred"))
         }
     }
 
@@ -640,7 +641,7 @@ open class ImportController(
             // Unexpected errors
             log.error("CSV upload unexpected error: user={}, error={}", username, e.message, e)
             HttpResponse.status<ErrorResponse>(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ErrorResponse("Error processing CSV file: ${e.message}"))
+                .body(ErrorResponse("An internal error occurred"))
         }
     }
 
@@ -686,7 +687,7 @@ open class ImportController(
         } catch (e: Exception) {
             log.error("Error downloading CSV template: {}", e.message, e)
             HttpResponse.status<ErrorResponse>(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ErrorResponse("Error downloading template: ${e.message}"))
+                .body(ErrorResponse("An internal error occurred"))
         }
     }
 
@@ -824,7 +825,7 @@ open class ImportController(
         } catch (e: Exception) {
             log.error("Error processing Masscan XML file", e)
             HttpResponse.status<ErrorResponse>(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ErrorResponse("Error processing file: ${e.message}"))
+                .body(ErrorResponse("An internal error occurred"))
         }
     }
 
@@ -953,7 +954,7 @@ open class ImportController(
         } catch (e: Exception) {
             log.error("Asset import failed for user: {}", authentication.name, e)
             HttpResponse.serverError<ErrorResponse>()
-                .body(ErrorResponse("Failed to import assets: ${e.message}"))
+                .body(ErrorResponse("An internal error occurred"))
         }
     }
 }

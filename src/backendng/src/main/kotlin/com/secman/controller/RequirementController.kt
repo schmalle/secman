@@ -23,6 +23,7 @@ import io.micronaut.security.authentication.Authentication
 import io.micronaut.security.rules.SecurityRule
 import io.micronaut.serde.annotation.Serdeable
 import jakarta.transaction.Transactional
+import jakarta.validation.Valid
 import org.apache.poi.xwpf.usermodel.XWPFDocument
 import org.apache.poi.xwpf.usermodel.XWPFParagraph
 import org.apache.poi.xssf.usermodel.XSSFWorkbook
@@ -167,7 +168,7 @@ open class RequirementController(
 
     @Post
     @Transactional
-    open fun create(@Body request: RequirementCreateRequest): HttpResponse<*> {
+    open fun create(@Valid @Body request: RequirementCreateRequest): HttpResponse<*> {
         if (request.shortreq.isBlank()) {
             return HttpResponse.badRequest(mapOf("error" to "Short requirement is required"))
         }
@@ -242,7 +243,7 @@ open class RequirementController(
             val savedRequirement = requirementService.createRequirement(requirement)
             return HttpResponse.ok(RequirementResponse.from(savedRequirement))
         } catch (e: Exception) {
-            return HttpResponse.serverError<Any>().body(mapOf("error" to "Failed to create requirement: ${e.message}"))
+            return HttpResponse.serverError<Any>().body(mapOf("error" to "An internal error occurred"))
         }
     }
 
@@ -259,7 +260,7 @@ open class RequirementController(
 
     @Put("/{id}")
     @Transactional
-    open fun update(@PathVariable id: Long, @Body request: RequirementUpdateRequest): HttpResponse<*> {
+    open fun update(@PathVariable id: Long, @Valid @Body request: RequirementUpdateRequest): HttpResponse<*> {
         // Validate ID
         val idValidation = inputValidationService.validateId(id)
         if (!idValidation.isValid) {
@@ -352,7 +353,7 @@ open class RequirementController(
             val savedRequirement = requirementRepository.update(requirement)
             return HttpResponse.ok(RequirementResponse.from(savedRequirement))
         } catch (e: Exception) {
-            return HttpResponse.serverError<Any>().body(mapOf("error" to "Failed to update requirement: ${e.message}"))
+            return HttpResponse.serverError<Any>().body(mapOf("error" to "An internal error occurred"))
         }
     }
 
@@ -369,7 +370,7 @@ open class RequirementController(
             requirementRepository.deleteById(id)
             return HttpResponse.ok(mapOf("message" to "Requirement deleted successfully"))
         } catch (e: Exception) {
-            return HttpResponse.serverError<Any>().body(mapOf("error" to "Failed to delete requirement: ${e.message}"))
+            return HttpResponse.serverError<Any>().body(mapOf("error" to "An internal error occurred"))
         }
     }
 
@@ -382,7 +383,7 @@ open class RequirementController(
             requirementRepository.deleteAll()
             return HttpResponse.ok(mapOf("message" to "All requirements deleted successfully"))
         } catch (e: Exception) {
-            return HttpResponse.serverError<Any>().body(mapOf("error" to "Failed to delete all requirements: ${e.message}"))
+            return HttpResponse.serverError<Any>().body(mapOf("error" to "An internal error occurred"))
         }
     }
 
@@ -452,6 +453,7 @@ open class RequirementController(
 
         val inputStream = ByteArrayInputStream(outputStream.toByteArray())
         val filename = "requirements_usecase_${useCase.name.replace(" ", "_")}.docx"
+            .replace("\"", "").replace("\r", "").replace("\n", "")
 
         return HttpResponse.ok(StreamedFile(inputStream, MediaType.of("application/vnd.openxmlformats-officedocument.wordprocessingml.document")))
             .header("Content-Disposition", "attachment; filename=\"$filename\"")
@@ -520,6 +522,7 @@ open class RequirementController(
 
         val inputStream = ByteArrayInputStream(outputStream.toByteArray())
         val filename = "requirements_usecase_${useCase.name.replace(" ", "_")}.xlsx"
+            .replace("\"", "").replace("\r", "").replace("\n", "")
         
         return HttpResponse.ok(StreamedFile(inputStream, MediaType.of("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")))
             .header("Content-Disposition", "attachment; filename=\"$filename\"")
@@ -772,7 +775,7 @@ open class RequirementController(
         } catch (e: Exception) {
             HttpResponse.serverError(mapOf(
                 "error" to "Translation export failed",
-                "message" to e.message
+                "message" to "An internal error occurred"
             ))
         }
     }
@@ -808,13 +811,14 @@ open class RequirementController(
             val inputStream = ByteArrayInputStream(outputStream.toByteArray())
             val languageName = translationService.getSupportedLanguages()[language] ?: language
             val filename = "requirements_usecase_${useCase.name.replace(" ", "_")}_translated_${language}_${LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"))}.docx"
+                .replace("\"", "").replace("\r", "").replace("\n", "")
             
             HttpResponse.ok(StreamedFile(inputStream, MediaType.of("application/vnd.openxmlformats-officedocument.wordprocessingml.document")))
                 .header("Content-Disposition", "attachment; filename=\"$filename\"")
         } catch (e: Exception) {
             HttpResponse.serverError(mapOf(
                 "error" to "Translation export failed",
-                "message" to e.message
+                "message" to "An internal error occurred"
             ))
         }
     }
@@ -1051,7 +1055,7 @@ open class RequirementController(
         } catch (e: Exception) {
             HttpResponse.serverError(mapOf(
                 "error" to "Translation export failed",
-                "message" to e.message
+                "message" to "An internal error occurred"
             ))
         }
     }
@@ -1087,13 +1091,14 @@ open class RequirementController(
             val inputStream = ByteArrayInputStream(outputStream.toByteArray())
             val languageName = translationService.getSupportedLanguages()[language] ?: language
             val filename = "requirements_usecase_${useCase.name.replace(" ", "_")}_translated_${language}_${LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"))}.xlsx"
+                .replace("\"", "").replace("\r", "").replace("\n", "")
             
             HttpResponse.ok(StreamedFile(inputStream, MediaType.of("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")))
                 .header("Content-Disposition", "attachment; filename=\"$filename\"")
         } catch (e: Exception) {
             HttpResponse.serverError(mapOf(
                 "error" to "Translation export failed",
-                "message" to e.message
+                "message" to "An internal error occurred"
             ))
         }
     }
