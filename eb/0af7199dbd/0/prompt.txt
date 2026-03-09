@@ -1,0 +1,9 @@
+as admin user or secchampion user i can assign the ownership to a new user. Please create a select box for the ownership, which must contain "Crowdstrike Import" and all users, which are existing in the system. Please propose a plan.
+
+---
+
+yes
+
+---
+
+as secmanadmin (pw is secmanadmin also) i have assigned the ownershop of an asset to to secmanuser, but when i log into secmanuser, i can see only 0 assets. Please evaluate, why this assignment of assets is not working.

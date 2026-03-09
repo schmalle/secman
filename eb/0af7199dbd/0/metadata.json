@@ -1,0 +1,34 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "eb0af7199dbd",
+  "session_id": "0fa43d35-d049-44a5-9b20-cc5a085745bb",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-09T15:05:31.679432Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/backendng/src/main/kotlin/com/secman/controller/AlignmentController.kt",
+    "src/backendng/src/main/kotlin/com/secman/controller/UserController.kt"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "69361fec482a",
+  "token_usage": {
+    "input_tokens": 73,
+    "cache_creation_tokens": 85111,
+    "cache_read_tokens": 3547175,
+    "output_tokens": 18122,
+    "api_call_count": 59
+  },
+  "session_metrics": {
+    "turn_count": 3
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-09T15:05:31.172227Z",
+    "agent_lines": 0,
+    "human_added": 1026,
+    "human_modified": 30,
+    "human_removed": 0,
+    "total_committed": 1026,
+    "agent_percentage": 0
+  }
+}
