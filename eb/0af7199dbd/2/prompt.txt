@@ -1,0 +1,1637 @@
+please do a holistic review of all backend endpoints, if the authentication is properly handled
+
+---
+
+fix all findings identified
+
+---
+
+do a full security review over the entire source code
+
+---
+
+<task-notification>
+<task-id>ae64f737c57076535</task-id>
+<tool-use-id>toolu_018AWmFAj6xozZpxx6h8pTGc</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-flake-sources-misc-secman/tasks/ae64f737c57076535.output</output-file>
+<status>completed</status>
+<summary>Agent "Review crypto, secrets & configuration" completed</summary>
+<result>I now have a comprehensive view of the codebase's security posture. Let me compile the full security review.
+
+---
+
+# Security Review: Cryptography, Secrets Management, and Security Configuration
+
+## Executive Summary
+
+The secman codebase demonstrates generally good security practices with several strong controls (HttpOnly cookies, security headers filter, JWKS validation, BCrypt password hashing, audit logging). However, I identified several findings that require attention, ranging from critical hardcoded default secrets to medium-severity design issues. Below are the findings organized by severity.
+
+---
+
+## CRITICAL Findings
+
+### C-01: Hardcoded JWT Secret with Weak Default
+
+**Files:**
+- `/Users/flake/sources/misc/secman/src/backendng/src/main/resources/application.yml` (lines 67, 70)
+- `/Users/flake/sources/misc/secman/.env` (line 9)
+- `/Users/flake/sources/misc/secman/.env.example` (line 19)
+- `/Users/flake/sources/misc/secman/docker-compose.yml` (line 38)
+
+**Description:** The JWT signing secret has a hardcoded default value `pleasechangethissecrectokeyproductionforsecurityreasonsmustbe256bits` that ships in both `application.yml` and the `.env` file. The `.env` file (which contains this default) is tracked in git (it is not in `.gitignore` -- only `.env.*` patterns are excluded while `.env` itself is gitignored via the exact `.env` entry, but the file currently exists in the working tree). If the production deployment fails to override `JWT_SECRET`, any attacker who reads the source code can forge valid JWT tokens for any user, including administrators.
+
+```yaml
+secret: ${JWT_SECRET:pleasechangethissecrectokeyproductionforsecurityreasonsmustbe256bits}
+```
+
+**Impact:** Complete authentication bypass. An attacker can forge admin-level JWT tokens.
+
+**Recommended Fix:**
+1. Remove the default value from `application.yml` so the application fails to start if `JWT_SECRET` is not set. Replace with:
+   ```yaml
+   secret: ${JWT_SECRET}
+   ```
+2. Add a startup validator (similar to `JwtSigningValidator`) that checks the secret is not the known default string and meets minimum entropy requirements.
+3. Ensure `.env` is never committed (it is gitignored but already exists on disk -- verify no prior commit shipped it).
+4. Generate the production secret with at least 256 bits of cryptographic randomness.
+
+---
+
+### C-02: Hardcoded Default Encryption Password and Salt
+
+**Files:**
+- `/Users/flake/sources/misc/secman/src/backendng/src/main/resources/application.yml` (lines 156-158)
+- `/Users/flake/sources/misc/secman/src/backendng/src/main/kotlin/com/secman/util/EncryptedStringConverter.kt` (lines 18-19)
+
+**Description:** The encryption password (`SecManDefaultEncryptionPassword2024`) and salt (`5c0744940b5c369b`) used for encrypting sensitive data at rest (via `Encryptors.text()`, which uses AES-256-CBC with PBKDF2) are hardcoded as defaults in both the configuration and the source code. If production does not override `SECMAN_ENCRYPTION_PASSWORD` and `SECMAN_ENCRYPTION_SALT`, all encrypted database fields (e.g., SMTP credentials, OAuth client secrets in identity providers) are decryptable by anyone with source code access.
+
+```kotlin
+private const val DEFAULT_PASSWORD = "SecManDefaultEncryptionPassword2024"
+private const val DEFAULT_SALT = "5c0744940b5c369b"
+```
+
+**Impact:** Exposure of all encrypted sensitive data in the database.
+
+**Recommended Fix:**
+1. Remove hardcoded defaults and require environment variables at startup.
+2. Add a startup check that fails if the defaults are detected in production.
+3. The salt is only 8 bytes (64 bits); while this is the minimum for Spring's `Encryptors.text()`, consider using a longer salt for defense-in-depth.
+
+---
+
+### C-03: Default Admin Credentials Logged to Console
+
+**File:** `/Users/flake/sources/misc/secman/src/backendng/src/main/kotlin/com/secman/config/DefaultAdminBootstrapper.kt` (lines 62-65)
+
+**Description:** On first startup, a default admin account is created with the password `password` and the credentials are logged at WARN level, including the plaintext password. While the bootstrapper only runs when no users exist, the password "password" is trivially guessable and the log message persists in logging infrastructure.
+
+```kotlin
+log.warn("  Password: {} (CHANGE IMMEDIATELY!)", DEFAULT_ADMIN_PASSWORD)
+```
+
+**Impact:** If the admin password is not changed immediately, the application is fully compromised. Log aggregation systems retain the plaintext password.
+
+**Recommended Fix:**
+1. Generate a random password on first boot using `SecureRandom` and print it once to stdout (not to structured logs that are shipped to SIEM/logging systems).
+2. Alternatively, require the initial admin password via environment variable.
+3. Never log the plaintext password. Instead, log instructions directing the admin to a secure setup flow.
+
+---
+
+## HIGH Findings
+
+### H-01: MCP API Key Hashing Uses Single-Pass SHA-256 Without Proper KDF
+
+**File:** `/Users/flake/sources/misc/secman/src/backendng/src/main/kotlin/com/secman/service/McpAuthenticationService.kt` (lines 227-236)
+
+**Description:** API key secrets are hashed using a single pass of SHA-256 with the keyId as salt. This is insufficient for secret storage because SHA-256 is fast and GPU-accelerable. An attacker with database access can brute-force API key secrets efficiently.
+
+```kotlin
+fun hashApiKeySecret(secret: String, keyId: String): String {
+    val salt = keyId.toByteArray(Charsets.UTF_8)
+    val secretBytes = secret.toByteArray(Charsets.UTF_8)
+    val digest = MessageDigest.getInstance("SHA-256")
+    digest.update(salt)
+    digest.update(secretBytes)
+    return digest.digest().joinToString("") { "%02x".format(it) }
+}
+```
+
+**Impact:** If the database is compromised, API key secrets can be recovered via brute force or rainbow tables.
+
+**CWE Reference:** CWE-916 (Use of Password Hash With Insufficient Computational Effort)
+
+**Recommended Fix:**
+Use BCrypt, Argon2, or PBKDF2 with a high iteration count. Since API keys have high entropy (48 characters from a 64-character alphabet), a faster KDF like HMAC-SHA256 with a server-side secret key (keyed hash) is also acceptable, but a proper KDF is preferred.
+
+---
+
+### H-02: MCP API Key Authentication Iterates All Active Keys (Timing Side Channel)
+
+**File:** `/Users/flake/sources/misc/secman/src/backendng/src/main/kotlin/com/secman/service/McpAuthenticationService.kt` (lines 80-111)
+
+**Description:** The `authenticateApiKeyBySecret` method loads all active API keys from the database and iterates through them, comparing SHA-256 hashes. This creates two issues:
+1. **Timing attack**: The time to authenticate varies with the number of keys and position of the matching key, potentially leaking information.
+2. **Performance/DoS**: Loading all active keys into memory for every authentication attempt is inefficient and could be exploited for resource exhaustion.
+
+**Recommended Fix:**
+Store a non-sensitive prefix (first N bytes) of the key alongside the hash for efficient lookup, then verify the full hash. Alternatively, use a keyed-hash approach where the key ID is derivable from the secret.
+
+---
+
+### H-03: No Login Rate Limiting or Account Lockout for Password Authentication
+
+**Files:**
+- `/Users/flake/sources/misc/secman/src/backendng/src/main/kotlin/com/secman/controller/AuthController.kt` (lines 64-139)
+- `/Users/flake/sources/misc/secman/src/backendng/src/main/kotlin/com/secman/security/AuthenticationProviderUserPassword.kt`
+
+**Description:** The login endpoint (`POST /api/auth/login`) has no rate limiting, account lockout, or brute-force protection. While MCP API key authentication has IP-based blocking, the primary user login flow has none. An attacker can make unlimited password guessing attempts.
+
+**CWE Reference:** CWE-307 (Improper Restriction of Excessive Authentication Attempts)
+
+**Recommended Fix:**
+1. Implement progressive rate limiting per username and per IP (e.g., exponential backoff after N failures).
+2. Consider temporary account lockout after a threshold (e.g., 10 failed attempts in 15 minutes).
+3. Add CAPTCHA or proof-of-work after N failed attempts.
+4. Log failed login attempts with IP addresses for monitoring.
+
+---
+
+### H-04: WebAuthn Uses NonStrict Manager and Disables User Verification
+
+**File:** `/Users/flake/sources/misc/secman/src/backendng/src/main/kotlin/com/secman/service/WebAuthnService.kt` (lines 38, 155, 268)
+
+**Description:** The WebAuthn implementation uses `createNonStrictWebAuthnManager()` which disables strict attestation validation. Additionally, `userVerificationRequired` is set to `false` in both registration and authentication parameters, despite the frontend requesting `userVerification = "required"`. This discrepancy means the server accepts authenticator responses that did not perform user verification (biometric/PIN), undermining the MFA security guarantee.
+
+```kotlin
+private val webAuthnManager = WebAuthnManager.createNonStrictWebAuthnManager()
+// ...
+val registrationParameters = RegistrationParameters(
+    serverProperty,
+    null,
+    false, // userVerificationRequired -- should be true
+    true   // userPresenceRequired
+)
+```
+
+**CWE Reference:** CWE-287 (Improper Authentication)
+
+**Recommended Fix:**
+1. Set `userVerificationRequired = true` in both `RegistrationParameters` and `AuthenticationParameters` to match the frontend's `userVerification: "required"`.
+2. Consider using the strict `WebAuthnManager` in production and non-strict only in test environments.
+
+---
+
+### H-05: JWKS Validation Falls Back to Unverified JWT Parsing
+
+**File:** `/Users/flake/sources/misc/secman/src/backendng/src/main/kotlin/com/secman/service/JwksValidationService.kt` (lines 52-55, 253-268)
+
+**Description:** When no JWKS URI is configured for an identity provider, the service falls back to `parseJwtWithoutVerification()`, which parses the JWT payload without any signature validation. This means an attacker could forge an ID token with arbitrary claims (email, roles, tenant) and it would be accepted.
+
+```kotlin
+if (jwksUri.isNullOrBlank()) {
+    logger.warn("No JWKS URI configured - falling back to unverified parsing (NOT RECOMMENDED)")
+    return parseJwtWithoutVerification(jwt)
+}
+```
+
+**Impact:** If an identity provider is configured without a JWKS URI, any attacker can forge identity claims and authenticate as any user.
+
+**Recommended Fix:**
+1. Return `null` (reject the token) when JWKS URI is not configured, rather than falling back to unverified parsing.
+2. Require JWKS URI as a mandatory field for OIDC identity providers at the configuration level.
+
+---
+
+### H-06: OAuth Flow Does Not Implement PKCE
+
+**File:** `/Users/flake/sources/misc/secman/src/backendng/src/main/kotlin/com/secman/service/OAuthService.kt` (lines 293-374, 659-748)
+
+**Description:** The OAuth 2.0 Authorization Code flow does not use PKCE (Proof Key for Code Exchange). PKCE is critical for preventing authorization code interception attacks, especially relevant when the application uses public-facing redirect URIs. The search for `code_verifier`, `code_challenge`, and `PKCE` returned zero results across the codebase.
+
+**CWE Reference:** CWE-352 (Cross-Site Request Forgery) -- PKCE provides additional protection beyond the state parameter.
+
+**Recommended Fix:**
+1. Generate a `code_verifier` (cryptographic random string) per authorization request.
+2. Store it alongside the OAuth state in the database.
+3. Compute `code_challenge = BASE64URL(SHA256(code_verifier))` and include it in the authorization request.
+4. Include `code_verifier` in the token exchange request.
+
+---
+
+## MEDIUM Findings
+
+### M-01: CORS Wildcard Regex for MCP Endpoints
+
+**File:** `/Users/flake/sources/misc/secman/src/backendng/src/main/resources/application.yml` (lines 41-42)
+
+**Description:** The MCP CORS configuration uses `allowed-origins-regex: ".*"` which permits any origin. While the comment states MCP clients are non-browser, if any browser-based client connects to the MCP endpoints, this allows cross-origin requests from any domain.
+
+```yaml
+mcp:
+  allowed-origins-regex:
+    - ".*"  # MCP clients can come from anywhere (non-browser)
+```
+
+**Recommended Fix:**
+Since `allow-credentials: false` is set, the risk is mitigated for authenticated endpoints. However, consider restricting to known origins or ensuring that browser-based access to MCP endpoints is explicitly blocked via a separate authentication mechanism.
+
+---
+
+### M-02: WebAuthn Challenge Store Is In-Memory (Not Multi-Instance Safe)
+
+**File:** `/Users/flake/sources/misc/secman/src/backendng/src/main/kotlin/com/secman/service/WebAuthnService.kt` (line 44)
+
+**Description:** WebAuthn challenges are stored in a `mutableMapOf<String, Challenge>()` in memory. This has two security implications:
+1. In a multi-instance deployment, challenges generated on one instance cannot be verified on another.
+2. The map has no TTL/eviction -- challenges accumulate until the JVM restarts, creating a memory leak that could be exploited for DoS.
+
+```kotlin
+private val challengeStore = mutableMapOf<String, Challenge>()
+```
+
+**Recommended Fix:**
+1. Store challenges in the database (like OAuth state) with an expiration timestamp.
+2. If staying in-memory, use a Caffeine cache with TTL matching `CHALLENGE_TIMEOUT_MS` (2 minutes) and maximum size.
+
+---
+
+### M-03: Memory Endpoint Exposed Without Authentication
+
+**File:** `/Users/flake/sources/misc/secman/src/backendng/src/main/resources/application.yml` (lines 336-338)
+
+**Description:** The `/memory` management endpoint is configured with `sensitive: false`, which may expose JVM heap metrics to unauthenticated users, leaking infrastructure details.
+
+```yaml
+endpoints:
+  memory:
+    enabled: true
+    sensitive: false
+```
+
+**Recommended Fix:**
+Set `sensitive: true` or restrict access to admin-only via the `intercept-url-map`.
+
+---
+
+### M-04: JWT Uses HS256 (Symmetric) Instead of RS256 (Asymmetric)
+
+**File:** `/Users/flake/sources/misc/secman/src/backendng/src/main/resources/application.yml` (lines 67-71)
+
+**Description:** The JWT signing uses HS256 (HMAC-SHA256 with a shared secret). This means any service that validates tokens must also have the secret, and therefore can forge tokens. RS256 (RSA signatures) separates signing and verification keys, providing better security posture for distributed architectures.
+
+**Recommended Fix:**
+Consider migrating to RS256 for JWT signing, which allows token verification with only the public key. This is particularly important if other services or microservices need to validate tokens without having the ability to forge them.
+
+---
+
+### M-05: No Refresh Token Mechanism
+
+**Files:**
+- `/Users/flake/sources/misc/secman/src/backendng/src/main/kotlin/com/secman/controller/AuthController.kt` (lines 203-235)
+- `/Users/flake/sources/misc/secman/src/backendng/src/main/resources/application.yml` (line 74)
+
+**Description:** The access token has an 8-hour expiration and the refresh endpoint (`POST /api/auth/refresh`) simply generates a new access token if the current one is still valid. There is no separate refresh token with its own lifecycle. This means:
+1. Stolen tokens are valid for the full 8-hour window with no way to rotate just the access token.
+2. The refresh endpoint extends sessions indefinitely as long as the user calls it before expiry.
+
+**Recommended Fix:**
+Implement a proper refresh token flow with short-lived access tokens (15-30 minutes) and longer-lived refresh tokens that can be revoked.
+
+---
+
+### M-06: OAuth Error Messages May Leak Internal Details
+
+**File:** `/Users/flake/sources/misc/secman/src/backendng/src/main/kotlin/com/secman/controller/OAuthController.kt` (line 101)
+
+**Description:** The OAuth authorization error handler includes the raw exception message in the HTTP response:
+
+```kotlin
+HttpResponse.serverError(ErrorResponse("OAuth authorization failed: ${e.message}"))
+```
+
+Exception messages may contain internal details such as database connection strings, class names, or stack trace fragments.
+
+**Recommended Fix:**
+Return a generic error message to the client and log the detailed exception server-side only.
+
+---
+
+### M-07: WebAuthn JSON Construction via String Interpolation
+
+**File:** `/Users/flake/sources/misc/secman/src/backendng/src/main/kotlin/com/secman/service/WebAuthnService.kt` (lines 340-371)
+
+**Description:** The `buildRegistrationResponseJson` and `buildAuthenticationResponseJson` methods construct JSON using string interpolation of user-provided values. While these values are base64-encoded credential data, if any value contains a double quote or backslash, it would break the JSON structure or potentially allow JSON injection.
+
+```kotlin
+private fun buildRegistrationResponseJson(response: RegistrationCredentialResponse): String {
+    return """
+    {
+        "id": "${response.id}",
+        ...
+    }
+    """.trimIndent()
+}
+```
+
+**CWE Reference:** CWE-116 (Improper Encoding or Escaping of Output)
+
+**Recommended Fix:**
+Use the Jackson `ObjectMapper` to construct JSON properly, which handles escaping automatically.
+
+---
+
+## LOW Findings
+
+### L-01: Password Policy Is Minimal (8 Characters, No Complexity)
+
+**File:** `/Users/flake/sources/misc/secman/src/backendng/src/main/kotlin/com/secman/controller/UserProfileController.kt` (lines 257-258)
+
+**Description:** The password change flow only enforces a minimum length of 8 characters with no complexity requirements (uppercase, lowercase, digit, special character). While password complexity has diminishing returns, modern guidance (NIST SP 800-63B) recommends checking against a list of known compromised passwords.
+
+**Recommended Fix:**
+1. Check passwords against a breach dictionary (e.g., Have I Been Pwned API or a local subset).
+2. Consider a minimum of 12 characters.
+3. The current 200-character max length (line 262) is appropriate for BCrypt.
+
+---
+
+### L-02: Database Password Default "CHANGEME" in Configuration
+
+**File:** `/Users/flake/sources/misc/secman/src/backendng/src/main/resources/application.yml` (line 271)
+
+**Description:** The database password defaults to "CHANGEME", which is a commonly known placeholder.
+
+```yaml
+password: ${DB_PASSWORD:CHANGEME}
+```
+
+**Recommended Fix:**
+Similar to the JWT secret, consider removing the default so the application fails to start without explicit configuration, or add a startup check that rejects the default in production.
+
+---
+
+### L-03: Multiple BCryptPasswordEncoder Instances Created
+
+**Files:** Multiple controllers and services each create their own `BCryptPasswordEncoder()` instance.
+
+**Description:** While not a direct security vulnerability, creating multiple instances prevents consistent configuration (e.g., if you want to increase the BCrypt work factor). If one instance uses a different strength parameter, password verification could fail.
+
+**Recommended Fix:**
+Create a single `@Singleton` BCryptPasswordEncoder bean and inject it everywhere.
+
+---
+
+### L-04: SMTP Password Default "changeme"
+
+**File:** `/Users/flake/sources/misc/secman/src/backendng/src/main/resources/application.yml` (line 167)
+
+**Description:** The SMTP password defaults to "changeme" in plain text.
+
+**Recommended Fix:**
+Remove the default and require configuration via environment variable or database.
+
+---
+
+### L-05: Cookie Secure Flag Defaults to False
+
+**File:** `/Users/flake/sources/misc/secman/src/backendng/src/main/resources/application.yml` (line 153)
+
+**Description:** `cookie-secure` defaults to `false`, meaning auth cookies will be sent over unencrypted HTTP by default. While documented as "for local development", if production deploys use the default configuration, authentication tokens are exposed over plaintext connections.
+
+```yaml
+cookie-secure: ${SECMAN_AUTH_COOKIE_SECURE:false}
+```
+
+**Recommended Fix:**
+Change the default to `true` so production is secure by default, and require explicit override for development.
+
+---
+
+## Positive Security Controls Observed
+
+The following controls demonstrate good security engineering:
+
+1. **Security Headers Filter** (`SecurityHeadersFilter.kt`): Comprehensive headers including CSP, HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, and cache controls for API endpoints.
+
+2. **HttpOnly Secure Cookies** (`AuthCookieService.kt`): JWT tokens are delivered via HttpOnly cookies with SameSite=Lax, preventing XSS-based token theft.
+
+3. **JWKS Signature Validation** (`JwksValidationService.kt`): Proper cryptographic validation of OIDC ID tokens with key rotation support.
+
+4. **JWT Signing Validator** (`JwtSigningValidator.kt`): Startup check that prevents the application from running with unsigned (alg:none) tokens.
+
+5. **OAuth State Management**: CSRF protection via state parameter with DB persistence, REQUIRES_NEW transaction isolation, retry logic for race conditions, and scheduled cleanup.
+
+6. **BCrypt Password Hashing**: All password storage uses BCrypt (default strength 10).
+
+7. **Email Header Injection Protection** (`EmailSender.kt`): CRLF stripping in email headers (CWE-93).
+
+8. **Input Validation Service**: XSS prevention via OWASP HTML Sanitizer, SQL injection pattern detection, and command injection checks.
+
+9. **Non-Root Docker Containers** (`Dockerfile`): Application runs as a dedicated `secman` user.
+
+10. **SecureRandom Usage**: All cryptographic random generation uses `java.security.SecureRandom` -- no instances of `java.util.Random` for security purposes.
+
+11. **Audit Logging**: Security events are logged to a dedicated `security.audit` logger with MDC context for SIEM integration.
+
+12. **Dependency Hygiene**: Log4j is bridged to SLF4J via `log4j-to-slf4j:2.25.3`, eliminating Log4Shell exposure. Library versions are current.
+
+---
+
+## Summary Table
+
+| ID | Severity | Finding | Fix Complexity |
+|----|----------|---------|---------------|
+| C-01 | CRITICAL | Hardcoded JWT secret with weak default | Low |
+| C-02 | CRITICAL | Hardcoded encryption password and salt | Low |
+| C-03 | CRITICAL | Default admin password logged to console | Low |
+| H-01 | HIGH | MCP API key uses single-pass SHA-256 | Medium |
+| H-02 | HIGH | API key auth timing side channel | Medium |
+| H-03 | HIGH | No login rate limiting / account lockout | Medium |
+| H-04 | HIGH | WebAuthn non-strict mode, UV disabled | Low |
+| H-05 | HIGH | JWKS falls back to unverified JWT parsing | Low |
+| H-06 | HIGH | OAuth missing PKCE | Medium |
+| M-01 | MEDIUM | CORS wildcard for MCP endpoints | Low |
+| M-02 | MEDIUM | WebAuthn challenge store in-memory only | Medium |
+| M-03 | MEDIUM | Memory endpoint unauthenticated | Low |
+| M-04 | MEDIUM | JWT uses HS256 instead of RS256 | High |
+| M-05 | MEDIUM | No proper refresh token mechanism | High |
+| M-06 | MEDIUM | OAuth error messages leak internals | Low |
+| M-07 | MEDIUM | WebAuthn JSON via string interpolation | Low |
+| L-01 | LOW | Minimal password policy | Low |
+| L-02 | LOW | Database password default "CHANGEME" | Low |
+| L-03 | LOW | Multiple BCryptPasswordEncoder instances | Low |
+| L-04 | LOW | SMTP password default "changeme" | Low |
+| L-05 | LOW | Cookie secure defaults to false | Low |
+
+**Priority recommendation:** Address C-01 through C-03 immediately, followed by H-03 (login rate limiting) and H-05 (JWKS fallback), as these have the highest exploitability with the lowest implementation cost.</result>
+<usage><total_tokens>106604</total_tokens><tool_uses>70</tool_uses><duration_ms>209809</duration_ms></usage>
+</task-notification>
+Full transcript available at: /private/tmp/claude-501/-Users-flake-sources-misc-secman/tasks/ae64f737c57076535.output
+
+---
+
+<task-notification>
+<task-id>ab185be45b330be17</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-flake-sources-misc-secman/tasks/ab185be45b330be17.output</output-file>
+<status>completed</status>
+<summary>Agent "Review file handling & data exposure" completed</summary>
+<result>I now have enough information for a comprehensive security review. Here is my analysis.
+
+---
+
+# Security Review: secman Codebase
+
+## File Handling, Data Exposure, and Business Logic Vulnerabilities
+
+---
+
+## FINDING 1: Content-Disposition Header Injection in File Downloads
+
+**Severity: HIGH**
+**CWE: CWE-113 (HTTP Response Splitting)**
+**File:** `/Users/flake/sources/misc/secman/src/backendng/src/main/kotlin/com/secman/controller/RequirementFileController.kt`, line 207
+
+The `originalFilename` from the database is interpolated directly into the `Content-Disposition` header without encoding. If a filename containing double-quotes or newlines was stored (e.g., through an older version without the current validation), it could inject HTTP headers.
+
+```kotlin
+.header("Content-Disposition", "attachment; filename=\"${file.originalFilename}\"")
+```
+
+**Attack vector:** If `originalFilename` contains characters like `"` or CRLF sequences, an attacker could perform response header injection. While the upload path currently validates filenames, defense in depth requires sanitizing at the download path as well, since the data originates from the database (which could be populated via other means).
+
+**Recommended fix:** Use RFC 5987 encoding for the filename in Content-Disposition, or at minimum sanitize the filename at the download point:
+
+```kotlin
+val safeFilename = file.originalFilename
+    .replace("\"", "")
+    .replace("\r", "")
+    .replace("\n", "")
+    .replace("%", "%25")
+.header("Content-Disposition", "attachment; filename=\"$safeFilename\"; filename*=UTF-8''${java.net.URLEncoder.encode(safeFilename, "UTF-8").replace("+", "%20")}")
+```
+
+This same pattern appears in multiple controllers (search identified 19 occurrences across `AlignmentController.kt`, `RequirementController.kt`, `AssetController.kt`, `OutdatedAssetController.kt`, `NotificationLogController.kt`, `ProductController.kt`, `PublicRequirementDownloadController.kt`, and `VulnerabilityExceptionRequestController.kt`).
+
+---
+
+## FINDING 2: Hardcoded JWT Secret in Configuration
+
+**Severity: CRITICAL**
+**CWE: CWE-798 (Use of Hard-coded Credentials)**
+**File:** `/Users/flake/sources/misc/secman/src/backendng/src/main/resources/application.yml`, line 67
+
+The JWT signing secret has a hardcoded default value that is human-readable and predictable:
+
+```yaml
+secret: ${JWT_SECRET:pleasechangethissecrectokeyproductionforsecurityreasonsmustbe256bits}
+```
+
+If the `JWT_SECRET` environment variable is not set in production, any attacker who reads the source code can forge arbitrary JWT tokens with any role (including ADMIN), gaining complete access to the system.
+
+**Recommended fix:**
+1. Remove the default value entirely so the application fails to start without `JWT_SECRET`:
+   ```yaml
+   secret: ${JWT_SECRET}
+   ```
+2. Add a startup validator that checks the JWT secret is not the default value and meets minimum entropy requirements (32+ random bytes).
+3. Generate the secret using `openssl rand -base64 64` or equivalent.
+
+---
+
+## FINDING 3: Default Admin Password Logged to Output
+
+**Severity: HIGH**
+**CWE: CWE-312 (Cleartext Storage of Sensitive Information), CWE-798 (Hardcoded Credentials)**
+**File:** `/Users/flake/sources/misc/secman/src/backendng/src/main/kotlin/com/secman/config/DefaultAdminBootstrapper.kt`, lines 36 and 64
+
+The default admin password "password" is defined as a constant and logged in cleartext at WARN level:
+
+```kotlin
+const val DEFAULT_ADMIN_PASSWORD = "password"
+...
+log.warn("  Password: {} (CHANGE IMMEDIATELY!)", DEFAULT_ADMIN_PASSWORD)
+```
+
+This creates two issues: (1) the password is a well-known trivial value, and (2) it is written to log files where it can be discovered. In containerized/cloud environments, logs are often centralized and accessible to operations teams.
+
+**Recommended fix:**
+1. Generate a random password at bootstrap time and display it only once:
+   ```kotlin
+   val randomPassword = java.security.SecureRandom().let { sr ->
+       val bytes = ByteArray(24)
+       sr.nextBytes(bytes)
+       java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
+   }
+   ```
+2. Alternatively, require the admin password to be provided via environment variable and refuse to start without it.
+3. Never log the actual password value -- log a masked reference or instruct users to check a secure store.
+
+---
+
+## FINDING 4: SMTP Password Existence and Length Logged
+
+**Severity: MEDIUM**
+**CWE: CWE-532 (Insertion of Sensitive Information into Log File)**
+**File:** `/Users/flake/sources/misc/secman/src/backendng/src/main/kotlin/com/secman/service/EmailService.kt`, line 247
+
+```kotlin
+log.debug("Password configured: {} (length: {})", password.isNotEmpty(), password.length)
+```
+
+While this does not log the actual password, it confirms its existence and reveals its exact length, which aids brute-force attacks by narrowing the search space. In production with DEBUG logging enabled (or if log levels are misconfigured), this information disclosure is meaningful.
+
+**Recommended fix:** Remove the password length from the log message:
+```kotlin
+log.debug("SMTP authentication configured: {}", password.isNotEmpty())
+```
+
+---
+
+## FINDING 5: JPA Entity Returned Directly in API Responses (Mass Assignment / Data Exposure)
+
+**Severity: HIGH**
+**CWE: CWE-200 (Exposure of Sensitive Information), CWE-915 (Mass Assignment)**
+**File:** `/Users/flake/sources/misc/secman/src/backendng/src/main/kotlin/com/secman/controller/AssetController.kt`, lines 117-131 and 159
+
+The `Asset` JPA entity (annotated with `@Serdeable`) is returned directly in API responses:
+
+```kotlin
+open fun list(authentication: Authentication): HttpResponse<List<Asset>> {
+    val assets = assetFilterService.getAccessibleAssets(authentication)
+    ...
+    HttpResponse.ok(assets)
+}
+```
+
+And in the get endpoint (line 159):
+```kotlin
+HttpResponse.ok(asset)
+```
+
+The `Asset` entity exposes internal fields like `ipNumeric`, `createdAt`, `updatedAt`, `criticality`, `cloudAccountId`, `cloudInstanceId`, `adDomain`, and `osVersion` to all authenticated users. While `@JsonIgnore` protects some relations, the entity itself leaks infrastructure metadata.
+
+Similarly, the `User` entity at `/Users/flake/sources/misc/secman/src/backendng/src/main/kotlin/com/secman/domain/User.kt` is `@Serdeable`. Although `passwordHash` has `@JsonIgnore`, if this entity is ever inadvertently returned in a context where Jackson (not Micronaut Serde) handles serialization, the password hash could leak. The entity also includes `authSource`, `mfaEnabled`, `lastLogin`, and internal IDs -- information that regular users should not see about each other.
+
+**Recommended fix:** Create dedicated DTOs for API responses (like `UserResponse` in `UserController.kt` -- the pattern is already used there). Apply this consistently to `Asset` endpoints as well:
+```kotlin
+@Serdeable
+data class AssetResponse(
+    val id: Long,
+    val name: String,
+    val type: String,
+    val ip: String?,
+    val owner: String,
+    val description: String?
+    // Only include fields the caller needs
+)
+```
+
+---
+
+## FINDING 6: No Rate Limiting on Login Endpoint
+
+**Severity: HIGH**
+**CWE: CWE-307 (Improper Restriction of Excessive Authentication Attempts)**
+**File:** `/Users/flake/sources/misc/secman/src/backendng/src/main/kotlin/com/secman/controller/AuthController.kt`, line 67
+
+The `/api/auth/login` endpoint has no rate limiting, account lockout, or progressive delay mechanism. An attacker can perform unlimited brute-force password guessing attempts:
+
+```kotlin
+@Post("/login")
+@Secured(SecurityRule.IS_ANONYMOUS)
+@Transactional
+open fun login(@Body loginRequest: LoginRequest): HttpResponse<*> {
+```
+
+The search for rate-limiting patterns confirmed that rate limiting is only implemented for MCP endpoints and export jobs, not for authentication.
+
+**Recommended fix:**
+1. Implement per-IP rate limiting (e.g., 5 attempts per minute, 20 per hour)
+2. Implement per-account rate limiting with exponential backoff
+3. Add account lockout after N consecutive failed attempts (e.g., 10 attempts triggers 15-minute lockout)
+4. Log failed login attempts with source IP for security monitoring
+
+---
+
+## FINDING 7: Nmap XML Parsing Will Reject Real Nmap Files Due to DTD Restriction
+
+**Severity: LOW (functional issue, but the security posture is correct)**
+**CWE: N/A (defense-in-depth comment)**
+**File:** `/Users/flake/sources/misc/secman/src/backendng/src/main/kotlin/com/secman/service/NmapParserService.kt`, line 69
+
+The XXE prevention is correctly implemented with `disallow-doctype-decl` set to `true`. This is the most secure approach per OWASP guidelines. However, real nmap XML output files include a DOCTYPE declaration:
+
+```xml
+<!DOCTYPE nmaprun>
+```
+
+This means genuine nmap files will be rejected by the parser with a SAXParseException. If this is working in production, users must be pre-processing their nmap files to strip the DOCTYPE. This should be documented, or the parser should strip DOCTYPE declarations from input before parsing (while still disabling external entities).
+
+**Recommended fix (if nmap files are being rejected):** Pre-process the XML to strip DOCTYPE before parsing, while keeping external entity protections:
+```kotlin
+val cleanedXml = String(xmlContent).replace(Regex("<!DOCTYPE[^>]*>"), "")
+// Then parse cleanedXml.toByteArray()
+```
+
+This same observation applies to `MasscanParserService.kt` at the same file.
+
+---
+
+## FINDING 8: Excel Formula Evaluation During Import (Formula Injection Risk)
+
+**Severity: MEDIUM**
+**CWE: CWE-1236 (Improper Neutralization of Formula Elements in a CSV File)**
+**Files:**
+- `/Users/flake/sources/misc/secman/src/backendng/src/main/kotlin/com/secman/controller/ImportController.kt`, lines 297-313
+- `/Users/flake/sources/misc/secman/src/backendng/src/main/kotlin/com/secman/service/VulnerabilityImportService.kt`, line 302-305
+- `/Users/flake/sources/misc/secman/src/backendng/src/main/kotlin/com/secman/service/UserMappingImportService.kt`, line 285-288
+
+When importing Excel files, formulas in cells are actively **evaluated** on the server:
+
+```kotlin
+CellType.FORMULA -> {
+    val evaluator = cell.sheet.workbook.creationHelper.createFormulaEvaluator()
+    val result = evaluator.evaluate(cell)
+```
+
+Apache POI's formula evaluator can execute formulas that reference external data sources, call functions like `WEBSERVICE()`, `HYPERLINK()`, or perform DCOM/DDE operations depending on the Excel version and POI configuration. While POI's evaluator is limited compared to full Excel, this still represents an unnecessary attack surface.
+
+**Recommended fix:** Do not evaluate formulas. Instead, treat formula cells as their cached/display value, or skip them entirely:
+
+```kotlin
+CellType.FORMULA -> {
+    try {
+        // Use cached value instead of evaluating
+        when (cell.cachedFormulaResultType) {
+            CellType.STRING -> cell.richStringCellValue.string
+            CellType.NUMERIC -> cell.numericCellValue.toString()
+            CellType.BOOLEAN -> cell.booleanCellValue.toString()
+            else -> ""
+        }
+    } catch (e: Exception) {
+        ""
+    }
+}
+```
+
+---
+
+## FINDING 9: Export File Path Traversal in ExportJobService
+
+**Severity: MEDIUM**
+**CWE: CWE-22 (Path Traversal)**
+**File:** `/Users/flake/sources/misc/secman/src/backendng/src/main/kotlin/com/secman/service/ExportJobService.kt`, lines 170 and 410
+
+The `getExportFile` method reads `job.filePath` from the database and constructs a `File` object without validating that the path is within the expected export directory:
+
+```kotlin
+fun getExportFile(jobId: String, username: String): File? {
+    val job = exportJobRepository.findByIdAndUsername(jobId, username).orElse(null)
+    ...
+    val file = File(job.filePath!!)
+    if (!file.exists()) { ... }
+    return file
+}
+```
+
+If the `filePath` in the database were ever modified (via SQL injection elsewhere, direct DB access, or a logic bug), this could serve arbitrary files from the filesystem.
+
+Similarly, when creating the file (line 410):
+```kotlin
+val filePath = "$exportDirectory/$fileName"
+```
+
+The `fileName` includes the `jobId` (UUID), which is safe. But the lack of path normalization and containment check at the download point is a defense-in-depth gap.
+
+**Recommended fix:** Add path validation in `getExportFile`:
+```kotlin
+val file = File(job.filePath!!)
+val exportDir = File(exportDirectory).canonicalFile
+if (!file.canonicalFile.startsWith(exportDir)) {
+    log.error("Path traversal attempt in export file: {}", job.filePath)
+    return null
+}
+```
+
+---
+
+## FINDING 10: Upload Directory Uses Relative Path (Web Root Risk)
+
+**Severity: MEDIUM**
+**CWE: CWE-552 (Files or Directories Accessible to External Parties)**
+**File:** `/Users/flake/sources/misc/secman/src/backendng/src/main/kotlin/com/secman/service/FileService.kt`, line 37
+
+```kotlin
+const val UPLOAD_DIR = "uploads/requirement-files"
+```
+
+And in ExportJobService.kt line 60:
+```kotlin
+@Value("\${secman.export.directory:exports}") private val exportDirectory: String
+```
+
+Both use relative paths that resolve relative to the JVM working directory. If the application is started from a directory that is served by a web server (e.g., inside the Astro/frontend build), uploaded files could become directly accessible via HTTP, bypassing authentication and authorization.
+
+**Recommended fix:** Use absolute paths configured via environment variables, pointing to a directory outside the web root:
+```kotlin
+@Value("\${secman.upload.directory:/var/secman/uploads}") private val uploadDirectory: String
+```
+Ensure the directory is not served by any web server and has restrictive permissions (700, owned by the application user).
+
+---
+
+## FINDING 11: Error Messages Leak Internal Details to Clients
+
+**Severity: MEDIUM**
+**CWE: CWE-209 (Generation of Error Message Containing Sensitive Information)**
+**Files:** Multiple controllers, representative example in `/Users/flake/sources/misc/secman/src/backendng/src/main/kotlin/com/secman/controller/ImportController.kt`, lines 107, 436, 523, 637, 643
+
+```kotlin
+.body(ErrorResponse("Error processing file: ${e.message}"))
+```
+
+Exception messages are passed directly to API responses in multiple controllers. Java/Kotlin exception messages can contain database table names, SQL fragments, file system paths, stack trace snippets, or class names that reveal implementation details useful for reconnaissance.
+
+**Recommended fix:** Return generic error messages to clients and log the full exception details server-side:
+```kotlin
+log.error("Error processing file upload for user: {}", authentication.name, e)
+HttpResponse.status<ErrorResponse>(HttpStatus.INTERNAL_SERVER_ERROR)
+    .body(ErrorResponse("An internal error occurred. Please contact support."))
+```
+
+---
+
+## FINDING 12: CORS Configuration Has Wildcard Regex for MCP
+
+**Severity: MEDIUM**
+**CWE: CWE-942 (Permissive Cross-domain Policy)**
+**File:** `/Users/flake/sources/misc/secman/src/backendng/src/main/resources/application.yml`, lines 41-42
+
+```yaml
+mcp:
+  allowed-origins-regex:
+    - ".*"  # MCP clients can come from anywhere (non-browser)
+```
+
+While the comment states MCP clients are non-browser, the `.*` regex allows any origin. If MCP endpoints are accessible from a browser context (which they may be, since they use HTTP), this enables cross-origin attacks. A malicious website could make requests to MCP endpoints if a user visits it while having a valid session.
+
+The MCP configuration also does not set `allow-credentials: true`, which limits the attack to non-credentialed requests. However, if MCP authentication uses API keys in headers (not cookies), this CORS policy combined with the wildcard origin means any website can attempt to use MCP endpoints with leaked API keys.
+
+**Recommended fix:** Restrict MCP CORS to known origins or require API key authentication that is not vulnerable to CORS-based attacks. At minimum, remove the wildcard and use specific patterns.
+
+---
+
+## FINDING 13: 100 MB File Upload Limit May Enable DoS
+
+**Severity: LOW**
+**CWE: CWE-400 (Uncontrolled Resource Consumption)**
+**File:** `/Users/flake/sources/misc/secman/src/backendng/src/main/kotlin/com/secman/controller/ImportController.kt`, line 56; `/Users/flake/sources/misc/secman/src/backendng/src/main/resources/application.yml`, lines 11-12
+
+```kotlin
+private const val MAX_FILE_SIZE = 100 * 1024 * 1024L // 100MB
+```
+
+```yaml
+max-request-size: 100MB
+multipart:
+  max-file-size: 100MB
+```
+
+A 100 MB file upload limit with no per-user rate limiting on import endpoints means authenticated users (including those with just the ADMIN or VULN role) could repeatedly upload large files to consume server memory and disk I/O. The xlsx parsing with XSSFWorkbook loads the entire file into memory, which means a 100 MB xlsx file can consume several hundred MB of heap space.
+
+**Recommended fix:**
+1. Reduce the limit to a reasonable size for the actual data (10-20 MB for vulnerability imports, 50 MB for large datasets)
+2. Add per-user rate limiting on import endpoints
+3. Consider using SXSSFWorkbook (streaming) for reading large xlsx files where possible, or use SAX-based event parsing via Apache POI's XSSF SAX reader
+
+---
+
+## FINDING 14: CLI Credentials Passable via Command-Line Arguments
+
+**Severity: MEDIUM**
+**CWE: CWE-214 (Invocation of Process Using Visible Sensitive Information)**
+**File:** `/Users/flake/sources/misc/secman/src/cli/src/main/kotlin/com/secman/cli/commands/QueryCommand.kt`, lines 48-49
+
+```kotlin
+var clientId: String? = null
+var clientSecret: String? = null
+```
+
+The CLI allows passing CrowdStrike API credentials (`clientId` and `clientSecret`) as command-line arguments. On Unix systems, command-line arguments are visible to all users via `/proc/<pid>/cmdline` or `ps aux`. This means API secrets could be captured by other users on a shared system.
+
+**Recommended fix:** Remove the ability to pass secrets as CLI arguments. Instead, support only environment variables and config files (which already exist in `ConfigLoader`). If CLI args must be supported, accept them via stdin or a file reference:
+```
+--credentials-file ~/.secman/credentials
+```
+
+---
+
+## FINDING 15: No Pagination Limit on Asset List Endpoint
+
+**Severity: LOW**
+**CWE: CWE-400 (Uncontrolled Resource Consumption)**
+**File:** `/Users/flake/sources/misc/secman/src/backendng/src/main/kotlin/com/secman/controller/AssetController.kt`, lines 116-131
+
+```kotlin
+@Get
+open fun list(authentication: Authentication): HttpResponse<List<Asset>> {
+    val assets = assetFilterService.getAccessibleAssets(authentication)
+        .sortedByDescending { it.createdAt }
+    HttpResponse.ok(assets)
+}
+```
+
+The asset list endpoint returns ALL accessible assets with no pagination. For an ADMIN user with access to a large asset database (100K+ assets), this will load all entities into memory and serialize them into a single JSON response, potentially causing OOM or very slow responses.
+
+The vulnerability endpoint (`getCurrentVulnerabilities`) correctly implements pagination with a max size of 500. The asset endpoint does not.
+
+**Recommended fix:** Add pagination support:
+```kotlin
+@Get
+open fun list(
+    authentication: Authentication,
+    @QueryValue(defaultValue = "0") page: Int,
+    @QueryValue(defaultValue = "100") size: Int
+): HttpResponse<Page<AssetDto>> {
+    val pageSize = minOf(maxOf(size, 1), 500)
+    // ...paginated query...
+}
+```
+
+---
+
+## Summary by Severity
+
+| Severity | Count | Findings |
+|----------|-------|----------|
+| CRITICAL | 1 | #2 (Hardcoded JWT Secret) |
+| HIGH | 4 | #1 (Content-Disposition injection), #3 (Default admin password logged), #5 (JPA entities exposed), #6 (No login rate limiting) |
+| MEDIUM | 6 | #4 (SMTP password length logged), #8 (Formula evaluation), #9 (Export path traversal), #10 (Relative upload path), #11 (Error message leakage), #12 (CORS wildcard), #14 (CLI credentials in args) |
+| LOW | 3 | #7 (Nmap DOCTYPE rejection), #13 (100 MB upload DoS), #15 (No asset pagination) |
+
+## Positive Observations
+
+Several security controls are already well-implemented:
+
+1. **XXE Prevention**: Both `NmapParserService.kt` and `MasscanParserService.kt` implement comprehensive XXE prevention following OWASP guidelines, including `disallow-doctype-decl`.
+
+2. **Security Headers**: The `SecurityHeadersFilter` is thorough, including CSP, HSTS, X-Frame-Options, X-Content-Type-Options: nosniff, Referrer-Policy, Permissions-Policy, and cross-origin isolation headers.
+
+3. **File Upload Validation**: The `FileService` and `SecurityService` implement multi-layer validation including extension checking, MIME type validation, extension-MIME matching, blocked extensions, path traversal checks, null byte detection, and file size limits.
+
+4. **Path Traversal Prevention**: The `FileService.uploadFile()` method correctly validates that the resolved file path stays within the upload directory using `absolutePath.startsWith(uploadDir)`.
+
+5. **Access Control**: Consistent use of `@Secured` annotations, workgroup-based filtering via `AssetFilterService`, and file-level access control in `SecurityService`.
+
+6. **Password Handling**: BCrypt is used for password hashing, and the `passwordHash` field has `@JsonIgnore`.
+
+7. **Temporary File Cleanup**: The CSV upload correctly cleans up temp files in a `finally` block, and export files have scheduled cleanup.
+
+8. **DTOs for User Responses**: `UserController` correctly maps `User` entities to `UserResponse` DTOs, stripping `passwordHash`.</result>
+<usage><total_tokens>134719</total_tokens><tool_uses>54</tool_uses><duration_ms>201461</duration_ms></usage>
+</task-notification>
+Full transcript available at: /private/tmp/claude-501/-Users-flake-sources-misc-secman/tasks/ab185be45b330be17.output
+
+---
+
+<task-notification>
+<task-id>aab50d9bced9dc45d</task-id>
+<tool-use-id>toolu_01LTpy9LJTcLWH9mjTmpqNjf</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-flake-sources-misc-secman/tasks/aab50d9bced9dc45d.output</output-file>
+<status>completed</status>
+<summary>Agent "Review frontend security issues" completed</summary>
+<result>Now I have a comprehensive understanding of the frontend codebase. Let me compile the full security review.
+
+---
+
+# Frontend Client-Side Security Review -- secman
+
+## Executive Summary
+
+The secman frontend has a generally sound security posture. The migration from JWT-in-localStorage to HttpOnly cookies is a significant improvement. However, I identified several findings ranging from a committed credential to excessive logging and inconsistent authentication patterns. Below are the findings organized by severity.
+
+---
+
+## FINDING 1: Committed Session Cookie with Valid JWT
+
+**Severity: CRITICAL**
+**CWE-798 (Use of Hard-coded Credentials), CWE-540 (Inclusion of Sensitive Information in Source Code)**
+
+**File:** `/Users/flake/sources/misc/secman/src/frontend/cookies.txt` (line 5)
+
+```
+#HttpOnly_localhost	FALSE	/	FALSE	0	PLAY_SESSION	REDACTED
+```
+
+This is a Netscape-format cookie file containing a PLAY_SESSION JWT for an `adminuser` account with `ADMIN,USER` roles. This file is tracked in the repository, leaking:
+- The username `adminuser`
+- The role structure (`ADMIN,USER`)
+- A signed JWT (from which the HMAC signing key could potentially be brute-forced if weak)
+
+**Recommended Fix:**
+1. Delete `cookies.txt` immediately and add it to `.gitignore`.
+2. Rotate the JWT signing key used by the backend.
+3. Review `git log` for any other committed credentials.
+4. Add `cookies.txt` and `*.cookie*` patterns to `.gitignore`.
+
+---
+
+## FINDING 2: Debug Script with Hardcoded Credentials
+
+**Severity: HIGH**
+**CWE-798 (Use of Hard-coded Credentials)**
+
+**File:** `/Users/flake/sources/misc/secman/src/frontend/debug-login.js` (lines 14-15)
+
+```javascript
+await page.fill('input[id="username"]', 'adminuser');
+await page.fill('input[id="password"]', 'password');
+```
+
+A debug Playwright script containing hardcoded admin credentials (`adminuser`/`password`) is committed to source control. Even if these are development credentials, this establishes a pattern and risks credential re-use.
+
+**Recommended Fix:**
+1. Delete `debug-login.js` from the repository or move it to a `.gitignore`d debug directory.
+2. If retained for debugging, read credentials from environment variables.
+
+---
+
+## FINDING 3: Inconsistent Authentication in ConfigBundleManager -- JWT Stored in sessionStorage
+
+**Severity: HIGH**
+**CWE-922 (Insecure Storage of Sensitive Information)**
+
+**File:** `/Users/flake/sources/misc/secman/src/frontend/src/components/ConfigBundleManager.tsx` (lines 73-76, 88, 150, 201)
+
+```typescript
+const token = sessionStorage.getItem('jwt_token');
+if (token) {
+  axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+}
+```
+
+This component reads a JWT from `sessionStorage` and attaches it as a Bearer token header, bypassing the application-wide HttpOnly cookie authentication pattern. This is inconsistent with the security architecture:
+- If the `jwt_token` key is never actually populated (since the rest of the app uses HttpOnly cookies), these requests will fail silently or rely on a different auth path.
+- If it *is* populated, it means the JWT is accessible to JavaScript, defeating the XSS protections of the HttpOnly cookie approach.
+- Setting `axios.defaults.headers.common['Authorization']` in a `useEffect` pollutes the global axios instance, potentially leaking the token to requests from other components.
+
+**Recommended Fix:**
+Refactor `ConfigBundleManager.tsx` to use `credentials: 'include'` (or the global `withCredentials: true` already set by the CSRF setup) instead of manually reading JWT from sessionStorage. Remove the `useEffect` block that sets the Authorization header. The HttpOnly cookie will handle authentication automatically.
+
+---
+
+## FINDING 4: User Metadata Passed via URL Query Parameter (OAuth Login Success)
+
+**Severity: MEDIUM**
+**CWE-598 (Use of GET Request Method With Sensitive Query Strings)**
+
+**File:** `/Users/flake/sources/misc/secman/src/frontend/src/pages/login/success.astro` (lines 61-67)
+
+```javascript
+var urlParams = new URLSearchParams(window.location.search);
+var userJson = urlParams.get('user');
+// ...
+var userData = JSON.parse(decodeURIComponent(userJson));
+```
+
+User metadata (username, email, roles) is passed as a URL query parameter from the OAuth callback. While the page does call `window.history.replaceState({}, '', '/login/success')` to clean the URL (line 82), there is a window of exposure:
+- The full URL with user data appears in browser history before `replaceState` executes.
+- It is logged in web server access logs.
+- Referrer headers could leak it if any external resources load on the page (the page loads Bootstrap from CDN at line 11).
+- The data is parsed from an attacker-controllable URL parameter without schema validation.
+
+**Recommended Fix:**
+1. Have the backend store user metadata server-side (e.g., in the session) rather than passing it via URL parameters. The login/success page should fetch user data from `/api/auth/status` after confirming the HttpOnly cookie is set, which it already does on line 85.
+2. At minimum, validate the parsed `userData` object against an expected schema (required fields, type checks) before trusting it.
+
+---
+
+## FINDING 5: Excessive Console Logging of Sensitive Data in Production
+
+**Severity: MEDIUM**
+**CWE-532 (Insertion of Sensitive Information into Log File)**
+
+**Multiple files**, most notably:
+
+- `/Users/flake/sources/misc/secman/src/frontend/src/utils/auth.ts` (lines 113, 115, 195, 229, etc.) -- Logs every authenticated request URL and status
+- `/Users/flake/sources/misc/secman/src/frontend/src/utils/auth-init.ts` (line 33) -- Logs user object on auth init
+- `/Users/flake/sources/misc/secman/src/frontend/src/services/crowdstrikeService.ts` (lines 89-92, 169-170, 190-192, 255-257) -- Logs hostnames, vulnerability counts, full response objects
+- `/Users/flake/sources/misc/secman/src/frontend/src/services/appSettingsService.ts` (lines 43-62, 76-95) -- Logs settings data
+- `/Users/flake/sources/misc/secman/src/frontend/src/components/Login.tsx` (lines 36-91) -- Extensive OAuth flow logging including provider details, URLs, and nonces
+- `/Users/flake/sources/misc/secman/src/frontend/src/components/McpApiKeyManagement.tsx` (line 131) -- Logs API key creation request body
+
+There are well over 80 `console.log/warn/error` statements across the frontend services and components. Many of these log sensitive operational data including:
+- Full API response objects
+- Authentication flow details
+- Hostnames and vulnerability data
+- API key creation parameters
+
+An attacker who achieves XSS could harvest this data from the console, or a compromised browser extension could read it. In corporate environments, console output may be aggregated by monitoring tools.
+
+**Recommended Fix:**
+1. Implement a centralized logger utility with log levels (DEBUG, INFO, WARN, ERROR).
+2. Strip all `console.log` calls in production builds (configure via Vite/Astro build settings).
+3. Remove sensitive data from log messages (e.g., don't log full response bodies, API key details, or OAuth flow parameters).
+
+---
+
+## FINDING 6: No Content Security Policy (CSP) Configured
+
+**Severity: MEDIUM**
+**CWE-1021 (Improper Restriction of Rendered UI Layers)**
+
+**File:** `/Users/flake/sources/misc/secman/src/frontend/astro.config.mjs` and `/Users/flake/sources/misc/secman/src/frontend/src/layouts/Layout.astro`
+
+There is no Content Security Policy configured anywhere in the application -- not in the Astro config, not as a `<meta>` tag, and not indicated to be set by the backend as a response header. The Layout page loads:
+- Bootstrap CSS from `cdn.jsdelivr.net` (line 47)
+- Bootstrap JS from `cdn.jsdelivr.net` (line 82)
+- Bootstrap Icons from `cdn.jsdelivr.net` (line 48)
+
+Without CSP, if an XSS vulnerability is introduced:
+- Inline scripts can execute freely
+- External scripts from any domain can be loaded
+- Data exfiltration via `fetch`/XHR to arbitrary domains is unrestricted
+
+**Recommended Fix:**
+Add a CSP header, at minimum:
+```
+Content-Security-Policy: default-src 'self'; script-src 'self' cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' cdn.jsdelivr.net; img-src 'self' data:; connect-src 'self'; font-src 'self' cdn.jsdelivr.net; frame-ancestors 'none';
+```
+This can be set either:
+- As a response header from the Astro Node adapter or backend reverse proxy
+- As a `<meta http-equiv="Content-Security-Policy">` tag in `Layout.astro`
+
+Consider eventually moving away from CDN-hosted Bootstrap to self-hosted copies to further restrict `script-src`.
+
+---
+
+## FINDING 7: Client-Side Role Checks Without Server Enforcement Guarantee
+
+**Severity: MEDIUM**
+**CWE-602 (Client-Side Enforcement of Server-Side Security)**
+
+**File:** `/Users/flake/sources/misc/secman/src/frontend/src/middleware.ts` (lines 26-38)
+
+```typescript
+// Decode JWT to check roles (without verification - the backend will verify)
+const payload = JSON.parse(
+    Buffer.from(authToken.split('.')[1], 'base64').toString('utf-8')
+);
+const roles = payload.roles || [];
+if (!roles.includes('ADMIN')) {
+    return redirect('/');
+}
+```
+
+The Astro middleware decodes the JWT payload without signature verification to check for the ADMIN role. While the comment states "the backend will verify," this approach has issues:
+- If the frontend serves cached/static content that contains sensitive admin data, a user who crafts a JWT with an ADMIN role claim (without a valid signature) could see admin UI elements before the backend rejects their API calls.
+- The `roles` path in the JWT payload is assumed but not validated.
+
+The mitigation here (comment on line 26-27) acknowledges the limitation, and the backend does enforce authorization. This is a defense-in-depth concern rather than a direct vulnerability.
+
+**Recommended Fix:**
+This is acceptable as a UX optimization if the backend consistently enforces RBAC on all admin API endpoints. Ensure:
+1. Every `/api/admin/*` and admin-specific endpoint has `@Secured(["ADMIN"])` server-side.
+2. No sensitive data is rendered server-side by the Astro middleware based on this unverified check.
+
+---
+
+## FINDING 8: OAuth Error Parameter Reflected in UI Without Sanitization
+
+**Severity: LOW**
+**CWE-79 (Reflected XSS -- Mitigated by React)**
+
+**File:** `/Users/flake/sources/misc/secman/src/frontend/src/components/Login.tsx` (lines 25-31)
+
+```typescript
+const params = new URLSearchParams(window.location.search);
+const errorParam = params.get('error');
+if (errorParam) {
+    setError(decodeURIComponent(errorParam));
+    window.history.replaceState({}, '', '/login');
+}
+```
+
+The `error` query parameter from the URL is read, decoded, and stored in React state, then rendered in the UI (line 217):
+```tsx
+<strong>Login failed:</strong> {error}
+```
+
+This is mitigated by React's automatic JSX escaping -- `{error}` in JSX is rendered as text, not HTML. However, this is still a reflected-parameter-to-UI pattern that deserves awareness. If the rendering mechanism ever changes (e.g., someone uses `dangerouslySetInnerHTML`), this becomes an XSS vector.
+
+**Recommended Fix:**
+The current implementation is safe due to React's escaping. For defense in depth, consider:
+1. Validating the error parameter against a whitelist of known error codes.
+2. Mapping error codes to predefined messages rather than displaying arbitrary user-controlled strings.
+
+---
+
+## FINDING 9: react-markdown Renders User-Controlled Content
+
+**Severity: LOW**
+**CWE-79 (Stored XSS -- Low risk with default config)**
+
+**File:** `/Users/flake/sources/misc/secman/src/frontend/src/components/RequirementManagement.tsx` (lines 662, 693)
+
+```tsx
+<ReactMarkdown>{formData.details}</ReactMarkdown>
+<ReactMarkdown>{formData.example}</ReactMarkdown>
+```
+
+`react-markdown` v10.x (from package.json) renders markdown content from requirement form data. By default, `react-markdown` does NOT render raw HTML -- it strips it. This is safe with default configuration. However:
+- If `rehype-raw` plugin is ever added, raw HTML in the markdown would be rendered, enabling stored XSS.
+- Markdown link syntax `[text](javascript:alert(1))` is handled safely by default `react-markdown`, which does not allow `javascript:` protocol URLs.
+
+**Recommended Fix:**
+This is currently safe. To maintain safety:
+1. Do NOT add `rehype-raw` plugin without also adding `rehype-sanitize`.
+2. Document this decision for future developers.
+
+---
+
+## FINDING 10: File Upload Validation is Client-Side Only
+
+**Severity: LOW (assuming server validates)**
+**CWE-434 (Unrestricted Upload of File with Dangerous Type)**
+
+**Multiple files:**
+- `/Users/flake/sources/misc/secman/src/frontend/src/components/Import.tsx` (line 51)
+- `/Users/flake/sources/misc/secman/src/frontend/src/components/RequirementFileUpload.tsx` (lines 69-76)
+- `/Users/flake/sources/misc/secman/src/frontend/src/components/ConfigBundleManager.tsx` (lines 121-128)
+
+File type and size validation happens only on the client side. The `accept` attribute on file inputs and JavaScript validation in handlers can be trivially bypassed with browser dev tools or direct API calls.
+
+According to `CLAUDE.md`, the backend enforces file validation ("Validate file <= 10MB, extension, content-type"), so this is a defense-in-depth concern rather than a vulnerability. The client-side validation serves UX purposes.
+
+**Recommended Fix:**
+Ensure all file upload endpoints on the backend validate:
+1. File size limits
+2. File extension whitelist
+3. MIME type / magic byte validation
+4. Filename sanitization (prevent path traversal in filenames)
+
+---
+
+## FINDING 11: Vite Dev Proxy with `secure: false`
+
+**Severity: LOW (development only)**
+
+**File:** `/Users/flake/sources/misc/secman/src/frontend/astro.config.mjs` (lines 30, 35)
+
+```javascript
+proxy: {
+    "/api": {
+        target: allowedDomain,
+        changeOrigin: true,
+        secure: false,
+    },
+```
+
+The `secure: false` setting disables TLS certificate verification for the proxy target. This is acceptable in development but should not leak into production configuration.
+
+**Recommended Fix:**
+This is Vite dev server configuration and only applies during `astro dev`. Verify it is not used in production. Consider adding a comment explicitly noting this is dev-only.
+
+---
+
+## Positive Security Observations
+
+The following are areas where the frontend security posture is notably good:
+
+1. **HttpOnly Cookie Authentication:** The migration from JWT-in-localStorage to HttpOnly cookies (`secman_auth`) is a strong defense against XSS-based token theft. The implementation is thorough and consistent across most of the codebase.
+
+2. **CSRF Protection:** The `csrf.ts` utility properly configures CSRF tokens via both meta tags and the `Csrf-Token` header on all Axios requests. The `withCredentials: true` global setting ensures cookies are sent.
+
+3. **No `dangerouslySetInnerHTML`:** No instances found across the entire codebase. React's JSX auto-escaping is relied upon consistently.
+
+4. **No `innerHTML` assignments:** No direct DOM manipulation with `innerHTML` was found. The one `innerText` assignment in `Sidebar.tsx` (line 606) uses a hardcoded CSS string constant, which is safe.
+
+5. **SSE Authentication via Cookie:** The `EventSource` for exception badge updates uses `withCredentials: true` (line 135 of `exceptionBadgeService.ts`), properly sending the HttpOnly cookie instead of passing JWT as a query parameter. This avoids token exposure in server logs and browser history.
+
+6. **URL Parameter Encoding:** User-controlled values in API URLs are consistently encoded with `encodeURIComponent()` (visible in `crowdstrikeService.ts`, `domainVulnsService.ts`, `productService.ts`, etc.).
+
+7. **SRI on CDN Resources:** Bootstrap CSS and JS loaded from CDN use `integrity` and `crossorigin` attributes in `Layout.astro` (lines 47, 82), protecting against CDN compromise.
+
+8. **No Open Redirect:** All `window.location.href` assignments redirect to hardcoded application paths (`/login`, `/`), not to user-controlled values.
+
+9. **Dependency Versions:** Core dependencies are reasonably current (React 19.2.4, Axios 1.13.6, Astro 5.18). The `overrides` section in `package.json` pins known-vulnerable transitive dependencies to safe versions.
+
+---
+
+## Summary of Recommendations by Priority
+
+| Priority | Finding | Action |
+|----------|---------|--------|
+| Immediate | F1: cookies.txt with JWT | Delete file, add to .gitignore, rotate signing key |
+| Immediate | F2: debug-login.js credentials | Delete or externalize credentials |
+| High | F3: ConfigBundleManager auth inconsistency | Refactor to use HttpOnly cookie auth |
+| Medium | F4: User data in OAuth URL params | Fetch from /api/auth/status instead |
+| Medium | F5: Excessive console logging | Add build-time stripping, centralized logger |
+| Medium | F6: Missing CSP | Configure Content-Security-Policy header |
+| Low | F7: Client-side JWT decode without verification | Document limitation, verify backend enforcement |
+| Low | F8: Reflected error parameter | Map to predefined messages |
+| Low | F9: react-markdown content | Document no-rehype-raw policy |
+| Low | F10: Client-only file validation | Verify backend enforcement |
+| Low | F11: Vite proxy secure:false | Add dev-only comment |</result>
+<usage><total_tokens>106267</total_tokens><tool_uses>71</tool_uses><duration_ms>238766</duration_ms></usage>
+</task-notification>
+Full transcript available at: /private/tmp/claude-501/-Users-flake-sources-misc-secman/tasks/aab50d9bced9dc45d.output
+
+---
+
+<task-notification>
+<task-id>a7906ce05bd2c323e</task-id>
+<tool-use-id>toolu_01TN9GRHFHZ1msteofvKhvBi</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-flake-sources-misc-secman/tasks/a7906ce05bd2c323e.output</output-file>
+<status>completed</status>
+<summary>Agent "Review backend injection & input validation" completed</summary>
+<result>Now I have a comprehensive view of the codebase. Let me compile the full security review report.
+
+---
+
+# Security Review: Injection Vulnerabilities and Input Validation
+
+## Scope
+
+All files in:
+- `src/backendng/src/main/kotlin/com/secman/service/`
+- `src/backendng/src/main/kotlin/com/secman/controller/`
+- `src/backendng/src/main/kotlin/com/secman/repository/`
+
+---
+
+## FINDING 1 -- Email Header Injection in EmailService.kt
+
+**Severity: MEDIUM**
+
+**File:** `/Users/flake/sources/misc/secman/src/backendng/src/main/kotlin/com/secman/service/EmailService.kt`
+**Lines:** 166-169 (also 536-539 in `sendEmailWithConfigEnhanced`)
+
+The `sendEmailWithConfig()` method sets the email subject without sanitizing CRLF characters:
+
+```kotlin
+val message = MimeMessage(session).apply {
+    setFrom(InternetAddress(config.fromEmail, config.fromName))
+    setRecipients(Message.RecipientType.TO, InternetAddress.parse(to))
+    setSubject(subject)
+```
+
+In contrast, `EmailSender.kt` (line 182) and `SesEmailService.kt` (line 59) both call `sanitizeEmailHeader()` to strip `\r\n` from the subject. This inconsistency means that if user-controlled data flows into a subject via `EmailService`, an attacker could inject additional email headers (CWE-93).
+
+**Recommended Fix:** Add the same `sanitizeEmailHeader()` call before `setSubject()`:
+
+```kotlin
+private fun sanitizeEmailHeader(value: String): String {
+    return value.replace(Regex("[\r\n]"), "")
+}
+
+// In sendEmailWithConfig:
+setSubject(sanitizeEmailHeader(subject))
+```
+
+Apply the same fix to `sendEmailWithConfigEnhanced()` at line 539.
+
+---
+
+## FINDING 2 -- Missing @Valid on UserController Request Bodies
+
+**Severity: MEDIUM**
+
+**File:** `/Users/flake/sources/misc/secman/src/backendng/src/main/kotlin/com/secman/controller/UserController.kt`
+**Lines:** 110, 204
+
+Both `create()` and `update()` accept `@Body` without `@Valid`:
+
+```kotlin
+open fun create(@Body request: CreateUserRequest, ...): HttpResponse<*>
+open fun update(@PathVariable id: Long, @Body request: UpdateUserRequest): HttpResponse<*>
+```
+
+The `CreateUserRequest` and `UpdateUserRequest` DTOs (lines 33-49) have zero Jakarta validation annotations -- no `@NotBlank`, no `@Size`, no `@Email`. This means:
+- Usernames and emails of arbitrary length can be submitted (CWE-20)
+- Email format is not validated server-side
+- Password length is uncapped (the manual `isBlank()` check at line 112 only catches empty strings, not excessively long ones)
+
+Compare with `AssetController.kt` which properly uses `@Valid @Body` with `@NotBlank @Size(max=255)` on its DTO fields.
+
+**Recommended Fix:**
+
+```kotlin
+@Serdeable
+data class CreateUserRequest(
+    @field:NotBlank @field:Size(max = 255) val username: String,
+    @field:NotBlank @field:Email @field:Size(max = 255) val email: String,
+    @field:NotBlank @field:Size(min = 8, max = 200) val password: String,
+    val roles: List<String>? = null,
+    val workgroupIds: List<Long>? = null,
+    val mfaEnabled: Boolean? = null
+)
+
+// And on the endpoint:
+open fun create(@Valid @Body request: CreateUserRequest, ...): HttpResponse<*>
+```
+
+---
+
+## FINDING 3 -- Missing @Valid on Multiple Controller Endpoints
+
+**Severity: MEDIUM**
+
+The following controllers accept `@Body` without `@Valid`, bypassing any Jakarta validation annotations that may exist on the DTO:
+
+| Controller | Method | Line |
+|---|---|---|
+| `RequirementController.kt` | `create()` | 170 |
+| `RequirementController.kt` | `update()` | 262 |
+| `ReleaseController.kt` | `createRelease()` | 37 |
+| `ReleaseController.kt` | `updateReleaseStatus()` | 158 |
+| `AlignmentController.kt` | `startAlignment()` | 59 |
+| `AlignmentController.kt` | `submitReviewDecision()` | 315 |
+| `AlignmentController.kt` | `finalizeAlignment()` | 409 |
+| `AlignmentController.kt` | `cancelAlignment()` | 467 |
+| `AlignmentController.kt` | `submitReview()` | 569 |
+| `IdentityProviderController.kt` | `createProvider()` | 243 |
+| `IdentityProviderController.kt` | `updateProvider()` | 322 |
+| `AwsAccountSharingController.kt` | `create()` | 55 |
+| `McpAdminController.kt` | `createApiKey()` | 43 |
+| `McpAdminController.kt` | `grantPermission()` | 384 |
+| `ConfigBundleController.kt` | `importBundleJson()` | 186 |
+
+Without `@Valid`, even if DTOs define constraints like `@NotBlank` or `@Size`, Micronaut will not enforce them. This enables oversized inputs, missing required fields, and other validation bypass scenarios (CWE-20).
+
+**Recommended Fix:** Add `@Valid` before every `@Body` parameter on mutation endpoints. Audit all DTOs to ensure they have appropriate field-level constraints.
+
+---
+
+## FINDING 4 -- Internal Exception Details Leaked to Clients
+
+**Severity: LOW**
+
+**Files:** Multiple controllers (see below)
+
+Numerous controllers return `e.message` directly in HTTP error responses. Exception messages can contain internal implementation details such as SQL error text, stack trace fragments, class names, or database schema information (CWE-209).
+
+Examples from `IdentityProviderController.kt`:
+```kotlin
+HttpResponse.serverError(ErrorResponse("Failed to fetch identity providers: ${e.message}"))          // line 197
+HttpResponse.serverError(ErrorResponse("Failed to fetch enabled identity providers: ${e.message}"))   // line 214
+HttpResponse.serverError(ErrorResponse("Failed to create identity provider: ${e.message}"))           // line 312
+```
+
+This pattern appears across at least 15 controllers including `ConfigBundleController.kt`, `TranslationConfigController.kt`, `RequirementFileController.kt`, `OAuthController.kt`, `PasskeyController.kt`, `EmailConfigController.kt`, `AssetController.kt`, `UseCaseController.kt`, `UserProfileController.kt`, and more.
+
+The `IdentityProviderController.getEnabledProviders()` endpoint (line 206) is particularly concerning since it is `@Secured(SecurityRule.IS_ANONYMOUS)` -- unauthenticated users could trigger errors and receive internal exception details.
+
+**Recommended Fix:** Return generic error messages to clients and log the full exception server-side:
+
+```kotlin
+} catch (e: Exception) {
+    logger.error("Error fetching enabled identity providers: {}", e.message, e)
+    HttpResponse.serverError(ErrorResponse("An internal error occurred. Please contact support."))
+}
+```
+
+---
+
+## FINDING 5 -- Log Injection via Kotlin String Interpolation
+
+**Severity: LOW**
+
+**File:** `/Users/flake/sources/misc/secman/src/backendng/src/main/kotlin/com/secman/service/UserMappingApplicationService.kt`
+**Lines:** 43, 54, 63-66, 70
+
+User-derived data (email, mapping fields) is logged using Kotlin string interpolation (`$variable`) instead of SLF4J parameterized logging (`{}`):
+
+```kotlin
+log.info("User created event received for email: $email (source: ${event.source})")
+log.info("Found ${pendingMappings.size} pending mapping(s) for user: $email")
+log.info("Applied pending mapping: email=$email, " +
+    "domain=${mapping.domain}, awsAccountId=${mapping.awsAccountId}, " +
+    "ipAddress=${mapping.ipAddress}")
+```
+
+While the `email` value comes from the database (not direct user input), the underlying issue is that Kotlin string interpolation bypasses SLF4J's parameterized logging. If an attacker controls the email field (e.g., via OIDC auto-provisioning), they could inject newlines or control characters into log output (CWE-117).
+
+This pattern also appears in:
+- `EmailProviderConfigService.kt` (lines 84, 117, 173, 191, 210, 224)
+- `OAuthService.kt` (lines 1035, 1052, 1056, 1088, 1091, 1096)
+- `ConfigBundleService.kt` (lines 54, 90-93, 101, 113, 120, 207, 222, and many more)
+
+**Recommended Fix:** Convert all log statements to use SLF4J parameterized format:
+
+```kotlin
+log.info("User created event received for email: {} (source: {})", email, event.source)
+log.info("Found {} pending mapping(s) for user: {}", pendingMappings.size, email)
+```
+
+---
+
+## FINDING 6 -- Dynamic ORDER BY in JPQL (Acceptable with Allowlist)
+
+**Severity: LOW (Informational)**
+
+**File:** `/Users/flake/sources/misc/secman/src/backendng/src/main/kotlin/com/secman/service/VulnerabilityService.kt`
+**Lines:** 302-326, 693-694, 738
+
+The sort column and direction are interpolated into JPQL at line 738:
+
+```kotlin
+jpqlBase.append(" ORDER BY $sortColumn $direction")
+```
+
+However, this is properly mitigated:
+- `sortColumn` is resolved from `SORT_FIELD_MAP` (line 693), a hardcoded allowlist mapping user input to safe JPQL expressions. Unknown keys default to `"v.importTimestamp"`.
+- `direction` is constrained to `"ASC"` or `"DESC"` via the ternary at line 694.
+
+The entry point at `getCurrentVulnerabilitiesOptimized()` (line 392) checks `SORT_FIELD_MAP.containsKey(sort)` before calling the custom sort method.
+
+**Assessment:** This is the correct pattern for dynamic ORDER BY in JPQL (JPA does not support parameter binding for ORDER BY clauses). No fix needed, but adding a code comment documenting the security rationale would be valuable.
+
+---
+
+## FINDING 7 -- McpController Logs Tool Name via String Interpolation
+
+**Severity: LOW**
+
+**File:** `/Users/flake/sources/misc/secman/src/backendng/src/main/kotlin/com/secman/controller/McpController.kt`
+**Line:** 458
+
+```kotlin
+logger.error("Tool call failed: ${request.params.name}", e)
+```
+
+The tool name comes from user input in the JSON-RPC request body. Using SLF4J parameterized logging would be safer:
+
+```kotlin
+logger.error("Tool call failed: {}", request.params.name, e)
+```
+
+Also at `McpController.kt` line 232:
+
+```kotlin
+logger.error("Session close failed for sessionId: $sessionId", e)
+```
+
+**Recommended Fix:** Use `{}` placeholders consistently.
+
+---
+
+## FINDING 8 -- OAuthController Exposes Exception Message to Anonymous Users
+
+**Severity: LOW**
+
+**File:** `/Users/flake/sources/misc/secman/src/backendng/src/main/kotlin/com/secman/controller/OAuthController.kt`
+**Line:** 101
+
+```kotlin
+HttpResponse.serverError(ErrorResponse("OAuth authorization failed: ${e.message}"))
+```
+
+This endpoint is `@Secured(SecurityRule.IS_ANONYMOUS)`, meaning unauthenticated users can trigger this path and receive internal exception details. The callback handler at line 213 correctly uses a generic error message ("An unexpected error occurred during login. Please try again."), but the authorize endpoint does not.
+
+**Recommended Fix:** Use a generic message for the external response.
+
+---
+
+## CLEAN AREAS (No Vulnerabilities Found)
+
+The following categories were thoroughly examined and found clean:
+
+**SQL Injection:** All EntityManager queries use proper parameter binding (`:paramName` with `setParameter()`). All Micronaut Data repository methods use derived queries or `@Query` with JPQL parameter binding. Native SQL queries in `VulnerabilityStatisticsService.kt`, `AccountVulnsService.kt`, and `WorkgroupVulnsService.kt` all use `query.setParameter()`.
+
+**Command Injection:** No usage of `Runtime.exec()` or `ProcessBuilder` found anywhere in the backend code.
+
+**Path Traversal:** `FileService.kt` implements comprehensive protections: filename validation (rejecting `..`, `/`, `\`, null bytes), path normalization with `startsWith(uploadDir)` checks, blocked extensions allowlist, allowed content types allowlist, and POSIX file permissions.
+
+**JPQL/HQL Injection beyond ORDER BY:** All WHERE clause filters use parameterized queries consistently. The dynamic query construction in `VulnerabilityService.kt` (lines 698-736) uses `:paramName` binding for all filter values.
+
+**InputValidationService:** A dedicated `InputValidationService.kt` exists with SQL injection, XSS, command injection, and path traversal pattern detection. It is used in `AuthController.kt` for login validation. However, it is not consistently applied across all controllers (see Finding 3 about missing `@Valid`).
+
+**SSRF Prevention in IdentityProviderController:** The `validateOAuthEndpointUrl()` method (lines 67-110) blocks cloud metadata endpoints (169.254.169.254, metadata.google.internal, etc.), private IP ranges (10.x, 192.168.x, 172.16-31.x), and localhost. It requires HTTPS for all OAuth endpoint URLs.
+
+**MCP Security:** Both `McpController.kt` and `McpStreamableHttpController.kt` enforce mandatory `X-MCP-User-Email` delegation headers, API key authentication, rate limiting, permission checks, and tool argument validation before execution.
+
+---
+
+## Summary by Severity
+
+| Severity | Count | Findings |
+|---|---|---|
+| CRITICAL | 0 | -- |
+| HIGH | 0 | -- |
+| MEDIUM | 3 | #1 (Email header injection), #2 (UserController missing @Valid), #3 (Multiple controllers missing @Valid) |
+| LOW | 5 | #4 (Exception details leaked), #5 (Log injection via string interpolation), #6 (Dynamic ORDER BY - informational), #7 (MCP log interpolation), #8 (OAuth error message to anonymous users) |
+
+The codebase demonstrates strong security practices overall: consistent use of parameterized queries, proper path traversal prevention, SSRF protection for OAuth endpoints, robust RBAC with `@Secured` annotations, and a dedicated input validation service. The primary areas for improvement are (a) ensuring `@Valid` is applied consistently across all controller endpoints accepting request bodies, (b) harmonizing email header sanitization across all email sending paths, and (c) avoiding leaking internal exception messages in HTTP responses.</result>
+<usage><total_tokens>85681</total_tokens><tool_uses>57</tool_uses><duration_ms>285911</duration_ms></usage>
+</task-notification>
+Full transcript available at: /private/tmp/claude-501/-Users-flake-sources-misc-secman/tasks/a7906ce05bd2c323e.output
+
+---
+
+implement findings HI-3, HI-5, HI-9, HI-10, ME-1, ME-2, ME-3, ME-4, ME-5, ME-7-HI-7, HI-1, HI-4, HI-8
+
+---
+
+<task-notification>
+<task-id>a060926f1a9848353</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-flake-sources-misc-secman/tasks/a060926f1a9848353.output</output-file>
+<status>completed</status>
+<summary>Agent "Fix HI-8: Create Asset DTO for responses" completed</summary>
+<result>The implementation is complete and compiles successfully. Here is a summary of what was done:
+
+## Changes Made
+
+**File modified:** `/Users/flake/sources/misc/secman/src/backendng/src/main/kotlin/com/secman/controller/AssetController.kt`
+
+### 1. Added `AssetResponse` DTO (inner class, lines 91-144)
+- Annotated with `@Serdeable` for Micronaut serialization
+- Includes only the fields needed by the frontend: `id`, `name`, `type`, `ip`, `owner`, `description`, `lastSeen`, `groups`, `criticality`, `cloudAccountId`, `adDomain`, `createdAt`, `workgroups`
+- Excludes sensitive/internal fields: `ipNumeric`, `cloudInstanceId`, `osVersion`, `updatedAt`, `vulnerabilities` collection, `scanResults`, `manualCreator` details, `scanUploader` details
+- Contains a nested `WorkgroupSummary` DTO (also `@Serdeable`) to expose only workgroup `id` and `name`
+- Has a `companion object { fun from(asset: Asset): AssetResponse }` factory method
+- Workgroup access is wrapped in try/catch to handle `LazyInitializationException` gracefully (returns `null` if workgroups are not loaded)
+
+### 2. Updated endpoints to return `AssetResponse`
+- **`list()`** - Return type changed from `HttpResponse<List<Asset>>` to `HttpResponse<List<AssetResponse>>`, with `.map { AssetResponse.from(it) }` applied
+- **`get()`** - Now returns `HttpResponse.ok(AssetResponse.from(asset))` instead of the raw entity
+- **`create()`** - Now returns `AssetResponse.from(savedAsset)` with `HttpStatus.CREATED`
+- **`update()`** - Now returns `AssetResponse.from(updatedAsset)`
+
+### 3. Other controllers checked
+No other controllers in the codebase return raw `Asset` JPA entities -- `AssetController` was the only one that needed updating.
+
+### Build verification
+Clean build (`kspKotlin + compileKotlin`) passes successfully with the changes.</result>
+<usage><total_tokens>79085</total_tokens><tool_uses>64</tool_uses><duration_ms>771338</duration_ms></usage>
+</task-notification>
+Full transcript available at: /private/tmp/claude-501/-Users-flake-sources-misc-secman/tasks/a060926f1a9848353.output
+
+---
+
+<task-notification>
+<task-id>a9274892045c70348</task-id>
+<tool-use-id>toolu_0176W8CqP8QXi82PWc9eCqVr</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-flake-sources-misc-secman/tasks/a9274892045c70348.output</output-file>
+<status>completed</status>
+<summary>Agent "Fix ME-7+HI-7: sanitize error msgs & headers" completed</summary>
+<result>You've hit your limit · resets 3pm (Europe/Berlin)</result>
+<usage><total_tokens>2122</total_tokens><tool_uses>178</tool_uses><duration_ms>909148</duration_ms></usage>
+</task-notification>
+Full transcript available at: /private/tmp/claude-501/-Users-flake-sources-misc-secman/tasks/a9274892045c70348.output
+
+---
+
+<task-notification>
+<task-id>a5c272494de45a3da</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-flake-sources-misc-secman/tasks/a5c272494de45a3da.output</output-file>
+<status>completed</status>
+<summary>Agent "Fix ME-3: Add @Valid to controllers" completed</summary>
+<result>You've hit your limit · resets 3pm (Europe/Berlin)</result>
+<usage><total_tokens>950</total_tokens><tool_uses>218</tool_uses><duration_ms>976012</duration_ms></usage>
+</task-notification>
+Full transcript available at: /private/tmp/claude-501/-Users-flake-sources-misc-secman/tasks/a5c272494de45a3da.output
