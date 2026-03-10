@@ -1,0 +1,5 @@
+search for similar bugs in the frontend and in case you find some, please propose a fix for all of them
+
+---
+
+please check the entire javascript / typescript code in the frontend for similar issues and fix where needed
