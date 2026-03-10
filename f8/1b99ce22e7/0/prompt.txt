@@ -1,0 +1,1 @@
+please have a look at the UI, there are vulnerabilities shown, which are less than 30 days open and already shown as overdue. I havent imported new Crowdstrike data here for ages, maybe something in the import is wrong, maybe only the UI calculation is wrong. Please propose a holistic fixing plan

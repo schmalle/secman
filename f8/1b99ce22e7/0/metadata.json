@@ -1,0 +1,38 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "f81b99ce22e7",
+  "session_id": "06493878-82cf-4a86-8667-f14028ebe3e7",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-10T11:13:24.528652Z",
+  "branch": "main",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "src/backendng/src/main/kotlin/com/secman/controller/VulnerabilityExceptionRequestController.kt",
+    "src/backendng/src/main/kotlin/com/secman/domain/VulnerabilityExceptionRequest.kt",
+    "src/backendng/src/main/kotlin/com/secman/repository/VulnerabilityExceptionRequestRepository.kt",
+    "src/backendng/src/main/kotlin/com/secman/scheduler/ExceptionExpirationScheduler.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/ExceptionRequestStatisticsService.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/VulnerabilityExceptionRequestService.kt",
+    "src/frontend/src/components/ExceptionRequestDetailModal.tsx",
+    "src/frontend/src/components/MyExceptionRequests.tsx",
+    "src/frontend/src/services/exceptionRequestService.ts"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "54eefb25404e",
+  "token_usage": {
+    "input_tokens": 23,
+    "cache_creation_tokens": 56633,
+    "cache_read_tokens": 630927,
+    "output_tokens": 12806,
+    "api_call_count": 15
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-10T11:13:24.265579Z",
+    "agent_lines": 478,
+    "human_added": 11,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 489,
+    "agent_percentage": 97.75051124744377
+  }
+}
