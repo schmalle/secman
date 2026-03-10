@@ -1,0 +1,5 @@
+implement a function that individual exception requests can be deleted from the users and granted corresponging exceptions will also be deleted
+
+---
+
+please fix this bug
