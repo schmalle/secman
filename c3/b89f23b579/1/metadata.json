@@ -1,7 +1,9 @@
 {
   "cli_version": "0.5.0",
   "checkpoint_id": "c3b89f23b579",
+  "session_id": "2654c4fd-e11f-44b3-a96f-3c127db8fb94",
   "strategy": "manual-commit",
+  "created_at": "2026-03-10T17:23:01.470772Z",
   "branch": "main",
   "checkpoints_count": 1,
   "files_touched": [
@@ -33,25 +35,25 @@
     "src/frontend/src/services/productService.ts",
     "src/frontend/src/services/vulnerabilityManagementService.ts"
   ],
-  "sessions": [
-    {
-      "metadata": "/c3/b89f23b579/0/metadata.json",
-      "transcript": "/c3/b89f23b579/0/full.jsonl",
-      "content_hash": "/c3/b89f23b579/0/content_hash.txt",
-      "prompt": "/c3/b89f23b579/0/prompt.txt"
-    },
-    {
-      "metadata": "/c3/b89f23b579/1/metadata.json",
-      "transcript": "/c3/b89f23b579/1/full.jsonl",
-      "content_hash": "/c3/b89f23b579/1/content_hash.txt",
-      "prompt": ""
-    }
-  ],
+  "agent": "Claude Code",
+  "turn_id": "d5a453ac88c0",
   "token_usage": {
-    "input_tokens": 21,
-    "cache_creation_tokens": 37475,
-    "cache_read_tokens": 311258,
-    "output_tokens": 4177,
-    "api_call_count": 13
+    "input_tokens": 10,
+    "cache_creation_tokens": 19204,
+    "cache_read_tokens": 193229,
+    "output_tokens": 3033,
+    "api_call_count": 8
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-10T17:23:01.426737Z",
+    "agent_lines": 622,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 622,
+    "agent_percentage": 100
   }
 }
