@@ -1,6 +1,5 @@
 package com.secman.controller
 
-import com.secman.domain.Vulnerability
 import com.secman.dto.OutdatedAssetDto
 import com.secman.service.OutdatedAssetService
 import io.micronaut.data.model.Page
@@ -70,7 +69,7 @@ class OutdatedAssetController(
         @QueryValue(defaultValue = "") minSeverity: String?,
         @QueryValue(defaultValue = "") adDomain: String?,
         pageable: Pageable
-    ): HttpResponse<Page<OutdatedAssetDto>> {
+    ): HttpResponse<Map<String, Any>> {
         // Validate user has required role
         val hasRequiredRole = authentication.roles.any { it == "ADMIN" || it == "VULN" }
         if (!hasRequiredRole) {
@@ -89,7 +88,13 @@ class OutdatedAssetController(
         // Map to DTOs
         val dtoPage = page.map { OutdatedAssetDto.from(it) }
 
-        return HttpResponse.ok(dtoPage)
+        return HttpResponse.ok(mapOf(
+            "content" to dtoPage.content,
+            "totalElements" to dtoPage.totalSize,
+            "totalPages" to dtoPage.totalPages,
+            "size" to dtoPage.size,
+            "number" to dtoPage.pageNumber
+        ))
     }
 
     /**
@@ -286,7 +291,7 @@ class OutdatedAssetController(
         id: Long,
         authentication: Authentication,
         pageable: Pageable
-    ): HttpResponse<Page<Vulnerability>> {
+    ): HttpResponse<Map<String, Any>> {
         // Validate user has required role
         val hasRequiredRole = authentication.roles.any { it == "ADMIN" || it == "VULN" }
         if (!hasRequiredRole) {
@@ -303,6 +308,12 @@ class OutdatedAssetController(
             pageable
         )
 
-        return HttpResponse.ok(vulnerabilities)
+        return HttpResponse.ok(mapOf(
+            "content" to vulnerabilities.content,
+            "totalElements" to vulnerabilities.totalSize,
+            "totalPages" to vulnerabilities.totalPages,
+            "size" to vulnerabilities.size,
+            "number" to vulnerabilities.pageNumber
+        ))
     }
 }

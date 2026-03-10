@@ -295,6 +295,7 @@ open class CrowdStrikeQueryService(
 
         return CrowdStrikeQueryResponse(
             hostname = asset.name,
+            instanceId = asset.cloudInstanceId,
             cloudAccountId = asset.cloudAccountId,
             vulnerabilities = vulns.content.map { v ->
                 val matchingException = activeExceptions.find { it.matches(v, asset) }

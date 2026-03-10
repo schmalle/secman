@@ -871,7 +871,7 @@ const AssetManagement: React.FC = () => {
                                 className="btn btn-sm btn-outline-danger"
                                 title="Show vulnerabilities in CrowdStrike"
                               >
-                                <i className="bi bi-shield-exclamation"></i> Vulnerabilities
+                                <i className="bi bi-shield-exclamation"></i> Vulns
                               </a>
                               {/* Delete button only visible to ADMIN users (Feature 033) */}
                               {isAdmin(getUser()?.roles) && (
