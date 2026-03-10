@@ -1,0 +1,36 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "c3b89f23b579",
+  "session_id": "c68a4b90-e4be-4867-93e2-495979b49f36",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-10T17:23:06.342162Z",
+  "branch": "main",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "src/backendng/src/main/kotlin/com/secman/controller/AssetController.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/VulnerabilityService.kt",
+    "src/frontend/src/components/CrowdStrikeVulnerabilityLookup.tsx",
+    "src/frontend/src/components/CurrentVulnerabilitiesTable.tsx"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "65e92c2a27f1",
+  "token_usage": {
+    "input_tokens": 71,
+    "cache_creation_tokens": 151673,
+    "cache_read_tokens": 3672143,
+    "output_tokens": 24680,
+    "api_call_count": 53
+  },
+  "session_metrics": {
+    "turn_count": 6
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-10T17:23:05.615889Z",
+    "agent_lines": 314,
+    "human_added": 309,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 623,
+    "agent_percentage": 50.40128410914928
+  }
+}

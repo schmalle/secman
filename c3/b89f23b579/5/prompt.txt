@@ -1,0 +1,13 @@
+search for similar bugs in the frontend and in case you find some, please propose a fix for all of them
+
+---
+
+please check the entire javascript / typescript code in the frontend for similar issues and fix where needed
+
+---
+
+please also support here the Edit details function for the asset
+
+---
+
+the authentication in production is failing, please analyze the error and propose a fix, configchange etc
