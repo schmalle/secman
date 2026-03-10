@@ -1,0 +1,1 @@
+i have a complex change. The UI must be also availble for all users with AWS mapped accounts, but i must only show the sharing from the current users to other users. Meaning as user X i am not allowed, what the user Y shared to others and if others shared their accounts to Y. The UI must consequently be also reachable from below "Vulnerability Management" on the sidebar.
