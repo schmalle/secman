@@ -1,0 +1,18 @@
+if an instance id from AWS is available, also show this in the UI
+
+---
+
+add the instance id here too
+
+---
+
+please review all DTOs and fix this bug " Backend had a gap: The AssetResponse DTO (used by GET /api/assets) included cloudAccountId but not cloudInstanceId, even though both exist on the Asset entity. This is a common pattern in evolving codebases — fields get added to the entity
+  but the DTO isn't always updated to expose all of them." if existing
+
+---
+
+please remove Owner / Workgroups from the table columns
+
+---
+
+save to database button must only be visible for admins
