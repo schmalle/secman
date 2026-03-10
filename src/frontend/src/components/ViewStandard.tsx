@@ -129,7 +129,7 @@ const ViewStandard: React.FC<ViewStandardProps> = ({ standardId }) => {
                 aria-controls={`collapse${index}`}
               >
                 <strong>{chapter.name}</strong>
-                <span className="badge bg-secondary ms-2">{chapter.requirements.length} requirements</span>
+                <span className="badge bg-secondary ms-2">{(chapter.requirements ?? []).length} requirements</span>
               </button>
             </h2>
             <div

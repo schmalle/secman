@@ -188,8 +188,8 @@ const MoveWorkgroupModal: React.FC<MoveWorkgroupModalProps> = ({
                     <strong>Moving:</strong> {workgroup.name}
                     <br />
                     <small className="text-muted">
-                      Current location: {workgroup.ancestors.length > 0
-                        ? workgroup.ancestors.map(a => a.name).join(' > ') + ' > ' + workgroup.name
+                      Current location: {(workgroup.ancestors ?? []).length > 0
+                        ? workgroup.ancestors!.map(a => a.name).join(' > ') + ' > ' + workgroup.name
                         : 'Root level'}
                     </small>
                     <br />

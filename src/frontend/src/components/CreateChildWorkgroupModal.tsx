@@ -140,10 +140,10 @@ const CreateChildWorkgroupModal: React.FC<CreateChildWorkgroupModalProps> = ({
                         </span>
                       )}
                     </small>
-                    {parentWorkgroup.ancestors.length > 0 && (
+                    {(parentWorkgroup.ancestors ?? []).length > 0 && (
                       <div className="mt-2">
                         <small className="text-muted">
-                          Path: {`${parentWorkgroup.ancestors.map(a => a.name).join(' > ')} > ${parentWorkgroup.name}`}
+                          Path: {`${parentWorkgroup.ancestors!.map(a => a.name).join(' > ')} > ${parentWorkgroup.name}`}
                         </small>
                       </div>
                     )}
