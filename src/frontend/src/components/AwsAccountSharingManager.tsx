@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { authenticatedGet } from '../utils/auth';
+import { authenticatedGet, getUser, isAdmin as checkIsAdmin } from '../utils/auth';
 import {
     listSharingRules,
     createSharingRule,
@@ -20,6 +20,8 @@ const AwsAccountSharingManager: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
+    const [isAdmin, setIsAdmin] = useState(false);
+    const [currentUser, setCurrentUser] = useState<User | null>(null);
 
     // Pagination
     const [page, setPage] = useState(0);
@@ -35,6 +37,13 @@ const AwsAccountSharingManager: React.FC = () => {
 
     // Delete confirmation
     const [deletingId, setDeletingId] = useState<number | null>(null);
+
+    useEffect(() => {
+        const admin = checkIsAdmin();
+        setIsAdmin(admin);
+        const user = getUser();
+        setCurrentUser(user);
+    }, []);
 
     const showSuccess = (msg: string) => {
         setSuccessMessage(msg);
@@ -62,7 +71,9 @@ const AwsAccountSharingManager: React.FC = () => {
 
     const fetchUsers = useCallback(async () => {
         try {
-            const response = await authenticatedGet('/api/users');
+            // Admins use the full user list; non-admins use the lightweight sharing endpoint
+            const url = checkIsAdmin() ? '/api/users' : '/api/aws-account-sharing/users';
+            const response = await authenticatedGet(url);
             if (response.ok) {
                 const data = await response.json();
                 setUsers(data);
@@ -79,11 +90,13 @@ const AwsAccountSharingManager: React.FC = () => {
 
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (sourceUserId === '' || targetUserId === '') {
-            showError('Please select both source and target users');
+
+        const effectiveSourceUserId = isAdmin ? sourceUserId : currentUser?.id;
+        if (!effectiveSourceUserId || targetUserId === '') {
+            showError(isAdmin ? 'Please select both source and target users' : 'Please select a target user');
             return;
         }
-        if (sourceUserId === targetUserId) {
+        if (effectiveSourceUserId === targetUserId) {
             showError('Source and target user cannot be the same');
             return;
         }
@@ -91,11 +104,11 @@ const AwsAccountSharingManager: React.FC = () => {
         setIsCreating(true);
         try {
             const result = await createSharingRule({
-                sourceUserId: sourceUserId as number,
+                sourceUserId: effectiveSourceUserId as number,
                 targetUserId: targetUserId as number,
             });
             showSuccess(
-                `Sharing rule created: ${result.sourceUserEmail} -> ${result.targetUserEmail} (${result.sharedAwsAccountCount} accounts)`
+                `Sharing rule created: ${result.sourceUserEmail} → ${result.targetUserEmail} (${result.sharedAwsAccountCount} accounts)`
             );
             setShowCreateForm(false);
             setSourceUserId('');
@@ -144,8 +157,13 @@ const AwsAccountSharingManager: React.FC = () => {
             </div>
 
             <p className="text-muted mb-3">
-                Share AWS account visibility between users. When User A's accounts are shared with User B,
-                User B can see all assets belonging to User A's AWS accounts. Sharing is directional and non-transitive.
+                {isAdmin ? (
+                    <>Share AWS account visibility between users. When User A's accounts are shared with User B,
+                    User B can see all assets belonging to User A's AWS accounts. Sharing is directional and non-transitive.</>
+                ) : (
+                    <>Share your AWS account visibility with other users. When you share your accounts with another user,
+                    they can see all assets belonging to your AWS accounts. Sharing is directional and non-transitive.</>
+                )}
             </p>
 
             {/* Alerts */}
@@ -169,25 +187,41 @@ const AwsAccountSharingManager: React.FC = () => {
                         <h5 className="card-title">Create Sharing Rule</h5>
                         <form onSubmit={handleCreate}>
                             <div className="row g-3">
-                                <div className="col-md-5">
-                                    <label htmlFor="sourceUser" className="form-label">
-                                        Source User (shares their AWS accounts)
-                                    </label>
-                                    <select
-                                        id="sourceUser"
-                                        className="form-select"
-                                        value={sourceUserId}
-                                        onChange={(e) => setSourceUserId(e.target.value ? Number(e.target.value) : '')}
-                                        required
-                                    >
-                                        <option value="">-- Select source user --</option>
-                                        {users.map((user) => (
-                                            <option key={user.id} value={user.id}>
-                                                {user.username} ({user.email})
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
+                                {isAdmin ? (
+                                    /* Admin: full source user selector */
+                                    <div className="col-md-5">
+                                        <label htmlFor="sourceUser" className="form-label">
+                                            Source User (shares their AWS accounts)
+                                        </label>
+                                        <select
+                                            id="sourceUser"
+                                            className="form-select"
+                                            value={sourceUserId}
+                                            onChange={(e) => setSourceUserId(e.target.value ? Number(e.target.value) : '')}
+                                            required
+                                        >
+                                            <option value="">-- Select source user --</option>
+                                            {users.map((user) => (
+                                                <option key={user.id} value={user.id}>
+                                                    {user.username} ({user.email})
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                ) : (
+                                    /* Non-admin: source is fixed to current user */
+                                    <div className="col-md-5">
+                                        <label className="form-label">
+                                            Source User (you)
+                                        </label>
+                                        <input
+                                            type="text"
+                                            className="form-control"
+                                            value={currentUser ? `${currentUser.username} (${currentUser.email})` : ''}
+                                            disabled
+                                        />
+                                    </div>
+                                )}
                                 <div className="col-md-1 d-flex align-items-end justify-content-center pb-2">
                                     <i className="bi bi-arrow-right fs-4"></i>
                                 </div>
@@ -203,7 +237,7 @@ const AwsAccountSharingManager: React.FC = () => {
                                         required
                                     >
                                         <option value="">-- Select target user --</option>
-                                        {users.map((user) => (
+                                        {users.filter(u => u.id !== currentUser?.id).map((user) => (
                                             <option key={user.id} value={user.id}>
                                                 {user.username} ({user.email})
                                             </option>
@@ -239,7 +273,9 @@ const AwsAccountSharingManager: React.FC = () => {
                 </div>
             ) : sharingRules.length === 0 ? (
                 <div className="alert alert-info">
-                    No AWS account sharing rules configured. Click "Create Sharing Rule" to add one.
+                    {isAdmin
+                        ? 'No AWS account sharing rules configured. Click "Create Sharing Rule" to add one.'
+                        : 'You have not shared your AWS accounts with anyone yet. Click "Create Sharing Rule" to share.'}
                 </div>
             ) : (
                 <>
@@ -247,7 +283,7 @@ const AwsAccountSharingManager: React.FC = () => {
                         <table className="table table-striped table-hover">
                             <thead className="table-dark">
                                 <tr>
-                                    <th>Source User</th>
+                                    {isAdmin && <th>Source User</th>}
                                     <th>Target User</th>
                                     <th>Shared Accounts</th>
                                     <th>Created By</th>
@@ -258,11 +294,13 @@ const AwsAccountSharingManager: React.FC = () => {
                             <tbody>
                                 {sharingRules.map((rule) => (
                                     <tr key={rule.id}>
-                                        <td>
-                                            <strong>{rule.sourceUserUsername}</strong>
-                                            <br />
-                                            <small className="text-muted">{rule.sourceUserEmail}</small>
-                                        </td>
+                                        {isAdmin && (
+                                            <td>
+                                                <strong>{rule.sourceUserUsername}</strong>
+                                                <br />
+                                                <small className="text-muted">{rule.sourceUserEmail}</small>
+                                            </td>
+                                        )}
                                         <td>
                                             <strong>{rule.targetUserUsername}</strong>
                                             <br />

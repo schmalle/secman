@@ -828,6 +828,9 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                             IP
                             <SortIcon field="assetIp" />
                           </th>
+                          <th>
+                            Instance ID
+                          </th>
                           <th
                             onClick={() => handleSort("vulnerabilityId")}
                             style={{ cursor: "pointer" }}
@@ -881,6 +884,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                               </a>
                             </td>
                             <td>{vuln.assetIp || "-"}</td>
+                            <td>{vuln.cloudInstanceId || "-"}</td>
                             <td>
                               <CveLink cveId={vuln.vulnerabilityId} />
                             </td>

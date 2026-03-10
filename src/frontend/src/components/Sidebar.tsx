@@ -313,6 +313,14 @@ const Sidebar = () => {
                                         <i className="bi bi-clipboard-check me-2"></i> My Exception Requests
                                     </a>
                                 </li>
+                                {!isAdmin && awsAccountCount > 0 && (
+                                    <li>
+                                        <a href="/aws-account-sharing" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary"
+                                            title="Manage sharing of your AWS accounts with other users">
+                                            <i className="bi bi-share-fill me-2"></i> AWS Sharing
+                                        </a>
+                                    </li>
+                                )}
                                 {(userRoles.includes('ADMIN') || userRoles.includes('SECCHAMPION')) && (
                                     <li>
                                         <a href="/exception-approvals" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">

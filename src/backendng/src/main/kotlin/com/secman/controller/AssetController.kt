@@ -105,6 +105,7 @@ open class AssetController(
         val groups: String?,
         val criticality: Criticality?,
         val cloudAccountId: String?,
+        val cloudInstanceId: String?,
         val adDomain: String?,
         val createdAt: String?,
         val workgroups: List<WorkgroupSummary>? = null
@@ -135,6 +136,7 @@ open class AssetController(
                     groups = asset.groups,
                     criticality = asset.criticality,
                     cloudAccountId = asset.cloudAccountId,
+                    cloudInstanceId = asset.cloudInstanceId,
                     adDomain = asset.adDomain,
                     createdAt = asset.createdAt?.toString(),
                     workgroups = workgroupSummaries
@@ -215,6 +217,34 @@ open class AssetController(
             HttpResponse.ok(AssetResponse.from(asset))
         } catch (e: Exception) {
             log.error("Error fetching asset with id: {}", id, e)
+            HttpResponse.serverError<Any>()
+        }
+    }
+
+    /**
+     * Get asset by name with access control
+     * Used by CrowdStrike Vulnerability Lookup to load asset details for editing.
+     */
+    @Get("/by-name/{name}")
+    @Transactional(readOnly = true)
+    open fun getByName(name: String, authentication: Authentication): HttpResponse<*> {
+        return try {
+            log.debug("Fetching asset by name: {} for user: {}", name, authentication.name)
+
+            val asset = assetRepository.findByNameIgnoreCase(name)
+
+            if (asset == null) {
+                return HttpResponse.notFound(ErrorResponse("Asset not found"))
+            }
+
+            if (!assetFilterService.canAccessAsset(asset.id!!, authentication)) {
+                log.warn("User {} denied access to asset {}", authentication.name, name)
+                return HttpResponse.notFound(ErrorResponse("Asset not found"))
+            }
+
+            HttpResponse.ok(AssetResponse.from(asset))
+        } catch (e: Exception) {
+            log.error("Error fetching asset by name: {}", name, e)
             HttpResponse.serverError<Any>()
         }
     }

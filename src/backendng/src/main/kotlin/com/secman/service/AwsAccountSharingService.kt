@@ -33,6 +33,19 @@ open class AwsAccountSharingService(
      */
     fun listSharingRules(page: Int, size: Int): Map<String, Any> {
         val allRules = awsAccountSharingRepository.findAllWithUsers()
+        return paginateRules(allRules, page, size)
+    }
+
+    /**
+     * List sharing rules where the given user is the source (outgoing shares only).
+     * Used for non-admin users who can only manage their own sharing rules.
+     */
+    fun listSharingRulesForSourceUser(sourceUserId: Long, page: Int, size: Int): Map<String, Any> {
+        val allRules = awsAccountSharingRepository.findAllWithUsersBySourceUserId(sourceUserId)
+        return paginateRules(allRules, page, size)
+    }
+
+    private fun paginateRules(allRules: List<AwsAccountSharing>, page: Int, size: Int): Map<String, Any> {
         val totalElements = allRules.size.toLong()
         val totalPages = if (totalElements == 0L) 0 else ((totalElements + size - 1) / size).toInt()
 
@@ -110,6 +123,15 @@ open class AwsAccountSharingService(
         log.info("AUDIT: AWS account sharing deleted: id={}, source={}, target={}",
             sharingId, sharing.sourceUser.email, sharing.targetUser.email)
         return true
+    }
+
+    /**
+     * Check if a sharing rule is owned by (source user of) the given user.
+     * Used for authorization: non-admin users can only delete their own rules.
+     */
+    fun isOwnedByUser(sharingId: Long, userId: Long): Boolean {
+        val sharing = awsAccountSharingRepository.findById(sharingId).orElse(null) ?: return false
+        return sharing.sourceUser.id == userId
     }
 
     /**

@@ -50,7 +50,7 @@ export async function listSharingRules(
 
     if (!response.ok) {
         if (response.status === 401) throw new Error('Authentication required');
-        if (response.status === 403) throw new Error('Insufficient permissions (ADMIN role required)');
+        if (response.status === 403) throw new Error('Insufficient permissions');
         throw new Error(`Failed to list sharing rules: ${response.status}`);
     }
 
@@ -69,7 +69,7 @@ export async function createSharingRule(
         const errorData = await response.json().catch(() => ({ message: 'Failed to create sharing rule' }));
         if (response.status === 400) throw new Error(errorData.message || 'Invalid request');
         if (response.status === 401) throw new Error('Authentication required');
-        if (response.status === 403) throw new Error('Insufficient permissions (ADMIN role required)');
+        if (response.status === 403) throw new Error('Insufficient permissions');
         if (response.status === 404) throw new Error(errorData.message || 'User not found');
         throw new Error(errorData.message || `Failed to create sharing rule: ${response.status}`);
     }
@@ -85,7 +85,7 @@ export async function deleteSharingRule(id: number): Promise<void> {
 
     if (!response.ok) {
         if (response.status === 401) throw new Error('Authentication required');
-        if (response.status === 403) throw new Error('Insufficient permissions (ADMIN role required)');
+        if (response.status === 403) throw new Error('Insufficient permissions');
         if (response.status === 404) throw new Error('Sharing rule not found');
         throw new Error(`Failed to delete sharing rule: ${response.status}`);
     }

@@ -107,6 +107,7 @@ export default function MostCommonVulnerabilities({ domain, awsHosted }: MostCom
       sheet.columns = [
         { header: 'System Name', key: 'name', width: 30 },
         { header: 'IP Address', key: 'ip', width: 18 },
+        { header: 'Instance ID', key: 'instanceId', width: 22 },
         { header: 'Domain', key: 'domain', width: 20 },
         { header: 'Type', key: 'type', width: 15 },
       ];
@@ -115,6 +116,7 @@ export default function MostCommonVulnerabilities({ domain, awsHosted }: MostCom
         sheet.addRow({
           name: asset.assetName,
           ip: asset.assetIp || '-',
+          instanceId: asset.cloudInstanceId || '-',
           domain: asset.adDomain || '-',
           type: asset.assetType || '-',
         });
@@ -317,6 +319,7 @@ export default function MostCommonVulnerabilities({ domain, awsHosted }: MostCom
                             <tr>
                               <th>System Name</th>
                               <th>IP Address</th>
+                              <th>Instance ID</th>
                               <th>Domain</th>
                               <th>Type</th>
                             </tr>
@@ -330,6 +333,7 @@ export default function MostCommonVulnerabilities({ domain, awsHosted }: MostCom
                                   </a>
                                 </td>
                                 <td>{asset.assetIp || '-'}</td>
+                                <td>{asset.cloudInstanceId || '-'}</td>
                                 <td>{asset.adDomain || '-'}</td>
                                 <td>{asset.assetType || '-'}</td>
                               </tr>

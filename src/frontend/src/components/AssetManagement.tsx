@@ -824,9 +824,9 @@ const AssetManagement: React.FC = () => {
                       <tr>
                         <th>Name</th>
                         <th>IP Address</th>
+                        <th>Instance ID</th>
+                        <th>Account ID</th>
                         <th>AD Domain</th>
-                        <th>Owner</th>
-                        <th>Workgroups</th>
                         <th>Actions</th>
                       </tr>
                     </thead>
@@ -835,6 +835,8 @@ const AssetManagement: React.FC = () => {
                         <tr key={asset.id}>
                           <td>{asset.name}</td>
                           <td>{asset.ip || '-'}</td>
+                          <td>{asset.cloudInstanceId || '-'}</td>
+                          <td>{asset.cloudAccountId || '-'}</td>
                           <td>
                             {asset.adDomain ? (
                               <span className="badge bg-secondary" title="Active Directory Domain">
@@ -842,18 +844,6 @@ const AssetManagement: React.FC = () => {
                               </span>
                             ) : (
                               <span className="text-muted">-</span>
-                            )}
-                          </td>
-                          <td>{asset.owner}</td>
-                          <td>
-                            {asset.workgroups && asset.workgroups.length > 0 ? (
-                              <div>
-                                {asset.workgroups.map(wg => (
-                                  <span key={wg.id} className="badge bg-info me-1">{wg.name}</span>
-                                ))}
-                              </div>
-                            ) : (
-                              <span className="text-muted">None</span>
                             )}
                           </td>
                           <td>

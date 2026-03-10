@@ -25,7 +25,8 @@ data class ProductSystemDto(
     val name: String,                // Asset name
     val ip: String?,                 // IP address (nullable)
     val adDomain: String?,           // AD domain (nullable)
-    val cloudAccountId: String?      // AWS Account ID (nullable)
+    val cloudAccountId: String?,     // AWS Account ID (nullable)
+    val cloudInstanceId: String?     // AWS Instance ID (nullable)
 )
 
 /**

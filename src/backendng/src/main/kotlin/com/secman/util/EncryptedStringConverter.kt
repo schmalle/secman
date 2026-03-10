@@ -2,6 +2,7 @@ package com.secman.util
 
 import jakarta.persistence.AttributeConverter
 import jakarta.persistence.Converter
+import org.slf4j.LoggerFactory
 import org.springframework.security.crypto.encrypt.Encryptors
 import org.springframework.security.crypto.encrypt.TextEncryptor
 import java.security.SecureRandom
@@ -11,6 +12,8 @@ import java.util.*
 class EncryptedStringConverter : AttributeConverter<String?, String?> {
 
     companion object {
+        private val log = LoggerFactory.getLogger(EncryptedStringConverter::class.java)
+
         private const val ENCRYPTION_PASSWORD_PROPERTY = "secman.encryption.password"
         private const val ENCRYPTION_SALT_PROPERTY = "secman.encryption.salt"
 
@@ -21,13 +24,30 @@ class EncryptedStringConverter : AttributeConverter<String?, String?> {
         private val textEncryptor: TextEncryptor by lazy {
             val password = System.getProperty(ENCRYPTION_PASSWORD_PROPERTY)
                 ?: System.getenv("SECMAN_ENCRYPTION_PASSWORD")
-                ?: DEFAULT_PASSWORD
-
             val salt = System.getProperty(ENCRYPTION_SALT_PROPERTY)
                 ?: System.getenv("SECMAN_ENCRYPTION_SALT")
-                ?: DEFAULT_SALT
 
-            Encryptors.text(password, salt)
+            val usingDefaultPassword = password == null
+            val usingDefaultSalt = salt == null
+            val isProduction = System.getenv("MICRONAUT_ENVIRONMENTS")
+                ?.split(",")?.any { it.trim().equals("prod", ignoreCase = true) } == true
+
+            if (usingDefaultPassword || usingDefaultSalt) {
+                if (isProduction) {
+                    throw IllegalStateException(
+                        "CRITICAL: Encryption secrets not configured for production! " +
+                        "Set SECMAN_ENCRYPTION_PASSWORD and SECMAN_ENCRYPTION_SALT environment variables. " +
+                        "Use EncryptedStringConverter.generatePassword() and generateSalt() to create secure values."
+                    )
+                }
+                log.warn("##########################################################################")
+                log.warn("# SECURITY WARNING: Using default encryption secrets!                    #")
+                log.warn("# Set SECMAN_ENCRYPTION_PASSWORD and SECMAN_ENCRYPTION_SALT env vars     #")
+                log.warn("# for production deployments. Default secrets are PUBLIC and INSECURE.    #")
+                log.warn("##########################################################################")
+            }
+
+            Encryptors.text(password ?: DEFAULT_PASSWORD, salt ?: DEFAULT_SALT)
         }
 
         /**

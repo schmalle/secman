@@ -14,6 +14,7 @@ data class AffectedAssetDto(
     val assetName: String,
     val assetIp: String?,
     val adDomain: String?,
+    val cloudInstanceId: String?,
     val assetType: String?
 )
 
@@ -42,6 +43,7 @@ data class AssetWithProductDto(
     val assetName: String,
     val assetIp: String?,
     val adDomain: String?,
+    val cloudInstanceId: String?,
     val assetType: String?,
     val vulnerabilityCount: Long
 )

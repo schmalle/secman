@@ -12,7 +12,7 @@ import io.micronaut.management.endpoint.annotation.Read
  * - SC-001: Query memory <50MB above baseline
  * - SC-002: Export memory <100MB above baseline
  *
- * Access: Anonymous (management endpoint)
+ * Access: Authenticated (management endpoint, sensitive: true)
  * Path: GET /memory
  */
 @Endpoint(id = "memory")

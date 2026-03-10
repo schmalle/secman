@@ -19,6 +19,7 @@ export interface ProductSystemDto {
     ip: string | null;
     adDomain: string | null;
     cloudAccountId: string | null;
+    cloudInstanceId: string | null;
 }
 
 export interface PaginatedProductSystemsResponse {

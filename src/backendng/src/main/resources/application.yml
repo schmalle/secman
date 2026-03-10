@@ -335,4 +335,4 @@ app:
 endpoints:
   memory:
     enabled: true
-    sensitive: false
+    sensitive: true
