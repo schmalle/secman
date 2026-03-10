@@ -1,0 +1,37 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "f81b99ce22e7",
+  "session_id": "6e854fca-f039-4ee9-8d7d-cc88268edaf6",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-10T11:13:27.023991Z",
+  "branch": "main",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "src/backendng/src/main/kotlin/com/secman/controller/VulnerabilityExceptionRequestController.kt",
+    "src/frontend/src/services/exceptionRequestService.ts"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-4-6",
+  "turn_id": "733c8a51390f",
+  "checkpoint_transcript_start": 1607,
+  "transcript_lines_at_start": 1607,
+  "token_usage": {
+    "input_tokens": 0,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 0,
+    "output_tokens": 0,
+    "api_call_count": 0
+  },
+  "session_metrics": {
+    "turn_count": 10
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-10T11:13:25.157485Z",
+    "agent_lines": 0,
+    "human_added": 562,
+    "human_modified": 2,
+    "human_removed": 0,
+    "total_committed": 562,
+    "agent_percentage": 0
+  }
+}
