@@ -1,0 +1,5 @@
+if the system queried is on AWS, please add in the titel something like Vulnerabilities for EC2AMAZ-RMHI4TO / Instance-ID (ensure instance id is shown after the hostname), but only if instance ID is existing
+
+---
+
+please fix so that i can see if existing the instance id next to the servername , in the UI behind "Vulnerabilities for EC2AMAZ-RMHI4TO"

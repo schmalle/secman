@@ -3,9 +3,12 @@
   "checkpoint_id": "a0763731c52a",
   "strategy": "manual-commit",
   "branch": "main",
-  "checkpoints_count": 1,
+  "checkpoints_count": 4,
   "files_touched": [
-    "src/frontend/src/components/AssetManagement.tsx"
+    "src/backendng/src/main/kotlin/com/secman/controller/OutdatedAssetController.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeQueryService.kt",
+    "src/frontend/src/components/AssetManagement.tsx",
+    "src/frontend/src/components/CrowdStrikeVulnerabilityLookup.tsx"
   ],
   "sessions": [
     {
@@ -13,13 +16,19 @@
       "transcript": "/a0/763731c52a/0/full.jsonl",
       "content_hash": "/a0/763731c52a/0/content_hash.txt",
       "prompt": "/a0/763731c52a/0/prompt.txt"
+    },
+    {
+      "metadata": "/a0/763731c52a/1/metadata.json",
+      "transcript": "/a0/763731c52a/1/full.jsonl",
+      "content_hash": "/a0/763731c52a/1/content_hash.txt",
+      "prompt": "/a0/763731c52a/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 21,
-    "cache_creation_tokens": 61657,
-    "cache_read_tokens": 472428,
-    "output_tokens": 7526,
-    "api_call_count": 13
+    "input_tokens": 51,
+    "cache_creation_tokens": 98305,
+    "cache_read_tokens": 1260440,
+    "output_tokens": 14609,
+    "api_call_count": 35
   }
 }

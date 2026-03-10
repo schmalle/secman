@@ -1,0 +1,36 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "a0763731c52a",
+  "session_id": "998386b5-c1a2-4ef1-8174-a92c124d4115",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-10T21:21:30.440077Z",
+  "branch": "main",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "src/backendng/src/main/kotlin/com/secman/controller/OutdatedAssetController.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeQueryService.kt",
+    "src/frontend/src/components/AssetManagement.tsx",
+    "src/frontend/src/components/CrowdStrikeVulnerabilityLookup.tsx"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "6811a3a87002",
+  "token_usage": {
+    "input_tokens": 30,
+    "cache_creation_tokens": 36648,
+    "cache_read_tokens": 788012,
+    "output_tokens": 7083,
+    "api_call_count": 22
+  },
+  "session_metrics": {
+    "turn_count": 3
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-10T21:21:30.27366Z",
+    "agent_lines": 24,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 24,
+    "agent_percentage": 100
+  }
+}
