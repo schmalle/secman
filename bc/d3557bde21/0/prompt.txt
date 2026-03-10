@@ -1,0 +1,1 @@
+review the implemented functionality, add email configuration export also to UI and business logic. Also include AWS account sharing data in the export and import.
