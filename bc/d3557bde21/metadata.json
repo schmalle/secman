@@ -3,7 +3,7 @@
   "checkpoint_id": "bcd3557bde21",
   "strategy": "manual-commit",
   "branch": "main",
-  "checkpoints_count": 0,
+  "checkpoints_count": 1,
   "files_touched": [
     ".idea/workspace.xml"
   ],
@@ -13,13 +13,19 @@
       "transcript": "/bc/d3557bde21/0/full.jsonl",
       "content_hash": "/bc/d3557bde21/0/content_hash.txt",
       "prompt": "/bc/d3557bde21/0/prompt.txt"
+    },
+    {
+      "metadata": "/bc/d3557bde21/1/metadata.json",
+      "transcript": "/bc/d3557bde21/1/full.jsonl",
+      "content_hash": "/bc/d3557bde21/1/content_hash.txt",
+      "prompt": "/bc/d3557bde21/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 16,
-    "cache_creation_tokens": 66827,
-    "cache_read_tokens": 347398,
-    "output_tokens": 3180,
-    "api_call_count": 8
+    "input_tokens": 190,
+    "cache_creation_tokens": 496404,
+    "cache_read_tokens": 14301500,
+    "output_tokens": 85778,
+    "api_call_count": 149
   }
 }
