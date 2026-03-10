@@ -1,9 +1,11 @@
 {
   "cli_version": "0.5.0",
   "checkpoint_id": "f81b99ce22e7",
+  "session_id": "c68a4b90-e4be-4867-93e2-495979b49f36",
   "strategy": "manual-commit",
+  "created_at": "2026-03-10T11:13:28.251416Z",
   "branch": "main",
-  "checkpoints_count": 4,
+  "checkpoints_count": 1,
   "files_touched": [
     "src/backendng/src/main/kotlin/com/secman/controller/VulnerabilityExceptionRequestController.kt",
     "src/backendng/src/main/kotlin/com/secman/domain/VulnerabilityExceptionRequest.kt",
@@ -18,37 +20,25 @@
     "src/frontend/src/services/exceptionRequestService.ts",
     "src/frontend/src/utils/currentVulnerabilityExport.ts"
   ],
-  "sessions": [
-    {
-      "metadata": "/f8/1b99ce22e7/0/metadata.json",
-      "transcript": "/f8/1b99ce22e7/0/full.jsonl",
-      "content_hash": "/f8/1b99ce22e7/0/content_hash.txt",
-      "prompt": "/f8/1b99ce22e7/0/prompt.txt"
-    },
-    {
-      "metadata": "/f8/1b99ce22e7/1/metadata.json",
-      "transcript": "/f8/1b99ce22e7/1/full.jsonl",
-      "content_hash": "/f8/1b99ce22e7/1/content_hash.txt",
-      "prompt": "/f8/1b99ce22e7/1/prompt.txt"
-    },
-    {
-      "metadata": "/f8/1b99ce22e7/2/metadata.json",
-      "transcript": "/f8/1b99ce22e7/2/full.jsonl",
-      "content_hash": "/f8/1b99ce22e7/2/content_hash.txt",
-      "prompt": "/f8/1b99ce22e7/2/prompt.txt"
-    },
-    {
-      "metadata": "/f8/1b99ce22e7/3/metadata.json",
-      "transcript": "/f8/1b99ce22e7/3/full.jsonl",
-      "content_hash": "/f8/1b99ce22e7/3/content_hash.txt",
-      "prompt": ""
-    }
-  ],
+  "agent": "Claude Code",
+  "turn_id": "59a5f417218e",
   "token_usage": {
-    "input_tokens": 95,
-    "cache_creation_tokens": 208181,
-    "cache_read_tokens": 6739321,
-    "output_tokens": 46580,
-    "api_call_count": 79
+    "input_tokens": 6,
+    "cache_creation_tokens": 15688,
+    "cache_read_tokens": 90495,
+    "output_tokens": 2650,
+    "api_call_count": 4
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-10T11:13:28.12762Z",
+    "agent_lines": 489,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 489,
+    "agent_percentage": 100
   }
 }
