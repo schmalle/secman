@@ -1,0 +1,1 @@
+rename the Vulnerabilities Button to Vulns to make it better fit to the page
