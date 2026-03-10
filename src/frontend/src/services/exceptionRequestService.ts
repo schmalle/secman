@@ -263,6 +263,46 @@ export async function cancelRequest(id: number): Promise<void> {
 }
 
 /**
+ * Permanently delete an exception request and any associated exception
+ *
+ * @param id Request ID
+ * @returns void on success
+ * @throws Error on 401 (unauthorized), 403 (not owner), 404 (not found), 500 (server error)
+ */
+export async function deleteRequest(id: number): Promise<void> {
+  const response = await authenticatedDelete(`/api/vulnerability-exception-requests/${id}/delete`);
+
+  if (response.status === 204) {
+    return; // Success - no content
+  }
+
+  // Handle error responses
+  if (response.status === 400) {
+    const error = await response.json();
+    throw new Error(error.error || 'Cannot delete this request.');
+  }
+
+  if (response.status === 401) {
+    throw new Error('Unauthorized. Please login again.');
+  }
+
+  if (response.status === 403) {
+    throw new Error('You do not have permission to delete this request. Only the requester can delete their own requests.');
+  }
+
+  if (response.status === 404) {
+    throw new Error('Exception request not found.');
+  }
+
+  if (response.status === 500) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to delete exception request.');
+  }
+
+  throw new Error(`Failed to delete exception request: ${response.status}`);
+}
+
+/**
  * Get pending exception requests (ADMIN/SECCHAMPION only)
  *
  * @param page Page number (0-indexed)

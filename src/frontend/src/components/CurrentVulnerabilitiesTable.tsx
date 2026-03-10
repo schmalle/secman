@@ -168,11 +168,15 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
         vulnerabilityId: "vulnerabilityId",
         cvssSeverity: "cvssSeverity",
         vulnerableProductVersions: "vulnerableProductVersions",
-        daysOpen: "daysOpen",
+        daysOpen: "scanTimestamp",
         scanTimestamp: "scanTimestamp",
         overdueStatus: "scanTimestamp", // Sort by scan age as proxy for overdue status
       };
       const backendSortField = sortFieldMap[sortField] || undefined;
+      // Invert sort direction for daysOpen: ascending days = descending scanTimestamp
+      const effectiveSortOrder = sortField === "daysOpen"
+        ? (sortOrder === "asc" ? "desc" : "asc")
+        : sortOrder;
       const data = await getCurrentVulnerabilities(
         severityFilter || undefined,
         systemFilter || undefined,
@@ -183,7 +187,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
         currentPage,
         pageSize,
         backendSortField,
-        sortOrder,
+        effectiveSortOrder,
       );
       setPaginatedResponse(data);
       setError(null);
@@ -896,7 +900,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                             >
                               {vuln.vulnerableProductVersions || "-"}
                             </td>
-                            <td>{vuln.daysOpen || "-"}</td>
+                            <td>{vuln.ageInDays != null ? `${vuln.ageInDays} days` : "-"}</td>
                             <td>
                               <OverdueStatusBadge
                                 status={vuln.overdueStatus || "OK"}

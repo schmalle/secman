@@ -214,7 +214,7 @@ open class ExceptionRequestStatisticsService(
 
         // Group by CVE ID and count
         val cveCounts = requests
-            .mapNotNull { it.vulnerability?.vulnerabilityId }
+            .mapNotNull { it.vulnerability?.vulnerabilityId ?: it.cveId }
             .groupingBy { it }
             .eachCount()
             .map { (cveId, count) -> cveId to count.toLong() }

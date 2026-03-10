@@ -21,6 +21,7 @@ import {
     getMyRequests,
     getMySummary,
     cancelRequest,
+    deleteRequest,
     type VulnerabilityExceptionRequestDto,
     type ExceptionRequestSummaryDto,
     type ExceptionRequestStatus,
@@ -46,8 +47,9 @@ const MyExceptionRequests: React.FC = () => {
     const [showDetailModal, setShowDetailModal] = useState(false);
     const [selectedRequestId, setSelectedRequestId] = useState<number | null>(null);
 
-    // Cancellation state
+    // Cancellation and deletion state
     const [cancellingId, setCancellingId] = useState<number | null>(null);
+    const [deletingId, setDeletingId] = useState<number | null>(null);
 
     useEffect(() => {
         fetchData();
@@ -117,6 +119,30 @@ const MyExceptionRequests: React.FC = () => {
             setError(errorMessage);
         } finally {
             setCancellingId(null);
+        }
+    };
+
+    const handleDeleteRequest = async (requestId: number) => {
+        if (!confirm('Are you sure you want to permanently delete this exception request? This will also remove any associated exception.')) {
+            return;
+        }
+
+        try {
+            setDeletingId(requestId);
+            await deleteRequest(requestId);
+
+            setSuccessMessage('Exception request deleted successfully.');
+
+            setTimeout(() => {
+                setSuccessMessage(null);
+            }, 5000);
+
+            fetchData();
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : 'Failed to delete request';
+            setError(errorMessage);
+        } finally {
+            setDeletingId(null);
         }
     };
 
@@ -210,40 +236,60 @@ const MyExceptionRequests: React.FC = () => {
 
             {/* Summary Cards */}
             {summary && (
-                <div className="row mb-4">
-                    <div className="col-md-3">
-                        <div className="card">
-                            <div className="card-body">
-                                <h6 className="card-subtitle mb-2 text-muted">Total Requests</h6>
-                                <h3 className="card-title mb-0">{summary.totalRequests}</h3>
+                <>
+                    <div className="row mb-2">
+                        <div className="col-md-4">
+                            <div className="card">
+                                <div className="card-body">
+                                    <h6 className="card-subtitle mb-2 text-muted">Total Requests</h6>
+                                    <h3 className="card-title mb-0">{summary.totalRequests}</h3>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="col-md-4">
+                            <div className="card border-success">
+                                <div className="card-body">
+                                    <h6 className="card-subtitle mb-2 text-success">Approved</h6>
+                                    <h3 className="card-title mb-0 text-success">{summary.approvedCount}</h3>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="col-md-4">
+                            <div className="card border-warning">
+                                <div className="card-body">
+                                    <h6 className="card-subtitle mb-2 text-warning">Pending</h6>
+                                    <h3 className="card-title mb-0 text-warning">{summary.pendingCount}</h3>
+                                </div>
                             </div>
                         </div>
                     </div>
-                    <div className="col-md-3">
-                        <div className="card border-success">
-                            <div className="card-body">
-                                <h6 className="card-subtitle mb-2 text-success">Approved</h6>
-                                <h3 className="card-title mb-0 text-success">{summary.approvedCount}</h3>
+                    <div className="row mb-4">
+                        <div className="col-md-4">
+                            <div className="card border-danger">
+                                <div className="card-body">
+                                    <h6 className="card-subtitle mb-2 text-danger">Rejected</h6>
+                                    <h3 className="card-title mb-0 text-danger">{summary.rejectedCount}</h3>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="col-md-4">
+                            <div className="card border-secondary">
+                                <div className="card-body">
+                                    <h6 className="card-subtitle mb-2 text-secondary">Expired</h6>
+                                    <h3 className="card-title mb-0 text-secondary">{summary.expiredCount}</h3>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="col-md-4">
+                            <div className="card border-secondary">
+                                <div className="card-body">
+                                    <h6 className="card-subtitle mb-2 text-secondary">Cancelled</h6>
+                                    <h3 className="card-title mb-0 text-secondary">{summary.cancelledCount}</h3>
+                                </div>
                             </div>
                         </div>
                     </div>
-                    <div className="col-md-3">
-                        <div className="card border-warning">
-                            <div className="card-body">
-                                <h6 className="card-subtitle mb-2 text-warning">Pending</h6>
-                                <h3 className="card-title mb-0 text-warning">{summary.pendingCount}</h3>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="col-md-3">
-                        <div className="card border-danger">
-                            <div className="card-body">
-                                <h6 className="card-subtitle mb-2 text-danger">Rejected</h6>
-                                <h3 className="card-title mb-0 text-danger">{summary.rejectedCount}</h3>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                </>
             )}
 
             {/* Filters and Controls */}
@@ -370,6 +416,18 @@ const MyExceptionRequests: React.FC = () => {
                                                                         )}
                                                                     </button>
                                                                 )}
+                                                                <button
+                                                                    className="btn btn-outline-danger"
+                                                                    onClick={() => handleDeleteRequest(request.id)}
+                                                                    disabled={deletingId === request.id}
+                                                                    title="Delete request permanently"
+                                                                >
+                                                                    {deletingId === request.id ? (
+                                                                        <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                                                    ) : (
+                                                                        <i className="bi bi-trash"></i>
+                                                                    )}
+                                                                </button>
                                                             </div>
                                                         </td>
                                                     </tr>

@@ -16,7 +16,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { getRequestById, cancelRequest, type VulnerabilityExceptionRequestDto } from '../services/exceptionRequestService';
+import { getRequestById, cancelRequest, deleteRequest, type VulnerabilityExceptionRequestDto } from '../services/exceptionRequestService';
 import ExceptionStatusBadge from './ExceptionStatusBadge';
 
 interface ExceptionRequestDetailModalProps {
@@ -36,6 +36,7 @@ const ExceptionRequestDetailModal: React.FC<ExceptionRequestDetailModalProps> = 
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [cancelling, setCancelling] = useState(false);
+    const [deleting, setDeleting] = useState(false);
 
     useEffect(() => {
         if (isOpen) {
@@ -79,19 +80,40 @@ const ExceptionRequestDetailModal: React.FC<ExceptionRequestDetailModalProps> = 
         }
     };
 
+    const handleDelete = async () => {
+        if (!confirm('Are you sure you want to permanently delete this exception request? This will also remove any associated exception.')) {
+            return;
+        }
+
+        try {
+            setDeleting(true);
+            await deleteRequest(requestId);
+
+            if (onUpdate) {
+                onUpdate();
+            }
+            onClose();
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : 'Failed to delete request';
+            setError(errorMessage);
+        } finally {
+            setDeleting(false);
+        }
+    };
+
     // Handle keyboard navigation (Escape to close)
     useEffect(() => {
         if (!isOpen) return;
 
         function handleKeyDown(e: KeyboardEvent) {
-            if (e.key === 'Escape' && !cancelling) {
+            if (e.key === 'Escape' && !cancelling && !deleting) {
                 onClose();
             }
         }
 
         document.addEventListener('keydown', handleKeyDown);
         return () => document.removeEventListener('keydown', handleKeyDown);
-    }, [isOpen, cancelling]);
+    }, [isOpen, cancelling, deleting]);
 
     // Don't render if not open
     if (!isOpen) {
@@ -282,7 +304,7 @@ const ExceptionRequestDetailModal: React.FC<ExceptionRequestDetailModalProps> = 
                                 type="button"
                                 className="btn btn-secondary"
                                 onClick={onClose}
-                                disabled={cancelling}
+                                disabled={cancelling || deleting}
                             >
                                 Close
                             </button>
@@ -291,7 +313,7 @@ const ExceptionRequestDetailModal: React.FC<ExceptionRequestDetailModalProps> = 
                                     type="button"
                                     className="btn btn-danger"
                                     onClick={handleCancel}
-                                    disabled={cancelling}
+                                    disabled={cancelling || deleting}
                                     title={request.status === 'APPROVED' ? 'Revoke auto-approved exception' : 'Cancel pending request'}
                                 >
                                     {cancelling ? (
@@ -303,6 +325,27 @@ const ExceptionRequestDetailModal: React.FC<ExceptionRequestDetailModalProps> = 
                                         <>
                                             <i className="bi bi-x-circle me-2"></i>
                                             {request.status === 'APPROVED' ? 'Revoke Exception' : 'Cancel Request'}
+                                        </>
+                                    )}
+                                </button>
+                            )}
+                            {request && (
+                                <button
+                                    type="button"
+                                    className="btn btn-outline-danger"
+                                    onClick={handleDelete}
+                                    disabled={cancelling || deleting}
+                                    title="Permanently delete this request and any associated exception"
+                                >
+                                    {deleting ? (
+                                        <>
+                                            <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                            Deleting...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <i className="bi bi-trash me-2"></i>
+                                            Delete
                                         </>
                                     )}
                                 </button>
