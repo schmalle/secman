@@ -1,0 +1,1 @@
+deleting a workgroup breaks, please fix this

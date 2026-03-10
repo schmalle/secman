@@ -1,0 +1,35 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "6ebf4586d99a",
+  "session_id": "c68a4b90-e4be-4867-93e2-495979b49f36",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-10T11:21:22.29056Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/frontend/src/components/DeleteWorkgroupConfirmation.tsx"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "606967777010",
+  "checkpoint_transcript_start": 166,
+  "transcript_lines_at_start": 166,
+  "token_usage": {
+    "input_tokens": 6,
+    "cache_creation_tokens": 5979,
+    "cache_read_tokens": 134659,
+    "output_tokens": 630,
+    "api_call_count": 4
+  },
+  "session_metrics": {
+    "turn_count": 2
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-10T11:21:22.12081Z",
+    "agent_lines": 5,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 5,
+    "agent_percentage": 100
+  }
+}
