@@ -70,9 +70,10 @@ const DeleteWorkgroupConfirmation: React.FC<DeleteWorkgroupConfirmationProps> = 
 
   const hasChildren = workgroup.childCount > 0;
   const hasParent = workgroup.parentId !== null && workgroup.parentId !== undefined;
+  const ancestors = workgroup.ancestors ?? [];
   const promotionTarget = hasParent
-    ? workgroup.ancestors.length > 0
-      ? workgroup.ancestors[workgroup.ancestors.length - 1].name
+    ? ancestors.length > 0
+      ? ancestors[ancestors.length - 1].name
       : 'grandparent'
     : 'root level';
 
@@ -124,8 +125,8 @@ const DeleteWorkgroupConfirmation: React.FC<DeleteWorkgroupConfirmationProps> = 
                   <div className="small text-muted">
                     <div>
                       <strong>Location:</strong>{' '}
-                      {workgroup.ancestors.length > 0
-                        ? workgroup.ancestors.map(a => a.name).join(' > ') + ' > ' + workgroup.name
+                      {ancestors.length > 0
+                        ? ancestors.map(a => a.name).join(' > ') + ' > ' + workgroup.name
                         : 'Root level'}
                     </div>
                     <div>
