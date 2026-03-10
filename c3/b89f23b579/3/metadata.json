@@ -1,9 +1,11 @@
 {
   "cli_version": "0.5.0",
   "checkpoint_id": "c3b89f23b579",
+  "session_id": "7c76f1e9-2c68-4dd2-baaa-d9587bace19a",
   "strategy": "manual-commit",
+  "created_at": "2026-03-10T17:23:04.261456Z",
   "branch": "main",
-  "checkpoints_count": 3,
+  "checkpoints_count": 1,
   "files_touched": [
     "src/backendng/src/main/kotlin/com/secman/controller/AssetController.kt",
     "src/backendng/src/main/kotlin/com/secman/controller/AwsAccountSharingController.kt",
@@ -33,37 +35,25 @@
     "src/frontend/src/services/productService.ts",
     "src/frontend/src/services/vulnerabilityManagementService.ts"
   ],
-  "sessions": [
-    {
-      "metadata": "/c3/b89f23b579/0/metadata.json",
-      "transcript": "/c3/b89f23b579/0/full.jsonl",
-      "content_hash": "/c3/b89f23b579/0/content_hash.txt",
-      "prompt": "/c3/b89f23b579/0/prompt.txt"
-    },
-    {
-      "metadata": "/c3/b89f23b579/1/metadata.json",
-      "transcript": "/c3/b89f23b579/1/full.jsonl",
-      "content_hash": "/c3/b89f23b579/1/content_hash.txt",
-      "prompt": ""
-    },
-    {
-      "metadata": "/c3/b89f23b579/2/metadata.json",
-      "transcript": "/c3/b89f23b579/2/full.jsonl",
-      "content_hash": "/c3/b89f23b579/2/content_hash.txt",
-      "prompt": "/c3/b89f23b579/2/prompt.txt"
-    },
-    {
-      "metadata": "/c3/b89f23b579/3/metadata.json",
-      "transcript": "/c3/b89f23b579/3/full.jsonl",
-      "content_hash": "/c3/b89f23b579/3/content_hash.txt",
-      "prompt": ""
-    }
-  ],
+  "agent": "Claude Code",
+  "turn_id": "1e650deb9680",
   "token_usage": {
-    "input_tokens": 200,
-    "cache_creation_tokens": 475380,
-    "cache_read_tokens": 14325932,
-    "output_tokens": 87467,
-    "api_call_count": 157
+    "input_tokens": 5,
+    "cache_creation_tokens": 8328,
+    "cache_read_tokens": 60572,
+    "output_tokens": 692,
+    "api_call_count": 3
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-10T17:23:04.231465Z",
+    "agent_lines": 622,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 622,
+    "agent_percentage": 100
   }
 }
