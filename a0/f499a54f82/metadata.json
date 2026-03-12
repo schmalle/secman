@@ -1,0 +1,23 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "a0f499a54f82",
+  "strategy": "manual-commit",
+  "branch": "082-fix-cs-instance-update",
+  "checkpoints_count": 2,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/a0/f499a54f82/0/metadata.json",
+      "transcript": "/a0/f499a54f82/0/full.jsonl",
+      "content_hash": "/a0/f499a54f82/0/content_hash.txt",
+      "prompt": "/a0/f499a54f82/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 66,
+    "cache_creation_tokens": 119515,
+    "cache_read_tokens": 5444333,
+    "output_tokens": 31078,
+    "api_call_count": 60
+  }
+}
