@@ -13,11 +13,11 @@ As a security analyst, when CrowdStrike reports a new Instance ID for a server t
 
 **Why this priority**: This is the core bug fix. Stale Instance IDs cause confusion when correlating secman data with the actual AWS Console, making it difficult to identify which EC2 instance a vulnerability belongs to.
 
-**Independent Test**: Import vulnerabilities for a known server (e.g., EC2AMAZ-6VPPB5L) with Account ID 026632457565 and Instance ID `i-0affe4981fb04c836`. Verify the asset record in secman shows the new Instance ID instead of the old one (`i-0487cf7ee7b736d4c`).
+**Independent Test**: Import vulnerabilities for a known server (e.g., EC2AMAZ-X) with Account ID 000 and Instance ID `i-0affe`. Verify the asset record in secman shows the new Instance ID instead of the old one (`i-0487`).
 
 **Acceptance Scenarios**:
 
-1. **Given** an asset "EC2AMAZ-6VPPB5L" exists with cloudAccountId "026632457565" and cloudInstanceId "i-OLD", **When** CrowdStrike import runs with the same hostname and account ID but cloudInstanceId "i-NEW", **Then** the asset's cloudInstanceId is updated to "i-NEW"
+1. **Given** an asset "EC2AMAZ-X" exists with cloudAccountId "000" and cloudInstanceId "i-OLD", **When** CrowdStrike import runs with the same hostname and account ID but cloudInstanceId "i-NEW", **Then** the asset's cloudInstanceId is updated to "i-NEW"
 2. **Given** an asset exists with a cloudInstanceId, **When** CrowdStrike import provides the same cloudInstanceId, **Then** no unnecessary update is performed (no-op for unchanged values)
 3. **Given** an asset exists with a cloudInstanceId, **When** CrowdStrike import provides a null or blank cloudInstanceId, **Then** the existing cloudInstanceId is preserved (not overwritten with null)
 
