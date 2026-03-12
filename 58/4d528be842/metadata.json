@@ -1,0 +1,27 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "584d528be842",
+  "strategy": "manual-commit",
+  "branch": "082-fix-cs-instance-update",
+  "checkpoints_count": 3,
+  "files_touched": [
+    ".idea/workspace.xml",
+    "gradle/wrapper/gradle-wrapper.properties",
+    "scripts/compilecli.sh"
+  ],
+  "sessions": [
+    {
+      "metadata": "/58/4d528be842/0/metadata.json",
+      "transcript": "/58/4d528be842/0/full.jsonl",
+      "content_hash": "/58/4d528be842/0/content_hash.txt",
+      "prompt": "/58/4d528be842/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 79,
+    "cache_creation_tokens": 257315,
+    "cache_read_tokens": 6239045,
+    "output_tokens": 32358,
+    "api_call_count": 68
+  }
+}

@@ -1,0 +1,9 @@
+yes
+
+---
+
+users with SECCHAMPION role must also see all vulnerabilities in this view. The admin user seens more than 700000 vulns, so the SECCHAMPION role user must somehow be blocked, please fix thiy
+
+---
+
+how to compile the cli client ?
