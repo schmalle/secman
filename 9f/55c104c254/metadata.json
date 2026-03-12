@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "9f55c104c254",
+  "strategy": "manual-commit",
+  "branch": "082-fix-cs-instance-update",
+  "checkpoints_count": 0,
+  "files_touched": [
+    ".idea/workspace.xml",
+    "specs/082-fix-cs-instance-update/spec.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/9f/55c104c254/0/metadata.json",
+      "transcript": "/9f/55c104c254/0/full.jsonl",
+      "content_hash": "/9f/55c104c254/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 0,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 0,
+    "output_tokens": 0,
+    "api_call_count": 0
+  }
+}

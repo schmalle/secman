@@ -1,0 +1,36 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "9f55c104c254",
+  "session_id": "3a251487-01f2-4e80-b7f6-ba87b1772933",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-12T20:54:52.286493Z",
+  "branch": "082-fix-cs-instance-update",
+  "checkpoints_count": 0,
+  "files_touched": [
+    ".idea/workspace.xml",
+    "specs/082-fix-cs-instance-update/spec.md"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "71208df0a2c4",
+  "checkpoint_transcript_start": 353,
+  "transcript_lines_at_start": 353,
+  "token_usage": {
+    "input_tokens": 0,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 0,
+    "output_tokens": 0,
+    "api_call_count": 0
+  },
+  "session_metrics": {
+    "turn_count": 4
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-12T20:54:51.871633Z",
+    "agent_lines": 3,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 3,
+    "agent_percentage": 100
+  }
+}
