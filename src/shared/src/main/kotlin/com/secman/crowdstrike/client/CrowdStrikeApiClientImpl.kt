@@ -1521,6 +1521,10 @@ open class CrowdStrikeApiClientImpl(
                 // Extract Active Directory domain (Feature 043)
                 val adDomain = hostInfo?.get("machine_domain")?.toString()
 
+                // Extract cloud metadata from host_info (Feature 082)
+                val cloudAccountId = hostInfo?.get("service_provider_account_id")?.toString()
+                val cloudInstanceId = hostInfo?.get("instance_id")?.toString()
+
                 // Extract CVE object for multiple field access
                 val cveObject = vuln["cve"] as? Map<*, *>
                 val cveId = cveObject?.get("id")?.toString()
@@ -1589,7 +1593,9 @@ open class CrowdStrikeApiClientImpl(
                     patchPublicationDate = patchPublicationDate,
                     status = vuln["status"]?.toString() ?: "open",
                     hasException = false,
-                    exceptionReason = null
+                    exceptionReason = null,
+                    cloudAccountId = cloudAccountId,
+                    cloudInstanceId = cloudInstanceId
                 )
 
                 log.trace("Mapped vulnerability: CVE={}, severity={}, cvssScore={}, hostname={}",

@@ -132,11 +132,18 @@ class ServersCommand {
 
                     val batches = byHostname.map { (hostname, vulns) ->
                         val firstVuln = vulns.firstOrNull()
+                        // Feature 082: Use cloudInstanceId from the most recently detected vulnerability
+                        // When EC2 instances are replaced, CrowdStrike may report both old and new devices
+                        // under the same hostname. Using the latest detection ensures we pick up the new instance ID.
+                        val latestCloudInstanceId = vulns
+                            .filter { !it.cloudInstanceId.isNullOrBlank() }
+                            .maxByOrNull { it.detectedAt }
+                            ?.cloudInstanceId
                         CrowdStrikeVulnerabilityBatchDto(
                             hostname = hostname,
                             groups = null,
                             cloudAccountId = firstVuln?.cloudAccountId,
-                            cloudInstanceId = firstVuln?.cloudInstanceId,
+                            cloudInstanceId = latestCloudInstanceId ?: firstVuln?.cloudInstanceId,
                             adDomain = firstVuln?.adDomain,
                             osVersion = null,
                             ip = firstVuln?.ip,
@@ -279,11 +286,16 @@ class ServersCommand {
             // Map CrowdStrike DTOs to backend batch DTOs
             val batches = vulnerabilitiesByHostname.map { (hostname, vulns) ->
                 val firstVuln = vulns.firstOrNull()
+                // Feature 082: Use cloudInstanceId from the most recently detected vulnerability
+                val latestCloudInstanceId = vulns
+                    .filter { !it.cloudInstanceId.isNullOrBlank() }
+                    .maxByOrNull { it.detectedAt }
+                    ?.cloudInstanceId
                 CrowdStrikeVulnerabilityBatchDto(
                     hostname = hostname,
                     groups = null,
                     cloudAccountId = firstVuln?.cloudAccountId,
-                    cloudInstanceId = firstVuln?.cloudInstanceId,
+                    cloudInstanceId = latestCloudInstanceId ?: firstVuln?.cloudInstanceId,
                     adDomain = firstVuln?.adDomain,
                     osVersion = null,
                     ip = firstVuln?.ip,

@@ -858,7 +858,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                             onClick={() => handleSort("daysOpen")}
                             style={{ cursor: "pointer" }}
                           >
-                            Days Open
+                            Open
                             <SortIcon field="daysOpen" />
                           </th>
                           <th

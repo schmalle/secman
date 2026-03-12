@@ -119,7 +119,7 @@ open class ExportJobService(
 
         // Start async processing using ExecutorService
         // We need to capture the authentication info since Authentication may not be available in background thread
-        val isAdmin = authentication.roles.contains("ADMIN")
+        val isAdmin = authentication.roles.contains("ADMIN") || authentication.roles.contains("SECCHAMPION")
         val accessibleAssetIds = if (isAdmin) {
             emptySet()
         } else {
