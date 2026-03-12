@@ -3,7 +3,7 @@
   "checkpoint_id": "897aaffb935a",
   "strategy": "manual-commit",
   "branch": "082-fix-cs-instance-update",
-  "checkpoints_count": 2,
+  "checkpoints_count": 3,
   "files_touched": [
     "specs/082-fix-cs-instance-update/checklists/requirements.md",
     "specs/082-fix-cs-instance-update/spec.md",
@@ -24,13 +24,19 @@
       "transcript": "/89/7aaffb935a/1/full.jsonl",
       "content_hash": "/89/7aaffb935a/1/content_hash.txt",
       "prompt": "/89/7aaffb935a/1/prompt.txt"
+    },
+    {
+      "metadata": "/89/7aaffb935a/2/metadata.json",
+      "transcript": "/89/7aaffb935a/2/full.jsonl",
+      "content_hash": "/89/7aaffb935a/2/content_hash.txt",
+      "prompt": "/89/7aaffb935a/2/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 61,
-    "cache_creation_tokens": 237349,
-    "cache_read_tokens": 3222350,
-    "output_tokens": 35833,
-    "api_call_count": 51
+    "input_tokens": 68,
+    "cache_creation_tokens": 288208,
+    "cache_read_tokens": 3422562,
+    "output_tokens": 36550,
+    "api_call_count": 56
   }
 }
