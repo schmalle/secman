@@ -1,0 +1,30 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "897aaffb935a",
+  "strategy": "manual-commit",
+  "branch": "082-fix-cs-instance-update",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "specs/082-fix-cs-instance-update/checklists/requirements.md",
+    "specs/082-fix-cs-instance-update/spec.md",
+    "src/cli/src/main/kotlin/com/secman/cli/commands/QueryCommand.kt",
+    "src/cli/src/main/kotlin/com/secman/cli/commands/ServersCommand.kt",
+    "src/frontend/src/components/CurrentVulnerabilitiesTable.tsx",
+    "src/shared/src/main/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClientImpl.kt"
+  ],
+  "sessions": [
+    {
+      "metadata": "/89/7aaffb935a/0/metadata.json",
+      "transcript": "/89/7aaffb935a/0/full.jsonl",
+      "content_hash": "/89/7aaffb935a/0/content_hash.txt",
+      "prompt": "/89/7aaffb935a/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 38,
+    "cache_creation_tokens": 89550,
+    "cache_read_tokens": 2361957,
+    "output_tokens": 23432,
+    "api_call_count": 34
+  }
+}
