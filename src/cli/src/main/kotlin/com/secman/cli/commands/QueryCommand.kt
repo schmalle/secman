@@ -129,11 +129,16 @@ class QueryCommand {
 
                 // Build a single batch DTO from the hostname + filtered vulnerabilities
                 val firstVuln = finalResponse.vulnerabilities.firstOrNull()
+                // Feature 082: Use cloudInstanceId from the most recently detected vulnerability
+                val latestCloudInstanceId = finalResponse.vulnerabilities
+                    .filter { !it.cloudInstanceId.isNullOrBlank() }
+                    .maxByOrNull { it.detectedAt }
+                    ?.cloudInstanceId
                 val batch = CrowdStrikeVulnerabilityBatchDto(
                     hostname = hostname,
                     groups = null,
                     cloudAccountId = firstVuln?.cloudAccountId,
-                    cloudInstanceId = firstVuln?.cloudInstanceId,
+                    cloudInstanceId = latestCloudInstanceId ?: firstVuln?.cloudInstanceId,
                     adDomain = firstVuln?.adDomain,
                     osVersion = null,
                     ip = firstVuln?.ip,
