@@ -53,6 +53,11 @@ interface ExportJobRepository : JpaRepository<ExportJob, String> {
     fun countByUsernameAndStatusIn(username: String, statuses: List<ExportJobStatus>): Long
 
     /**
+     * Count running jobs for a user filtered by export type (for per-type rate limiting)
+     */
+    fun countByUsernameAndExportTypeAndStatusIn(username: String, exportType: ExportType, statuses: List<ExportJobStatus>): Long
+
+    /**
      * Count total running jobs (for global rate limiting)
      */
     fun countByStatusIn(statuses: List<ExportJobStatus>): Long

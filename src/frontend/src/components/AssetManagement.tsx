@@ -78,6 +78,7 @@ const AssetManagement: React.FC = () => {
   const [exportLoading, setExportLoading] = useState(false);
   const [exportProgress, setExportProgress] = useState<ExportJob | null>(null);
   const [exportJobId, setExportJobId] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   // Owner candidates for select dropdown
   const [ownerCandidates, setOwnerCandidates] = useState<OwnerCandidate[]>([]);
@@ -332,7 +333,8 @@ const AssetManagement: React.FC = () => {
       setTimeout(() => setBulkDeleteSuccess(null), 5000);
 
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to export vulnerabilities');
+      setExportError(err instanceof Error ? err.message : 'Failed to export vulnerabilities');
+      setTimeout(() => setExportError(null), 10000);
     } finally {
       setExportLoading(false);
       setExportProgress(null);
@@ -525,6 +527,22 @@ const AssetManagement: React.FC = () => {
           </div>
         </div>
       </div>
+      {exportError && (
+        <div className="row mb-3">
+          <div className="col-12">
+            <div className="alert alert-warning alert-dismissible fade show" role="alert">
+              <i className="bi bi-exclamation-triangle-fill me-2"></i>
+              {exportError}
+              <button
+                type="button"
+                className="btn-close"
+                onClick={() => setExportError(null)}
+                aria-label="Close"
+              ></button>
+            </div>
+          </div>
+        </div>
+      )}
       {showForm && (
         <div className="row mb-4">
           <div className="col-12">

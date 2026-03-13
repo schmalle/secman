@@ -41,8 +41,8 @@ import java.util.*
  * - Cleanup of old export files
  *
  * Rate Limiting:
- * - Max 1 concurrent export per user
- * - Max 3 concurrent exports globally
+ * - Max 1 concurrent export per user per export type
+ * - Max 5 concurrent exports globally (across all types and users)
  *
  * Memory Optimization (Feature 073):
  * - Uses SXSSFWorkbook with 100-row memory window (streaming write)
@@ -59,7 +59,7 @@ open class ExportJobService(
     private val memoryConfig: MemoryOptimizationConfig,
     @Value("\${secman.export.directory:exports}") private val exportDirectory: String,
     @Value("\${secman.export.max-concurrent-per-user:1}") private val maxConcurrentPerUser: Int,
-    @Value("\${secman.export.max-concurrent-global:3}") private val maxConcurrentGlobal: Int,
+    @Value("\${secman.export.max-concurrent-global:5}") private val maxConcurrentGlobal: Int,
     @Value("\${secman.export.file-retention-hours:24}") private val fileRetentionHours: Long
 ) {
     private val log = LoggerFactory.getLogger(ExportJobService::class.java)
@@ -90,10 +90,13 @@ open class ExportJobService(
         // Check rate limits
         val runningStatuses = listOf(ExportJobStatus.PENDING, ExportJobStatus.PROCESSING)
 
-        val userRunningJobs = exportJobRepository.countByUsernameAndStatusIn(username, runningStatuses)
+        // Auto-reset zombie jobs that got stuck (e.g., server restart during processing)
+        autoResetStaleJobs(username, exportType, runningStatuses)
+
+        val userRunningJobs = exportJobRepository.countByUsernameAndExportTypeAndStatusIn(username, exportType, runningStatuses)
         if (userRunningJobs >= maxConcurrentPerUser) {
-            log.warn("User {} already has {} running export(s), max allowed: {}", username, userRunningJobs, maxConcurrentPerUser)
-            throw IllegalStateException("You already have an export in progress. Please wait for it to complete.")
+            log.warn("User {} already has {} running {} export(s), max allowed: {}", username, userRunningJobs, exportType, maxConcurrentPerUser)
+            throw IllegalStateException("You already have a ${exportType.name.lowercase()} export in progress. Please wait for it to complete.")
         }
 
         val globalRunningJobs = exportJobRepository.countByStatusIn(runningStatuses)
@@ -133,6 +136,27 @@ open class ExportJobService(
         }
 
         return ExportJobDto.fromEntity(savedJob)
+    }
+
+    /**
+     * Auto-reset export jobs stuck in PENDING/PROCESSING for over 30 minutes.
+     * This handles zombie jobs left behind by server restarts or unhandled errors
+     * in background threads, preventing users from being permanently blocked.
+     */
+    private fun autoResetStaleJobs(username: String, exportType: ExportType, runningStatuses: List<ExportJobStatus>) {
+        val staleThreshold = LocalDateTime.now().minusMinutes(30)
+        val runningJobs = exportJobRepository.findByUsernameAndStatusIn(username, runningStatuses)
+
+        runningJobs
+            .filter { it.exportType == exportType && it.createdAt.isBefore(staleThreshold) }
+            .forEach { job ->
+                log.warn("Auto-resetting stale export job: {} (status: {}, created: {}, type: {})",
+                    job.id, job.status, job.createdAt, job.exportType)
+                job.status = ExportJobStatus.FAILED
+                job.completedAt = LocalDateTime.now()
+                job.errorMessage = "Auto-reset: job was stale (running > 30 minutes)"
+                exportJobRepository.update(job)
+            }
     }
 
     /**
@@ -320,7 +344,6 @@ open class ExportJobService(
         job.status = ExportJobStatus.PROCESSING
         job.startedAt = LocalDateTime.now()
         exportJobRepository.update(job)
-        entityManager.flush()
     }
 
     /**
@@ -340,7 +363,6 @@ open class ExportJobService(
         val job = exportJobRepository.findById(jobId).orElse(null) ?: return
         job.totalItems = totalItems
         exportJobRepository.update(job)
-        entityManager.flush()
     }
 
     /**
@@ -351,7 +373,6 @@ open class ExportJobService(
         val job = exportJobRepository.findById(jobId).orElse(null) ?: return
         job.processedItems = processedItems
         exportJobRepository.update(job)
-        entityManager.flush()
     }
 
     /**
@@ -367,7 +388,6 @@ open class ExportJobService(
         job.fileSizeBytes = fileSizeBytes
         job.processedItems = totalItems
         exportJobRepository.update(job)
-        entityManager.flush()
     }
 
     /**
@@ -380,7 +400,6 @@ open class ExportJobService(
         job.completedAt = LocalDateTime.now()
         job.errorMessage = errorMessage
         exportJobRepository.update(job)
-        entityManager.flush()
     }
 
     /**
