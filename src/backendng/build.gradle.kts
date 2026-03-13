@@ -37,16 +37,16 @@ dependencies {
     runtimeOnly("org.mariadb.jdbc:mariadb-java-client:3.5.7")
 
 	implementation("io.micronaut.flyway:micronaut-flyway:7.9.2")
-	runtimeOnly("org.flywaydb:flyway-core:12.0.2")
-	runtimeOnly("org.flywaydb:flyway-mysql:12.0.2")
+	runtimeOnly("org.flywaydb:flyway-core:12.1.0")
+	runtimeOnly("org.flywaydb:flyway-mysql:12.1.0")
 	
     // Security
     implementation("io.micronaut.security:micronaut-security-jwt:4.17.1")
     implementation("io.micronaut.security:micronaut-security-oauth2:4.17.1")
 
     // WebAuthn/Passkey support
-    implementation("com.webauthn4j:webauthn4j-core:0.31.0.RELEASE")
-    implementation("com.webauthn4j:webauthn4j-metadata:0.31.0.RELEASE")
+    implementation("com.webauthn4j:webauthn4j-core:0.31.1.RELEASE")
+    implementation("com.webauthn4j:webauthn4j-metadata:0.31.1.RELEASE")
 
     // Validation
     implementation("io.micronaut.validation:micronaut-validation")
