@@ -22,12 +22,12 @@ dependencies {
     implementation(project(":shared"))
     
     // Micronaut Core
-    implementation("io.micronaut:micronaut-http-client:4.10.15")
-    implementation("io.micronaut:micronaut-http-server-netty:4.10.15")
-    implementation("io.micronaut:micronaut-jackson-databind:4.10.15")
+    implementation("io.micronaut:micronaut-http-client:4.10.16")
+    implementation("io.micronaut:micronaut-http-server-netty:4.10.16")
+    implementation("io.micronaut:micronaut-jackson-databind:4.10.16")
     implementation("io.micronaut.kotlin:micronaut-kotlin-runtime")
     implementation("io.micronaut.kotlin:micronaut-kotlin-extension-functions")
-    implementation("io.micronaut:micronaut-retry:4.10.15")
+    implementation("io.micronaut:micronaut-retry:4.10.16")
     implementation("io.micronaut.cache:micronaut-cache-caffeine")
     
     // Database
@@ -93,7 +93,7 @@ dependencies {
     
     // Password encoding
     implementation("org.springframework.security:spring-security-crypto:7.0.3")
-    implementation("commons-logging:commons-logging:1.3.5")
+    implementation("commons-logging:commons-logging:1.3.6")
     
     // Document generation (Apache POI)
     implementation("org.apache.poi:poi-ooxml:5.5.1")
