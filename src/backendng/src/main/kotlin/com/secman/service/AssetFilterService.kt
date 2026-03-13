@@ -22,6 +22,7 @@ import org.hibernate.Hibernate
  *
  * Implements filtering logic for assets, vulnerabilities, and scans based on:
  * - ADMIN role: Full access to all resources
+ * - SECCHAMPION role: Full access to all resources (same as ADMIN for visibility)
  * - VULN role: Respects workgroup restrictions like regular users
  * - USER role: Access to resources from their workgroups + personally created/uploaded items + AWS account mappings
  *
@@ -49,7 +50,7 @@ open class AssetFilterService(
      * FR-013, FR-016, FR-017: Filter by workgroup + ownership + AWS account mapping + AD domain mapping, ADMIN has full access
      *
      * Users can access assets if ANY of the following is true:
-     * 1. User is ADMIN (universal access)
+     * 1. User is ADMIN or SECCHAMPION (universal access)
      * 2. Asset belongs to a workgroup the user is a member of
      * 3. Asset was manually created by the user
      * 4. Asset was discovered via a scan uploaded by the user
@@ -64,8 +65,8 @@ open class AssetFilterService(
      * @return List of accessible assets (deduplicated and sorted by name)
      */
     fun getAccessibleAssets(authentication: Authentication): List<Asset> {
-        // ADMIN has universal access
-        if (hasRole(authentication, "ADMIN")) {
+        // ADMIN and SECCHAMPION have universal access
+        if (hasRole(authentication, "ADMIN") || hasRole(authentication, "SECCHAMPION")) {
             return assetRepository.findAll()
         }
 
@@ -168,8 +169,8 @@ open class AssetFilterService(
      * @return List of accessible vulnerabilities
      */
     fun getAccessibleVulnerabilities(authentication: Authentication): List<Vulnerability> {
-        // ADMIN has universal access
-        if (hasRole(authentication, "ADMIN")) {
+        // ADMIN and SECCHAMPION have universal access
+        if (hasRole(authentication, "ADMIN") || hasRole(authentication, "SECCHAMPION")) {
             return vulnerabilityRepository.findAll()
         }
 
@@ -193,8 +194,8 @@ open class AssetFilterService(
      * @return List of accessible scans
      */
     fun getAccessibleScans(authentication: Authentication): List<Scan> {
-        // ADMIN has universal access
-        if (hasRole(authentication, "ADMIN")) {
+        // ADMIN and SECCHAMPION have universal access
+        if (hasRole(authentication, "ADMIN") || hasRole(authentication, "SECCHAMPION")) {
             return scanRepository.findAll()
         }
 
@@ -240,8 +241,8 @@ open class AssetFilterService(
      * @return true if user can access this asset
      */
     fun canAccessAsset(assetId: Long, authentication: Authentication): Boolean {
-        // ADMIN has universal access
-        if (hasRole(authentication, "ADMIN")) {
+        // ADMIN and SECCHAMPION have universal access
+        if (hasRole(authentication, "ADMIN") || hasRole(authentication, "SECCHAMPION")) {
             return true
         }
 

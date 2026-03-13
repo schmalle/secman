@@ -89,7 +89,7 @@ const AssetManagement: React.FC = () => {
 
   useEffect(() => {
     fetchAssets();
-    if (isAdmin(getUser()?.roles)) {
+    if (isAdmin(getUser()?.roles) || isSecChampion(getUser()?.roles)) {
       fetchWorkgroups();
     }
     if (canAssignOwner) {
