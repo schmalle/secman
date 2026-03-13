@@ -3,7 +3,7 @@
   "checkpoint_id": "3127af330ca6",
   "strategy": "manual-commit",
   "branch": "main",
-  "checkpoints_count": 2,
+  "checkpoints_count": 3,
   "files_touched": [
     "src/backendng/src/main/kotlin/com/secman/repository/ExportJobRepository.kt",
     "src/backendng/src/main/kotlin/com/secman/service/ExportJobService.kt",
@@ -21,13 +21,19 @@
       "transcript": "/31/27af330ca6/1/full.jsonl",
       "content_hash": "/31/27af330ca6/1/content_hash.txt",
       "prompt": "/31/27af330ca6/1/prompt.txt"
+    },
+    {
+      "metadata": "/31/27af330ca6/2/metadata.json",
+      "transcript": "/31/27af330ca6/2/full.jsonl",
+      "content_hash": "/31/27af330ca6/2/content_hash.txt",
+      "prompt": "/31/27af330ca6/2/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 45,
-    "cache_creation_tokens": 249218,
-    "cache_read_tokens": 2481766,
-    "output_tokens": 23332,
-    "api_call_count": 31
+    "input_tokens": 74,
+    "cache_creation_tokens": 329611,
+    "cache_read_tokens": 4052275,
+    "output_tokens": 56278,
+    "api_call_count": 58
   }
 }
