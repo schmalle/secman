@@ -1,8 +1,10 @@
 package com.secman.service
 
 import com.secman.domain.NotificationType
+import com.secman.domain.User
 import com.secman.repository.AssetReminderStateRepository
 import com.secman.repository.NotificationLogRepository
+import com.secman.repository.UserRepository
 import jakarta.inject.Singleton
 import org.slf4j.LoggerFactory
 import java.time.Instant
@@ -17,7 +19,8 @@ class NotificationService(
     private val reminderStateService: ReminderStateService,
     private val notificationLogService: NotificationLogService,
     private val emailSender: EmailSender,
-    private val assetReminderStateRepository: AssetReminderStateRepository
+    private val assetReminderStateRepository: AssetReminderStateRepository,
+    private val userRepository: UserRepository
 ) {
     private val logger = LoggerFactory.getLogger(NotificationService::class.java)
 
@@ -103,12 +106,65 @@ class NotificationService(
             }
         }
 
+        // Send notifications to users with REPORT role
+        val reportEmailResult = sendToReportUsers(outdatedAssets, dryRun)
+        emailsSent += reportEmailResult.first
+        failures += reportEmailResult.second
+
         return ProcessingResult(
             assetsProcessed = outdatedAssets.size,
             emailsSent = emailsSent,
             failures = failures,
             skipped = skipped
         )
+    }
+
+    /**
+     * Send outdated asset notifications to all users with the REPORT role.
+     * REPORT users receive a consolidated notification with all outdated assets.
+     *
+     * @return Pair of (emailsSent, failures)
+     */
+    private fun sendToReportUsers(
+        outdatedAssets: List<OutdatedAssetData>,
+        dryRun: Boolean
+    ): Pair<Int, Int> {
+        if (outdatedAssets.isEmpty()) return Pair(0, 0)
+
+        val reportUsers = userRepository.findByRolesContaining(User.Role.REPORT)
+        if (reportUsers.isEmpty()) {
+            logger.debug("No users with REPORT role found, skipping report notifications")
+            return Pair(0, 0)
+        }
+
+        logger.info("Sending outdated asset notifications to ${reportUsers.size} REPORT user(s)")
+
+        var emailsSent = 0
+        var failures = 0
+
+        val notificationType = NotificationType.OUTDATED_LEVEL1
+
+        reportUsers.forEach { reportUser ->
+            try {
+                if (reportUser.email.isNullOrBlank()) {
+                    logger.warn("REPORT user ${reportUser.username} has no email, skipping")
+                    return@forEach
+                }
+
+                if (dryRun) {
+                    logger.info("[DRY-RUN] Would send outdated asset report to REPORT user ${reportUser.email} for ${outdatedAssets.size} assets")
+                } else {
+                    sendOutdatedReminder(reportUser.email, outdatedAssets, notificationType)
+                }
+
+                emailsSent++
+            } catch (e: Exception) {
+                logger.error("Failed to send report notification to ${reportUser.email}", e)
+                failures++
+            }
+        }
+
+        return Pair(emailsSent, failures)
     }
 
     /**
