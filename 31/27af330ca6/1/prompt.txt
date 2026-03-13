@@ -1,0 +1,1 @@
+exporting vulns is working, but when i afterwards want to export assets, i always get an error message, please analyze this, also from the view of a multi user system and propose a holistic fix

@@ -1,0 +1,36 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "3127af330ca6",
+  "session_id": "3a251487-01f2-4e80-b7f6-ba87b1772933",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-13T22:22:31.104507Z",
+  "branch": "main",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "src/backendng/src/main/kotlin/com/secman/service/ExportJobService.kt"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-4-6",
+  "turn_id": "f85c23dcf0b2",
+  "checkpoint_transcript_start": 353,
+  "transcript_lines_at_start": 353,
+  "token_usage": {
+    "input_tokens": 23,
+    "cache_creation_tokens": 191438,
+    "cache_read_tokens": 1688248,
+    "output_tokens": 9228,
+    "api_call_count": 15
+  },
+  "session_metrics": {
+    "turn_count": 5
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-13T22:22:30.335705Z",
+    "agent_lines": 30,
+    "human_added": 24,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 54,
+    "agent_percentage": 55.55555555555556
+  }
+}
