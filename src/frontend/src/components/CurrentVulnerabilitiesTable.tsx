@@ -14,7 +14,7 @@
  * Related to: Feature 021-vulnerability-overdue-exception-logic
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   getCurrentVulnerabilities,
   cleanupDuplicateVulnerabilities,
@@ -85,6 +85,10 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
   const [sortField, setSortField] =
     useState<keyof CurrentVulnerability>("scanTimestamp");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+
+  // Track previous filter values to detect filter-only vs page/sort changes
+  // When only page/sort changes, we pass knownTotal to skip the expensive count query
+  const prevFiltersRef = useRef<string>("");
 
   // Check access on mount - ADMIN, VULN, or SECCHAMPION
   useEffect(() => {
@@ -177,6 +181,16 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
       const effectiveSortOrder = sortField === "daysOpen"
         ? (sortOrder === "asc" ? "desc" : "asc")
         : sortOrder;
+
+      // PERFORMANCE: When only page/sort changes (filters unchanged), pass the known total
+      // to skip the expensive COUNT query with NOT EXISTS on 358k+ rows
+      const currentFilterKey = `${severityFilter}|${systemFilter}|${exceptionFilter}|${productFilter}|${adDomainFilter}|${cloudAccountIdFilter}`;
+      const filtersUnchanged = currentFilterKey === prevFiltersRef.current;
+      const knownTotal = filtersUnchanged && paginatedResponse
+        ? paginatedResponse.totalElements
+        : undefined;
+      prevFiltersRef.current = currentFilterKey;
+
       const data = await getCurrentVulnerabilities(
         severityFilter || undefined,
         systemFilter || undefined,
@@ -188,6 +202,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
         pageSize,
         backendSortField,
         effectiveSortOrder,
+        knownTotal,
       );
       setPaginatedResponse(data);
       setError(null);
