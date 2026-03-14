@@ -72,7 +72,7 @@ open class WorkgroupController(
      * Returns: 200 OK with array of workgroups
      */
     @Get
-    @Secured("ADMIN")
+    @Secured("ADMIN", "SECCHAMPION")
     @Transactional
     open fun listWorkgroups(): HttpResponse<List<WorkgroupListResponse>> {
         val workgroups = workgroupService.listAllWorkgroups()
