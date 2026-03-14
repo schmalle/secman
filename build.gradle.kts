@@ -6,7 +6,7 @@ plugins {
     id("io.micronaut.application") version "4.6.2" apply false
     id("io.micronaut.library") version "4.6.2" apply false
     id("io.micronaut.aot") version "4.6.2" apply false
-    id("com.gradleup.shadow") version "9.3.1" apply false
+    id("com.gradleup.shadow") version "9.3.2" apply false
 }
 
 subprojects {
@@ -21,7 +21,7 @@ subprojects {
 // Common dependency versions
 ext {
     set("kotlinVersion", "2.3.10")
-    set("micronautVersion", "4.10.7")
+    set("micronautVersion", "4.10.9")
     set("jvmTarget", "21")
     set("picocliVersion", "4.7.7")
 }
