@@ -127,6 +127,10 @@ micronaut:
     vulnerability_total_count:
       maximum-size: 10
       expire-after-write: 5m
+    # Cached count for admin not_excepted queries (no filters) - avoids expensive COUNT with NOT EXISTS
+    vulnerability_not_excepted_count:
+      maximum-size: 10
+      expire-after-write: 5m
     workgroup_memberships:
       maximum-size: 200
       expire-after-write: 10m
