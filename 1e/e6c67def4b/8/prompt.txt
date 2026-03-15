@@ -1,0 +1,1 @@
+this looks wrong. SOME of the mappings in the database must be also in the newly downloaded file. Please analyze, what the root cause is.
