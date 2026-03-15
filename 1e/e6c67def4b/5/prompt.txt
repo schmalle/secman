@@ -1,0 +1,1 @@
+carefully analyze, why the error happens, when i start the CLI client without the need to access the database at all
