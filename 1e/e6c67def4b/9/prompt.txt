@@ -1,0 +1,1 @@
+the bug is still existing, maybe also the access_token is required ? As said on Windows with the native CLI it is working, so it is a failure in the secman code
