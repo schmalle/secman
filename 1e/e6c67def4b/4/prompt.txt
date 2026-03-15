@@ -1,0 +1,1 @@
+fix the errors until "./bin/secmanng manage-user-mappings import-s3 --bucket cov-sec-c7n-accounts --key accounts.json --dry-run" returns no error anymore

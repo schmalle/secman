@@ -1,0 +1,44 @@
+{
+  "cli_version": "0.5.0",
+  "checkpoint_id": "1ee6c67def4b",
+  "session_id": "639085f1-e1e0-4231-9f5d-0a9d873a76fd",
+  "strategy": "manual-commit",
+  "created_at": "2026-03-15T17:42:28.99495Z",
+  "branch": "main",
+  "checkpoints_count": 2,
+  "files_touched": [
+    ".idea/workspace.xml",
+    "bin/secmanng",
+    "secman.env",
+    "src/backendng/src/main/kotlin/com/secman/config/DatasourceUrlValidator.kt",
+    "src/backendng/src/main/kotlin/com/secman/config/JwtSigningValidator.kt",
+    "src/cli/src/main/kotlin/com/secman/cli/commands/ImportS3Command.kt",
+    "src/cli/src/main/kotlin/com/secman/cli/service/S3DownloadService.kt",
+    "src/cli/src/main/kotlin/com/secman/cli/service/UserMappingCliService.kt",
+    "src/cli/src/main/resources/application.yml",
+    "src/frontend/package-lock.json",
+    "src/frontend/package.json",
+    "src/frontend/src/content.config.ts"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "4cc86f7e9d80",
+  "token_usage": {
+    "input_tokens": 60,
+    "cache_creation_tokens": 108056,
+    "cache_read_tokens": 3198108,
+    "output_tokens": 41256,
+    "api_call_count": 46
+  },
+  "session_metrics": {
+    "turn_count": 2
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-15T17:42:28.665906Z",
+    "agent_lines": 688,
+    "human_added": 16,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 704,
+    "agent_percentage": 97.72727272727273
+  }
+}
