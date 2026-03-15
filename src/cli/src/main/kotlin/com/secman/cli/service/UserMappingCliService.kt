@@ -1,5 +1,6 @@
 package com.secman.cli.service
 
+import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import com.secman.domain.MappingStatus
@@ -343,11 +344,18 @@ class UserMappingCliService(
 
         log.info("Importing from $filePath (format: $detectedFormat, dryRun: $dryRun)")
 
-        return when (detectedFormat) {
+        val result = when (detectedFormat) {
             "CSV" -> importFromCsv(file, dryRun, adminEmail)
             "JSON" -> importFromJson(file, dryRun, adminEmail)
             else -> throw IllegalArgumentException("Unsupported format: $detectedFormat")
         }
+
+        if (dryRun) {
+            val comparison = compareMappingsWithDb(result.operations)
+            return result.copy(comparison = comparison)
+        }
+
+        return result
     }
 
     /**
@@ -529,7 +537,25 @@ class UserMappingCliService(
         val objectMapper = jacksonObjectMapper()
 
         try {
-            val mappingsData: List<Map<String, Any>> = objectMapper.readValue(file)
+            // Handle both JSON array root and object root (e.g. {"accounts": [...]})
+            val rootNode = objectMapper.readTree(file)
+            val typeRef = object : TypeReference<List<Map<String, Any>>>() {}
+            val mappingsData: List<Map<String, Any>> = when {
+                rootNode.isArray -> objectMapper.convertValue(rootNode, typeRef)
+                rootNode.isObject -> {
+                    // Look for first array-valued field as the data source
+                    val arrayField = rootNode.fields().asSequence()
+                        .firstOrNull { it.value.isArray }
+                    if (arrayField != null) {
+                        log.info("JSON root is an object; using '${arrayField.key}' array (${arrayField.value.size()} entries)")
+                        objectMapper.convertValue(arrayField.value, typeRef)
+                    } else {
+                        // Single object — wrap in a list
+                        listOf(objectMapper.convertValue(rootNode, object : TypeReference<Map<String, Any>>() {}))
+                    }
+                }
+                else -> throw IllegalArgumentException("JSON root must be an array or object")
+            }
 
             if (mappingsData.size > MAX_IMPORT_ROWS) {
                 throw IllegalArgumentException(
@@ -539,9 +565,18 @@ class UserMappingCliService(
             }
 
             mappingsData.forEach { mapping ->
-                val email = mapping["email"] as? String
-                val domains = mapping["domains"] as? List<*>
-                val awsAccounts = mapping["awsAccounts"] as? List<*>
+                // Prefer vars["cov:owner"] (real owner email) over top-level "email"
+                // (which contains cryptic AWS root account emails in Cloud Custodian format)
+                @Suppress("UNCHECKED_CAST")
+                val vars = mapping["vars"] as? Map<String, Any>
+                val covOwner = vars?.get("cov:owner")?.toString()?.trim()
+                val rawEmail = (mapping["email"] ?: mapping["Email"]) as? String
+                val email = if (!covOwner.isNullOrBlank()) covOwner else rawEmail
+                val domains = (mapping["domains"] ?: mapping["Domains"]) as? List<*>
+                // Support both standard format ("awsAccounts": ["123..."]) and
+                // Cloud Custodian format ("account_id": "123..." or "account_id": 123...)
+                val awsAccounts = (mapping["awsAccounts"] ?: mapping["AwsAccounts"]) as? List<*>
+                    ?: mapping["account_id"]?.toString()?.let { listOf(it) }
 
                 if (email.isNullOrBlank()) {
                     results.add(
@@ -647,6 +682,62 @@ class UserMappingCliService(
     }
 
     /**
+     * Compare parsed file mappings against existing DB mappings (dry-run enhancement)
+     *
+     * Compares on (email, awsAccountId) only — the domain column is ignored.
+     * The CSV upload path stores "-NONE-" as a sentinel domain while the CLI/JSON
+     * path uses null; both mean "no domain". By keying on just email + awsAccountId
+     * the comparison is immune to this mismatch.
+     * Falls back gracefully if DB is unreachable.
+     */
+    private fun compareMappingsWithDb(operations: List<MappingOperationResult>): MappingComparisonResult {
+        try {
+            val successOps = operations.filter { it.success }
+
+            // Build file keys: only email + awsAccountId, ignore domain
+            val fileKeys = successOps
+                .filter { it.awsAccountId != null }
+                .map { Pair(it.email.lowercase().trim(), it.awsAccountId!!.trim()) }
+                .toSet()
+
+            // Load DB mappings that have an awsAccountId, key on email + awsAccountId only
+            val dbMappings = userMappingRepository.findAll()
+                .filter { it.awsAccountId != null }
+
+            val dbKeys = dbMappings
+                .map { Pair(it.email.lowercase().trim(), it.awsAccountId!!.trim()) }
+                .toSet()
+
+            log.debug("Comparison: fileKeys={}, dbKeys={}, sample file={}, sample db={}",
+                fileKeys.size, dbKeys.size,
+                fileKeys.firstOrNull(), dbKeys.firstOrNull())
+
+            val newKeys = fileKeys - dbKeys
+            val unchangedKeys = fileKeys.intersect(dbKeys)
+            val removedKeys = dbKeys - fileKeys
+
+            return MappingComparisonResult(
+                dbMappingCount = dbKeys.size,
+                fileMappingCount = fileKeys.size,
+                newCount = newKeys.size,
+                unchangedCount = unchangedKeys.size,
+                removedCount = removedKeys.size,
+                dbAvailable = true
+            )
+        } catch (e: Exception) {
+            log.warn("Could not query database for mapping comparison: ${e.message}")
+            return MappingComparisonResult(
+                dbMappingCount = 0,
+                fileMappingCount = operations.count { it.success },
+                newCount = 0,
+                unchangedCount = 0,
+                removedCount = 0,
+                dbAvailable = false
+            )
+        }
+    }
+
+    /**
      * Summarize operation results into counts
      */
     private fun summarizeResults(results: List<MappingOperationResult>): MappingResult {
@@ -688,5 +779,18 @@ data class MappingResult(
     val createdPending: Int = 0,
     val skipped: Int,
     val errors: List<String>,
-    val operations: List<MappingOperationResult>
+    val operations: List<MappingOperationResult>,
+    val comparison: MappingComparisonResult? = null
+)
+
+/**
+ * Result of comparing file mappings against the database (dry-run only)
+ */
+data class MappingComparisonResult(
+    val dbMappingCount: Int,
+    val fileMappingCount: Int,
+    val newCount: Int,
+    val unchangedCount: Int,
+    val removedCount: Int,
+    val dbAvailable: Boolean
 )

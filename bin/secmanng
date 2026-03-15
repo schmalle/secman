@@ -9,7 +9,12 @@ export SECMAN_USERNAME="op://test/secman/SECMAN_USERNAME"
 export SECMAN_PASSWORD="op://test/secman/SECMAN_PASSWORD"
 export API_KEY="op://test/secman/API_KEY"
 export SECMAN_ADMIN_EMAIL="op://test/secman/SECMAN_ADMIN_EMAIL"
+export AWS_ACCESS_KEY_ID="op://test/secman/SECMAN_AWS_ACCESS_KEY_ID"
+export AWS_SECRET_ACCESS_KEY="op://test/secman/SECMAN_AWS_SECRET_ACCESS_KEY"
+export AWS_SESSION_TOKEN="op://test/secman/SECMAN_AWS_ACCESS_TOKEN"
 
+# Explicit DB_CONNECT avoids Micronaut placeholder colon-parsing issue in shadow JAR
+export DB_CONNECT="${DB_CONNECT:-jdbc:mariadb://localhost:3306/secman}"
 
 ./gradlew cli:build
-op run -- java -jar ./src/cli/build/libs/cli-0.1.0-all.jar "$@"
+op run -- java -Ddatasources.default.initialization-fail-timeout=-1 -jar ./src/cli/build/libs/cli-0.1.0-all.jar "$@"

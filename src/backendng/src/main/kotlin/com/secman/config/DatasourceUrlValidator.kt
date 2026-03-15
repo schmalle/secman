@@ -8,7 +8,7 @@ import jakarta.inject.Singleton
 import org.slf4j.LoggerFactory
 
 @Context
-@Requires(notEnv = ["test"])
+@Requires(notEnv = ["test", "cli"])
 @Singleton
 class DatasourceUrlValidator(
     @Value("\${datasources.default.url}") private val jdbcUrl: String

@@ -66,9 +66,20 @@ class S3DownloadService {
         val s3Client = buildS3Client(region, profile, accessKeyId, secretAccessKey, sessionToken)
 
         try {
-            // Check file size before downloading
-            val objectSize = getObjectSize(s3Client, bucket, key)
-            if (objectSize > MAX_FILE_SIZE_BYTES) {
+            // Check file size before downloading (best-effort — requires s3:HeadObject)
+            val objectSize = try {
+                getObjectSize(s3Client, bucket, key)
+            } catch (e: S3Exception) {
+                if (e.statusCode() == 403) {
+                    log.warn("HeadObject permission denied — skipping pre-download size check. " +
+                        "Grant s3:HeadObject for file size validation before download.")
+                    null
+                } else {
+                    throw e  // re-throw non-permission errors (e.g. 404 will be caught by outer handler)
+                }
+            }
+
+            if (objectSize != null && objectSize > MAX_FILE_SIZE_BYTES) {
                 throw S3DownloadException(
                     "File 's3://$bucket/$key' exceeds ${MAX_FILE_SIZE_MB}MB limit (actual: ${objectSize / 1024 / 1024}MB)"
                 )
@@ -91,15 +102,27 @@ class S3DownloadService {
             log.info("Downloading s3://$bucket/$key to temp file: $tempFile")
 
             try {
+                // Use streaming getObject instead of path-based overload to avoid
+                // SDK FileResponseTransformer issues with pre-existing temp files
                 s3Client.getObject(
                     GetObjectRequest.builder()
                         .bucket(bucket)
                         .key(key)
-                        .build(),
-                    tempFile
-                )
+                        .build()
+                ).use { responseStream ->
+                    Files.copy(responseStream, tempFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+                }
 
-                log.info("Downloaded ${objectSize / 1024}KB from S3")
+                // Post-download size check (catches oversized files when HeadObject was unavailable)
+                val downloadedSize = Files.size(tempFile)
+                if (downloadedSize > MAX_FILE_SIZE_BYTES) {
+                    Files.deleteIfExists(tempFile)
+                    throw S3DownloadException(
+                        "Downloaded file exceeds ${MAX_FILE_SIZE_MB}MB limit (actual: ${downloadedSize / 1024 / 1024}MB). File deleted."
+                    )
+                }
+
+                log.info("Downloaded ${downloadedSize / 1024}KB from S3")
                 return tempFile
             } catch (e: Exception) {
                 // Clean up temp file on download failure
@@ -115,7 +138,7 @@ class S3DownloadService {
             if (e.statusCode() == 403) {
                 throw S3DownloadException(
                     "Access denied. Check IAM permissions for bucket '$bucket'. " +
-                    "Required permissions: s3:GetObject, s3:HeadObject"
+                    "Required permission: s3:GetObject"
                 )
             }
             throw S3DownloadException("S3 error: ${e.awsErrorDetails()?.errorMessage() ?: e.message}")
@@ -175,6 +198,16 @@ class S3DownloadService {
         when {
             accessKeyId != null && secretAccessKey != null -> {
                 log.debug("Using explicit AWS credentials (access key ID: ${accessKeyId.take(4)}...)")
+                // ASIA prefix = temporary STS credentials; session token is mandatory
+                if (accessKeyId.startsWith("ASIA") && sessionToken == null) {
+                    throw S3DownloadException(
+                        "Temporary AWS credentials detected (ASIA-prefix key) but no session token provided.\n" +
+                        "  Temporary/STS credentials require all three parts:\n" +
+                        "  - AWS_ACCESS_KEY_ID (or --aws-access-key-id)\n" +
+                        "  - AWS_SECRET_ACCESS_KEY (or --aws-secret-access-key)\n" +
+                        "  - AWS_SESSION_TOKEN (or --aws-session-token)"
+                    )
+                }
                 val credentials = if (sessionToken != null) {
                     log.debug("Using session token for temporary credentials")
                     AwsSessionCredentials.create(accessKeyId, secretAccessKey, sessionToken)

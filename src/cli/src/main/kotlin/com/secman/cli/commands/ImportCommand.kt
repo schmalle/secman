@@ -112,9 +112,22 @@ class ImportCommand(
                     println("⚠️  Skipped: ${result.skipped} duplicate(s)")
                 }
             } else {
-                val wouldCreate = result.operations.count { it.operation == "WOULD_CREATE" }
-                if (wouldCreate > 0) {
-                    println("✅ Would create: $wouldCreate mapping(s)")
+                val comparison = result.comparison
+                if (comparison != null && comparison.dbAvailable) {
+                    println("Comparison:")
+                    println("  Backend:   ${comparison.dbMappingCount} existing mapping(s)")
+                    println("  File:      ${comparison.fileMappingCount} mapping(s) from file")
+                    println("  New:       ${comparison.newCount} mapping(s) (in file, not in DB)")
+                    println("  Unchanged: ${comparison.unchangedCount} mapping(s) (in both)")
+                    println("  Removed:   ${comparison.removedCount} mapping(s) (in DB, not in file)")
+                } else {
+                    val wouldCreate = result.operations.count { it.operation == "WOULD_CREATE" }
+                    if (wouldCreate > 0) {
+                        println("Would create: $wouldCreate mapping(s)")
+                    }
+                    if (comparison != null && !comparison.dbAvailable) {
+                        println("Note: Database unavailable, comparison skipped (format validation only)")
+                    }
                 }
             }
 

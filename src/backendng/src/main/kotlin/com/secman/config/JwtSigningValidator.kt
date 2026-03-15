@@ -9,7 +9,7 @@ import org.slf4j.LoggerFactory
 import java.util.Base64
 
 @Context
-@Requires(notEnv = ["test"])
+@Requires(notEnv = ["test", "cli"])
 @Singleton
 class JwtSigningValidator(
     private val jwtTokenGenerator: JwtTokenGenerator
