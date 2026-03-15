@@ -1,9 +1,11 @@
 {
   "cli_version": "0.5.0",
   "checkpoint_id": "1ee6c67def4b",
+  "session_id": "4949fdf7-f610-4d6f-8910-6f41aff09dc6",
   "strategy": "manual-commit",
+  "created_at": "2026-03-15T17:42:28.184017Z",
   "branch": "main",
-  "checkpoints_count": 7,
+  "checkpoints_count": 1,
   "files_touched": [
     ".idea/workspace.xml",
     "bin/secmanng",
@@ -19,31 +21,25 @@
     "src/frontend/package.json",
     "src/frontend/src/content.config.ts"
   ],
-  "sessions": [
-    {
-      "metadata": "/1e/e6c67def4b/0/metadata.json",
-      "transcript": "/1e/e6c67def4b/0/full.jsonl",
-      "content_hash": "/1e/e6c67def4b/0/content_hash.txt",
-      "prompt": "/1e/e6c67def4b/0/prompt.txt"
-    },
-    {
-      "metadata": "/1e/e6c67def4b/1/metadata.json",
-      "transcript": "/1e/e6c67def4b/1/full.jsonl",
-      "content_hash": "/1e/e6c67def4b/1/content_hash.txt",
-      "prompt": "/1e/e6c67def4b/1/prompt.txt"
-    },
-    {
-      "metadata": "/1e/e6c67def4b/2/metadata.json",
-      "transcript": "/1e/e6c67def4b/2/full.jsonl",
-      "content_hash": "/1e/e6c67def4b/2/content_hash.txt",
-      "prompt": ""
-    }
-  ],
+  "agent": "Claude Code",
+  "turn_id": "cbf0b64f10a6",
   "token_usage": {
-    "input_tokens": 131,
-    "cache_creation_tokens": 153603,
-    "cache_read_tokens": 2164193,
-    "output_tokens": 40745,
-    "api_call_count": 47
+    "input_tokens": 10,
+    "cache_creation_tokens": 37167,
+    "cache_read_tokens": 238676,
+    "output_tokens": 2089,
+    "api_call_count": 8
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-03-15T17:42:28.108496Z",
+    "agent_lines": 704,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 704,
+    "agent_percentage": 100
   }
 }
