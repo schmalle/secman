@@ -1,0 +1,9 @@
+i still see the error. Please ensure that the S3 importer ONLY looks at email and AWS Account ID and IGNORES the domain field.
+
+---
+
+the error is still existing. For the CLI based import comparison, only check the mapping lines with email and aws_account_id,
+
+---
+
+the code is still not working. Please add code to export in the current working directory a file current.csv with email, awsaccountid for the current DB content and a new.csv file with the same content from the newly downloaded s3 import
