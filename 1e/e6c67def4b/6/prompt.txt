@@ -1,0 +1,1 @@
+please analyze the bug (I have the right getObject rights !!!), hence I thing the S3 logic in your code is buggy and propose a fix.
