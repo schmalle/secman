@@ -1,0 +1,1 @@
+please analyze the problem and propose a fix. As i did not even asked for any database related action from the CLI i am surpised about this error
