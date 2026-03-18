@@ -8,11 +8,13 @@ import com.secman.repository.EmailNotificationLogRepository
 import io.micronaut.scheduling.TaskExecutors
 import io.micronaut.scheduling.annotation.ExecuteOn
 import jakarta.inject.Singleton
+import jakarta.activation.DataHandler
 import jakarta.mail.*
 import jakarta.mail.internet.InternetAddress
 import jakarta.mail.internet.MimeBodyPart
 import jakarta.mail.internet.MimeMessage
 import jakarta.mail.internet.MimeMultipart
+import jakarta.mail.util.ByteArrayDataSource
 import kotlinx.coroutines.*
 import kotlinx.coroutines.future.future
 import kotlinx.coroutines.runBlocking
@@ -77,6 +79,102 @@ open class EmailService(
         return sendEmail(to, subject, textContent, htmlContent)
     }
     
+    /**
+     * Send email with inline images embedded as CID attachments.
+     * @param inlineImages Map of Content-ID to (bytes, mimeType) pairs
+     */
+    fun sendEmailWithInlineImages(
+        to: String,
+        subject: String,
+        textContent: String,
+        htmlContent: String,
+        inlineImages: Map<String, Pair<ByteArray, String>>
+    ): CompletableFuture<Boolean> {
+        return CompletableFuture.supplyAsync {
+            runBlocking {
+                try {
+                    val activeConfig = getActiveEmailConfig()
+                    if (activeConfig == null) {
+                        log.warn("No active email configuration found. Skipping email to {}", to)
+                        return@runBlocking false
+                    }
+
+                    sendEmailWithConfigAndImages(activeConfig, to, subject, textContent, htmlContent, inlineImages)
+                } catch (e: Exception) {
+                    log.error("Failed to send email with inline images to {}: {}", to, e.message, e)
+                    false
+                }
+            }
+        }
+    }
+
+    /**
+     * Send email using specific configuration with inline image support.
+     * MIME structure: multipart/related [ multipart/alternative [ text, html ], image1, image2, ... ]
+     */
+    private fun sendEmailWithConfigAndImages(
+        config: EmailConfig,
+        to: String,
+        subject: String,
+        textContent: String,
+        htmlContent: String,
+        inlineImages: Map<String, Pair<ByteArray, String>>
+    ): Boolean {
+        return try {
+            log.debug("Sending email with {} inline image(s) to {}", inlineImages.size, to)
+
+            val properties = createMailProperties(config)
+            val session = createMailSession(properties, config)
+
+            val message = MimeMessage(session).apply {
+                setFrom(InternetAddress(config.fromEmail, config.fromName))
+                setRecipients(Message.RecipientType.TO, InternetAddress.parse(to))
+                setSubject(subject.replace(Regex("[\\r\\n]"), ""))
+
+                // Build multipart/alternative with text + HTML
+                val alternativePart = MimeMultipart("alternative")
+
+                val textPart = MimeBodyPart().apply {
+                    setText(textContent, "UTF-8")
+                }
+                alternativePart.addBodyPart(textPart)
+
+                val htmlPart = MimeBodyPart().apply {
+                    setContent(htmlContent, "text/html; charset=UTF-8")
+                }
+                alternativePart.addBodyPart(htmlPart)
+
+                // Wrap in multipart/related and add inline images
+                val relatedPart = MimeMultipart("related")
+
+                val alternativeWrapper = MimeBodyPart()
+                alternativeWrapper.setContent(alternativePart)
+                relatedPart.addBodyPart(alternativeWrapper)
+
+                inlineImages.forEach { (contentId, imageData) ->
+                    val (bytes, mimeType) = imageData
+                    val imagePart = MimeBodyPart().apply {
+                        dataHandler = DataHandler(ByteArrayDataSource(bytes, mimeType))
+                        setHeader("Content-ID", "<$contentId>")
+                        disposition = MimeBodyPart.INLINE
+                    }
+                    relatedPart.addBodyPart(imagePart)
+                }
+
+                setContent(relatedPart)
+                sentDate = Date()
+            }
+
+            Transport.send(message)
+            log.info("Successfully sent email with inline images to {} with subject: {}", to, subject)
+            true
+
+        } catch (e: Exception) {
+            log.error("Failed to send email with inline images to {}: {} - {}", to, e.javaClass.simpleName, e.message, e)
+            false
+        }
+    }
+
     /**
      * Test email configuration by sending a test email
      */

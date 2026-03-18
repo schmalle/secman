@@ -196,6 +196,9 @@ class AdminSummaryService(
         val htmlContent = renderHtmlTemplate(statistics, executionDate)
         val textContent = renderTextTemplate(statistics, executionDate)
 
+        // Load logo for CID inline embedding
+        val inlineImages = loadLogoInlineImage()
+
         val sentRecipients = mutableListOf<String>()
         val failedRecipients = mutableListOf<String>()
 
@@ -205,11 +208,12 @@ class AdminSummaryService(
                     logger.info("Sending admin summary email to {}", user.email)
                 }
 
-                val success = emailService.sendEmail(
+                val success = emailService.sendEmailWithInlineImages(
                     to = user.email,
                     subject = "SecMan Admin Summary",
                     textContent = textContent,
-                    htmlContent = htmlContent
+                    htmlContent = htmlContent,
+                    inlineImages = inlineImages
                 ).get()
 
                 if (success) {
@@ -266,6 +270,26 @@ class AdminSummaryService(
             logger.debug("Logged admin summary execution: status={}", result.status)
         } catch (e: Exception) {
             logger.error("Failed to log admin summary execution: {}", e.message)
+        }
+    }
+
+    /**
+     * Load the SecMan logo from classpath resources for CID inline embedding.
+     * Returns an empty map if the logo cannot be loaded (email will still send, just without the logo).
+     */
+    private fun loadLogoInlineImage(): Map<String, Pair<ByteArray, String>> {
+        return try {
+            val logoBytes = javaClass.getResourceAsStream("/email-templates/SecManLogo.png")
+                ?.readAllBytes()
+            if (logoBytes != null) {
+                mapOf("secman-logo" to (logoBytes to "image/png"))
+            } else {
+                logger.warn("SecManLogo.png not found in classpath, email will be sent without logo")
+                emptyMap()
+            }
+        } catch (e: Exception) {
+            logger.warn("Failed to load SecManLogo.png: {}", e.message)
+            emptyMap()
         }
     }
 
