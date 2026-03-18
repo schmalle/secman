@@ -54,6 +54,7 @@ class ServersCommand {
     var clientSecret: String? = null     // CrowdStrike client secret (optional override)
     var limit: Int = 800                 // Page size for pagination
     var lastSeenDays: Int = 0            // Only include devices seen within N days (0 = all devices)
+    var overdueThreshold: Int = 30       // Threshold in days for overdue vulnerability report
 
     /**
      * Execute the servers query command
@@ -116,6 +117,7 @@ class ServersCommand {
                 val allErrors = mutableListOf<String>()
                 var totalErrorCount = 0
                 var streamBatchNum = 0
+                var totalSystemsWithOverdueVulns = 0
 
                 val totalVulns = apiClient.queryServersWithFiltersStreaming(
                     deviceType = deviceType,
@@ -159,6 +161,11 @@ class ServersCommand {
                         )
                     }
 
+                    // Count systems with overdue vulnerabilities (O(1) extra memory - just a counter)
+                    totalSystemsWithOverdueVulns += batches.count { batch ->
+                        batch.vulnerabilities.any { it.daysOpen > overdueThreshold }
+                    }
+
                     val result = importService.importServerVulnerabilities(batches, "CLI", triggerRefresh = false)
                     totalServersProcessed += result.serversProcessed
                     totalServersCreated += result.serversCreated
@@ -188,6 +195,13 @@ class ServersCommand {
                 System.out.println("Vulnerabilities imported: $totalVulnsImported")
                 System.out.println("  - With patch publication date: $totalVulnsWithPatchDate")
                 System.out.println("Vulnerabilities skipped: $totalVulnsSkipped")
+
+                // Overdue vulnerability report
+                if (totalServersProcessed > 0) {
+                    val percent = totalSystemsWithOverdueVulns * 100.0 / totalServersProcessed
+                    System.out.println("\n--- Overdue Vulnerability Report (>$overdueThreshold days) ---")
+                    System.out.println("Systems with overdue vulnerabilities: $totalSystemsWithOverdueVulns of $totalServersProcessed (${String.format("%.1f", percent)}%)")
+                }
 
                 if (totalErrorCount > 0) {
                     System.err.println("\n--- Errors ($totalErrorCount) ---")
@@ -311,6 +325,11 @@ class ServersCommand {
                 )
             }
 
+            // Count systems with overdue vulnerabilities (O(1) extra memory - just a counter)
+            val systemsWithOverdueVulns = batches.count { batch ->
+                batch.vulnerabilities.any { it.daysOpen > overdueThreshold }
+            }
+
             val result = importService.importServerVulnerabilities(batches, "CLI")
 
             // Display import statistics
@@ -322,6 +341,13 @@ class ServersCommand {
             System.out.println("Vulnerabilities imported: ${result.vulnerabilitiesImported}")
             System.out.println("  - With patch publication date: ${result.vulnerabilitiesWithPatchDate}")
             System.out.println("Vulnerabilities skipped: ${result.vulnerabilitiesSkipped}")
+
+            // Overdue vulnerability report
+            if (result.serversProcessed > 0) {
+                val percent = systemsWithOverdueVulns * 100.0 / result.serversProcessed
+                System.out.println("\n--- Overdue Vulnerability Report (>$overdueThreshold days) ---")
+                System.out.println("Systems with overdue vulnerabilities: $systemsWithOverdueVulns of ${result.serversProcessed} (${String.format("%.1f", percent)}%)")
+            }
 
             if (result.errors.isNotEmpty()) {
                 System.err.println("\n--- Errors (${result.errors.size}) ---")

@@ -265,7 +265,7 @@ const Sidebar = () => {
                                         </a>
                                     </li>
                                 )}
-                                {!isAdmin && (
+                                {(isAdmin || userRoles.includes('SECCHAMPION')) && (
                                     <li>
                                         <a href="/vulnerabilities/system" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
                                             <i className="bi bi-hdd me-2"></i> System vulns

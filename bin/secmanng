@@ -17,5 +17,5 @@ export SECMAN_BACKEND_URL="op://test/secman/SECMAN_HOST"
 # Explicit DB_CONNECT avoids Micronaut placeholder colon-parsing issue in shadow JAR
 export DB_CONNECT="${DB_CONNECT:-jdbc:mariadb://localhost:3306/secman}"
 
-./gradlew cli:build
+# ./gradlew cli:build
 op run -- java -Ddatasources.default.initialization-fail-timeout=-1 -jar ./src/cli/build/libs/cli-0.1.0-all.jar "$@"

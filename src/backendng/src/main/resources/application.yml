@@ -329,7 +329,7 @@ logger:
   levels:
     com.secman: DEBUG
     io.micronaut.security: DEBUG
-    io.micronaut.web.router: DEBUG
+    io.micronaut.web.router: INFO
 
 app:
   backend:
