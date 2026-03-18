@@ -11,7 +11,8 @@ import com.secman.crowdstrike.model.AuthToken
  */
 data class StreamingSummary(
     val totalVulnerabilities: Int,
-    val hostCounts: Map<String, Int>  // hostname -> vuln count
+    val hostCounts: Map<String, Int>,  // hostname -> vuln count
+    val hostsWithOverdueVulns: Int = 0  // hosts with vulns open > overdueThreshold days
 )
 
 /**
@@ -161,6 +162,7 @@ interface CrowdStrikeApiClient {
         config: FalconConfigDto,
         limit: Int = 100,
         lastSeenDays: Int = 0,
-        deviceBatchSize: Int = 200
+        deviceBatchSize: Int = 200,
+        overdueThreshold: Int = 30
     ): StreamingSummary
 }

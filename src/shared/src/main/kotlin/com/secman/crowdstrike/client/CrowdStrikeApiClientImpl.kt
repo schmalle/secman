@@ -526,7 +526,8 @@ open class CrowdStrikeApiClientImpl(
         config: FalconConfigDto,
         limit: Int,
         lastSeenDays: Int,
-        deviceBatchSize: Int
+        deviceBatchSize: Int,
+        overdueThreshold: Int
     ): StreamingSummary {
         val parsedDeviceType = DeviceType.fromString(deviceType)
         log.info("Streaming summary query for {} devices: severity={}, minDaysOpen={}", parsedDeviceType.name, severity, minDaysOpen)
@@ -542,6 +543,7 @@ open class CrowdStrikeApiClientImpl(
         log.info("Found {} {} devices, summarizing in batches of {}", serverDeviceIds.size, parsedDeviceType.name, deviceBatchSize)
 
         val hostCounts = mutableMapOf<String, Int>()
+        val overdueHosts = mutableSetOf<String>()
         var totalVulns = 0
         val deviceChunks = serverDeviceIds.chunked(deviceBatchSize)
 
@@ -559,15 +561,30 @@ open class CrowdStrikeApiClientImpl(
 
             batchVulns.groupBy { it.hostname }.forEach { (host, vulns) ->
                 hostCounts.merge(host, vulns.size) { a, b -> a + b }
+                if (vulns.any { parseDaysOpen(it.daysOpen) > overdueThreshold }) {
+                    overdueHosts.add(host)
+                }
             }
             totalVulns += batchVulns.size
             // batchVulns eligible for GC after this iteration
         }
 
-        log.info("Streaming summary completed: {} total vulnerabilities across {} hosts",
-            totalVulns, hostCounts.size)
+        log.info("Streaming summary completed: {} total vulnerabilities across {} hosts, {} with overdue vulns",
+            totalVulns, hostCounts.size, overdueHosts.size)
 
-        return StreamingSummary(totalVulnerabilities = totalVulns, hostCounts = hostCounts)
+        return StreamingSummary(
+            totalVulnerabilities = totalVulns,
+            hostCounts = hostCounts,
+            hostsWithOverdueVulns = overdueHosts.size
+        )
+    }
+
+    /**
+     * Parse daysOpen string to integer value (e.g., "526 days" -> 526)
+     */
+    private fun parseDaysOpen(daysOpen: String?): Int {
+        if (daysOpen.isNullOrBlank()) return 0
+        return daysOpen.split(" ").firstOrNull()?.toIntOrNull() ?: 0
     }
 
     /**

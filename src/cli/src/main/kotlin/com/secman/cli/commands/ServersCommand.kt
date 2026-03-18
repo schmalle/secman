@@ -196,11 +196,13 @@ class ServersCommand {
                 System.out.println("  - With patch publication date: $totalVulnsWithPatchDate")
                 System.out.println("Vulnerabilities skipped: $totalVulnsSkipped")
 
-                // Overdue vulnerability report
+                // Vulnerability age summary
                 if (totalServersProcessed > 0) {
+                    val totalWithoutOverdue = totalServersProcessed - totalSystemsWithOverdueVulns
                     val percent = totalSystemsWithOverdueVulns * 100.0 / totalServersProcessed
-                    System.out.println("\n--- Overdue Vulnerability Report (>$overdueThreshold days) ---")
-                    System.out.println("Systems with overdue vulnerabilities: $totalSystemsWithOverdueVulns of $totalServersProcessed (${String.format("%.1f", percent)}%)")
+                    System.out.println("\n--- Vulnerability Age Summary (>$overdueThreshold days) ---")
+                    System.out.println("Servers with vulnerabilities older than $overdueThreshold days: $totalSystemsWithOverdueVulns of $totalServersProcessed (${String.format("%.1f", percent)}%)")
+                    System.out.println("Servers with no vulnerabilities older than $overdueThreshold days: $totalWithoutOverdue of $totalServersProcessed")
                 }
 
                 if (totalErrorCount > 0) {
@@ -226,7 +228,8 @@ class ServersCommand {
                     config = config,
                     limit = limit,
                     lastSeenDays = lastSeenDays,
-                    deviceBatchSize = 200
+                    deviceBatchSize = 200,
+                    overdueThreshold = overdueThreshold
                 )
 
                 System.out.println("Found ${summary.totalVulnerabilities} vulnerabilities across ${parsedDeviceType.displayName()}")
@@ -243,6 +246,17 @@ class ServersCommand {
                     summary.hostCounts.entries.sortedByDescending { it.value }.forEach { (hostname, count) ->
                         System.out.println("  - $hostname: $count vulnerabilities")
                     }
+                }
+
+                // Vulnerability age summary
+                if (summary.hostCounts.isNotEmpty()) {
+                    val totalHosts = summary.hostCounts.size
+                    val hostsWithOverdue = summary.hostsWithOverdueVulns
+                    val hostsWithoutOverdue = totalHosts - hostsWithOverdue
+                    val overduePercent = hostsWithOverdue * 100.0 / totalHosts
+                    System.out.println("\n--- Vulnerability Age Summary (>$overdueThreshold days) ---")
+                    System.out.println("Servers with vulnerabilities older than $overdueThreshold days: $hostsWithOverdue of $totalHosts (${String.format("%.1f", overduePercent)}%)")
+                    System.out.println("Servers with no vulnerabilities older than $overdueThreshold days: $hostsWithoutOverdue of $totalHosts")
                 }
 
                 if (dryRun) {
@@ -281,6 +295,17 @@ class ServersCommand {
                     System.out.println("  - $hostname: ${vulns.size} vulnerabilities")
                 }
             }
+
+            // Vulnerability age summary
+            val hostsWithOverdue = vulnerabilitiesByHostname.count { (_, vulns) ->
+                vulns.any { parseDaysOpenToInt(it.daysOpen) > overdueThreshold }
+            }
+            val totalHosts = vulnerabilitiesByHostname.size
+            val hostsWithoutOverdue = totalHosts - hostsWithOverdue
+            val overduePercent = hostsWithOverdue * 100.0 / totalHosts
+            System.out.println("\n--- Vulnerability Age Summary (>$overdueThreshold days) ---")
+            System.out.println("Servers with vulnerabilities older than $overdueThreshold days: $hostsWithOverdue of $totalHosts (${String.format("%.1f", overduePercent)}%)")
+            System.out.println("Servers with no vulnerabilities older than $overdueThreshold days: $hostsWithoutOverdue of $totalHosts")
 
             // Dry-run mode: skip import
             if (dryRun) {
@@ -342,11 +367,13 @@ class ServersCommand {
             System.out.println("  - With patch publication date: ${result.vulnerabilitiesWithPatchDate}")
             System.out.println("Vulnerabilities skipped: ${result.vulnerabilitiesSkipped}")
 
-            // Overdue vulnerability report
+            // Vulnerability age summary
             if (result.serversProcessed > 0) {
+                val totalWithoutOverdue = result.serversProcessed - systemsWithOverdueVulns
                 val percent = systemsWithOverdueVulns * 100.0 / result.serversProcessed
-                System.out.println("\n--- Overdue Vulnerability Report (>$overdueThreshold days) ---")
-                System.out.println("Systems with overdue vulnerabilities: $systemsWithOverdueVulns of ${result.serversProcessed} (${String.format("%.1f", percent)}%)")
+                System.out.println("\n--- Vulnerability Age Summary (>$overdueThreshold days) ---")
+                System.out.println("Servers with vulnerabilities older than $overdueThreshold days: $systemsWithOverdueVulns of ${result.serversProcessed} (${String.format("%.1f", percent)}%)")
+                System.out.println("Servers with no vulnerabilities older than $overdueThreshold days: $totalWithoutOverdue of ${result.serversProcessed}")
             }
 
             if (result.errors.isNotEmpty()) {
