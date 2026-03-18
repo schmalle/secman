@@ -8,16 +8,9 @@ import jakarta.inject.Singleton
  * CLI command to add domain-to-user mappings (Feature 049)
  *
  * Usage:
- *   ./gradlew cli:run --args='manage-user-mappings add-domain \
+ *   ./bin/secman manage-user-mappings add-domain \
  *     --emails user1@example.com,user2@example.com \
- *     --domains example.com,corp.local'
- *
- * Features:
- * - Creates n×m mappings (cross product)
- * - Validates email and domain formats
- * - Skips duplicates with warning
- * - Creates pending mappings for non-existent users
- * - Requires ADMIN role
+ *     --domains example.com,corp.local
  */
 @Singleton
 @Command(
@@ -55,9 +48,15 @@ class AddDomainCommand(
             println("=" .repeat(60))
             println()
 
-            // Get admin user
-            val adminEmail = parent.getAdminUserOrThrow()
-            println("Admin user: $adminEmail")
+            // Authenticate with backend
+            val backendUrl = parent.getEffectiveBackendUrl()
+            val username = parent.getEffectiveUsername()
+            val password = parent.getEffectivePassword()
+            userMappingCliService.initHttpClient(backendUrl, parent.insecure)
+            val token = userMappingCliService.authenticate(username, password, backendUrl)
+                ?: throw IllegalArgumentException("Authentication failed - check username/password")
+
+            println("Backend: $backendUrl")
             println()
 
             // Validate inputs
@@ -65,12 +64,12 @@ class AddDomainCommand(
             val trimmedDomains = domains.map { it.trim() }.filter { it.isNotEmpty() }
 
             if (trimmedEmails.isEmpty()) {
-                System.err.println("❌ Error: No valid email addresses provided")
+                System.err.println("Error: No valid email addresses provided")
                 System.exit(1)
             }
 
             if (trimmedDomains.isEmpty()) {
-                System.err.println("❌ Error: No valid domains provided")
+                System.err.println("Error: No valid domains provided")
                 System.exit(1)
             }
 
@@ -79,19 +78,20 @@ class AddDomainCommand(
             println("Domains: ${trimmedDomains.joinToString()}")
             println()
 
-            // Execute mapping creation
+            // Execute mapping creation via HTTP
             val result = userMappingCliService.addDomainMappings(
                 emails = trimmedEmails,
                 domains = trimmedDomains,
-                adminEmail = adminEmail
+                backendUrl = backendUrl,
+                authToken = token
             )
 
             // Display results
             result.operations.forEach { op ->
                 val symbol = when (op.operation) {
-                    "CREATED" -> if (op.isPending) "⚠️ " else "✅"
-                    "SKIPPED_DUPLICATE" -> "⚠️ "
-                    else -> "❌"
+                    "CREATED" -> if (op.isPending) "!" else "+"
+                    "SKIPPED_DUPLICATE" -> "~"
+                    else -> "x"
                 }
 
                 val status = when {
@@ -101,7 +101,7 @@ class AddDomainCommand(
                     else -> ""
                 }
 
-                println("$symbol ${op.email} → ${op.domain}$status")
+                println("[$symbol] ${op.email} -> ${op.domain}$status")
             }
 
             println()
@@ -109,36 +109,27 @@ class AddDomainCommand(
             println("Summary")
             println("=" .repeat(60))
             println("Total: ${result.totalProcessed} mapping(s) processed")
-            if (result.created > 0) {
-                println("Created: ${result.created} active")
-            }
-            if (result.createdPending > 0) {
-                println("Created: ${result.createdPending} pending")
-            }
-            if (result.skipped > 0) {
-                println("Skipped: ${result.skipped} duplicate(s)")
-            }
+            if (result.created > 0) println("Created: ${result.created} active")
+            if (result.createdPending > 0) println("Created: ${result.createdPending} pending")
+            if (result.skipped > 0) println("Skipped: ${result.skipped} duplicate(s)")
             if (result.errors.isNotEmpty()) {
                 println("Errors: ${result.errors.size} failure(s)")
-                result.errors.forEach { error ->
-                    println("  - $error")
-                }
+                result.errors.forEach { error -> println("  - $error") }
             }
             println()
 
-            // Exit with error code if there were errors
             if (result.errors.isNotEmpty()) {
-                println("✗ Completed with errors")
+                println("Completed with errors")
                 System.exit(1)
             } else {
-                println("✓ All mappings processed successfully")
+                println("All mappings processed successfully")
             }
 
         } catch (e: IllegalArgumentException) {
-            System.err.println("❌ Error: ${e.message}")
+            System.err.println("Error: ${e.message}")
             System.exit(1)
         } catch (e: Exception) {
-            System.err.println("❌ Error: ${e.message}")
+            System.err.println("Error: ${e.message}")
             e.printStackTrace()
             System.exit(1)
         }

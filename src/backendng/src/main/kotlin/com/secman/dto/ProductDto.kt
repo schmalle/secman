@@ -1,5 +1,6 @@
 package com.secman.dto
 
+import com.fasterxml.jackson.annotation.JsonInclude
 import io.micronaut.serde.annotation.Serdeable
 
 /**
@@ -9,6 +10,7 @@ import io.micronaut.serde.annotation.Serdeable
  * Related to: Feature 054-products-overview
  */
 @Serdeable
+@JsonInclude(JsonInclude.Include.ALWAYS)
 data class ProductListResponse(
     val products: List<String>,      // Distinct product names, alphabetically sorted
     val totalCount: Int              // Total number of unique products
@@ -64,6 +66,7 @@ data class TopProductDto(
  * Related to: Feature 054-products-overview
  */
 @Serdeable
+@JsonInclude(JsonInclude.Include.ALWAYS)
 data class TopProductsResponse(
     val products: List<TopProductDto>,
     val totalCount: Int

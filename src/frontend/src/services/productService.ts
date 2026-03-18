@@ -59,7 +59,11 @@ export async function getTopProducts(limit: number = 15): Promise<TopProductsRes
     if (!response.ok) {
         throw new Error(`Failed to fetch top products: ${response.status}`);
     }
-    return response.json();
+    const data = await response.json();
+    return {
+        products: data.products ?? [],
+        totalCount: data.totalCount ?? 0,
+    };
 }
 
 /**
@@ -82,7 +86,11 @@ export async function getProducts(search?: string): Promise<ProductListResponse>
     if (!response.ok) {
         throw new Error(`Failed to fetch products: ${response.status}`);
     }
-    return response.json();
+    const data = await response.json();
+    return {
+        products: data.products ?? [],
+        totalCount: data.totalCount ?? 0,
+    };
 }
 
 /**
@@ -110,7 +118,13 @@ export async function getProductSystems(
     if (!response.ok) {
         throw new Error(`Failed to fetch product systems: ${response.status}`);
     }
-    return response.json();
+    const data = await response.json();
+    return {
+        ...data,
+        content: data.content ?? [],
+        totalElements: data.totalElements ?? 0,
+        totalPages: data.totalPages ?? 0,
+    };
 }
 
 /**

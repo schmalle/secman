@@ -1,9 +1,8 @@
 package com.secman.cli.commands
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.secman.cli.service.UserMappingCliResponse
 import com.secman.cli.service.UserMappingCliService
-import com.secman.domain.MappingStatus
-import com.secman.domain.UserMapping
 import org.apache.commons.csv.CSVFormat
 import org.apache.commons.csv.CSVPrinter
 import picocli.CommandLine.*
@@ -14,17 +13,11 @@ import java.io.StringWriter
  * CLI command to list user mappings (Feature 049)
  *
  * Usage:
- *   ./gradlew cli:run --args='manage-user-mappings list'
- *   ./gradlew cli:run --args='manage-user-mappings list --email user@example.com'
- *   ./gradlew cli:run --args='manage-user-mappings list --status PENDING'
- *   ./gradlew cli:run --args='manage-user-mappings list --format JSON'
- *   ./gradlew cli:run --args='manage-user-mappings list --format CSV'
- *
- * Features:
- * - Filter by email and/or status
- * - Multiple output formats (TABLE, JSON, CSV)
- * - Grouped display by email
- * - Summary statistics
+ *   ./bin/secman manage-user-mappings list
+ *   ./bin/secman manage-user-mappings list --email user@example.com
+ *   ./bin/secman manage-user-mappings list --status PENDING
+ *   ./bin/secman manage-user-mappings list --format JSON
+ *   ./bin/secman manage-user-mappings list --format CSV
  */
 @Singleton
 @Command(
@@ -60,23 +53,33 @@ class ListCommand(
 
     override fun run() {
         try {
-            // Get admin user (not strictly required for read operations, but maintains consistency)
-            val adminEmail = parent.getAdminUserOrThrow()
+            // Authenticate with backend
+            val backendUrl = parent.getEffectiveBackendUrl()
+            val username = parent.getEffectiveUsername()
+            val password = parent.getEffectivePassword()
+            userMappingCliService.initHttpClient(backendUrl, parent.insecure)
+            val token = userMappingCliService.authenticate(username, password, backendUrl)
+                ?: throw IllegalArgumentException("Authentication failed - check username/password")
 
             // Parse status filter
             val status = when (statusFilter?.uppercase()) {
-                "ACTIVE" -> MappingStatus.ACTIVE
-                "PENDING" -> MappingStatus.PENDING
+                "ACTIVE" -> "ACTIVE"
+                "PENDING" -> "PENDING"
                 "ALL", null -> null
                 else -> {
-                    System.err.println("❌ Error: Invalid status. Use ACTIVE, PENDING, or ALL")
+                    System.err.println("Error: Invalid status. Use ACTIVE, PENDING, or ALL")
                     System.exit(1)
                     return
                 }
             }
 
-            // Fetch mappings
-            val mappings = userMappingCliService.listMappings(email, status)
+            // Fetch mappings via HTTP
+            val mappings = userMappingCliService.listMappings(
+                email = email,
+                status = status,
+                backendUrl = backendUrl,
+                authToken = token
+            )
 
             // Display based on format
             when (format.uppercase()) {
@@ -84,22 +87,22 @@ class ListCommand(
                 "JSON" -> displayJson(mappings)
                 "CSV" -> displayCsv(mappings)
                 else -> {
-                    System.err.println("❌ Error: Invalid format. Use TABLE, JSON, or CSV")
+                    System.err.println("Error: Invalid format. Use TABLE, JSON, or CSV")
                     System.exit(1)
                 }
             }
 
         } catch (e: IllegalArgumentException) {
-            System.err.println("❌ Error: ${e.message}")
+            System.err.println("Error: ${e.message}")
             System.exit(1)
         } catch (e: Exception) {
-            System.err.println("❌ Error: ${e.message}")
+            System.err.println("Error: ${e.message}")
             e.printStackTrace()
             System.exit(1)
         }
     }
 
-    private fun displayTable(mappings: List<UserMapping>) {
+    private fun displayTable(mappings: List<UserMappingCliResponse>) {
         println("=" .repeat(80))
         println("User Mappings")
         println("=" .repeat(80))
@@ -116,9 +119,9 @@ class ListCommand(
 
         groupedByEmail.forEach { (email, userMappings) ->
             val statusBadge = when {
-                userMappings.all { it.status == MappingStatus.ACTIVE } -> "✅"
-                userMappings.all { it.status == MappingStatus.PENDING } -> "⚠️ "
-                else -> "◐"
+                userMappings.all { it.status == "ACTIVE" } -> "[active]"
+                userMappings.all { it.status == "PENDING" } -> "[pending]"
+                else -> "[mixed]"
             }
 
             println("$statusBadge $email")
@@ -130,7 +133,7 @@ class ListCommand(
             if (domains.isNotEmpty()) {
                 println("  Domains:")
                 domains.forEach { mapping ->
-                    val status = if (mapping.status == MappingStatus.PENDING) " (pending)" else ""
+                    val status = if (mapping.status == "PENDING") " (pending)" else ""
                     println("    - ${mapping.domain}$status")
                 }
             }
@@ -138,7 +141,7 @@ class ListCommand(
             if (awsAccounts.isNotEmpty()) {
                 println("  AWS Accounts:")
                 awsAccounts.forEach { mapping ->
-                    val status = if (mapping.status == MappingStatus.PENDING) " (pending)" else ""
+                    val status = if (mapping.status == "PENDING") " (pending)" else ""
                     println("    - ${mapping.awsAccountId}$status")
                 }
             }
@@ -150,27 +153,26 @@ class ListCommand(
         displaySummary(mappings, groupedByEmail.size)
     }
 
-    private fun displayJson(mappings: List<UserMapping>) {
+    private fun displayJson(mappings: List<UserMappingCliResponse>) {
         val objectMapper = jacksonObjectMapper()
 
-        // Group by email for cleaner JSON structure
         val groupedByEmail = mappings.groupBy { it.email }.map { (email, userMappings) ->
             mapOf(
                 "email" to email,
                 "domains" to userMappings.filter { it.domain != null }.map {
                     mapOf(
                         "domain" to it.domain,
-                        "status" to it.status.name,
-                        "createdAt" to it.createdAt.toString(),
-                        "appliedAt" to it.appliedAt?.toString()
+                        "status" to it.status,
+                        "createdAt" to it.createdAt,
+                        "appliedAt" to it.appliedAt
                     )
                 },
                 "awsAccounts" to userMappings.filter { it.awsAccountId != null }.map {
                     mapOf(
                         "awsAccountId" to it.awsAccountId,
-                        "status" to it.status.name,
-                        "createdAt" to it.createdAt.toString(),
-                        "appliedAt" to it.appliedAt?.toString()
+                        "status" to it.status,
+                        "createdAt" to it.createdAt,
+                        "appliedAt" to it.appliedAt
                     )
                 }
             )
@@ -186,7 +188,7 @@ class ListCommand(
     }
 
     @Suppress("DEPRECATION")
-    private fun displayCsv(mappings: List<UserMapping>) {
+    private fun displayCsv(mappings: List<UserMappingCliResponse>) {
         val stringWriter = StringWriter()
         val csvPrinter = CSVPrinter(
             stringWriter,
@@ -198,20 +200,12 @@ class ListCommand(
         mappings.forEach { mapping ->
             when {
                 mapping.domain != null -> csvPrinter.printRecord(
-                    mapping.email,
-                    "DOMAIN",
-                    mapping.domain,
-                    mapping.status.name,
-                    mapping.createdAt.toString(),
-                    mapping.appliedAt?.toString() ?: ""
+                    mapping.email, "DOMAIN", mapping.domain, mapping.status,
+                    mapping.createdAt, mapping.appliedAt ?: ""
                 )
                 mapping.awsAccountId != null -> csvPrinter.printRecord(
-                    mapping.email,
-                    "AWS_ACCOUNT",
-                    mapping.awsAccountId,
-                    mapping.status.name,
-                    mapping.createdAt.toString(),
-                    mapping.appliedAt?.toString() ?: ""
+                    mapping.email, "AWS_ACCOUNT", mapping.awsAccountId, mapping.status,
+                    mapping.createdAt, mapping.appliedAt ?: ""
                 )
             }
         }
@@ -220,13 +214,13 @@ class ListCommand(
         println(stringWriter.toString())
     }
 
-    private fun displaySummary(mappings: List<UserMapping>, userCount: Int) {
+    private fun displaySummary(mappings: List<UserMappingCliResponse>, userCount: Int) {
         println("=" .repeat(80))
         println("Summary")
         println("=" .repeat(80))
 
-        val activeCount = mappings.count { it.status == MappingStatus.ACTIVE }
-        val pendingCount = mappings.count { it.status == MappingStatus.PENDING }
+        val activeCount = mappings.count { it.status == "ACTIVE" }
+        val pendingCount = mappings.count { it.status == "PENDING" }
         val domainCount = mappings.count { it.domain != null }
         val awsAccountCount = mappings.count { it.awsAccountId != null }
 

@@ -40,6 +40,38 @@ data class UpdateUserMappingRequest(
     val ipAddress: String?
 )
 
+@Serdeable
+data class BulkUserMappingEntry(
+    val email: String,
+    val awsAccountId: String? = null,
+    val domain: String? = null
+)
+
+@Serdeable
+data class BulkUserMappingRequest(
+    val mappings: List<BulkUserMappingEntry>,
+    val dryRun: Boolean = false
+)
+
+@Serdeable
+data class BulkUserMappingResponse(
+    val totalProcessed: Int,
+    val created: Int,
+    val createdPending: Int,
+    val skipped: Int,
+    val errors: List<String>,
+    val comparison: MappingComparisonResponse? = null
+)
+
+@Serdeable
+data class MappingComparisonResponse(
+    val dbMappingCount: Int,
+    val fileMappingCount: Int,
+    val newCount: Int,
+    val unchangedCount: Int,
+    val removedCount: Int
+)
+
 /**
  * Convert UserMapping entity to UserMappingResponse DTO
  * Feature 042: Extended to include user reference and appliedAt timestamp

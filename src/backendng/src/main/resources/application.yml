@@ -320,6 +320,7 @@ jpa:
           use_query_cache: false
 
 jackson:
+  serialization-inclusion: always
   dateFormat: yyyy-MM-dd'T'HH:mm:ss.SSSZ
   serialization:
     writeDatesAsTimestamps: false
@@ -328,6 +329,7 @@ logger:
   levels:
     com.secman: DEBUG
     io.micronaut.security: DEBUG
+    io.micronaut.web.router: DEBUG
 
 app:
   backend:

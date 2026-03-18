@@ -8,16 +8,9 @@ import jakarta.inject.Singleton
  * CLI command to add AWS-account-to-user mappings (Feature 049)
  *
  * Usage:
- *   ./gradlew cli:run --args='manage-user-mappings add-aws \
+ *   ./bin/secman manage-user-mappings add-aws \
  *     --emails user1@example.com,user2@example.com \
- *     --accounts 123456789012,987654321098'
- *
- * Features:
- * - Creates n×m mappings (cross product)
- * - Validates AWS account ID format (12 digits)
- * - Skips duplicates with warning
- * - Creates pending mappings for non-existent users
- * - Requires ADMIN role
+ *     --accounts 123456789012,987654321098
  */
 @Singleton
 @Command(
@@ -55,9 +48,15 @@ class AddAwsCommand(
             println("=" .repeat(60))
             println()
 
-            // Get admin user
-            val adminEmail = parent.getAdminUserOrThrow()
-            println("Admin user: $adminEmail")
+            // Authenticate with backend
+            val backendUrl = parent.getEffectiveBackendUrl()
+            val username = parent.getEffectiveUsername()
+            val password = parent.getEffectivePassword()
+            userMappingCliService.initHttpClient(backendUrl, parent.insecure)
+            val token = userMappingCliService.authenticate(username, password, backendUrl)
+                ?: throw IllegalArgumentException("Authentication failed - check username/password")
+
+            println("Backend: $backendUrl")
             println()
 
             // Validate inputs
@@ -65,12 +64,12 @@ class AddAwsCommand(
             val trimmedAccounts = accounts.map { it.trim() }.filter { it.isNotEmpty() }
 
             if (trimmedEmails.isEmpty()) {
-                System.err.println("❌ Error: No valid email addresses provided")
+                System.err.println("Error: No valid email addresses provided")
                 System.exit(1)
             }
 
             if (trimmedAccounts.isEmpty()) {
-                System.err.println("❌ Error: No valid AWS account IDs provided")
+                System.err.println("Error: No valid AWS account IDs provided")
                 System.exit(1)
             }
 
@@ -79,19 +78,20 @@ class AddAwsCommand(
             println("AWS Accounts: ${trimmedAccounts.joinToString()}")
             println()
 
-            // Execute mapping creation
+            // Execute mapping creation via HTTP
             val result = userMappingCliService.addAwsAccountMappings(
                 emails = trimmedEmails,
                 awsAccountIds = trimmedAccounts,
-                adminEmail = adminEmail
+                backendUrl = backendUrl,
+                authToken = token
             )
 
             // Display results
             result.operations.forEach { op ->
                 val symbol = when (op.operation) {
-                    "CREATED" -> if (op.isPending) "⚠️ " else "✅"
-                    "SKIPPED_DUPLICATE" -> "⚠️ "
-                    else -> "❌"
+                    "CREATED" -> if (op.isPending) "!" else "+"
+                    "SKIPPED_DUPLICATE" -> "~"
+                    else -> "x"
                 }
 
                 val status = when {
@@ -101,7 +101,7 @@ class AddAwsCommand(
                     else -> ""
                 }
 
-                println("$symbol ${op.email} → ${op.awsAccountId}$status")
+                println("[$symbol] ${op.email} -> ${op.awsAccountId}$status")
             }
 
             println()
@@ -109,36 +109,27 @@ class AddAwsCommand(
             println("Summary")
             println("=" .repeat(60))
             println("Total: ${result.totalProcessed} mapping(s) processed")
-            if (result.created > 0) {
-                println("Created: ${result.created} active")
-            }
-            if (result.createdPending > 0) {
-                println("Created: ${result.createdPending} pending")
-            }
-            if (result.skipped > 0) {
-                println("Skipped: ${result.skipped} duplicate(s)")
-            }
+            if (result.created > 0) println("Created: ${result.created} active")
+            if (result.createdPending > 0) println("Created: ${result.createdPending} pending")
+            if (result.skipped > 0) println("Skipped: ${result.skipped} duplicate(s)")
             if (result.errors.isNotEmpty()) {
                 println("Errors: ${result.errors.size} failure(s)")
-                result.errors.forEach { error ->
-                    println("  - $error")
-                }
+                result.errors.forEach { error -> println("  - $error") }
             }
             println()
 
-            // Exit with error code if there were errors
             if (result.errors.isNotEmpty()) {
-                println("✗ Completed with errors")
+                println("Completed with errors")
                 System.exit(1)
             } else {
-                println("✓ All mappings processed successfully")
+                println("All mappings processed successfully")
             }
 
         } catch (e: IllegalArgumentException) {
-            System.err.println("❌ Error: ${e.message}")
+            System.err.println("Error: ${e.message}")
             System.exit(1)
         } catch (e: Exception) {
-            System.err.println("❌ Error: ${e.message}")
+            System.err.println("Error: ${e.message}")
             e.printStackTrace()
             System.exit(1)
         }

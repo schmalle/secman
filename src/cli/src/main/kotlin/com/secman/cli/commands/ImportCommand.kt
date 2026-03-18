@@ -76,9 +76,15 @@ class ImportCommand(
             println("=" .repeat(60))
             println()
 
-            // Get admin user
-            val adminEmail = parent.getAdminUserOrThrow()
-            println("Admin user: $adminEmail")
+            // Authenticate with backend
+            val backendUrl = parent.getEffectiveBackendUrl()
+            val username = parent.getEffectiveUsername()
+            val password = parent.getEffectivePassword()
+            userMappingCliService.initHttpClient(backendUrl, parent.insecure)
+            val token = userMappingCliService.authenticate(username, password, backendUrl)
+                ?: throw IllegalArgumentException("Authentication failed - check username/password")
+
+            println("Backend: $backendUrl")
             println("File: $filePath")
             println("Format: $format")
             if (dryRun) {
@@ -86,12 +92,13 @@ class ImportCommand(
             }
             println()
 
-            // Execute import
+            // Execute import via HTTP
             val result = userMappingCliService.importMappingsFromFile(
                 filePath = filePath,
                 format = format,
                 dryRun = dryRun,
-                adminEmail = adminEmail
+                backendUrl = backendUrl,
+                authToken = token
             )
 
             // Display summary

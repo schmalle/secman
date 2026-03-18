@@ -111,9 +111,10 @@ const ProductsOverview: React.FC = () => {
 
         try {
             const response: ProductListResponse = await getProducts(search);
-            setProducts(response.products);
+            const productList = response.products || [];
+            setProducts(productList);
             // Clear selection if the selected product is no longer in the filtered list
-            if (selectedProduct && !response.products.includes(selectedProduct)) {
+            if (selectedProduct && !productList.includes(selectedProduct)) {
                 setSelectedProduct('');
             }
         } catch (err: any) {
@@ -132,7 +133,7 @@ const ProductsOverview: React.FC = () => {
 
         try {
             const response = await getTopProducts(15);
-            setTopProducts(response.products);
+            setTopProducts(response.products || []);
         } catch (err: any) {
             console.error('Failed to fetch top products:', err);
             // Don't set error for top products - just log it

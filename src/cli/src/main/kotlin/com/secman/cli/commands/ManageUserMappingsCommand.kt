@@ -22,10 +22,11 @@ import jakarta.inject.Singleton
  *   list-bucket - List objects in an S3 bucket (Feature 065)
  *
  * Authentication:
- *   All operations require ADMIN role
- *   Specify admin user via:
- *   - --admin-user flag
- *   - SECMAN_ADMIN_EMAIL environment variable
+ *   All operations require ADMIN role and backend credentials.
+ *   Specify via CLI flags or environment variables:
+ *   - --username / SECMAN_USERNAME
+ *   - --password / SECMAN_PASSWORD
+ *   - --backend-url / SECMAN_HOST / SECMAN_BACKEND_URL
  */
 @Singleton
 @Command(
@@ -46,25 +47,67 @@ class ManageUserMappingsCommand : Runnable {
 
     @Option(
         names = ["--admin-user", "-u"],
-        description = ["Admin user email (defaults to SECMAN_ADMIN_EMAIL env var)"]
+        description = ["(Deprecated) Admin user email - identity is now derived from backend credentials"],
+        scope = ScopeType.INHERIT
     )
     var adminUser: String? = null
+
+    @Option(
+        names = ["--username"],
+        description = ["Backend username (or set SECMAN_USERNAME env var)"],
+        scope = ScopeType.INHERIT
+    )
+    var username: String? = null
+
+    @Option(
+        names = ["--password"],
+        description = ["Backend password (or set SECMAN_PASSWORD env var)"],
+        scope = ScopeType.INHERIT
+    )
+    var password: String? = null
+
+    @Option(
+        names = ["--backend-url"],
+        description = ["Backend API URL (or set SECMAN_HOST / SECMAN_BACKEND_URL env var)"],
+        scope = ScopeType.INHERIT
+    )
+    var backendUrl: String? = null
+
+    @Option(
+        names = ["--insecure"],
+        description = ["Disable SSL certificate verification (for self-signed certificates)"],
+        scope = ScopeType.INHERIT
+    )
+    var insecure: Boolean = false
 
     @Spec
     lateinit var spec: Model.CommandSpec
 
-    /**
-     * Get the admin user email from flag or environment variable
-     *
-     * @return Admin user email
-     * @throws IllegalArgumentException if no admin user specified
-     */
-    fun getAdminUserOrThrow(): String {
-        return adminUser
-            ?: System.getenv("SECMAN_ADMIN_EMAIL")
+    fun getEffectiveUsername(): String {
+        return username
+            ?: System.getenv("SECMAN_USERNAME")
             ?: throw IllegalArgumentException(
-                "Admin user required. Use --admin-user flag or set SECMAN_ADMIN_EMAIL environment variable"
+                "Backend username required. Use --username flag or set SECMAN_USERNAME environment variable"
             )
+    }
+
+    fun getEffectivePassword(): String {
+        return password
+            ?: System.getenv("SECMAN_PASSWORD")
+            ?: throw IllegalArgumentException(
+                "Backend password required. Use --password flag or set SECMAN_PASSWORD environment variable"
+            )
+    }
+
+    fun getEffectiveBackendUrl(): String {
+        val url = backendUrl
+            ?: System.getenv("SECMAN_HOST")
+            ?: System.getenv("SECMAN_BACKEND_URL")
+            ?: "http://localhost:8080"
+        // Ensure URL has a scheme — default to https:// for scheme-less URLs
+        // (scheme-less URLs like "server:8443" cause NPE in DefaultHttpClient.isSecureScheme)
+        return if (url.startsWith("http://") || url.startsWith("https://")) url
+               else "https://$url"
     }
 
     override fun run() {

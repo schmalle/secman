@@ -1,9 +1,7 @@
 package com.secman.controller
 
-import com.secman.dto.CreateUserMappingRequest
-import com.secman.dto.UpdateUserMappingRequest
-import com.secman.dto.UserMappingResponse
-import com.secman.dto.toResponse
+import com.secman.domain.MappingStatus
+import com.secman.dto.*
 import com.secman.repository.UserMappingRepository
 import com.secman.service.UserMappingService
 import io.micronaut.data.model.Pageable
@@ -72,7 +70,7 @@ open class UserMappingController(
     }
 
     /**
-     * GET /api/user-mappings - List all user mappings with pagination
+     * GET /api/user-mappings - List all user mappings with pagination and filters
      */
     @Get
     @Secured("ADMIN")
@@ -80,77 +78,106 @@ open class UserMappingController(
         @QueryValue("page") page: Int?,
         @QueryValue("size") size: Int?,
         @QueryValue("email") email: String?,
-        @QueryValue("domain") domain: String?
+        @QueryValue("domain") domain: String?,
+        @QueryValue("awsAccountId") awsAccountId: String?,
+        @QueryValue("status") status: String?
     ): HttpResponse<Map<String, Any>> {
-        logger.debug("Listing user mappings: page=$page, size=$size, email=$email, domain=$domain")
+        logger.debug("Listing user mappings: page=$page, size=$size, email=$email, domain=$domain, awsAccountId=$awsAccountId, status=$status")
 
         return try {
             val pageNumber = page ?: 0
             val pageSize = size ?: 20
-            val pageable = Pageable.from(pageNumber, pageSize)
 
-            val mappingsPage = if (email != null) {
-                // Filter by email
-                val mappings = userMappingRepository.findByEmail(email)
-                    .map { it.toResponse() }
-                    .drop(pageNumber * pageSize)
-                    .take(pageSize)
-
-                val totalElements = userMappingRepository.findByEmail(email).size.toLong()
-                val totalPages = ((totalElements + pageSize - 1) / pageSize).toInt()
-
-                mapOf(
-                    "content" to mappings,
-                    "totalElements" to totalElements,
-                    "totalPages" to totalPages,
-                    "page" to pageNumber,
-                    "size" to pageSize
-                )
-            } else if (domain != null) {
-                // Filter by domain
-                val mappings = userMappingRepository.findByDomain(domain)
-                    .map { it.toResponse() }
-                    .drop(pageNumber * pageSize)
-                    .take(pageSize)
-
-                val totalElements = userMappingRepository.findByDomain(domain).size.toLong()
-                val totalPages = ((totalElements + pageSize - 1) / pageSize).toInt()
-
-                mapOf(
-                    "content" to mappings,
-                    "totalElements" to totalElements,
-                    "totalPages" to totalPages,
-                    "page" to pageNumber,
-                    "size" to pageSize
-                )
-            } else {
-                // Get all mappings
-                val allMappings = userMappingRepository.findAll()
-                    .map { it.toResponse() }
-
-                val mappings = allMappings
-                    .drop(pageNumber * pageSize)
-                    .take(pageSize)
-
-                val totalElements = allMappings.size.toLong()
-                val totalPages = ((totalElements + pageSize - 1) / pageSize).toInt()
-
-                mapOf(
-                    "content" to mappings,
-                    "totalElements" to totalElements,
-                    "totalPages" to totalPages,
-                    "page" to pageNumber,
-                    "size" to pageSize
-                )
+            // Parse status filter
+            val statusFilter = when (status?.uppercase()) {
+                "ACTIVE" -> MappingStatus.ACTIVE
+                "PENDING" -> MappingStatus.PENDING
+                null, "" -> null
+                else -> throw IllegalArgumentException("Invalid status filter: $status (use ACTIVE or PENDING)")
             }
 
-            HttpResponse.ok(mappingsPage)
+            // Fetch base set based on primary filter: email > domain > awsAccountId > status > all
+            var allMappings = when {
+                email != null -> userMappingRepository.findByEmail(email)
+                domain != null -> userMappingRepository.findByDomain(domain)
+                awsAccountId != null -> userMappingRepository.findByAwsAccountId(awsAccountId)
+                statusFilter != null -> userMappingRepository.findByStatus(statusFilter)
+                else -> userMappingRepository.findAll().toList()
+            }
+
+            // Apply status filter as secondary filter when primary is email/domain/awsAccountId
+            if (statusFilter != null && email != null || statusFilter != null && domain != null || statusFilter != null && awsAccountId != null) {
+                allMappings = allMappings.filter { it.status == statusFilter }
+            }
+
+            val mappings = allMappings
+                .map { it.toResponse() }
+                .drop(pageNumber * pageSize)
+                .take(pageSize)
+
+            val totalElements = allMappings.size.toLong()
+            val totalPages = if (pageSize > 0) ((totalElements + pageSize - 1) / pageSize).toInt() else 0
+
+            val result = mapOf(
+                "content" to mappings,
+                "totalElements" to totalElements,
+                "totalPages" to totalPages,
+                "page" to pageNumber,
+                "size" to pageSize
+            )
+
+            HttpResponse.ok(result)
+        } catch (e: IllegalArgumentException) {
+            logger.warn("Invalid filter parameter: ${e.message}")
+            HttpResponse.badRequest(
+                mapOf(
+                    "error" to "Validation Error",
+                    "message" to (e.message ?: "Invalid filter parameter")
+                )
+            )
         } catch (e: Exception) {
             logger.error("Failed to list user mappings", e)
             HttpResponse.serverError(
                 mapOf(
                     "error" to "Internal Server Error",
                     "message" to "Failed to list user mappings"
+                )
+            )
+        }
+    }
+
+    /**
+     * POST /api/user-mappings/bulk - Bulk create user mappings
+     *
+     * Accepts a list of mapping entries and creates them in a single transaction.
+     * Supports dry-run mode for comparison against existing DB state.
+     * Used by CLI for import operations (CSV/JSON/S3).
+     */
+    @Post("/bulk")
+    @Secured("ADMIN")
+    open fun bulkCreateMappings(
+        @Body request: BulkUserMappingRequest,
+        authentication: Authentication
+    ): HttpResponse<*> {
+        logger.info("Bulk create user mappings: entries=${request.mappings.size}, dryRun=${request.dryRun}")
+
+        return try {
+            val result = userMappingService.bulkCreateMappings(request)
+            HttpResponse.ok(result)
+        } catch (e: IllegalArgumentException) {
+            logger.warn("Bulk create validation failed: ${e.message}")
+            HttpResponse.badRequest(
+                mapOf(
+                    "error" to "Validation Error",
+                    "message" to (e.message ?: "Invalid request")
+                )
+            )
+        } catch (e: Exception) {
+            logger.error("Failed to bulk create user mappings", e)
+            HttpResponse.serverError(
+                mapOf(
+                    "error" to "Internal Server Error",
+                    "message" to "Failed to process bulk create"
                 )
             )
         }

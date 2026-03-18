@@ -136,9 +136,15 @@ class ImportS3Command(
             println("=".repeat(60))
             println()
 
-            // Get admin user from parent command
-            val adminEmail = parent.getAdminUserOrThrow()
-            println("Admin user: $adminEmail")
+            // Authenticate with backend
+            val backendUrl = parent.getEffectiveBackendUrl()
+            val backendUsername = parent.getEffectiveUsername()
+            val backendPassword = parent.getEffectivePassword()
+            userMappingCliService.initHttpClient(backendUrl, parent.insecure)
+            val token = userMappingCliService.authenticate(backendUsername, backendPassword, backendUrl)
+                ?: throw IllegalArgumentException("Authentication failed - check username/password")
+
+            println("Backend: $backendUrl")
             println("Source: s3://$bucket/$key")
             if (awsRegion != null) {
                 println("AWS Region: $awsRegion")
@@ -186,12 +192,13 @@ class ImportS3Command(
             println("Download complete.")
             println()
 
-            // Execute import using existing logic
+            // Execute import via HTTP
             val result = userMappingCliService.importMappingsFromFile(
                 filePath = tempFilePath.toString(),
                 format = format,
                 dryRun = dryRun,
-                adminEmail = adminEmail
+                backendUrl = backendUrl,
+                authToken = token
             )
 
             // Display summary (matching existing ImportCommand format)

@@ -298,4 +298,14 @@ interface UserMappingRepository : JpaRepository<UserMapping, Long> {
      * @return Page of mappings matching the email filter
      */
     fun findByEmailContainingIgnoreCase(email: String, pageable: io.micronaut.data.model.Pageable): io.micronaut.data.model.Page<UserMapping>
+
+    /**
+     * Find all mappings with a specific status
+     *
+     * Use case: Filter mappings by ACTIVE or PENDING status via REST API
+     *
+     * @param status Mapping status (ACTIVE or PENDING)
+     * @return List of mappings with the specified status
+     */
+    fun findByStatus(status: com.secman.domain.MappingStatus): List<UserMapping>
 }

@@ -136,7 +136,7 @@ data class McpApiKeyCreateResponse(
     val keyId: String? = null,
     val apiKey: String? = null, // Only returned once during creation
     val name: String? = null,
-    val permissions: List<String>? = null,
+    val permissions: List<String> = emptyList(),
     val expiresAt: String? = null,
     val createdAt: String? = null,
     /** Whether user delegation is enabled for this key. Feature: 050-mcp-user-delegation */
@@ -173,7 +173,7 @@ data class McpApiKeyInfo(
  */
 @Serdeable
 data class McpApiKeyListResponse(
-    val apiKeys: List<McpApiKeyInfo>? = null,
+    val apiKeys: List<McpApiKeyInfo> = emptyList(),
     val total: Int? = null,
     val error: McpErrorResponse? = null
 )
@@ -250,7 +250,7 @@ data class McpAuditLogEntry(
  */
 @Serdeable
 data class McpAuditLogResponse(
-    val logs: List<McpAuditLogEntry>? = null,
+    val logs: List<McpAuditLogEntry> = emptyList(),
     val total: Long? = null,
     val page: Int? = null,
     val pageSize: Int? = null,
@@ -297,7 +297,7 @@ data class McpToolPermissionInfo(
 @Serdeable
 data class McpToolPermissionResponse(
     val permission: McpToolPermissionInfo? = null,
-    val permissions: List<McpToolPermissionInfo>? = null,
+    val permissions: List<McpToolPermissionInfo> = emptyList(),
     val success: Boolean? = null,
     val error: McpErrorResponse? = null
 )

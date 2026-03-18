@@ -2,325 +2,300 @@ package com.secman.cli.service
 
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
-import com.fasterxml.jackson.module.kotlin.readValue
-import com.secman.domain.MappingStatus
-import com.secman.domain.User
-import com.secman.domain.UserMapping
-import com.secman.repository.UserMappingRepository
-import com.secman.repository.UserRepository
+import io.micronaut.http.HttpRequest
+import io.micronaut.http.HttpResponse
+import io.micronaut.http.MediaType
+import io.micronaut.http.client.DefaultHttpClientConfiguration
+import io.micronaut.http.client.HttpClient
+import io.micronaut.http.client.netty.DefaultHttpClient
+import io.micronaut.http.ssl.AbstractClientSslConfiguration
 import jakarta.inject.Singleton
-import org.apache.commons.csv.CSVFormat
-import org.apache.commons.csv.CSVParser
 import org.slf4j.LoggerFactory
 import java.io.File
 import java.io.FileReader
-import java.time.Instant
+import java.net.URI
+import java.time.Duration
+import org.apache.commons.csv.CSVFormat
+import org.apache.commons.csv.CSVParser
 
 /**
  * CLI service for user mapping operations (Feature 049)
  *
- * Provides business logic for creating, listing, and removing user mappings
- * via CLI commands. Handles validation, duplicate detection, and audit logging.
- *
- * Related to: Feature 042 (Future User Mappings), Feature 049 (CLI User Mapping)
+ * All operations are performed via HTTP calls to the backend REST API.
+ * The backend handles validation, duplicate detection, and persistence.
+ * The HTTP client is created dynamically to support runtime SSL configuration.
  */
 @Singleton
-class UserMappingCliService(
-    private val userMappingRepository: UserMappingRepository,
-    private val userRepository: UserRepository
-) {
+class UserMappingCliService {
     private val log = LoggerFactory.getLogger(UserMappingCliService::class.java)
+    private val objectMapper = jacksonObjectMapper()
+
+    private var httpClient: HttpClient? = null
+    private var insecureMode: Boolean = false
+
+    /**
+     * Initialize the HTTP client for the given backend URL.
+     * Must be called before any HTTP operations.
+     *
+     * @param backendUrl Backend API base URL
+     * @param insecure If true, disable SSL certificate verification
+     */
+    fun initHttpClient(backendUrl: String, insecure: Boolean) {
+        this.insecureMode = insecure
+        val config = DefaultHttpClientConfiguration().apply {
+            setReadTimeout(Duration.ofSeconds(120))
+            setConnectTimeout(Duration.ofSeconds(30))
+            maxContentLength = 104_857_600 // 100MB
+        }
+        if (insecure) {
+            log.warn("SSL certificate verification is DISABLED (--insecure mode)")
+            (config.sslConfiguration as AbstractClientSslConfiguration).isInsecureTrustAllCertificates = true
+        }
+        // Always use the 2-argument constructor — the 3-arg variant with
+        // ClientSslBuilder has a scheme-initialization bug in Micronaut 4.10.x
+        httpClient = DefaultHttpClient(URI.create(backendUrl), config)
+    }
+
+    private fun getClient(): HttpClient {
+        return httpClient ?: throw IllegalStateException(
+            "HTTP client not initialized. Call initHttpClient() first."
+        )
+    }
 
     companion object {
         const val MAX_IMPORT_ROWS = 100_000
     }
 
-    // Validation regex patterns (from spec FR-003, FR-004, FR-006)
+    // Client-side validation regex (fast feedback before HTTP call)
     private val emailRegex = Regex("^[^@]+@[^@]+\\.[^@]+$")
     private val awsAccountIdRegex = Regex("^\\d{12}$")
     private val domainRegex = Regex("^[a-zA-Z0-9.-]+$")
 
     /**
-     * Add domain-to-user mappings
-     *
-     * Creates n×m mappings (cross product of emails and domains)
-     * Handles duplicate detection, user existence check, and pending mappings
-     *
-     * @param emails List of user email addresses
-     * @param domains List of AD domain names
-     * @param adminEmail Admin user executing the command (for audit logging)
-     * @return Result summary (created, skipped, errors)
+     * Authenticate with backend API and get JWT token
+     */
+    fun authenticate(username: String, password: String, backendUrl: String): String? {
+        try {
+            val request = HttpRequest.POST("$backendUrl/api/auth/login", mapOf(
+                "username" to username,
+                "password" to password
+            )).contentType(MediaType.APPLICATION_JSON)
+
+            val response: HttpResponse<Map<*, *>> = getClient().toBlocking()
+                .exchange(request, Map::class.java)
+
+            if (response.status.code == 200) {
+                // JWT is in Set-Cookie header as "secman_auth=<token>; ..."
+                val setCookieHeaders = response.headers.getAll("Set-Cookie")
+                val token = setCookieHeaders
+                    ?.flatMap { it.split(";") }
+                    ?.firstOrNull { it.trim().startsWith("secman_auth=") }
+                    ?.substringAfter("=")
+                    ?.trim()
+
+                if (token != null && token.isNotBlank()) {
+                    log.info("Successfully authenticated with backend")
+                    return token
+                }
+
+                // Fallback: try response body (for future API changes)
+                val body = response.body()
+                val bodyToken = body?.get("access_token")?.toString()
+                    ?: body?.get("token")?.toString()
+                    ?: body?.get("accessToken")?.toString()
+
+                if (bodyToken != null) {
+                    log.info("Successfully authenticated with backend (body token)")
+                    return bodyToken
+                }
+
+                log.error("Authentication succeeded but no JWT found in Set-Cookie or response body")
+            }
+
+            log.error("Authentication failed: status={}", response.status)
+            return null
+        } catch (e: io.micronaut.http.client.exceptions.HttpClientResponseException) {
+            log.error("Authentication error: {} - {}", e.status.code, e.message)
+            return null
+        } catch (e: Exception) {
+            log.error("Authentication error: {}", e.message, e)
+            return null
+        }
+    }
+
+    /**
+     * Add domain-to-user mappings via bulk endpoint
      */
     fun addDomainMappings(
         emails: List<String>,
         domains: List<String>,
-        adminEmail: String
+        backendUrl: String,
+        authToken: String
     ): MappingResult {
-        val results = mutableListOf<MappingOperationResult>()
-
-        // Validate inputs
+        // Client-side validation
         val invalidEmails = emails.filter { !emailRegex.matches(it) }
         if (invalidEmails.isNotEmpty()) {
             throw IllegalArgumentException("Invalid email format: ${invalidEmails.joinToString()}")
         }
-
         val invalidDomains = domains.filter { !domainRegex.matches(it) }
         if (invalidDomains.isNotEmpty()) {
             throw IllegalArgumentException("Invalid domain format: ${invalidDomains.joinToString()}")
         }
 
-        // Create cross-product mappings
-        for (email in emails) {
-            for (domain in domains) {
-                val result = createMapping(
-                    email = email.lowercase().trim(),
-                    domain = domain.lowercase().trim(),
-                    awsAccountId = null,
-                    adminEmail = adminEmail,
-                    operationType = "CREATE_DOMAIN_MAPPING"
-                )
-                results.add(result)
+        // Build cross-product entries
+        val entries = emails.flatMap { email ->
+            domains.map { domain ->
+                mapOf("email" to email.lowercase().trim(), "domain" to domain.lowercase().trim())
             }
         }
 
-        return summarizeResults(results)
+        val bulkResponse = postBulk(entries, false, backendUrl, authToken)
+        return bulkResponseToMappingResult(bulkResponse, entries)
     }
 
     /**
-     * Add AWS-account-to-user mappings
-     *
-     * Creates n×m mappings (cross product of emails and AWS accounts)
-     * Validates 12-digit AWS account ID format
-     *
-     * @param emails List of user email addresses
-     * @param awsAccountIds List of AWS account IDs (12 digits)
-     * @param adminEmail Admin user executing the command
-     * @return Result summary
+     * Add AWS-account-to-user mappings via bulk endpoint
      */
     fun addAwsAccountMappings(
         emails: List<String>,
         awsAccountIds: List<String>,
-        adminEmail: String
+        backendUrl: String,
+        authToken: String
     ): MappingResult {
-        val results = mutableListOf<MappingOperationResult>()
-
-        // Validate inputs
+        // Client-side validation
         val invalidEmails = emails.filter { !emailRegex.matches(it) }
         if (invalidEmails.isNotEmpty()) {
             throw IllegalArgumentException("Invalid email format: ${invalidEmails.joinToString()}")
         }
-
         val invalidAccounts = awsAccountIds.filter { !awsAccountIdRegex.matches(it) }
         if (invalidAccounts.isNotEmpty()) {
             throw IllegalArgumentException("Invalid AWS account ID (must be 12 digits): ${invalidAccounts.joinToString()}")
         }
 
-        // Create cross-product mappings
-        for (email in emails) {
-            for (accountId in awsAccountIds) {
-                val result = createMapping(
-                    email = email.lowercase().trim(),
-                    domain = null,
-                    awsAccountId = accountId.trim(),
-                    adminEmail = adminEmail,
-                    operationType = "CREATE_AWS_MAPPING"
-                )
-                results.add(result)
+        // Build cross-product entries
+        val entries = emails.flatMap { email ->
+            awsAccountIds.map { accountId ->
+                mapOf("email" to email.lowercase().trim(), "awsAccountId" to accountId.trim())
             }
         }
 
-        return summarizeResults(results)
+        val bulkResponse = postBulk(entries, false, backendUrl, authToken)
+        return bulkResponseToMappingResult(bulkResponse, entries)
     }
 
     /**
-     * Create a single user mapping with duplicate detection and status determination
-     *
-     * @return Result indicating CREATED, SKIPPED_DUPLICATE, or error
-     */
-    private fun createMapping(
-        email: String,
-        domain: String?,
-        awsAccountId: String?,
-        adminEmail: String,
-        operationType: String
-    ): MappingOperationResult {
-        try {
-            // Check for duplicate
-            val exists = userMappingRepository.existsByEmailAndAwsAccountIdAndDomain(
-                email, awsAccountId, domain
-            )
-
-            if (exists) {
-                log.debug("Skipping duplicate mapping: email=$email, domain=$domain, awsAccountId=$awsAccountId")
-                return MappingOperationResult(
-                    success = true,
-                    operation = "SKIPPED_DUPLICATE",
-                    message = "Mapping already exists",
-                    email = email,
-                    domain = domain,
-                    awsAccountId = awsAccountId
-                )
-            }
-
-            // Check if user exists
-            val user = userRepository.findByEmailIgnoreCase(email).orElse(null)
-            val status = if (user != null) MappingStatus.ACTIVE else MappingStatus.PENDING
-
-            // Create mapping
-            val mapping = UserMapping(
-                email = email,
-                user = user,
-                domain = domain,
-                awsAccountId = awsAccountId,
-                ipAddress = null,
-                status = status
-            )
-
-            if (user != null) {
-                mapping.appliedAt = Instant.now()
-            }
-
-            userMappingRepository.save(mapping)
-
-            // Audit log
-            log.info(
-                "AUDIT: operation=$operationType, actor=$adminEmail, " +
-                "email=$email, domain=$domain, awsAccountId=$awsAccountId, status=$status"
-            )
-
-            val messageStatus = if (status == MappingStatus.PENDING) " (pending - user not found)" else ""
-            return MappingOperationResult(
-                success = true,
-                operation = "CREATED",
-                message = "Created$messageStatus",
-                email = email,
-                domain = domain,
-                awsAccountId = awsAccountId,
-                isPending = status == MappingStatus.PENDING
-            )
-
-        } catch (e: Exception) {
-            log.error("Failed to create mapping: email=$email, domain=$domain, awsAccountId=$awsAccountId", e)
-            return MappingOperationResult(
-                success = false,
-                operation = "ERROR",
-                message = e.message ?: "Unknown error",
-                email = email,
-                domain = domain,
-                awsAccountId = awsAccountId
-            )
-        }
-    }
-
-    /**
-     * List user mappings with optional filtering
-     *
-     * @param email Filter by specific email (optional, null = all users)
-     * @param status Filter by status (ACTIVE, PENDING, or null = all statuses)
-     * @return List of user mappings matching criteria
+     * List user mappings via HTTP with optional filtering
      */
     fun listMappings(
         email: String? = null,
-        status: MappingStatus? = null
-    ): List<UserMapping> {
-        return when {
-            email != null && status != null -> {
-                // Filter by both email and status
-                userMappingRepository.findByEmailAndStatus(email.lowercase().trim(), status)
+        status: String? = null,
+        backendUrl: String,
+        authToken: String
+    ): List<UserMappingCliResponse> {
+        val results = mutableListOf<UserMappingCliResponse>()
+        var page = 0
+        val pageSize = 1000
+
+        do {
+            val params = mutableListOf("page=$page", "size=$pageSize")
+            if (email != null) params.add("email=${email.lowercase().trim()}")
+            if (status != null) params.add("status=${status.uppercase()}")
+
+            val request = HttpRequest.GET<Any>("$backendUrl/api/user-mappings?${params.joinToString("&")}")
+                .header("Authorization", "Bearer $authToken")
+
+            val response = getClient().toBlocking().exchange(request, Map::class.java)
+            val body = response.body() ?: break
+
+            @Suppress("UNCHECKED_CAST")
+            val content = body["content"] as? List<Map<String, Any?>> ?: break
+            val totalElements = (body["totalElements"] as? Number)?.toLong() ?: 0
+
+            content.forEach { item ->
+                results.add(UserMappingCliResponse(
+                    id = (item["id"] as Number).toLong(),
+                    email = item["email"] as String,
+                    awsAccountId = item["awsAccountId"] as? String,
+                    domain = item["domain"] as? String,
+                    status = if (item["isFutureMapping"] == true) "PENDING" else "ACTIVE",
+                    createdAt = item["createdAt"] as? String ?: "",
+                    appliedAt = item["appliedAt"] as? String
+                ))
             }
-            email != null -> {
-                // Filter by email only
-                userMappingRepository.findByEmail(email.lowercase().trim())
-            }
-            status != null -> {
-                // Filter by status only - need to get all and filter
-                userMappingRepository.findAll().filter { it.status == status }
-            }
-            else -> {
-                // No filters - return all
-                userMappingRepository.findAll().toList()
-            }
-        }
+
+            page++
+        } while (results.size < totalElements)
+
+        return results
     }
 
     /**
-     * Remove user mappings based on criteria
-     *
-     * @param email User email (required)
-     * @param domain Specific domain to remove (optional)
-     * @param awsAccountId Specific AWS account to remove (optional)
-     * @param removeAll Remove all mappings for user (default: false)
-     * @param adminEmail Admin user executing the command
-     * @return Number of mappings removed
+     * Remove user mappings by finding via HTTP then deleting by ID
      */
     fun removeMappings(
         email: String,
         domain: String? = null,
         awsAccountId: String? = null,
         removeAll: Boolean = false,
-        adminEmail: String
+        backendUrl: String,
+        authToken: String
     ): Int {
         val normalizedEmail = email.lowercase().trim()
 
-        // Find mappings to delete
+        // Fetch all mappings for this email
+        val allMappings = listMappings(
+            email = normalizedEmail,
+            status = null,
+            backendUrl = backendUrl,
+            authToken = authToken
+        )
+
+        // Filter based on criteria
         val mappingsToDelete = when {
-            removeAll -> {
-                // Remove all mappings for this email
-                userMappingRepository.findByEmail(normalizedEmail)
+            removeAll -> allMappings
+            domain != null -> allMappings.filter {
+                it.domain?.lowercase()?.trim() == domain.lowercase().trim()
             }
-            domain != null -> {
-                // Remove specific domain mapping
-                val mapping = userMappingRepository.findByEmailAndAwsAccountIdAndDomain(
-                    normalizedEmail, null, domain.lowercase().trim()
-                )
-                if (mapping.isPresent) listOf(mapping.get()) else emptyList()
+            awsAccountId != null -> allMappings.filter {
+                it.awsAccountId?.trim() == awsAccountId.trim()
             }
-            awsAccountId != null -> {
-                // Remove specific AWS account mapping
-                val mapping = userMappingRepository.findByEmailAndAwsAccountIdAndDomain(
-                    normalizedEmail, awsAccountId.trim(), null
-                )
-                if (mapping.isPresent) listOf(mapping.get()) else emptyList()
-            }
-            else -> {
-                throw IllegalArgumentException(
-                    "Must specify either --domain, --account, or --all to indicate what to remove"
-                )
-            }
+            else -> throw IllegalArgumentException(
+                "Must specify either --domain, --account, or --all to indicate what to remove"
+            )
         }
 
         if (mappingsToDelete.isEmpty()) {
             throw IllegalArgumentException("No mappings found matching the specified criteria")
         }
 
-        // Delete mappings
-        userMappingRepository.deleteAll(mappingsToDelete)
-
-        // Audit log
+        // Delete each by ID
+        var deletedCount = 0
         mappingsToDelete.forEach { mapping ->
-            log.info(
-                "AUDIT: operation=DELETE_MAPPING, actor=$adminEmail, " +
-                "email=${mapping.email}, domain=${mapping.domain}, awsAccountId=${mapping.awsAccountId}"
-            )
+            try {
+                val request = HttpRequest.DELETE<Any>("$backendUrl/api/user-mappings/${mapping.id}")
+                    .header("Authorization", "Bearer $authToken")
+
+                getClient().toBlocking().exchange(request, Void::class.java)
+                deletedCount++
+
+                log.info("Deleted mapping id=${mapping.id}: ${mapping.email} -> ${mapping.domain ?: mapping.awsAccountId}")
+            } catch (e: Exception) {
+                log.error("Failed to delete mapping id=${mapping.id}: ${e.message}")
+            }
         }
 
-        return mappingsToDelete.size
+        return deletedCount
     }
 
     /**
-     * Import user mappings from CSV or JSON file
-     *
-     * @param filePath Path to file
-     * @param format Format (CSV, JSON, or AUTO for auto-detection)
-     * @param dryRun If true, validate without saving
-     * @param adminEmail Admin user executing the command
-     * @return Result summary
+     * Import user mappings from CSV or JSON file via HTTP bulk endpoint
      */
     fun importMappingsFromFile(
         filePath: String,
         format: String,
         dryRun: Boolean,
-        adminEmail: String
+        backendUrl: String,
+        authToken: String
     ): MappingResult {
         val file = File(filePath)
         if (!file.exists()) {
@@ -333,7 +308,6 @@ class UserMappingCliService(
             filePath.endsWith(".csv", ignoreCase = true) -> "CSV"
             filePath.endsWith(".json", ignoreCase = true) -> "JSON"
             else -> {
-                // Try to detect by reading first few bytes
                 val content = file.readText()
                 when {
                     content.trim().startsWith("[") || content.trim().startsWith("{") -> "JSON"
@@ -344,30 +318,74 @@ class UserMappingCliService(
 
         log.info("Importing from $filePath (format: $detectedFormat, dryRun: $dryRun)")
 
-        val result = when (detectedFormat) {
-            "CSV" -> importFromCsv(file, dryRun, adminEmail)
-            "JSON" -> importFromJson(file, dryRun, adminEmail)
+        // Parse file into entries (CLI handles Cloud Custodian format)
+        val parseResult = when (detectedFormat) {
+            "CSV" -> parseFromCsv(file)
+            "JSON" -> parseFromJson(file)
             else -> throw IllegalArgumentException("Unsupported format: $detectedFormat")
         }
 
-        if (dryRun) {
-            val comparison = compareMappingsWithDb(result.operations)
-            return result.copy(comparison = comparison)
+        if (parseResult.entries.isEmpty() && parseResult.errors.isEmpty()) {
+            return MappingResult(
+                totalProcessed = 0,
+                created = 0,
+                createdPending = 0,
+                skipped = 0,
+                errors = listOf("No valid entries found in file"),
+                operations = emptyList()
+            )
         }
 
-        return result
+        // Send parsed entries to bulk endpoint
+        val bulkResponse = postBulk(parseResult.entries, dryRun, backendUrl, authToken)
+
+        // Merge parse errors with backend errors
+        val allErrors = parseResult.errors + bulkResponse.errors
+        val comparison = if (dryRun && bulkResponse.comparison != null) {
+            MappingComparisonResult(
+                dbMappingCount = bulkResponse.comparison.dbMappingCount,
+                fileMappingCount = bulkResponse.comparison.fileMappingCount,
+                newCount = bulkResponse.comparison.newCount,
+                unchangedCount = bulkResponse.comparison.unchangedCount,
+                removedCount = bulkResponse.comparison.removedCount,
+                dbAvailable = true
+            )
+        } else null
+
+        // Build operations list for display (simplified from bulk response)
+        val operations = parseResult.entries.map { entry ->
+            val email = (entry["email"] ?: "") as String
+            MappingOperationResult(
+                success = true,
+                operation = if (dryRun) "WOULD_CREATE" else "CREATED",
+                message = if (dryRun) "Would create mapping (dry-run)" else "Created",
+                email = email,
+                domain = entry["domain"] as? String,
+                awsAccountId = entry["awsAccountId"] as? String
+            )
+        }
+
+        return MappingResult(
+            totalProcessed = bulkResponse.totalProcessed,
+            created = bulkResponse.created,
+            createdPending = bulkResponse.createdPending,
+            skipped = bulkResponse.skipped,
+            errors = allErrors,
+            operations = operations,
+            comparison = comparison
+        )
     }
 
-    /**
-     * Import mappings from CSV file
-     *
-     * Expected CSV format:
-     * email,type,value
-     * user@example.com,DOMAIN,example.com
-     * user@example.com,AWS_ACCOUNT,123456789012
-     */
-    private fun importFromCsv(file: File, dryRun: Boolean, adminEmail: String): MappingResult {
-        val results = mutableListOf<MappingOperationResult>()
+    // --- File parsing (kept in CLI for Cloud Custodian format support) ---
+
+    private data class ParseResult(
+        val entries: List<Map<String, Any?>>,
+        val errors: List<String>
+    )
+
+    private fun parseFromCsv(file: File): ParseResult {
+        val entries = mutableListOf<Map<String, Any?>>()
+        val errors = mutableListOf<String>()
         var lineNumber = 1
 
         try {
@@ -386,8 +404,7 @@ class UserMappingCliService(
                     lineNumber++
                     if (lineNumber - 1 > MAX_IMPORT_ROWS) {
                         throw IllegalArgumentException(
-                            "File exceeds maximum of $MAX_IMPORT_ROWS records. " +
-                            "Split the file into smaller batches."
+                            "File exceeds maximum of $MAX_IMPORT_ROWS records. Split the file into smaller batches."
                         )
                     }
                     try {
@@ -396,161 +413,61 @@ class UserMappingCliService(
                         val value = record.get("value") ?: record.get("Value") ?: record.get("VALUE")
 
                         if (email.isNullOrBlank() || type.isNullOrBlank() || value.isNullOrBlank()) {
-                            results.add(
-                                MappingOperationResult(
-                                    success = false,
-                                    operation = "ERROR",
-                                    message = "Line $lineNumber: Missing required fields (email, type, value)",
-                                    email = email ?: "",
-                                    domain = null,
-                                    awsAccountId = null
-                                )
-                            )
+                            errors.add("Line $lineNumber: Missing required fields (email, type, value)")
                             return@forEach
                         }
 
-                        val result = when (type.uppercase()) {
+                        when (type.uppercase()) {
                             "DOMAIN" -> {
-                                if (!dryRun) {
-                                    createMapping(
-                                        email = email.trim(),
-                                        domain = value.trim(),
-                                        awsAccountId = null,
-                                        adminEmail = adminEmail,
-                                        operationType = "IMPORT_CSV_DOMAIN"
-                                    )
+                                if (!emailRegex.matches(email.trim())) {
+                                    errors.add("Line $lineNumber: Invalid email format")
+                                } else if (!domainRegex.matches(value.trim())) {
+                                    errors.add("Line $lineNumber: Invalid domain format")
                                 } else {
-                                    // Dry-run validation
-                                    if (!emailRegex.matches(email.trim())) {
-                                        MappingOperationResult(
-                                            success = false,
-                                            operation = "ERROR",
-                                            message = "Line $lineNumber: Invalid email format",
-                                            email = email.trim(),
-                                            domain = value.trim()
-                                        )
-                                    } else if (!domainRegex.matches(value.trim())) {
-                                        MappingOperationResult(
-                                            success = false,
-                                            operation = "ERROR",
-                                            message = "Line $lineNumber: Invalid domain format",
-                                            email = email.trim(),
-                                            domain = value.trim()
-                                        )
-                                    } else {
-                                        MappingOperationResult(
-                                            success = true,
-                                            operation = "WOULD_CREATE",
-                                            message = "Would create mapping (dry-run)",
-                                            email = email.trim(),
-                                            domain = value.trim()
-                                        )
-                                    }
+                                    entries.add(mapOf("email" to email.trim(), "domain" to value.trim()))
                                 }
                             }
                             "AWS_ACCOUNT" -> {
-                                if (!dryRun) {
-                                    createMapping(
-                                        email = email.trim(),
-                                        domain = null,
-                                        awsAccountId = value.trim(),
-                                        adminEmail = adminEmail,
-                                        operationType = "IMPORT_CSV_AWS"
-                                    )
+                                if (!emailRegex.matches(email.trim())) {
+                                    errors.add("Line $lineNumber: Invalid email format")
+                                } else if (!awsAccountIdRegex.matches(value.trim())) {
+                                    errors.add("Line $lineNumber: Invalid AWS account ID (must be 12 digits)")
                                 } else {
-                                    // Dry-run validation
-                                    if (!emailRegex.matches(email.trim())) {
-                                        MappingOperationResult(
-                                            success = false,
-                                            operation = "ERROR",
-                                            message = "Line $lineNumber: Invalid email format",
-                                            email = email.trim(),
-                                            awsAccountId = value.trim()
-                                        )
-                                    } else if (!awsAccountIdRegex.matches(value.trim())) {
-                                        MappingOperationResult(
-                                            success = false,
-                                            operation = "ERROR",
-                                            message = "Line $lineNumber: Invalid AWS account ID (must be 12 digits)",
-                                            email = email.trim(),
-                                            awsAccountId = value.trim()
-                                        )
-                                    } else {
-                                        MappingOperationResult(
-                                            success = true,
-                                            operation = "WOULD_CREATE",
-                                            message = "Would create mapping (dry-run)",
-                                            email = email.trim(),
-                                            awsAccountId = value.trim()
-                                        )
-                                    }
+                                    entries.add(mapOf("email" to email.trim(), "awsAccountId" to value.trim()))
                                 }
                             }
-                            else -> {
-                                MappingOperationResult(
-                                    success = false,
-                                    operation = "ERROR",
-                                    message = "Line $lineNumber: Invalid type '$type' (must be DOMAIN or AWS_ACCOUNT)",
-                                    email = email.trim(),
-                                    domain = null,
-                                    awsAccountId = null
-                                )
-                            }
+                            else -> errors.add("Line $lineNumber: Invalid type '$type' (must be DOMAIN or AWS_ACCOUNT)")
                         }
-                        results.add(result)
-
                     } catch (e: Exception) {
-                        results.add(
-                            MappingOperationResult(
-                                success = false,
-                                operation = "ERROR",
-                                message = "Line $lineNumber: ${e.message}",
-                                email = "",
-                                domain = null,
-                                awsAccountId = null
-                            )
-                        )
+                        errors.add("Line $lineNumber: ${e.message}")
                     }
                 }
             }
+        } catch (e: IllegalArgumentException) {
+            throw e
         } catch (e: Exception) {
             throw IllegalArgumentException("Failed to parse CSV file: ${e.message}", e)
         }
 
-        return summarizeResults(results)
+        return ParseResult(entries, errors)
     }
 
-    /**
-     * Import mappings from JSON file
-     *
-     * Expected JSON format:
-     * [
-     *   {
-     *     "email": "user@example.com",
-     *     "domains": ["example.com", "corp.local"],
-     *     "awsAccounts": ["123456789012"]
-     *   }
-     * ]
-     */
-    private fun importFromJson(file: File, dryRun: Boolean, adminEmail: String): MappingResult {
-        val results = mutableListOf<MappingOperationResult>()
-        val objectMapper = jacksonObjectMapper()
+    private fun parseFromJson(file: File): ParseResult {
+        val entries = mutableListOf<Map<String, Any?>>()
+        val errors = mutableListOf<String>()
 
         try {
-            // Handle both JSON array root and object root (e.g. {"accounts": [...]})
             val rootNode = objectMapper.readTree(file)
             val typeRef = object : TypeReference<List<Map<String, Any>>>() {}
             val mappingsData: List<Map<String, Any>> = when {
                 rootNode.isArray -> objectMapper.convertValue(rootNode, typeRef)
                 rootNode.isObject -> {
-                    // Look for first array-valued field as the data source
                     val arrayField = rootNode.fields().asSequence()
                         .firstOrNull { it.value.isArray }
                     if (arrayField != null) {
                         log.info("JSON root is an object; using '${arrayField.key}' array (${arrayField.value.size()} entries)")
                         objectMapper.convertValue(arrayField.value, typeRef)
                     } else {
-                        // Single object — wrap in a list
                         listOf(objectMapper.convertValue(rootNode, object : TypeReference<Map<String, Any>>() {}))
                     }
                 }
@@ -559,210 +476,323 @@ class UserMappingCliService(
 
             if (mappingsData.size > MAX_IMPORT_ROWS) {
                 throw IllegalArgumentException(
-                    "File contains ${mappingsData.size} records, exceeding maximum of $MAX_IMPORT_ROWS. " +
-                    "Split the file into smaller batches."
+                    "File contains ${mappingsData.size} records, exceeding maximum of $MAX_IMPORT_ROWS."
                 )
             }
 
             mappingsData.forEach { mapping ->
                 // Prefer vars["cov:owner"] (real owner email) over top-level "email"
-                // (which contains cryptic AWS root account emails in Cloud Custodian format)
                 @Suppress("UNCHECKED_CAST")
                 val vars = mapping["vars"] as? Map<String, Any>
                 val covOwner = vars?.get("cov:owner")?.toString()?.trim()
                 val rawEmail = (mapping["email"] ?: mapping["Email"]) as? String
                 val email = if (!covOwner.isNullOrBlank()) covOwner else rawEmail
+
                 val domains = (mapping["domains"] ?: mapping["Domains"]) as? List<*>
-                // Support both standard format ("awsAccounts": ["123..."]) and
-                // Cloud Custodian format ("account_id": "123..." or "account_id": 123...)
                 val awsAccounts = (mapping["awsAccounts"] ?: mapping["AwsAccounts"]) as? List<*>
                     ?: mapping["account_id"]?.toString()?.let { listOf(it) }
 
                 if (email.isNullOrBlank()) {
-                    results.add(
-                        MappingOperationResult(
-                            success = false,
-                            operation = "ERROR",
-                            message = "Missing or invalid email field",
-                            email = "",
-                            domain = null,
-                            awsAccountId = null
-                        )
-                    )
+                    errors.add("Missing or invalid email field")
                     return@forEach
                 }
 
                 // Process domains
                 domains?.forEach { domain ->
                     val domainStr = domain.toString()
-                    val result = if (!dryRun) {
-                        createMapping(
-                            email = email.trim(),
-                            domain = domainStr.trim(),
-                            awsAccountId = null,
-                            adminEmail = adminEmail,
-                            operationType = "IMPORT_JSON_DOMAIN"
-                        )
+                    if (!emailRegex.matches(email.trim())) {
+                        errors.add("Invalid email format: $email")
+                    } else if (!domainRegex.matches(domainStr.trim())) {
+                        errors.add("Invalid domain format: $domainStr")
                     } else {
-                        if (!emailRegex.matches(email.trim())) {
-                            MappingOperationResult(
-                                success = false,
-                                operation = "ERROR",
-                                message = "Invalid email format",
-                                email = email.trim(),
-                                domain = domainStr.trim()
-                            )
-                        } else if (!domainRegex.matches(domainStr.trim())) {
-                            MappingOperationResult(
-                                success = false,
-                                operation = "ERROR",
-                                message = "Invalid domain format",
-                                email = email.trim(),
-                                domain = domainStr.trim()
-                            )
-                        } else {
-                            MappingOperationResult(
-                                success = true,
-                                operation = "WOULD_CREATE",
-                                message = "Would create mapping (dry-run)",
-                                email = email.trim(),
-                                domain = domainStr.trim()
-                            )
-                        }
+                        entries.add(mapOf("email" to email.trim(), "domain" to domainStr.trim()))
                     }
-                    results.add(result)
                 }
 
                 // Process AWS accounts
                 awsAccounts?.forEach { account ->
                     val accountStr = account.toString()
-                    val result = if (!dryRun) {
-                        createMapping(
-                            email = email.trim(),
-                            domain = null,
-                            awsAccountId = accountStr.trim(),
-                            adminEmail = adminEmail,
-                            operationType = "IMPORT_JSON_AWS"
-                        )
+                    if (!emailRegex.matches(email.trim())) {
+                        errors.add("Invalid email format: $email")
+                    } else if (!awsAccountIdRegex.matches(accountStr.trim())) {
+                        errors.add("Invalid AWS account ID (must be 12 digits): $accountStr")
                     } else {
-                        if (!emailRegex.matches(email.trim())) {
-                            MappingOperationResult(
-                                success = false,
-                                operation = "ERROR",
-                                message = "Invalid email format",
-                                email = email.trim(),
-                                awsAccountId = accountStr.trim()
-                            )
-                        } else if (!awsAccountIdRegex.matches(accountStr.trim())) {
-                            MappingOperationResult(
-                                success = false,
-                                operation = "ERROR",
-                                message = "Invalid AWS account ID (must be 12 digits)",
-                                email = email.trim(),
-                                awsAccountId = accountStr.trim()
-                            )
-                        } else {
-                            MappingOperationResult(
-                                success = true,
-                                operation = "WOULD_CREATE",
-                                message = "Would create mapping (dry-run)",
-                                email = email.trim(),
-                                awsAccountId = accountStr.trim()
-                            )
-                        }
+                        entries.add(mapOf("email" to email.trim(), "awsAccountId" to accountStr.trim()))
                     }
-                    results.add(result)
                 }
             }
+        } catch (e: IllegalArgumentException) {
+            throw e
         } catch (e: Exception) {
             throw IllegalArgumentException("Failed to parse JSON file: ${e.message}", e)
         }
 
-        return summarizeResults(results)
+        return ParseResult(entries, errors)
     }
 
+    // --- HTTP helpers ---
+
     /**
-     * Compare parsed file mappings against existing DB mappings (dry-run enhancement)
+     * Post bulk mappings using Java's built-in HttpClient to bypass Micronaut Serde.
      *
-     * Compares on (email, awsAccountId) only — the domain column is ignored.
-     * The CSV upload path stores "-NONE-" as a sentinel domain while the CLI/JSON
-     * path uses null; both mean "no domain". By keying on just email + awsAccountId
-     * the comparison is immune to this mismatch.
-     * Falls back gracefully if DB is unreachable.
+     * Micronaut Serde cannot introspect Map<String, Any> with nested List<Map> generics
+     * at compile time, producing malformed JSON that causes route-matching to fail (404).
+     * Using java.net.http.HttpClient with Jackson serialization avoids Serde entirely.
      */
-    private fun compareMappingsWithDb(operations: List<MappingOperationResult>): MappingComparisonResult {
+    private fun postBulk(
+        entries: List<Map<String, Any?>>,
+        dryRun: Boolean,
+        backendUrl: String,
+        authToken: String
+    ): BulkResponse {
+        val bodyMap = mapOf(
+            "mappings" to entries.map { entry ->
+                buildMap<String, Any> {
+                    put("email", entry["email"] as String)
+                    (entry["awsAccountId"] as? String)?.let { put("awsAccountId", it) }
+                    (entry["domain"] as? String)?.let { put("domain", it) }
+                }
+            },
+            "dryRun" to dryRun
+        )
+        val jsonBody = objectMapper.writeValueAsString(bodyMap)
+
         try {
-            val successOps = operations.filter { it.success }
+            val clientBuilder = java.net.http.HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(30))
+            if (insecureMode) {
+                clientBuilder.sslContext(createTrustAllSslContext())
+                val sslParams = javax.net.ssl.SSLParameters()
+                sslParams.endpointIdentificationAlgorithm = ""
+                clientBuilder.sslParameters(sslParams)
+            }
+            val javaClient = clientBuilder.build()
 
-            // Build file keys: only email + awsAccountId, ignore domain
-            val fileKeys = successOps
-                .filter { it.awsAccountId != null }
-                .map { Pair(it.email.lowercase().trim(), it.awsAccountId!!.trim()) }
-                .toSet()
+            val httpRequest = java.net.http.HttpRequest.newBuilder()
+                .uri(URI.create("$backendUrl/api/user-mappings/bulk"))
+                .header("Content-Type", "application/json")
+                .header("Authorization", "Bearer $authToken")
+                .POST(java.net.http.HttpRequest.BodyPublishers.ofString(jsonBody))
+                .timeout(Duration.ofSeconds(120))
+                .build()
 
-            // Load DB mappings that have an awsAccountId, key on email + awsAccountId only
-            val dbMappings = userMappingRepository.findAll()
-                .filter { it.awsAccountId != null }
+            val response = javaClient.send(httpRequest, java.net.http.HttpResponse.BodyHandlers.ofString())
 
-            val dbKeys = dbMappings
-                .map { Pair(it.email.lowercase().trim(), it.awsAccountId!!.trim()) }
-                .toSet()
+            when (response.statusCode()) {
+                200 -> {
+                    @Suppress("UNCHECKED_CAST")
+                    val responseBody = objectMapper.readValue(response.body(), Map::class.java) as Map<String, Any?>
 
-            log.debug("Comparison: fileKeys={}, dbKeys={}, sample file={}, sample db={}",
-                fileKeys.size, dbKeys.size,
-                fileKeys.firstOrNull(), dbKeys.firstOrNull())
+                    @Suppress("UNCHECKED_CAST")
+                    val comparison = (responseBody["comparison"] as? Map<String, Any?>)?.let {
+                        BulkComparisonResponse(
+                            dbMappingCount = (it["dbMappingCount"] as? Number)?.toInt() ?: 0,
+                            fileMappingCount = (it["fileMappingCount"] as? Number)?.toInt() ?: 0,
+                            newCount = (it["newCount"] as? Number)?.toInt() ?: 0,
+                            unchangedCount = (it["unchangedCount"] as? Number)?.toInt() ?: 0,
+                            removedCount = (it["removedCount"] as? Number)?.toInt() ?: 0
+                        )
+                    }
 
-            val newKeys = fileKeys - dbKeys
-            val unchangedKeys = fileKeys.intersect(dbKeys)
-            val removedKeys = dbKeys - fileKeys
-
-            return MappingComparisonResult(
-                dbMappingCount = dbKeys.size,
-                fileMappingCount = fileKeys.size,
-                newCount = newKeys.size,
-                unchangedCount = unchangedKeys.size,
-                removedCount = removedKeys.size,
-                dbAvailable = true
-            )
+                    return BulkResponse(
+                        totalProcessed = (responseBody["totalProcessed"] as? Number)?.toInt() ?: entries.size,
+                        created = (responseBody["created"] as? Number)?.toInt() ?: 0,
+                        createdPending = (responseBody["createdPending"] as? Number)?.toInt() ?: 0,
+                        skipped = (responseBody["skipped"] as? Number)?.toInt() ?: 0,
+                        errors = (responseBody["errors"] as? List<String>) ?: emptyList(),
+                        comparison = comparison
+                    )
+                }
+                404 -> {
+                    log.warn("Bulk endpoint not available (404), falling back to individual operations")
+                    return if (dryRun) {
+                        dryRunFallback(entries, backendUrl, authToken)
+                    } else {
+                        individualCreateFallback(entries, backendUrl, authToken)
+                    }
+                }
+                401 -> throw IllegalArgumentException("Authentication required")
+                403 -> throw IllegalArgumentException("Insufficient permissions (ADMIN role required)")
+                400 -> {
+                    val errorBody = try {
+                        @Suppress("UNCHECKED_CAST")
+                        objectMapper.readValue(response.body(), Map::class.java) as Map<String, Any?>
+                    } catch (_: Exception) { null }
+                    throw IllegalArgumentException(errorBody?.get("message")?.toString() ?: "Bad request")
+                }
+                else -> throw IllegalArgumentException("Backend API error: ${response.statusCode()}")
+            }
+        } catch (e: IllegalArgumentException) {
+            throw e
+        } catch (e: java.net.ConnectException) {
+            throw IllegalArgumentException("Cannot connect to backend at $backendUrl")
         } catch (e: Exception) {
-            log.warn("Could not query database for mapping comparison: ${e.message}")
-            return MappingComparisonResult(
-                dbMappingCount = 0,
-                fileMappingCount = operations.count { it.success },
-                newCount = 0,
-                unchangedCount = 0,
-                removedCount = 0,
-                dbAvailable = false
-            )
+            log.error("Bulk request failed: {}", e.message, e)
+            throw IllegalArgumentException("Backend API error: ${e.message}")
+        }
+    }
+
+    private fun createTrustAllSslContext(): javax.net.ssl.SSLContext {
+        val trustAllCerts = arrayOf<javax.net.ssl.TrustManager>(object : javax.net.ssl.X509TrustManager {
+            override fun checkClientTrusted(chain: Array<java.security.cert.X509Certificate>?, authType: String?) {}
+            override fun checkServerTrusted(chain: Array<java.security.cert.X509Certificate>?, authType: String?) {}
+            override fun getAcceptedIssuers(): Array<java.security.cert.X509Certificate> = arrayOf()
+        })
+        return javax.net.ssl.SSLContext.getInstance("TLS").apply {
+            init(null, trustAllCerts, java.security.SecureRandom())
         }
     }
 
     /**
-     * Summarize operation results into counts
+     * Fallback for dry-run when bulk endpoint is unavailable.
+     * Fetches all DB mappings via the paginated list endpoint and compares locally.
      */
-    private fun summarizeResults(results: List<MappingOperationResult>): MappingResult {
-        val created = results.count { it.operation == "CREATED" && !it.isPending }
-        val createdPending = results.count { it.operation == "CREATED" && it.isPending }
-        val skipped = results.count { it.operation == "SKIPPED_DUPLICATE" }
-        val errors = results.filter { it.operation == "ERROR" }
+    private fun dryRunFallback(
+        entries: List<Map<String, Any?>>,
+        backendUrl: String,
+        authToken: String
+    ): BulkResponse {
+        log.info("Performing local dry-run comparison...")
+        val dbMappings = listMappings(email = null, status = null, backendUrl = backendUrl, authToken = authToken)
 
-        return MappingResult(
-            totalProcessed = results.size,
-            created = created,
-            createdPending = createdPending,
-            skipped = skipped,
-            errors = errors.map { "${it.email} → ${it.domain ?: it.awsAccountId}: ${it.message}" },
-            operations = results
+        // Build normalized key sets: Pair(email, awsAccountId-or-domain)
+        val fileKeys = entries.map { entry ->
+            val email = (entry["email"] as String).lowercase().trim()
+            val identifier = (entry["awsAccountId"] as? String)?.trim()
+                ?: (entry["domain"] as? String)?.lowercase()?.trim()
+                ?: ""
+            Pair(email, identifier)
+        }.toSet()
+
+        val dbKeys = dbMappings.map { m ->
+            val identifier = m.awsAccountId?.trim() ?: m.domain?.lowercase()?.trim() ?: ""
+            Pair(m.email.lowercase().trim(), identifier)
+        }.toSet()
+
+        val newCount = (fileKeys - dbKeys).size
+        val unchangedCount = (fileKeys intersect dbKeys).size
+        val removedCount = (dbKeys - fileKeys).size
+
+        return BulkResponse(
+            totalProcessed = entries.size,
+            created = 0, createdPending = 0, skipped = 0,
+            errors = emptyList(),
+            comparison = BulkComparisonResponse(
+                dbMappingCount = dbMappings.size,
+                fileMappingCount = entries.size,
+                newCount = newCount,
+                unchangedCount = unchangedCount,
+                removedCount = removedCount
+            )
         )
     }
+
+    /**
+     * Fallback for non-dry-run when bulk endpoint is unavailable.
+     * Creates each mapping individually via POST /api/user-mappings.
+     */
+    private fun individualCreateFallback(
+        entries: List<Map<String, Any?>>,
+        backendUrl: String,
+        authToken: String
+    ): BulkResponse {
+        log.info("Creating {} mappings individually...", entries.size)
+        var created = 0; var skipped = 0
+        val errors = mutableListOf<String>()
+
+        entries.forEachIndexed { index, entry ->
+            try {
+                val body = mapOf(
+                    "email" to entry["email"],
+                    "awsAccountId" to entry["awsAccountId"],
+                    "domain" to entry["domain"],
+                    "ipAddress" to null
+                )
+                val request = HttpRequest.POST("$backendUrl/api/user-mappings", body)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .header("Authorization", "Bearer $authToken")
+                getClient().toBlocking().exchange(request, Map::class.java)
+                created++
+            } catch (e: io.micronaut.http.client.exceptions.HttpClientResponseException) {
+                if (e.status.code == 400) skipped++  // duplicate
+                else errors.add("${entry["email"]}: ${e.message}")
+            } catch (e: Exception) {
+                errors.add("${entry["email"]}: ${e.message}")
+            }
+            if ((index + 1) % 100 == 0) log.info("Progress: {}/{}", index + 1, entries.size)
+        }
+
+        return BulkResponse(
+            totalProcessed = entries.size,
+            created = created, createdPending = 0,
+            skipped = skipped, errors = errors, comparison = null
+        )
+    }
+
+    private fun bulkResponseToMappingResult(
+        bulkResponse: BulkResponse,
+        entries: List<Map<String, Any?>>
+    ): MappingResult {
+        val operations = entries.map { entry ->
+            MappingOperationResult(
+                success = true,
+                operation = "CREATED",
+                message = "Created",
+                email = (entry["email"] ?: "") as String,
+                domain = entry["domain"] as? String,
+                awsAccountId = entry["awsAccountId"] as? String
+            )
+        }
+
+        return MappingResult(
+            totalProcessed = bulkResponse.totalProcessed,
+            created = bulkResponse.created,
+            createdPending = bulkResponse.createdPending,
+            skipped = bulkResponse.skipped,
+            errors = bulkResponse.errors,
+            operations = operations
+        )
+    }
+
+    // --- Internal DTOs for HTTP responses ---
+
+    private data class BulkResponse(
+        val totalProcessed: Int,
+        val created: Int,
+        val createdPending: Int,
+        val skipped: Int,
+        val errors: List<String>,
+        val comparison: BulkComparisonResponse?
+    )
+
+    private data class BulkComparisonResponse(
+        val dbMappingCount: Int,
+        val fileMappingCount: Int,
+        val newCount: Int,
+        val unchangedCount: Int,
+        val removedCount: Int
+    )
 }
+
+/**
+ * CLI-local response model for user mappings (replaces JPA UserMapping entity)
+ */
+data class UserMappingCliResponse(
+    val id: Long,
+    val email: String,
+    val awsAccountId: String?,
+    val domain: String?,
+    val status: String,
+    val createdAt: String,
+    val appliedAt: String?
+)
 
 /**
  * Result of a single mapping operation
  */
 data class MappingOperationResult(
     val success: Boolean,
-    val operation: String, // CREATED, SKIPPED_DUPLICATE, ERROR
+    val operation: String,
     val message: String,
     val email: String,
     val domain: String? = null,

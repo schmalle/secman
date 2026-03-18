@@ -2,10 +2,8 @@ package com.secman.service
 
 import com.secman.domain.User
 import com.secman.domain.UserMapping
-import com.secman.dto.CreateUserMappingRequest
-import com.secman.dto.UpdateUserMappingRequest
-import com.secman.dto.UserMappingResponse
-import com.secman.dto.toResponse
+import com.secman.domain.MappingStatus
+import com.secman.dto.*
 import com.secman.event.UserCreatedEvent
 import com.secman.repository.AssetRepository
 import com.secman.repository.UserMappingRepository
@@ -182,6 +180,129 @@ open class UserMappingService(
 
         userMappingRepository.delete(mapping)
         return true
+    }
+
+    // Validation regex patterns (matching CLI patterns)
+    private val emailRegex = Regex("^[^@]+@[^@]+\\.[^@]+$")
+    private val awsAccountIdRegex = Regex("^\\d{12}$")
+    private val domainRegex = Regex("^[a-zA-Z0-9.-]+$")
+
+    companion object {
+        const val MAX_BULK_ENTRIES = 100_000
+    }
+
+    /**
+     * Bulk create user mappings with optional dry-run comparison.
+     *
+     * For dryRun=false: validates, deduplicates, and saves each entry.
+     * For dryRun=true: validates formats, then compares (email, awsAccountId) key sets
+     * between the request and all existing DB mappings to produce new/unchanged/removed counts.
+     */
+    @Transactional
+    open fun bulkCreateMappings(request: BulkUserMappingRequest): BulkUserMappingResponse {
+        if (request.mappings.size > MAX_BULK_ENTRIES) {
+            throw IllegalArgumentException(
+                "Request contains ${request.mappings.size} entries, exceeding maximum of $MAX_BULK_ENTRIES"
+            )
+        }
+
+        val errors = mutableListOf<String>()
+        var created = 0
+        var createdPending = 0
+        var skipped = 0
+
+        // Validate all entries first
+        val validEntries = mutableListOf<BulkUserMappingEntry>()
+        request.mappings.forEachIndexed { index, entry ->
+            val trimmedEmail = entry.email.trim()
+            if (trimmedEmail.isBlank() || !emailRegex.matches(trimmedEmail)) {
+                errors.add("Entry ${index + 1}: Invalid email format '${entry.email}'")
+                return@forEachIndexed
+            }
+            if (entry.awsAccountId != null && !awsAccountIdRegex.matches(entry.awsAccountId.trim())) {
+                errors.add("Entry ${index + 1}: Invalid AWS account ID '${entry.awsAccountId}' (must be 12 digits)")
+                return@forEachIndexed
+            }
+            if (entry.domain != null && entry.domain.isNotBlank() && !domainRegex.matches(entry.domain.trim())) {
+                errors.add("Entry ${index + 1}: Invalid domain format '${entry.domain}'")
+                return@forEachIndexed
+            }
+            validEntries.add(entry)
+        }
+
+        if (request.dryRun) {
+            // Dry-run: compare (email, awsAccountId) key sets against DB
+            val fileKeys = validEntries
+                .filter { it.awsAccountId != null }
+                .map { Pair(it.email.lowercase().trim(), it.awsAccountId!!.trim()) }
+                .toSet()
+
+            val dbKeys = userMappingRepository.findAll()
+                .filter { it.awsAccountId != null }
+                .map { Pair(it.email.lowercase().trim(), it.awsAccountId!!.trim()) }
+                .toSet()
+
+            val newKeys = fileKeys - dbKeys
+            val unchangedKeys = fileKeys.intersect(dbKeys)
+            val removedKeys = dbKeys - fileKeys
+
+            return BulkUserMappingResponse(
+                totalProcessed = validEntries.size,
+                created = 0,
+                createdPending = 0,
+                skipped = 0,
+                errors = errors,
+                comparison = MappingComparisonResponse(
+                    dbMappingCount = dbKeys.size,
+                    fileMappingCount = fileKeys.size,
+                    newCount = newKeys.size,
+                    unchangedCount = unchangedKeys.size,
+                    removedCount = removedKeys.size
+                )
+            )
+        }
+
+        // Non-dry-run: create mappings
+        validEntries.forEach { entry ->
+            val email = entry.email.lowercase().trim()
+            val awsAccountId = entry.awsAccountId?.trim()
+            val domain = entry.domain?.trim()?.ifBlank { null }
+
+            // Duplicate check
+            val exists = userMappingRepository.existsByEmailAndAwsAccountIdAndDomain(email, awsAccountId, domain)
+            if (exists) {
+                skipped++
+                return@forEach
+            }
+
+            // Resolve user for ACTIVE vs PENDING status
+            val user = userRepository.findByEmailIgnoreCase(email).orElse(null)
+            val status = if (user != null) MappingStatus.ACTIVE else MappingStatus.PENDING
+
+            val mapping = UserMapping(
+                email = email,
+                user = user,
+                awsAccountId = awsAccountId,
+                domain = domain
+            )
+            mapping.status = status
+            if (user != null) {
+                mapping.appliedAt = Instant.now()
+            }
+
+            userMappingRepository.save(mapping)
+
+            if (status == MappingStatus.ACTIVE) created++ else createdPending++
+        }
+
+        return BulkUserMappingResponse(
+            totalProcessed = request.mappings.size,
+            created = created,
+            createdPending = createdPending,
+            skipped = skipped,
+            errors = errors,
+            comparison = null
+        )
     }
 
     // Feature 042: Future User Mapping Support

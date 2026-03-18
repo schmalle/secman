@@ -8,16 +8,9 @@ import jakarta.inject.Singleton
  * CLI command to remove user mappings (Feature 049)
  *
  * Usage:
- *   ./gradlew cli:run --args='manage-user-mappings remove --email user@example.com --domain example.com'
- *   ./gradlew cli:run --args='manage-user-mappings remove --email user@example.com --account 123456789012'
- *   ./gradlew cli:run --args='manage-user-mappings remove --email user@example.com --all'
- *
- * Features:
- * - Remove specific domain mapping
- * - Remove specific AWS account mapping
- * - Remove all mappings for a user
- * - Audit logging for all deletions
- * - Requires ADMIN role
+ *   ./bin/secman manage-user-mappings remove --email user@example.com --domain example.com
+ *   ./bin/secman manage-user-mappings remove --email user@example.com --account 123456789012
+ *   ./bin/secman manage-user-mappings remove --email user@example.com --all
  */
 @Singleton
 @Command(
@@ -64,25 +57,31 @@ class RemoveCommand(
             println("=" .repeat(60))
             println()
 
-            // Get admin user
-            val adminEmail = parent.getAdminUserOrThrow()
-            println("Admin user: $adminEmail")
+            // Authenticate with backend
+            val backendUrl = parent.getEffectiveBackendUrl()
+            val username = parent.getEffectiveUsername()
+            val password = parent.getEffectivePassword()
+            userMappingCliService.initHttpClient(backendUrl, parent.insecure)
+            val token = userMappingCliService.authenticate(username, password, backendUrl)
+                ?: throw IllegalArgumentException("Authentication failed - check username/password")
+
+            println("Backend: $backendUrl")
             println()
 
             // Validate inputs
             val trimmedEmail = email.trim()
             if (trimmedEmail.isEmpty()) {
-                System.err.println("❌ Error: Email address is required")
+                System.err.println("Error: Email address is required")
                 System.exit(1)
             }
 
             // Determine what to remove
             val description = when {
                 removeAll -> "all mappings for $trimmedEmail"
-                domain != null -> "domain mapping: $trimmedEmail → $domain"
-                awsAccountId != null -> "AWS account mapping: $trimmedEmail → $awsAccountId"
+                domain != null -> "domain mapping: $trimmedEmail -> $domain"
+                awsAccountId != null -> "AWS account mapping: $trimmedEmail -> $awsAccountId"
                 else -> {
-                    System.err.println("❌ Error: Must specify --domain, --account, or --all")
+                    System.err.println("Error: Must specify --domain, --account, or --all")
                     System.exit(1)
                     return
                 }
@@ -91,28 +90,29 @@ class RemoveCommand(
             println("Removing: $description")
             println()
 
-            // Execute removal
+            // Execute removal via HTTP
             val removedCount = userMappingCliService.removeMappings(
                 email = trimmedEmail,
                 domain = domain?.trim(),
                 awsAccountId = awsAccountId?.trim(),
                 removeAll = removeAll,
-                adminEmail = adminEmail
+                backendUrl = backendUrl,
+                authToken = token
             )
 
             println("=" .repeat(60))
             println("Summary")
             println("=" .repeat(60))
-            println("✅ Removed $removedCount mapping(s)")
+            println("Removed $removedCount mapping(s)")
             println()
 
         } catch (e: IllegalArgumentException) {
             println()
-            System.err.println("❌ Error: ${e.message}")
+            System.err.println("Error: ${e.message}")
             System.exit(1)
         } catch (e: Exception) {
             println()
-            System.err.println("❌ Error: ${e.message}")
+            System.err.println("Error: ${e.message}")
             e.printStackTrace()
             System.exit(1)
         }
