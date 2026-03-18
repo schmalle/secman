@@ -22,12 +22,12 @@ dependencies {
     implementation(project(":shared"))
     
     // Micronaut Core
-    implementation("io.micronaut:micronaut-http-client:4.10.16")
-    implementation("io.micronaut:micronaut-http-server-netty:4.10.16")
-    implementation("io.micronaut:micronaut-jackson-databind:4.10.16")
+    implementation("io.micronaut:micronaut-http-client:4.10.18")
+    implementation("io.micronaut:micronaut-http-server-netty:4.10.18")
+    implementation("io.micronaut:micronaut-jackson-databind:4.10.18")
     implementation("io.micronaut.kotlin:micronaut-kotlin-runtime")
     implementation("io.micronaut.kotlin:micronaut-kotlin-extension-functions")
-    implementation("io.micronaut:micronaut-retry:4.10.16")
+    implementation("io.micronaut:micronaut-retry:4.10.18")
     implementation("io.micronaut.cache:micronaut-cache-caffeine")
     
     // Database
@@ -119,7 +119,7 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter-api:6.0.3")
     testImplementation("org.junit.jupiter:junit-jupiter-engine:6.0.3")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:6.0.3")
-    testImplementation("io.micronaut.test:micronaut-test-junit5:4.10.2")
+    testImplementation("io.micronaut.test:micronaut-test-junit5:4.10.3")
     testImplementation("io.mockk:mockk:1.14.9")
     testImplementation("org.testcontainers:testcontainers:2.0.3")
     testImplementation("org.testcontainers:mariadb:1.21.4")

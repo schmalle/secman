@@ -48,8 +48,8 @@ dependencies {
     implementation("software.amazon.awssdk:s3")
     
     // Kotlin
-    implementation("org.jetbrains.kotlin:kotlin-reflect:2.3.10")
-    implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.3.10")
+    implementation("org.jetbrains.kotlin:kotlin-reflect:2.3.20")
+    implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.3.20")
     
     // Logging
     runtimeOnly("ch.qos.logback:logback-classic")
