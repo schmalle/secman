@@ -515,6 +515,11 @@ const Sidebar = () => {
                                         <i className="bi bi-envelope-paper me-2"></i> Notification Logs
                                     </a>
                                 </li>
+                                <li>
+                                    <a href="/admin/ec2-compliance" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-shield-check me-2"></i> EC2 Compliance
+                                    </a>
+                                </li>
                             </ul>
                         )}
                     </li>

@@ -460,4 +460,11 @@ interface AssetRepository : JpaRepository<Asset, Long> {
         ORDER BY a.name ASC
     """)
     fun findAssetsByProductForAllNoLimit(product: String): List<Asset>
+
+    /**
+     * Get all asset IDs (lightweight query for bulk operations).
+     * Feature: ec2-vulnerability-tracking
+     */
+    @io.micronaut.data.annotation.Query("SELECT a.id FROM Asset a")
+    fun findAllIds(): List<Long>
 }
