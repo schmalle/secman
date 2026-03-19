@@ -1,7 +1,6 @@
 plugins {
     id("org.jetbrains.kotlin.jvm")
     id("org.jetbrains.kotlin.plugin.allopen")
-    id("org.jetbrains.kotlin.plugin.jpa")
     id("com.google.devtools.ksp")
     id("io.micronaut.application")
     id("com.gradleup.shadow")
@@ -14,22 +13,12 @@ dependencies {
     // Shared CrowdStrike Module
     implementation(project(":shared"))
 
-    // Backend Module (for NotificationService, repositories)
-    implementation(project(":backendng"))
-
     // Micronaut Core
     implementation("io.micronaut:micronaut-runtime")
     implementation("io.micronaut.kotlin:micronaut-kotlin-runtime")
     implementation("io.micronaut:micronaut-http-client")
     implementation("io.micronaut:micronaut-context")
-
-    // Micronaut Data (required for Pageable and repository interfaces)
-    implementation("io.micronaut.data:micronaut-data-hibernate-jpa")
-
-    // Database (required for EntityManager and JPA support)
-    implementation("io.micronaut.sql:micronaut-hibernate-jpa")
-    implementation("io.micronaut.sql:micronaut-jdbc-hikari")
-    runtimeOnly("org.mariadb.jdbc:mariadb-java-client:3.5.7")
+    implementation("io.micronaut.serde:micronaut-serde-jackson")
 
     // Picocli for CLI
     implementation("info.picocli:picocli:4.7.7")
@@ -100,7 +89,6 @@ tasks {
 allOpen {
     annotation("io.micronaut.aop.Around")
     annotation("jakarta.inject.Singleton")
-    annotation("jakarta.transaction.Transactional")
     annotation("picocli.CommandLine.Command")
 }
 

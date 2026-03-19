@@ -1,29 +1,12 @@
 package com.secman.cli.commands
 
-import com.secman.cli.service.WorkgroupCliService
+import com.secman.cli.service.CliHttpClient
 import picocli.CommandLine.*
+import jakarta.inject.Inject
 import jakarta.inject.Singleton
 
 /**
- * CLI command to assign assets to a workgroup
- *
- * Supports assigning assets by:
- * - Pattern matching (wildcards)
- * - Specific asset IDs
- * - Asset type filtering
- *
- * Usage:
- *   # Assign assets by pattern
- *   ./gradlew cli:run --args='manage-workgroups assign-assets --workgroup Production --pattern "ip-10-*"'
- *
- *   # Assign specific assets by ID
- *   ./gradlew cli:run --args='manage-workgroups assign-assets --workgroup Production --ids 1,2,3'
- *
- *   # Assign assets by pattern and type
- *   ./gradlew cli:run --args='manage-workgroups assign-assets --workgroup Production --pattern "*prod*" --type SERVER'
- *
- *   # Dry run (preview without changes)
- *   ./gradlew cli:run --args='manage-workgroups assign-assets --workgroup Production --pattern "*" --dry-run'
+ * CLI command to assign assets to a workgroup via backend HTTP API.
  */
 @Singleton
 @Command(
@@ -31,45 +14,27 @@ import jakarta.inject.Singleton
     description = ["Assign assets to a workgroup"],
     mixinStandardHelpOptions = true
 )
-class AssignWorkgroupAssetsCommand(
-    private val workgroupCliService: WorkgroupCliService
-) : Runnable {
+class AssignWorkgroupAssetsCommand : Runnable {
 
-    @Option(
-        names = ["--workgroup", "-w"],
-        description = ["Target workgroup name or ID"],
-        required = true
-    )
+    @Inject
+    lateinit var cliHttpClient: CliHttpClient
+
+    @Option(names = ["--workgroup", "-w"], description = ["Target workgroup name or ID"], required = true)
     lateinit var workgroup: String
 
-    @Option(
-        names = ["--pattern", "-p"],
-        description = ["Asset name pattern with wildcards (* = any chars, ? = single char)"]
-    )
+    @Option(names = ["--pattern", "-p"], description = ["Asset name pattern with wildcards (* = any chars, ? = single char)"])
     var pattern: String? = null
 
-    @Option(
-        names = ["--ids", "-i"],
-        description = ["Comma-separated list of asset IDs to assign"]
-    )
+    @Option(names = ["--ids", "-i"], description = ["Comma-separated list of asset IDs to assign"])
     var assetIds: String? = null
 
-    @Option(
-        names = ["--type", "-t"],
-        description = ["Filter assets by type (e.g., SERVER, WORKSTATION)"]
-    )
+    @Option(names = ["--type", "-t"], description = ["Filter assets by type (e.g., SERVER, WORKSTATION)"])
     var assetType: String? = null
 
-    @Option(
-        names = ["--dry-run", "-d"],
-        description = ["Preview matching assets without making changes"]
-    )
+    @Option(names = ["--dry-run", "-d"], description = ["Preview matching assets without making changes"])
     var dryRun: Boolean = false
 
-    @Option(
-        names = ["--verbose", "-v"],
-        description = ["Show detailed output including asset names"]
-    )
+    @Option(names = ["--verbose", "-v"], description = ["Show detailed output including asset names"])
     var verbose: Boolean = false
 
     @ParentCommand
@@ -77,38 +42,35 @@ class AssignWorkgroupAssetsCommand(
 
     override fun run() {
         try {
-            // Validate that at least one selection method is provided
             if (pattern.isNullOrBlank() && assetIds.isNullOrBlank()) {
                 System.err.println("Error: Must specify either --pattern or --ids")
                 System.exit(1)
                 return
             }
 
+            val effectiveUrl = parent.getEffectiveBackendUrl()
+            val authToken = cliHttpClient.authenticate(
+                parent.getEffectiveUsername(), parent.getEffectivePassword(), effectiveUrl
+            ) ?: throw RuntimeException("Authentication failed. Check credentials.")
+
             // Find workgroup
-            val wg = workgroupCliService.findWorkgroup(workgroup)
+            val workgroups = cliHttpClient.getList("$effectiveUrl/api/workgroups", authToken) ?: emptyList()
+            val wg = findWorkgroup(workgroups, workgroup)
             if (wg == null) {
                 System.err.println("Error: Workgroup not found: $workgroup")
                 System.exit(1)
                 return
             }
+            val wgId = (wg["id"] as? Number)?.toLong() ?: 0
 
-            // Dry run mode - just show what would be assigned
-            if (dryRun) {
-                executeDryRun(wg.id!!)
-                return
-            }
+            // Build request
+            val requestBody = mutableMapOf<String, Any?>(
+                "dryRun" to dryRun
+            )
 
-            // Get admin user
-            val adminEmail = parent.getAdminUserOrThrow()
-
-            // Execute assignment
-            val result = if (!pattern.isNullOrBlank()) {
-                workgroupCliService.assignAssetsByPattern(
-                    workgroupId = wg.id!!,
-                    pattern = pattern!!,
-                    type = assetType,
-                    adminEmail = adminEmail
-                )
+            if (!pattern.isNullOrBlank()) {
+                requestBody["pattern"] = pattern
+                if (assetType != null) requestBody["type"] = assetType
             } else {
                 val ids = assetIds!!.split(",")
                     .map { it.trim() }
@@ -120,36 +82,50 @@ class AssignWorkgroupAssetsCommand(
                     System.exit(1)
                     return
                 }
-
-                workgroupCliService.assignAssets(
-                    workgroupId = wg.id!!,
-                    assetIds = ids,
-                    adminEmail = adminEmail
-                )
+                requestBody["assetIds"] = ids
             }
 
-            // Display result
+            val result = cliHttpClient.postMap(
+                "$effectiveUrl/api/workgroups/$wgId/cli/assign-assets",
+                requestBody,
+                authToken
+            ) ?: throw RuntimeException("Failed to assign assets - no response from server")
+
+            val success = result["success"] as? Boolean ?: false
+            val message = result["message"]?.toString() ?: ""
+            val assigned = (result["assigned"] as? Number)?.toInt() ?: 0
+            val skipped = (result["skipped"] as? Number)?.toInt() ?: 0
+            @Suppress("UNCHECKED_CAST")
+            val errors = (result["errors"] as? List<String>) ?: emptyList()
+            @Suppress("UNCHECKED_CAST")
+            val assetNames = (result["assetNames"] as? List<String>) ?: emptyList()
+
+            if (dryRun) {
+                println("DRY RUN - No changes will be made")
+                println()
+            }
+
             println()
-            if (result.success) {
-                println("SUCCESS: ${result.message}")
+            if (success) {
+                println("SUCCESS: $message")
             } else {
-                println("COMPLETED WITH ERRORS: ${result.message}")
+                println("COMPLETED WITH ERRORS: $message")
             }
 
             println()
             println("Summary:")
-            println("  - Assigned: ${result.assigned}")
-            println("  - Skipped (already assigned): ${result.skipped}")
+            println("  - Assigned: $assigned")
+            println("  - Skipped (already assigned): $skipped")
 
-            if (result.errors.isNotEmpty()) {
-                println("  - Errors: ${result.errors.size}")
-                result.errors.forEach { println("    - $it") }
+            if (errors.isNotEmpty()) {
+                println("  - Errors: ${errors.size}")
+                errors.forEach { println("    - $it") }
             }
 
-            if (verbose && result.assetNames.isNotEmpty()) {
+            if (verbose && assetNames.isNotEmpty()) {
                 println()
                 println("Assigned assets:")
-                result.assetNames.forEach { println("  - $it") }
+                assetNames.forEach { println("  - $it") }
             }
 
         } catch (e: IllegalArgumentException) {
@@ -162,53 +138,11 @@ class AssignWorkgroupAssetsCommand(
         }
     }
 
-    private fun executeDryRun(workgroupId: Long) {
-        println("DRY RUN - No changes will be made")
-        println()
-
-        val matchingAssets = if (!pattern.isNullOrBlank()) {
-            workgroupCliService.searchAssets(pattern, assetType)
-        } else {
-            val ids = assetIds!!.split(",")
-                .map { it.trim() }
-                .filter { it.isNotBlank() }
-                .mapNotNull { it.toLongOrNull() }
-
-            // Get all assets and filter by IDs
-            workgroupCliService.searchAssets(null, null)
-                .filter { ids.contains(it.id) }
+    private fun findWorkgroup(workgroups: List<Map<String, Any?>>, nameOrId: String): Map<String, Any?>? {
+        val id = nameOrId.toLongOrNull()
+        if (id != null) {
+            return workgroups.find { (it["id"] as? Number)?.toLong() == id }
         }
-
-        if (matchingAssets.isEmpty()) {
-            println("No assets match the specified criteria")
-            return
-        }
-
-        // Get current workgroup assets
-        val currentAssets = workgroupCliService.listAssetsInWorkgroup(workgroupId)
-        val currentAssetIds = currentAssets.mapNotNull { it.id }.toSet()
-
-        val newAssets = matchingAssets.filter { !currentAssetIds.contains(it.id) }
-        val alreadyAssigned = matchingAssets.filter { currentAssetIds.contains(it.id) }
-
-        println("Assets that would be assigned:")
-        if (newAssets.isEmpty()) {
-            println("  (none - all matching assets already assigned)")
-        } else {
-            newAssets.forEach { asset ->
-                println("  - ${asset.name} (${asset.type})")
-            }
-        }
-
-        if (alreadyAssigned.isNotEmpty()) {
-            println()
-            println("Assets already assigned (would be skipped):")
-            alreadyAssigned.forEach { asset ->
-                println("  - ${asset.name} (${asset.type})")
-            }
-        }
-
-        println()
-        println("Summary: ${newAssets.size} would be assigned, ${alreadyAssigned.size} already assigned")
+        return workgroups.find { (it["name"]?.toString() ?: "").equals(nameOrId, ignoreCase = true) }
     }
 }

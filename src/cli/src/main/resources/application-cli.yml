@@ -1,4 +1,1 @@
-flyway:
-  datasources:
-    default:
-      enabled: false
+# CLI-specific configuration overrides

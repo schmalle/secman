@@ -2,15 +2,14 @@ package com.secman.cli.commands
 
 import com.secman.cli.config.ConfigLoader
 import com.secman.cli.export.ExportService
+import com.secman.cli.service.VulnerabilityStorageService
+import com.secman.cli.service.VulnerabilityStorageService.ServerVulnerabilityBatch
 import com.secman.crowdstrike.client.CrowdStrikeApiClient
 import com.secman.crowdstrike.dto.FalconConfigDto
 import com.secman.crowdstrike.exception.AuthenticationException
 import com.secman.crowdstrike.exception.CrowdStrikeException
 import com.secman.crowdstrike.exception.NotFoundException
 import com.secman.crowdstrike.exception.RateLimitException
-import com.secman.dto.CrowdStrikeVulnerabilityBatchDto
-import com.secman.dto.VulnerabilityDto
-import com.secman.service.CrowdStrikeVulnerabilityImportService
 import io.micronaut.context.ApplicationContext
 import org.slf4j.LoggerFactory
 import java.io.File
@@ -26,9 +25,7 @@ import java.io.File
  * - Filter by severity and product
  * - Support pagination
  * - Export to JSON or CSV
- * - Optionally save to database (--save flag, direct DB access)
- *
- * Related to: Feature 023-create-in-the, 032-servers-query-import, 073-cli-direct-db
+ * - Optionally save to database via backend HTTP API (--save flag)
  */
 class QueryCommand {
     private val log = LoggerFactory.getLogger(QueryCommand::class.java)
@@ -36,7 +33,7 @@ class QueryCommand {
     private val exportService = ExportService()
     private val appContext = ApplicationContext.run()
     private val apiClient: CrowdStrikeApiClient = appContext.getBean(CrowdStrikeApiClient::class.java)
-    private val importService: CrowdStrikeVulnerabilityImportService = appContext.getBean(CrowdStrikeVulnerabilityImportService::class.java)
+    private val storageService: VulnerabilityStorageService = appContext.getBean(VulnerabilityStorageService::class.java)
 
     var hostname: String = ""
     var outputPath: String? = null
@@ -54,31 +51,24 @@ class QueryCommand {
         return try {
             log.info("Querying vulnerabilities for hostname: {}", hostname)
 
-            // Validate input
             if (hostname.isBlank()) {
                 System.err.println("Error: Hostname cannot be blank")
                 return 1
             }
 
-            // Load or override configuration
             val config = if (clientId != null && clientSecret != null) {
-                FalconConfigDto(
-                    clientId = clientId!!,
-                    clientSecret = clientSecret!!
-                )
+                FalconConfigDto(clientId = clientId!!, clientSecret = clientSecret!!)
             } else {
                 configLoader.loadConfig()
             }
 
             log.info("Configuration loaded successfully")
 
-            // Query CrowdStrike API
             log.info("Querying CrowdStrike API for hostname: {}", hostname)
             System.out.println("Querying vulnerabilities for: $hostname")
 
             val response = apiClient.queryAllVulnerabilities(hostname, config, limit)
 
-            // Filter by severity if specified (supports comma-separated values)
             val filteredByServerity = if (severity != null) {
                 val severityLevels = severity!!.split(",").map { it.trim().lowercase() }
                 if (verbose) {
@@ -93,7 +83,6 @@ class QueryCommand {
                 response
             }
 
-            // Filter by product if specified
             val filteredByProduct = if (product != null) {
                 filteredByServerity.copy(
                     vulnerabilities = filteredByServerity.vulnerabilities.filter {
@@ -104,12 +93,10 @@ class QueryCommand {
                 filteredByServerity
             }
 
-            // Apply final filters
             val finalResponse = filteredByProduct
 
             System.out.println("Total vulnerabilities found: ${finalResponse.vulnerabilities.size}")
 
-            // Show severity breakdown if verbose
             if (verbose && finalResponse.vulnerabilities.isNotEmpty()) {
                 val severityCount = finalResponse.vulnerabilities
                     .groupBy { it.severity }
@@ -123,37 +110,29 @@ class QueryCommand {
                 }
             }
 
-            // Save to database if --save flag is specified
+            // Save to database via backend HTTP API if --save flag is specified
             if (save && finalResponse.vulnerabilities.isNotEmpty()) {
-                System.out.println("\nSaving to database...")
+                System.out.println("\nSaving to database via backend API...")
 
-                // Build a single batch DTO from the hostname + filtered vulnerabilities
                 val firstVuln = finalResponse.vulnerabilities.firstOrNull()
-                // Feature 082: Use cloudInstanceId from the most recently detected vulnerability
                 val latestCloudInstanceId = finalResponse.vulnerabilities
                     .filter { !it.cloudInstanceId.isNullOrBlank() }
                     .maxByOrNull { it.detectedAt }
                     ?.cloudInstanceId
-                val batch = CrowdStrikeVulnerabilityBatchDto(
-                    hostname = hostname,
+
+                val serverBatch = ServerVulnerabilityBatch(
+                    vulnerabilities = finalResponse.vulnerabilities,
                     groups = null,
                     cloudAccountId = firstVuln?.cloudAccountId,
                     cloudInstanceId = latestCloudInstanceId ?: firstVuln?.cloudInstanceId,
                     adDomain = firstVuln?.adDomain,
                     osVersion = null,
-                    ip = firstVuln?.ip,
-                    vulnerabilities = finalResponse.vulnerabilities.map { vuln ->
-                        VulnerabilityDto(
-                            cveId = vuln.cveId ?: "",
-                            severity = vuln.severity,
-                            affectedProduct = vuln.affectedProduct,
-                            daysOpen = parseDaysOpenToInt(vuln.daysOpen),
-                            patchPublicationDate = vuln.patchPublicationDate
-                        )
-                    }
+                    ip = firstVuln?.ip
                 )
 
-                val result = importService.importServerVulnerabilities(listOf(batch), "CLI")
+                val result = storageService.storeServerVulnerabilities(
+                    serverBatches = mapOf(hostname to serverBatch)
+                )
 
                 System.out.println("Save completed!")
                 System.out.println("  - Asset: ${if (result.serversCreated > 0) "CREATED" else "UPDATED"}")
@@ -174,12 +153,8 @@ class QueryCommand {
             if (outputFile != null && finalResponse.vulnerabilities.isNotEmpty()) {
                 val outFile = File(outputFile!!)
                 val exported = when (format.lowercase()) {
-                    "csv" -> {
-                        exportService.exportToCsv(finalResponse, outFile)
-                    }
-                    else -> {
-                        exportService.exportToJson(finalResponse, outFile)
-                    }
+                    "csv" -> exportService.exportToCsv(finalResponse, outFile)
+                    else -> exportService.exportToJson(finalResponse, outFile)
                 }
 
                 if (exported) {
@@ -230,11 +205,6 @@ class QueryCommand {
         }
     }
 
-    /**
-     * Parse daysOpen string to integer value
-     *
-     * Handles formats: "526 days" -> 526, "1 day" -> 1, null -> 0
-     */
     private fun parseDaysOpenToInt(daysOpen: String?): Int {
         if (daysOpen.isNullOrBlank()) return 0
         return daysOpen.split(" ").firstOrNull()?.toIntOrNull() ?: 0

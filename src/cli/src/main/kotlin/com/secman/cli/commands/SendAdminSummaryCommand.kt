@@ -1,20 +1,13 @@
 package com.secman.cli.commands
 
-import com.secman.cli.service.AdminSummaryCliService
-import com.secman.domain.ExecutionStatus
+import com.secman.cli.service.CliHttpClient
 import picocli.CommandLine.*
 import jakarta.inject.Inject
 import jakarta.inject.Singleton
 
 /**
- * CLI command to send admin summary email to all ADMIN users.
+ * CLI command to send admin summary email to all ADMIN users via backend HTTP API.
  * Feature: 070-admin-summary-email
- *
- * Usage:
- *   ./bin/secman send-admin-summary
- *   ./bin/secman send-admin-summary --dry-run
- *   ./bin/secman send-admin-summary --verbose
- *   ./bin/secman send-admin-summary --dry-run --verbose
  */
 @Singleton
 @Command(
@@ -24,23 +17,26 @@ import jakarta.inject.Singleton
 )
 class SendAdminSummaryCommand : Runnable {
 
-    @Option(
-        names = ["--dry-run"],
-        description = ["Preview planned recipients without sending emails"]
-    )
+    @Option(names = ["--dry-run"], description = ["Preview planned recipients without sending emails"])
     var dryRun: Boolean = false
 
-    @Option(
-        names = ["--verbose", "-v"],
-        description = ["Detailed logging (show per-recipient status)"]
-    )
+    @Option(names = ["--verbose", "-v"], description = ["Detailed logging (show per-recipient status)"])
     var verbose: Boolean = false
+
+    @Option(names = ["--username"], description = ["Backend username (or set SECMAN_USERNAME env var)"])
+    var username: String? = null
+
+    @Option(names = ["--password"], description = ["Backend password (or set SECMAN_PASSWORD env var)"])
+    var password: String? = null
+
+    @Option(names = ["--backend-url"], description = ["Backend API URL (or set SECMAN_BACKEND_URL env var)"])
+    var backendUrl: String? = null
 
     @Spec
     lateinit var spec: Model.CommandSpec
 
     @Inject
-    lateinit var adminSummaryCliService: AdminSummaryCliService
+    lateinit var cliHttpClient: CliHttpClient
 
     override fun run() {
         try {
@@ -54,54 +50,83 @@ class SendAdminSummaryCommand : Runnable {
                 println()
             }
 
+            val effectiveUrl = getEffectiveBackendUrl()
+            val effectiveUsername = getEffectiveUsername()
+            val effectivePassword = getEffectivePassword()
+
+            val authToken = cliHttpClient.authenticate(effectiveUsername, effectivePassword, effectiveUrl)
+                ?: throw RuntimeException("Authentication failed. Check credentials.")
+
             // Gather and display statistics
-            val statistics = adminSummaryCliService.getStatistics()
+            val statsResult = cliHttpClient.getMap("$effectiveUrl/api/cli/admin-summary/statistics", authToken)
+                ?: throw RuntimeException("Failed to fetch statistics - no response from server")
+
+            val userCount = (statsResult["userCount"] as? Number)?.toLong() ?: 0
+            val vulnerabilityCount = (statsResult["vulnerabilityCount"] as? Number)?.toLong() ?: 0
+            val assetCount = (statsResult["assetCount"] as? Number)?.toLong() ?: 0
+            val vulnerabilityStatisticsUrl = statsResult["vulnerabilityStatisticsUrl"]?.toString() ?: ""
+
             if (dryRun) {
                 println("Statistics to be sent:")
             } else {
                 println("Gathering statistics...")
             }
-            println("   Users: ${statistics.userCount}")
-            println("   Vulnerabilities: ${statistics.vulnerabilityCount}")
-            println("   Assets: ${statistics.assetCount}")
+            println("   Users: $userCount")
+            println("   Vulnerabilities: $vulnerabilityCount")
+            println("   Assets: $assetCount")
             println()
 
-            println("Vulnerability Statistics: ${statistics.vulnerabilityStatisticsUrl}")
+            println("Vulnerability Statistics: $vulnerabilityStatisticsUrl")
             println()
 
-            if (statistics.topProducts.isNotEmpty()) {
+            @Suppress("UNCHECKED_CAST")
+            val topProducts = (statsResult["topProducts"] as? List<Map<String, Any?>>) ?: emptyList()
+            if (topProducts.isNotEmpty()) {
                 println("Top 10 Most Affected Products:")
-                statistics.topProducts.forEach { product ->
-                    println("   ${product.name}: ${product.vulnerabilityCount}")
+                topProducts.forEach { product ->
+                    val name = product["name"]?.toString() ?: ""
+                    val count = (product["vulnerabilityCount"] as? Number)?.toLong() ?: 0
+                    println("   $name: $count")
                 }
                 println()
             }
 
-            if (statistics.topServers.isNotEmpty()) {
+            @Suppress("UNCHECKED_CAST")
+            val topServers = (statsResult["topServers"] as? List<Map<String, Any?>>) ?: emptyList()
+            if (topServers.isNotEmpty()) {
                 println("Top 10 Most Affected Servers:")
-                statistics.topServers.forEach { server ->
-                    println("   ${server.name}: ${server.vulnerabilityCount}")
+                topServers.forEach { server ->
+                    val name = server["name"]?.toString() ?: ""
+                    val count = (server["vulnerabilityCount"] as? Number)?.toLong() ?: 0
+                    println("   $name: $count")
                 }
                 println()
             }
 
             // Execute send
-            val result = adminSummaryCliService.execute(dryRun, verbose)
+            val sendResult = cliHttpClient.postMap(
+                "$effectiveUrl/api/cli/admin-summary/send",
+                mapOf("dryRun" to dryRun, "verbose" to verbose),
+                authToken
+            ) ?: throw RuntimeException("Failed to send admin summary - no response from server")
+
+            val status = sendResult["status"]?.toString() ?: "UNKNOWN"
+            val recipientCount = (sendResult["recipientCount"] as? Number)?.toInt() ?: 0
+            val emailsSent = (sendResult["emailsSent"] as? Number)?.toInt() ?: 0
+            val emailsFailed = (sendResult["emailsFailed"] as? Number)?.toInt() ?: 0
+            @Suppress("UNCHECKED_CAST")
+            val recipients = (sendResult["recipients"] as? List<String>) ?: emptyList()
+            @Suppress("UNCHECKED_CAST")
+            val failedRecipients = (sendResult["failedRecipients"] as? List<String>) ?: emptyList()
 
             if (dryRun) {
-                println("Would send to ${result.recipientCount} ADMIN users:")
-                result.recipients.forEach { email ->
-                    println("   - $email")
-                }
+                println("Would send to $recipientCount ADMIN users:")
+                recipients.forEach { email -> println("   - $email") }
             } else {
-                println("Sending to ${result.recipientCount} ADMIN users...")
+                println("Sending to $recipientCount ADMIN users...")
                 if (verbose) {
-                    result.recipients.forEach { email ->
-                        println("   SUCCESS $email")
-                    }
-                    result.failedRecipients.forEach { email ->
-                        println("   FAILED $email")
-                    }
+                    recipients.forEach { email -> println("   SUCCESS $email") }
+                    failedRecipients.forEach { email -> println("   FAILED $email") }
                 }
             }
 
@@ -109,37 +134,31 @@ class SendAdminSummaryCommand : Runnable {
             println("=" .repeat(60))
             println("Summary")
             println("=" .repeat(60))
-            println("Recipients: ${result.recipientCount}")
-            println("Emails sent: ${result.emailsSent}")
-            println("Failures: ${result.emailsFailed}")
+            println("Recipients: $recipientCount")
+            println("Emails sent: $emailsSent")
+            println("Failures: $emailsFailed")
             println()
 
-            when (result.status) {
-                ExecutionStatus.SUCCESS -> {
-                    println("Admin summary email sent successfully")
-                }
-                ExecutionStatus.DRY_RUN -> {
-                    println("Dry run complete - no emails sent")
-                }
-                ExecutionStatus.PARTIAL_FAILURE -> {
+            when (status) {
+                "SUCCESS" -> println("Admin summary email sent successfully")
+                "DRY_RUN" -> println("Dry run complete - no emails sent")
+                "PARTIAL_FAILURE" -> {
                     println("Admin summary email completed with some failures")
-                    if (verbose && result.failedRecipients.isNotEmpty()) {
+                    if (verbose && failedRecipients.isNotEmpty()) {
                         println()
                         println("Failed recipients:")
-                        result.failedRecipients.forEach { println("   - $it") }
+                        failedRecipients.forEach { println("   - $it") }
                     }
                 }
-                ExecutionStatus.FAILURE -> {
+                "FAILURE" -> {
                     println("Admin summary email failed")
-                    if (result.recipientCount == 0) {
+                    if (recipientCount == 0) {
                         println("No ADMIN users with valid email found")
                     }
                 }
             }
 
-            // Exit with appropriate code
-            if (result.status == ExecutionStatus.FAILURE ||
-                result.status == ExecutionStatus.PARTIAL_FAILURE) {
+            if (status == "FAILURE" || status == "PARTIAL_FAILURE") {
                 System.exit(1)
             }
 
@@ -150,5 +169,20 @@ class SendAdminSummaryCommand : Runnable {
             }
             System.exit(1)
         }
+    }
+
+    private fun getEffectiveUsername(): String {
+        return username ?: System.getenv("SECMAN_USERNAME")
+            ?: throw IllegalArgumentException("Backend username required. Use --username flag or set SECMAN_USERNAME environment variable")
+    }
+
+    private fun getEffectivePassword(): String {
+        return password ?: System.getenv("SECMAN_PASSWORD")
+            ?: throw IllegalArgumentException("Backend password required. Use --password flag or set SECMAN_PASSWORD environment variable")
+    }
+
+    private fun getEffectiveBackendUrl(): String {
+        val url = backendUrl ?: System.getenv("SECMAN_HOST") ?: System.getenv("SECMAN_BACKEND_URL") ?: "http://localhost:8080"
+        return if (url.startsWith("http://") || url.startsWith("https://")) url else "https://$url"
     }
 }

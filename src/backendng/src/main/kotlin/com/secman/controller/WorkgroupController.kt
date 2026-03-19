@@ -5,11 +5,14 @@ import com.secman.domain.Workgroup
 import com.secman.dto.BreadcrumbItem
 import com.secman.dto.CreateChildWorkgroupRequest
 import com.secman.dto.WorkgroupResponse
+import com.secman.repository.AssetRepository
 import com.secman.service.ValidationException
 import com.secman.service.WorkgroupService
 import io.micronaut.http.HttpResponse
+import io.micronaut.http.MediaType
 import io.micronaut.http.annotation.*
 import io.micronaut.security.annotation.Secured
+import io.micronaut.security.authentication.Authentication
 import io.micronaut.security.rules.SecurityRule
 import io.micronaut.serde.annotation.Serdeable
 import jakarta.transaction.Transactional
@@ -17,6 +20,7 @@ import jakarta.validation.Valid
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Size
+import org.slf4j.LoggerFactory
 
 /**
  * REST controller for Workgroup management
@@ -38,8 +42,10 @@ import jakarta.validation.constraints.Size
 @Controller("/api/workgroups")
 @Secured(SecurityRule.IS_AUTHENTICATED)
 open class WorkgroupController(
-    private val workgroupService: WorkgroupService
+    private val workgroupService: WorkgroupService,
+    private val assetRepository: AssetRepository
 ) {
+    private val logger = LoggerFactory.getLogger(WorkgroupController::class.java)
 
     /**
      * Create a new workgroup
@@ -409,6 +415,301 @@ open class WorkgroupController(
         } catch (e: ValidationException) {
             HttpResponse.badRequest()
         }
+    }
+
+    // --- CLI-specific endpoints for workgroup management without direct DB access ---
+
+    @Serdeable
+    data class CliAssetDto(
+        val id: Long,
+        val name: String,
+        val type: String?,
+        val ip: String?,
+        val owner: String?
+    )
+
+    @Serdeable
+    data class PatternOperationRequest(
+        val pattern: String? = null,
+        val type: String? = null,
+        val assetIds: List<Long>? = null,
+        val dryRun: Boolean = false
+    )
+
+    @Serdeable
+    data class WorkgroupOperationResultDto(
+        val success: Boolean,
+        val message: String,
+        val assigned: Int = 0,
+        val removed: Int = 0,
+        val skipped: Int = 0,
+        val errors: List<String> = emptyList(),
+        val assetNames: List<String> = emptyList()
+    )
+
+    /**
+     * GET /api/workgroups/cli/search-assets
+     *
+     * Search assets by wildcard pattern and optional type filter.
+     * Used by CLI for pattern-based asset operations.
+     */
+    @Get("/cli/search-assets")
+    @Secured("ADMIN")
+    @Transactional
+    open fun searchAssets(
+        @QueryValue(defaultValue = "") pattern: String,
+        @QueryValue(defaultValue = "") type: String
+    ): HttpResponse<List<CliAssetDto>> {
+        val allAssets = assetRepository.findAll().toList()
+
+        var filtered = allAssets
+
+        if (type.isNotBlank()) {
+            filtered = filtered.filter { it.type.equals(type, ignoreCase = true) }
+        }
+
+        if (pattern.isNotBlank()) {
+            val regex = wildcardToRegex(pattern.lowercase())
+            filtered = filtered.filter { regex.matches(it.name.lowercase()) }
+        }
+
+        val result = filtered.sortedBy { it.name.lowercase() }.map {
+            CliAssetDto(
+                id = it.id!!,
+                name = it.name,
+                type = it.type,
+                ip = it.ip,
+                owner = it.owner
+            )
+        }
+
+        return HttpResponse.ok(result)
+    }
+
+    /**
+     * GET /api/workgroups/{id}/cli/assets
+     *
+     * List assets in a workgroup. Used by CLI for listing workgroup contents.
+     */
+    @Get("/{id}/cli/assets")
+    @Secured("ADMIN")
+    @Transactional
+    open fun listWorkgroupAssets(@PathVariable id: Long): HttpResponse<List<CliAssetDto>> {
+        return try {
+            workgroupService.getWorkgroupById(id)
+            val assets = assetRepository.findByWorkgroupsIdOrderByNameAsc(id)
+            val result = assets.map {
+                CliAssetDto(
+                    id = it.id!!,
+                    name = it.name,
+                    type = it.type,
+                    ip = it.ip,
+                    owner = it.owner
+                )
+            }
+            HttpResponse.ok(result)
+        } catch (e: IllegalArgumentException) {
+            HttpResponse.notFound()
+        }
+    }
+
+    /**
+     * POST /api/workgroups/{id}/cli/assign-assets
+     *
+     * Assign assets to a workgroup by IDs or pattern. Used by CLI.
+     */
+    @Post("/{id}/cli/assign-assets")
+    @Secured("ADMIN")
+    @Transactional
+    open fun cliAssignAssets(
+        @PathVariable id: Long,
+        @Body request: PatternOperationRequest,
+        authentication: Authentication
+    ): HttpResponse<WorkgroupOperationResultDto> {
+        val adminEmail = authentication.name
+
+        return try {
+            val workgroup = workgroupService.getWorkgroupById(id)
+
+            // Resolve asset IDs from pattern or direct IDs
+            val assetIds = resolveAssetIds(request)
+            if (assetIds.isEmpty()) {
+                return HttpResponse.ok(WorkgroupOperationResultDto(
+                    success = true,
+                    message = "No assets found matching criteria",
+                    assigned = 0, skipped = 0
+                ))
+            }
+
+            if (request.dryRun) {
+                val assets = assetIds.mapNotNull { assetRepository.findById(it).orElse(null) }
+                return HttpResponse.ok(WorkgroupOperationResultDto(
+                    success = true,
+                    message = "Dry run: would assign ${assets.size} assets to workgroup '${workgroup.name}'",
+                    assigned = assets.size,
+                    skipped = 0,
+                    assetNames = assets.map { it.name }
+                ))
+            }
+
+            var assigned = 0
+            var skipped = 0
+            val errors = mutableListOf<String>()
+            val assignedNames = mutableListOf<String>()
+
+            for (assetId in assetIds) {
+                val asset = assetRepository.findById(assetId).orElse(null)
+                if (asset == null) {
+                    errors.add("Asset not found with ID: $assetId")
+                    continue
+                }
+                if (asset.workgroups.any { it.id == id }) {
+                    skipped++
+                    continue
+                }
+                asset.workgroups.add(workgroup)
+                assetRepository.update(asset)
+                assigned++
+                assignedNames.add(asset.name)
+                logger.info("AUDIT: operation=ASSIGN_ASSET, actor={}, workgroup={}, asset={}",
+                    adminEmail, workgroup.name, asset.name)
+            }
+
+            HttpResponse.ok(WorkgroupOperationResultDto(
+                success = errors.isEmpty(),
+                message = "Assigned $assigned assets to workgroup '${workgroup.name}' (skipped $skipped already assigned)",
+                assigned = assigned,
+                skipped = skipped,
+                errors = errors,
+                assetNames = assignedNames
+            ))
+        } catch (e: IllegalArgumentException) {
+            HttpResponse.notFound()
+        }
+    }
+
+    /**
+     * POST /api/workgroups/{id}/cli/remove-assets
+     *
+     * Remove assets from a workgroup by IDs, pattern, or all.
+     */
+    @Post("/{id}/cli/remove-assets")
+    @Secured("ADMIN")
+    @Transactional
+    open fun cliRemoveAssets(
+        @PathVariable id: Long,
+        @Body request: PatternOperationRequest,
+        authentication: Authentication
+    ): HttpResponse<WorkgroupOperationResultDto> {
+        val adminEmail = authentication.name
+
+        return try {
+            val workgroup = workgroupService.getWorkgroupById(id)
+            val assetsInWorkgroup = assetRepository.findByWorkgroupsIdOrderByNameAsc(id)
+
+            // If no assetIds and no pattern, remove all
+            val assetIds = if (request.assetIds.isNullOrEmpty() && request.pattern.isNullOrBlank()) {
+                assetsInWorkgroup.mapNotNull { it.id }
+            } else if (!request.pattern.isNullOrBlank()) {
+                // Filter by pattern within workgroup
+                val regex = wildcardToRegex(request.pattern.lowercase())
+                var matching = assetsInWorkgroup.filter { regex.matches(it.name.lowercase()) }
+                if (!request.type.isNullOrBlank()) {
+                    matching = matching.filter { it.type.equals(request.type, ignoreCase = true) }
+                }
+                matching.mapNotNull { it.id }
+            } else {
+                request.assetIds ?: emptyList()
+            }
+
+            if (assetIds.isEmpty()) {
+                return HttpResponse.ok(WorkgroupOperationResultDto(
+                    success = true,
+                    message = "No assets found matching criteria",
+                    removed = 0, skipped = 0
+                ))
+            }
+
+            if (request.dryRun) {
+                val assets = assetIds.mapNotNull { aid -> assetsInWorkgroup.find { it.id == aid } }
+                return HttpResponse.ok(WorkgroupOperationResultDto(
+                    success = true,
+                    message = "Dry run: would remove ${assets.size} assets from workgroup '${workgroup.name}'",
+                    removed = assets.size,
+                    skipped = 0,
+                    assetNames = assets.map { it.name }
+                ))
+            }
+
+            var removed = 0
+            var skipped = 0
+            val errors = mutableListOf<String>()
+            val removedNames = mutableListOf<String>()
+
+            for (assetId in assetIds) {
+                val asset = assetRepository.findById(assetId).orElse(null)
+                if (asset == null) {
+                    errors.add("Asset not found with ID: $assetId")
+                    continue
+                }
+                if (!asset.workgroups.any { it.id == id }) {
+                    skipped++
+                    continue
+                }
+                asset.workgroups.removeIf { it.id == id }
+                assetRepository.update(asset)
+                removed++
+                removedNames.add(asset.name)
+                logger.info("AUDIT: operation=REMOVE_ASSET, actor={}, workgroup={}, asset={}",
+                    adminEmail, workgroup.name, asset.name)
+            }
+
+            HttpResponse.ok(WorkgroupOperationResultDto(
+                success = errors.isEmpty(),
+                message = "Removed $removed assets from workgroup '${workgroup.name}' (skipped $skipped not assigned)",
+                removed = removed,
+                skipped = skipped,
+                errors = errors,
+                assetNames = removedNames
+            ))
+        } catch (e: IllegalArgumentException) {
+            HttpResponse.notFound()
+        }
+    }
+
+    private fun resolveAssetIds(request: PatternOperationRequest): List<Long> {
+        if (!request.assetIds.isNullOrEmpty()) {
+            return request.assetIds
+        }
+        if (!request.pattern.isNullOrBlank()) {
+            val allAssets = assetRepository.findAll().toList()
+            val regex = wildcardToRegex(request.pattern.lowercase())
+            var matching = allAssets.filter { regex.matches(it.name.lowercase()) }
+            if (!request.type.isNullOrBlank()) {
+                matching = matching.filter { it.type.equals(request.type, ignoreCase = true) }
+            }
+            return matching.mapNotNull { it.id }
+        }
+        return emptyList()
+    }
+
+    private fun wildcardToRegex(pattern: String): Regex {
+        val regexPattern = pattern
+            .replace("\\", "\\\\")
+            .replace(".", "\\.")
+            .replace("+", "\\+")
+            .replace("^", "\\^")
+            .replace("$", "\\$")
+            .replace("{", "\\{")
+            .replace("}", "\\}")
+            .replace("(", "\\(")
+            .replace(")", "\\)")
+            .replace("|", "\\|")
+            .replace("[", "\\[")
+            .replace("]", "\\]")
+            .replace("*", ".*")
+            .replace("?", ".")
+        return Regex("^$regexPattern$")
     }
 
     /**
