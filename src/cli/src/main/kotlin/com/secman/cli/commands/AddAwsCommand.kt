@@ -52,7 +52,7 @@ class AddAwsCommand(
             val backendUrl = parent.getEffectiveBackendUrl()
             val username = parent.getEffectiveUsername()
             val password = parent.getEffectivePassword()
-            userMappingCliService.initHttpClient(backendUrl, parent.insecure)
+            userMappingCliService.initHttpClient(backendUrl, parent.isEffectiveInsecure())
             val token = userMappingCliService.authenticate(username, password, backendUrl)
                 ?: throw IllegalArgumentException("Authentication failed - check username/password")
 

@@ -117,6 +117,18 @@ class UserMappingCliService {
         } catch (e: io.micronaut.http.client.exceptions.HttpClientResponseException) {
             log.error("Authentication error: {} - {}", e.status.code, e.message)
             return null
+        } catch (e: javax.net.ssl.SSLHandshakeException) {
+            log.error("SSL handshake failed during authentication: {}", e.message)
+            throw IllegalArgumentException(
+                "SSL certificate verification failed for $backendUrl. " +
+                "If using a self-signed certificate, use --insecure flag or set SECMAN_INSECURE=true"
+            )
+        } catch (e: javax.net.ssl.SSLException) {
+            log.error("SSL error during authentication: {}", e.message)
+            throw IllegalArgumentException(
+                "SSL error connecting to $backendUrl: ${e.message}. " +
+                "If using a self-signed certificate, use --insecure flag or set SECMAN_INSECURE=true"
+            )
         } catch (e: Exception) {
             log.error("Authentication error: {}", e.message, e)
             return null
@@ -560,6 +572,7 @@ class UserMappingCliService {
         try {
             val clientBuilder = java.net.http.HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(30))
+                .followRedirects(java.net.http.HttpClient.Redirect.NORMAL)
             if (insecureMode) {
                 clientBuilder.sslContext(createTrustAllSslContext())
                 val sslParams = javax.net.ssl.SSLParameters()
@@ -624,6 +637,18 @@ class UserMappingCliService {
             }
         } catch (e: IllegalArgumentException) {
             throw e
+        } catch (e: javax.net.ssl.SSLHandshakeException) {
+            log.error("SSL handshake failed: {}", e.message)
+            throw IllegalArgumentException(
+                "SSL certificate verification failed for $backendUrl. " +
+                "If using a self-signed certificate, use --insecure flag or set SECMAN_INSECURE=true"
+            )
+        } catch (e: javax.net.ssl.SSLException) {
+            log.error("SSL error: {}", e.message)
+            throw IllegalArgumentException(
+                "SSL error connecting to $backendUrl: ${e.message}. " +
+                "If using a self-signed certificate, use --insecure flag or set SECMAN_INSECURE=true"
+            )
         } catch (e: java.net.ConnectException) {
             throw IllegalArgumentException("Cannot connect to backend at $backendUrl")
         } catch (e: Exception) {

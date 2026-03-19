@@ -13,6 +13,7 @@ export AWS_ACCESS_KEY_ID="op://test/secman/SECMAN_AWS_ACCESS_KEY_ID"
 export AWS_SECRET_ACCESS_KEY="op://test/secman/SECMAN_AWS_SECRET_ACCESS_KEY"
 export AWS_SESSION_TOKEN="op://test/secman/SECMAN_AWS_ACCESS_TOKEN"
 export SECMAN_BACKEND_URL="op://test/secman/SECMAN_HOST"
+export SECMAN_INSECURE="${SECMAN_INSECURE:-true}"
 
 # Explicit DB_CONNECT avoids Micronaut placeholder colon-parsing issue in shadow JAR
 export DB_CONNECT="${DB_CONNECT:-jdbc:mariadb://localhost:3306/secman}"
