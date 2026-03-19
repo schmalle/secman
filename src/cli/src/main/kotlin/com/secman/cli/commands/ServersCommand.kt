@@ -12,6 +12,7 @@ import com.secman.crowdstrike.exception.RateLimitException
 import com.secman.dto.CrowdStrikeVulnerabilityBatchDto
 import com.secman.dto.VulnerabilityDto
 import com.secman.service.CrowdStrikeVulnerabilityImportService
+import com.secman.service.VulnerabilityAgeSnapshotService
 import io.micronaut.context.ApplicationContext
 import org.slf4j.LoggerFactory
 
@@ -41,6 +42,7 @@ class ServersCommand {
     private val appContext = ApplicationContext.run()
     private val apiClient: CrowdStrikeApiClient = appContext.getBean(CrowdStrikeApiClient::class.java)
     private val importService: CrowdStrikeVulnerabilityImportService = appContext.getBean(CrowdStrikeVulnerabilityImportService::class.java)
+    private val snapshotService: VulnerabilityAgeSnapshotService = appContext.getBean(VulnerabilityAgeSnapshotService::class.java)
 
     // Command-line options
     var hostnames: List<String>? = null  // Optional hostname filter (FR-003)
@@ -203,6 +205,19 @@ class ServersCommand {
                     System.out.println("\n--- Vulnerability Age Summary (>$overdueThreshold days) ---")
                     System.out.println("Servers with vulnerabilities older than $overdueThreshold days: $totalSystemsWithOverdueVulns of $totalServersProcessed (${String.format("%.1f", percent)}%)")
                     System.out.println("Servers with no vulnerabilities older than $overdueThreshold days: $totalWithoutOverdue of $totalServersProcessed")
+
+                    // Capture snapshot for historical tracking
+                    try {
+                        snapshotService.captureSnapshotFromData(
+                            totalServers = totalServersProcessed,
+                            serversWithOverdue = totalSystemsWithOverdueVulns,
+                            thresholdDays = overdueThreshold,
+                            source = "CLI"
+                        )
+                        System.out.println("Vulnerability age snapshot saved.")
+                    } catch (e: Exception) {
+                        log.warn("Failed to capture vulnerability age snapshot", e)
+                    }
                 }
 
                 if (totalErrorCount > 0) {
@@ -374,6 +389,19 @@ class ServersCommand {
                 System.out.println("\n--- Vulnerability Age Summary (>$overdueThreshold days) ---")
                 System.out.println("Servers with vulnerabilities older than $overdueThreshold days: $systemsWithOverdueVulns of ${result.serversProcessed} (${String.format("%.1f", percent)}%)")
                 System.out.println("Servers with no vulnerabilities older than $overdueThreshold days: $totalWithoutOverdue of ${result.serversProcessed}")
+
+                // Capture snapshot for historical tracking
+                try {
+                    snapshotService.captureSnapshotFromData(
+                        totalServers = result.serversProcessed,
+                        serversWithOverdue = systemsWithOverdueVulns,
+                        thresholdDays = overdueThreshold,
+                        source = "CLI"
+                    )
+                    System.out.println("Vulnerability age snapshot saved.")
+                } catch (e: Exception) {
+                    log.warn("Failed to capture vulnerability age snapshot", e)
+                }
             }
 
             if (result.errors.isNotEmpty()) {

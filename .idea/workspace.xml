@@ -6,6 +6,10 @@
   <component name="ChangeListManager">
     <list default="true" id="94ada8b3-9f4e-473c-9fea-3bc9651b5bdd" name="Changes" comment="test change">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/VulnerabilityStatisticsController.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/VulnerabilityStatisticsController.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/commands/ServersCommand.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/commands/ServersCommand.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/src/components/statistics/VulnerabilityStatisticsPage.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/components/statistics/VulnerabilityStatisticsPage.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/src/services/api/vulnerabilityStatisticsApi.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/services/api/vulnerabilityStatisticsApi.ts" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
