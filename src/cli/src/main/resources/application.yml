@@ -15,7 +15,7 @@ micronaut:
 
 secman:
   backend:
-    base-url: ${SECMAN_BACKEND_URL:${SECMAN_HOST:http://localhost:8080}}
+    base-url: http://localhost:8080
   crowdstrike:
     batch-size: ${SECMAN_CROWDSTRIKE_BATCH_SIZE:25}
     max-parallel-batches: ${SECMAN_CROWDSTRIKE_MAX_PARALLEL_BATCHES:4}
