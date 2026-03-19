@@ -257,9 +257,14 @@ open class CrowdStrikeApiClientImpl(
                         // Check for pagination
                         val meta = responseBody["meta"] as? Map<*, *>
                         val pagination = meta?.get("pagination") as? Map<*, *>
+                        val prevAfterToken = afterToken
                         afterToken = pagination?.get("after")?.toString()
 
-                        hasMore = afterToken != null && vulns.isNotEmpty()
+                        // Stop when: no token, empty page, short page (< requested = last page), or frozen cursor
+                        hasMore = afterToken != null &&
+                                  vulns.isNotEmpty() &&
+                                  vulns.size >= limit.coerceAtMost(5000) &&
+                                  afterToken != prevAfterToken
 
                         if (hasMore) {
                             log.debug("More results available, fetching next page...")
@@ -1406,7 +1411,8 @@ open class CrowdStrikeApiClientImpl(
                                 pageCount, vulns.size, allVulnerabilities.size)
 
                             // Check if there are more results
-                            hasMore = newAfterToken != null && vulns.isNotEmpty() && newAfterToken != afterToken
+                            // Stop when: no token, empty page, short page (< requested = last page), or frozen cursor
+                            hasMore = newAfterToken != null && vulns.isNotEmpty() && vulns.size >= currentLimit && newAfterToken != afterToken
                             afterToken = newAfterToken
                             pageSuccess = true
                         }
