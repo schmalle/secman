@@ -50,6 +50,13 @@ class UserMappingCliService {
         if (insecure) {
             log.warn("SSL certificate verification is DISABLED (--insecure mode)")
             (config.sslConfiguration as AbstractClientSslConfiguration).isInsecureTrustAllCertificates = true
+            // Set JVM-level defaults as fallback — the Micronaut 2-arg constructor
+            // does not always wire the config's SSL settings into the Netty pipeline.
+            // Safe for CLI (short-lived process, single backend target).
+            val trustAllSslContext = createTrustAllSslContext()
+            javax.net.ssl.SSLContext.setDefault(trustAllSslContext)
+            javax.net.ssl.HttpsURLConnection.setDefaultSSLSocketFactory(trustAllSslContext.socketFactory)
+            javax.net.ssl.HttpsURLConnection.setDefaultHostnameVerifier { _, _ -> true }
         }
         // Always use the 2-argument constructor — the 3-arg variant with
         // ClientSslBuilder has a scheme-initialization bug in Micronaut 4.10.x
@@ -575,8 +582,10 @@ class UserMappingCliService {
                 .followRedirects(java.net.http.HttpClient.Redirect.NORMAL)
             if (insecureMode) {
                 clientBuilder.sslContext(createTrustAllSslContext())
+                // Disable hostname verification — empty string doesn't work on all
+                // JDK versions, but null reliably disables the HTTPS endpoint check.
                 val sslParams = javax.net.ssl.SSLParameters()
-                sslParams.endpointIdentificationAlgorithm = ""
+                sslParams.endpointIdentificationAlgorithm = null
                 clientBuilder.sslParameters(sslParams)
             }
             val javaClient = clientBuilder.build()
