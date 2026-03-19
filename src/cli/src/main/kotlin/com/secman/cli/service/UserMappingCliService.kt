@@ -41,36 +41,52 @@ class UserMappingCliService {
      * @param insecure If true, disable SSL certificate verification
      */
     fun initHttpClient(backendUrl: String, insecure: Boolean) {
-        this.insecureMode = insecure
+        // Insecure mode can be triggered via --insecure flag, SECMAN_INSECURE env var,
+        // or -Dsecman.ssl.insecure=true JVM flag (set by bin/secmanng wrapper).
+        val jvmInsecure = System.getProperty("secman.ssl.insecure")?.lowercase() == "true"
+        this.insecureMode = insecure || jvmInsecure
         val config = DefaultHttpClientConfiguration().apply {
             setReadTimeout(Duration.ofSeconds(120))
             setConnectTimeout(Duration.ofSeconds(30))
             maxContentLength = 104_857_600 // 100MB
         }
-        if (insecure) {
+        if (this.insecureMode) {
             log.warn("SSL certificate verification is DISABLED (--insecure mode)")
             (config.sslConfiguration as AbstractClientSslConfiguration).isInsecureTrustAllCertificates = true
-            // Set JVM-level defaults as fallback — the Micronaut 2-arg constructor
-            // does not always wire the config's SSL settings into the Netty pipeline.
-            // Safe for CLI (short-lived process, single backend target).
-            val trustAllSslContext = createTrustAllSslContext()
-            javax.net.ssl.SSLContext.setDefault(trustAllSslContext)
-            javax.net.ssl.HttpsURLConnection.setDefaultSSLSocketFactory(trustAllSslContext.socketFactory)
-            javax.net.ssl.HttpsURLConnection.setDefaultHostnameVerifier { _, _ -> true }
         }
         // Always use the 2-argument constructor — the 3-arg variant with
         // ClientSslBuilder has a scheme-initialization bug in Micronaut 4.10.x
         httpClient = DefaultHttpClient(URI.create(backendUrl), config)
     }
 
+    companion object {
+        const val MAX_IMPORT_ROWS = 100_000
+
+        init {
+            // When -Dsecman.ssl.insecure=true is set by the secmanng wrapper script,
+            // configure JVM-level SSL defaults before any HTTP client is created.
+            // This ensures both Micronaut Netty client and Java HttpClient accept
+            // self-signed certificates. Safe for CLI (short-lived, single-target process).
+            if (System.getProperty("secman.ssl.insecure")?.lowercase() == "true") {
+                val trustAllCerts = arrayOf<javax.net.ssl.TrustManager>(object : javax.net.ssl.X509TrustManager {
+                    override fun checkClientTrusted(chain: Array<java.security.cert.X509Certificate>?, authType: String?) {}
+                    override fun checkServerTrusted(chain: Array<java.security.cert.X509Certificate>?, authType: String?) {}
+                    override fun getAcceptedIssuers(): Array<java.security.cert.X509Certificate> = arrayOf()
+                })
+                val sslContext = javax.net.ssl.SSLContext.getInstance("TLS").apply {
+                    init(null, trustAllCerts, java.security.SecureRandom())
+                }
+                javax.net.ssl.SSLContext.setDefault(sslContext)
+                javax.net.ssl.HttpsURLConnection.setDefaultSSLSocketFactory(sslContext.socketFactory)
+                javax.net.ssl.HttpsURLConnection.setDefaultHostnameVerifier { _, _ -> true }
+            }
+        }
+    }
+
     private fun getClient(): HttpClient {
         return httpClient ?: throw IllegalStateException(
             "HTTP client not initialized. Call initHttpClient() first."
         )
-    }
-
-    companion object {
-        const val MAX_IMPORT_ROWS = 100_000
     }
 
     // Client-side validation regex (fast feedback before HTTP call)

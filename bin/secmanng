@@ -18,5 +18,12 @@ export SECMAN_INSECURE="${SECMAN_INSECURE:-true}"
 # Explicit DB_CONNECT avoids Micronaut placeholder colon-parsing issue in shadow JAR
 export DB_CONNECT="${DB_CONNECT:-jdbc:mariadb://localhost:3306/secman}"
 
+# When SECMAN_INSECURE is enabled, pass JVM flag to trust all SSL certificates.
+# This ensures both Micronaut Netty client and Java HttpClient accept self-signed certs.
+SSL_FLAG=""
+case "${SECMAN_INSECURE,,}" in
+    true|1|yes) SSL_FLAG="-Dsecman.ssl.insecure=true" ;;
+esac
+
 # ./gradlew cli:build
-op run -- java -Ddatasources.default.initialization-fail-timeout=-1 -jar ./src/cli/build/libs/cli-0.1.0-all.jar "$@"
+op run -- java $SSL_FLAG -Ddatasources.default.initialization-fail-timeout=-1 -jar ./src/cli/build/libs/cli-0.1.0-all.jar "$@"
