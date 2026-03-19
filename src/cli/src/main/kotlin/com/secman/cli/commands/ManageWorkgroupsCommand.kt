@@ -4,13 +4,7 @@ import picocli.CommandLine.*
 import jakarta.inject.Singleton
 
 /**
- * Parent command for workgroup management operations
- *
- * Provides subcommands for assigning and removing assets from workgroups,
- * listing workgroups and assets, with support for pattern-based selection.
- *
- * Usage:
- *   ./gradlew cli:run --args='manage-workgroups <subcommand> [options]'
+ * Parent command for workgroup management operations via backend HTTP API.
  *
  * Subcommands:
  *   list            - List workgroups or assets in a workgroup
@@ -18,23 +12,11 @@ import jakarta.inject.Singleton
  *   remove-assets   - Remove assets from a workgroup
  *
  * Authentication:
- *   All operations require ADMIN role
- *   Specify admin user via:
- *   - --admin-user flag
- *   - SECMAN_ADMIN_EMAIL environment variable
- *
- * Examples:
- *   # List all workgroups
- *   ./gradlew cli:run --args='manage-workgroups list'
- *
- *   # List assets in a workgroup
- *   ./gradlew cli:run --args='manage-workgroups list --workgroup Production'
- *
- *   # Assign assets by pattern
- *   ./gradlew cli:run --args='manage-workgroups assign-assets --workgroup Production --pattern "ip-10-*"'
- *
- *   # Remove all assets from workgroup
- *   ./gradlew cli:run --args='manage-workgroups remove-assets --workgroup Test --all'
+ *   All operations require ADMIN role and backend credentials.
+ *   Specify via CLI flags or environment variables:
+ *   - --username / SECMAN_USERNAME
+ *   - --password / SECMAN_PASSWORD
+ *   - --backend-url / SECMAN_HOST / SECMAN_BACKEND_URL
  */
 @Singleton
 @Command(
@@ -51,19 +33,35 @@ class ManageWorkgroupsCommand : Runnable {
 
     @Option(
         names = ["--admin-user", "-u"],
-        description = ["Admin user email (defaults to SECMAN_ADMIN_EMAIL env var)"]
+        description = ["Admin user email (defaults to SECMAN_ADMIN_EMAIL env var)"],
+        scope = ScopeType.INHERIT
     )
     var adminUser: String? = null
+
+    @Option(
+        names = ["--username"],
+        description = ["Backend username (or set SECMAN_USERNAME env var)"],
+        scope = ScopeType.INHERIT
+    )
+    var username: String? = null
+
+    @Option(
+        names = ["--password"],
+        description = ["Backend password (or set SECMAN_PASSWORD env var)"],
+        scope = ScopeType.INHERIT
+    )
+    var password: String? = null
+
+    @Option(
+        names = ["--backend-url"],
+        description = ["Backend API URL (or set SECMAN_HOST / SECMAN_BACKEND_URL env var)"],
+        scope = ScopeType.INHERIT
+    )
+    var backendUrl: String? = null
 
     @Spec
     lateinit var spec: Model.CommandSpec
 
-    /**
-     * Get the admin user email from flag or environment variable
-     *
-     * @return Admin user email
-     * @throws IllegalArgumentException if no admin user specified
-     */
     fun getAdminUserOrThrow(): String {
         return adminUser
             ?: System.getenv("SECMAN_ADMIN_EMAIL")
@@ -72,8 +70,22 @@ class ManageWorkgroupsCommand : Runnable {
             )
     }
 
+    fun getEffectiveUsername(): String {
+        return username ?: System.getenv("SECMAN_USERNAME")
+            ?: throw IllegalArgumentException("Backend username required. Use --username flag or set SECMAN_USERNAME environment variable")
+    }
+
+    fun getEffectivePassword(): String {
+        return password ?: System.getenv("SECMAN_PASSWORD")
+            ?: throw IllegalArgumentException("Backend password required. Use --password flag or set SECMAN_PASSWORD environment variable")
+    }
+
+    fun getEffectiveBackendUrl(): String {
+        val url = backendUrl ?: System.getenv("SECMAN_HOST") ?: System.getenv("SECMAN_BACKEND_URL") ?: "http://localhost:8080"
+        return if (url.startsWith("http://") || url.startsWith("https://")) url else "https://$url"
+    }
+
     override fun run() {
-        // Show help if no subcommand specified
         spec.commandLine().usage(System.out)
     }
 }

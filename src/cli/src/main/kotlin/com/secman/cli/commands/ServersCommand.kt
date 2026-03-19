@@ -1,18 +1,16 @@
 package com.secman.cli.commands
 
 import com.secman.cli.config.ConfigLoader
+import com.secman.cli.service.CliHttpClient
+import com.secman.cli.service.VulnerabilityStorageService
+import com.secman.cli.service.VulnerabilityStorageService.ServerVulnerabilityBatch
 import com.secman.crowdstrike.client.CrowdStrikeApiClient
-import com.secman.crowdstrike.client.StreamingSummary
 import com.secman.crowdstrike.dto.DeviceType
 import com.secman.crowdstrike.dto.FalconConfigDto
 import com.secman.crowdstrike.exception.AuthenticationException
 import com.secman.crowdstrike.exception.CrowdStrikeException
 import com.secman.crowdstrike.exception.NotFoundException
 import com.secman.crowdstrike.exception.RateLimitException
-import com.secman.dto.CrowdStrikeVulnerabilityBatchDto
-import com.secman.dto.VulnerabilityDto
-import com.secman.service.CrowdStrikeVulnerabilityImportService
-import com.secman.service.VulnerabilityAgeSnapshotService
 import io.micronaut.context.ApplicationContext
 import org.slf4j.LoggerFactory
 
@@ -26,11 +24,10 @@ import org.slf4j.LoggerFactory
  * - Query CrowdStrike Falcon API for server vulnerabilities (device type: SERVER)
  * - Filter by severity (HIGH, CRITICAL) and days open (>=30 by default)
  * - Optionally filter by specific hostnames
- * - Automatically import discovered servers as Asset records with vulnerabilities
+ * - Import discovered servers via backend HTTP API (--save flag)
  * - Support dry-run mode (query without importing)
- * - Support verbose logging
  *
- * Feature: 032-servers-query-import, 073-cli-direct-db
+ * Feature: 032-servers-query-import
  */
 class ServersCommand {
     companion object {
@@ -41,31 +38,24 @@ class ServersCommand {
     private val configLoader = ConfigLoader()
     private val appContext = ApplicationContext.run()
     private val apiClient: CrowdStrikeApiClient = appContext.getBean(CrowdStrikeApiClient::class.java)
-    private val importService: CrowdStrikeVulnerabilityImportService = appContext.getBean(CrowdStrikeVulnerabilityImportService::class.java)
-    private val snapshotService: VulnerabilityAgeSnapshotService = appContext.getBean(VulnerabilityAgeSnapshotService::class.java)
+    private val storageService: VulnerabilityStorageService = appContext.getBean(VulnerabilityStorageService::class.java)
+    private val cliHttpClient: CliHttpClient = appContext.getBean(CliHttpClient::class.java)
 
-    // Command-line options
-    var hostnames: List<String>? = null  // Optional hostname filter (FR-003)
-    var deviceType: String = "SERVER"    // Device type filter (FR-002)
-    var severity: String = "HIGH,CRITICAL"  // Severity filter (FR-004)
-    var minDaysOpen: Int = 30            // Minimum days open filter (FR-004)
-    var dryRun: Boolean = false          // Dry-run mode (FR-005)
-    var save: Boolean = false            // Save to database (direct access)
-    var verbose: Boolean = false         // Verbose logging (FR-009)
-    var clientId: String? = null         // CrowdStrike client ID (optional override)
-    var clientSecret: String? = null     // CrowdStrike client secret (optional override)
-    var limit: Int = 800                 // Page size for pagination
-    var lastSeenDays: Int = 0            // Only include devices seen within N days (0 = all devices)
-    var overdueThreshold: Int = 30       // Threshold in days for overdue vulnerability report
+    var hostnames: List<String>? = null
+    var deviceType: String = "SERVER"
+    var severity: String = "HIGH,CRITICAL"
+    var minDaysOpen: Int = 30
+    var dryRun: Boolean = false
+    var save: Boolean = false
+    var verbose: Boolean = false
+    var clientId: String? = null
+    var clientSecret: String? = null
+    var limit: Int = 800
+    var lastSeenDays: Int = 0
+    var overdueThreshold: Int = 30
 
-    /**
-     * Execute the servers query command
-     *
-     * @return Exit code (0 = success, 1 = error)
-     */
     fun execute(): Int {
         return try {
-            // Validate and parse device type (case-insensitive)
             val parsedDeviceType = try {
                 DeviceType.fromString(deviceType)
             } catch (e: IllegalArgumentException) {
@@ -73,7 +63,6 @@ class ServersCommand {
                 return 1
             }
 
-            // Always show which device type is being queried
             System.out.println("Device type: ${parsedDeviceType.name}")
 
             if (verbose) {
@@ -81,12 +70,8 @@ class ServersCommand {
                     parsedDeviceType.name, severity, minDaysOpen, lastSeenDays, hostnames?.joinToString(",") ?: "ALL")
             }
 
-            // Load or override configuration
             val config = if (clientId != null && clientSecret != null) {
-                FalconConfigDto(
-                    clientId = clientId!!,
-                    clientSecret = clientSecret!!
-                )
+                FalconConfigDto(clientId = clientId!!, clientSecret = clientSecret!!)
             } else {
                 configLoader.loadConfig()
             }
@@ -96,7 +81,6 @@ class ServersCommand {
             }
             logMemoryUsage("after config load")
 
-            // Query CrowdStrike API with filters
             System.out.println("Querying CrowdStrike for ${parsedDeviceType.displayName()}...")
             if (verbose) {
                 System.out.println("Filters: device type=${parsedDeviceType.name}, severity=$severity, min days open=$minDaysOpen, last seen days=${if (lastSeenDays > 0) lastSeenDays else "all"}")
@@ -106,7 +90,6 @@ class ServersCommand {
             }
 
             // When --save is specified and no specific hostnames, use streaming mode
-            // to avoid holding all vulnerabilities in memory at once
             if (save && hostnames.isNullOrEmpty()) {
                 System.out.println("Querying and importing in streaming mode...")
 
@@ -134,41 +117,28 @@ class ServersCommand {
                     val byHostname = batchVulns.groupBy { it.hostname }
                     System.out.println("  Stream batch $streamBatchNum: ${batchVulns.size} vulns across ${byHostname.size} hosts")
 
-                    val batches = byHostname.map { (hostname, vulns) ->
+                    val serverBatches = byHostname.map { (hostname, vulns) ->
                         val firstVuln = vulns.firstOrNull()
-                        // Feature 082: Use cloudInstanceId from the most recently detected vulnerability
-                        // When EC2 instances are replaced, CrowdStrike may report both old and new devices
-                        // under the same hostname. Using the latest detection ensures we pick up the new instance ID.
                         val latestCloudInstanceId = vulns
                             .filter { !it.cloudInstanceId.isNullOrBlank() }
                             .maxByOrNull { it.detectedAt }
                             ?.cloudInstanceId
-                        CrowdStrikeVulnerabilityBatchDto(
-                            hostname = hostname,
+                        hostname to ServerVulnerabilityBatch(
+                            vulnerabilities = vulns,
                             groups = null,
                             cloudAccountId = firstVuln?.cloudAccountId,
                             cloudInstanceId = latestCloudInstanceId ?: firstVuln?.cloudInstanceId,
                             adDomain = firstVuln?.adDomain,
                             osVersion = null,
-                            ip = firstVuln?.ip,
-                            vulnerabilities = vulns.map { vuln ->
-                                VulnerabilityDto(
-                                    cveId = vuln.cveId ?: "",
-                                    severity = vuln.severity,
-                                    affectedProduct = vuln.affectedProduct,
-                                    daysOpen = parseDaysOpenToInt(vuln.daysOpen),
-                                    patchPublicationDate = vuln.patchPublicationDate
-                                )
-                            }
+                            ip = firstVuln?.ip
                         )
+                    }.toMap()
+
+                    totalSystemsWithOverdueVulns += serverBatches.count { (_, batch) ->
+                        batch.vulnerabilities.any { parseDaysOpenToInt(it.daysOpen) > overdueThreshold }
                     }
 
-                    // Count systems with overdue vulnerabilities (O(1) extra memory - just a counter)
-                    totalSystemsWithOverdueVulns += batches.count { batch ->
-                        batch.vulnerabilities.any { it.daysOpen > overdueThreshold }
-                    }
-
-                    val result = importService.importServerVulnerabilities(batches, "CLI", triggerRefresh = false)
+                    val result = storageService.storeServerVulnerabilities(serverBatches)
                     totalServersProcessed += result.serversProcessed
                     totalServersCreated += result.serversCreated
                     totalServersUpdated += result.serversUpdated
@@ -198,7 +168,6 @@ class ServersCommand {
                 System.out.println("  - With patch publication date: $totalVulnsWithPatchDate")
                 System.out.println("Vulnerabilities skipped: $totalVulnsSkipped")
 
-                // Vulnerability age summary
                 if (totalServersProcessed > 0) {
                     val totalWithoutOverdue = totalServersProcessed - totalSystemsWithOverdueVulns
                     val percent = totalSystemsWithOverdueVulns * 100.0 / totalServersProcessed
@@ -206,18 +175,7 @@ class ServersCommand {
                     System.out.println("Servers with vulnerabilities older than $overdueThreshold days: $totalSystemsWithOverdueVulns of $totalServersProcessed (${String.format("%.1f", percent)}%)")
                     System.out.println("Servers with no vulnerabilities older than $overdueThreshold days: $totalWithoutOverdue of $totalServersProcessed")
 
-                    // Capture snapshot for historical tracking
-                    try {
-                        snapshotService.captureSnapshotFromData(
-                            totalServers = totalServersProcessed,
-                            serversWithOverdue = totalSystemsWithOverdueVulns,
-                            thresholdDays = overdueThreshold,
-                            source = "CLI"
-                        )
-                        System.out.println("Vulnerability age snapshot saved.")
-                    } catch (e: Exception) {
-                        log.warn("Failed to capture vulnerability age snapshot", e)
-                    }
+                    captureSnapshotViaHttp(totalServersProcessed, totalSystemsWithOverdueVulns, overdueThreshold)
                 }
 
                 if (totalErrorCount > 0) {
@@ -233,8 +191,7 @@ class ServersCommand {
                 return if (totalErrorCount > 0) 1 else 0
             }
 
-            // When no specific hostnames: use streaming summary to avoid loading all vulns into memory.
-            // This only retains hostname→count stats instead of 800K+ vulnerability DTOs (~320MB).
+            // When no specific hostnames: use streaming summary
             if (hostnames.isNullOrEmpty()) {
                 val summary = apiClient.queryServersWithFiltersSummary(
                     deviceType = deviceType,
@@ -263,7 +220,6 @@ class ServersCommand {
                     }
                 }
 
-                // Vulnerability age summary
                 if (summary.hostCounts.isNotEmpty()) {
                     val totalHosts = summary.hostCounts.size
                     val hostsWithOverdue = summary.hostsWithOverdueVulns
@@ -283,7 +239,7 @@ class ServersCommand {
                 return 0
             }
 
-            // Hostname-specific queries: load full DTOs (bounded by the number of specified hosts)
+            // Hostname-specific queries
             val response = apiClient.queryServersWithFilters(
                 hostnames = hostnames,
                 deviceType = deviceType,
@@ -301,7 +257,6 @@ class ServersCommand {
                 return 0
             }
 
-            // Group vulnerabilities by hostname for display
             val vulnerabilitiesByHostname = response.vulnerabilities.groupBy { it.hostname }
             System.out.println("${parsedDeviceType.displayName().replaceFirstChar { it.uppercase() }} with vulnerabilities: ${vulnerabilitiesByHostname.size}")
 
@@ -311,7 +266,6 @@ class ServersCommand {
                 }
             }
 
-            // Vulnerability age summary
             val hostsWithOverdue = vulnerabilitiesByHostname.count { (_, vulns) ->
                 vulns.any { parseDaysOpenToInt(it.daysOpen) > overdueThreshold }
             }
@@ -322,57 +276,42 @@ class ServersCommand {
             System.out.println("Servers with vulnerabilities older than $overdueThreshold days: $hostsWithOverdue of $totalHosts (${String.format("%.1f", overduePercent)}%)")
             System.out.println("Servers with no vulnerabilities older than $overdueThreshold days: $hostsWithoutOverdue of $totalHosts")
 
-            // Dry-run mode: skip import
             if (dryRun) {
                 System.out.println("\n[DRY-RUN MODE] Would import ${vulnerabilitiesByHostname.size} ${parsedDeviceType.displayName()} with ${response.vulnerabilities.size} vulnerabilities")
                 return 0
             }
 
-            // Skip import if --save not specified
             if (!save) {
                 System.out.println("\nQuery completed successfully. Use --save to import directly to database.")
                 return 0
             }
 
-            // Import directly to database via import service (hostname-specific queries)
+            // Import via backend HTTP API
             System.out.println("\nImporting to database...")
 
-            // Map CrowdStrike DTOs to backend batch DTOs
-            val batches = vulnerabilitiesByHostname.map { (hostname, vulns) ->
+            val serverBatches = vulnerabilitiesByHostname.map { (hostname, vulns) ->
                 val firstVuln = vulns.firstOrNull()
-                // Feature 082: Use cloudInstanceId from the most recently detected vulnerability
                 val latestCloudInstanceId = vulns
                     .filter { !it.cloudInstanceId.isNullOrBlank() }
                     .maxByOrNull { it.detectedAt }
                     ?.cloudInstanceId
-                CrowdStrikeVulnerabilityBatchDto(
-                    hostname = hostname,
+                hostname to ServerVulnerabilityBatch(
+                    vulnerabilities = vulns,
                     groups = null,
                     cloudAccountId = firstVuln?.cloudAccountId,
                     cloudInstanceId = latestCloudInstanceId ?: firstVuln?.cloudInstanceId,
                     adDomain = firstVuln?.adDomain,
                     osVersion = null,
-                    ip = firstVuln?.ip,
-                    vulnerabilities = vulns.map { vuln ->
-                        VulnerabilityDto(
-                            cveId = vuln.cveId ?: "",
-                            severity = vuln.severity,
-                            affectedProduct = vuln.affectedProduct,
-                            daysOpen = parseDaysOpenToInt(vuln.daysOpen),
-                            patchPublicationDate = vuln.patchPublicationDate
-                        )
-                    }
+                    ip = firstVuln?.ip
                 )
+            }.toMap()
+
+            val systemsWithOverdueVulns = serverBatches.count { (_, batch) ->
+                batch.vulnerabilities.any { parseDaysOpenToInt(it.daysOpen) > overdueThreshold }
             }
 
-            // Count systems with overdue vulnerabilities (O(1) extra memory - just a counter)
-            val systemsWithOverdueVulns = batches.count { batch ->
-                batch.vulnerabilities.any { it.daysOpen > overdueThreshold }
-            }
+            val result = storageService.storeServerVulnerabilities(serverBatches)
 
-            val result = importService.importServerVulnerabilities(batches, "CLI")
-
-            // Display import statistics
             val deviceLabel = parsedDeviceType.displayName().replaceFirstChar { it.uppercase() }
             System.out.println("\n--- Import Statistics ---")
             System.out.println("$deviceLabel processed: ${result.serversProcessed}")
@@ -382,7 +321,6 @@ class ServersCommand {
             System.out.println("  - With patch publication date: ${result.vulnerabilitiesWithPatchDate}")
             System.out.println("Vulnerabilities skipped: ${result.vulnerabilitiesSkipped}")
 
-            // Vulnerability age summary
             if (result.serversProcessed > 0) {
                 val totalWithoutOverdue = result.serversProcessed - systemsWithOverdueVulns
                 val percent = systemsWithOverdueVulns * 100.0 / result.serversProcessed
@@ -390,18 +328,7 @@ class ServersCommand {
                 System.out.println("Servers with vulnerabilities older than $overdueThreshold days: $systemsWithOverdueVulns of ${result.serversProcessed} (${String.format("%.1f", percent)}%)")
                 System.out.println("Servers with no vulnerabilities older than $overdueThreshold days: $totalWithoutOverdue of ${result.serversProcessed}")
 
-                // Capture snapshot for historical tracking
-                try {
-                    snapshotService.captureSnapshotFromData(
-                        totalServers = result.serversProcessed,
-                        serversWithOverdue = systemsWithOverdueVulns,
-                        thresholdDays = overdueThreshold,
-                        source = "CLI"
-                    )
-                    System.out.println("Vulnerability age snapshot saved.")
-                } catch (e: Exception) {
-                    log.warn("Failed to capture vulnerability age snapshot", e)
-                }
+                captureSnapshotViaHttp(result.serversProcessed, systemsWithOverdueVulns, overdueThreshold)
             }
 
             if (result.errors.isNotEmpty()) {
@@ -477,6 +404,42 @@ class ServersCommand {
         }
     }
 
+    /**
+     * Capture vulnerability age snapshot via backend HTTP API.
+     * Uses the backend API's /api/vulnerability-statistics/age-snapshot-from-data endpoint.
+     */
+    private fun captureSnapshotViaHttp(totalServers: Int, serversWithOverdue: Int, thresholdDays: Int) {
+        try {
+            // Try to authenticate and call the snapshot endpoint
+            val backendUrl = System.getenv("SECMAN_BACKEND_URL")
+                ?: System.getenv("SECMAN_HOST")
+                ?: "http://localhost:8080"
+            val username = System.getenv("SECMAN_USERNAME") ?: return
+            val password = System.getenv("SECMAN_PASSWORD") ?: return
+
+            val authToken = cliHttpClient.authenticate(username, password, backendUrl) ?: run {
+                log.warn("Could not authenticate for snapshot capture, skipping")
+                return
+            }
+
+            val requestBody = mapOf(
+                "totalServers" to totalServers,
+                "serversWithOverdue" to serversWithOverdue,
+                "thresholdDays" to thresholdDays,
+                "source" to "CLI"
+            )
+
+            cliHttpClient.postMap(
+                "$backendUrl/api/vulnerability-statistics/age-snapshot-from-data",
+                requestBody,
+                authToken
+            )
+            System.out.println("Vulnerability age snapshot saved.")
+        } catch (e: Exception) {
+            log.warn("Failed to capture vulnerability age snapshot via HTTP", e)
+        }
+    }
+
     private fun logMemoryUsage(label: String) {
         if (!verbose) return
         val runtime = Runtime.getRuntime()
@@ -485,11 +448,6 @@ class ServersCommand {
         System.out.println("  [Memory $label] ${usedMB}MB / ${maxMB}MB (${usedMB * 100 / maxMB}%)")
     }
 
-    /**
-     * Parse daysOpen string to integer value
-     *
-     * Handles formats: "526 days" -> 526, "1 day" -> 1, null -> 0
-     */
     private fun parseDaysOpenToInt(daysOpen: String?): Int {
         if (daysOpen.isNullOrBlank()) return 0
         return daysOpen.split(" ").firstOrNull()?.toIntOrNull() ?: 0

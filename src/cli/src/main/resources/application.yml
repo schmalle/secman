@@ -19,30 +19,8 @@ secman:
     max-parallel-batches: ${SECMAN_CROWDSTRIKE_MAX_PARALLEL_BATCHES:4}
     max-vulnerabilities-per-batch: ${SECMAN_MAX_VULNS_PER_BATCH:50000}
 
-# Database configuration (required for EntityManager/JPA support)
-# CLI needs access to the same database as the backend to use backend services
-datasources:
-  default:
-    url: ${DB_CONNECT:jdbc:mariadb://localhost:3306/secman}
-    username: ${DB_USERNAME:secman}
-    password: ${DB_PASSWORD:CHANGEME}
-    maximum-pool-size: 10
-    minimum-idle: 0
-    initialization-fail-timeout: -1
-
-jpa:
-  default:
-    properties:
-      hibernate:
-        hbm2ddl:
-          auto: update
-        show_sql: false
-        format_sql: true
-
 # Logging configuration
 logger:
   levels:
     com.secman.cli: INFO
     io.micronaut.http.client: WARN
-    io.micronaut.security: DEBUG
-    org.hibernate.orm.incubating: ERROR

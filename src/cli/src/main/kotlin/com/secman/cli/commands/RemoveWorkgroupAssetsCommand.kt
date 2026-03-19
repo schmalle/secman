@@ -1,29 +1,12 @@
 package com.secman.cli.commands
 
-import com.secman.cli.service.WorkgroupCliService
+import com.secman.cli.service.CliHttpClient
 import picocli.CommandLine.*
+import jakarta.inject.Inject
 import jakarta.inject.Singleton
 
 /**
- * CLI command to remove assets from a workgroup
- *
- * Supports removing assets by:
- * - Pattern matching (wildcards)
- * - Specific asset IDs
- * - All assets at once
- *
- * Usage:
- *   # Remove assets by pattern
- *   ./gradlew cli:run --args='manage-workgroups remove-assets --workgroup Test --pattern "*test*"'
- *
- *   # Remove specific assets by ID
- *   ./gradlew cli:run --args='manage-workgroups remove-assets --workgroup Test --ids 1,2,3'
- *
- *   # Remove all assets from workgroup
- *   ./gradlew cli:run --args='manage-workgroups remove-assets --workgroup Test --all'
- *
- *   # Dry run (preview without changes)
- *   ./gradlew cli:run --args='manage-workgroups remove-assets --workgroup Test --pattern "*" --dry-run'
+ * CLI command to remove assets from a workgroup via backend HTTP API.
  */
 @Singleton
 @Command(
@@ -31,57 +14,33 @@ import jakarta.inject.Singleton
     description = ["Remove assets from a workgroup"],
     mixinStandardHelpOptions = true
 )
-class RemoveWorkgroupAssetsCommand(
-    private val workgroupCliService: WorkgroupCliService
-) : Runnable {
+class RemoveWorkgroupAssetsCommand : Runnable {
 
-    @Option(
-        names = ["--workgroup", "-w"],
-        description = ["Target workgroup name or ID"],
-        required = true
-    )
+    @Inject
+    lateinit var cliHttpClient: CliHttpClient
+
+    @Option(names = ["--workgroup", "-w"], description = ["Target workgroup name or ID"], required = true)
     lateinit var workgroup: String
 
-    @Option(
-        names = ["--pattern", "-p"],
-        description = ["Asset name pattern with wildcards (* = any chars, ? = single char)"]
-    )
+    @Option(names = ["--pattern", "-p"], description = ["Asset name pattern with wildcards (* = any chars, ? = single char)"])
     var pattern: String? = null
 
-    @Option(
-        names = ["--ids", "-i"],
-        description = ["Comma-separated list of asset IDs to remove"]
-    )
+    @Option(names = ["--ids", "-i"], description = ["Comma-separated list of asset IDs to remove"])
     var assetIds: String? = null
 
-    @Option(
-        names = ["--type", "-t"],
-        description = ["Filter assets by type (e.g., SERVER, WORKSTATION)"]
-    )
+    @Option(names = ["--type", "-t"], description = ["Filter assets by type (e.g., SERVER, WORKSTATION)"])
     var assetType: String? = null
 
-    @Option(
-        names = ["--all", "-a"],
-        description = ["Remove all assets from the workgroup"]
-    )
+    @Option(names = ["--all", "-a"], description = ["Remove all assets from workgroup"])
     var removeAll: Boolean = false
 
-    @Option(
-        names = ["--dry-run", "-d"],
-        description = ["Preview matching assets without making changes"]
-    )
+    @Option(names = ["--dry-run", "-d"], description = ["Preview matching assets without making changes"])
     var dryRun: Boolean = false
 
-    @Option(
-        names = ["--verbose", "-v"],
-        description = ["Show detailed output including asset names"]
-    )
+    @Option(names = ["--verbose", "-v"], description = ["Show detailed output including asset names"])
     var verbose: Boolean = false
 
-    @Option(
-        names = ["--force", "-f"],
-        description = ["Skip confirmation prompt for --all"]
-    )
+    @Option(names = ["--force", "-f"], description = ["Skip confirmation prompt for --all"])
     var force: Boolean = false
 
     @ParentCommand
@@ -89,99 +48,102 @@ class RemoveWorkgroupAssetsCommand(
 
     override fun run() {
         try {
-            // Validate that at least one selection method is provided
             if (pattern.isNullOrBlank() && assetIds.isNullOrBlank() && !removeAll) {
-                System.err.println("Error: Must specify either --pattern, --ids, or --all")
+                System.err.println("Error: Must specify --pattern, --ids, or --all")
                 System.exit(1)
                 return
             }
 
+            val effectiveUrl = parent.getEffectiveBackendUrl()
+            val authToken = cliHttpClient.authenticate(
+                parent.getEffectiveUsername(), parent.getEffectivePassword(), effectiveUrl
+            ) ?: throw RuntimeException("Authentication failed. Check credentials.")
+
             // Find workgroup
-            val wg = workgroupCliService.findWorkgroup(workgroup)
+            val workgroups = cliHttpClient.getList("$effectiveUrl/api/workgroups", authToken) ?: emptyList()
+            val wg = findWorkgroup(workgroups, workgroup)
             if (wg == null) {
                 System.err.println("Error: Workgroup not found: $workgroup")
                 System.exit(1)
                 return
             }
+            val wgId = (wg["id"] as? Number)?.toLong() ?: 0
+            val wgName = wg["name"]?.toString() ?: workgroup
 
-            // Dry run mode - just show what would be removed
-            if (dryRun) {
-                executeDryRun(wg.id!!)
-                return
-            }
-
-            // Confirm removal of all assets
-            if (removeAll && !force) {
-                val assetCount = workgroupCliService.listAssetsInWorkgroup(wg.id!!).size
-                print("Are you sure you want to remove all $assetCount assets from '${wg.name}'? [y/N]: ")
-                val answer = readLine()?.trim()?.lowercase()
-                if (answer != "y" && answer != "yes") {
-                    println("Cancelled")
+            // Confirm --all unless --force
+            if (removeAll && !force && !dryRun) {
+                print("Remove ALL assets from workgroup '$wgName'? (yes/no): ")
+                val confirmation = readlnOrNull()?.trim()?.lowercase()
+                if (confirmation != "yes" && confirmation != "y") {
+                    println("Operation cancelled")
                     return
                 }
             }
 
-            // Get admin user
-            val adminEmail = parent.getAdminUserOrThrow()
+            // Build request
+            val requestBody = mutableMapOf<String, Any?>(
+                "dryRun" to dryRun
+            )
 
-            // Execute removal
-            val result = when {
-                removeAll -> {
-                    workgroupCliService.removeAllAssets(
-                        workgroupId = wg.id!!,
-                        adminEmail = adminEmail
-                    )
-                }
-                !pattern.isNullOrBlank() -> {
-                    workgroupCliService.removeAssetsByPattern(
-                        workgroupId = wg.id!!,
-                        pattern = pattern!!,
-                        type = assetType,
-                        adminEmail = adminEmail
-                    )
-                }
-                else -> {
-                    val ids = assetIds!!.split(",")
-                        .map { it.trim() }
-                        .filter { it.isNotBlank() }
-                        .mapNotNull { it.toLongOrNull() }
+            if (!pattern.isNullOrBlank()) {
+                requestBody["pattern"] = pattern
+                if (assetType != null) requestBody["type"] = assetType
+            } else if (!assetIds.isNullOrBlank()) {
+                val ids = assetIds!!.split(",")
+                    .map { it.trim() }
+                    .filter { it.isNotBlank() }
+                    .mapNotNull { it.toLongOrNull() }
 
-                    if (ids.isEmpty()) {
-                        System.err.println("Error: No valid asset IDs provided")
-                        System.exit(1)
-                        return
-                    }
-
-                    workgroupCliService.removeAssets(
-                        workgroupId = wg.id!!,
-                        assetIds = ids,
-                        adminEmail = adminEmail
-                    )
+                if (ids.isEmpty()) {
+                    System.err.println("Error: No valid asset IDs provided")
+                    System.exit(1)
+                    return
                 }
+                requestBody["assetIds"] = ids
+            }
+            // If removeAll is true and no pattern/ids, the backend removes all (empty pattern + empty assetIds)
+
+            val result = cliHttpClient.postMap(
+                "$effectiveUrl/api/workgroups/$wgId/cli/remove-assets",
+                requestBody,
+                authToken
+            ) ?: throw RuntimeException("Failed to remove assets - no response from server")
+
+            val success = result["success"] as? Boolean ?: false
+            val message = result["message"]?.toString() ?: ""
+            val removed = (result["removed"] as? Number)?.toInt() ?: 0
+            val skipped = (result["skipped"] as? Number)?.toInt() ?: 0
+            @Suppress("UNCHECKED_CAST")
+            val errors = (result["errors"] as? List<String>) ?: emptyList()
+            @Suppress("UNCHECKED_CAST")
+            val assetNames = (result["assetNames"] as? List<String>) ?: emptyList()
+
+            if (dryRun) {
+                println("DRY RUN - No changes will be made")
+                println()
             }
 
-            // Display result
             println()
-            if (result.success) {
-                println("SUCCESS: ${result.message}")
+            if (success) {
+                println("SUCCESS: $message")
             } else {
-                println("COMPLETED WITH ERRORS: ${result.message}")
+                println("COMPLETED WITH ERRORS: $message")
             }
 
             println()
             println("Summary:")
-            println("  - Removed: ${result.removed}")
-            println("  - Skipped (not in workgroup): ${result.skipped}")
+            println("  - Removed: $removed")
+            println("  - Skipped (not assigned): $skipped")
 
-            if (result.errors.isNotEmpty()) {
-                println("  - Errors: ${result.errors.size}")
-                result.errors.forEach { println("    - $it") }
+            if (errors.isNotEmpty()) {
+                println("  - Errors: ${errors.size}")
+                errors.forEach { println("    - $it") }
             }
 
-            if (verbose && result.assetNames.isNotEmpty()) {
+            if (verbose && assetNames.isNotEmpty()) {
                 println()
                 println("Removed assets:")
-                result.assetNames.forEach { println("  - $it") }
+                assetNames.forEach { println("  - $it") }
             }
 
         } catch (e: IllegalArgumentException) {
@@ -194,57 +156,11 @@ class RemoveWorkgroupAssetsCommand(
         }
     }
 
-    private fun executeDryRun(workgroupId: Long) {
-        println("DRY RUN - No changes will be made")
-        println()
-
-        // Get current workgroup assets
-        val currentAssets = workgroupCliService.listAssetsInWorkgroup(workgroupId)
-
-        if (currentAssets.isEmpty()) {
-            println("Workgroup has no assets")
-            return
+    private fun findWorkgroup(workgroups: List<Map<String, Any?>>, nameOrId: String): Map<String, Any?>? {
+        val id = nameOrId.toLongOrNull()
+        if (id != null) {
+            return workgroups.find { (it["id"] as? Number)?.toLong() == id }
         }
-
-        val assetsToRemove = when {
-            removeAll -> currentAssets
-            !pattern.isNullOrBlank() -> {
-                // Build regex from pattern
-                val regexPattern = pattern!!.lowercase()
-                    .replace("\\", "\\\\")
-                    .replace(".", "\\.")
-                    .replace("*", ".*")
-                    .replace("?", ".")
-                val regex = Regex("^$regexPattern$")
-
-                var filtered = currentAssets.filter { regex.matches(it.name.lowercase()) }
-                if (!assetType.isNullOrBlank()) {
-                    filtered = filtered.filter { it.type.equals(assetType, ignoreCase = true) }
-                }
-                filtered
-            }
-            else -> {
-                val ids = assetIds!!.split(",")
-                    .map { it.trim() }
-                    .filter { it.isNotBlank() }
-                    .mapNotNull { it.toLongOrNull() }
-                    .toSet()
-
-                currentAssets.filter { ids.contains(it.id) }
-            }
-        }
-
-        println("Assets that would be removed:")
-        if (assetsToRemove.isEmpty()) {
-            println("  (none match the criteria)")
-        } else {
-            assetsToRemove.forEach { asset ->
-                println("  - ${asset.name} (${asset.type})")
-            }
-        }
-
-        val remaining = currentAssets.size - assetsToRemove.size
-        println()
-        println("Summary: ${assetsToRemove.size} would be removed, $remaining would remain")
+        return workgroups.find { (it["name"]?.toString() ?: "").equals(nameOrId, ignoreCase = true) }
     }
 }
