@@ -140,7 +140,7 @@ class ImportS3Command(
             val backendUrl = parent.getEffectiveBackendUrl()
             val backendUsername = parent.getEffectiveUsername()
             val backendPassword = parent.getEffectivePassword()
-            userMappingCliService.initHttpClient(backendUrl, parent.insecure)
+            userMappingCliService.initHttpClient(backendUrl, parent.isEffectiveInsecure())
             val token = userMappingCliService.authenticate(backendUsername, backendPassword, backendUrl)
                 ?: throw IllegalArgumentException("Authentication failed - check username/password")
 

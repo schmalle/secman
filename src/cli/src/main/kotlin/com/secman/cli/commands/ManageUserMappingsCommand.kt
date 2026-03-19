@@ -75,10 +75,19 @@ class ManageUserMappingsCommand : Runnable {
 
     @Option(
         names = ["--insecure"],
-        description = ["Disable SSL certificate verification (for self-signed certificates)"],
+        description = ["Disable SSL certificate verification (for self-signed certificates). Can also set SECMAN_INSECURE=true"],
         scope = ScopeType.INHERIT
     )
     var insecure: Boolean = false
+
+    /**
+     * Check if insecure mode is enabled via CLI flag or SECMAN_INSECURE env var.
+     */
+    fun isEffectiveInsecure(): Boolean {
+        if (insecure) return true
+        val envValue = System.getenv("SECMAN_INSECURE")?.lowercase()?.trim()
+        return envValue in listOf("true", "1", "yes")
+    }
 
     @Spec
     lateinit var spec: Model.CommandSpec
@@ -106,8 +115,9 @@ class ManageUserMappingsCommand : Runnable {
             ?: "http://localhost:8080"
         // Ensure URL has a scheme — default to https:// for scheme-less URLs
         // (scheme-less URLs like "server:8443" cause NPE in DefaultHttpClient.isSecureScheme)
-        return if (url.startsWith("http://") || url.startsWith("https://")) url
-               else "https://$url"
+        val withScheme = if (url.startsWith("http://") || url.startsWith("https://")) url
+                         else "https://$url"
+        return withScheme.trimEnd('/')
     }
 
     override fun run() {

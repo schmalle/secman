@@ -41,13 +41,16 @@ class UserMappingCliService {
      * @param insecure If true, disable SSL certificate verification
      */
     fun initHttpClient(backendUrl: String, insecure: Boolean) {
-        this.insecureMode = insecure
+        // Insecure mode can be triggered via --insecure flag, SECMAN_INSECURE env var,
+        // or -Dsecman.ssl.insecure=true JVM flag (set by bin/secmanng wrapper).
+        val jvmInsecure = System.getProperty("secman.ssl.insecure")?.lowercase() == "true"
+        this.insecureMode = insecure || jvmInsecure
         val config = DefaultHttpClientConfiguration().apply {
             setReadTimeout(Duration.ofSeconds(120))
             setConnectTimeout(Duration.ofSeconds(30))
             maxContentLength = 104_857_600 // 100MB
         }
-        if (insecure) {
+        if (this.insecureMode) {
             log.warn("SSL certificate verification is DISABLED (--insecure mode)")
             (config.sslConfiguration as AbstractClientSslConfiguration).isInsecureTrustAllCertificates = true
         }
@@ -56,14 +59,34 @@ class UserMappingCliService {
         httpClient = DefaultHttpClient(URI.create(backendUrl), config)
     }
 
+    companion object {
+        const val MAX_IMPORT_ROWS = 100_000
+
+        init {
+            // When -Dsecman.ssl.insecure=true is set by the secmanng wrapper script,
+            // configure JVM-level SSL defaults before any HTTP client is created.
+            // This ensures both Micronaut Netty client and Java HttpClient accept
+            // self-signed certificates. Safe for CLI (short-lived, single-target process).
+            if (System.getProperty("secman.ssl.insecure")?.lowercase() == "true") {
+                val trustAllCerts = arrayOf<javax.net.ssl.TrustManager>(object : javax.net.ssl.X509TrustManager {
+                    override fun checkClientTrusted(chain: Array<java.security.cert.X509Certificate>?, authType: String?) {}
+                    override fun checkServerTrusted(chain: Array<java.security.cert.X509Certificate>?, authType: String?) {}
+                    override fun getAcceptedIssuers(): Array<java.security.cert.X509Certificate> = arrayOf()
+                })
+                val sslContext = javax.net.ssl.SSLContext.getInstance("TLS").apply {
+                    init(null, trustAllCerts, java.security.SecureRandom())
+                }
+                javax.net.ssl.SSLContext.setDefault(sslContext)
+                javax.net.ssl.HttpsURLConnection.setDefaultSSLSocketFactory(sslContext.socketFactory)
+                javax.net.ssl.HttpsURLConnection.setDefaultHostnameVerifier { _, _ -> true }
+            }
+        }
+    }
+
     private fun getClient(): HttpClient {
         return httpClient ?: throw IllegalStateException(
             "HTTP client not initialized. Call initHttpClient() first."
         )
-    }
-
-    companion object {
-        const val MAX_IMPORT_ROWS = 100_000
     }
 
     // Client-side validation regex (fast feedback before HTTP call)
@@ -117,6 +140,18 @@ class UserMappingCliService {
         } catch (e: io.micronaut.http.client.exceptions.HttpClientResponseException) {
             log.error("Authentication error: {} - {}", e.status.code, e.message)
             return null
+        } catch (e: javax.net.ssl.SSLHandshakeException) {
+            log.error("SSL handshake failed during authentication: {}", e.message)
+            throw IllegalArgumentException(
+                "SSL certificate verification failed for $backendUrl. " +
+                "If using a self-signed certificate, use --insecure flag or set SECMAN_INSECURE=true"
+            )
+        } catch (e: javax.net.ssl.SSLException) {
+            log.error("SSL error during authentication: {}", e.message)
+            throw IllegalArgumentException(
+                "SSL error connecting to $backendUrl: ${e.message}. " +
+                "If using a self-signed certificate, use --insecure flag or set SECMAN_INSECURE=true"
+            )
         } catch (e: Exception) {
             log.error("Authentication error: {}", e.message, e)
             return null
@@ -560,10 +595,13 @@ class UserMappingCliService {
         try {
             val clientBuilder = java.net.http.HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(30))
+                .followRedirects(java.net.http.HttpClient.Redirect.NORMAL)
             if (insecureMode) {
                 clientBuilder.sslContext(createTrustAllSslContext())
+                // Disable hostname verification — empty string doesn't work on all
+                // JDK versions, but null reliably disables the HTTPS endpoint check.
                 val sslParams = javax.net.ssl.SSLParameters()
-                sslParams.endpointIdentificationAlgorithm = ""
+                sslParams.endpointIdentificationAlgorithm = null
                 clientBuilder.sslParameters(sslParams)
             }
             val javaClient = clientBuilder.build()
@@ -624,6 +662,18 @@ class UserMappingCliService {
             }
         } catch (e: IllegalArgumentException) {
             throw e
+        } catch (e: javax.net.ssl.SSLHandshakeException) {
+            log.error("SSL handshake failed: {}", e.message)
+            throw IllegalArgumentException(
+                "SSL certificate verification failed for $backendUrl. " +
+                "If using a self-signed certificate, use --insecure flag or set SECMAN_INSECURE=true"
+            )
+        } catch (e: javax.net.ssl.SSLException) {
+            log.error("SSL error: {}", e.message)
+            throw IllegalArgumentException(
+                "SSL error connecting to $backendUrl: ${e.message}. " +
+                "If using a self-signed certificate, use --insecure flag or set SECMAN_INSECURE=true"
+            )
         } catch (e: java.net.ConnectException) {
             throw IllegalArgumentException("Cannot connect to backend at $backendUrl")
         } catch (e: Exception) {
