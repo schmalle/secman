@@ -13,17 +13,19 @@ export AWS_ACCESS_KEY_ID="op://test/secman/SECMAN_AWS_ACCESS_KEY_ID"
 export AWS_SECRET_ACCESS_KEY="op://test/secman/SECMAN_AWS_SECRET_ACCESS_KEY"
 export AWS_SESSION_TOKEN="op://test/secman/SECMAN_AWS_ACCESS_TOKEN"
 export SECMAN_BACKEND_URL="op://test/secman/SECMAN_HOST"
-export SECMAN_INSECURE="${SECMAN_INSECURE:-true}"
+export SECMAN_INSECURE="op://test/secman/SECMAN_SSL_ACCEPT_ALL"
 
 # Explicit DB_CONNECT avoids Micronaut placeholder colon-parsing issue in shadow JAR
 export DB_CONNECT="${DB_CONNECT:-jdbc:mariadb://localhost:3306/secman}"
 
-# When SECMAN_INSECURE is enabled, pass JVM flag to trust all SSL certificates.
-# This ensures both Micronaut Netty client and Java HttpClient accept self-signed certs.
+# ./gradlew cli:build
+# Note: SSL_FLAG is determined inside the op run subshell so that SECMAN_INSECURE
+# has been resolved from the 1Password reference before we inspect its value.
+op run -- bash -c '
 SSL_FLAG=""
-case "${SECMAN_INSECURE,,}" in
+INSECURE_LOWER="$(printf "%s" "$SECMAN_INSECURE" | tr "[:upper:]" "[:lower:]")"
+case "$INSECURE_LOWER" in
     true|1|yes) SSL_FLAG="-Dsecman.ssl.insecure=true" ;;
 esac
-
-# ./gradlew cli:build
-op run -- java $SSL_FLAG -Ddatasources.default.initialization-fail-timeout=-1 -jar ./src/cli/build/libs/cli-0.1.0-all.jar "$@"
+java $SSL_FLAG -Ddatasources.default.initialization-fail-timeout=-1 -jar ./src/cli/build/libs/cli-0.1.0-all.jar "$@"
+' -- "$@"

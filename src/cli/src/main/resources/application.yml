@@ -7,6 +7,8 @@ micronaut:
       read-timeout: 120s       # 2 minutes read timeout (was default 10s)
       connect-timeout: 30s     # 30 seconds connection timeout
       max-content-length: 104857600  # 100MB - matches backend max-request-size
+      ssl:
+        insecure-trust-all-certificates: ${secman.ssl.insecure:false}
       pool:
         enabled: true
         max-connections: 20    # Allow up to 20 concurrent connections

@@ -2,8 +2,9 @@ package com.secman.cli.commands
 
 import com.secman.cli.config.ConfigLoader
 import com.secman.cli.export.ExportService
+import com.secman.cli.service.CliHttpClient
 import com.secman.cli.service.VulnerabilityStorageService
-import com.secman.cli.service.VulnerabilityStorageService.ServerVulnerabilityBatch
+import com.secman.cli.service.ServerVulnerabilityBatch
 import com.secman.crowdstrike.client.CrowdStrikeApiClient
 import com.secman.crowdstrike.dto.FalconConfigDto
 import com.secman.crowdstrike.exception.AuthenticationException
@@ -34,6 +35,7 @@ class QueryCommand {
     private val appContext = ApplicationContext.run()
     private val apiClient: CrowdStrikeApiClient = appContext.getBean(CrowdStrikeApiClient::class.java)
     private val storageService: VulnerabilityStorageService = appContext.getBean(VulnerabilityStorageService::class.java)
+    private val cliHttpClient: CliHttpClient = appContext.getBean(CliHttpClient::class.java)
 
     var hostname: String = ""
     var outputPath: String? = null
@@ -112,6 +114,24 @@ class QueryCommand {
 
             // Save to database via backend HTTP API if --save flag is specified
             if (save && finalResponse.vulnerabilities.isNotEmpty()) {
+                // Authenticate with backend before import
+                val backendUrl = System.getenv("SECMAN_BACKEND_URL")
+                    ?: System.getenv("SECMAN_HOST")
+                    ?: "http://localhost:8080"
+                val username = System.getenv("SECMAN_USERNAME")
+                val password = System.getenv("SECMAN_PASSWORD")
+
+                if (username.isNullOrBlank() || password.isNullOrBlank()) {
+                    System.err.println("Error: SECMAN_USERNAME and SECMAN_PASSWORD environment variables are required for --save")
+                    return 1
+                }
+
+                val authToken = cliHttpClient.authenticate(username, password, backendUrl)
+                if (authToken == null) {
+                    System.err.println("Error: Failed to authenticate with backend API. Check credentials and backend availability.")
+                    return 1
+                }
+
                 System.out.println("\nSaving to database via backend API...")
 
                 val firstVuln = finalResponse.vulnerabilities.firstOrNull()
@@ -121,6 +141,7 @@ class QueryCommand {
                     ?.cloudInstanceId
 
                 val serverBatch = ServerVulnerabilityBatch(
+                    hostname = hostname,
                     vulnerabilities = finalResponse.vulnerabilities,
                     groups = null,
                     cloudAccountId = firstVuln?.cloudAccountId,
@@ -131,7 +152,8 @@ class QueryCommand {
                 )
 
                 val result = storageService.storeServerVulnerabilities(
-                    serverBatches = mapOf(hostname to serverBatch)
+                    serverBatches = mapOf(hostname to serverBatch),
+                    authToken = authToken
                 )
 
                 System.out.println("Save completed!")

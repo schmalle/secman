@@ -3,7 +3,7 @@ package com.secman.cli.commands
 import com.secman.cli.config.ConfigLoader
 import com.secman.cli.service.CliHttpClient
 import com.secman.cli.service.VulnerabilityStorageService
-import com.secman.cli.service.VulnerabilityStorageService.ServerVulnerabilityBatch
+import com.secman.cli.service.ServerVulnerabilityBatch
 import com.secman.crowdstrike.client.CrowdStrikeApiClient
 import com.secman.crowdstrike.dto.DeviceType
 import com.secman.crowdstrike.dto.FalconConfigDto
@@ -81,6 +81,31 @@ class ServersCommand {
             }
             logMemoryUsage("after config load")
 
+            // Authenticate with backend when --save is specified
+            var authToken: String? = null
+            if (save) {
+                val backendUrl = System.getenv("SECMAN_BACKEND_URL")
+                    ?: System.getenv("SECMAN_HOST")
+                    ?: "http://localhost:8080"
+                val username = System.getenv("SECMAN_USERNAME")
+                val password = System.getenv("SECMAN_PASSWORD")
+
+                if (username.isNullOrBlank() || password.isNullOrBlank()) {
+                    System.err.println("Error: SECMAN_USERNAME and SECMAN_PASSWORD environment variables are required for --save")
+                    return 1
+                }
+
+                authToken = cliHttpClient.authenticate(username, password, backendUrl)
+                if (authToken == null) {
+                    System.err.println("Error: Failed to authenticate with backend API. Check credentials and backend availability.")
+                    return 1
+                }
+
+                if (verbose) {
+                    log.info("Successfully authenticated with backend API")
+                }
+            }
+
             System.out.println("Querying CrowdStrike for ${parsedDeviceType.displayName()}...")
             if (verbose) {
                 System.out.println("Filters: device type=${parsedDeviceType.name}, severity=$severity, min days open=$minDaysOpen, last seen days=${if (lastSeenDays > 0) lastSeenDays else "all"}")
@@ -124,6 +149,7 @@ class ServersCommand {
                             .maxByOrNull { it.detectedAt }
                             ?.cloudInstanceId
                         hostname to ServerVulnerabilityBatch(
+                            hostname = hostname,
                             vulnerabilities = vulns,
                             groups = null,
                             cloudAccountId = firstVuln?.cloudAccountId,
@@ -138,7 +164,7 @@ class ServersCommand {
                         batch.vulnerabilities.any { parseDaysOpenToInt(it.daysOpen) > overdueThreshold }
                     }
 
-                    val result = storageService.storeServerVulnerabilities(serverBatches)
+                    val result = storageService.storeServerVulnerabilities(serverBatches, authToken = authToken)
                     totalServersProcessed += result.serversProcessed
                     totalServersCreated += result.serversCreated
                     totalServersUpdated += result.serversUpdated
@@ -296,6 +322,7 @@ class ServersCommand {
                     .maxByOrNull { it.detectedAt }
                     ?.cloudInstanceId
                 hostname to ServerVulnerabilityBatch(
+                    hostname = hostname,
                     vulnerabilities = vulns,
                     groups = null,
                     cloudAccountId = firstVuln?.cloudAccountId,
@@ -310,7 +337,7 @@ class ServersCommand {
                 batch.vulnerabilities.any { parseDaysOpenToInt(it.daysOpen) > overdueThreshold }
             }
 
-            val result = storageService.storeServerVulnerabilities(serverBatches)
+            val result = storageService.storeServerVulnerabilities(serverBatches, authToken = authToken)
 
             val deviceLabel = parsedDeviceType.displayName().replaceFirstChar { it.uppercase() }
             System.out.println("\n--- Import Statistics ---")

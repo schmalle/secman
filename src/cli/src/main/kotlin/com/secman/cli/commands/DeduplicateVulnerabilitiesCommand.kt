@@ -197,6 +197,17 @@ class DeduplicateVulnerabilitiesCommand : Runnable {
                 .exchange(request, Map::class.java)
 
             if (response.status.code == 200) {
+                // JWT is in Set-Cookie header as "secman_auth=<token>; ..."
+                val setCookieHeaders = response.headers.getAll("Set-Cookie")
+                val token = setCookieHeaders
+                    ?.flatMap { it.split(";") }
+                    ?.firstOrNull { it.trim().startsWith("secman_auth=") }
+                    ?.substringAfter("=")
+                    ?.trim()
+
+                if (token != null && token.isNotBlank()) return token
+
+                // Fallback: try response body
                 val body = response.body()
                 return body?.get("access_token")?.toString()
                     ?: body?.get("token")?.toString()
