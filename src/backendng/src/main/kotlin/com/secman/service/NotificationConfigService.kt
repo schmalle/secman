@@ -435,8 +435,9 @@ class NotificationConfigService(
         errors.addAll(emailValidationErrors)
 
         // Validate conditions JSON if present
-        if (!config.conditions.isNullOrBlank()) {
-            val conditionValidationErrors = validateConditionsJson(config.conditions)
+        val cond = config.conditions
+        if (!cond.isNullOrBlank()) {
+            val conditionValidationErrors = validateConditionsJson(cond)
             errors.addAll(conditionValidationErrors)
         }
 

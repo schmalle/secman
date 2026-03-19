@@ -82,11 +82,12 @@ data class TestEmailAccount(
      * Get decrypted credentials as a map
      */
     fun getCredentialsMap(): Map<String, Any> {
-        return if (credentials.isNullOrBlank()) {
+        val creds = credentials
+        return if (creds.isNullOrBlank()) {
             emptyMap()
         } else {
             try {
-                kotlinx.serialization.json.Json.decodeFromString<Map<String, Any>>(credentials)
+                kotlinx.serialization.json.Json.decodeFromString<Map<String, Any>>(creds)
             } catch (e: Exception) {
                 throw RuntimeException("Failed to parse test account credentials", e)
             }
@@ -135,11 +136,12 @@ data class TestEmailAccount(
      * Get last test result as a map
      */
     fun getLastTestResultMap(): Map<String, Any>? {
-        return if (lastTestResult.isNullOrBlank()) {
+        val result = lastTestResult
+        return if (result.isNullOrBlank()) {
             null
         } else {
             try {
-                kotlinx.serialization.json.Json.decodeFromString<Map<String, Any>>(lastTestResult)
+                kotlinx.serialization.json.Json.decodeFromString<Map<String, Any>>(result)
             } catch (e: Exception) {
                 null // Return null if parsing fails
             }

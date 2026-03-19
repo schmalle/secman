@@ -190,10 +190,11 @@ data class McpApiKey(
      * Feature: 050-mcp-user-delegation
      */
     fun getDelegationDomainsList(): List<String> {
-        if (!delegationEnabled || allowedDelegationDomains.isNullOrBlank()) {
+        val domains = allowedDelegationDomains
+        if (!delegationEnabled || domains.isNullOrBlank()) {
             return emptyList()
         }
-        return allowedDelegationDomains
+        return domains
             .split(",")
             .map { it.trim().lowercase() }
             .filter { it.isNotBlank() && it.startsWith("@") }

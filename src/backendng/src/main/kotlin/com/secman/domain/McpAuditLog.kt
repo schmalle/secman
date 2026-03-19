@@ -208,7 +208,8 @@ data class McpAuditLog(
      * Check if this is a performance-related event.
      */
     fun isPerformanceEvent(): Boolean {
-        return durationMs != null && durationMs > 1000 // Operations taking > 1 second
+        val duration = durationMs
+        return duration != null && duration > 1000 // Operations taking > 1 second
     }
 
     /**
@@ -219,7 +220,8 @@ data class McpAuditLog(
         val result = if (success) "succeeded" else "failed"
         val user = if (userId != null) " for user $userId" else ""
         val delegated = if (delegatedUserEmail != null) " (delegated: $delegatedUserEmail)" else ""
-        val session = if (sessionId != null) " in session ${sessionId.take(8)}..." else ""
+        val sid = sessionId
+        val session = if (sid != null) " in session ${sid.take(8)}..." else ""
 
         return "${eventType.name.lowercase().replace('_', ' ')} - $operation $result$user$delegated$session"
     }
@@ -236,12 +238,14 @@ data class McpAuditLog(
      * Get performance metrics summary if available.
      */
     fun getPerformanceMetrics(): Map<String, Any?> {
+        val duration = durationMs
+        val respSize = responseSizeBytes
         return mapOf(
-            "durationMs" to durationMs,
+            "durationMs" to duration,
             "requestSizeBytes" to requestSizeBytes,
-            "responseSizeBytes" to responseSizeBytes,
-            "throughputBytesPerSec" to if (durationMs != null && durationMs > 0 && responseSizeBytes != null) {
-                (responseSizeBytes * 1000) / durationMs
+            "responseSizeBytes" to respSize,
+            "throughputBytesPerSec" to if (duration != null && duration > 0 && respSize != null) {
+                (respSize * 1000) / duration
             } else null
         )
     }

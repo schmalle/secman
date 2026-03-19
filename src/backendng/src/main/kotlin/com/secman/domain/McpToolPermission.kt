@@ -122,13 +122,14 @@ data class McpToolPermission(
      * Returns true if no restrictions or if parameters match restrictions.
      */
     fun allowsParameters(parameters: Map<String, Any>): Boolean {
-        if (parameterRestrictions.isNullOrBlank()) {
+        val restrictions = parameterRestrictions
+        if (restrictions.isNullOrBlank()) {
             return true // No restrictions
         }
 
         return try {
-            val restrictions = parseParameterRestrictions(parameterRestrictions)
-            validateParametersAgainstRestrictions(parameters, restrictions)
+            val parsed = parseParameterRestrictions(restrictions)
+            validateParametersAgainstRestrictions(parameters, parsed)
         } catch (e: Exception) {
             false // Invalid restrictions or parameters
         }

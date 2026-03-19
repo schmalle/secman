@@ -102,11 +102,12 @@ data class RiskAssessmentNotificationConfig(
      * Get conditions as a map
      */
     fun getConditionsMap(): Map<String, Any>? {
-        return if (conditions.isNullOrBlank()) {
+        val cond = conditions
+        return if (cond.isNullOrBlank()) {
             null
         } else {
             try {
-                kotlinx.serialization.json.Json.decodeFromString<Map<String, Any>>(conditions)
+                kotlinx.serialization.json.Json.decodeFromString<Map<String, Any>>(cond)
             } catch (e: Exception) {
                 null // Return null if parsing fails
             }
