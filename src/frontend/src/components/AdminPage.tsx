@@ -283,6 +283,21 @@ const AdminPage = () => {
                         </div>
                     </div>
                 </div>
+
+                <div className="col-md-4 mb-3">
+                    <div className="card">
+                        <div className="card-body">
+                            <h5 className="card-title">
+                                <i className="bi bi-shield-check me-2"></i>
+                                EC2 Compliance Tracking
+                            </h5>
+                            <p className="card-text">Track vulnerability compliance status changes across all assets over time.</p>
+                            <a href="/admin/ec2-compliance" className="btn btn-primary">
+                                View Compliance
+                            </a>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     );
