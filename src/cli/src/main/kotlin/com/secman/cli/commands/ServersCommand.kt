@@ -53,6 +53,7 @@ class ServersCommand {
     var limit: Int = 800
     var lastSeenDays: Int = 0
     var overdueThreshold: Int = 30
+    var backendUrl: String? = null
 
     fun execute(): Int {
         return try {
@@ -81,12 +82,21 @@ class ServersCommand {
             }
             logMemoryUsage("after config load")
 
+            // Resolve backend URL once: CLI flag → SECMAN_BACKEND_URL → SECMAN_HOST (with scheme) → default
+            val resolvedBackendUrl = backendUrl
+                ?: System.getenv("SECMAN_BACKEND_URL")
+                ?: System.getenv("SECMAN_HOST")?.let { host ->
+                    if (host.startsWith("http://") || host.startsWith("https://")) host else "https://$host"
+                }
+                ?: "http://localhost:8080"
+
+            if (verbose) {
+                log.info("Using backend URL: {}", resolvedBackendUrl)
+            }
+
             // Authenticate with backend when --save is specified
             var authToken: String? = null
             if (save) {
-                val backendUrl = System.getenv("SECMAN_BACKEND_URL")
-                    ?: System.getenv("SECMAN_HOST")
-                    ?: "http://localhost:8080"
                 val username = System.getenv("SECMAN_USERNAME")
                 val password = System.getenv("SECMAN_PASSWORD")
 
@@ -95,9 +105,9 @@ class ServersCommand {
                     return 1
                 }
 
-                authToken = cliHttpClient.authenticate(username, password, backendUrl)
+                authToken = cliHttpClient.authenticate(username, password, resolvedBackendUrl)
                 if (authToken == null) {
-                    System.err.println("Error: Failed to connect to backend API at $backendUrl. See error details above.")
+                    System.err.println("Error: Failed to connect to backend API at $resolvedBackendUrl. See error details above.")
                     return 1
                 }
 
@@ -164,7 +174,7 @@ class ServersCommand {
                         batch.vulnerabilities.any { parseDaysOpenToInt(it.daysOpen) > overdueThreshold }
                     }
 
-                    val result = storageService.storeServerVulnerabilities(serverBatches, authToken = authToken)
+                    val result = storageService.storeServerVulnerabilities(serverBatches, backendUrl = resolvedBackendUrl, authToken = authToken)
                     totalServersProcessed += result.serversProcessed
                     totalServersCreated += result.serversCreated
                     totalServersUpdated += result.serversUpdated
@@ -201,7 +211,7 @@ class ServersCommand {
                     System.out.println("Servers with vulnerabilities older than $overdueThreshold days: $totalSystemsWithOverdueVulns of $totalServersProcessed (${String.format("%.1f", percent)}%)")
                     System.out.println("Servers with no vulnerabilities older than $overdueThreshold days: $totalWithoutOverdue of $totalServersProcessed")
 
-                    captureSnapshotViaHttp(totalServersProcessed, totalSystemsWithOverdueVulns, overdueThreshold)
+                    captureSnapshotViaHttp(resolvedBackendUrl, totalServersProcessed, totalSystemsWithOverdueVulns, overdueThreshold)
                 }
 
                 if (totalErrorCount > 0) {
@@ -337,7 +347,7 @@ class ServersCommand {
                 batch.vulnerabilities.any { parseDaysOpenToInt(it.daysOpen) > overdueThreshold }
             }
 
-            val result = storageService.storeServerVulnerabilities(serverBatches, authToken = authToken)
+            val result = storageService.storeServerVulnerabilities(serverBatches, backendUrl = resolvedBackendUrl, authToken = authToken)
 
             val deviceLabel = parsedDeviceType.displayName().replaceFirstChar { it.uppercase() }
             System.out.println("\n--- Import Statistics ---")
@@ -355,7 +365,7 @@ class ServersCommand {
                 System.out.println("Servers with vulnerabilities older than $overdueThreshold days: $systemsWithOverdueVulns of ${result.serversProcessed} (${String.format("%.1f", percent)}%)")
                 System.out.println("Servers with no vulnerabilities older than $overdueThreshold days: $totalWithoutOverdue of ${result.serversProcessed}")
 
-                captureSnapshotViaHttp(result.serversProcessed, systemsWithOverdueVulns, overdueThreshold)
+                captureSnapshotViaHttp(resolvedBackendUrl, result.serversProcessed, systemsWithOverdueVulns, overdueThreshold)
             }
 
             if (result.errors.isNotEmpty()) {
@@ -435,12 +445,8 @@ class ServersCommand {
      * Capture vulnerability age snapshot via backend HTTP API.
      * Uses the backend API's /api/vulnerability-statistics/age-snapshot-from-data endpoint.
      */
-    private fun captureSnapshotViaHttp(totalServers: Int, serversWithOverdue: Int, thresholdDays: Int) {
+    private fun captureSnapshotViaHttp(backendUrl: String, totalServers: Int, serversWithOverdue: Int, thresholdDays: Int) {
         try {
-            // Try to authenticate and call the snapshot endpoint
-            val backendUrl = System.getenv("SECMAN_BACKEND_URL")
-                ?: System.getenv("SECMAN_HOST")
-                ?: "http://localhost:8080"
             val username = System.getenv("SECMAN_USERNAME") ?: return
             val password = System.getenv("SECMAN_PASSWORD") ?: return
 

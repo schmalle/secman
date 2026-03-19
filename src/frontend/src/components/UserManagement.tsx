@@ -257,7 +257,9 @@ const UserManagement = () => {
                 setShowAddUserModal(false);
                 setNewUser({ username: '', email: '', password: '', roles: ['USER'], workgroupIds: [] }); // Reset form
             } else {
-                throw new Error(`Failed to create user: ${response.status}`);
+                const errorData = await response.json().catch(() => null);
+                const message = errorData?.error || `Failed to create user (status ${response.status})`;
+                setAddUserError(message);
             }
         } catch (err) {
             console.error('Add user request failed:', err);

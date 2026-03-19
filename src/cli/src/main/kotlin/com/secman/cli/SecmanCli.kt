@@ -96,6 +96,10 @@ class SecmanCli {
                             serversCommand.overdueThreshold = args[i + 1].toIntOrNull() ?: 30
                             i++
                         }
+                        args[i] == "--backend-url" && i + 1 < args.size -> {
+                            serversCommand.backendUrl = args[i + 1]
+                            i++
+                        }
                         args[i] == "--save" -> serversCommand.save = true
                         args[i] == "--dry-run" -> serversCommand.dryRun = true
                         args[i] == "--verbose" -> serversCommand.verbose = true
@@ -417,12 +421,14 @@ class SecmanCli {
                   --client-id <id>         CrowdStrike API client ID (overrides config file)
                   --client-secret <secret> CrowdStrike API client secret (overrides config file)
                   --overdue-threshold <num> Days threshold for overdue vulnerability report (default: 30)
-                  --save                   Save to database (direct access, no backend required)
+                  --backend-url <url>      Backend API URL (default: SECMAN_BACKEND_URL env var, or http://localhost:8080)
+                  --save                   Save to database via backend API
                   --dry-run                Query but don't import
                   --verbose                Enable verbose logging
 
                 Examples:
                   secman query servers --save
+                  secman query servers --backend-url https://secman.example.com --save
                   secman query servers --hostnames server01,server02 --save --verbose
                   secman query servers --severity CRITICAL --min-days-open 60 --dry-run
                   secman query servers --device-type WORKSTATION --severity CRITICAL,HIGH --save
