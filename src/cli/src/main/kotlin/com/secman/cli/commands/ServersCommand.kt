@@ -97,7 +97,7 @@ class ServersCommand {
 
                 authToken = cliHttpClient.authenticate(username, password, backendUrl)
                 if (authToken == null) {
-                    System.err.println("Error: Failed to authenticate with backend API. Check credentials and backend availability.")
+                    System.err.println("Error: Failed to connect to backend API at $backendUrl. See error details above.")
                     return 1
                 }
 

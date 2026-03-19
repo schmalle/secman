@@ -67,10 +67,47 @@ class CliHttpClient(
             log.error("Authentication failed: status={}", response.status)
             return null
         } catch (e: io.micronaut.http.client.exceptions.HttpClientResponseException) {
-            log.error("Authentication error: {} - {}", e.status.code, e.message)
+            when (e.status.code) {
+                401, 403 -> log.error("Authentication failed: invalid credentials (HTTP {})", e.status.code)
+                else -> log.error("Authentication HTTP error: {} - {}", e.status.code, e.message)
+            }
+            return null
+        } catch (e: io.micronaut.discovery.exceptions.NoAvailableServiceException) {
+            log.error("Cannot reach backend at '{}': {}", backendUrl, e.message)
+            log.error("Check that SECMAN_BACKEND_URL or SECMAN_HOST includes the scheme (e.g. https://hostname)")
+            return null
+        } catch (e: java.net.ConnectException) {
+            log.error("Connection refused to backend at '{}': {}", backendUrl, e.message)
+            log.error("Check that the backend is running and the URL/port is correct")
+            return null
+        } catch (e: java.net.UnknownHostException) {
+            log.error("DNS resolution failed for backend '{}': {}", backendUrl, e.message)
+            log.error("Check that the hostname is correct and DNS is reachable")
+            return null
+        } catch (e: javax.net.ssl.SSLHandshakeException) {
+            log.error("SSL certificate verification failed for '{}': {}", backendUrl, e.message)
+            log.error("If using a self-signed certificate, use --insecure flag or set SECMAN_INSECURE=true")
+            return null
+        } catch (e: javax.net.ssl.SSLException) {
+            log.error("SSL error connecting to '{}': {}", backendUrl, e.message)
+            return null
+        } catch (e: io.micronaut.http.client.exceptions.ReadTimeoutException) {
+            log.error("Connection to backend '{}' timed out: {}", backendUrl, e.message)
+            log.error("Check network connectivity and firewall rules between this host and the backend")
             return null
         } catch (e: Exception) {
-            log.error("Authentication error: {}", e.message, e)
+            // Check for wrapped connectivity exceptions in the cause chain
+            val rootCause = generateSequence(e as Throwable?) { it.cause }.last()
+            when (rootCause) {
+                is java.net.ConnectException ->
+                    log.error("Connection refused to backend at '{}': {}", backendUrl, rootCause.message)
+                is java.net.UnknownHostException ->
+                    log.error("DNS resolution failed for backend '{}': {}", backendUrl, rootCause.message)
+                is javax.net.ssl.SSLException ->
+                    log.error("SSL error connecting to '{}': {}", backendUrl, rootCause.message)
+                else ->
+                    log.error("Failed to connect to backend at '{}': {} ({})", backendUrl, e.message, e.javaClass.simpleName)
+            }
             return null
         }
     }
