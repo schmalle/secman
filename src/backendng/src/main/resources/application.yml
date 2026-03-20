@@ -220,6 +220,11 @@ secman:
     # Enable streaming exports (write directly to Excel during fetch)
     # When false, accumulates all records first (original behavior)
     streaming-exports-enabled: ${MEMORY_STREAMING_EXPORTS:true}
+  # Vulnerability statistics cache (pre-computed JSON for "All Domains" admin views)
+  # When enabled, statistics are served from cache instead of live queries
+  # Cache is refreshed during materialized view refresh (after CLI import)
+  statistics-cache:
+    enabled: ${STATISTICS_CACHE_ENABLED:true}
   vulnerability:
     # Use patch publication date for calculating days open
     # When true: days_open = scan_timestamp - patch_publication_date

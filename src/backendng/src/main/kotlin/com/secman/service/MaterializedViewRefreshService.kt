@@ -39,7 +39,8 @@ open class MaterializedViewRefreshService(
     private val vulnerabilityRepository: VulnerabilityRepository,
     private val vulnerabilityConfigService: VulnerabilityConfigService,
     private val eventPublisher: ApplicationEventPublisher<RefreshProgressEvent>,
-    private val vulnerabilityExceptionService: VulnerabilityExceptionService  // For checking active exceptions
+    private val vulnerabilityExceptionService: VulnerabilityExceptionService,  // For checking active exceptions
+    private val vulnerabilityStatisticsCacheService: VulnerabilityStatisticsCacheService
 ) {
     private val log = LoggerFactory.getLogger(MaterializedViewRefreshService::class.java)
 
@@ -197,6 +198,14 @@ open class MaterializedViewRefreshService(
         // Step 5: Mark job as completed
         job.markCompleted()
         updateJob(job)
+
+        // Step 6: Refresh vulnerability statistics cache (piggyback on refresh lifecycle)
+        try {
+            log.info("Refreshing vulnerability statistics cache after materialized view refresh")
+            vulnerabilityStatisticsCacheService.refreshCache()
+        } catch (e: Exception) {
+            log.error("Statistics cache refresh failed (non-fatal): {}", e.message, e)
+        }
 
         // Publish completion event
         publishProgressEvent(job, "Refresh completed successfully")
