@@ -55,7 +55,9 @@ const ReleaseManagement = () => {
                 throw new Error('Failed to load data');
             }
 
-            const releasesData = await releasesResponse.json();
+            const releasesJson = await releasesResponse.json();
+            // API returns { data: [...] } wrapper; extract the array
+            const releasesData = Array.isArray(releasesJson) ? releasesJson : (releasesJson.data || []);
             setReleases(releasesData);
 
             // Calculate stats from releases data

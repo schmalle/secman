@@ -1,0 +1,22 @@
+{
+  "backend": {
+    "start": "op run --env-file=.env.tpl -- gradle :backendng:clean :backendng:run --no-daemon",
+    "healthUrl": "http://localhost:8080",
+    "healthTimeout": 120
+  },
+  "frontend": {
+    "start": "npm run dev",
+    "healthUrl": "http://localhost:4321",
+    "healthTimeout": 60,
+    "cwd": "./frontend"
+  },
+  "e2e": {
+    "script": "./scripts/e2e-test.sh",
+    "maxRetries": 5,
+    "retryDelay": 5,
+    "env": {
+      "BASE_URL": "http://localhost:4321",
+      "API_URL": "http://localhost:8080"
+    }
+  }
+}

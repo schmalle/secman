@@ -28,7 +28,6 @@ checkin-test-results.json
 .idea/
 .vscode/
 .specify/
-.claude/
 .codex/
 src/backendng/bin/
 src/cli/bin/
