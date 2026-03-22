@@ -69,7 +69,7 @@ env/
 htmlcov/
 
 # Project specific
-.claude/
+.claude/settings.local.json
 ./codex/
 .serena/
 src/backendng/.kotlin/sessions/*
