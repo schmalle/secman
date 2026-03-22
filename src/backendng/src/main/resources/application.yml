@@ -344,6 +344,8 @@ app:
 
 # Management endpoints (Feature 073: Memory Optimization)
 endpoints:
+  health:
+    enabled: false
   memory:
     enabled: true
     sensitive: true

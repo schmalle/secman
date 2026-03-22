@@ -51,7 +51,11 @@ assert_body_contains() {
   local BODY
   BODY=$(curl -s --connect-timeout 5 "$URL" 2>/dev/null || echo "")
 
-  if echo "$BODY" | grep -q "$NEEDLE"; then
+  # Use grep -c to avoid SIGPIPE issues with large bodies and pipefail
+  local MATCH_COUNT
+  MATCH_COUNT=$(echo "$BODY" | grep -c "$NEEDLE" 2>/dev/null || true)
+
+  if [ "$MATCH_COUNT" -gt 0 ]; then
     echo "PASS: ${NAME}"
     PASS=$((PASS + 1))
   else
@@ -69,20 +73,22 @@ echo " E2E Test Suite — $(date)"
 echo "═══════════════════════════════════════════"
 echo ""
 
-# Backend health
-assert_http "backend-health" "${API_URL}/"
+# Backend health endpoint (public, no auth required)
+assert_http "backend-health" "${API_URL}/health"
+assert_body_contains "backend-health-json" "${API_URL}/health" '"status":"UP"'
 
 # Frontend serves HTML
 assert_http "frontend-serves" "${BASE_URL}/"
-assert_body_contains "frontend-has-root" "${BASE_URL}/" '<div id="root"'
+assert_body_contains "frontend-has-astro" "${BASE_URL}/" 'data-astro-cid'
 
-# API endpoints
-assert_http "api-auth-endpoint" "${API_URL}/api/auth/status"
-assert_body_contains "api-returns-json" "${API_URL}/api/auth/status" '"authenticated"'
+# Public API endpoints (no auth required)
+assert_http "api-login-endpoint" "${API_URL}/api/auth/login" "405"
+assert_http "api-identity-providers" "${API_URL}/api/identity-providers/enabled"
+assert_http "api-maintenance-banners" "${API_URL}/api/maintenance-banners/active"
 
-# Add your project-specific tests below
-# assert_http "my-feature" "${API_URL}/api/my-feature"
-# assert_body_contains "my-page" "${BASE_URL}/my-page" "Expected Content"
+# Auth-protected endpoints should return 401 without token
+assert_http "api-auth-requires-token" "${API_URL}/api/auth/status" "401"
+assert_http "api-assets-requires-token" "${API_URL}/api/assets" "401"
 
 # ── Summary ───────────────────────────────────────────────────
 

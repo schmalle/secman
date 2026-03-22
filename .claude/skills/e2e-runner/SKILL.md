@@ -9,7 +9,6 @@ description: >
   when the user asks to "fix all failing tests" or "get the tests green".
 context: fork
 ---
-
 # E2E Test Runner — Iterative Fix Loop
 
 You are an orchestration agent that brings up a full-stack environment, executes
@@ -42,19 +41,21 @@ Read the project-specific configuration from `e2e-runner.config.json` in the
 project root (see references/config-schema.md for the schema). Fall back to
 sensible defaults if the file is missing:
 
-| Setting              | Default                                         |
-|----------------------|-------------------------------------------------|
-| `backend.start`      | `gradle :backendng:clean :backendng:run`        |
-| `backend.healthUrl`  | `http://localhost:8080`                          |
-| `backend.healthTimeout` | `120` (seconds)                              |
-| `frontend.start`     | `npm run dev`                                   |
-| `frontend.healthUrl` | `http://localhost:4321`                          |
-| `frontend.healthTimeout` | `60` (seconds)                              |
-| `e2e.script`         | `./scripts/e2e-test.sh`                         |
-| `e2e.maxRetries`     | `5`                                             |
-| `e2e.retryDelay`     | `5` (seconds)                                   |
+
+| Setting                  | Default                                  |
+| ------------------------ | ---------------------------------------- |
+| `backend.start`          | `gradle :backendng:clean :backendng:run` |
+| `backend.healthUrl`      | `http://localhost:8080`                  |
+| `backend.healthTimeout`  | `120` (seconds)                          |
+| `frontend.start`         | `npm run dev`                            |
+| `frontend.healthUrl`     | `http://localhost:4321`                  |
+| `frontend.healthTimeout` | `60` (seconds)                           |
+| `e2e.script`             | `./scripts/e2e-test.sh`                  |
+| `e2e.maxRetries`         | `5`                                      |
+| `e2e.retryDelay`         | `5` (seconds)                            |
 
 **Starting services:**
+
 - Start each service in a **background process** using `bash` with `nohup` or `&`,
   redirecting stdout/stderr to log files under `.e2e-logs/`.
 - Record the PID so you can kill it later.
@@ -66,6 +67,7 @@ Execute the E2E test script. Capture **both stdout and stderr** into
 `.e2e-logs/e2e-run-<N>.log` where N is the iteration number.
 
 Parse the output to identify:
+
 1. Which test(s) / pages failed
 2. The error message / stack trace
 3. The error **category** (see classification rules below)
@@ -74,21 +76,23 @@ Parse the output to identify:
 
 The JS error scanner outputs structured error lines. Classify each error:
 
-| Output pattern | Category | Action |
-|----------------|----------|--------|
-| `[HTTP 5xx]` (500, 502, 503) | **backend** | Fix the backend controller/service that serves this endpoint |
-| `[HTTP 403]` | **backend** | Check RBAC — missing `@Secured` annotation or role mismatch |
-| `[HTTP 404]` on `/api/*` | **backend** | Missing endpoint — add controller method or fix route |
-| `[UNCAUGHT EXCEPTION]` with React/JS stack | **frontend** | Fix the component (hydration, props, data shape) |
-| `[CONSOLE ERROR]` with "hydration" | **frontend** | SSR/client mismatch in Astro/React component |
-| `[CONSOLE ERROR]` with "Failed to fetch" or "NetworkError" | **backend** | Endpoint unreachable or CORS issue |
+
+| Output pattern                                             | Category     | Action                                                                               |
+| ---------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------ |
+| `[HTTP 5xx]` (500, 502, 503)                               | **backend**  | Fix the backend controller/service that serves this endpoint                         |
+| `[HTTP 403]`                                               | **backend**  | Check RBAC — missing`@Secured` annotation or role mismatch                          |
+| `[HTTP 404]` on `/api/*`                                   | **backend**  | Missing endpoint — add controller method or fix route                               |
+| `[UNCAUGHT EXCEPTION]` with React/JS stack                 | **frontend** | Fix the component (hydration, props, data shape)                                     |
+| `[CONSOLE ERROR]` with "hydration"                         | **frontend** | SSR/client mismatch in Astro/React component                                         |
+| `[CONSOLE ERROR]` with "Failed to fetch" or "NetworkError" | **backend**  | Endpoint unreachable or CORS issue                                                   |
 | `[CONSOLE ERROR]` with `.map is not a function` or similar | **frontend** | API response shape mismatch — fix the component to handle the actual response shape |
-| `[TIMEOUT]` | **infra** | Page hangs — check for infinite loops or missing API responses |
-| `[SESSION EXPIRED]` | **infra** | Session/JWT expired mid-scan — not a code bug, skip |
+| `[TIMEOUT]`                                                | **infra**    | Page hangs — check for infinite loops or missing API responses                      |
+| `[SESSION EXPIRED]`                                        | **infra**    | Session/JWT expired mid-scan — not a code bug, skip                                 |
 
 **Backend errors** (`[HTTP 5xx]`, `[HTTP 403]`, `[HTTP 404]` on API routes) are the most
 important to fix because they cause downstream frontend errors. Always fix backend
-errors before frontend errors in a given iteration.
+errors before frontend errors in a given iteration. Additionally, if we find any stack traces in the backend, also fix the root cause for it.
+
 
 ### Phase 3 — Fix Loop
 
@@ -126,6 +130,7 @@ For each failure, fix in priority order: **backend errors first**, then frontend
 #### 3c. Classify and Restart
 
 After applying fixes:
+
 - `backend` → kill the backend process (`kill $BACKEND_PID`), re-run the start
   command, wait for health check before proceeding.
 - `frontend` → Astro/Vite hot-reloads. Wait 3 seconds, then proceed.
