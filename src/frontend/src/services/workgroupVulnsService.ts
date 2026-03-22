@@ -93,9 +93,9 @@ export async function getWorkgroupVulns(): Promise<WorkgroupVulnsSummary> {
   });
 
   if (!response.ok) {
-    console.error('[workgroupVulnsService] Request failed with status:', response.status);
+    console.warn('[workgroupVulnsService] Request failed with status:', response.status);
     const errorData = await response.json().catch(() => ({ error: 'Request failed' }));
-    console.error('[workgroupVulnsService] Error data:', errorData);
+    console.warn('[workgroupVulnsService] Error data:', errorData);
     throw new Error(errorData.error || errorData.message || `Request failed with status ${response.status}`);
   }
 

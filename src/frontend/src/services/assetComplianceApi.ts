@@ -62,11 +62,19 @@ export async function getComplianceOverview(
 
   const url = `/api/asset-compliance/overview${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
   const response = await authenticatedGet(url);
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.message || `Request failed with status ${response.status}`);
+  }
   return await response.json();
 }
 
 export async function getComplianceSummary(): Promise<AssetComplianceSummary> {
   const response = await authenticatedGet('/api/asset-compliance/summary');
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.message || `Request failed with status ${response.status}`);
+  }
   return await response.json();
 }
 

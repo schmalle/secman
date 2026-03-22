@@ -114,6 +114,9 @@ const HYDRATION_WAIT = 3_000; // 3 seconds for React hydration + initial API cal
 // Console error patterns to ignore (browser-level noise, not application bugs)
 const IGNORED_CONSOLE_PATTERNS = [
   /net::ERR_INVALID_HANDLE/,  // Chromium artifact from SSE connections interrupted by navigation
+  /net::ERR_NETWORK_IO_SUSPENDED/,  // Chromium artifact from network requests interrupted by page navigation
+  /^Failed to load resource:/,  // Browser-level HTTP error logging — redundant with [HTTP xxx] tracking
+  /^%cAstro/,  // Astro framework internal audit/debug messages
 ];
 
 // --- Runtime data structures ---

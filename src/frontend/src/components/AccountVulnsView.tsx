@@ -22,6 +22,7 @@ import React, { useState, useEffect } from 'react';
 import { getAccountVulns, type AccountVulnsSummary } from '../services/accountVulnsService';
 import AssetVulnTable from './AssetVulnTable';
 import SeverityBadge from './SeverityBadge';
+import { isAdmin } from '../utils/auth';
 
 const AccountVulnsView: React.FC = () => {
     console.log('[AccountVulnsView] Component mounting...');
@@ -49,6 +50,12 @@ const AccountVulnsView: React.FC = () => {
 
     useEffect(() => {
         console.log('[AccountVulnsView] useEffect triggered, calling fetchAccountVulns...');
+        // Admin users should use System Vulnerabilities view — skip the API call entirely
+        if (isAdmin()) {
+            setIsAdminRedirect(true);
+            setLoading(false);
+            return;
+        }
         fetchAccountVulns();
     }, []);
 
@@ -69,7 +76,7 @@ const AccountVulnsView: React.FC = () => {
             setSummary(data);
             console.log('[AccountVulnsView] State updated with summary data');
         } catch (err) {
-            console.error('[AccountVulnsView] Error in fetchAccountVulns:', err);
+            console.warn('[AccountVulnsView] Error in fetchAccountVulns:', err);
             const errorMessage = err instanceof Error ? err.message : 'Failed to load account vulnerabilities';
             console.log('[AccountVulnsView] Error message:', errorMessage);
 

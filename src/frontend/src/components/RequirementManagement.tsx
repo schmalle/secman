@@ -86,22 +86,26 @@ export default function RequirementManagement() {
         errors: Array<{ batchNumber: number; errorType: string; errorMessage: string }>;
     } | null>(null);
 
-    // Feature 067/078: Release viewing state — restore from sessionStorage
-    const [selectedReleaseId, setSelectedReleaseId] = useState<number | null>(() => {
-        if (typeof window !== 'undefined') {
-            const stored = sessionStorage.getItem('secman_selectedReleaseId');
-            if (stored) {
-                const parsed = parseInt(stored, 10);
-                return isNaN(parsed) ? null : parsed;
-            }
-        }
-        return null;
-    });
+    // Feature 067/078: Release viewing state — initialize as null to match SSR,
+    // then restore from sessionStorage after mount to avoid hydration mismatch
+    const [selectedReleaseId, setSelectedReleaseId] = useState<number | null>(null);
     const [selectedRelease, setSelectedRelease] = useState<Release | null>(null);
     const [isViewingHistorical, setIsViewingHistorical] = useState(false);
     // Feature 078: Track if editing should be blocked (ARCHIVED/ACTIVE releases)
     const isEditingBlocked = selectedRelease !== null &&
         (selectedRelease.status === 'ARCHIVED' || selectedRelease.status === 'ACTIVE');
+
+    // Restore release selection from sessionStorage after mount (avoids SSR hydration mismatch)
+    useEffect(() => {
+        const stored = sessionStorage.getItem('secman_selectedReleaseId');
+        if (stored) {
+            const parsed = parseInt(stored, 10);
+            if (!isNaN(parsed)) {
+                setSelectedReleaseId(parsed);
+                return; // The selectedReleaseId useEffect below will handle fetching
+            }
+        }
+    }, []);
 
     // Fetch requirements, use cases, and norms from backend
     useEffect(() => {

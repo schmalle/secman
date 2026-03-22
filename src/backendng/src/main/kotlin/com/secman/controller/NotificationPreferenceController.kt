@@ -6,6 +6,7 @@ import io.micronaut.http.annotation.*
 import io.micronaut.security.annotation.Secured
 import io.micronaut.security.authentication.Authentication
 import io.micronaut.security.rules.SecurityRule
+import io.micronaut.serde.annotation.Serdeable
 import jakarta.inject.Singleton
 import jakarta.validation.Valid
 import org.slf4j.LoggerFactory
@@ -29,8 +30,7 @@ open class NotificationPreferenceController(
      */
     @Get
     fun getUserPreferences(authentication: Authentication): NotificationPreferenceResponse {
-        val userId = authentication.name.toLongOrNull()
-            ?: throw IllegalArgumentException("Invalid user ID in authentication")
+        val userId = getUserIdFromAuthentication(authentication)
 
         val preference = notificationPreferenceRepository.findByUserId(userId)
             .orElseGet {
@@ -52,8 +52,7 @@ open class NotificationPreferenceController(
         @Valid @Body request: UpdatePreferenceRequest,
         authentication: Authentication
     ): NotificationPreferenceResponse {
-        val userId = authentication.name.toLongOrNull()
-            ?: throw IllegalArgumentException("Invalid user ID in authentication")
+        val userId = getUserIdFromAuthentication(authentication)
 
         val existing = notificationPreferenceRepository.findByUserId(userId)
 
@@ -79,10 +78,12 @@ open class NotificationPreferenceController(
         return NotificationPreferenceResponse.from(preference)
     }
 
+    @Serdeable
     data class UpdatePreferenceRequest(
         val enableNewVulnNotifications: Boolean
     )
 
+    @Serdeable
     data class NotificationPreferenceResponse(
         val id: Long?,
         val userId: Long,
@@ -100,6 +101,19 @@ open class NotificationPreferenceController(
                 createdAt = preference.createdAt,
                 updatedAt = preference.updatedAt
             )
+        }
+    }
+
+    /**
+     * Extract user ID from authentication object
+     */
+    private fun getUserIdFromAuthentication(authentication: Authentication): Long {
+        val userId = authentication.attributes["userId"]
+        return when (userId) {
+            is Long -> userId
+            is Int -> userId.toLong()
+            is String -> userId.toLong()
+            else -> throw IllegalStateException("Unable to determine user ID from authentication")
         }
     }
 }
