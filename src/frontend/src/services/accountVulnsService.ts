@@ -93,9 +93,9 @@ export async function getAccountVulns(): Promise<AccountVulnsSummary> {
   });
 
   if (!response.ok) {
-    console.error('[accountVulnsService] Request failed with status:', response.status);
+    console.warn('[accountVulnsService] Request failed with status:', response.status);
     const errorData = await response.json().catch(() => ({ error: 'Request failed' }));
-    console.error('[accountVulnsService] Error data:', errorData);
+    console.warn('[accountVulnsService] Error data:', errorData);
     throw new Error(errorData.error || errorData.message || `Request failed with status ${response.status}`);
   }
 

@@ -219,6 +219,36 @@ fun findStateByValueWithRetry(stateToken: String): Optional<OAuthState> {
 - Config: `src/backendng/src/main/resources/application.yml`
 - Environment Docs: `docs/ENVIRONMENT.md`
 
+
+# E2E Test Runner Integration
+
+## Quick Start
+
+Run `/e2e-runner` to start the full E2E test loop. This will:
+1. Start the Play backend and Astro frontend
+2. Run the E2E test script
+3. Automatically fix failures and retry
+
+## Architecture
+
+
+- **E2E Tests**: Shell script at `./scripts/e2e-test.sh`
+
+## E2E Runner Rules
+
+- Backend changes (Java/Scala) always require a backend restart
+- Frontend changes usually hot-reload via Vite — no restart needed
+- Config changes (`astro.config.mjs`, `application.conf`) require restart
+- Secrets are injected via `op run` — never hardcode them
+- Logs are written to `.e2e-logs/` — add this to `.gitignore`
+- The runner will attempt up to 5 fix iterations before stopping
+
+## Service Health
+
+- Backend health: `http://localhost:8080` (120s timeout)
+- Frontend health: `http://localhost:4321` (60s timeout)
+
+
 ---
 *Last updated: 2025-12-29*
 
@@ -253,6 +283,8 @@ fun findStateByValueWithRetry(stateToken: String): Optional<OAuthState> {
 - MariaDB 11.4 (existing `user_roles` table, no schema changes) (080-default-user-roles)
 - TypeScript (Playwright test files), Bash (runner script) + @playwright/test 1.57.0 (Astro-compatible version) (081-playwright-vuln-e2e)
 - N/A (no data persistence — test infrastructure only) (081-playwright-vuln-e2e)
+- Bash 5.x (wrapper), Node.js (script using Playwright API) + Playwright (from existing `tests/e2e/node_modules/`), 1Password CLI (`op`) (083-js-error-scanner)
+- N/A (no persistence) (083-js-error-scanner)
 
 ## Recent Changes
 - 058-ai-norm-mapping: Added Kotlin 2.2.21 / Java 21 (backend), TypeScript/React 19 (frontend) + Micronaut 4.10, Hibernate JPA, Axios, Bootstrap 5.3

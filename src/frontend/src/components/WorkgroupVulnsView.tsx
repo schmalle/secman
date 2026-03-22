@@ -18,6 +18,7 @@ import React, { useState, useEffect } from 'react';
 import { getWorkgroupVulns, type WorkgroupVulnsSummary } from '../services/workgroupVulnsService';
 import AssetVulnTable from './AssetVulnTable';
 import SeverityBadge from './SeverityBadge';
+import { isAdmin } from '../utils/auth';
 
 const WorkgroupVulnsView: React.FC = () => {
     console.log('[WorkgroupVulnsView] Component mounting...');
@@ -44,6 +45,12 @@ const WorkgroupVulnsView: React.FC = () => {
 
     useEffect(() => {
         console.log('[WorkgroupVulnsView] useEffect triggered, calling fetchWorkgroupVulns...');
+        // Admin users should use System Vulnerabilities view — skip the API call entirely
+        if (isAdmin()) {
+            setIsAdminRedirect(true);
+            setLoading(false);
+            return;
+        }
         fetchWorkgroupVulns();
     }, []);
 
@@ -64,7 +71,7 @@ const WorkgroupVulnsView: React.FC = () => {
             setSummary(data);
             console.log('[WorkgroupVulnsView] State updated with summary data');
         } catch (err) {
-            console.error('[WorkgroupVulnsView] Error in fetchWorkgroupVulns:', err);
+            console.warn('[WorkgroupVulnsView] Error in fetchWorkgroupVulns:', err);
             const errorMessage = err instanceof Error ? err.message : 'Failed to load workgroup vulnerabilities';
             console.log('[WorkgroupVulnsView] Error message:', errorMessage);
 

@@ -146,9 +146,8 @@ const requiresRedirect = !user && !isPublicPage;
                         window.dispatchEvent(new CustomEvent('userLoaded'));
                     }
                 } catch (error) {
-                    console.error('Failed to fetch auth status:', error);
-                    // Optionally redirect to login on network error too, or show an error message
-                    // window.location.href = '/login';
+                    console.warn('Failed to fetch auth status:', error);
+                    // Network errors during navigation are expected; don't redirect
                 }
             }
             checkAuthAndRedirect();

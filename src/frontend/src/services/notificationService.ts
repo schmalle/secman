@@ -1,10 +1,7 @@
 import axios from 'axios';
 
-// API base URL - uses relative URLs in production to avoid CORS issues
-const API_BASE_URL = import.meta.env.PUBLIC_API_URL ||
-  (typeof window !== 'undefined' && window.location.hostname !== 'localhost'
-    ? '' // Use relative URLs in production
-    : 'http://localhost:8080'); // Use localhost in development
+// API base URL - always use relative URLs to go through Astro's proxy and avoid CORS issues
+const API_BASE_URL = import.meta.env.PUBLIC_API_URL || '';
 
 export interface NotificationPreference {
   id: number | null;

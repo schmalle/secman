@@ -136,19 +136,30 @@ open class AssetComplianceTrackingService(
             effectiveSearch, effectiveStatus, size, page * size
         )
 
-        val content = results.map { row ->
-            val cols = row as Array<*>
-            AssetComplianceOverviewDto(
-                assetId = (cols[1] as Number).toLong(),
-                assetName = cols[7] as String,
-                assetType = cols[9] as? String,
-                cloudInstanceId = cols[8] as? String,
-                currentStatus = ComplianceStatus.valueOf(cols[2] as String),
-                lastChangeAt = cols[3] as LocalDateTime,
-                overdueCount = (cols[4] as Number).toInt(),
-                oldestVulnDays = (cols[5] as? Number)?.toInt(),
-                source = cols[6] as String
-            )
+        val content = results.mapNotNull { row ->
+            try {
+                val cols = when (row) {
+                    is Array<*> -> row
+                    else -> {
+                        log.warn("Unexpected row type in compliance overview: {}", row?.javaClass?.name)
+                        return@mapNotNull null
+                    }
+                }
+                AssetComplianceOverviewDto(
+                    assetId = (cols[1] as Number).toLong(),
+                    assetName = cols[7] as String,
+                    assetType = cols[9] as? String,
+                    cloudInstanceId = cols[8] as? String,
+                    currentStatus = ComplianceStatus.valueOf(cols[2] as String),
+                    lastChangeAt = cols[3] as LocalDateTime,
+                    overdueCount = (cols[4] as Number).toInt(),
+                    oldestVulnDays = (cols[5] as? Number)?.toInt(),
+                    source = cols[6] as String
+                )
+            } catch (e: Exception) {
+                log.error("Failed to map compliance overview row: {}", e.message)
+                null
+            }
         }
 
         return mapOf(

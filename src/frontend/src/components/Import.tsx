@@ -46,7 +46,13 @@ const Import = () => {
     const [scanSummary, setScanSummary] = useState<ScanSummary | null>(null);
     const [masscanSummary, setMasscanSummary] = useState<MasscanImportResponse | null>(null);
     const [assetImportResult, setAssetImportResult] = useState<ImportResult | null>(null);
+    const [showAdminTab, setShowAdminTab] = useState<boolean>(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Resolve admin status after mount to avoid SSR hydration mismatch
+    useEffect(() => {
+        setShowAdminTab(isAdmin());
+    }, []);
 
     const validateFile = (file: File): boolean => {
         if (importType === 'requirements' || importType === 'assets') {
@@ -349,7 +355,7 @@ const Import = () => {
                                         Assets
                                     </button>
                                 </li>
-                                {isAdmin() && (
+                                {showAdminTab && (
                                     <li className="nav-item" role="presentation">
                                         <button
                                             className={`nav-link ${importType === 'usermappings' ? 'active' : ''}`}

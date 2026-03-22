@@ -21,6 +21,7 @@
 import React, { useState, useEffect } from 'react';
 import { getDomainVulns, syncDomainFromCrowdStrike, type DomainVulnsSummary } from '../services/domainVulnsService';
 import SeverityBadge from './SeverityBadge';
+import { isAdmin } from '../utils/auth';
 
 const DomainVulnsView: React.FC = () => {
     console.log('[DomainVulnsView] Component mounting...');
@@ -50,6 +51,12 @@ const DomainVulnsView: React.FC = () => {
 
     useEffect(() => {
         console.log('[DomainVulnsView] useEffect triggered, calling fetchDomainVulns...');
+        // Admin users should use System Vulnerabilities view — skip the API call entirely
+        if (isAdmin()) {
+            setIsAdminRedirect(true);
+            setLoading(false);
+            return;
+        }
         fetchDomainVulns();
     }, []);
 
@@ -70,7 +77,7 @@ const DomainVulnsView: React.FC = () => {
             setSummary(data);
             console.log('[DomainVulnsView] State updated with summary data');
         } catch (err) {
-            console.error('[DomainVulnsView] Error in fetchDomainVulns:', err);
+            console.warn('[DomainVulnsView] Error in fetchDomainVulns:', err);
             const errorMessage = err instanceof Error ? err.message : 'Failed to load domain vulnerabilities';
             console.log('[DomainVulnsView] Error message:', errorMessage);
 

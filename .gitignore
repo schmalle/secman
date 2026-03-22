@@ -28,7 +28,6 @@ checkin-test-results.json
 .idea/
 .vscode/
 .specify/
-.claude/
 .codex/
 src/backendng/bin/
 src/cli/bin/
@@ -69,7 +68,7 @@ env/
 htmlcov/
 
 # Project specific
-.claude/
+.claude/settings.local.json
 ./codex/
 .serena/
 src/backendng/.kotlin/sessions/*
