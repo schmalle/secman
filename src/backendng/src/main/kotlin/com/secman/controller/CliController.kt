@@ -5,6 +5,7 @@ import com.secman.repository.OutdatedAssetMaterializedViewRepository
 import com.secman.repository.UserMappingRepository
 import com.secman.service.AdminSummaryService
 import com.secman.service.NotificationService
+import com.secman.service.UserVulnerabilityNotificationService
 import io.micronaut.data.model.Pageable
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.MediaType
@@ -33,7 +34,8 @@ class CliController(
     private val outdatedAssetRepository: OutdatedAssetMaterializedViewRepository,
     private val assetRepository: AssetRepository,
     private val userMappingRepository: UserMappingRepository,
-    private val adminSummaryService: AdminSummaryService
+    private val adminSummaryService: AdminSummaryService,
+    private val userVulnerabilityNotificationService: UserVulnerabilityNotificationService
 ) {
     private val logger = LoggerFactory.getLogger(CliController::class.java)
 
@@ -230,6 +232,67 @@ class CliController(
             ))
         } catch (e: Exception) {
             logger.error("Error sending admin summary", e)
+            HttpResponse.serverError()
+        }
+    }
+
+    // --- User Vulnerability Notification Endpoints ---
+
+    @Serdeable
+    data class SendUserVulnNotificationsRequest(
+        val dryRun: Boolean = false,
+        val verbose: Boolean = false,
+        val thresholdDays: Int = 30
+    )
+
+    @Serdeable
+    data class UserVulnNotificationResultDto(
+        val status: String,
+        val awsAccountsAffected: Int,
+        val usersNotified: Int,
+        val emailsSent: Int,
+        val emailsFailed: Int,
+        val recipients: List<String>,
+        val failedRecipients: List<String>,
+        val unmappedAccounts: List<String>,
+        val thresholdDays: Int
+    )
+
+    /**
+     * POST /api/cli/user-vulnerability-notifications/send
+     *
+     * Finds AWS accounts with overdue vulnerabilities, maps them to users via UserMapping,
+     * and sends each user one consolidated notification email.
+     */
+    @Post("/user-vulnerability-notifications/send")
+    @Produces(MediaType.APPLICATION_JSON)
+    fun sendUserVulnerabilityNotifications(
+        @Body request: SendUserVulnNotificationsRequest,
+        authentication: Authentication
+    ): HttpResponse<UserVulnNotificationResultDto> {
+        logger.info("CLI user-vulnerability-notifications requested by user: {} (dryRun={}, thresholdDays={})",
+            authentication.name, request.dryRun, request.thresholdDays)
+
+        return try {
+            val result = userVulnerabilityNotificationService.sendUserVulnerabilityNotifications(
+                thresholdDays = request.thresholdDays,
+                dryRun = request.dryRun,
+                verbose = request.verbose
+            )
+
+            HttpResponse.ok(UserVulnNotificationResultDto(
+                status = result.status.name,
+                awsAccountsAffected = result.awsAccountsAffected,
+                usersNotified = result.usersNotified,
+                emailsSent = result.emailsSent,
+                emailsFailed = result.emailsFailed,
+                recipients = result.recipients,
+                failedRecipients = result.failedRecipients,
+                unmappedAccounts = result.unmappedAccounts,
+                thresholdDays = result.thresholdDays
+            ))
+        } catch (e: Exception) {
+            logger.error("Error sending user vulnerability notifications", e)
             HttpResponse.serverError()
         }
     }

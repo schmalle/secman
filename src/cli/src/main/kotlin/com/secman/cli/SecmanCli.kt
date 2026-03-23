@@ -12,6 +12,7 @@ import com.secman.cli.commands.MonitorCommand
 import com.secman.cli.commands.QueryCommand
 import com.secman.cli.commands.SendAdminSummaryCommand
 import com.secman.cli.commands.SendNotificationsCommand
+import com.secman.cli.commands.SendNotificationUsersCommand
 import com.secman.cli.commands.ServersCommand
 import io.micronaut.configuration.picocli.PicocliRunner
 import io.micronaut.context.ApplicationContext
@@ -272,6 +273,14 @@ class SecmanCli {
                 }
                 0
             }
+            args[0] == "send-notification-users" -> {
+                // Use Picocli with Micronaut DI for send-notification-users command
+                val subArgs = args.drop(1).toTypedArray()
+                createCliContext().use { ctx ->
+                    PicocliRunner.run(SendNotificationUsersCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
             args[0] == "deduplicate-vulnerabilities" -> {
                 // Remove duplicate vulnerability records from the database
                 val subArgs = args.drop(1).toTypedArray()
@@ -323,6 +332,7 @@ class SecmanCli {
               Notifications:
                 send-notifications     Send email notifications for outdated assets
                 send-admin-summary     Send system statistics summary email to ADMIN users
+                send-notification-users  Send vulnerability notifications to users by AWS account
 
               User & Access Management:
                 manage-user-mappings   Manage user mappings for domains and AWS accounts
@@ -504,6 +514,28 @@ class SecmanCli {
                   secman send-admin-summary --dry-run
                   secman send-admin-summary --verbose
                   secman send-admin-summary --dry-run --verbose
+            """.trimIndent(),
+
+            "send-notification-users" to """
+                secman send-notification-users - Send vulnerability notification emails to users with affected AWS accounts
+
+                Usage: secman send-notification-users [options]
+
+                Options:
+                  --dry-run                Preview planned notifications without sending emails
+                  --verbose, -v            Detailed logging (show per-recipient status)
+                  --days <number>          Vulnerability age threshold in days (default: 30)
+
+                Description:
+                  Identifies AWS accounts with systems having vulnerabilities open longer than
+                  the specified threshold. Maps accounts to users via UserMapping and sends each
+                  user one consolidated email listing all their affected AWS accounts.
+
+                Examples:
+                  secman send-notification-users
+                  secman send-notification-users --dry-run
+                  secman send-notification-users --days 60 --verbose
+                  secman send-notification-users --dry-run --days 14
             """.trimIndent(),
 
             "manage-user-mappings" to """
