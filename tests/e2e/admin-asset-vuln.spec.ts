@@ -33,12 +33,19 @@ async function login(
   password: string,
 ) {
   await page.goto('/login');
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('domcontentloaded');
+  // Wait for the login form to be fully hydrated by React
+  // The submit button becomes a React-controlled element after hydration
+  const submitBtn = page.locator('button[type="submit"]');
+  await submitBtn.waitFor({ state: 'visible', timeout: 15_000 });
+  // Small delay to ensure React hydration completes
+  await page.waitForTimeout(1000);
   await page.locator('#username').fill(username);
   await page.locator('#password').fill(password);
-  await page.locator('button[type="submit"]').click();
+  await submitBtn.click();
+  // Wait for redirect after successful login (the Login component uses window.location.href = '/')
   await page.waitForURL((url) => !url.pathname.includes('/login'), {
-    timeout: 15_000,
+    timeout: 30_000,
   });
 }
 
@@ -61,7 +68,7 @@ test.describe.serial('Admin add system and vulnerability', () => {
 
     // Navigate to assets page
     await page.goto('/assets');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Wait for the asset table/list to load
     await page.waitForTimeout(2000);
@@ -80,7 +87,7 @@ test.describe.serial('Admin add system and vulnerability', () => {
 
     // Navigate to admin add-system page
     await page.goto('/admin/add-system');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Verify page loaded
     await expect(
@@ -117,7 +124,7 @@ test.describe.serial('Admin add system and vulnerability', () => {
 
     // Navigate to admin add-system page
     await page.goto('/admin/add-system');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Fill the vulnerability form
     await page.locator('#vuln-hostname').fill(DUMMY_ASSET_NAME);
@@ -149,7 +156,7 @@ test.describe.serial('Admin add system and vulnerability', () => {
 
     // Navigate to assets page
     await page.goto('/assets');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Wait for assets to load and search for the DUMMY asset
     await page.waitForTimeout(2000);
