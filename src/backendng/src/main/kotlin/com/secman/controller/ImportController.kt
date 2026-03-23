@@ -460,8 +460,8 @@ open class ImportController(
 
         // Check content type
         val contentType = file.contentType.map { it.toString() }.orElse("")
-        if (!contentType.contains("spreadsheetml.sheet") && !contentType.contains("excel") && !contentType.contains("octet-stream")) {
-            return "Invalid file format. Please upload a valid Excel file."
+        if (!contentType.contains("spreadsheetml.sheet") && !contentType.contains("excel")) {
+            return "Invalid file format. Please upload a valid Excel file (.xlsx)."
         }
 
         // Check file is not empty
@@ -635,7 +635,7 @@ open class ImportController(
             // File I/O errors
             log.error("CSV upload I/O error: user={}, error={}", username, e.message, e)
             HttpResponse.status<ErrorResponse>(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ErrorResponse("Error reading CSV file: ${e.message}"))
+                .body(ErrorResponse("Failed to read CSV file"))
 
         } catch (e: Exception) {
             // Unexpected errors
@@ -851,7 +851,7 @@ open class ImportController(
 
         // Check content type
         val contentType = file.contentType.map { it.toString() }.orElse("")
-        if (!contentType.contains("xml") && !contentType.contains("octet-stream")) {
+        if (!contentType.contains("xml")) {
             return "Invalid file format. Please upload a valid XML file."
         }
 
@@ -949,7 +949,7 @@ open class ImportController(
         } catch (e: IOException) {
             log.error("Asset import IO error", e)
             HttpResponse.serverError<ErrorResponse>()
-                .body(ErrorResponse("Failed to read file: ${e.message}"))
+                .body(ErrorResponse("Failed to read uploaded file"))
 
         } catch (e: Exception) {
             log.error("Asset import failed for user: {}", authentication.name, e)

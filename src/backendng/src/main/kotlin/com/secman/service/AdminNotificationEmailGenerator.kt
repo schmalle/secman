@@ -27,7 +27,9 @@ class AdminNotificationEmailGenerator {
      * @return Email subject line
      */
     fun generateSubject(newUsername: String): String {
-        return "New User Registered: $newUsername"
+        // Sanitize username to prevent email header injection (CRLF) and limit length
+        val sanitized = newUsername.replace(Regex("[\r\n]"), "").take(100)
+        return "New User Registered: $sanitized"
     }
 
     /**

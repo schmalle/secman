@@ -20,7 +20,7 @@ class AuditLogService {
         details: String? = null
     ) {
         val timestamp = Instant.now()
-        val username = authentication.name
+        val username = sanitizeLogInput(authentication.name)
         val roles = authentication.roles?.joinToString(",") ?: ""
 
         val logMessage = buildString {
@@ -31,9 +31,17 @@ class AuditLogService {
             append("action=$action, ")
             append("entityType=$entityType")
             entityId?.let { append(", entityId=$it") }
-            details?.let { append(", details=$it") }
+            details?.let { append(", details=${sanitizeLogInput(it)}") }
         }
 
         logger.info(logMessage)
+    }
+
+    /**
+     * Sanitize input for log messages to prevent log injection (CRLF injection).
+     * Removes newline characters that could forge log entries.
+     */
+    private fun sanitizeLogInput(input: String): String {
+        return input.replace(Regex("[\r\n\t]"), "_")
     }
 }
