@@ -12,12 +12,27 @@ import java.util.Base64
 @Requires(notEnv = ["test", "cli"])
 @Singleton
 class JwtSigningValidator(
-    private val jwtTokenGenerator: JwtTokenGenerator
+    private val jwtTokenGenerator: JwtTokenGenerator,
+    @io.micronaut.context.annotation.Value("\${micronaut.security.token.jwt.signatures.secret.generator.secret}")
+    private val jwtSecret: String
 ) {
     private val logger = LoggerFactory.getLogger(JwtSigningValidator::class.java)
 
+    companion object {
+        private const val DEFAULT_INSECURE_SECRET = "pleasechangethissecrectokeyproductionforsecurityreasonsmustbe256bits"
+    }
+
     @PostConstruct
     fun validate() {
+        // Warn loudly if using the default insecure JWT secret
+        if (jwtSecret == DEFAULT_INSECURE_SECRET) {
+            logger.error("=".repeat(70))
+            logger.error("  SECURITY WARNING: Using default JWT signing secret!")
+            logger.error("  Set the JWT_SECRET environment variable to a strong random value.")
+            logger.error("  Generate one with: openssl rand -base64 48")
+            logger.error("  The default secret is publicly known and allows token forgery!")
+            logger.error("=".repeat(70))
+        }
         val testClaims = mapOf("sub" to "startup-check", "iss" to "secman-backend-ng")
         val token = jwtTokenGenerator.generateToken(testClaims)
 
