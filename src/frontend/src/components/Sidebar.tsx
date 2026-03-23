@@ -502,6 +502,11 @@ const Sidebar = () => {
                                         <i className="bi bi-radar me-2"></i> Scans
                                     </a>
                                 </li>
+                                <li>
+                                    <a href="/admin/add-system" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-plus-circle me-2"></i> Add System
+                                    </a>
+                                </li>
 
                                 {/* Monitoring */}
                                 <li className="admin-subsection-header">Monitoring</li>
