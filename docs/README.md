@@ -2,7 +2,7 @@
 
 Security requirement and risk assessment management tool.
 
-**Last Updated:** 2026-03-08
+**Last Updated:** 2026-03-24
 
 ---
 
@@ -20,6 +20,7 @@ Security requirement and risk assessment management tool.
 | [Troubleshooting](./TROUBLESHOOTING.md)       | Common issues and solutions                    |
 | [E2E Exception Workflow](./E2E_EXCEPTION_WORKFLOW_TEST.md) | End-to-end exception workflow test    |
 | [S3 User Mapping Import](./S3_USER_MAPPING_IMPORT.md) | S3-based user mapping imports            |
+| [Skills & Agents](./SKILLS_AND_AGENTS.md)             | Claude Code skills and agent reference   |
 
 ---
 
@@ -76,11 +77,11 @@ Using Secman for security management:
 
 **Technology Stack:**
 
-- **Backend**: Kotlin 2.3.10, Java 21, Micronaut 4.10, Hibernate JPA
-- **Frontend**: Astro 5.18, React 19, Bootstrap 5.3, Axios
+- **Backend**: Kotlin 2.3.20, Java 21, Micronaut 4.10, Hibernate JPA
+- **Frontend**: Astro 6.0, React 19, Bootstrap 5.3, Axios
 - **Database**: MariaDB 12 with auto-migration
 - **CLI**: Picocli 4.7.7, CrowdStrike API, AWS SDK v2
-- **Build**: Gradle 9.3.1 (Kotlin DSL)
+- **Build**: Gradle 9.4.0 (Kotlin DSL)
 
 For detailed architecture, see [ARCHITECTURE.md](./ARCHITECTURE.md).
 
@@ -276,7 +277,8 @@ docs/
 ├── TESTING.md             <- Test infrastructure
 ├── TROUBLESHOOTING.md     <- Common issues & solutions
 ├── E2E_EXCEPTION_WORKFLOW_TEST.md  <- Exception E2E test
-└── S3_USER_MAPPING_IMPORT.md      <- S3 import guide
+├── S3_USER_MAPPING_IMPORT.md      <- S3 import guide
+└── SKILLS_AND_AGENTS.md           <- Skills & agents reference
 ```
 
 ---

@@ -28,10 +28,10 @@ SecMan is a full-stack security management platform that helps organizations man
 
 ## Technology Stack
 
-- **Backend**: Micronaut 4.10 + Kotlin 2.3.0 (Java 21)
-- **Frontend**: Astro 5.16 + React 19 + Bootstrap 5.3
+- **Backend**: Micronaut 4.10 + Kotlin 2.3.20 (Java 21)
+- **Frontend**: Astro 6.0 + React 19 + Bootstrap 5.3
 - **Database**: MariaDB 12 with Hibernate JPA
-- **Build System**: Gradle 9.3 (Kotlin DSL)
+- **Build System**: Gradle 9.4 (Kotlin DSL)
 - **CLI Tools**: Kotlin/Picocli for CrowdStrike queries, notifications, and data management
 - **Authentication**: JWT with OAuth2/OIDC and Passkeys (WebAuthn)
 
@@ -257,7 +257,9 @@ secman/
 │   ├── MCP.md              # MCP integration guide
 │   ├── TESTING.md          # Test guide
 │   ├── CROWDSTRIKE_IMPORT.md # CrowdStrike import details
-│   └── TROUBLESHOOTING.md  # Troubleshooting
+│   ├── TROUBLESHOOTING.md  # Troubleshooting
+│   ├── S3_USER_MAPPING_IMPORT.md # S3 import guide
+│   └── SKILLS_AND_AGENTS.md # Skills & agents reference
 ├── mcp/                    # MCP Node.js bridge
 ├── scripts/                # Utility scripts
 └── specs/                  # Feature specifications
@@ -423,7 +425,8 @@ Connect Claude Desktop, Claude Code, or other MCP clients:
 
 ```bash
 claude mcp add --transport http secman http://localhost:8080/mcp \
-  --header "X-MCP-API-Key: sk-your-api-key"
+  --header "X-MCP-API-Key: sk-your-api-key" \
+  --header "X-MCP-User-Email: your.email@company.com"
 ```
 
 ### Claude Desktop
@@ -434,7 +437,8 @@ claude mcp add --transport http secman http://localhost:8080/mcp \
     "secman": {
       "command": "npx",
       "args": ["-y", "mcp-remote", "http://localhost:8080/mcp",
-               "--header", "X-MCP-API-Key: sk-your-api-key"]
+               "--header", "X-MCP-API-Key: sk-your-api-key",
+               "--header", "X-MCP-User-Email: your.email@company.com"]
     }
   }
 }
@@ -491,6 +495,7 @@ Comprehensive documentation is available in the `docs/` directory:
 | [CrowdStrike Import](docs/CROWDSTRIKE_IMPORT.md)      | Vulnerability import technical details         |
 | [Testing Guide](docs/TESTING.md)                      | Test infrastructure and patterns               |
 | [Troubleshooting](docs/TROUBLESHOOTING.md)            | Common issues and solutions                    |
+| [Skills & Agents](docs/SKILLS_AND_AGENTS.md)          | Claude Code skills and agent reference         |
 
 ## Contributing
 
