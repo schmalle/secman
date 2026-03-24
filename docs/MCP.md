@@ -1,6 +1,6 @@
 # MCP (Model Context Protocol) Integration Guide
 
-**Last Updated:** 2026-03-08
+**Last Updated:** 2026-03-24
 **Version:** 5.0
 
 This guide covers integrating Secman with AI assistants (Claude Desktop, Claude Code, ChatGPT, etc.) using the Model Context Protocol (MCP).

@@ -1,6 +1,6 @@
 # Secman Environment Variables Reference
 
-**Last Updated:** 2026-03-08
+**Last Updated:** 2026-03-24
 **Version:** 1.0
 
 This document provides a comprehensive reference for all environment variables used by Secman components.
@@ -94,7 +94,7 @@ export SMTP_ENABLE_TLS=true
 
 | Variable           | Description                            | Default                       | Required |
 | ------------------ | -------------------------------------- | ----------------------------- | -------- |
-| `BACKEND_BASE_URL` | Public URL of the backend API          | `https://secman.covestro.net` | Yes      |
+| `BACKEND_BASE_URL` | Public URL of the backend API          | `http://localhost:8080`       | Yes      |
 | `FRONTEND_URL`     | Public URL of the frontend application | `http://localhost:4321`       | Yes      |
 
 These URLs are used for:

@@ -1,6 +1,6 @@
 # Secman CLI Reference
 
-**Last Updated:** 2026-03-08
+**Last Updated:** 2026-03-24
 **Version:** 1.0
 
 Command-line interface for CrowdStrike vulnerability queries, notifications, user mapping management, and manual vulnerability entry.

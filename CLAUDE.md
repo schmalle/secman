@@ -4,7 +4,7 @@
 
 **secman** - Security requirement and risk assessment management tool
 
-**Stack**: Kotlin 2.2.21 / Java 21, Micronaut 4.10, Hibernate JPA | Astro 5.15, React 19, Bootstrap 5.3 | MariaDB 12, Gradle 9.2
+**Stack**: Kotlin 2.3.20 / Java 21, Micronaut 4.10, Hibernate JPA | Astro 6.0, React 19, Bootstrap 5.3 | MariaDB 12, Gradle 9.4
 
 **Architecture**:
 - Backend: `src/backendng/` - Domain (JPA) → Repository → Service → Controller (REST)
@@ -250,41 +250,16 @@ Run `/e2e-runner` to start the full E2E test loop. This will:
 
 
 ---
-*Last updated: 2025-12-29*
+*Last updated: 2026-03-24*
 
 ## Active Technologies
-- Kotlin 2.2.21 / Java 21 (backend), TypeScript/React 19 (frontend) + Micronaut 4.10, Hibernate JPA, Axios, Bootstrap 5.3 (058-ai-norm-mapping)
-- MariaDB 11.4 (existing `requirement`, `norm`, `requirement_norm` tables) (058-ai-norm-mapping)
-- Kotlin 2.2.21 / Java 21 + Micronaut 4.10, Hibernate JPA (060-mcp-list-users)
-- MariaDB 11.4 (existing `users` table) (060-mcp-list-users)
-- MariaDB 11.4 (existing tables: `vulnerability_exception_request`, `vulnerability_exception`, `outdated_asset_materialized_view`) (062-mcp-vuln-exceptions)
-- Kotlin 2.3.0 / Java 25 (backend), Bash (test script) + Micronaut 4.10, Hibernate JPA, PicoCLI (CLI) (063-e2e-vuln-exception)
-- Kotlin 2.3.0 / Java 25 + Micronaut 4.10, Hibernate JPA, PicoCLI (CLI), MCP Protocol (064-mcp-cli-user-mapping)
-- MariaDB 11.4 (existing `user_mapping` table) (064-mcp-cli-user-mapping)
-- Kotlin 2.3.0 / Java 21 + Micronaut 4.10, PicoCLI 4.7.5, AWS SDK for Java v2 (S3) (065-s3-user-mapping-import)
-- MariaDB 11.4 (existing user_mapping table), local temp files for S3 downloads (065-s3-user-mapping-import)
-- Kotlin 2.3.0 / Java 25 + Micronaut 4.10, Hibernate JPA, Apache POI 5.3 (Excel/Word exports) (066-requirement-versioning)
-- MariaDB 11.4 (existing `requirement`, `requirement_snapshot`, `releases` tables) (066-requirement-versioning)
-- Kotlin 2.3.0 / Java 25 + Micronaut 4.10, PicoCLI (CLI framework), Jakarta Mail (email) (070-admin-summary-email)
-- MariaDB 11.4 (existing database) (070-admin-summary-email)
-- MariaDB 11.4 (read-only queries for statistics) (069-enhanced-admin-summary)
-- Kotlin 2.3.0 / Java 25 + Micronaut 4.10, Jakarta Mail (angus-mail 2.0.5), Hibernate JPA (071-ses-smtp-rewrite)
-- MariaDB 11.4 (existing `email_configs` table) (071-ses-smtp-rewrite)
-- Kotlin 2.3.0 / Java 25 + Micronaut 4.10, Hibernate JPA, Apache POI 5.3 (SXSSFWorkbook) (073-memory-optimization)
-- MariaDB 11.4 (HikariCP connection pool, max 20 connections) (073-memory-optimization)
-- Kotlin 2.3.0 / Java 25 (backend), Bash (test script), TypeScript/React 19 (frontend) + Micronaut 4.10, Hibernate JPA, curl, jq, 1Password CLI v2.x (074-mcp-e2e-test)
-- MariaDB 11.4 (existing tables: users, assets, vulnerabilities, workgroups, user_workgroups, asset_workgroups) (074-mcp-e2e-test)
-- TypeScript / React 19 + Astro 5.15, React 19, Bootstrap 5.3 (075-sort-empty-accounts)
-- N/A (no data model changes) (075-sort-empty-accounts)
-- Kotlin 2.3.0 / Java 25 (backend), TypeScript / React 19 (frontend) + Micronaut 4.10, Hibernate JPA, Astro 5.15, Bootstrap 5.3, Axios (078-release-rework)
-- MariaDB 11.4 (existing `releases` table, `requirement_snapshot` table) (078-release-rework)
-- Kotlin 2.3.0 / Java 25 (backend), TypeScript / React 19 (frontend), Bash (e2e test) + Micronaut 4.10, Hibernate JPA, Astro 5.15, Bootstrap 5.3 (079-reqadmin-release-role)
-- MariaDB 11.4 (no schema changes needed - authorization-only change) (079-reqadmin-release-role)
-- MariaDB 11.4 (existing `user_roles` table, no schema changes) (080-default-user-roles)
-- TypeScript (Playwright test files), Bash (runner script) + @playwright/test 1.57.0 (Astro-compatible version) (081-playwright-vuln-e2e)
-- N/A (no data persistence — test infrastructure only) (081-playwright-vuln-e2e)
-- Bash 5.x (wrapper), Node.js (script using Playwright API) + Playwright (from existing `tests/e2e/node_modules/`), 1Password CLI (`op`) (083-js-error-scanner)
-- N/A (no persistence) (083-js-error-scanner)
+- **Backend**: Kotlin 2.3.20 / Java 21, Micronaut 4.10, Hibernate JPA, PicoCLI 4.7.7, Jakarta Mail, Apache POI, AWS SDK v2
+- **Frontend**: Astro 6.0, React 19, TypeScript, Bootstrap 5.3, Axios
+- **Database**: MariaDB 12, HikariCP connection pool
+- **Build**: Gradle 9.4.0 (Kotlin DSL)
+- **Testing**: JUnit 6, Mockk, Testcontainers, AssertJ, Playwright
+- **CLI**: PicoCLI, CrowdStrike Falcon API, AWS SDK v2 (S3)
+- **MCP**: Streamable HTTP transport, JSON-RPC 2.0
 
 ## Recent Changes
 - 058-ai-norm-mapping: Added Kotlin 2.2.21 / Java 21 (backend), TypeScript/React 19 (frontend) + Micronaut 4.10, Hibernate JPA, Axios, Bootstrap 5.3

@@ -1,6 +1,6 @@
 # SecMan Testing Guide
 
-**Last Updated:** 2026-03-08
+**Last Updated:** 2026-03-24
 **Version:** 1.1
 
 Comprehensive guide for testing the SecMan security management platform.

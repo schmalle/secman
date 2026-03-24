@@ -1,6 +1,6 @@
 # Secman Architecture
 
-**Last Updated:** 2026-03-08
+**Last Updated:** 2026-03-24
 
 This document describes the system architecture, data model, and design patterns used in Secman.
 
@@ -59,18 +59,18 @@ Secman is a security requirement and risk assessment management tool consisting 
 
 | Layer        | Technology    | Version              |
 | ------------ | ------------- | -------------------- |
-| **Backend**  | Kotlin        | 2.3.10               |
+| **Backend**  | Kotlin        | 2.3.20               |
 |              | Java          | 21                   |
 |              | Micronaut     | 4.10                 |
 |              | Hibernate JPA | (via Micronaut Data) |
-| **Frontend** | Astro         | 5.18                 |
+| **Frontend** | Astro         | 6.0                  |
 |              | React         | 19                   |
 |              | Bootstrap     | 5.3                  |
 |              | Axios         | (HTTP client)        |
 | **Database** | MariaDB       | 12                   |
 | **CLI**      | Picocli       | 4.7.7                |
 |              | AWS SDK       | v2                   |
-| **Build**    | Gradle        | 9.3.1                |
+| **Build**    | Gradle        | 9.4.0                |
 
 ---
 
@@ -576,7 +576,10 @@ secman/
 │   ├── MCP.md                        # MCP integration
 │   ├── TESTING.md                    # Testing guide
 │   ├── CROWDSTRIKE_IMPORT.md         # CrowdStrike import
-│   └── TROUBLESHOOTING.md            # Troubleshooting guide
+│   ├── TROUBLESHOOTING.md            # Troubleshooting guide
+│   ├── E2E_EXCEPTION_WORKFLOW_TEST.md # Exception E2E test
+│   ├── S3_USER_MAPPING_IMPORT.md     # S3 import guide
+│   └── SKILLS_AND_AGENTS.md          # Skills & agents reference
 │
 ├── scripts/                          # Utility scripts
 ├── specs/                            # Feature specifications
