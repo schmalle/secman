@@ -5,11 +5,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="94ada8b3-9f4e-473c-9fea-3bc9651b5bdd" name="Changes" comment="test change">
-      <change beforePath="$PROJECT_DIR$/.claude/skills/e2e-runner/references/config-schema.md" beforeDir="false" afterPath="$PROJECT_DIR$/.claude/skills/e2e-runner/references/config-schema.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/e2e-runner.config.json" beforeDir="false" afterPath="$PROJECT_DIR$/e2e-runner.config.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/e2e-test.sh" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/e2e-test.sh" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/cli/build.gradle.kts" beforeDir="false" afterPath="$PROJECT_DIR$/src/cli/build.gradle.kts" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

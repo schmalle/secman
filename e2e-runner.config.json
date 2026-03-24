@@ -5,7 +5,7 @@
     "healthTimeout": 120
   },
   "frontend": {
-    "start": "npm run dev",
+    "start": "SECMAN_DOMAIN=http://localhost:8080 npm run dev",
     "healthUrl": "http://localhost:4321",
     "healthTimeout": 60,
     "cwd": "./frontend"
