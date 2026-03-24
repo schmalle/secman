@@ -15,8 +15,11 @@
 
 set -uo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
 BASE_URL="${BASE_URL:-http://localhost:4321}"
-API_URL="${API_URL:-http://localhost:9000}"
+API_URL="${API_URL:-http://localhost:8080}"
 
 PASS=0
 FAIL=0
@@ -90,11 +93,11 @@ assert_http "api-maintenance-banners" "${API_URL}/api/maintenance-banners/active
 assert_http "api-auth-requires-token" "${API_URL}/api/auth/status" "401"
 assert_http "api-assets-requires-token" "${API_URL}/api/assets" "401"
 
-# ── Summary ───────────────────────────────────────────────────
+# ── Phase 1 Summary ───────────────────────────────────────────
 
 echo ""
 echo "═══════════════════════════════════════════"
-echo " Results: ${PASS} passed, ${FAIL} failed"
+echo " Phase 1 (Smoke Tests): ${PASS} passed, ${FAIL} failed"
 echo "═══════════════════════════════════════════"
 
 if [ ${#ERRORS[@]} -gt 0 ]; then
@@ -103,7 +106,42 @@ if [ ${#ERRORS[@]} -gt 0 ]; then
   for ERR in "${ERRORS[@]}"; do
     echo "  ✗ ${ERR}"
   done
+  echo ""
+  echo "Skipping JS error scanner due to smoke test failures."
   exit 1
 fi
 
-exit 0
+# ── Phase 2: JS Error Scanner ────────────────────────────────
+
+echo ""
+echo "═══════════════════════════════════════════"
+echo " Phase 2: JS Error Scanner"
+echo "═══════════════════════════════════════════"
+echo ""
+
+SCANNER="${PROJECT_ROOT}/tests/js-error-scanner.sh"
+if [ ! -x "$SCANNER" ]; then
+  echo "FAIL: js-error-scanner — script not found or not executable at ${SCANNER}"
+  exit 1
+fi
+
+# Bridge env vars for the scanner.
+# SECMAN_BACKEND_URL points at the local frontend (Astro dev server) — the scanner
+# navigates through the frontend, not directly to the backend API.
+# Credentials (SECMAN_USERNAME/SECMAN_PASSWORD) are left for the scanner's own
+# 1Password resolution via op run.
+export SECMAN_BACKEND_URL="${SECMAN_BACKEND_URL:-${BASE_URL}}"
+export SECMAN_INSECURE="${SECMAN_INSECURE:-false}"
+
+# Run the scanner. Its structured output ([HTTP xxx], [UNCAUGHT EXCEPTION], etc.)
+# goes to stdout where the e2e-runner skill can parse it.
+if "$SCANNER"; then
+  echo ""
+  echo "PASS: js-error-scanner — all pages clean"
+  exit 0
+else
+  SCANNER_EXIT=$?
+  echo ""
+  echo "FAIL: js-error-scanner — found errors (exit code ${SCANNER_EXIT})"
+  exit 1
+fi

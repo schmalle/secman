@@ -55,6 +55,19 @@ uses sensible defaults for a Kotlin/Micronaut + Astro/React stack.
 }
 ```
 
+## E2E Environment Variables
+
+| Variable             | Default                 | Description                                                      |
+| -------------------- | ----------------------- | ---------------------------------------------------------------- |
+| `BASE_URL`           | `http://localhost:4321` | Frontend URL for smoke tests                                     |
+| `API_URL`            | `http://localhost:8080` | Backend URL for smoke tests                                      |
+| `SECMAN_BACKEND_URL` | Same as `BASE_URL`      | Target URL for JS error scanner (overrides 1Password default)    |
+| `SECMAN_INSECURE`    | `false`                 | Accept self-signed SSL certs (for non-localhost targets)          |
+
+**Note:** `SECMAN_USERNAME` and `SECMAN_PASSWORD` are resolved by 1Password
+inside `tests/js-error-scanner.sh` via `op run`. They do not need to be set
+in the config — the scanner handles credential injection automatically.
+
 ## Minimal Example
 
 If your project follows the standard layout, you only need:
@@ -72,7 +85,7 @@ If your backend needs secrets from 1Password:
 ```json
 {
   "backend": {
-    "start": "op run --env-file=.env.tpl -- gradle :backendng:clean :backendng:run"
+    "start": "op run --env-file=secman.env -- gradle :backendng:clean :backendng:run"
   }
 }
 ```

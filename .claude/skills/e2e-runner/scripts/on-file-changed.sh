@@ -2,7 +2,7 @@
 # on-file-changed.sh — PostToolUse hook that flags when a backend restart is needed.
 #
 # Called by Claude Code after every Edit/Write operation.
-# Writes a marker file if a Java/Scala/conf file was changed, so the
+# Writes a marker file if a Kotlin/Java/config file was changed, so the
 # e2e-runner skill knows the backend needs restarting before the next test run.
 #
 # Usage (configured in .claude/settings.json):
@@ -28,7 +28,7 @@ MARKER_DIR=".e2e-logs"
 mkdir -p "$MARKER_DIR"
 
 # Check if the changed file is a backend file
-if [[ "$FILE_PATH" =~ \.(java|scala|conf)$ ]] || [[ "$FILE_PATH" =~ build\.gradle ]]; then
+if [[ "$FILE_PATH" =~ \.(kt|java|scala|conf|yml|yaml)$ ]] || [[ "$FILE_PATH" =~ build\.gradle ]]; then
   echo "backend" >> "${MARKER_DIR}/restart-needed"
   echo "⚠️  Backend file changed: ${FILE_PATH} — restart needed before next test run" >&2
 fi

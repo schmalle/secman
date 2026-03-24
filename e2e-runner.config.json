@@ -1,6 +1,6 @@
 {
   "backend": {
-    "start": "op run --env-file=.env.tpl -- gradle :backendng:clean :backendng:run --no-daemon",
+    "start": "op run --env-file=secman.env -- gradle :backendng:clean :backendng:run --no-daemon",
     "healthUrl": "http://localhost:8080",
     "healthTimeout": 120
   },
@@ -16,7 +16,9 @@
     "retryDelay": 5,
     "env": {
       "BASE_URL": "http://localhost:4321",
-      "API_URL": "http://localhost:8080"
+      "API_URL": "http://localhost:8080",
+      "SECMAN_BACKEND_URL": "http://localhost:4321",
+      "SECMAN_INSECURE": "false"
     }
   }
 }

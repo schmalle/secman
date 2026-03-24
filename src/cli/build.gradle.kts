@@ -27,7 +27,7 @@ dependencies {
     // Jackson for YAML/JSON
     implementation("com.fasterxml.jackson.core:jackson-databind")
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml")
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.21.2")
     
     // CSV export
     implementation("org.apache.commons:commons-csv:1.14.1")

@@ -66,11 +66,28 @@ sensible defaults if the file is missing:
 Execute the E2E test script. Capture **both stdout and stderr** into
 `.e2e-logs/e2e-run-<N>.log` where N is the iteration number.
 
+The test script runs in **two phases**:
+
+1. **Phase 1 (Smoke Tests)** — fast curl-based checks that verify backend health,
+   frontend serving, and auth endpoints. Output format: `PASS: <name>` / `FAIL: <name> — <msg>`.
+   If any smoke test fails, Phase 2 is skipped automatically.
+
+2. **Phase 2 (JS Error Scanner)** — Playwright-based scan of all application pages.
+   Logs in, visits every static route, and captures JavaScript errors, console errors,
+   and HTTP errors. Output format: structured `[HTTP xxx]`, `[UNCAUGHT EXCEPTION]`,
+   `[CONSOLE ERROR]`, `[TIMEOUT]`, `[SESSION EXPIRED]` lines.
+
 Parse the output to identify:
 
 1. Which test(s) / pages failed
 2. The error message / stack trace
 3. The error **category** (see classification rules below)
+
+**If only smoke tests fail** (Phase 2 skipped), focus on getting services healthy —
+the backend may not be running or the frontend may not be serving.
+
+**Exit codes from the scanner**: exit 2 = fatal (can't reach host or login failed —
+don't retry, fix infrastructure), exit 1 = found page-level errors (fixable).
 
 ### Phase 2.5 — Error Classification
 
