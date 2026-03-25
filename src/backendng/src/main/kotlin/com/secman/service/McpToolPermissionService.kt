@@ -220,6 +220,10 @@ class McpToolPermissionService(
             "delete_asset" -> {
                 permissions.contains(McpPermission.ASSETS_READ)
             }
+            // Feature: MCP Asset Management Tools
+            "create_asset", "update_asset" -> {
+                permissions.contains(McpPermission.ASSETS_WRITE)
+            }
             else -> false
         }
     }

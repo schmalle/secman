@@ -71,6 +71,11 @@ enum class McpPermission {
     ASSETS_READ,
 
     /**
+     * Create and update assets - allows create_asset, update_asset tools
+     */
+    ASSETS_WRITE,
+
+    /**
      * Read scan data - allows get_scans, get_scan_results, search_products tools
      */
     SCANS_READ,
@@ -109,6 +114,7 @@ enum class McpPermission {
             TRANSLATION_USE -> "Use Translations"
             AUDIT_READ -> "Read Audit Logs"
             ASSETS_READ -> "Read Assets"
+            ASSETS_WRITE -> "Write Assets"
             SCANS_READ -> "Read Scans"
             VULNERABILITIES_READ -> "Read Vulnerabilities"
             WORKGROUPS_WRITE -> "Manage Workgroups"
@@ -134,6 +140,7 @@ enum class McpPermission {
             TRANSLATION_USE -> "Translate requirements to different languages"
             AUDIT_READ -> "View MCP server audit logs (admin only)"
             ASSETS_READ -> "View and search asset inventory"
+            ASSETS_WRITE -> "Create and update assets in the inventory"
             SCANS_READ -> "View scan data and results"
             VULNERABILITIES_READ -> "View vulnerability information"
             WORKGROUPS_WRITE -> "Create, delete, and manage workgroup memberships (admin only)"

@@ -47,6 +47,7 @@ const McpApiKeyManagement: React.FC = () => {
     'ASSESSMENTS_READ',
     'ASSESSMENTS_WRITE',
     'ASSETS_READ',
+    'ASSETS_WRITE',
     'VULNERABILITIES_READ',
     'SCANS_READ',
     'TAGS_READ',

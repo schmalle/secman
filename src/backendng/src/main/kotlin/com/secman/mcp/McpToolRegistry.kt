@@ -76,7 +76,10 @@ class McpToolRegistry(
     // Feature: AWS Account Sharing
     @Inject private val listAwsAccountSharingTool: ListAwsAccountSharingTool,
     @Inject private val createAwsAccountSharingTool: CreateAwsAccountSharingTool,
-    @Inject private val deleteAwsAccountSharingTool: DeleteAwsAccountSharingTool
+    @Inject private val deleteAwsAccountSharingTool: DeleteAwsAccountSharingTool,
+    // Feature: MCP Asset Management Tools
+    @Inject private val createAssetTool: CreateAssetTool,
+    @Inject private val updateAssetTool: UpdateAssetTool
 ) {
     private val logger = LoggerFactory.getLogger(McpToolRegistry::class.java)
 
@@ -149,7 +152,10 @@ class McpToolRegistry(
             // Feature: AWS Account Sharing
             listAwsAccountSharingTool,
             createAwsAccountSharingTool,
-            deleteAwsAccountSharingTool
+            deleteAwsAccountSharingTool,
+            // Feature: MCP Asset Management Tools
+            createAssetTool,
+            updateAssetTool
         ).forEach { tool ->
             toolMap[tool.name] = tool
             logger.debug("Registered MCP tool: {}", tool.name)
@@ -382,6 +388,11 @@ class McpToolRegistry(
             // Feature: AWS Account Sharing (ADMIN only via User Delegation)
             "list_aws_account_sharing", "create_aws_account_sharing", "delete_aws_account_sharing" -> {
                 permissions.contains(McpPermission.USER_ACTIVITY) // ADMIN role checked in tool execute()
+            }
+
+            // Feature: MCP Asset Management Tools
+            "create_asset", "update_asset" -> {
+                permissions.contains(McpPermission.ASSETS_WRITE)
             }
 
             else -> false

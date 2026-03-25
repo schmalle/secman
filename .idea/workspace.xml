@@ -5,7 +5,14 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="94ada8b3-9f4e-473c-9fea-3bc9651b5bdd" name="Changes" comment="test change">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/domain/McpPermission.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/domain/McpPermission.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/dto/AddVulnerabilityRequestDto.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/dto/AddVulnerabilityRequestDto.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/mcp/McpToolRegistry.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/mcp/McpToolRegistry.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/mcp/tools/AddVulnerabilityTool.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/mcp/tools/AddVulnerabilityTool.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/McpDelegationService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/McpDelegationService.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/McpToolPermissionService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/McpToolPermissionService.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/VulnerabilityService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/VulnerabilityService.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/src/components/McpApiKeyManagement.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/components/McpApiKeyManagement.tsx" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

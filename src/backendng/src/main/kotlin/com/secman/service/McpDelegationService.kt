@@ -85,6 +85,7 @@ class McpDelegationService {
         User.Role.USER to setOf(
             McpPermission.REQUIREMENTS_READ,
             McpPermission.ASSETS_READ,
+            McpPermission.ASSETS_WRITE,
             McpPermission.VULNERABILITIES_READ,
             McpPermission.TAGS_READ
         ),
@@ -92,7 +93,8 @@ class McpDelegationService {
         User.Role.VULN to setOf(
             McpPermission.VULNERABILITIES_READ,
             McpPermission.SCANS_READ,
-            McpPermission.ASSETS_READ
+            McpPermission.ASSETS_READ,
+            McpPermission.ASSETS_WRITE
         ),
         User.Role.RELEASE_MANAGER to setOf(
             McpPermission.REQUIREMENTS_READ,
@@ -113,6 +115,7 @@ class McpDelegationService {
             McpPermission.REQUIREMENTS_READ,
             McpPermission.ASSESSMENTS_READ,
             McpPermission.ASSETS_READ,
+            McpPermission.ASSETS_WRITE,
             McpPermission.VULNERABILITIES_READ,
             McpPermission.SCANS_READ
         )
