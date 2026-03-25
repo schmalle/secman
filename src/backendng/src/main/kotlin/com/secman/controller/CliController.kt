@@ -242,7 +242,8 @@ class CliController(
     data class SendUserVulnNotificationsRequest(
         val dryRun: Boolean = false,
         val verbose: Boolean = false,
-        val thresholdDays: Int = 30
+        val thresholdDays: Int = 30,
+        val notificationUser: String? = null
     )
 
     @Serdeable
@@ -277,7 +278,8 @@ class CliController(
             val result = userVulnerabilityNotificationService.sendUserVulnerabilityNotifications(
                 thresholdDays = request.thresholdDays,
                 dryRun = request.dryRun,
-                verbose = request.verbose
+                verbose = request.verbose,
+                notificationUser = request.notificationUser
             )
 
             HttpResponse.ok(UserVulnNotificationResultDto(

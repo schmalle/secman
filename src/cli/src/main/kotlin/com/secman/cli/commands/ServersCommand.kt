@@ -36,10 +36,30 @@ class ServersCommand {
 
     private val log = LoggerFactory.getLogger(ServersCommand::class.java)
     private val configLoader = ConfigLoader()
-    private val appContext = ApplicationContext.run()
-    private val apiClient: CrowdStrikeApiClient = appContext.getBean(CrowdStrikeApiClient::class.java)
-    private val storageService: VulnerabilityStorageService = appContext.getBean(VulnerabilityStorageService::class.java)
-    private val cliHttpClient: CliHttpClient = appContext.getBean(CliHttpClient::class.java)
+
+    /**
+     * Lazy ApplicationContext that injects the resolved backend URL as a Micronaut property.
+     * This ensures @Client-annotated HttpClients connect to the correct host (e.g. nginx on HTTPS)
+     * instead of defaulting to http://localhost:8080 which may bypass the reverse proxy.
+     */
+    private val appContext by lazy {
+        val resolvedUrl = backendUrl
+            ?: System.getenv("SECMAN_BACKEND_URL")
+            ?: System.getenv("SECMAN_HOST")?.let { host ->
+                if (host.startsWith("http://") || host.startsWith("https://")) host else "https://$host"
+            }
+
+        if (resolvedUrl != null) {
+            ApplicationContext.builder()
+                .properties(mapOf("secman.backend.base-url" to resolvedUrl))
+                .start()
+        } else {
+            ApplicationContext.run()
+        }
+    }
+    private val apiClient: CrowdStrikeApiClient by lazy { appContext.getBean(CrowdStrikeApiClient::class.java) }
+    private val storageService: VulnerabilityStorageService by lazy { appContext.getBean(VulnerabilityStorageService::class.java) }
+    private val cliHttpClient: CliHttpClient by lazy { appContext.getBean(CliHttpClient::class.java) }
 
     var hostnames: List<String>? = null
     var deviceType: String = "SERVER"
@@ -463,7 +483,7 @@ class ServersCommand {
             )
 
             cliHttpClient.postMap(
-                "$backendUrl/api/vulnerability-statistics/age-snapshot-from-data",
+                "/api/vulnerability-statistics/age-snapshot-from-data",
                 requestBody,
                 authToken
             )

@@ -27,7 +27,7 @@ class CliHttpClient(
      */
     fun authenticate(username: String, password: String, backendUrl: String): String? {
         try {
-            val endpoint = "$backendUrl/api/auth/login"
+            val endpoint = "/api/auth/login"
             val request = HttpRequest.POST(endpoint, mapOf(
                 "username" to username,
                 "password" to password

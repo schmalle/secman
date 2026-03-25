@@ -12,6 +12,7 @@ Import user mappings (domain and AWS account associations) directly from CSV or 
 The `import-s3` subcommand extends the existing `manage-user-mappings` CLI with S3 support. This enables automated, scheduled imports from centralized S3 buckets without requiring local file copies.
 
 Key capabilities:
+
 - Download and import user mapping files from any S3 bucket
 - Standard AWS credential chain (environment variables, profiles, IAM roles)
 - Dry-run mode for validation before committing changes
@@ -54,7 +55,7 @@ Build the CLI fat JAR:
 Verify the command is available:
 
 ```bash
-./bin/secman manage-user-mappings import-s3 --help
+./bin/secmanng manage-user-mappings import-s3 --help
 ```
 
 ### 3. Required Tools
@@ -68,13 +69,14 @@ Verify the command is available:
 
 ### Environment Variables
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `SECMAN_ADMIN_EMAIL` | Yes* | - | Admin email for audit logging (alternative: `--admin-user` flag) |
-| `AWS_ACCESS_KEY_ID` | Conditional | - | AWS access key (if not using profile/IAM role) |
-| `AWS_SECRET_ACCESS_KEY` | Conditional | - | AWS secret key (if not using profile/IAM role) |
-| `AWS_ENDPOINT_URL` | No | - | Custom S3 endpoint URL for local testing (e.g. `http://localhost:9090` for S3Mock) |
-| `AWS_REGION` | No | SDK default | Default AWS region (can be overridden with `--aws-region`) |
+
+| Variable                | Required    | Default     | Description                                                                       |
+| ----------------------- | ----------- | ----------- | --------------------------------------------------------------------------------- |
+| `SECMAN_ADMIN_EMAIL`    | Yes*        | -           | Admin email for audit logging (alternative:`--admin-user` flag)                   |
+| `AWS_ACCESS_KEY_ID`     | Conditional | -           | AWS access key (if not using profile/IAM role)                                    |
+| `AWS_SECRET_ACCESS_KEY` | Conditional | -           | AWS secret key (if not using profile/IAM role)                                    |
+| `AWS_ENDPOINT_URL`      | No          | -           | Custom S3 endpoint URL for local testing (e.g.`http://localhost:9090` for S3Mock) |
+| `AWS_REGION`            | No          | SDK default | Default AWS region (can be overridden with`--aws-region`)                         |
 
 *Either `SECMAN_ADMIN_EMAIL` env var or `--admin-user` flag is required.
 
@@ -96,14 +98,14 @@ Before importing, you can browse an S3 bucket to discover available files using 
 ### List All Objects
 
 ```bash
-./bin/secman manage-user-mappings list-bucket \
+./bin/secmanng manage-user-mappings list-bucket \
   --bucket my-company-mappings
 ```
 
 ### Filter by Prefix
 
 ```bash
-./bin/secman manage-user-mappings list-bucket \
+./bin/secmanng manage-user-mappings list-bucket \
   --bucket my-company-mappings \
   --prefix user-mappings/
 ```
@@ -111,7 +113,7 @@ Before importing, you can browse an S3 bucket to discover available files using 
 ### With AWS Profile and Region
 
 ```bash
-./bin/secman manage-user-mappings list-bucket \
+./bin/secmanng manage-user-mappings list-bucket \
   --bucket my-company-mappings \
   --prefix user-mappings/ \
   --aws-profile production \
@@ -140,14 +142,15 @@ Total: 3 object(s)
 
 ### list-bucket Options
 
-| Option | Short | Required | Default | Description |
-|--------|-------|----------|---------|-------------|
-| `--bucket` | `-b` | Yes | - | S3 bucket name |
-| `--prefix` | `-p` | No | - | Filter objects by key prefix |
-| `--aws-region` | - | No | SDK default | AWS region |
-| `--aws-profile` | - | No | default chain | AWS credential profile name |
-| `--endpoint-url` | - | No | `$AWS_ENDPOINT_URL` | Custom S3 endpoint URL for local testing |
-| `--admin-user` | `-u` | No* | `$SECMAN_ADMIN_EMAIL` | Admin email (inherited from parent) |
+
+| Option           | Short | Required | Default               | Description                              |
+| ---------------- | ----- | -------- | --------------------- | ---------------------------------------- |
+| `--bucket`       | `-b`  | Yes      | -                     | S3 bucket name                           |
+| `--prefix`       | `-p`  | No       | -                     | Filter objects by key prefix             |
+| `--aws-region`   | -     | No       | SDK default           | AWS region                               |
+| `--aws-profile`  | -     | No       | default chain         | AWS credential profile name              |
+| `--endpoint-url` | -     | No       | `$AWS_ENDPOINT_URL`   | Custom S3 endpoint URL for local testing |
+| `--admin-user`   | `-u`  | No*      | `$SECMAN_ADMIN_EMAIL` | Admin email (inherited from parent)      |
 
 ### Required IAM Permissions
 
@@ -168,7 +171,7 @@ The `list-bucket` command requires the `s3:ListBucket` permission on the target 
 ### Basic Import
 
 ```bash
-./bin/secman manage-user-mappings import-s3 \
+./bin/secmanng manage-user-mappings import-s3 \
   --bucket my-company-mappings \
   --key user-mappings/latest.csv
 ```
@@ -176,7 +179,7 @@ The `list-bucket` command requires the `s3:ListBucket` permission on the target 
 ### Dry-Run (Validation Only)
 
 ```bash
-./bin/secman manage-user-mappings import-s3 \
+./bin/secmanng manage-user-mappings import-s3 \
   --bucket my-company-mappings \
   --key user-mappings/latest.csv \
   --dry-run
@@ -185,7 +188,7 @@ The `list-bucket` command requires the `s3:ListBucket` permission on the target 
 ### With AWS Profile
 
 ```bash
-./bin/secman manage-user-mappings import-s3 \
+./bin/secmanng manage-user-mappings import-s3 \
   --bucket my-company-mappings \
   --key user-mappings/latest.csv \
   --aws-profile production
@@ -194,7 +197,7 @@ The `list-bucket` command requires the `s3:ListBucket` permission on the target 
 ### With Explicit Region
 
 ```bash
-./bin/secman manage-user-mappings import-s3 \
+./bin/secmanng manage-user-mappings import-s3 \
   --bucket my-company-mappings \
   --key user-mappings/latest.csv \
   --aws-region eu-west-1
@@ -203,7 +206,7 @@ The `list-bucket` command requires the `s3:ListBucket` permission on the target 
 ### JSON Format
 
 ```bash
-./bin/secman manage-user-mappings import-s3 \
+./bin/secmanng manage-user-mappings import-s3 \
   --bucket my-company-mappings \
   --key user-mappings/latest.json \
   --format JSON
@@ -223,16 +226,17 @@ The `list-bucket` command requires the `s3:ListBucket` permission on the target 
 
 ### Command-Line Options
 
-| Option | Short | Required | Default | Description |
-|--------|-------|----------|---------|-------------|
-| `--bucket` | `-b` | Yes | - | S3 bucket name |
-| `--key` | `-k` | Yes | - | S3 object key (path to file) |
-| `--aws-region` | - | No | SDK default | AWS region |
-| `--aws-profile` | - | No | default chain | AWS credential profile name |
-| `--format` | - | No | `AUTO` | File format: `CSV`, `JSON`, or `AUTO` |
-| `--dry-run` | - | No | `false` | Validate without creating mappings |
-| `--endpoint-url` | - | No | `$AWS_ENDPOINT_URL` | Custom S3 endpoint URL for local testing |
-| `--admin-user` | `-u` | No* | `$SECMAN_ADMIN_EMAIL` | Admin email for audit |
+
+| Option           | Short | Required | Default               | Description                              |
+| ---------------- | ----- | -------- | --------------------- | ---------------------------------------- |
+| `--bucket`       | `-b`  | Yes      | -                     | S3 bucket name                           |
+| `--key`          | `-k`  | Yes      | -                     | S3 object key (path to file)             |
+| `--aws-region`   | -     | No       | SDK default           | AWS region                               |
+| `--aws-profile`  | -     | No       | default chain         | AWS credential profile name              |
+| `--format`       | -     | No       | `AUTO`                | File format:`CSV`, `JSON`, or `AUTO`     |
+| `--dry-run`      | -     | No       | `false`               | Validate without creating mappings       |
+| `--endpoint-url` | -     | No       | `$AWS_ENDPOINT_URL`   | Custom S3 endpoint URL for local testing |
+| `--admin-user`   | `-u`  | No*      | `$SECMAN_ADMIN_EMAIL` | Admin email for audit                    |
 
 ---
 
@@ -296,14 +300,15 @@ DEBUG=1 ./tests/s3-user-mapping-import-e2e-test.sh
 
 ### Test Environment Variables
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `S3_TEST_BUCKET` | Yes | 1Password URI | S3 bucket for test files |
-| `S3_TEST_REGION` | Yes | 1Password URI | AWS region for test bucket |
-| `AWS_ACCESS_KEY_ID` | Yes | 1Password URI | AWS credentials |
-| `AWS_SECRET_ACCESS_KEY` | Yes | 1Password URI | AWS credentials |
-| `SECMAN_ADMIN_EMAIL` | Yes | 1Password URI | Admin email for CLI commands |
-| `SECMAN_BASE_URL` | No | `http://localhost:8080` | Backend URL |
+
+| Variable                | Required | Default                 | Description                  |
+| ----------------------- | -------- | ----------------------- | ---------------------------- |
+| `S3_TEST_BUCKET`        | Yes      | 1Password URI           | S3 bucket for test files     |
+| `S3_TEST_REGION`        | Yes      | 1Password URI           | AWS region for test bucket   |
+| `AWS_ACCESS_KEY_ID`     | Yes      | 1Password URI           | AWS credentials              |
+| `AWS_SECRET_ACCESS_KEY` | Yes      | 1Password URI           | AWS credentials              |
+| `SECMAN_ADMIN_EMAIL`    | Yes      | 1Password URI           | Admin email for CLI commands |
+| `SECMAN_BASE_URL`       | No       | `http://localhost:8080` | Backend URL                  |
 
 ### Expected Output
 
@@ -328,14 +333,15 @@ DEBUG=1 ./tests/s3-user-mapping-import-e2e-test.sh
 
 ### Test Flow
 
-| Step | Action | Verification |
-|------|--------|--------------|
-| 1 | Build CLI fat JAR | JAR file exists |
-| 2 | Upload test CSV to S3 | `aws s3 cp` succeeds |
-| 3 | Dry-run import | Exit code 0, validation messages present |
-| 4 | Actual import | Exit code 0, success messages present |
-| 5 | List mappings | Test domain and AWS account found |
-| 6 | Cleanup | Mappings deleted, S3 file removed |
+
+| Step | Action                | Verification                             |
+| ---- | --------------------- | ---------------------------------------- |
+| 1    | Build CLI fat JAR     | JAR file exists                          |
+| 2    | Upload test CSV to S3 | `aws s3 cp` succeeds                     |
+| 3    | Dry-run import        | Exit code 0, validation messages present |
+| 4    | Actual import         | Exit code 0, success messages present    |
+| 5    | List mappings         | Test domain and AWS account found        |
+| 6    | Cleanup               | Mappings deleted, S3 file removed        |
 
 ---
 
@@ -392,12 +398,13 @@ Split the file into multiple files with fewer records each. Import them sequenti
 
 ### Exit Codes
 
-| Code | Meaning | Action |
-|------|---------|--------|
-| 0 | Success | All mappings imported |
-| 1 | Partial success | Some mappings had errors, check output |
-| 2 | Fatal S3/config error | Fix credentials, bucket, or key |
-| 3 | Unexpected error | Check logs, enable debug logging |
+
+| Code | Meaning               | Action                                 |
+| ---- | --------------------- | -------------------------------------- |
+| 0    | Success               | All mappings imported                  |
+| 1    | Partial success       | Some mappings had errors, check output |
+| 2    | Fatal S3/config error | Fix credentials, bucket, or key        |
+| 3    | Unexpected error      | Check logs, enable debug logging       |
 
 ---
 
@@ -432,12 +439,12 @@ aws s3api put-object --bucket test --key mappings.csv --body ./test-mappings.csv
 
 ```bash
 # List bucket contents
-./bin/secman manage-user-mappings list-bucket \
+./bin/secmanng manage-user-mappings list-bucket \
   --bucket test \
   --endpoint-url http://localhost:9090
 
 # Dry-run import
-./bin/secman manage-user-mappings import-s3 \
+./bin/secmanng manage-user-mappings import-s3 \
   --bucket test \
   --key mappings.csv \
   --endpoint-url http://localhost:9090 \

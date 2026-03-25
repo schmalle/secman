@@ -15,11 +15,11 @@ micronaut:
 
 secman:
   backend:
-    base-url: http://localhost:8080
+    base-url: ${SECMAN_BACKEND_URL:http://localhost:8080}
   crowdstrike:
     batch-size: ${SECMAN_CROWDSTRIKE_BATCH_SIZE:25}
     max-parallel-batches: ${SECMAN_CROWDSTRIKE_MAX_PARALLEL_BATCHES:4}
-    max-vulnerabilities-per-batch: ${SECMAN_MAX_VULNS_PER_BATCH:50000}
+    max-vulnerabilities-per-batch: ${SECMAN_MAX_VULNS_PER_BATCH:5000}
 
 # Logging configuration
 logger:

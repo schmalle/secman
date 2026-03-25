@@ -4,11 +4,16 @@
 **Service**: `CrowdStrikeVulnerabilityImportService`
 **Location**: `src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeVulnerabilityImportService.kt`
 
-This document explains how the CrowdStrike vulnerability import system prevents duplicate entries and ensures data consistency.
+```
+SECMAN_BACKEND_URL=<URL> \                                                                                                                                                
+    SECMAN_SSL_INSECURE=true \                                                                                                                                                                    
+    ./bin/secmanng query servers --device-type SERVER --severity CRITICAL,HIGH \                                                                                                                  
+    --min-days-open 1 --save --last-seen-days 1  
 
----
+```
 
-## Duplicate Prevention Mechanism
+
+###Duplicate Prevention Mechanism
 
 The import service uses a **transactional replace pattern** to prevent duplicate vulnerability entries. This approach ensures that each (Asset, CVE) combination exists exactly once in the database.
 
@@ -42,20 +47,21 @@ open fun importVulnerabilitiesForServer(batch: CrowdStrikeVulnerabilityBatchDto)
 ### Key Guarantees
 
 1. **Idempotency**: Running the same import multiple times produces identical database state
+
    - Import at T1 → 5 vulnerabilities
    - Import at T2 (same data) → Still 5 vulnerabilities (not 10)
-
 2. **No Duplicates**: Each (Asset, CVE) combination exists exactly once
+
    - Asset A + CVE-2023-1234 → 1 record
    - Asset B + CVE-2023-1234 → 1 record (different asset, allowed)
    - Asset A + CVE-2023-1234 (imported again) → Still 1 record (replaced)
-
 3. **Atomicity**: Transaction ensures all-or-nothing behavior
+
    - If delete succeeds but insert fails → transaction rolls back
    - If any error occurs → database remains unchanged
    - Per-server isolation: Failure on server A doesn't affect server B
-
 4. **Remediation Tracking**: Missing CVEs indicate patched vulnerabilities
+
    - Initial import: CVE-2023-0001 through CVE-2023-0010 (10 vulnerabilities)
    - Later import: CVE-2023-0001 through CVE-2023-0007 (7 vulnerabilities)
    - Result: CVE-2023-0008, CVE-2023-0009, CVE-2023-0010 are removed (remediated)
@@ -68,31 +74,33 @@ The transactional replace pattern was chosen over alternative approaches for sev
 
 ### Comparison with Alternatives
 
-| Approach | Pros | Cons | Decision |
-|----------|------|------|----------|
-| **Transactional Replace** (chosen) | Simple logic, accurate remediation, bulk performance, clean state | Deletes then recreates records | ✅ **Selected** |
-| **Upsert (Update or Insert)** | Preserves record IDs | Complex merge logic, slower individual operations, hard to detect remediation | ❌ Not chosen |
-| **Soft Delete** | Keeps history | Database bloat, complex queries, stale data issues | ❌ Not chosen |
-| **Differential Sync** | Only changes what's needed | Very complex, error-prone, doesn't guarantee consistency | ❌ Not chosen |
+
+| Approach                           | Pros                                                              | Cons                                                                          | Decision       |
+| ---------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------- | -------------- |
+| **Transactional Replace** (chosen) | Simple logic, accurate remediation, bulk performance, clean state | Deletes then recreates records                                                | ✅**Selected** |
+| **Upsert (Update or Insert)**      | Preserves record IDs                                              | Complex merge logic, slower individual operations, hard to detect remediation | ❌ Not chosen  |
+| **Soft Delete**                    | Keeps history                                                     | Database bloat, complex queries, stale data issues                            | ❌ Not chosen  |
+| **Differential Sync**              | Only changes what's needed                                        | Very complex, error-prone, doesn't guarantee consistency                      | ❌ Not chosen  |
 
 ### Benefits of Transactional Replace
 
 1. **Simpler Logic**: No need to compare existing vs new records
+
    - No complex UPDATE/INSERT detection
    - No need to identify which records to keep vs delete
    - Straightforward: delete all, insert new
-
 2. **Accurate Remediation**: Missing CVEs clearly indicate fixed vulnerabilities
+
    - Import 1: CVE-A, CVE-B, CVE-C
    - Import 2: CVE-A, CVE-C
    - Result: CVE-B removed → vulnerability was patched
-
 3. **Better Performance**: Bulk operations are faster than individual upserts
+
    - Single `DELETE FROM vulnerabilities WHERE asset_id = ?`
    - Batch `INSERT INTO vulnerabilities VALUES (...)` for all new records
    - No need to SELECT existing records and compare
-
 4. **Cleaner State**: No orphaned or inconsistent records
+
    - Database always reflects latest CrowdStrike data
    - No partial updates leaving stale data
    - No need for cleanup jobs
@@ -116,6 +124,7 @@ var vulnerabilities: MutableList<Vulnerability> = mutableListOf()
 ```
 
 **What Happens:**
+
 1. Import service calls `vulnerabilityRepository.deleteByAssetId(asset.id)` → Deletes old vulnerabilities
 2. Import service calls `vulnerabilityRepository.saveAll(vulnerabilities)` → Inserts new vulnerabilities
 3. Transaction commits
@@ -134,6 +143,7 @@ var vulnerabilities: MutableList<Vulnerability> = mutableListOf()
 ```
 
 **Manual Cascade in Service Layer:**
+
 ```kotlin
 // CrowdStrikeVulnerabilityImportService.kt
 vulnerabilityRepository.deleteByAssetId(asset.id!!)  // Explicit delete
@@ -166,6 +176,7 @@ After the initial Feature 048 implementation, a critical bug was discovered wher
 Vulnerabilities that were 901 days old appeared with "OK" status (green badge) instead of "OVERDUE" status (red badge) when the configured threshold was 30 days.
 
 **Root Cause**:
+
 ```kotlin
 // ❌ BEFORE FIX - Lines 228-246
 val currentImportTime = LocalDateTime.now()
@@ -173,6 +184,7 @@ val scanTimestamp = currentImportTime  // Bug: Uses import time, not discovery d
 ```
 
 **Impact**:
+
 - Overdue calculation (`ChronoUnit.DAYS.between(scanTimestamp, now)`) calculated days since **last import**, not days since **vulnerability discovery**
 - If imports ran daily, all vulnerabilities appeared to be 0-1 days old
 - Threshold enforcement (30 days) was applied to wrong date range
@@ -196,6 +208,7 @@ val (scanTimestamp, daysOpenText) = if (usePatchPublicationDate && patchPublicat
 ```
 
 **Example**:
+
 - Current time: 2025-11-17
 - CrowdStrike reports `daysOpen = 901`
 - Discovery timestamp: 2025-11-17 - 901 days = **2023-04-16**
@@ -216,6 +229,7 @@ Existing vulnerabilities with incorrect timestamps must be migrated using the ad
 **Endpoint**: `POST /api/vulnerabilities/migrate-timestamps?dryRun=true`
 
 **Process**:
+
 1. Fetches all existing vulnerabilities
 2. Parses `daysOpen` field (e.g., "901 days" → 901)
 3. Calculates discovery timestamp: `currentTime - daysOpen`
@@ -223,6 +237,7 @@ Existing vulnerabilities with incorrect timestamps must be migrated using the ad
 5. Handles `patchPublicationDate` if available (Feature 041)
 
 **Usage**:
+
 ```bash
 # Dry run - see what would change without saving
 curl -X POST "https://secman.example.com/api/vulnerabilities/migrate-timestamps?dryRun=true" \
@@ -234,6 +249,7 @@ curl -X POST "https://secman.example.com/api/vulnerabilities/migrate-timestamps"
 ```
 
 **Response**:
+
 ```json
 {
   "totalProcessed": 113,
@@ -250,6 +266,7 @@ curl -X POST "https://secman.example.com/api/vulnerabilities/migrate-timestamps"
 After migration, verify overdue status calculations are correct:
 
 1. **Check database timestamps**:
+
    ```sql
    SELECT id, vulnerability_id, days_open, scan_timestamp,
           DATEDIFF(NOW(), scan_timestamp) as calculated_days
@@ -257,19 +274,18 @@ After migration, verify overdue status calculations are correct:
    ORDER BY scan_timestamp DESC
    LIMIT 10;
    ```
-
 2. **Verify UI displays**: Vulnerabilities > 30 days old should show red "OVERDUE" badge
-
 3. **Check threshold configuration**: Admin > Vulnerability Settings > Threshold should be 30 days
 
 #### Configuration Options
 
 The timestamp calculation respects the `VULN_USE_PATCH_PUBLICATION_DATE` environment variable (Feature 041):
 
-| Setting | Behavior | Use Case |
-|---------|----------|----------|
-| `false` (default) | Use `daysOpen` from CrowdStrike API | Standard vulnerability age tracking |
-| `true` | Use `patchPublicationDate` if available | Track age from patch availability, not vulnerability discovery |
+
+| Setting           | Behavior                               | Use Case                                                       |
+| ----------------- | -------------------------------------- | -------------------------------------------------------------- |
+| `false` (default) | Use`daysOpen` from CrowdStrike API     | Standard vulnerability age tracking                            |
+| `true`            | Use`patchPublicationDate` if available | Track age from patch availability, not vulnerability discovery |
 
 ---
 
@@ -456,30 +472,32 @@ println("Skipped: ${result.vulnerabilitiesSkipped}")
 
 For typical enterprise deployments:
 
-| Dataset Size | Expected Time | Bottleneck |
-|--------------|---------------|------------|
-| 10 servers, 50 vulnerabilities | < 5 seconds | Network I/O |
-| 100 servers, 500 vulnerabilities | < 30 seconds | Database writes |
-| 1000 servers, 5000 vulnerabilities | < 5 minutes | Database writes |
+
+| Dataset Size                       | Expected Time | Bottleneck      |
+| ---------------------------------- | ------------- | --------------- |
+| 10 servers, 50 vulnerabilities     | < 5 seconds   | Network I/O     |
+| 100 servers, 500 vulnerabilities   | < 30 seconds  | Database writes |
+| 1000 servers, 5000 vulnerabilities | < 5 minutes   | Database writes |
 
 ### Optimization Notes
 
 1. **Batch Processing**: Import operations are batched by server
+
    - Each server is a separate transaction
    - Failures isolated to individual servers
    - Parallel processing possible (different servers)
-
 2. **Bulk Operations**: Delete and insert use bulk SQL
+
    - `DELETE FROM vulnerabilities WHERE asset_id = ?`
    - `INSERT INTO vulnerabilities VALUES (...), (...), (...)`
    - More efficient than individual statements
-
 3. **Per-Server Transactions**: Transaction scope limited to single server
+
    - Smaller transaction = faster commit
    - Reduced lock contention
    - Better concurrency
-
 4. **Index Usage**: Database indexes on key columns
+
    - `asset_id` for delete operations
    - `(asset_id, vulnerability_id)` for uniqueness
 
@@ -494,6 +512,7 @@ Comprehensive integration tests verify duplicate prevention:
 **Test File**: `src/backendng/src/test/kotlin/com/secman/service/CrowdStrikeVulnerabilityImportServiceTest.kt`
 
 **Coverage**:
+
 - ✅ Idempotent imports (same data twice)
 - ✅ Initial import creates records
 - ✅ Remediation removes vulnerabilities
@@ -502,6 +521,7 @@ Comprehensive integration tests verify duplicate prevention:
 - ✅ Expansion (adding new vulnerabilities)
 
 **Run Tests**:
+
 ```bash
 ./gradlew test --tests "CrowdStrikeVulnerabilityImportServiceTest"
 ```
@@ -516,5 +536,6 @@ Comprehensive integration tests verify duplicate prevention:
 - [Troubleshooting](./TROUBLESHOOTING.md) - Common import issues
 
 **Internal References:**
+
 - Feature Spec: `/specs/048-prevent-duplicate-vulnerabilities/spec.md`
 - Service Code: `src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeVulnerabilityImportService.kt`

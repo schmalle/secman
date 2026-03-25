@@ -28,6 +28,9 @@ class SendNotificationUsersCommand : Runnable {
     @Option(names = ["--days"], description = ["Vulnerability age threshold in days (default: 30)"])
     var thresholdDays: Int = 30
 
+    @Option(names = ["--notification-user"], description = ["Only notify this specific user email (skip all others)"])
+    var notificationUser: String? = null
+
     @Option(names = ["--username"], description = ["Backend username (or set SECMAN_USERNAME env var)"])
     var username: String? = null
 
@@ -56,6 +59,9 @@ class SendNotificationUsersCommand : Runnable {
             }
 
             println("Vulnerability age threshold: $thresholdDays days")
+            if (notificationUser != null) {
+                println("Notification user filter: $notificationUser")
+            }
             println()
 
             val effectiveUrl = getEffectiveBackendUrl()
@@ -65,13 +71,18 @@ class SendNotificationUsersCommand : Runnable {
             val authToken = cliHttpClient.authenticate(effectiveUsername, effectivePassword, effectiveUrl)
                 ?: throw RuntimeException("Authentication failed. Check credentials.")
 
+            val requestBody = mutableMapOf<String, Any>(
+                "dryRun" to dryRun,
+                "verbose" to verbose,
+                "thresholdDays" to thresholdDays
+            )
+            if (notificationUser != null) {
+                requestBody["notificationUser"] = notificationUser!!
+            }
+
             val result = cliHttpClient.postMap(
                 "$effectiveUrl/api/cli/user-vulnerability-notifications/send",
-                mapOf(
-                    "dryRun" to dryRun,
-                    "verbose" to verbose,
-                    "thresholdDays" to thresholdDays
-                ),
+                requestBody,
                 authToken
             ) ?: throw RuntimeException("Failed to send user vulnerability notifications - no response from server")
 
