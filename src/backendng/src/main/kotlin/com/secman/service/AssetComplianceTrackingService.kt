@@ -122,6 +122,7 @@ open class AssetComplianceTrackingService(
     /**
      * Get paginated overview of latest compliance status per asset.
      */
+    @Transactional
     open fun getOverview(
         searchTerm: String?,
         statusFilter: String?,
@@ -131,20 +132,47 @@ open class AssetComplianceTrackingService(
         val effectiveSearch = searchTerm?.takeIf { it.isNotBlank() }
         val effectiveStatus = statusFilter?.takeIf { it.isNotBlank() }
 
-        val total = complianceHistoryRepository.countLatestStatusOverview(effectiveSearch, effectiveStatus)
-        val results = complianceHistoryRepository.findLatestStatusOverview(
-            effectiveSearch, effectiveStatus, size, page * size
+        // Use EntityManager directly — Micronaut Data @Query(nativeQuery=true) with List<Any>
+        // return type causes Hibernate 6 to return scalar Long values instead of Object[] rows.
+        val countQuery = entityManager.createNativeQuery(
+            """
+            SELECT COUNT(*) FROM asset_compliance_history h
+            INNER JOIN asset a ON h.asset_id = a.id
+            WHERE h.changed_at = (
+                SELECT MAX(h2.changed_at) FROM asset_compliance_history h2 WHERE h2.asset_id = h.asset_id
+            )
+            AND (:searchTerm IS NULL OR LOWER(a.name) LIKE LOWER(CONCAT('%', :searchTerm, '%')))
+            AND (:statusFilter IS NULL OR h.status = :statusFilter)
+            """.trimIndent()
         )
+        countQuery.setParameter("searchTerm", effectiveSearch)
+        countQuery.setParameter("statusFilter", effectiveStatus)
+        val total = (countQuery.singleResult as Number).toLong()
 
-        val content = results.mapNotNull { row ->
+        val dataQuery = entityManager.createNativeQuery(
+            """
+            SELECT h.id, h.asset_id, h.status, h.changed_at, h.overdue_count, h.oldest_vuln_days, h.source,
+                   a.name AS asset_name, a.cloud_instance_id, a.type AS asset_type
+            FROM asset_compliance_history h
+            INNER JOIN asset a ON h.asset_id = a.id
+            WHERE h.changed_at = (
+                SELECT MAX(h2.changed_at) FROM asset_compliance_history h2 WHERE h2.asset_id = h.asset_id
+            )
+            AND (:searchTerm IS NULL OR LOWER(a.name) LIKE LOWER(CONCAT('%', :searchTerm, '%')))
+            AND (:statusFilter IS NULL OR h.status = :statusFilter)
+            ORDER BY h.changed_at DESC
+            """.trimIndent()
+        )
+        dataQuery.setParameter("searchTerm", effectiveSearch)
+        dataQuery.setParameter("statusFilter", effectiveStatus)
+        dataQuery.setFirstResult(page * size)
+        dataQuery.setMaxResults(size)
+
+        @Suppress("UNCHECKED_CAST")
+        val results = dataQuery.resultList as List<Array<Any?>>
+
+        val content = results.mapNotNull { cols ->
             try {
-                val cols = when (row) {
-                    is Array<*> -> row
-                    else -> {
-                        log.warn("Unexpected row type in compliance overview: {}", row?.javaClass?.name)
-                        return@mapNotNull null
-                    }
-                }
                 AssetComplianceOverviewDto(
                     assetId = (cols[1] as Number).toLong(),
                     assetName = cols[7] as String,

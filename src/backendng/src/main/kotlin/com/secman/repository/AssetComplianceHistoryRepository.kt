@@ -7,7 +7,6 @@ import io.micronaut.data.annotation.Repository
 import io.micronaut.data.jpa.repository.JpaRepository
 import io.micronaut.data.model.Page
 import io.micronaut.data.model.Pageable
-import java.time.LocalDateTime
 
 /**
  * Repository for AssetComplianceHistory entity.
@@ -59,47 +58,4 @@ interface AssetComplianceHistoryRepository : JpaRepository<AssetComplianceHistor
     @Query("SELECT DISTINCT h.assetId FROM AssetComplianceHistory h")
     fun findDistinctAssetIds(): List<Long>
 
-    /**
-     * Paginated overview of latest compliance status per asset, joined with asset table.
-     * Returns raw results to be mapped in service layer.
-     */
-    @Query(
-        value = """
-            SELECT h.id, h.asset_id, h.status, h.changed_at, h.overdue_count, h.oldest_vuln_days, h.source,
-                   a.name AS asset_name, a.cloud_instance_id, a.type AS asset_type
-            FROM asset_compliance_history h
-            INNER JOIN asset a ON h.asset_id = a.id
-            WHERE h.changed_at = (
-                SELECT MAX(h2.changed_at) FROM asset_compliance_history h2 WHERE h2.asset_id = h.asset_id
-            )
-            AND (:searchTerm IS NULL OR LOWER(a.name) LIKE LOWER(CONCAT('%', :searchTerm, '%')))
-            AND (:statusFilter IS NULL OR h.status = :statusFilter)
-            ORDER BY h.changed_at DESC
-            LIMIT :pageSize OFFSET :pageOffset
-        """,
-        nativeQuery = true
-    )
-    fun findLatestStatusOverview(
-        searchTerm: String?,
-        statusFilter: String?,
-        pageSize: Int,
-        pageOffset: Int
-    ): List<Any>
-
-    /**
-     * Count for the paginated overview query.
-     */
-    @Query(
-        value = """
-            SELECT COUNT(*) FROM asset_compliance_history h
-            INNER JOIN asset a ON h.asset_id = a.id
-            WHERE h.changed_at = (
-                SELECT MAX(h2.changed_at) FROM asset_compliance_history h2 WHERE h2.asset_id = h.asset_id
-            )
-            AND (:searchTerm IS NULL OR LOWER(a.name) LIKE LOWER(CONCAT('%', :searchTerm, '%')))
-            AND (:statusFilter IS NULL OR h.status = :statusFilter)
-        """,
-        nativeQuery = true
-    )
-    fun countLatestStatusOverview(searchTerm: String?, statusFilter: String?): Long
 }
