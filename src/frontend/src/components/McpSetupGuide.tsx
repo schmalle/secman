@@ -42,23 +42,21 @@ const McpSetupGuide: React.FC = () => {
   const claudeDesktopConfig = `{
   "mcpServers": {
     "secman": {
-      "command": "node",
-      "args": ["/path/to/secman-mcp-client.js"],
-      "env": {
-        "SECMAN_API_URL": "http://localhost:8080/api/mcp",
-        "SECMAN_API_KEY": "${apiKey || 'your-api-key-here'}"
+      "url": "http://localhost:8080/mcp",
+      "headers": {
+        "X-MCP-API-Key": "${apiKey || 'sk-your-api-key-here'}",
+        "X-MCP-User-Email": "your.email@company.com"
       }
     }
   }
 }`;
 
   const genericMcpConfig = `{
-  "server_url": "http://localhost:8080/api/mcp",
-  "api_key": "${apiKey || 'your-api-key-here'}",
+  "server_url": "http://localhost:8080/mcp",
+  "api_key": "${apiKey || 'sk-your-api-key-here'}",
+  "user_email": "your.email@company.com",
   "capabilities": {
-    "tools": {},
-    "resources": {},
-    "prompts": {}
+    "tools": {}
   },
   "client_info": {
     "name": "Your AI Assistant",
@@ -68,35 +66,44 @@ const McpSetupGuide: React.FC = () => {
 
   const pythonExample = `import requests
 
-# Setup
-api_key = "${apiKey || 'your-api-key-here'}"
-base_url = "http://localhost:8080/api/mcp"
+# Setup — uses MCP Streamable HTTP Transport (JSON-RPC 2.0)
+api_key = "${apiKey || 'sk-your-api-key-here'}"
+user_email = "your.email@company.com"  # mandatory for data access
+base_url = "http://localhost:8080/mcp"
 
 headers = {
     "X-MCP-API-Key": api_key,
+    "X-MCP-User-Email": user_email,
     "Content-Type": "application/json"
 }
 
-# Test connection
-capabilities = requests.get(f"{base_url}/capabilities", headers=headers)
-print("Capabilities:", capabilities.json())
-
-# Create session
-session_response = requests.post(f"{base_url}/session",
-    headers=headers,
-    json={
-        "capabilities": {"tools": {}, "resources": {}, "prompts": {}},
-        "clientInfo": {"name": "Python Client", "version": "1.0.0"}
-    }
-)
-print("Session:", session_response.json())
-
-# Call a tool
-tool_response = requests.post(f"{base_url}/tools/call",
-    headers=headers,
+# Initialize handshake
+init_response = requests.post(base_url,
+    headers={"X-MCP-API-Key": api_key, "Content-Type": "application/json"},
     json={
         "jsonrpc": "2.0",
-        "id": "test-1",
+        "id": "init-1",
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {},
+            "clientInfo": {"name": "Python Client", "version": "1.0.0"}
+        }
+    }
+)
+print("Server info:", init_response.json())
+
+# List available tools
+tools_response = requests.post(base_url, headers=headers,
+    json={"jsonrpc": "2.0", "id": "list-1", "method": "tools/list"}
+)
+print("Tools:", tools_response.json())
+
+# Call a tool
+tool_response = requests.post(base_url, headers=headers,
+    json={
+        "jsonrpc": "2.0",
+        "id": "call-1",
         "method": "tools/call",
         "params": {
             "name": "get_requirements",
@@ -104,25 +111,30 @@ tool_response = requests.post(f"{base_url}/tools/call",
         }
     }
 )
-print("Tool result:", tool_response.json())`;
+print("Result:", tool_response.json())`;
 
-  const curlExample = `# Test authentication
-curl -H "X-MCP-API-Key: ${apiKey || 'your-api-key-here'}" \\
-  http://localhost:8080/api/mcp/capabilities
-
-# Create session
+  const curlExample = `# Initialize handshake (no X-MCP-User-Email needed)
 curl -X POST \\
-  -H "X-MCP-API-Key: ${apiKey || 'your-api-key-here'}" \\
+  -H "X-MCP-API-Key: ${apiKey || 'sk-your-api-key-here'}" \\
   -H "Content-Type: application/json" \\
-  -d '{"capabilities":{"tools":{},"resources":{},"prompts":{}},"clientInfo":{"name":"Test Client","version":"1.0.0"}}' \\
-  http://localhost:8080/api/mcp/session
+  -d '{"jsonrpc":"2.0","id":"1","method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"curl","version":"1.0"}}}' \\
+  http://localhost:8080/mcp
 
-# Call tool
+# List available tools (X-MCP-User-Email is mandatory)
 curl -X POST \\
-  -H "X-MCP-API-Key: ${apiKey || 'your-api-key-here'}" \\
+  -H "X-MCP-API-Key: ${apiKey || 'sk-your-api-key-here'}" \\
+  -H "X-MCP-User-Email: your.email@company.com" \\
   -H "Content-Type: application/json" \\
-  -d '{"jsonrpc":"2.0","id":"test","method":"tools/call","params":{"name":"get_requirements","arguments":{"limit":1}}}' \\
-  http://localhost:8080/api/mcp/tools/call`;
+  -d '{"jsonrpc":"2.0","id":"2","method":"tools/list"}' \\
+  http://localhost:8080/mcp
+
+# Call a tool
+curl -X POST \\
+  -H "X-MCP-API-Key: ${apiKey || 'sk-your-api-key-here'}" \\
+  -H "X-MCP-User-Email: your.email@company.com" \\
+  -H "Content-Type: application/json" \\
+  -d '{"jsonrpc":"2.0","id":"3","method":"tools/call","params":{"name":"get_requirements","arguments":{"limit":1}}}' \\
+  http://localhost:8080/mcp`;
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text).then(() => {
@@ -366,16 +378,10 @@ curl -X POST \\
                   </div>
                   <div className="card-body">
                     <p>Test the API directly:</p>
-                    <button
-                      className="btn btn-primary btn-sm mb-2"
-                      onClick={() => window.open('/api/mcp/capabilities', '_blank')}
-                    >
-                      Test Capabilities Endpoint
-                    </button>
-                    <br />
-                    <small className="text-muted">
-                      This will open the MCP capabilities endpoint. Add your API key as X-MCP-API-Key header.
-                    </small>
+                    <p>Use curl to test the MCP endpoint:</p>
+                    <code className="d-block bg-light p-2 rounded small">
+                      curl -X POST http://localhost:8080/mcp -H "Content-Type: application/json" -H "X-MCP-API-Key: YOUR_KEY" -H "X-MCP-User-Email: YOUR_EMAIL" -d '{`{"jsonrpc":"2.0","id":"1","method":"tools/list"}`}'
+                    </code>
                   </div>
                 </div>
               </div>

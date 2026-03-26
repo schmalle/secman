@@ -260,7 +260,6 @@ secman/
 │   ├── TROUBLESHOOTING.md  # Troubleshooting
 │   ├── S3_USER_MAPPING_IMPORT.md # S3 import guide
 │   └── SKILLS_AND_AGENTS.md # Skills & agents reference
-├── mcp/                    # MCP Node.js bridge
 ├── scripts/                # Utility scripts
 └── specs/                  # Feature specifications
 ```

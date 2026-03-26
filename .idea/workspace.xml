@@ -4,7 +4,16 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="94ada8b3-9f4e-473c-9fea-3bc9651b5bdd" name="Changes" comment="test change" />
+    <list default="true" id="94ada8b3-9f4e-473c-9fea-3bc9651b5bdd" name="Changes" comment="test change">
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/ARCHITECTURE.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/ARCHITECTURE.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/MCP.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/MCP.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/TROUBLESHOOTING.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/TROUBLESHOOTING.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/mcp/mcp-server.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/mcp/package.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/mcp/setup-mcp.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/src/components/McpSetupGuide.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/components/McpSetupGuide.tsx" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />

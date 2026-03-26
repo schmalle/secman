@@ -564,9 +564,6 @@ secman/
 │           ├── commands/             # Picocli commands (23 commands)
 │           └── service/              # CLI services
 │
-├── mcp/                              # MCP Node.js bridge
-│   └── mcp-server.js
-│
 ├── docs/                             # Documentation
 │   ├── README.md                     # Documentation index
 │   ├── ARCHITECTURE.md               # This file

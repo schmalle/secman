@@ -255,23 +255,6 @@ Test commands without making changes:
 - Localhost origins are always allowed
 - Configure allowed origins in `application.yml`
 
-### MCP Server Fails to Start (Node.js bridge)
-
-```bash
-# Check Node.js
-node -v  # Must be 18+
-
-# Install dependencies
-cd /path/to/secman
-npm install
-
-# Make executable
-chmod +x mcp/mcp-server.js
-
-# Test manually
-echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | node mcp/mcp-server.js
-```
-
 ### Claude Desktop Not Connecting
 
 1. Verify config file location:

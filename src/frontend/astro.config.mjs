@@ -48,6 +48,11 @@ export default defineConfig({
           changeOrigin: true,
           secure: false,
         },
+        "/mcp": {
+          target: allowedDomain,
+          changeOrigin: true,
+          secure: false,
+        },
       },
     },
   },

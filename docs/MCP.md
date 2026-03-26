@@ -13,8 +13,8 @@ This guide covers integrating Secman with AI assistants (Claude Desktop, Claude 
 2. [Quick Start](#quick-start)
 3. [Connection Methods](#connection-methods)
    - [Claude Code (Direct HTTP)](#claude-code-direct-http)
-   - [Claude Desktop with mcp-remote](#claude-desktop-with-mcp-remote)
-   - [Claude Desktop with Node.js Bridge](#claude-desktop-with-nodejs-bridge)
+   - [Claude Desktop (Direct HTTP)](#claude-desktop-direct-http)
+   - [Claude Desktop with mcp-remote (Fallback)](#claude-desktop-with-mcp-remote-fallback)
 4. [API Key Management](#api-key-management)
 5. [User Delegation](#user-delegation)
 6. [Available MCP Tools](#available-mcp-tools)
@@ -51,14 +51,14 @@ Secman supports multiple connection methods:
 │                         Connection Methods                               │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                                                                          │
-│  [Claude Code]  ──────HTTP────────────►  [Secman /mcp]                  │
-│                     (Direct)                                             │
+│  [Claude Code]    ──────HTTP────────────►  [Secman /mcp]                │
+│                       (Direct)                                           │
+│                                                                          │
+│  [Claude Desktop] ──────HTTP────────────►  [Secman /mcp]                │
+│                       (Direct, url config)                               │
 │                                                                          │
 │  [Claude Desktop] ──stdio──► [mcp-remote] ──HTTP──► [Secman /mcp]       │
-│                                 (Proxy)                                  │
-│                                                                          │
-│  [Claude Desktop] ──stdio──► [Node.js Bridge] ──HTTP──► [Secman /api]   │
-│                                 (Legacy)                                 │
+│                                 (Fallback)                               │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -66,8 +66,8 @@ Secman supports multiple connection methods:
 | Client | Method | Requires Node.js | Recommended |
 |--------|--------|------------------|-------------|
 | **Claude Code** | Direct HTTP | No | Yes |
-| **Claude Desktop** | Via `mcp-remote` proxy | Yes (npx) | Yes |
-| **Claude Desktop** | Node.js Bridge | Yes | Legacy |
+| **Claude Desktop** | Direct HTTP (`url` config) | No | Yes |
+| **Claude Desktop** | Via `mcp-remote` proxy | Yes (npx) | Fallback |
 
 ---
 
@@ -138,14 +138,34 @@ claude mcp add --transport http secman https://secman.yourcompany.com/mcp \
   --header "X-MCP-User-Email: your.email@company.com"
 ```
 
-### Claude Desktop with mcp-remote
+### Claude Desktop (Direct HTTP)
 
-Claude Desktop requires stdio-based servers. Use `mcp-remote` to proxy HTTP requests.
+Claude Desktop supports Streamable HTTP transport via the `url` configuration key — no middleware required.
 
 **Config file locations:**
 - **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
 - **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
 - **Linux**: `~/.config/Claude/claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "secman": {
+      "url": "http://localhost:8080/mcp",
+      "headers": {
+        "X-MCP-API-Key": "sk-your-api-key-here",
+        "X-MCP-User-Email": "your.email@company.com"
+      }
+    }
+  }
+}
+```
+
+Restart Claude Desktop after saving the config file.
+
+### Claude Desktop with mcp-remote (Fallback)
+
+If your Claude Desktop version doesn't support the `url` config, use `mcp-remote` as a stdio-to-HTTP proxy:
 
 ```json
 {
@@ -165,36 +185,6 @@ Claude Desktop requires stdio-based servers. Use `mcp-remote` to proxy HTTP requ
   }
 }
 ```
-
-### Claude Desktop with Node.js Bridge
-
-Uses the included Node.js MCP server (legacy method, full-featured):
-
-1. Install dependencies:
-   ```bash
-   cd /path/to/secman
-   npm install
-   chmod +x mcp/mcp-server.js
-   ```
-
-2. Configure Claude Desktop:
-   ```json
-   {
-     "mcpServers": {
-       "secman": {
-         "command": "node",
-         "args": ["/path/to/secman/mcp/mcp-server.js"],
-         "env": {
-           "SECMAN_BASE_URL": "http://localhost:8080",
-           "SECMAN_API_KEY": "sk-your-api-key-here",
-           "SECMAN_USER_EMAIL": "your.email@company.com"
-         }
-       }
-     }
-   }
-   ```
-
-3. Restart Claude Desktop.
 
 ### Testing the Connection
 
@@ -1109,12 +1099,6 @@ Ensure backup includes MCP-related tables:
 - Direct HTTP transport is designed for non-browser clients
 - Localhost origins are always allowed for development
 
-### "MCP Server fails to start" (Node.js bridge)
-- Ensure Node.js 18+ is installed
-- Run `npm install` in project directory
-- Verify paths in Claude Desktop config are absolute
-- Check `mcp-server.js` is executable
-
 ### Connection refused
 - Ensure the secman backend is running
 - Check firewall settings
@@ -1122,11 +1106,13 @@ Ensure backup includes MCP-related tables:
 
 ### Debug Commands
 
-**Test API key with delegation:**
+**Test MCP endpoint with delegation:**
 ```bash
-curl -H "X-MCP-API-Key: your-key" \
+curl -X POST http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -H "X-MCP-API-Key: your-key" \
   -H "X-MCP-User-Email: your.email@company.com" \
-  http://localhost:8080/api/mcp/capabilities
+  -d '{"jsonrpc":"2.0","id":"1","method":"tools/list"}'
 ```
 
 **Enable debug logging:**
