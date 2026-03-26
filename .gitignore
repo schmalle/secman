@@ -82,3 +82,4 @@ src/helper/.venv/
 .env
 .env.*
 !.env.example
+.e2e-logs/
