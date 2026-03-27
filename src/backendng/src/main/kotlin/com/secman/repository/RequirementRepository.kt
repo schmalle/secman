@@ -26,4 +26,29 @@ interface RequirementRepository : JpaRepository<Requirement, Long> {
     
     @Query("SELECT r FROM Requirement r JOIN r.norms n WHERE n.id = :normId")
     fun findByNormId(normId: Long): List<Requirement>
+
+    @Query("""SELECT r FROM Requirement r WHERE r.isCurrent = true AND (
+        LOWER(r.shortreq) LIKE LOWER(CONCAT('%', :query, '%'))
+        OR LOWER(COALESCE(r.details, '')) LIKE LOWER(CONCAT('%', :query, '%'))
+        OR LOWER(COALESCE(r.usecase, '')) LIKE LOWER(CONCAT('%', :query, '%'))
+        OR LOWER(COALESCE(r.example, '')) LIKE LOWER(CONCAT('%', :query, '%'))
+        OR LOWER(COALESCE(r.chapter, '')) LIKE LOWER(CONCAT('%', :query, '%'))
+        OR LOWER(COALESCE(r.norm, '')) LIKE LOWER(CONCAT('%', :query, '%'))
+    )""")
+    fun searchCurrentRequirements(query: String): List<Requirement>
+
+    @Query("""SELECT DISTINCT r FROM Requirement r JOIN r.usecases u
+        WHERE r.isCurrent = true AND LOWER(u.name) = LOWER(:usecaseName)""")
+    fun findCurrentByUsecaseName(usecaseName: String): List<Requirement>
+
+    @Query("""SELECT DISTINCT r FROM Requirement r JOIN r.norms n
+        WHERE r.isCurrent = true AND LOWER(n.name) = LOWER(:normName)""")
+    fun findCurrentByNormName(normName: String): List<Requirement>
+
+    @Query("""SELECT DISTINCT r FROM Requirement r LEFT JOIN r.usecases u
+        WHERE r.isCurrent = true AND (
+            LOWER(u.name) = LOWER(:usecaseName)
+            OR LOWER(COALESCE(r.usecase, '')) LIKE LOWER(CONCAT('%', :usecaseName, '%'))
+        )""")
+    fun findCurrentByUsecaseNameOrTextField(usecaseName: String): List<Requirement>
 }

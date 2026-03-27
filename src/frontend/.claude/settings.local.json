@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "mcp__plugin_context7_context7__resolve-library-id",
-      "mcp__plugin_context7_context7__query-docs"
+      "mcp__plugin_context7_context7__query-docs",
+      "mcp__secman__get_requirements",
+      "Bash(jq \"[.[] | select\\(.shortRequirement != null and \\(.shortRequirement | test\\(\"\"\\(?i\\)saas\"\"\\)\\)\\)]\")",
+      "Bash(./gradlew build:*)"
     ]
   }
 }

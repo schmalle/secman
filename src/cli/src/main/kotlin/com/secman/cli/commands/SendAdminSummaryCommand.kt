@@ -6,13 +6,13 @@ import jakarta.inject.Inject
 import jakarta.inject.Singleton
 
 /**
- * CLI command to send admin summary email to all ADMIN users via backend HTTP API.
+ * CLI command to send admin summary email to all ADMIN/REPORT users via backend HTTP API.
  * Feature: 070-admin-summary-email
  */
 @Singleton
 @Command(
     name = "send-admin-summary",
-    description = ["Send system statistics summary email to all ADMIN users"],
+    description = ["Send system statistics summary email to all ADMIN/REPORT users"],
     mixinStandardHelpOptions = true
 )
 class SendAdminSummaryCommand : Runnable {
@@ -120,10 +120,10 @@ class SendAdminSummaryCommand : Runnable {
             val failedRecipients = (sendResult["failedRecipients"] as? List<String>) ?: emptyList()
 
             if (dryRun) {
-                println("Would send to $recipientCount ADMIN users:")
+                println("Would send to $recipientCount ADMIN/REPORT users:")
                 recipients.forEach { email -> println("   - $email") }
             } else {
-                println("Sending to $recipientCount ADMIN users...")
+                println("Sending to $recipientCount ADMIN/REPORT users...")
                 if (verbose) {
                     recipients.forEach { email -> println("   SUCCESS $email") }
                     failedRecipients.forEach { email -> println("   FAILED $email") }
@@ -153,7 +153,7 @@ class SendAdminSummaryCommand : Runnable {
                 "FAILURE" -> {
                     println("Admin summary email failed")
                     if (recipientCount == 0) {
-                        println("No ADMIN users with valid email found")
+                        println("No ADMIN/REPORT users with valid email found")
                     }
                 }
             }

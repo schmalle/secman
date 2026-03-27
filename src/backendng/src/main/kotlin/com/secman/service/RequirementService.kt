@@ -24,11 +24,8 @@ open class RequirementService(
     }
 
     fun searchRequirements(query: String, limit: Int? = null): List<Requirement> {
-        val titleMatches = requirementRepository.findByShortreqContainingIgnoreCase(query)
-        val descriptionMatches = requirementRepository.findByDetailsContainingIgnoreCase(query)
-
-        val combined = (titleMatches + descriptionMatches).distinctBy { it.id }
-        return if (limit != null) combined.take(limit) else combined
+        val results = requirementRepository.searchCurrentRequirements(query)
+        return if (limit != null) results.take(limit) else results
     }
 
     fun getRequirementsByLanguage(language: String, limit: Int? = null): List<Requirement> {
@@ -89,6 +86,53 @@ open class RequirementService(
 
     fun getRequirementsByNormId(normId: Long): List<Requirement> {
         return requirementRepository.findByNormId(normId)
+    }
+
+    /**
+     * Combined filter method for MCP: filters by usecase (entity name + free-text field),
+     * norm (entity name + free-text field), chapter, and full-text search.
+     * All filters are ANDed together. Each individual filter matches broadly
+     * (UseCase entity name OR free-text usecase field).
+     */
+    fun filterRequirements(
+        search: String? = null,
+        usecase: String? = null,
+        norm: String? = null,
+        chapter: String? = null,
+        limit: Int? = null,
+        offset: Int = 0
+    ): Pair<List<Requirement>, Int> {
+        // Start with the most selective filter to minimize in-memory work
+        var results: List<Requirement> = when {
+            !search.isNullOrBlank() -> requirementRepository.searchCurrentRequirements(search)
+            !usecase.isNullOrBlank() -> requirementRepository.findCurrentByUsecaseNameOrTextField(usecase)
+            !norm.isNullOrBlank() -> requirementRepository.findCurrentByNormName(norm)
+            else -> requirementRepository.findCurrentRequirements()
+        }
+
+        // Apply remaining filters in memory (already narrowed by SQL above)
+        if (!usecase.isNullOrBlank() && !search.isNullOrBlank()) {
+            // usecase wasn't the primary query, apply it as secondary filter
+            results = results.filter { req ->
+                req.usecases.any { it.name.equals(usecase, ignoreCase = true) } ||
+                    req.usecase?.contains(usecase, ignoreCase = true) == true
+            }
+        }
+        if (!norm.isNullOrBlank() && (!search.isNullOrBlank() || !usecase.isNullOrBlank())) {
+            results = results.filter { req ->
+                req.norms.any { it.name.equals(norm, ignoreCase = true) } ||
+                    req.norm?.contains(norm, ignoreCase = true) == true
+            }
+        }
+        if (!chapter.isNullOrBlank()) {
+            results = results.filter {
+                it.chapter?.contains(chapter, ignoreCase = true) == true
+            }
+        }
+
+        val total = results.size
+        val paged = results.drop(offset).let { if (limit != null) it.take(limit) else it }
+        return Pair(paged, total)
     }
 
     /**

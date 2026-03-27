@@ -209,7 +209,7 @@ class CliController(
     /**
      * POST /api/cli/admin-summary/send
      *
-     * Sends admin summary email to all ADMIN users.
+     * Sends admin summary email to all ADMIN/REPORT users.
      */
     @Post("/admin-summary/send")
     @Produces(MediaType.APPLICATION_JSON)

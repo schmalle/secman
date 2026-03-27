@@ -139,14 +139,18 @@ class AdminSummaryService(
     }
 
     /**
-     * Get all ADMIN users with valid email addresses
+     * Get all users with ADMIN or REPORT role with valid email addresses.
+     * Users with both roles are deduplicated.
      */
     fun getAdminRecipients(): List<User> {
         val adminUsers = userRepository.findByRolesContaining(User.Role.ADMIN)
+        val reportUsers = userRepository.findByRolesContaining(User.Role.REPORT)
+        val recipients = (adminUsers + reportUsers)
+            .distinctBy { it.id }
             .filter { it.email.isNotBlank() }
 
-        logger.debug("Found {} ADMIN users with valid email", adminUsers.size)
-        return adminUsers
+        logger.debug("Found {} ADMIN/REPORT users with valid email", recipients.size)
+        return recipients
     }
 
     /**
@@ -161,7 +165,7 @@ class AdminSummaryService(
         val recipients = getAdminRecipients()
 
         if (recipients.isEmpty()) {
-            logger.warn("No ADMIN users with valid email found")
+            logger.warn("No ADMIN/REPORT users with valid email found")
             val result = AdminSummaryResult(
                 recipientCount = 0,
                 emailsSent = 0,

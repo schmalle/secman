@@ -11,7 +11,7 @@ import jakarta.inject.Singleton
  *
  * ADMIN role is required via User Delegation.
  * Delegates to AdminSummaryService.sendSummaryEmail() which gathers system statistics,
- * renders email templates, and sends to all ADMIN users.
+ * renders email templates, and sends to all ADMIN and REPORT users.
  *
  * Input parameters:
  * - dryRun (optional): If true, returns planned recipients without sending emails (default: false)
@@ -31,7 +31,7 @@ class SendAdminSummaryTool(
 ) : McpTool {
 
     override val name = "send_admin_summary"
-    override val description = "Send admin summary email with system statistics to all ADMIN users (ADMIN only, requires User Delegation)"
+    override val description = "Send admin summary email with system statistics to all ADMIN/REPORT users (ADMIN only, requires User Delegation)"
     override val operation = McpOperation.WRITE
 
     override val inputSchema = mapOf(
