@@ -27,10 +27,10 @@ class SendNotificationsCommand : Runnable {
     @Option(names = ["--outdated-only"], description = ["Process only outdated asset reminders (skip new vulnerability notifications)"])
     var outdatedOnly: Boolean = false
 
-    @Option(names = ["--username"], description = ["Backend username (or set SECMAN_USERNAME env var)"])
+    @Option(names = ["--username"], description = ["Backend username (or set SECMAN_ADMIN_NAME env var)"])
     var username: String? = null
 
-    @Option(names = ["--password"], description = ["Backend password (or set SECMAN_PASSWORD env var)"])
+    @Option(names = ["--password"], description = ["Backend password (or set SECMAN_ADMIN_PASS env var)"])
     var password: String? = null
 
     @Option(names = ["--backend-url"], description = ["Backend API URL (or set SECMAN_BACKEND_URL env var)"])
@@ -116,13 +116,13 @@ class SendNotificationsCommand : Runnable {
     }
 
     private fun getEffectiveUsername(): String {
-        return username ?: System.getenv("SECMAN_USERNAME")
-            ?: throw IllegalArgumentException("Backend username required. Use --username flag or set SECMAN_USERNAME environment variable")
+        return username ?: System.getenv("SECMAN_ADMIN_NAME")
+            ?: throw IllegalArgumentException("Backend username required. Use --username flag or set SECMAN_ADMIN_NAME environment variable")
     }
 
     private fun getEffectivePassword(): String {
-        return password ?: System.getenv("SECMAN_PASSWORD")
-            ?: throw IllegalArgumentException("Backend password required. Use --password flag or set SECMAN_PASSWORD environment variable")
+        return password ?: System.getenv("SECMAN_ADMIN_PASS")
+            ?: throw IllegalArgumentException("Backend password required. Use --password flag or set SECMAN_ADMIN_PASS environment variable")
     }
 
     private fun getEffectiveBackendUrl(): String {

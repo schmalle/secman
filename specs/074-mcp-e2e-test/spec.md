@@ -61,7 +61,7 @@ The test script uses 1Password CLI to securely retrieve credentials rather than 
 
 **Acceptance Scenarios**:
 
-1. **Given** environment variables `SECMAN_USERNAME`, `SECMAN_PASSWORD`, `SECMAN_API_KEY` set with 1Password URIs (e.g., `op://test/secman/SECMAN_USERNAME`), **When** the test script starts, **Then** credentials are resolved using `op run` or `op read`
+1. **Given** environment variables `SECMAN_ADMIN_NAME`, `SECMAN_ADMIN_PASS`, `SECMAN_API_KEY` set with 1Password URIs (e.g., `op://test/secman/SECMAN_ADMIN_NAME`), **When** the test script starts, **Then** credentials are resolved using `op run` or `op read`
 2. **Given** 1Password credentials are resolved, **When** authenticating to secman, **Then** authentication succeeds and a session token is obtained
 3. **Given** 1Password is not available or credentials are missing, **When** the test script starts, **Then** a clear error message is shown explaining the missing prerequisites
 

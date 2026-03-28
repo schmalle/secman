@@ -24,8 +24,8 @@ import jakarta.inject.Singleton
  * Authentication:
  *   All operations require ADMIN role and backend credentials.
  *   Specify via CLI flags or environment variables:
- *   - --username / SECMAN_USERNAME
- *   - --password / SECMAN_PASSWORD
+ *   - --username / SECMAN_ADMIN_NAME
+ *   - --password / SECMAN_ADMIN_PASS
  *   - --backend-url / SECMAN_HOST / SECMAN_BACKEND_URL
  */
 @Singleton
@@ -54,14 +54,14 @@ class ManageUserMappingsCommand : Runnable {
 
     @Option(
         names = ["--username"],
-        description = ["Backend username (or set SECMAN_USERNAME env var)"],
+        description = ["Backend username (or set SECMAN_ADMIN_NAME env var)"],
         scope = ScopeType.INHERIT
     )
     var username: String? = null
 
     @Option(
         names = ["--password"],
-        description = ["Backend password (or set SECMAN_PASSWORD env var)"],
+        description = ["Backend password (or set SECMAN_ADMIN_PASS env var)"],
         scope = ScopeType.INHERIT
     )
     var password: String? = null
@@ -94,17 +94,17 @@ class ManageUserMappingsCommand : Runnable {
 
     fun getEffectiveUsername(): String {
         return username
-            ?: System.getenv("SECMAN_USERNAME")
+            ?: System.getenv("SECMAN_ADMIN_NAME")
             ?: throw IllegalArgumentException(
-                "Backend username required. Use --username flag or set SECMAN_USERNAME environment variable"
+                "Backend username required. Use --username flag or set SECMAN_ADMIN_NAME environment variable"
             )
     }
 
     fun getEffectivePassword(): String {
         return password
-            ?: System.getenv("SECMAN_PASSWORD")
+            ?: System.getenv("SECMAN_ADMIN_PASS")
             ?: throw IllegalArgumentException(
-                "Backend password required. Use --password flag or set SECMAN_PASSWORD environment variable"
+                "Backend password required. Use --password flag or set SECMAN_ADMIN_PASS environment variable"
             )
     }
 

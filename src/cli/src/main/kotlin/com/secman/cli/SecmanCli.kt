@@ -674,8 +674,8 @@ class SecmanCli {
 
                 Options:
                   --backend-url <url>      Backend API URL (default: http://localhost:8080)
-                  --username <user>        Backend username with ADMIN role (or SECMAN_USERNAME env var)
-                  --password <pass>        Backend password (or SECMAN_PASSWORD env var)
+                  --username <user>        Backend username with ADMIN role (or SECMAN_ADMIN_NAME env var)
+                  --password <pass>        Backend password (or SECMAN_ADMIN_PASS env var)
                   --verbose, -v            Show per-asset deduplication details
 
                 Examples:
@@ -693,13 +693,13 @@ class SecmanCli {
                   --format <xlsx|docx>     Export format: xlsx (Excel) or docx (Word) (required)
                   --output <path>          Output file path (default: requirements_export_YYYYMMDD.{format})
                   --backend-url <url>      Backend API URL (default: http://localhost:8080)
-                  --username <user>        Backend username (or SECMAN_USERNAME env var)
-                  --password <pass>        Backend password (or SECMAN_PASSWORD env var)
+                  --username <user>        Backend username (or SECMAN_ADMIN_NAME env var)
+                  --password <pass>        Backend password (or SECMAN_ADMIN_PASS env var)
                   --verbose                Enable verbose output
 
                 Examples:
-                  export SECMAN_USERNAME=admin
-                  export SECMAN_PASSWORD=secret
+                  export SECMAN_ADMIN_NAME=admin
+                  export SECMAN_ADMIN_PASS=secret
                   secman export-requirements --format xlsx
                   secman export-requirements --format docx --output security_requirements.docx
                   secman export-requirements --format xlsx --output /path/to/export.xlsx --verbose
@@ -720,8 +720,8 @@ class SecmanCli {
                   --norm <name>            Regulatory norm reference (e.g., ISO 27001)
                   --usecase <name>         Use case description
                   --backend-url <url>      Backend API URL (default: http://localhost:8080)
-                  --username <user>        Backend username (or SECMAN_USERNAME env var)
-                  --password <pass>        Backend password (or SECMAN_PASSWORD env var)
+                  --username <user>        Backend username (or SECMAN_ADMIN_NAME env var)
+                  --password <pass>        Backend password (or SECMAN_ADMIN_PASS env var)
                   --verbose                Enable verbose output
 
                 Examples:
@@ -741,8 +741,8 @@ class SecmanCli {
                 Options:
                   --confirm                Required safety flag to confirm deletion (required)
                   --backend-url <url>      Backend API URL (default: http://localhost:8080)
-                  --username <user>        Backend username with ADMIN role (or SECMAN_USERNAME env var)
-                  --password <pass>        Backend password (or SECMAN_PASSWORD env var)
+                  --username <user>        Backend username with ADMIN role (or SECMAN_ADMIN_NAME env var)
+                  --password <pass>        Backend password (or SECMAN_ADMIN_PASS env var)
                   --verbose                Enable verbose output
 
                 Examples:
@@ -755,8 +755,8 @@ class SecmanCli {
                 secman environment variables reference
 
                 Backend Authentication:
-                  SECMAN_USERNAME          Backend username for authentication
-                  SECMAN_PASSWORD          Backend password (recommended over --password flag)
+                  SECMAN_ADMIN_NAME          Backend username for authentication
+                  SECMAN_ADMIN_PASS          Backend password (recommended over --password flag)
 
                 Admin Operations:
                   SECMAN_ADMIN_EMAIL       Admin email for user mapping and S3 import operations

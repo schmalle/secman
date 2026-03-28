@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 // --- Environment variable validation ---
 const requiredEnvVars = [
-  'SECMAN_ADMIN_USER',
+  'SECMAN_ADMIN_NAME',
   'SECMAN_ADMIN_PASS',
   'SECMAN_USER_USER',
   'SECMAN_USER_PASS',
@@ -16,7 +16,7 @@ if (missing.length > 0) {
   );
 }
 
-const ADMIN_USER = process.env.SECMAN_ADMIN_USER!;
+const ADMIN_USER = process.env.SECMAN_ADMIN_NAME!;
 const ADMIN_PASS = process.env.SECMAN_ADMIN_PASS!;
 const NORMAL_USER = process.env.SECMAN_USER_USER!;
 const NORMAL_PASS = process.env.SECMAN_USER_PASS!;

@@ -22,8 +22,8 @@ op vault list
 ### Environment Variables
 Set these in your shell profile or before running the test:
 ```bash
-export SECMAN_USERNAME="op://test/secman/SECMAN_USERNAME"
-export SECMAN_PASSWORD="op://test/secman/SECMAN_PASSWORD"
+export SECMAN_ADMIN_NAME="op://test/secman/SECMAN_ADMIN_NAME"
+export SECMAN_ADMIN_PASS="op://test/secman/SECMAN_ADMIN_PASS"
 export SECMAN_API_KEY="op://test/secman/SECMAN_API_KEY"
 ```
 
@@ -73,8 +73,8 @@ DEBUG=1 ./tests/mcp-e2e-workgroup-test.sh
 ### Step 1: Authenticate
 ```bash
 # Resolve credentials
-USERNAME=$(op read "op://test/secman/SECMAN_USERNAME")
-PASSWORD=$(op read "op://test/secman/SECMAN_PASSWORD")
+USERNAME=$(op read "op://test/secman/SECMAN_ADMIN_NAME")
+PASSWORD=$(op read "op://test/secman/SECMAN_ADMIN_PASS")
 
 # Get JWT token
 TOKEN=$(curl -s -X POST http://localhost:8080/api/auth/login \

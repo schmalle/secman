@@ -97,8 +97,8 @@ export CROWDSTRIKE_BASE_URL=https://api.crowdstrike.com
 
 **Backend authentication (for --save):**
 ```bash
-export SECMAN_USERNAME=adminuser
-export SECMAN_PASSWORD=your-password
+export SECMAN_ADMIN_NAME=adminuser
+export SECMAN_ADMIN_PASS=your-password
 export SECMAN_BACKEND_URL=https://api.yourdomain.com
 ```
 
@@ -115,8 +115,8 @@ baseUrl: https://api.crowdstrike.com
 ```bash
 CROWDSTRIKE_CLIENT_ID=your-client-id
 CROWDSTRIKE_CLIENT_SECRET=your-client-secret
-SECMAN_USERNAME=adminuser
-SECMAN_PASSWORD=your-password
+SECMAN_ADMIN_NAME=adminuser
+SECMAN_ADMIN_PASS=your-password
 ```
 
 Secure credentials file:
@@ -518,8 +518,8 @@ main() {
         --severity "${SEVERITY}" \
         --min-days-open "${MIN_DAYS_OPEN}" \
         --save \
-        --username "${SECMAN_USERNAME}" \
-        --password "${SECMAN_PASSWORD}" \
+        --username "${SECMAN_ADMIN_NAME}" \
+        --password "${SECMAN_ADMIN_PASS}" \
         2>&1 | tee -a "${LOG_FILE}"
 
     log "===== Secman CLI Cron Job Completed ====="
@@ -607,8 +607,8 @@ SECRETS=$(aws secretsmanager get-secret-value \
 
 export CROWDSTRIKE_CLIENT_ID=$(echo $SECRETS | jq -r .client_id)
 export CROWDSTRIKE_CLIENT_SECRET=$(echo $SECRETS | jq -r .client_secret)
-export SECMAN_USERNAME=$(echo $SECRETS | jq -r .username)
-export SECMAN_PASSWORD=$(echo $SECRETS | jq -r .password)
+export SECMAN_ADMIN_NAME=$(echo $SECRETS | jq -r .username)
+export SECMAN_ADMIN_PASS=$(echo $SECRETS | jq -r .password)
 
 java -jar /opt/secman/bin/secman-cli.jar "$@"
 ```

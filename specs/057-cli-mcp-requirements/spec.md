@@ -172,7 +172,7 @@ An AI assistant with admin privileges needs to clear all requirements as part of
 
 **Authentication & Authorization:**
 
-- **FR-017**: CLI commands MUST require authentication via `--username` and `--password` or environment variables (SECMAN_USERNAME, SECMAN_PASSWORD)
+- **FR-017**: CLI commands MUST require authentication via `--username` and `--password` or environment variables (SECMAN_ADMIN_NAME, SECMAN_ADMIN_PASS)
 - **FR-018**: Export commands MUST be accessible to ADMIN, REQ, and SECCHAMPION roles
 - **FR-019**: Add requirement command MUST be accessible to ADMIN, REQ, and SECCHAMPION roles
 - **FR-020**: Delete all requirements MUST be restricted to ADMIN role only

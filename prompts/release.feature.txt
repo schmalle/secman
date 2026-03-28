@@ -51,7 +51,7 @@ Requirement 3 Version 3
 
 Switch logic for release and UI elements
 Added / validated export logic
-Full end2end test suite for releases, assuming SECMAN_USERNAME,SECMAN_PASSWORD, SECMAN_API_KEY are set
+Full end2end test suite for releases, assuming SECMAN_ADMIN_NAME,SECMAN_ADMIN_PASS, SECMAN_API_KEY are set
 as environment variables.
 
 

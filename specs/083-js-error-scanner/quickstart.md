@@ -18,8 +18,8 @@
 3. **Secman instance** running and accessible (local or remote)
 
 4. **1Password vault** `test/secman` must contain:
-   - `SECMAN_USERNAME` — login username
-   - `SECMAN_PASSWORD` — login password
+   - `SECMAN_ADMIN_NAME` — login username
+   - `SECMAN_ADMIN_PASS` — login password
    - `SECMAN_HOST` — instance URL (e.g., `https://secman.example.com`)
    - `SECMAN_SSL_ACCEPT_ALL` — set to `true` for self-signed certs
 
@@ -50,8 +50,8 @@ SECMAN_BACKEND_URL="https://staging.secman.example.com" ./tests/js-error-scanner
 ### Skip 1Password (direct credentials)
 
 ```bash
-SECMAN_USERNAME="admin" \
-SECMAN_PASSWORD="password" \
+SECMAN_ADMIN_NAME="admin" \
+SECMAN_ADMIN_PASS="password" \
 SECMAN_BACKEND_URL="http://localhost:4321" \
 SECMAN_INSECURE="true" \
 node tests/js-error-scanner.mjs

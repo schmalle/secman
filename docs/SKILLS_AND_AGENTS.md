@@ -109,7 +109,7 @@ Runs the admin asset and vulnerability Playwright E2E test that verifies the ful
 - `src/backendng/.../service/AssetFilterService.kt` - Access control filtering
 
 **Required environment variables:**
-- `SECMAN_ADMIN_USER` / `SECMAN_ADMIN_PASS`
+- `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS`
 - `SECMAN_USER_USER` / `SECMAN_USER_PASS`
 
 ---

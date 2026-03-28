@@ -56,8 +56,8 @@ cd src/frontend && npm run build
 
 ### E2E Tests
 ```bash
-export SECMAN_USERNAME=adminuser
-export SECMAN_PASSWORD=password
+export SECMAN_ADMIN_NAME=adminuser
+export SECMAN_ADMIN_PASS=password
 export SECMAN_API_KEY=sk-your-api-key
 ./tests/release-e2e-test.sh
 ```

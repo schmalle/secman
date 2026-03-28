@@ -4,8 +4,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # --- Environment variables with 1Password URIs ---
-export SECMAN_USERNAME="${SECMAN_USERNAME:-op://test/secman/SECMAN_USERNAME}"
-export SECMAN_PASSWORD="${SECMAN_PASSWORD:-op://test/secman/SECMAN_PASSWORD}"
+export SECMAN_ADMIN_NAME="${SECMAN_ADMIN_NAME:-op://test/secman/SECMAN_ADMIN_NAME}"
+export SECMAN_ADMIN_PASS="${SECMAN_ADMIN_PASS:-op://test/secman/SECMAN_ADMIN_PASS}"
 export SECMAN_BACKEND_URL="${SECMAN_BACKEND_URL:-op://test/secman/SECMAN_HOST}"
 export SECMAN_INSECURE="${SECMAN_INSECURE:-op://test/secman/SECMAN_SSL_ACCEPT_ALL}"
 
@@ -15,7 +15,7 @@ echo "=== Secman JavaScript Error Scanner ==="
 # If any env var still contains an op:// URI, we need op run to resolve it.
 # If all values are already plain text, skip op run entirely.
 NEEDS_OP=false
-for VAR in "$SECMAN_USERNAME" "$SECMAN_PASSWORD" "$SECMAN_BACKEND_URL" "$SECMAN_INSECURE"; do
+for VAR in "$SECMAN_ADMIN_NAME" "$SECMAN_ADMIN_PASS" "$SECMAN_BACKEND_URL" "$SECMAN_INSECURE"; do
   case "$VAR" in
     op://*) NEEDS_OP=true; break ;;
   esac

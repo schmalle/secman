@@ -279,15 +279,15 @@ export FALCON_BASE_URL=https://api.eu-1.crowdstrike.com
 
 | Variable             | Description                         | Default                 | Required   |
 | -------------------- | ----------------------------------- | ----------------------- | ---------- |
-| `SECMAN_USERNAME`    | Backend username for authentication | -                       | For --save |
-| `SECMAN_PASSWORD`    | Backend password for authentication | -                       | For --save |
+| `SECMAN_ADMIN_NAME`    | Backend username for authentication | -                       | For --save |
+| `SECMAN_ADMIN_PASS`    | Backend password for authentication | -                       | For --save |
 | `SECMAN_BACKEND_URL` | Backend API URL                     | `http://localhost:8080` | No         |
 
 **Example:**
 
 ```bash
-export SECMAN_USERNAME=adminuser
-export SECMAN_PASSWORD=your-password
+export SECMAN_ADMIN_NAME=adminuser
+export SECMAN_ADMIN_PASS=your-password
 export SECMAN_BACKEND_URL=https://api.yourdomain.com
 ```
 
@@ -338,7 +338,7 @@ PUBLIC_API_URL
 ```
 FALCON_CLIENT_ID, FALCON_CLIENT_SECRET, FALCON_BASE_URL
 FALCON_CLIENT_ID, FALCON_CLIENT_SECRET, FALCON_CLOUD_REGION
-SECMAN_USERNAME, SECMAN_PASSWORD, SECMAN_BACKEND_URL
+SECMAN_ADMIN_NAME, SECMAN_ADMIN_PASS, SECMAN_BACKEND_URL
 ```
 
 ---
@@ -430,8 +430,8 @@ FALCON_CLIENT_SECRET=your-client-secret-here
 FALCON_BASE_URL=https://api.crowdstrike.com
 
 # --- Backend Authentication (for --save) ---
-SECMAN_USERNAME=adminuser
-SECMAN_PASSWORD=your-secure-password
+SECMAN_ADMIN_NAME=adminuser
+SECMAN_ADMIN_PASS=your-secure-password
 SECMAN_BACKEND_URL=https://api.yourdomain.com
 ```
 

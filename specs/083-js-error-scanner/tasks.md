@@ -35,7 +35,7 @@
 
 - [x] T002 [US2] Create `tests/js-error-scanner.sh` with shebang (`#!/usr/bin/env bash`), `set -euo pipefail`, and `SCRIPT_DIR` resolution matching the pattern in `tests/e2e/run-e2e.sh`
 - [x] T003 [US2] Add `op` CLI availability check in `tests/js-error-scanner.sh` — exit with clear error message if `op` command is not found (matching pattern from `tests/e2e/run-e2e.sh` lines 7-11)
-- [x] T004 [US2] Add 1Password vault reference exports in `tests/js-error-scanner.sh`: `SECMAN_USERNAME="op://test/secman/SECMAN_USERNAME"`, `SECMAN_PASSWORD="op://test/secman/SECMAN_PASSWORD"`, `SECMAN_BACKEND_URL="op://test/secman/SECMAN_HOST"`, `SECMAN_INSECURE="op://test/secman/SECMAN_SSL_ACCEPT_ALL"` — matching the field names from `./bin/secmanng`
+- [x] T004 [US2] Add 1Password vault reference exports in `tests/js-error-scanner.sh`: `SECMAN_ADMIN_NAME="op://test/secman/SECMAN_ADMIN_NAME"`, `SECMAN_ADMIN_PASS="op://test/secman/SECMAN_ADMIN_PASS"`, `SECMAN_BACKEND_URL="op://test/secman/SECMAN_HOST"`, `SECMAN_INSECURE="op://test/secman/SECMAN_SSL_ACCEPT_ALL"` — matching the field names from `./bin/secmanng`
 - [x] T005 [US2] Add `NODE_PATH` setup and `op run -- node` invocation in `tests/js-error-scanner.sh` — set `NODE_PATH="${SCRIPT_DIR}/e2e/node_modules"` and invoke `op run -- node "${SCRIPT_DIR}/js-error-scanner.mjs"`, passing through the exit code
 - [x] T006 [US2] Set execute permission on `tests/js-error-scanner.sh` via `chmod +x`
 
@@ -47,11 +47,11 @@
 
 **Goal**: Create the Node.js script that launches a headless browser, logs into secman, visits all static pages, and captures JavaScript errors
 
-**Independent Test**: Run `SECMAN_USERNAME=admin SECMAN_PASSWORD=pass SECMAN_BACKEND_URL=http://localhost:4321 NODE_PATH=tests/e2e/node_modules node tests/js-error-scanner.mjs` and verify it logs in, visits pages, and captures errors
+**Independent Test**: Run `SECMAN_ADMIN_NAME=admin SECMAN_ADMIN_PASS=pass SECMAN_BACKEND_URL=http://localhost:4321 NODE_PATH=tests/e2e/node_modules node tests/js-error-scanner.mjs` and verify it logs in, visits pages, and captures errors
 
 ### Implementation for User Story 1
 
-- [x] T007 [US1] Create `tests/js-error-scanner.mjs` with ES module imports for `playwright` (`chromium` from `playwright`), read environment variables `SECMAN_USERNAME`, `SECMAN_PASSWORD`, `SECMAN_BACKEND_URL`, `SECMAN_INSECURE` — exit with error if username/password/URL are missing
+- [x] T007 [US1] Create `tests/js-error-scanner.mjs` with ES module imports for `playwright` (`chromium` from `playwright`), read environment variables `SECMAN_ADMIN_NAME`, `SECMAN_ADMIN_PASS`, `SECMAN_BACKEND_URL`, `SECMAN_INSECURE` — exit with error if username/password/URL are missing
 - [x] T008 [US1] Implement browser launch and context creation in `tests/js-error-scanner.mjs` — use `chromium.launch({ headless: true })` and `browser.newContext()`, wrapping the entire scan in a try/finally that calls `browser.close()`
 - [x] T009 [US1] Implement reachability pre-check in `tests/js-error-scanner.mjs` — navigate to the base URL and verify the page loads (catch navigation errors and exit with code 2 and clear message if host is unreachable)
 - [x] T010 [US1] Implement browser-based login flow in `tests/js-error-scanner.mjs` — navigate to `/login`, wait for `networkidle`, fill `#username` and `#password`, click `button[type="submit"]`, wait for URL to no longer contain `/login` (15s timeout), matching the pattern from `tests/e2e/vuln-lense.spec.ts`

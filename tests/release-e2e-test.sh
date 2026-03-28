@@ -16,7 +16,7 @@
 # Prerequisites:
 # - curl, jq, op (1Password CLI) installed
 # - Environment variables set with 1Password URIs:
-#   SECMAN_USERNAME, SECMAN_PASSWORD, SECMAN_API_KEY
+#   SECMAN_ADMIN_NAME, SECMAN_ADMIN_PASS, SECMAN_API_KEY
 #
 # Usage:
 #   ./tests/release-e2e-test.sh
@@ -24,8 +24,8 @@
 
 set -euo pipefail
 
-export SECMAN_USERNAME="op://test/secman/SECMAN_USERNAME"
-export SECMAN_PASSWORD="op://test/secman/SECMAN_PASSWORD"
+export SECMAN_ADMIN_NAME="op://test/secman/SECMAN_ADMIN_NAME"
+export SECMAN_ADMIN_PASS="op://test/secman/SECMAN_ADMIN_PASS"
 export SECMAN_API_KEY="op://test/secman/SECMAN_API_KEY"
 
 # Configuration
@@ -120,8 +120,8 @@ check_prerequisites() {
         exit 1
     fi
 
-    [[ -z "${SECMAN_USERNAME:-}" ]] && { log_error "SECMAN_USERNAME not set"; exit 1; }
-    [[ -z "${SECMAN_PASSWORD:-}" ]] && { log_error "SECMAN_PASSWORD not set"; exit 1; }
+    [[ -z "${SECMAN_ADMIN_NAME:-}" ]] && { log_error "SECMAN_ADMIN_NAME not set"; exit 1; }
+    [[ -z "${SECMAN_ADMIN_PASS:-}" ]] && { log_error "SECMAN_ADMIN_PASS not set"; exit 1; }
     [[ -z "${SECMAN_API_KEY:-}" ]] && { log_error "SECMAN_API_KEY not set"; exit 1; }
 
     log_success "Prerequisites check passed"
@@ -131,16 +131,16 @@ check_prerequisites() {
 resolve_credentials() {
     log_info "Resolving credentials..."
 
-    if [[ "${SECMAN_USERNAME}" == op://* ]]; then
-        RESOLVED_USERNAME=$(op read "${SECMAN_USERNAME}" 2>/dev/null) || { log_error "Failed to resolve SECMAN_USERNAME"; exit 1; }
+    if [[ "${SECMAN_ADMIN_NAME}" == op://* ]]; then
+        RESOLVED_USERNAME=$(op read "${SECMAN_ADMIN_NAME}" 2>/dev/null) || { log_error "Failed to resolve SECMAN_ADMIN_NAME"; exit 1; }
     else
-        RESOLVED_USERNAME="${SECMAN_USERNAME}"
+        RESOLVED_USERNAME="${SECMAN_ADMIN_NAME}"
     fi
 
-    if [[ "${SECMAN_PASSWORD}" == op://* ]]; then
-        RESOLVED_PASSWORD=$(op read "${SECMAN_PASSWORD}" 2>/dev/null) || { log_error "Failed to resolve SECMAN_PASSWORD"; exit 1; }
+    if [[ "${SECMAN_ADMIN_PASS}" == op://* ]]; then
+        RESOLVED_PASSWORD=$(op read "${SECMAN_ADMIN_PASS}" 2>/dev/null) || { log_error "Failed to resolve SECMAN_ADMIN_PASS"; exit 1; }
     else
-        RESOLVED_PASSWORD="${SECMAN_PASSWORD}"
+        RESOLVED_PASSWORD="${SECMAN_ADMIN_PASS}"
     fi
 
     if [[ "${SECMAN_API_KEY}" == op://* ]]; then

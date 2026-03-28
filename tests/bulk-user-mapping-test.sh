@@ -11,7 +11,7 @@
 # Prerequisites:
 # - curl, jq, op (1Password CLI) installed
 # - Environment variables set (with 1Password URIs or direct values):
-#   SECMAN_USERNAME, SECMAN_PASSWORD
+#   SECMAN_ADMIN_NAME, SECMAN_ADMIN_PASS
 #
 # Usage:
 #   ./tests/bulk-user-mapping-test.sh
@@ -22,8 +22,8 @@
 set -euo pipefail
 
 # 1Password URI defaults (override with direct values or your own URIs)
-export SECMAN_USERNAME="${SECMAN_USERNAME:-op://test/secman/SECMAN_USERNAME}"
-export SECMAN_PASSWORD="${SECMAN_PASSWORD:-op://test/secman/SECMAN_PASSWORD}"
+export SECMAN_ADMIN_NAME="${SECMAN_ADMIN_NAME:-op://test/secman/SECMAN_ADMIN_NAME}"
+export SECMAN_ADMIN_PASS="${SECMAN_ADMIN_PASS:-op://test/secman/SECMAN_ADMIN_PASS}"
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -66,7 +66,7 @@ check_prerequisites() {
         exit 1
     fi
 
-    for var in SECMAN_USERNAME SECMAN_PASSWORD; do
+    for var in SECMAN_ADMIN_NAME SECMAN_ADMIN_PASS; do
         if [[ -z "${!var:-}" ]]; then
             log_error "$var environment variable not set"
             exit 1
@@ -89,10 +89,10 @@ resolve_credentials() {
         fi
     }
 
-    SECMAN_USERNAME=$(resolve_op_var "$SECMAN_USERNAME")
-    SECMAN_PASSWORD=$(resolve_op_var "$SECMAN_PASSWORD")
+    SECMAN_ADMIN_NAME=$(resolve_op_var "$SECMAN_ADMIN_NAME")
+    SECMAN_ADMIN_PASS=$(resolve_op_var "$SECMAN_ADMIN_PASS")
 
-    log_debug "Username: $SECMAN_USERNAME"
+    log_debug "Username: $SECMAN_ADMIN_NAME"
     log_debug "Base URL: $BASE_URL"
     log_success "Credentials resolved"
 }
@@ -112,7 +112,7 @@ authenticate() {
     local curl_exit=0
     local curl_args=(-s -D - -X POST "${BASE_URL}/api/auth/login"
         -H "Content-Type: application/json"
-        -d "{\"username\":\"${SECMAN_USERNAME}\",\"password\":\"${SECMAN_PASSWORD}\"}")
+        -d "{\"username\":\"${SECMAN_ADMIN_NAME}\",\"password\":\"${SECMAN_ADMIN_PASS}\"}")
     [[ "$INSECURE" == "true" ]] && curl_args+=(-k)
 
     response=$(curl "${curl_args[@]}" 2>&1) || curl_exit=$?

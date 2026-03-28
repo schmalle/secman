@@ -49,14 +49,14 @@ class DeleteAllRequirementsCommand : Runnable {
 
     @Option(
         names = ["--username", "-u"],
-        description = ["Backend username with ADMIN role (or set SECMAN_USERNAME env var)"],
+        description = ["Backend username with ADMIN role (or set SECMAN_ADMIN_NAME env var)"],
         required = false
     )
     var username: String? = null
 
     @Option(
         names = ["--password", "-p"],
-        description = ["Backend password (or set SECMAN_PASSWORD env var)"],
+        description = ["Backend password (or set SECMAN_ADMIN_PASS env var)"],
         required = false
     )
     var password: String? = null
@@ -78,17 +78,17 @@ class DeleteAllRequirementsCommand : Runnable {
 
         // Resolve credentials from environment variables if not provided via CLI
         val effectiveUsername = username
-            ?: System.getenv("SECMAN_USERNAME")
+            ?: System.getenv("SECMAN_ADMIN_NAME")
             ?: run {
-                System.err.println("Error: Username required via --username or SECMAN_USERNAME env var")
+                System.err.println("Error: Username required via --username or SECMAN_ADMIN_NAME env var")
                 System.exit(1)
                 return
             }
 
         val effectivePassword = password
-            ?: System.getenv("SECMAN_PASSWORD")
+            ?: System.getenv("SECMAN_ADMIN_PASS")
             ?: run {
-                System.err.println("Error: Password required via --password or SECMAN_PASSWORD env var")
+                System.err.println("Error: Password required via --password or SECMAN_ADMIN_PASS env var")
                 System.exit(1)
                 return
             }

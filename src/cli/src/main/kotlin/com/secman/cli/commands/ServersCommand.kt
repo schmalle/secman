@@ -117,11 +117,11 @@ class ServersCommand {
             // Authenticate with backend when --save is specified
             var authToken: String? = null
             if (save) {
-                val username = System.getenv("SECMAN_USERNAME")
-                val password = System.getenv("SECMAN_PASSWORD")
+                val username = System.getenv("SECMAN_ADMIN_NAME")
+                val password = System.getenv("SECMAN_ADMIN_PASS")
 
                 if (username.isNullOrBlank() || password.isNullOrBlank()) {
-                    System.err.println("Error: SECMAN_USERNAME and SECMAN_PASSWORD environment variables are required for --save")
+                    System.err.println("Error: SECMAN_ADMIN_NAME and SECMAN_ADMIN_PASS environment variables are required for --save")
                     return 1
                 }
 
@@ -467,8 +467,8 @@ class ServersCommand {
      */
     private fun captureSnapshotViaHttp(backendUrl: String, totalServers: Int, serversWithOverdue: Int, thresholdDays: Int) {
         try {
-            val username = System.getenv("SECMAN_USERNAME") ?: return
-            val password = System.getenv("SECMAN_PASSWORD") ?: return
+            val username = System.getenv("SECMAN_ADMIN_NAME") ?: return
+            val password = System.getenv("SECMAN_ADMIN_PASS") ?: return
 
             val authToken = cliHttpClient.authenticate(username, password, backendUrl) ?: run {
                 log.warn("Could not authenticate for snapshot capture, skipping")

@@ -57,7 +57,7 @@ Change `@Secured` annotations on create and delete endpoints:
 ### Step 6: E2E Test Script
 
 **File**: `scripts/release-e2e-test.sh`
-- New bash script using SECMAN_USERNAME, SECMAN_PASSWORD, SECMAN_API_KEY env vars
+- New bash script using SECMAN_ADMIN_NAME, SECMAN_ADMIN_PASS, SECMAN_API_KEY env vars
 - Tests: create, delete, lifecycle, MCP tools, exports
 - Dependencies: curl, jq
 

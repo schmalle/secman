@@ -267,8 +267,8 @@ secman export-requirements --format <xlsx|docx> [--output <path>] \
 |-----------|----------|---------|-------------|
 | --format | Yes | - | Export format: xlsx or docx |
 | --output | No | ./requirements_export_YYYYMMDD.{ext} | Output file path |
-| --username | Yes* | SECMAN_USERNAME env | Backend username |
-| --password | Yes* | SECMAN_PASSWORD env | Backend password |
+| --username | Yes* | SECMAN_ADMIN_NAME env | Backend username |
+| --password | Yes* | SECMAN_ADMIN_PASS env | Backend password |
 | --backend-url | No | http://localhost:8080 | Backend API URL |
 | --verbose | No | false | Enable verbose output |
 
@@ -296,8 +296,8 @@ secman add-requirement --shortreq <text> [--chapter <name>] [--details <text>] \
 | --example | No | - | Example text |
 | --norm | No | - | Norm reference |
 | --usecase | No | - | Use case |
-| --username | Yes* | SECMAN_USERNAME env | Backend username |
-| --password | Yes* | SECMAN_PASSWORD env | Backend password |
+| --username | Yes* | SECMAN_ADMIN_NAME env | Backend username |
+| --password | Yes* | SECMAN_ADMIN_PASS env | Backend password |
 | --backend-url | No | http://localhost:8080 | Backend API URL |
 | --verbose | No | false | Enable verbose output |
 
@@ -318,8 +318,8 @@ secman delete-all-requirements --confirm \
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | --confirm | Yes | - | Required safety flag |
-| --username | Yes* | SECMAN_USERNAME env | Backend username (ADMIN) |
-| --password | Yes* | SECMAN_PASSWORD env | Backend password |
+| --username | Yes* | SECMAN_ADMIN_NAME env | Backend username (ADMIN) |
+| --password | Yes* | SECMAN_ADMIN_PASS env | Backend password |
 | --backend-url | No | http://localhost:8080 | Backend API URL |
 | --verbose | No | false | Enable verbose output |
 

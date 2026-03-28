@@ -54,7 +54,7 @@
 
 ### 4. E2E Test Approach
 
-**Decision**: New bash script at `scripts/release-e2e-test.sh` using direct env vars (SECMAN_USERNAME, SECMAN_PASSWORD, SECMAN_API_KEY) without 1Password dependency.
+**Decision**: New bash script at `scripts/release-e2e-test.sh` using direct env vars (SECMAN_ADMIN_NAME, SECMAN_ADMIN_PASS, SECMAN_API_KEY) without 1Password dependency.
 
 **Rationale**: The existing `tests/release-e2e-test.sh` requires 1Password CLI (`op`). The new script uses plain environment variables per spec FR-012, making it portable for CI environments.
 

@@ -64,7 +64,7 @@ uses sensible defaults for a Kotlin/Micronaut + Astro/React stack.
 | `SECMAN_BACKEND_URL` | Same as `BASE_URL`      | Target URL for JS error scanner (overrides 1Password default)    |
 | `SECMAN_INSECURE`    | `false`                 | Accept self-signed SSL certs (for non-localhost targets)          |
 
-**Note:** `SECMAN_USERNAME` and `SECMAN_PASSWORD` are resolved by 1Password
+**Note:** `SECMAN_ADMIN_NAME` and `SECMAN_ADMIN_PASS` are resolved by 1Password
 inside `tests/js-error-scanner.sh` via `op run`. They do not need to be set
 in the config — the scanner handles credential injection automatically.
 

@@ -26,8 +26,8 @@ cd /Users/flake/sources/misc/secman
 ### Set Credentials (Recommended)
 
 ```bash
-export SECMAN_USERNAME=your-username
-export SECMAN_PASSWORD=your-password
+export SECMAN_ADMIN_NAME=your-username
+export SECMAN_ADMIN_PASS=your-password
 ```
 
 ### Export Requirements to Excel
@@ -178,8 +178,8 @@ done < requirements.csv
 
 ```bash
 # Clear all requirements in test environment
-export SECMAN_USERNAME=admin
-export SECMAN_PASSWORD=test-password
+export SECMAN_ADMIN_NAME=admin
+export SECMAN_ADMIN_PASS=test-password
 secman delete-all-requirements --confirm --backend-url http://test-server:8080
 ```
 

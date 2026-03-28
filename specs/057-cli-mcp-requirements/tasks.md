@@ -60,7 +60,7 @@
   - @Command annotation with name="export-requirements", mixinStandardHelpOptions=true
   - @Option --format (required, enum: xlsx, docx)
   - @Option --output (optional, default: timestamped filename)
-  - @Option --username, --password (with SECMAN_USERNAME/SECMAN_PASSWORD env var fallback)
+  - @Option --username, --password (with SECMAN_ADMIN_NAME/SECMAN_ADMIN_PASS env var fallback)
   - @Option --backend-url (default: http://localhost:8080)
   - @Option --verbose
   - @Inject RequirementCliService

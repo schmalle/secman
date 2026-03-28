@@ -95,7 +95,7 @@ Users access assets if **ANY** is true:
 - Specific test class: `./gradlew :backendng:test --tests "VulnerabilityServiceTest"`
 - E2E tests (Playwright): Setup: `cd tests/e2e && npm install && npx playwright install chrome msedge`
 - E2E tests (run with 1Password): `./tests/e2e/run-e2e.sh`
-- E2E tests (run manually): `cd tests/e2e && SECMAN_BASE_URL=http://localhost:4321 SECMAN_ADMIN_USER=... SECMAN_ADMIN_PASS=... SECMAN_USER_USER=... SECMAN_USER_PASS=... npx playwright test`
+- E2E tests (run manually): `cd tests/e2e && SECMAN_BASE_URL=http://localhost:4321 SECMAN_ADMIN_NAME=... SECMAN_ADMIN_PASS=... SECMAN_USER_USER=... SECMAN_USER_PASS=... npx playwright test`
 
 **Principles**:
 1. Security-First: File validation, input sanitization, RBAC, security review required
