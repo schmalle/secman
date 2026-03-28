@@ -128,7 +128,7 @@ fi
 # Bridge env vars for the scanner.
 # SECMAN_BACKEND_URL points at the local frontend (Astro dev server) — the scanner
 # navigates through the frontend, not directly to the backend API.
-# Credentials (SECMAN_USERNAME/SECMAN_PASSWORD) are left for the scanner's own
+# Credentials (SECMAN_ADMIN_NAME/SECMAN_ADMIN_PASS) are left for the scanner's own
 # 1Password resolution via op run.
 export SECMAN_BACKEND_URL="${SECMAN_BACKEND_URL:-${BASE_URL}}"
 export SECMAN_INSECURE="${SECMAN_INSECURE:-false}"

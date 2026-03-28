@@ -112,8 +112,8 @@ class NewTool(@Inject private val service: Service) : McpTool {
 
 **Pattern**:
 ```kotlin
-val username = cliUsername ?: System.getenv("SECMAN_USERNAME") ?: error
-val password = cliPassword ?: System.getenv("SECMAN_PASSWORD") ?: error
+val username = cliUsername ?: System.getenv("SECMAN_ADMIN_NAME") ?: error
+val password = cliPassword ?: System.getenv("SECMAN_ADMIN_PASS") ?: error
 val token = authenticate(username, password, backendUrl)
 ```
 

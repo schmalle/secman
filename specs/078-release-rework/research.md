@@ -97,7 +97,7 @@
 9. Export from each release and verify file download succeeds
 10. Cleanup: delete releases, delete requirements
 
-**Environment variables**: SECMAN_USERNAME, SECMAN_PASSWORD, SECMAN_API_KEY
+**Environment variables**: SECMAN_ADMIN_NAME, SECMAN_ADMIN_PASS, SECMAN_API_KEY
 
 ## R8: Database Migration
 

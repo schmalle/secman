@@ -96,7 +96,7 @@ class ListBucketCommand(
             println()
 
             // Audit log — use admin-user if provided, else username, else "unknown"
-            val auditActor = parent.adminUser ?: System.getenv("SECMAN_ADMIN_EMAIL") ?: parent.username ?: System.getenv("SECMAN_USERNAME") ?: "unknown"
+            val auditActor = parent.adminUser ?: System.getenv("SECMAN_ADMIN_EMAIL") ?: parent.username ?: System.getenv("SECMAN_ADMIN_NAME") ?: "unknown"
             log.info("AUDIT: operation=LIST_BUCKET, actor=$auditActor, bucket=$bucket, prefix=$prefix")
 
             println("Bucket: $bucket")

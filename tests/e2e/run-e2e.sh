@@ -12,7 +12,7 @@ fi
 
 # --- Environment variables with 1Password URIs ---
 export SECMAN_BASE_URL="${SECMAN_BASE_URL:-http://localhost:4321}"
-export SECMAN_ADMIN_USER="op://test/secman/SECMAN_ADMIN_USER"
+export SECMAN_ADMIN_NAME="op://test/secman/SECMAN_ADMIN_NAME"
 export SECMAN_ADMIN_PASS="op://test/secman/SECMAN_ADMIN_PASS"
 export SECMAN_USER_USER="op://test/secman/SECMAN_USER_USER"
 export SECMAN_USER_PASS="op://test/secman/SECMAN_USER_PASS"

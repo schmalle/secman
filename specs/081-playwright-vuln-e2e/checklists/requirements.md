@@ -33,5 +33,5 @@
 
 - All items pass validation. Spec is ready for `/speckit.plan`.
 - Clarification session (2026-03-03): 1 question asked — "loads successfully" refined to structural rendering (key page element visible). Updated FR-004 and acceptance scenarios in User Stories 1 & 2.
-- Environment variable naming conventions (SECMAN_ADMIN_USER, etc.) are used as illustrative examples in requirements, not implementation prescriptions — the implementation phase will decide final naming.
+- Environment variable naming conventions (SECMAN_ADMIN_NAME, etc.) are used as illustrative examples in requirements, not implementation prescriptions — the implementation phase will decide final naming.
 - The spec deliberately avoids specifying Playwright configuration details, test file structure, or assertion library choices — those belong in the planning phase.

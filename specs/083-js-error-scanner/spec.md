@@ -3,7 +3,7 @@
 **Feature Branch**: `083-js-error-scanner`
 **Created**: 2026-03-20
 **Status**: Draft
-**Input**: User description: "Create a test script that retrieves authentication data and SECMAN_HOST the same way as ./bin/secmanng, logs in using SECMAN_USER and SECMAN_PASSWORD from 1Password, visits every page in secman, and reports which subpages/URIs contain JavaScript errors. Must work with self-signed certificates."
+**Input**: User description: "Create a test script that retrieves authentication data and SECMAN_HOST the same way as ./bin/secmanng, logs in using SECMAN_USER and SECMAN_ADMIN_PASS from 1Password, visits every page in secman, and reports which subpages/URIs contain JavaScript errors. Must work with self-signed certificates."
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -25,7 +25,7 @@ A developer or QA engineer runs a single test script from the `tests/` directory
 
 ### User Story 2 - 1Password Credential Integration (Priority: P1)
 
-The script retrieves SECMAN_USER, SECMAN_PASSWORD, and SECMAN_HOST from 1Password using the same `op://test/secman/` vault references as the existing `./bin/secmanng` wrapper. This ensures credentials are never hardcoded and the script works consistently with the existing toolchain.
+The script retrieves SECMAN_USER, SECMAN_ADMIN_PASS, and SECMAN_HOST from 1Password using the same `op://test/secman/` vault references as the existing `./bin/secmanng` wrapper. This ensures credentials are never hardcoded and the script works consistently with the existing toolchain.
 
 **Why this priority**: Without secure credential retrieval, the script cannot authenticate. This is a prerequisite for all other functionality.
 
@@ -81,7 +81,7 @@ After visiting all pages, the script produces a structured summary report showin
 
 ### Functional Requirements
 
-- **FR-001**: Script MUST retrieve `SECMAN_USERNAME`, `SECMAN_PASSWORD`, `SECMAN_HOST`, and `SECMAN_SSL_ACCEPT_ALL` from 1Password using `op://test/secman/` vault references, matching the pattern used in `./bin/secmanng`.
+- **FR-001**: Script MUST retrieve `SECMAN_ADMIN_NAME`, `SECMAN_ADMIN_PASS`, `SECMAN_HOST`, and `SECMAN_SSL_ACCEPT_ALL` from 1Password using `op://test/secman/` vault references, matching the pattern used in `./bin/secmanng`.
 - **FR-002**: Script MUST authenticate against the secman instance by performing a login using the retrieved credentials and storing the authentication token for subsequent page visits.
 - **FR-003**: Script MUST visit all statically-routable pages in secman (pages without dynamic `[id]` parameters) using a headless browser that captures JavaScript console errors.
 - **FR-004**: Script MUST capture both uncaught JavaScript exceptions and `console.error` messages on each page, labeling them separately in the report (e.g., "UNCAUGHT EXCEPTION" vs. "CONSOLE ERROR") and associating each with the page URI. Both types affect the exit code.
@@ -113,5 +113,5 @@ After visiting all pages, the script produces a structured summary report showin
 - The secman frontend is an Astro + React application with file-based routing; all page URIs can be derived from the `src/frontend/src/pages/` directory structure.
 - Pages requiring dynamic parameters (e.g., `/outdated-assets/[id]`, `/releases/[id]`) will be skipped rather than requiring test data setup, as the goal is a quick smoke test of all static pages.
 - The script will use a headless browser (Playwright is already a project dependency in `tests/e2e/`) with built-in console error capture and self-signed certificate support.
-- The 1Password vault `test/secman` contains all required fields: `SECMAN_USERNAME`, `SECMAN_PASSWORD`, `SECMAN_HOST`, and `SECMAN_SSL_ACCEPT_ALL`.
+- The 1Password vault `test/secman` contains all required fields: `SECMAN_ADMIN_NAME`, `SECMAN_ADMIN_PASS`, `SECMAN_HOST`, and `SECMAN_SSL_ACCEPT_ALL`.
 - Admin-only pages may show permission errors for non-admin users; permission-denied UI responses are not counted as JavaScript errors unless they cause uncaught exceptions.

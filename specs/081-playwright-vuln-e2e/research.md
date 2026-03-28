@@ -98,7 +98,7 @@ expect(consoleErrors).toEqual([]);
 | Variable | 1Password URI | Purpose |
 |----------|---------------|---------|
 | `SECMAN_BASE_URL` | (plain value) | Frontend URL, e.g., `http://localhost:4321` |
-| `SECMAN_ADMIN_USER` | `op://test/secman/SECMAN_ADMIN_USER` | Admin username |
+| `SECMAN_ADMIN_NAME` | `op://test/secman/SECMAN_ADMIN_NAME` | Admin username |
 | `SECMAN_ADMIN_PASS` | `op://test/secman/SECMAN_ADMIN_PASS` | Admin password |
 | `SECMAN_USER_USER` | `op://test/secman/SECMAN_USER_USER` | Normal user username |
 | `SECMAN_USER_PASS` | `op://test/secman/SECMAN_USER_PASS` | Normal user password |

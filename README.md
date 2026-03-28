@@ -410,8 +410,8 @@ SMTP_USERNAME=noreply@yourdomain.com
 SMTP_PASSWORD=app_password
 
 # CLI Authentication
-SECMAN_USERNAME=adminuser
-SECMAN_PASSWORD=your-password
+SECMAN_ADMIN_NAME=adminuser
+SECMAN_ADMIN_PASS=your-password
 ```
 
 See [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md) for the complete environment variable reference.

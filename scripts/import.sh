@@ -13,4 +13,4 @@ if [ ! -f "$JAR_PATH" ]; then
     exit 1
 fi
 
-op run --env-file "$REPO_ROOT/secman.env" -- java -Xmx4g -Xms2g -jar ./src/cli/build/libs/cli-0.1.0-all.jar query servers --device-type SERVER --severity CRITICAL,HIGH --min-days-open 1 --save --username $SECMAN_USERNAME --password $SECMAN_PASSWORD --last-seen-days 1
+op run --env-file "$REPO_ROOT/secman.env" -- java -Xmx4g -Xms2g -jar ./src/cli/build/libs/cli-0.1.0-all.jar query servers --device-type SERVER --severity CRITICAL,HIGH --min-days-open 1 --save --username $SECMAN_ADMIN_NAME --password $SECMAN_ADMIN_PASS --last-seen-days 1

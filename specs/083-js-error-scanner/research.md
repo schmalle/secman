@@ -64,13 +64,13 @@
 
 ### 5. 1Password Credential Fields
 
-**Decision**: Use `SECMAN_USERNAME` and `SECMAN_PASSWORD` from `op://test/secman/` vault, plus `SECMAN_HOST` and `SECMAN_SSL_ACCEPT_ALL`.
+**Decision**: Use `SECMAN_ADMIN_NAME` and `SECMAN_ADMIN_PASS` from `op://test/secman/` vault, plus `SECMAN_HOST` and `SECMAN_SSL_ACCEPT_ALL`.
 
-**Rationale**: These are the same fields used by `./bin/secmanng`. The e2e tests use different fields (`SECMAN_ADMIN_USER`, `SECMAN_ADMIN_PASS`) but the user explicitly requested the `./bin/secmanng` pattern.
+**Rationale**: These are the same fields used by `./bin/secmanng`. The e2e tests use different fields (`SECMAN_ADMIN_NAME`, `SECMAN_ADMIN_PASS`) but the user explicitly requested the `./bin/secmanng` pattern.
 
 **Fields**:
-- `SECMAN_USERNAME` → `op://test/secman/SECMAN_USERNAME`
-- `SECMAN_PASSWORD` → `op://test/secman/SECMAN_PASSWORD`
+- `SECMAN_ADMIN_NAME` → `op://test/secman/SECMAN_ADMIN_NAME`
+- `SECMAN_ADMIN_PASS` → `op://test/secman/SECMAN_ADMIN_PASS`
 - `SECMAN_BACKEND_URL` → `op://test/secman/SECMAN_HOST` (the backend/frontend host)
 - `SECMAN_INSECURE` → `op://test/secman/SECMAN_SSL_ACCEPT_ALL`
 

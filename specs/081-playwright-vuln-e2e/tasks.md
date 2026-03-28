@@ -40,11 +40,11 @@
 
 **Goal**: An admin user can log in, navigate to the Vulnerability Management sidebar, click "Lense", and reach the Vulnerability Statistics page with zero JS console errors
 
-**Independent Test**: Run `SECMAN_ADMIN_USER=... SECMAN_ADMIN_PASS=... npx playwright test --project=chrome -g "Admin"` — should pass on Chrome alone
+**Independent Test**: Run `SECMAN_ADMIN_NAME=... SECMAN_ADMIN_PASS=... npx playwright test --project=chrome -g "Admin"` — should pass on Chrome alone
 
 ### Implementation for User Story 1
 
-- [x] T004 [US1] Create `tests/e2e/vuln-lense.spec.ts` with environment variable validation at module level — read `SECMAN_ADMIN_USER`, `SECMAN_ADMIN_PASS`, `SECMAN_USER_USER`, `SECMAN_USER_PASS` from `process.env`; throw descriptive error naming each missing variable if any are undefined (implements FR-007, FR-010, SC-003)
+- [x] T004 [US1] Create `tests/e2e/vuln-lense.spec.ts` with environment variable validation at module level — read `SECMAN_ADMIN_NAME`, `SECMAN_ADMIN_PASS`, `SECMAN_USER_USER`, `SECMAN_USER_PASS` from `process.env`; throw descriptive error naming each missing variable if any are undefined (implements FR-007, FR-010, SC-003)
 - [x] T005 [US1] In `tests/e2e/vuln-lense.spec.ts`, implement `test.describe('Admin user')` block containing a single test `'login and navigate to Vulnmanagement Lense'` that: (1) sets up `consoleErrors: string[]` array with `page.on('console', msg => { if (msg.type() === 'error') consoleErrors.push(msg.text()) })` listener; (2) navigates to `/login`; (3) fills `#username` with admin user, `#password` with admin pass; (4) clicks `button[type="submit"]`; (5) waits for navigation away from `/login`; (6) clicks `page.getByText('VULNERABILITY MANAGEMENT')` to expand sidebar submenu; (7) clicks `page.getByRole('link', { name: 'Lense' })` to navigate; (8) asserts `page.getByRole('heading', { name: /Vulnerability Statistics Lense/ })` is visible; (9) asserts `expect(consoleErrors).toEqual([])` (implements FR-001, FR-003, FR-004, FR-005, FR-011; ref: research.md R3–R6)
 
 **Checkpoint**: Admin user test passes on Chrome — `npx playwright test --project=chrome -g "Admin"` shows green. This is the MVP.
@@ -89,7 +89,7 @@
 
 ### Implementation for User Story 4
 
-- [x] T008 [US4] Create `tests/e2e/run-e2e.sh` — bash script with `#!/usr/bin/env bash` and `set -euo pipefail`; check `op --version` is available (exit with error if not); export env vars using `op://test/secman/...` URI format for `SECMAN_ADMIN_USER`, `SECMAN_ADMIN_PASS`, `SECMAN_USER_USER`, `SECMAN_USER_PASS`; accept optional `SECMAN_BASE_URL` (default `http://localhost:4321`); run `op run -- npx playwright test "$@"` to pass through CLI args; make script executable with `chmod +x` (implements FR-009; ref: research.md R7)
+- [x] T008 [US4] Create `tests/e2e/run-e2e.sh` — bash script with `#!/usr/bin/env bash` and `set -euo pipefail`; check `op --version` is available (exit with error if not); export env vars using `op://test/secman/...` URI format for `SECMAN_ADMIN_NAME`, `SECMAN_ADMIN_PASS`, `SECMAN_USER_USER`, `SECMAN_USER_PASS`; accept optional `SECMAN_BASE_URL` (default `http://localhost:4321`); run `op run -- npx playwright test "$@"` to pass through CLI args; make script executable with `chmod +x` (implements FR-009; ref: research.md R7)
 
 **Checkpoint**: `./tests/e2e/run-e2e.sh` executes full test matrix with 1Password-resolved credentials
 

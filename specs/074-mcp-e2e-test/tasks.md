@@ -72,7 +72,7 @@
 - [x] T012 [US1/US3] Create `tests/` directory at repository root if not exists
 - [x] T013 [US1/US3] Create `tests/mcp-e2e-workgroup-test.sh` with shebang and `set -euo pipefail`
 - [x] T014 [US3] Implement `check_prerequisites()` function - verify curl, jq, op CLI are available
-- [x] T015 [US3] Implement `resolve_credentials()` function - use `op read` to resolve 1Password URIs from SECMAN_USERNAME, SECMAN_PASSWORD, SECMAN_API_KEY environment variables
+- [x] T015 [US3] Implement `resolve_credentials()` function - use `op read` to resolve 1Password URIs from SECMAN_ADMIN_NAME, SECMAN_ADMIN_PASS, SECMAN_API_KEY environment variables
 - [x] T016 [US1] Implement `authenticate()` function - POST to /api/auth/login and extract JWT token
 - [x] T017 [US1] Implement `mcp_call()` helper function - curl wrapper for MCP tool calls with auth headers
 - [x] T018 [US1] Implement `create_test_user()` function - call add_user MCP tool for TEST user with VULN role

@@ -13,7 +13,7 @@
 # Prerequisites:
 # - curl, jq, op (1Password CLI) installed
 # - Environment variables set with 1Password URIs:
-#   SECMAN_USERNAME, SECMAN_PASSWORD, SECMAN_API_KEY, SECMAN_TEST_DOMAIN
+#   SECMAN_ADMIN_NAME, SECMAN_ADMIN_PASS, SECMAN_API_KEY, SECMAN_TEST_DOMAIN
 #
 # Usage:
 #   ./tests/mcp-e2e-default-roles-test.sh
@@ -21,8 +21,8 @@
 
 set -euo pipefail
 
-export SECMAN_USERNAME="op://test/secman/SECMAN_USERNAME"
-export SECMAN_PASSWORD="op://test/secman/SECMAN_PASSWORD"
+export SECMAN_ADMIN_NAME="op://test/secman/SECMAN_ADMIN_NAME"
+export SECMAN_ADMIN_PASS="op://test/secman/SECMAN_ADMIN_PASS"
 export SECMAN_API_KEY="op://test/secman/SECMAN_API_KEY"
 export SECMAN_TEST_DOMAIN="op://test/secman/SECMAN_TEST_DOMAIN"
 
@@ -66,7 +66,7 @@ check_prerequisites() {
         exit 1
     fi
 
-    for var in SECMAN_USERNAME SECMAN_PASSWORD SECMAN_API_KEY SECMAN_TEST_DOMAIN; do
+    for var in SECMAN_ADMIN_NAME SECMAN_ADMIN_PASS SECMAN_API_KEY SECMAN_TEST_DOMAIN; do
         if [[ -z "${!var:-}" ]]; then
             log_error "$var environment variable not set"
             exit 1
@@ -89,8 +89,8 @@ resolve_credentials() {
         fi
     }
 
-    RESOLVED_USERNAME=$(resolve_op_var "$SECMAN_USERNAME")
-    RESOLVED_PASSWORD=$(resolve_op_var "$SECMAN_PASSWORD")
+    RESOLVED_USERNAME=$(resolve_op_var "$SECMAN_ADMIN_NAME")
+    RESOLVED_PASSWORD=$(resolve_op_var "$SECMAN_ADMIN_PASS")
     API_KEY=$(resolve_op_var "$SECMAN_API_KEY")
     RESOLVED_TEST_DOMAIN=$(resolve_op_var "$SECMAN_TEST_DOMAIN")
 

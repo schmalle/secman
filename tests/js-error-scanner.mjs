@@ -8,15 +8,15 @@ const require = createRequire(join(__dirname, 'e2e', 'package.json'));
 const { chromium } = require('playwright');
 
 // --- Environment variables ---
-const USERNAME = process.env.SECMAN_USERNAME;
-const PASSWORD = process.env.SECMAN_PASSWORD;
+const USERNAME = process.env.SECMAN_ADMIN_NAME;
+const PASSWORD = process.env.SECMAN_ADMIN_PASS;
 const BASE_URL = process.env.SECMAN_BACKEND_URL;
 const INSECURE = process.env.SECMAN_INSECURE;
 
 if (!USERNAME || !PASSWORD || !BASE_URL) {
   console.error('ERROR: Missing required environment variables.');
-  console.error('  SECMAN_USERNAME  = login username');
-  console.error('  SECMAN_PASSWORD  = login password');
+  console.error('  SECMAN_ADMIN_NAME  = login username');
+  console.error('  SECMAN_ADMIN_PASS  = login password');
   console.error('  SECMAN_BACKEND_URL = secman instance URL (e.g. https://secman.example.com)');
   process.exit(2);
 }

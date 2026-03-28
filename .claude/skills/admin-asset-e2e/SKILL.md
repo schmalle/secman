@@ -72,7 +72,7 @@ cd tests/e2e && npx playwright test admin-asset-vuln.spec.ts --project=chrome
 ```
 
 Set environment variables for credentials:
-- `SECMAN_ADMIN_USER` / `SECMAN_ADMIN_PASS` (admin credentials)
+- `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS` (admin credentials)
 - `SECMAN_USER_USER` / `SECMAN_USER_PASS` (normal user credentials)
 
 Capture **both stdout and stderr** into `.e2e-logs/e2e-run-<N>.log`.

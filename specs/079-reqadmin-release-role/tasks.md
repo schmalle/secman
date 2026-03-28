@@ -82,11 +82,11 @@ No setup tasks required.
 
 **Goal**: Create comprehensive bash e2e test script that validates the complete release lifecycle with REQADMIN role enforcement.
 
-**Independent Test**: Run `./scripts/release-e2e-test.sh` with SECMAN_USERNAME, SECMAN_PASSWORD, SECMAN_API_KEY env vars set — all tests pass.
+**Independent Test**: Run `./scripts/release-e2e-test.sh` with SECMAN_ADMIN_NAME, SECMAN_ADMIN_PASS, SECMAN_API_KEY env vars set — all tests pass.
 
 ### Implementation
 
-- [X] T010 [US5] Create `scripts/release-e2e-test.sh` — bash script with: env var authentication (SECMAN_USERNAME, SECMAN_PASSWORD, SECMAN_API_KEY), helper functions (assert_equals, assert_not_empty, assert_http_ok, mcp_call, rest_get), test steps for: create requirements, create release (PREPARATION), activate release (ACTIVE), modify requirement, create second release, verify snapshots, compare releases, export (Word/Excel), cleanup, and pass/fail summary report. Make executable.
+- [X] T010 [US5] Create `scripts/release-e2e-test.sh` — bash script with: env var authentication (SECMAN_ADMIN_NAME, SECMAN_ADMIN_PASS, SECMAN_API_KEY), helper functions (assert_equals, assert_not_empty, assert_http_ok, mcp_call, rest_get), test steps for: create requirements, create release (PREPARATION), activate release (ACTIVE), modify requirement, create second release, verify snapshots, compare releases, export (Word/Excel), cleanup, and pass/fail summary report. Make executable.
 
 **Checkpoint**: E2E test validates complete release lifecycle including authorization.
 

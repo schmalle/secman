@@ -95,7 +95,7 @@
 **Independent Test**: Run `./tests/release-e2e-test.sh` against a running secman instance with env vars set.
 
 - [x] T022 [US4] Create `tests/release-e2e-test.sh` following pattern from `tests/mcp-e2e-workgroup-test.sh`. Script must:
-  - Require SECMAN_USERNAME, SECMAN_PASSWORD, SECMAN_API_KEY env vars
+  - Require SECMAN_ADMIN_NAME, SECMAN_ADMIN_PASS, SECMAN_API_KEY env vars
   - Authenticate via JWT login
   - Use trap for cleanup on EXIT (delete test releases, requirements)
   - Create test requirements via `add_requirement` MCP tool

@@ -118,11 +118,11 @@ class QueryCommand {
                 val backendUrl = System.getenv("SECMAN_BACKEND_URL")
                     ?: System.getenv("SECMAN_HOST")
                     ?: "http://localhost:8080"
-                val username = System.getenv("SECMAN_USERNAME")
-                val password = System.getenv("SECMAN_PASSWORD")
+                val username = System.getenv("SECMAN_ADMIN_NAME")
+                val password = System.getenv("SECMAN_ADMIN_PASS")
 
                 if (username.isNullOrBlank() || password.isNullOrBlank()) {
-                    System.err.println("Error: SECMAN_USERNAME and SECMAN_PASSWORD environment variables are required for --save")
+                    System.err.println("Error: SECMAN_ADMIN_NAME and SECMAN_ADMIN_PASS environment variables are required for --save")
                     return 1
                 }
 

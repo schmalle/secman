@@ -62,7 +62,7 @@ A user selects a release and exports requirements. The export (Word or Excel) co
 
 ### User Story 4 - Full E2E Test Suite for Releases (Priority: P2)
 
-An automated test script validates the complete release lifecycle end-to-end against a running secman instance. The test uses environment variables (SECMAN_USERNAME, SECMAN_PASSWORD, SECMAN_API_KEY) for authentication. It exercises release creation, status transitions, requirement context switching, export validation, and cleanup.
+An automated test script validates the complete release lifecycle end-to-end against a running secman instance. The test uses environment variables (SECMAN_ADMIN_NAME, SECMAN_ADMIN_PASS, SECMAN_API_KEY) for authentication. It exercises release creation, status transitions, requirement context switching, export validation, and cleanup.
 
 **Why this priority**: E2E tests are essential for regression prevention and deployment confidence. They depend on all three prior stories being implemented. They validate the integrated behavior rather than individual components.
 
@@ -70,7 +70,7 @@ An automated test script validates the complete release lifecycle end-to-end aga
 
 **Acceptance Scenarios**:
 
-1. **Given** SECMAN_USERNAME, SECMAN_PASSWORD, and SECMAN_API_KEY are set as environment variables, **When** the E2E test script is executed, **Then** it authenticates successfully and proceeds with test execution.
+1. **Given** SECMAN_ADMIN_NAME, SECMAN_ADMIN_PASS, and SECMAN_API_KEY are set as environment variables, **When** the E2E test script is executed, **Then** it authenticates successfully and proceeds with test execution.
 2. **Given** a clean test environment, **When** the E2E script runs, **Then** it creates test requirements, creates releases in PREPARATION status, transitions through ALIGNMENT to ACTIVE, verifies context switching returns correct snapshots, and cleans up all test data.
 3. **Given** the E2E test creates two releases with different requirement versions, **When** it switches between them via the API, **Then** it verifies the returned requirements match the expected snapshots for each release.
 4. **Given** the E2E test creates a release and exports requirements, **When** it downloads the export, **Then** it verifies the export contains the expected number of requirements.
@@ -103,7 +103,7 @@ An automated test script validates the complete release lifecycle end-to-end aga
 - **FR-011**: System MUST export requirements from the selected release's snapshot when a release context is active.
 - **FR-012**: System MUST support release-aware exports in all existing formats (Word, Excel, filtered by use case, translated).
 - **FR-013**: System MUST preserve ARCHIVED release snapshot data indefinitely for audit and compliance purposes.
-- **FR-014**: System MUST provide a complete E2E test script that validates the release lifecycle using environment-variable-based authentication (SECMAN_USERNAME, SECMAN_PASSWORD, SECMAN_API_KEY).
+- **FR-014**: System MUST provide a complete E2E test script that validates the release lifecycle using environment-variable-based authentication (SECMAN_ADMIN_NAME, SECMAN_ADMIN_PASS, SECMAN_API_KEY).
 - **FR-015**: System MUST persist the user's selected release context within their browser session.
 - **FR-016**: System MUST block requirement editing when viewing ARCHIVED or ACTIVE releases (read-only snapshots). Editing MUST be allowed when viewing PREPARATION or ALIGNMENT releases, with edits applied to the live requirement and the release snapshot refreshed on next snapshot capture.
 

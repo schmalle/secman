@@ -14,8 +14,8 @@ import jakarta.inject.Singleton
  * Authentication:
  *   All operations require ADMIN role and backend credentials.
  *   Specify via CLI flags or environment variables:
- *   - --username / SECMAN_USERNAME
- *   - --password / SECMAN_PASSWORD
+ *   - --username / SECMAN_ADMIN_NAME
+ *   - --password / SECMAN_ADMIN_PASS
  *   - --backend-url / SECMAN_HOST / SECMAN_BACKEND_URL
  */
 @Singleton
@@ -40,14 +40,14 @@ class ManageWorkgroupsCommand : Runnable {
 
     @Option(
         names = ["--username"],
-        description = ["Backend username (or set SECMAN_USERNAME env var)"],
+        description = ["Backend username (or set SECMAN_ADMIN_NAME env var)"],
         scope = ScopeType.INHERIT
     )
     var username: String? = null
 
     @Option(
         names = ["--password"],
-        description = ["Backend password (or set SECMAN_PASSWORD env var)"],
+        description = ["Backend password (or set SECMAN_ADMIN_PASS env var)"],
         scope = ScopeType.INHERIT
     )
     var password: String? = null
@@ -71,13 +71,13 @@ class ManageWorkgroupsCommand : Runnable {
     }
 
     fun getEffectiveUsername(): String {
-        return username ?: System.getenv("SECMAN_USERNAME")
-            ?: throw IllegalArgumentException("Backend username required. Use --username flag or set SECMAN_USERNAME environment variable")
+        return username ?: System.getenv("SECMAN_ADMIN_NAME")
+            ?: throw IllegalArgumentException("Backend username required. Use --username flag or set SECMAN_ADMIN_NAME environment variable")
     }
 
     fun getEffectivePassword(): String {
-        return password ?: System.getenv("SECMAN_PASSWORD")
-            ?: throw IllegalArgumentException("Backend password required. Use --password flag or set SECMAN_PASSWORD environment variable")
+        return password ?: System.getenv("SECMAN_ADMIN_PASS")
+            ?: throw IllegalArgumentException("Backend password required. Use --password flag or set SECMAN_ADMIN_PASS environment variable")
     }
 
     fun getEffectiveBackendUrl(): String {

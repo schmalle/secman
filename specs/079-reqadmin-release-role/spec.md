@@ -78,7 +78,7 @@ The Release Management UI components are updated so that create and delete contr
 
 ### User Story 5 - Comprehensive end-to-end test suite (Priority: P2)
 
-A bash-based end-to-end test script validates the complete release lifecycle with REQADMIN role enforcement. The script uses environment variables (SECMAN_USERNAME, SECMAN_PASSWORD, SECMAN_API_KEY) for authentication and tests: role-based authorization for create/delete, release lifecycle (PREPARATION -> ALIGNMENT -> ACTIVE -> ARCHIVED), MCP tool authorization, and export functionality per release.
+A bash-based end-to-end test script validates the complete release lifecycle with REQADMIN role enforcement. The script uses environment variables (SECMAN_ADMIN_NAME, SECMAN_ADMIN_PASS, SECMAN_API_KEY) for authentication and tests: role-based authorization for create/delete, release lifecycle (PREPARATION -> ALIGNMENT -> ACTIVE -> ARCHIVED), MCP tool authorization, and export functionality per release.
 
 **Why this priority**: Automated tests ensure the feature works correctly and prevents regressions.
 
@@ -132,7 +132,7 @@ The MCP documentation (docs/MCP.md) is updated to reflect the new REQADMIN role 
 - **FR-009**: The REQADMIN role MUST be assignable to users through the existing user management interface.
 - **FR-010**: MCP documentation MUST be updated to reflect the correct role requirements for each release tool.
 - **FR-011**: An end-to-end test script MUST validate the complete release lifecycle including REQADMIN role authorization.
-- **FR-012**: The test script MUST use SECMAN_USERNAME, SECMAN_PASSWORD, and SECMAN_API_KEY environment variables for authentication.
+- **FR-012**: The test script MUST use SECMAN_ADMIN_NAME, SECMAN_ADMIN_PASS, and SECMAN_API_KEY environment variables for authentication.
 - **FR-013**: Read-only release endpoints (list, get details, compare) MUST remain accessible to all authenticated users regardless of role.
 
 ### Key Entities
