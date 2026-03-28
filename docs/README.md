@@ -79,7 +79,7 @@ Using Secman for security management:
 
 - **Backend**: Kotlin 2.3.20, Java 21, Micronaut 4.10, Hibernate JPA
 - **Frontend**: Astro 6.0, React 19, Bootstrap 5.3, Axios
-- **Database**: MariaDB 12 with auto-migration
+- **Database**: MariaDB 12 with Flyway migrations
 - **CLI**: Picocli 4.7.7, CrowdStrike API, AWS SDK v2
 - **Build**: Gradle 9.4.0 (Kotlin DSL)
 
@@ -246,7 +246,7 @@ curl https://secman.yourdomain.com/
 | Issue               | Check                                |
 | ------------------- | ------------------------------------ |
 | Backend won't start | `journalctl -u secman-backend -n 50` |
-| Frontend blank page | Browser console, `PUBLIC_BACKEND_URL` |
+| Frontend blank page | Browser console, `PUBLIC_API_URL` |
 | Database connection | `mysql -u secman -p secman`          |
 | 502 Bad Gateway     | `systemctl status secman-backend`    |
 | MCP auth fails      | API key valid? Headers correct?      |

@@ -689,7 +689,7 @@ Schedule daily:
 ### Frontend Won't Start
 
 1. Check logs: `sudo journalctl -u secman-frontend -n 100`
-2. Verify Node: `node -v` (must be 18+ or 20.x)
+2. Verify Node: `node -v` (must be 20.x)
 3. Check build: `ls -la /opt/secman/app/src/frontend/dist/server/`
 4. Verify backend: `curl http://localhost:8080/health`
 

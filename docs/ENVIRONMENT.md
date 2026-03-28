@@ -251,8 +251,8 @@ The CLI tool supports multiple sources for configuration with the following prio
 
 | Variable               | Description                          |
 | ---------------------- | ------------------------------------ |
-| `FALCON_CLIENT_ID`     | Alias for`CROWDSTRIKE_CLIENT_ID`     |
-| `FALCON_CLIENT_SECRET` | Alias for`CROWDSTRIKE_CLIENT_SECRET` |
+| `FALCON_CLIENT_ID`     | Alias for `CROWDSTRIKE_CLIENT_ID`     |
+| `FALCON_CLIENT_SECRET` | Alias for `CROWDSTRIKE_CLIENT_SECRET` |
 | `FALCON_CLOUD_REGION`  | CrowdStrike cloud region             |
 
 **Base URL by Region:**
@@ -333,11 +333,10 @@ VULN_USE_PATCH_PUBLICATION_DATE, VULN_REQUIRE_PATCH_PUBLICATION_DATE
 PUBLIC_API_URL
 ```
 
-#### CLI (9 variables)
+#### CLI (7 variables)
 
 ```
-FALCON_CLIENT_ID, FALCON_CLIENT_SECRET, FALCON_BASE_URL
-FALCON_CLIENT_ID, FALCON_CLIENT_SECRET, FALCON_CLOUD_REGION
+FALCON_CLIENT_ID, FALCON_CLIENT_SECRET, FALCON_BASE_URL, FALCON_CLOUD_REGION
 SECMAN_USERNAME, SECMAN_PASSWORD, SECMAN_BACKEND_URL
 ```
 

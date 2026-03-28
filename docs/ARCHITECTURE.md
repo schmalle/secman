@@ -155,9 +155,8 @@ Astro with React islands architecture, 64 pages:
 
 **Authentication flow:**
 
-1. JWT stored in `localStorage` as `authToken`
-2. Axios interceptor adds `Authorization: Bearer <token>` header
-3. SSE endpoints receive token via query parameter (`?token=<jwt>`)
+1. JWT stored in HttpOnly cookie (`secman_auth`), user metadata in `localStorage`
+2. Cookies sent automatically with requests; SSE endpoints receive token via query parameter (`?token=<jwt>`)
 
 ### CLI (`src/cli/`)
 
@@ -360,7 +359,7 @@ fun canUserAccessAsset(user: User, asset: Asset): Boolean {
 
 | Method         | Storage                  | Use Case                    |
 | -------------- | ------------------------ | --------------------------- |
-| JWT            | `localStorage`           | Frontend API calls          |
+| JWT            | HttpOnly cookie          | Frontend API calls          |
 | OAuth2/OIDC    | Session + JWT            | SSO with Azure AD, Google   |
 | Passkeys       | WebAuthn credentials     | Passwordless authentication |
 | MCP API Key    | Header (`X-MCP-API-Key`) | AI assistant integration    |
