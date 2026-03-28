@@ -13,7 +13,7 @@ SECMAN_BACKEND_URL=<URL> \
 ```
 
 
-###Duplicate Prevention Mechanism
+### Duplicate Prevention Mechanism
 
 The import service uses a **transactional replace pattern** to prevent duplicate vulnerability entries. This approach ensures that each (Asset, CVE) combination exists exactly once in the database.
 

@@ -4,7 +4,7 @@ Python example clients for the Secman MCP server using the Streamable HTTP trans
 
 ## Prerequisites
 
-- Python 3.8+
+- Python 3.10+
 - `requests` library: `pip install requests`
 - Running Secman backend with MCP enabled
 - A delegation-enabled MCP API key

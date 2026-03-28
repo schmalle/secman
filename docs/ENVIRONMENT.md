@@ -24,10 +24,11 @@ The backend (Kotlin/Micronaut) is configured via environment variables, system p
 ### Database Configuration
 
 
-| Variable      | Description               | Default    | Required |
-| ------------- | ------------------------- | ---------- | -------- |
-| `DB_USERNAME` | MariaDB database username | `secman`   | Yes      |
-| `DB_PASSWORD` | MariaDB database password | `CHANGEME` | Yes      |
+| Variable      | Description               | Default                                  | Required |
+| ------------- | ------------------------- | ---------------------------------------- | -------- |
+| `DB_USERNAME` | MariaDB database username | `secman`                                 | Yes      |
+| `DB_PASSWORD` | MariaDB database password | `CHANGEME`                               | Yes      |
+| `DB_CONNECT`  | JDBC connection URL       | `jdbc:mariadb://localhost:3306/secman`   | No       |
 
 **Example:**
 
@@ -310,10 +311,10 @@ export SECMAN_BACKEND_URL=https://api.yourdomain.com
 
 ### All Variables by Component
 
-#### Backend (33 variables)
+#### Backend (28 variables)
 
 ```
-DB_USERNAME, DB_PASSWORD
+DB_USERNAME, DB_PASSWORD, DB_CONNECT
 JWT_SECRET
 SECMAN_ENCRYPTION_PASSWORD, SECMAN_ENCRYPTION_SALT
 SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD

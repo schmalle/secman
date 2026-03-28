@@ -246,7 +246,7 @@ curl -X POST http://localhost:8080/api/mcp/admin/api-keys \
   -d '{
     "name": "My Integration",
     "permissions": ["REQUIREMENTS_READ", "ASSETS_READ"],
-    "expiresAt": "2025-12-31T23:59:59"
+    "expiresAt": "2027-12-31T23:59:59"
   }'
 ```
 
