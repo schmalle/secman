@@ -37,8 +37,8 @@ dependencies {
     runtimeOnly("org.mariadb.jdbc:mariadb-java-client:3.5.7")
 
 	implementation("io.micronaut.flyway:micronaut-flyway:7.9.2")
-	runtimeOnly("org.flywaydb:flyway-core:12.1.0")
-	runtimeOnly("org.flywaydb:flyway-mysql:12.1.0")
+	runtimeOnly("org.flywaydb:flyway-core:12.1.1")
+	runtimeOnly("org.flywaydb:flyway-mysql:12.1.1")
 	
     // Security
     implementation("io.micronaut.security:micronaut-security-jwt:4.17.1")
@@ -89,10 +89,10 @@ dependencies {
     implementation("org.codehaus.janino:janino:3.1.12")
     
     // YAML configuration support
-    runtimeOnly("org.yaml:snakeyaml:2.5")
+    runtimeOnly("org.yaml:snakeyaml:2.6")
     
     // Password encoding
-    implementation("org.springframework.security:spring-security-crypto:7.0.3")
+    implementation("org.springframework.security:spring-security-crypto:7.0.4")
     implementation("commons-logging:commons-logging:1.3.6")
     
     // Document generation (Apache POI)
@@ -103,7 +103,7 @@ dependencies {
     implementation("org.apache.commons:commons-csv:1.14.1")
 
     // IP address parsing (Apache Commons Net) - Feature 020
-    implementation("commons-net:commons-net:3.12.0")
+    implementation("commons-net:commons-net:3.13.0")
 
     // HTML processing for email
     implementation("org.jsoup:jsoup:1.22.1")
@@ -121,7 +121,7 @@ dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:6.0.3")
     testImplementation("io.micronaut.test:micronaut-test-junit5:4.10.3")
     testImplementation("io.mockk:mockk:1.14.9")
-    testImplementation("org.testcontainers:testcontainers:2.0.3")
+    testImplementation("org.testcontainers:testcontainers:2.0.4")
     testImplementation("org.testcontainers:mariadb:1.21.4")
     testImplementation("org.testcontainers:junit-jupiter:1.21.4")
     testImplementation("org.assertj:assertj-core:3.27.7")

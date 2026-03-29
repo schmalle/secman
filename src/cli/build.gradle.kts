@@ -33,7 +33,7 @@ dependencies {
     implementation("org.apache.commons:commons-csv:1.14.1")
 
     // AWS SDK for S3 (Feature 065 - S3 User Mapping Import)
-    implementation(platform("software.amazon.awssdk:bom:2.42.13"))
+    implementation(platform("software.amazon.awssdk:bom:2.42.22"))
     implementation("software.amazon.awssdk:s3")
     
     // Kotlin
