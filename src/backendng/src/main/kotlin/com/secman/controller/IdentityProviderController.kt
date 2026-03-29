@@ -206,7 +206,7 @@ open class IdentityProviderController(
     @Secured(SecurityRule.IS_ANONYMOUS)
     fun getEnabledProviders(): HttpResponse<*> {
         return try {
-            logger.info("BACKEND_BASE_URL: {}", appConfig.backend.baseUrl)
+            logger.info("SECMAN_BACKEND_URL: {}", appConfig.backend.baseUrl)
             val providers = identityProviderRepository.findByEnabled(true)
             logger.info("Retrieved {} enabled identity providers", providers.size)
             HttpResponse.ok(providers)

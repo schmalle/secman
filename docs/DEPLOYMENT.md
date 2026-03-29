@@ -209,7 +209,7 @@ SMTP_FROM_NAME=Security Management System
 SMTP_ENABLE_TLS=true
 
 # URLs
-BACKEND_BASE_URL=https://api.yourdomain.com
+SECMAN_BACKEND_URL=https://api.yourdomain.com
 FRONTEND_URL=https://secman.yourdomain.com
 DB_CONNECT=jdbc:mariadb://localhost:3306/secman
 ```

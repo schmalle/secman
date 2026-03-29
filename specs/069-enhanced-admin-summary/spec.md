@@ -96,7 +96,7 @@ As an admin user, I want to see the top 10 most affected servers (assets) listed
 
 ## Assumptions
 
-- The backend base URL configured via `app.backend.base-url` (environment variable `BACKEND_BASE_URL`) is the correct URL for linking to the frontend vulnerability statistics page. This is consistent with current production deployment where backend and frontend share the same domain.
+- The backend base URL configured via `app.backend.base-url` (environment variable `SECMAN_BACKEND_URL`) is the correct URL for linking to the frontend vulnerability statistics page. This is consistent with current production deployment where backend and frontend share the same domain.
 - The admin summary email uses admin-level (unfiltered) access when gathering top 10 data, since all recipients are ADMIN users.
 - The existing vulnerability statistics service methods provide the required data for the top 10 lists.
 - The top 10 lists show only the product/server name and total vulnerability count to keep the email concise. Severity breakdowns are available on the full statistics page via the link.

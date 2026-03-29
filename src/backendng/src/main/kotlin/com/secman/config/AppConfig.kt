@@ -15,7 +15,7 @@ data class AppConfig(
 @ConfigurationProperties("backend")
 @Serdeable
 data class BackendConfig(
-	val baseUrl: String = System.getenv("BACKEND_BASE_URL")
+	val baseUrl: String = System.getenv("SECMAN_BACKEND_URL")
 		?: "https://localhost:8080"
 )
 

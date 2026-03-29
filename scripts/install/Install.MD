@@ -1,4 +1,4 @@
-export BACKEND_BASE_URL=https://hostname
+export SECMAN_BACKEND_URL=https://hostname
 
 export SECMAN_DOMAIN="https://hostname"
 

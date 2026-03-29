@@ -2,16 +2,14 @@
 
 ## Project Structure & Module Organization
 
-Core code sits in `src/`: `backendng/` holds the Micronaut service (`src/main/kotlin`, `src/main/resources`), `shared/` exposes reusable clients, and `cli/` ships terminal tooling. The Astro + React UI lives in `src/frontend/` (pages in `src/pages/`, components in `src/components/`, specs in `tests/`), while Python automation resides in `src/helper/` with pytest suites under `tests/`. Root-level `tests/`, `docker/`, `docs/`, and `scripts/` cover integration flows, container manifests, and setup aids. Additional shared code can be found in `src/shared/`, which is needed for both cli and backend development.
+Core code sits in `src/`: `backendng/` holds the Micronaut service (`src/main/kotlin`, `src/main/resources`), `shared/` exposes reusable clients, and `cli/` ships terminal tooling. The Astro + React UI lives in `src/frontend/` (pages in `src/pages/`, components in `src/components/`, specs in `tests/`). Root-level `tests/`, `docker/`, `docs/`, and `scripts/`cover integration flows, container manifests, and setup aids. Additional shared code can be found in`src/shared/`, which is needed for both cli and backend development.
 
 ## Build, Test, and Development Commands
 
-- `cd src/backendng && ./gradlew run` starts the API; `./gradlew build` compiles all Gradle modules.
+- `./bin/backenddev.sh` starts the backend / MCP / API; `./gradlew build` compiles all Gradle modules.
 - `cd src/frontend && npm install` once, then `npm run dev` for hot reload and `npm run build && npm run preview` to verify production output.
 - Verification: `./gradlew test` (when enabled), `npm run lint`, `npm run test:checkin`, `npm run test:e2e`.
-- Python helpers: `cd src/helper && pip install -e .[dev]`, `pytest`, `ruff check .`.
-
-## Coding Style & Naming Conventions
+- Coding Style & Naming Conventions
 
 Kotlin uses 4-space indentation, `UpperCamelCase` types, constructor injection, and immutable data classes; run ktlint (`./gradlew ktlintCheck` if configured) before pushing. TypeScript/TSX sticks to 2-space indentation, named exports, and ESLint via `npm run lint`, ordering imports external → internal → relative. Python follows PEP 8 with type hints, exposes entry points from `src/cli/`, and wraps scripts in `if __name__ == "__main__":`.
 

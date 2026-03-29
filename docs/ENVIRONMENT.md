@@ -94,7 +94,7 @@ export SMTP_ENABLE_TLS=true
 
 | Variable           | Description                            | Default                       | Required |
 | ------------------ | -------------------------------------- | ----------------------------- | -------- |
-| `BACKEND_BASE_URL` | Public URL of the backend API          | `http://localhost:8080`       | Yes      |
+| `SECMAN_BACKEND_URL` | Public URL of the backend API          | `http://localhost:8080`       | Yes      |
 | `FRONTEND_URL`     | Public URL of the frontend application | `http://localhost:4321`       | Yes      |
 
 These URLs are used for:
@@ -106,7 +106,7 @@ These URLs are used for:
 **Example:**
 
 ```bash
-export BACKEND_BASE_URL=https://api.yourdomain.com
+export SECMAN_BACKEND_URL=https://api.yourdomain.com
 export FRONTEND_URL=https://secman.yourdomain.com
 ```
 
@@ -172,6 +172,49 @@ export OAUTH_TOKEN_EXCHANGE_RETRY_DELAY=1000
 export MEMORY_LAZY_LOADING=true
 export MEMORY_BATCH_SIZE=2000
 export MEMORY_STREAMING_EXPORTS=true
+```
+
+### Debug Mode
+
+
+| Variable       | Description                                           | Default | Required |
+| -------------- | ----------------------------------------------------- | ------- | -------- |
+| `SECMAN_DEBUG` | Enable debug header logging for MCP and API requests  | `false` | No       |
+
+**Behavior:**
+
+When `SECMAN_DEBUG=true`, all HTTP headers on every MCP (`/mcp/**`) and API (`/api/**`) request are logged at DEBUG level. If an `Authorization: Bearer <token>` header is present, the JWT payload claims (subject, roles, expiration, etc.) are decoded and logged alongside the headers. The JWT signature is never logged.
+
+This is useful for diagnosing:
+- Missing or proxy-stripped headers (e.g., `X-MCP-User-Email` dropped by a reverse proxy)
+- JWT claim mismatches (wrong roles, expired tokens)
+- CORS or Origin header issues in specific environments
+
+**Security Note:** Do not enable in production — header logs may contain API keys and session tokens.
+
+**Example:**
+
+```bash
+export SECMAN_DEBUG=true
+```
+
+**Sample log output:**
+
+```
+DEBUG c.s.filter.McpDebugHeaderFilter - Debug headers [POST /mcp]:
+  Accept: application/json
+  Content-Type: application/json
+  Mcp-Session-Id: abc123
+  X-MCP-API-Key: sk-...
+  X-MCP-User-Email: user@example.com
+
+DEBUG c.s.filter.McpDebugHeaderFilter - Debug headers [GET /api/assets]:
+  Accept: application/json
+  Authorization: [PRESENT - 1 value(s)]
+  Content-Type: application/json
+
+DEBUG c.s.filter.McpDebugHeaderFilter - JWT claims [GET /api/assets]:
+  {"sub":"admin","roles":["ADMIN"],"iss":"secman-backend-ng","exp":1711756800}
 ```
 
 ### Logging Configuration
@@ -304,7 +347,7 @@ export SECMAN_BACKEND_URL=https://api.yourdomain.com
 | `SECMAN_ENCRYPTION_PASSWORD` | Backend   | Yes         |
 | `SECMAN_ENCRYPTION_SALT`     | Backend   | Yes         |
 | `SMTP_PASSWORD`              | Backend   | Yes         |
-| `BACKEND_BASE_URL`           | Backend   | Yes         |
+| `SECMAN_BACKEND_URL`           | Backend   | Yes         |
 | `FRONTEND_URL`               | Backend   | Yes         |
 | `CROWDSTRIKE_CLIENT_SECRET`  | CLI       | Yes         |
 
@@ -318,11 +361,12 @@ JWT_SECRET
 SECMAN_ENCRYPTION_PASSWORD, SECMAN_ENCRYPTION_SALT
 SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD
 SMTP_FROM_ADDRESS, SMTP_FROM_NAME, SMTP_ENABLE_TLS
-BACKEND_BASE_URL, FRONTEND_URL
+SECMAN_BACKEND_URL, FRONTEND_URL
 OAUTH_STATE_RETRY_MAX_ATTEMPTS, OAUTH_STATE_RETRY_INITIAL_DELAY
 OAUTH_STATE_RETRY_MAX_DELAY, OAUTH_STATE_RETRY_BACKOFF_MULTIPLIER
 OAUTH_TOKEN_EXCHANGE_MAX_RETRIES, OAUTH_TOKEN_EXCHANGE_RETRY_DELAY
 MEMORY_LAZY_LOADING, MEMORY_BATCH_SIZE, MEMORY_STREAMING_EXPORTS
+SECMAN_DEBUG
 SECMAN_LOGGING
 VULN_USE_PATCH_PUBLICATION_DATE, VULN_REQUIRE_PATCH_PUBLICATION_DATE
 ```
@@ -376,14 +420,15 @@ SMTP_FROM_NAME=Security Management System
 SMTP_ENABLE_TLS=true
 
 # --- URL Configuration ---
-BACKEND_BASE_URL=https://api.yourdomain.com
+SECMAN_BACKEND_URL=https://api.yourdomain.com
 FRONTEND_URL=https://secman.yourdomain.com
 
 # --- Optional: Vulnerability Settings ---
 VULN_USE_PATCH_PUBLICATION_DATE=false
 VULN_REQUIRE_PATCH_PUBLICATION_DATE=false
 
-# --- Optional: Logging ---
+# --- Optional: Debug & Logging ---
+# SECMAN_DEBUG=false           # true to log all MCP/API request headers and JWT claims
 # SECMAN_LOGGING=             # NO, ALL, ERROR, or unset for default (INFO)
 
 # --- Optional: Memory Optimization (Feature 073) ---

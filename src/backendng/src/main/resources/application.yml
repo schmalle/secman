@@ -151,10 +151,11 @@ micronaut:
         connect-timeout: 10s
 
 secman:
+  debug: ${SECMAN_DEBUG:false}
   auth:
     # Set to false for local development over HTTP, true for production HTTPS
     # When false, auth cookies will be sent over HTTP (insecure but needed for localhost)
-    cookie-secure: ${SECMAN_AUTH_COOKIE_SECURE:true}
+    cookie-secure: ${SECMAN_AUTH_COOKIE_SECURE:false}
   encryption:
     # Encryption password for sensitive data - MUST be overridden in production
     password: ${SECMAN_ENCRYPTION_PASSWORD:SecManDefaultEncryptionPassword2024}
@@ -338,7 +339,7 @@ logger:
 
 app:
   backend:
-    base-url: ${BACKEND_BASE_URL:https://secman.covestro.net}
+    base-url: ${SECMAN_BACKEND_URL:https://secman.schmall.io}
   frontend:
     base-url: ${FRONTEND_URL:http://localhost:4321}
 

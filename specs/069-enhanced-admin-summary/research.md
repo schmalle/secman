@@ -7,7 +7,7 @@
 
 **Decision**: Use `AppConfig.backend.baseUrl` injected via `@ConfigurationProperties("app")`
 
-**Rationale**: The `AppConfig` already provides `backend.baseUrl` from the `BACKEND_BASE_URL` environment variable (default: `https://localhost:8080`, production: `https://secman.covestro.net`). The backend and frontend share the same domain in production, so this URL is correct for constructing the link to `/vulnerability-statistics`.
+**Rationale**: The `AppConfig` already provides `backend.baseUrl` from the `SECMAN_BACKEND_URL` environment variable (default: `https://localhost:8080`, production: `https://secman.covestro.net`). The backend and frontend share the same domain in production, so this URL is correct for constructing the link to `/vulnerability-statistics`.
 
 **Alternatives considered**:
 - Use `AppConfig.frontend.baseUrl` — rejected because the frontend URL (`FRONTEND_URL`) defaults to `http://localhost:4321` and is intended for dev-only CORS configuration, not for user-facing links.

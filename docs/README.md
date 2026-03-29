@@ -141,7 +141,7 @@ SECMAN_ENCRYPTION_PASSWORD=$(openssl rand -hex 32)
 SECMAN_ENCRYPTION_SALT=$(openssl rand -hex 8)
 
 # URLs
-BACKEND_BASE_URL=https://api.yourdomain.com
+SECMAN_BACKEND_URL=https://api.yourdomain.com
 FRONTEND_URL=https://secman.yourdomain.com
 
 # Email (optional)
