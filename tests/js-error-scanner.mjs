@@ -137,7 +137,10 @@ function progressLine(index, total, uri, status) {
 
 // --- Main ---
 async function main() {
-  const host = BASE_URL.replace(/\/+$/, '');
+  let host = BASE_URL.replace(/\/+$/, '');
+  if (!/^https?:\/\//i.test(host)) {
+    host = `https://${host}`;
+  }
   const totalPages = PAGES.length;
 
   console.log(`Host: ${host}`);
