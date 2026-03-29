@@ -22,6 +22,8 @@ secman uses [1Password CLI](https://developer.1password.com/docs/cli/) (`op`) to
 | `API_KEY` | `API_KEY` | MCP API key | Backend, CLI |
 | `SECMAN_API_KEY` | `SECMAN_API_KEY` | API key (alternative reference) | MCP E2E tests, release tests |
 | `SECMAN_HOST` | `SECMAN_HOST` / `SECMAN_BACKEND_URL` | Backend server URL | CLI, JS error scanner |
+| `SECMAN_BACKEND_BASE_URL` | `SECMAN_BACKEND_URL` / `SECMAN_DOMAIN` | Backend base URL for API calls | Backend dev, Frontend dev |
+| `DB_CONNECT` | `DB_CONNECT` | Full JDBC connection URL (e.g. `jdbc:mariadb://host:3306/secman`) | Backend dev |
 | `SECMAN_SSL_ACCEPT_ALL` | `SECMAN_INSECURE` | Accept self-signed SSL certificates | CLI, JS error scanner |
 | `SECMAN_TEST_DOMAIN` | `SECMAN_TEST_DOMAIN` | Test domain for MCP tests | MCP E2E tests |
 | `FALCON_CLIENT_ID` | `FALCON_CLIENT_ID` | CrowdStrike Falcon API client ID | CLI (query servers) |
@@ -58,17 +60,39 @@ AWS_ACCESS_KEY_ID=op://test/secman/SECMAN_AWS_ACCESS_KEY_ID
 AWS_SECRET_ACCESS_KEY=op://test/secman/SECMAN_AWS_SECRET_ACCESS_KEY
 AWS_SESSION_TOKEN=op://test/secman/SECMAN_AWS_ACCESS_TOKEN
 SECMAN_HOST=op://test/secman/SECMAN_HOST
+SECMAN_DB_HOST=op://test/secman/SECMAN_DB_HOST
+SECMAN_DB_PORT=op://test/secman/SECMAN_DB_PORT
+SECMAN_DB_NAME=op://test/secman/SECMAN_DB_NAME
+DB_CONNECT=jdbc:mariadb://127.0.0.1:3306/secman
+DB_USERNAME=op://test/secman/SECMAN_DB_USER
+DB_PASSWORD=op://test/secman/SECMAN_DB_PASSWORD
 ```
 
 ## Usage Patterns
 
-### Run backend with secrets injected
+### Run backend (production-style)
 
 ```bash
 op run --env-file ./secman.env -- gradle :backendng:run
 # or use the convenience script:
 ./bin/backend
 ```
+
+### Run backend (development)
+
+```bash
+./bin/backenddev.sh
+```
+
+This script sets `MICRONAUT_ENVIRONMENTS=dev`, `SECMAN_DEBUG=true`, generates a random `JWT_SECRET`, and wraps `gradle` with `op run` to resolve `op://` references for `DB_CONNECT` and `SECMAN_BACKEND_URL`.
+
+### Run frontend (development)
+
+```bash
+./bin/frontenddev.sh
+```
+
+This script sets `SECMAN_DOMAIN` and `SECMAN_HOST` as `op://` references and wraps `npm run dev` with `op run` for resolution.
 
 ### Run CLI commands
 
@@ -109,6 +133,8 @@ op read "op://test/secman/SECMAN_ADMIN_NAME"
 | Script | Secrets Required |
 |---|---|
 | `bin/backend` | All from `secman.env` |
+| `bin/backenddev.sh` | `DB_CONNECT`, `SECMAN_BACKEND_BASE_URL` (via `op run`) |
+| `bin/frontenddev.sh` | `SECMAN_BACKEND_BASE_URL`, `SECMAN_HOST` (via `op run`) |
 | `bin/secmancli` | CrowdStrike, admin creds, AWS, API key, host |
 | `bin/secmanng` | Admin creds, host, SSL setting |
 | `bin/secmanserverca` | All from `secman.env` |

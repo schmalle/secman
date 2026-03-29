@@ -379,9 +379,7 @@ mysql -u secman -pCHANGEME secman
 
 ```bash
 # Database
-DB_HOST=localhost
-DB_PORT=3306
-DB_NAME=secman
+DB_CONNECT=jdbc:mariadb://localhost:3306/secman
 DB_PASSWORD=CHANGEME
 
 # JWT

@@ -1,7 +1,7 @@
 # Secman Environment Variables Reference
 
-**Last Updated:** 2026-03-24
-**Version:** 1.0
+**Last Updated:** 2026-03-29
+**Version:** 1.1
 
 This document provides a comprehensive reference for all environment variables used by Secman components.
 
@@ -24,14 +24,16 @@ The backend (Kotlin/Micronaut) is configured via environment variables, system p
 ### Database Configuration
 
 
-| Variable      | Description               | Default    | Required |
-| ------------- | ------------------------- | ---------- | -------- |
-| `DB_USERNAME` | MariaDB database username | `secman`   | Yes      |
-| `DB_PASSWORD` | MariaDB database password | `CHANGEME` | Yes      |
+| Variable      | Description                      | Default                                    | Required |
+| ------------- | -------------------------------- | ------------------------------------------ | -------- |
+| `DB_CONNECT`  | Full JDBC connection URL         | `jdbc:mariadb://localhost:3306/secman`      | Yes      |
+| `DB_USERNAME` | MariaDB database username        | `secman`                                   | Yes      |
+| `DB_PASSWORD` | MariaDB database password        | `CHANGEME`                                 | Yes      |
 
 **Example:**
 
 ```bash
+export DB_CONNECT=jdbc:mariadb://localhost:3306/secman
 export DB_USERNAME=secman
 export DB_PASSWORD=your_secure_password
 ```
@@ -342,6 +344,7 @@ export SECMAN_BACKEND_URL=https://api.yourdomain.com
 
 | Variable                     | Component | Must Change |
 | ---------------------------- | --------- | ----------- |
+| `DB_CONNECT`                 | Backend   | Yes         |
 | `DB_PASSWORD`                | Backend   | Yes         |
 | `JWT_SECRET`                 | Backend   | Yes         |
 | `SECMAN_ENCRYPTION_PASSWORD` | Backend   | Yes         |
@@ -356,7 +359,7 @@ export SECMAN_BACKEND_URL=https://api.yourdomain.com
 #### Backend (33 variables)
 
 ```
-DB_USERNAME, DB_PASSWORD
+DB_CONNECT, DB_USERNAME, DB_PASSWORD
 JWT_SECRET
 SECMAN_ENCRYPTION_PASSWORD, SECMAN_ENCRYPTION_SALT
 SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD
@@ -397,6 +400,7 @@ SECMAN_ADMIN_NAME, SECMAN_ADMIN_PASS, SECMAN_BACKEND_URL
 # =============================================================================
 
 # --- Database Configuration ---
+DB_CONNECT=jdbc:mariadb://localhost:3306/secman
 DB_USERNAME=secman
 DB_PASSWORD=REPLACE_WITH_SECURE_PASSWORD
 
