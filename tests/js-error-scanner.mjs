@@ -103,6 +103,7 @@ const PAGES = [
   '/admin/app-settings',
   '/admin/aws-account-sharing',
   '/admin/ec2-compliance',
+  '/admin/add-system',
 
   // About
   '/about',
