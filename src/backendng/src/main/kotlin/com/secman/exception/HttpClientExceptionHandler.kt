@@ -46,7 +46,7 @@ class HttpClientExceptionHandler : ExceptionHandler<HttpClientException, HttpRes
                     message.contains("Connection refused", ignoreCase = true) ->
                         "CrowdStrike API error: Unable to connect to external service."
                     else ->
-                        "CrowdStrike API error: $message"
+                        "CrowdStrike API error: An unexpected error occurred. Please try again."
                 }
             }
         }

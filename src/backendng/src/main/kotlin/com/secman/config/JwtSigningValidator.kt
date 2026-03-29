@@ -24,14 +24,19 @@ class JwtSigningValidator(
 
     @PostConstruct
     fun validate() {
-        // Warn loudly if using the default insecure JWT secret
+        // Fail fast if using the default insecure JWT secret
         if (jwtSecret == DEFAULT_INSECURE_SECRET) {
             logger.error("=".repeat(70))
-            logger.error("  SECURITY WARNING: Using default JWT signing secret!")
+            logger.error("  CRITICAL: Using default JWT signing secret!")
             logger.error("  Set the JWT_SECRET environment variable to a strong random value.")
             logger.error("  Generate one with: openssl rand -base64 48")
             logger.error("  The default secret is publicly known and allows token forgery!")
             logger.error("=".repeat(70))
+            throw IllegalStateException(
+                "CRITICAL: Application cannot start with the default JWT secret. " +
+                "Set the JWT_SECRET environment variable to a strong random value (min 256 bits). " +
+                "Generate one with: openssl rand -base64 48"
+            )
         }
         val testClaims = mapOf("sub" to "startup-check", "iss" to "secman-backend-ng")
         val token = jwtTokenGenerator.generateToken(testClaims)

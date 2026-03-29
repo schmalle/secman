@@ -1,12 +1,14 @@
 package com.secman.controller
 
 import com.secman.repository.UserRepository
+import com.secman.service.AuthCookieService
 import com.secman.service.WebAuthnService
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.annotation.*
 import io.micronaut.security.annotation.Secured
 import io.micronaut.security.authentication.Authentication
 import io.micronaut.security.rules.SecurityRule
+import io.micronaut.security.token.generator.TokenGenerator
 import io.micronaut.serde.annotation.Serdeable
 import jakarta.inject.Inject
 import jakarta.validation.Valid
@@ -19,7 +21,9 @@ import org.slf4j.LoggerFactory
 @Controller("/api/passkey")
 open class PasskeyController(
     private val webAuthnService: WebAuthnService,
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val tokenGenerator: TokenGenerator,
+    private val authCookieService: AuthCookieService
 ) {
     private val logger = LoggerFactory.getLogger(PasskeyController::class.java)
 
@@ -139,8 +143,24 @@ open class PasskeyController(
 
             val user = credential.user
 
-            // Generate JWT token (similar to password login)
-            // Note: This is a simplified version; in production, you'd use the TokenGenerator
+            // Generate JWT token using the same pattern as AuthController.login()
+            val userDetails = mapOf(
+                "sub" to user.username,
+                "username" to user.username,
+                "email" to user.email,
+                "roles" to user.roles.map { it.name },
+                "iss" to "secman-backend-ng",
+                "userId" to user.id.toString()
+            )
+
+            val tokenOptional = tokenGenerator.generateToken(userDetails)
+            if (tokenOptional.isEmpty) {
+                logger.error("Failed to generate JWT token for passkey authentication")
+                return HttpResponse.serverError<Any>().body(mapOf("error" to "Authentication failed"))
+            }
+
+            val token = tokenOptional.get()
+
             return HttpResponse.ok(mapOf(
                 "success" to true,
                 "userId" to user.id,
@@ -148,7 +168,7 @@ open class PasskeyController(
                 "email" to user.email,
                 "roles" to user.roles.map { it.name },
                 "message" to "Authentication successful"
-            ))
+            )).cookie(authCookieService.createAuthCookie(token))
 
         } catch (e: Exception) {
             logger.error("Failed to authenticate with passkey", e)

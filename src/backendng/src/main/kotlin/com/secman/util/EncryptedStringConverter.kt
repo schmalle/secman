@@ -29,21 +29,22 @@ class EncryptedStringConverter : AttributeConverter<String?, String?> {
 
             val usingDefaultPassword = password == null
             val usingDefaultSalt = salt == null
-            val isProduction = System.getenv("MICRONAUT_ENVIRONMENTS")
-                ?.split(",")?.any { it.trim().equals("prod", ignoreCase = true) } == true
+            val isDevelopment = System.getenv("MICRONAUT_ENVIRONMENTS")
+                ?.split(",")?.any { it.trim().equals("dev", ignoreCase = true) || it.trim().equals("test", ignoreCase = true) } == true
 
             if (usingDefaultPassword || usingDefaultSalt) {
-                if (isProduction) {
+                if (!isDevelopment) {
                     throw IllegalStateException(
-                        "CRITICAL: Encryption secrets not configured for production! " +
+                        "CRITICAL: Encryption secrets not configured! " +
                         "Set SECMAN_ENCRYPTION_PASSWORD and SECMAN_ENCRYPTION_SALT environment variables. " +
-                        "Use EncryptedStringConverter.generatePassword() and generateSalt() to create secure values."
+                        "Use EncryptedStringConverter.generatePassword() and generateSalt() to create secure values. " +
+                        "For local development, set MICRONAUT_ENVIRONMENTS=dev to use insecure defaults."
                     )
                 }
                 log.warn("##########################################################################")
                 log.warn("# SECURITY WARNING: Using default encryption secrets!                    #")
                 log.warn("# Set SECMAN_ENCRYPTION_PASSWORD and SECMAN_ENCRYPTION_SALT env vars     #")
-                log.warn("# for production deployments. Default secrets are PUBLIC and INSECURE.    #")
+                log.warn("# Default secrets are PUBLIC and INSECURE - dev/test only.               #")
                 log.warn("##########################################################################")
             }
 
