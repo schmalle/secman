@@ -2,6 +2,7 @@ package com.secman.config
 
 import io.micronaut.context.annotation.Context
 import io.micronaut.context.annotation.Requires
+import io.micronaut.context.env.Environment
 import io.micronaut.security.token.jwt.generator.JwtTokenGenerator
 import jakarta.annotation.PostConstruct
 import jakarta.inject.Singleton
@@ -14,7 +15,8 @@ import java.util.Base64
 class JwtSigningValidator(
     private val jwtTokenGenerator: JwtTokenGenerator,
     @io.micronaut.context.annotation.Value("\${micronaut.security.token.jwt.signatures.secret.generator.secret}")
-    private val jwtSecret: String
+    private val jwtSecret: String,
+    private val environment: Environment
 ) {
     private val logger = LoggerFactory.getLogger(JwtSigningValidator::class.java)
 
@@ -24,19 +26,27 @@ class JwtSigningValidator(
 
     @PostConstruct
     fun validate() {
-        // Fail fast if using the default insecure JWT secret
+        // Fail fast if using the default insecure JWT secret (except in dev)
         if (jwtSecret == DEFAULT_INSECURE_SECRET) {
-            logger.error("=".repeat(70))
-            logger.error("  CRITICAL: Using default JWT signing secret!")
-            logger.error("  Set the JWT_SECRET environment variable to a strong random value.")
-            logger.error("  Generate one with: openssl rand -base64 48")
-            logger.error("  The default secret is publicly known and allows token forgery!")
-            logger.error("=".repeat(70))
-            throw IllegalStateException(
-                "CRITICAL: Application cannot start with the default JWT secret. " +
-                "Set the JWT_SECRET environment variable to a strong random value (min 256 bits). " +
-                "Generate one with: openssl rand -base64 48"
-            )
+            if ("dev" in environment.activeNames) {
+                logger.warn("=".repeat(70))
+                logger.warn("  WARNING: Using default JWT signing secret in dev environment!")
+                logger.warn("  This is acceptable for local development only.")
+                logger.warn("  For production, set JWT_SECRET environment variable.")
+                logger.warn("=".repeat(70))
+            } else {
+                logger.error("=".repeat(70))
+                logger.error("  CRITICAL: Using default JWT signing secret!")
+                logger.error("  Set the JWT_SECRET environment variable to a strong random value.")
+                logger.error("  Generate one with: openssl rand -base64 48")
+                logger.error("  The default secret is publicly known and allows token forgery!")
+                logger.error("=".repeat(70))
+                throw IllegalStateException(
+                    "CRITICAL: Application cannot start with the default JWT secret. " +
+                    "Set the JWT_SECRET environment variable to a strong random value (min 256 bits). " +
+                    "Generate one with: openssl rand -base64 48"
+                )
+            }
         }
         val testClaims = mapOf("sub" to "startup-check", "iss" to "secman-backend-ng")
         val token = jwtTokenGenerator.generateToken(testClaims)

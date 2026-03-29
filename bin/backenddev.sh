@@ -1,9 +1,7 @@
 export MICRONAUT_ENVIRONMENTS=dev
-export SECMAN_BACKEND_URL="op://test/secman/SECMAN_HOST"
-export DB_HOST="op://test/secman/DB_HOST"
-export DB_PORT="op://test/secman/DB_PORT"
-export DB_NAME="op://test/secman/DB_NAME"
-export DB_CONNECT="jdbc:mariadb://"+DB_HOST+":"+DB_PORT+"/"+DB_NAME
+export SECMAN_BACKEND_URL="op://test/secman/SECMAN_BACKEND_BASE_URL"
+export DB_CONNECT="op://test/secman/DB_CONNECT"
 
+export JWT_SECRET=$(openssl rand -base64 48)
 
-gradle :backendng:clean backendeng:run
+op run -- gradle :backendng:clean backendng:run
