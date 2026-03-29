@@ -20,9 +20,10 @@ import jakarta.transaction.Transactional
 import jakarta.validation.Valid
 import org.slf4j.LoggerFactory
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
+import com.github.benmanes.caffeine.cache.Caffeine
 import java.time.Instant
-import java.util.concurrent.ConcurrentHashMap
 import java.util.*
+import java.util.concurrent.TimeUnit
 
 @Controller("/api/auth")
 open class AuthController(
@@ -37,42 +38,46 @@ open class AuthController(
     private val passwordEncoder = BCryptPasswordEncoder()
     private val logger = LoggerFactory.getLogger(AuthController::class.java)
 
-    // Login rate limiting: track failed attempts per username
+    // Login rate limiting: track failed attempts per username with automatic TTL eviction.
+    // Uses Caffeine cache to prevent unbounded memory growth and ensure entries expire
+    // after the lockout window, even under sustained enumeration attacks.
     private data class LoginAttemptRecord(val count: Int, val firstAttemptAt: Instant)
-    private val loginAttempts = ConcurrentHashMap<String, LoginAttemptRecord>()
+    private val loginAttempts = Caffeine.newBuilder()
+        .expireAfterWrite(15, TimeUnit.MINUTES)
+        .maximumSize(10_000)
+        .build<String, LoginAttemptRecord>()
     private val maxLoginAttempts = 5
     private val lockoutDurationSeconds = 900L // 15 minutes
 
     private fun isLoginLocked(key: String): Boolean {
-        val record = loginAttempts[key] ?: return false
+        val record = loginAttempts.getIfPresent(key) ?: return false
         if (record.count >= maxLoginAttempts) {
             val elapsed = java.time.Duration.between(record.firstAttemptAt, Instant.now()).seconds
             if (elapsed < lockoutDurationSeconds) {
                 return true
             }
             // Lockout expired, reset
-            loginAttempts.remove(key)
+            loginAttempts.invalidate(key)
         }
         return false
     }
 
     private fun recordFailedLogin(key: String) {
-        loginAttempts.compute(key) { _, existing ->
-            if (existing == null) {
-                LoginAttemptRecord(1, Instant.now())
+        val existing = loginAttempts.getIfPresent(key)
+        if (existing == null) {
+            loginAttempts.put(key, LoginAttemptRecord(1, Instant.now()))
+        } else {
+            val elapsed = java.time.Duration.between(existing.firstAttemptAt, Instant.now()).seconds
+            if (elapsed >= lockoutDurationSeconds) {
+                loginAttempts.put(key, LoginAttemptRecord(1, Instant.now()))
             } else {
-                val elapsed = java.time.Duration.between(existing.firstAttemptAt, Instant.now()).seconds
-                if (elapsed >= lockoutDurationSeconds) {
-                    LoginAttemptRecord(1, Instant.now()) // Reset window
-                } else {
-                    LoginAttemptRecord(existing.count + 1, existing.firstAttemptAt)
-                }
+                loginAttempts.put(key, LoginAttemptRecord(existing.count + 1, existing.firstAttemptAt))
             }
         }
     }
 
     private fun clearFailedLogins(key: String) {
-        loginAttempts.remove(key)
+        loginAttempts.invalidate(key)
     }
 
     @Serdeable

@@ -367,6 +367,20 @@ class McpStreamableHttpController(
 
         val effectivePermissions = delegation.effectivePermissions
 
+        // Security fix: Enforce rate limiting on all MCP tool calls
+        val rateLimitCheck = toolPermissionService.checkRateLimitForApiKey(
+            mcpApiKey.id,
+            request.id?.toString()
+        )
+        if (rateLimitCheck.exceeded) {
+            logger.warn("MCP rate limit exceeded: apiKeyId={}, tool={}", mcpApiKey.id, toolName)
+            return JsonRpcResponse.error(
+                request.id,
+                JsonRpcErrorCodes.INTERNAL_ERROR,
+                "Rate limit exceeded. Resets at ${rateLimitCheck.resetTime}"
+            )
+        }
+
         // Check tool permission
         val permissionCheck = toolPermissionService.hasPermissionWithSet(
             toolName,

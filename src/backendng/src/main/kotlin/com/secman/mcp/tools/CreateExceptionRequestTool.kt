@@ -4,6 +4,7 @@ import com.secman.domain.ExceptionScope
 import com.secman.domain.McpOperation
 import com.secman.dto.CreateExceptionRequestDto
 import com.secman.dto.mcp.McpExecutionContext
+import com.secman.repository.VulnerabilityRepository
 import com.secman.service.VulnerabilityExceptionRequestService
 import jakarta.inject.Inject
 import jakarta.inject.Singleton
@@ -16,7 +17,7 @@ import java.time.format.DateTimeParseException
  *
  * Access Control:
  * - Requires User Delegation
- * - Any authenticated user can create requests
+ * - Any authenticated user can create requests for vulnerabilities on accessible assets
  * - ADMIN/SECCHAMPION requests are auto-approved
  *
  * Spec reference: spec.md FR-006 through FR-010
@@ -24,7 +25,8 @@ import java.time.format.DateTimeParseException
  */
 @Singleton
 class CreateExceptionRequestTool(
-    @Inject private val exceptionRequestService: VulnerabilityExceptionRequestService
+    @Inject private val exceptionRequestService: VulnerabilityExceptionRequestService,
+    @Inject private val vulnerabilityRepository: VulnerabilityRepository
 ) : McpTool {
 
     override val name = "create_exception_request"
@@ -72,6 +74,18 @@ class CreateExceptionRequestTool(
             // Parse and validate vulnerabilityId
             val vulnerabilityId = (arguments["vulnerabilityId"] as? Number)?.toLong()
                 ?: return McpToolResult.error("VALIDATION_ERROR", "vulnerabilityId is required")
+
+            // Security fix: Verify the delegated user can access the vulnerability's asset
+            // Without this check, a non-ADMIN user could create exception requests for
+            // vulnerabilities on assets they cannot normally access via MCP or REST API.
+            if (!context.isAdmin) {
+                val vulnerability = vulnerabilityRepository.findById(vulnerabilityId).orElse(null)
+                    ?: return McpToolResult.error("NOT_FOUND", "Vulnerability not found: $vulnerabilityId")
+                val assetId = vulnerability.asset.id
+                if (assetId == null || !context.canAccessAsset(assetId)) {
+                    return McpToolResult.error("NOT_FOUND", "Vulnerability not found: $vulnerabilityId")
+                }
+            }
 
             // Parse and validate reason
             val reason = arguments["reason"] as? String

@@ -55,56 +55,38 @@
             if (errorMsg) errorMsg.textContent = message;
         }
 
-        // Extract URL parameters
-        // Note: JWT token is delivered solely via HttpOnly cookie (secman_auth) set by backend.
-        // Only user metadata is passed in the URL for client-side state.
-        var urlParams = new URLSearchParams(window.location.search);
-        var userJson = urlParams.get('user');
+        // Clean up any legacy token storage from previous versions
+        localStorage.removeItem('authToken');
+        document.cookie = 'authToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
 
-        if (userJson) {
-            try {
-                // Decode and parse user data
-                var userData = JSON.parse(decodeURIComponent(userJson));
-
-                // Clean up any legacy token storage from previous versions
-                localStorage.removeItem('authToken');
-                document.cookie = 'authToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-
-                // Store user metadata only (non-sensitive, for UI display and role checks)
-                // Authentication is handled entirely via the HttpOnly secman_auth cookie
+        // Security: User metadata is no longer passed in the URL to prevent PII exposure
+        // in browser history, access logs, and Referer headers.
+        // Instead, fetch user data from the authenticated /api/auth/status endpoint
+        // using the HttpOnly cookie set by the backend during OAuth callback.
+        fetch('/api/auth/status', {
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include'
+        })
+            .then(function(response) {
+                if (response.ok) {
+                    return response.json();
+                }
+                throw new Error('HTTP ' + response.status);
+            })
+            .then(function(userData) {
+                // Store user metadata for UI display and role checks
                 localStorage.setItem('user', JSON.stringify(userData));
 
                 // Set global user state for Header component
                 window.currentUser = userData;
                 window.dispatchEvent(new CustomEvent('userLoaded'));
 
-                // Clean sensitive data from URL before redirect (prevents token in browser history)
-                window.history.replaceState({}, '', '/login/success');
-
-                // Verify the auth cookie is working before redirecting
-                fetch('/api/auth/status', { credentials: 'include' })
-                    .then(function(response) {
-                        if (response.ok) {
-                            window.location.href = '/';
-                        } else {
-                            console.error('Auth verification failed, status:', response.status, 'statusText:', response.statusText);
-                            showError('Authentication cookie was not set properly (HTTP ' + response.status + '). Please try logging in again.');
-                        }
-                    })
-                    .catch(function(err) {
-                        console.error('Auth verification request failed:', err);
-                        // Network error - try redirecting anyway, the cookie might still work
-                        window.location.href = '/';
-                    });
-
-            } catch (error) {
-                console.error('Error processing login success:', error);
-                showError('Login succeeded, but there was an error processing your data. Please try again.');
-            }
-        } else {
-            console.error('Missing user data in OAuth callback');
-            showError('Login data was not received. Please try logging in again.');
-        }
+                window.location.href = '/';
+            })
+            .catch(function(err) {
+                console.error('Auth verification failed:', err);
+                showError('Authentication cookie was not set properly. Please try logging in again.');
+            });
     </script>
 </body>
 </html>

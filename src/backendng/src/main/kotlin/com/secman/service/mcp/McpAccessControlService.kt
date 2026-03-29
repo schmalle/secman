@@ -30,6 +30,8 @@ import org.slf4j.LoggerFactory
  * 4. Asset discovered via user's scan upload
  * 5. Asset's cloudAccountId matches user's AWS mappings (UserMapping)
  * 6. Asset's adDomain matches user's domain mappings (UserMapping, case-insensitive)
+ * 7. Asset's cloudAccountId matches shared AWS accounts (AwsAccountSharing)
+ * 8. Asset's owner matches user's username
  */
 @Singleton
 open class McpAccessControlService(
@@ -87,7 +89,7 @@ open class McpAccessControlService(
         val accessibleAssetIds = if (isAdmin) {
             null
         } else {
-            getAccessibleAssetIds(delegation.delegatedUserId, delegation.delegatedUserEmail)
+            getAccessibleAssetIds(delegation.delegatedUserId, delegation.delegatedUserEmail, user.username)
         }
 
         // Compute accessible workgroup IDs for potential workgroup-specific queries
@@ -122,15 +124,18 @@ open class McpAccessControlService(
      * 3. Asset discovered via user's scan upload
      * 4. Asset's cloudAccountId matches user's AWS mappings
      * 5. Asset's adDomain matches user's domain mappings (case-insensitive)
+     * 6. Asset's cloudAccountId matches shared AWS accounts (AwsAccountSharing)
+     * 7. Asset's owner matches user's username
      *
      * Note: ADMIN check happens before this method is called.
      *
      * @param userId The user's ID
      * @param userEmail The user's email (for UserMapping lookups)
+     * @param username The user's username (for owner matching)
      * @return Set of accessible asset IDs
      */
     @Cacheable(value = ["mcp_accessible_assets"], parameters = ["userId", "userEmail"])
-    open fun getAccessibleAssetIds(userId: Long, userEmail: String): Set<Long> {
+    open fun getAccessibleAssetIds(userId: Long, userEmail: String, username: String): Set<Long> {
         logger.debug("Computing accessible asset IDs (cache miss): userId={}, email={}", userId, userEmail)
 
         // Criteria 1-3: Workgroup membership + manual creator + scan uploader
@@ -167,11 +172,14 @@ open class McpAccessControlService(
             emptyList()
         }
 
-        val allAccessibleIds = (workgroupAssets + awsAssets + domainAssets + sharedAssets).toSet()
+        // Criteria 7: Asset owner matches user's username
+        val ownerAssets = assetRepository.findByOwner(username).mapNotNull { it.id }
+
+        val allAccessibleIds = (workgroupAssets + awsAssets + domainAssets + sharedAssets + ownerAssets).toSet()
 
         logger.info(
-            "Computed accessible assets: userId={}, email={}, workgroup={}, aws={}, domain={}, shared={}, total={}",
-            userId, userEmail, workgroupAssets.size, awsAssets.size, domainAssets.size, sharedAssets.size, allAccessibleIds.size
+            "Computed accessible assets: userId={}, email={}, workgroup={}, aws={}, domain={}, shared={}, owner={}, total={}",
+            userId, userEmail, workgroupAssets.size, awsAssets.size, domainAssets.size, sharedAssets.size, ownerAssets.size, allAccessibleIds.size
         )
 
         return allAccessibleIds
