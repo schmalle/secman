@@ -5,30 +5,13 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="94ada8b3-9f4e-473c-9fea-3bc9651b5bdd" name="Changes" comment="test change">
-      <change afterPath="$PROJECT_DIR$/bin/backenddev.sh" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/dataSources.local.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/dataSources.local.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/dataSources/90352fce-ba45-402e-9b8a-736ffb037f91.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/dataSources/90352fce-ba45-402e-9b8a-736ffb037f91.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/AGENTS.md" beforeDir="false" afterPath="$PROJECT_DIR$/AGENTS.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bin/backenddev.sh" beforeDir="false" afterPath="$PROJECT_DIR$/bin/backenddev.sh" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bin/secmancli" beforeDir="false" afterPath="$PROJECT_DIR$/bin/secmancli" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/bin/secmanng" beforeDir="false" afterPath="$PROJECT_DIR$/bin/secmanng" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docker-compose.yml" beforeDir="false" afterPath="$PROJECT_DIR$/docker-compose.yml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/DEPLOYMENT.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/DEPLOYMENT.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/ENVIRONMENT.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/ENVIRONMENT.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/examples/mcp/README.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/examples/mcp/secman_mcp_client.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/examples/mcp/simple_client.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/install/Install.MD" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/install/Install.MD" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bin/secmanreportenv" beforeDir="false" afterPath="$PROJECT_DIR$/bin/secmanreportenv" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/1PASSWORD.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/1PASSWORD.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/secman.env" beforeDir="false" afterPath="$PROJECT_DIR$/secman.env" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/specs/069-enhanced-admin-summary/research.md" beforeDir="false" afterPath="$PROJECT_DIR$/specs/069-enhanced-admin-summary/research.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/specs/069-enhanced-admin-summary/spec.md" beforeDir="false" afterPath="$PROJECT_DIR$/specs/069-enhanced-admin-summary/spec.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/docs/start.md" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/docs/start.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/config/AppConfig.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/config/AppConfig.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/IdentityProviderController.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/IdentityProviderController.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/domain/IdentityProvider.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/domain/IdentityProvider.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/resources/application.yml" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/resources/application.yml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/tests/e2e/playwright.config.ts" beforeDir="false" afterPath="$PROJECT_DIR$/tests/e2e/playwright.config.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/tests/e2e/run-e2e.sh" beforeDir="false" afterPath="$PROJECT_DIR$/tests/e2e/run-e2e.sh" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

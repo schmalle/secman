@@ -11,6 +11,12 @@ API_KEY=op://test/secman/API_KEY
 SECMAN_ADMIN_EMAIL=op://test/secman/SECMAN_ADMIN_EMAIL
 AWS_ACCESS_KEY_ID=op://test/secman/AWS_ACCESS_KEY_ID
 AWS_SECRET_ACCESS_KEY=op://test/secman/AWS_SECRET_ACCESS_KEY
+export DB_HOST="op://test/secman/DB_HOST"
+export DB_PORT="op://test/secman/DB_PORT"
+export DB_NAME="op://test/secman/DB_NAME"
+export DB_CONNECT="jdbc:mariadb://"+DB_HOST+":"+DB_PORT+"/"+DB_NAME
+
+
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"

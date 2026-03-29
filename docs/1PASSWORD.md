@@ -21,7 +21,7 @@ secman uses [1Password CLI](https://developer.1password.com/docs/cli/) (`op`) to
 | `SECMAN_USER_PASS` | `SECMAN_USER_PASS` | Regular user password | E2E tests (Playwright) |
 | `API_KEY` | `API_KEY` | MCP API key | Backend, CLI |
 | `SECMAN_API_KEY` | `SECMAN_API_KEY` | API key (alternative reference) | MCP E2E tests, release tests |
-| `SECMAN_HOST` | `SECMAN_HOST` / `SECMAN_BACKEND_URL` / `BACKEND_BASE_URL` | Backend server URL | CLI, JS error scanner |
+| `SECMAN_HOST` | `SECMAN_HOST` / `SECMAN_BACKEND_URL` | Backend server URL | CLI, JS error scanner |
 | `SECMAN_SSL_ACCEPT_ALL` | `SECMAN_INSECURE` | Accept self-signed SSL certificates | CLI, JS error scanner |
 | `SECMAN_TEST_DOMAIN` | `SECMAN_TEST_DOMAIN` | Test domain for MCP tests | MCP E2E tests |
 | `FALCON_CLIENT_ID` | `FALCON_CLIENT_ID` | CrowdStrike Falcon API client ID | CLI (query servers) |
