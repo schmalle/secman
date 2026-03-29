@@ -27,7 +27,7 @@ export SECMAN_API_KEY="op://test/secman/SECMAN_API_KEY"
 export SECMAN_TEST_DOMAIN="op://test/secman/SECMAN_TEST_DOMAIN"
 
 # Configuration
-BASE_URL="${SECMAN_BASE_URL:-http://localhost:8080}"
+BASE_URL="${SECMAN_BACKEND_URL:-http://localhost:8080}"
 TEST_USER_NAME="E2E_TEST_USER_$(date +%s)"
 TEST_USER_EMAIL=""  # Set after SECMAN_TEST_DOMAIN is resolved
 TEST_ASSET_NAME="E2E_TEST_ASSET_$(date +%s)"

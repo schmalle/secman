@@ -52,7 +52,7 @@
 
 ```bash
 export SECMAN_ADMIN_EMAIL="admin@example.com"
-export SECMAN_BASE_URL="http://localhost:8080"
+export SECMAN_BACKEND_URL="http://localhost:8080"
 ```
 
 ### 2. Import from CSV

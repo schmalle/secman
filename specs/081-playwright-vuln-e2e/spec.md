@@ -97,7 +97,7 @@ The test suite accepts credentials via command-line environment variables or arg
 - **FR-005**: The test suite MUST monitor the browser console throughout the entire test flow and fail if any JavaScript error-level messages are detected
 - **FR-006**: The test suite MUST run on both Google Chrome and Microsoft Edge browsers
 - **FR-007**: The test suite MUST accept user credentials via environment variables (e.g., `SECMAN_ADMIN_NAME`, `SECMAN_ADMIN_PASS`, `SECMAN_USER_USER`, `SECMAN_USER_PASS`)
-- **FR-008**: The test suite MUST accept the application base URL via environment variable (e.g., `SECMAN_BASE_URL`)
+- **FR-008**: The test suite MUST accept the application base URL via environment variable (e.g., `SECMAN_BACKEND_URL`)
 - **FR-009**: The test suite MUST provide a runner script demonstrating 1Password CLI (`op`) integration for credential injection
 - **FR-010**: The test suite MUST fail with a clear error message when required credentials or base URL are not provided
 - **FR-011**: JavaScript warnings and informational console messages MUST NOT cause test failure — only `error`-level messages should fail the test

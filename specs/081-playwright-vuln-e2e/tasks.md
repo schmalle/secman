@@ -30,7 +30,7 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [x] T003 Create `tests/e2e/playwright.config.ts` — configure two projects: `chrome` with `channel: 'chrome'` and `msedge` with `channel: 'msedge'`; read `SECMAN_BASE_URL` env var as `baseURL` (default `http://localhost:4321`); set `navigationTimeout: 30000`; set `actionTimeout: 10000`; enable HTML reporter; set `retries: 0` for deterministic results (implements FR-006, FR-008, SC-004, SC-005; delivers US3 cross-browser requirement via project matrix — ref: research.md R2)
+- [x] T003 Create `tests/e2e/playwright.config.ts` — configure two projects: `chrome` with `channel: 'chrome'` and `msedge` with `channel: 'msedge'`; read `SECMAN_BACKEND_URL` env var as `baseURL` (default `http://localhost:4321`); set `navigationTimeout: 30000`; set `actionTimeout: 10000`; enable HTML reporter; set `retries: 0` for deterministic results (implements FR-006, FR-008, SC-004, SC-005; delivers US3 cross-browser requirement via project matrix — ref: research.md R2)
 
 **Checkpoint**: `npx playwright test` should run (and fail with "no tests found") on both Chrome and Edge projects
 
@@ -89,7 +89,7 @@
 
 ### Implementation for User Story 4
 
-- [x] T008 [US4] Create `tests/e2e/run-e2e.sh` — bash script with `#!/usr/bin/env bash` and `set -euo pipefail`; check `op --version` is available (exit with error if not); export env vars using `op://test/secman/...` URI format for `SECMAN_ADMIN_NAME`, `SECMAN_ADMIN_PASS`, `SECMAN_USER_USER`, `SECMAN_USER_PASS`; accept optional `SECMAN_BASE_URL` (default `http://localhost:4321`); run `op run -- npx playwright test "$@"` to pass through CLI args; make script executable with `chmod +x` (implements FR-009; ref: research.md R7)
+- [x] T008 [US4] Create `tests/e2e/run-e2e.sh` — bash script with `#!/usr/bin/env bash` and `set -euo pipefail`; check `op --version` is available (exit with error if not); export env vars using `op://test/secman/...` URI format for `SECMAN_ADMIN_NAME`, `SECMAN_ADMIN_PASS`, `SECMAN_USER_USER`, `SECMAN_USER_PASS`; accept optional `SECMAN_BACKEND_URL` (default `http://localhost:4321`); run `op run -- npx playwright test "$@"` to pass through CLI args; make script executable with `chmod +x` (implements FR-009; ref: research.md R7)
 
 **Checkpoint**: `./tests/e2e/run-e2e.sh` executes full test matrix with 1Password-resolved credentials
 

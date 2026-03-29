@@ -11,7 +11,7 @@ Requirements:
 Environment variables:
     SECMAN_API_KEY      - MCP API key (required)
     SECMAN_USER_EMAIL   - User email for delegation (required)
-    SECMAN_BASE_URL     - Server URL (default: http://localhost:8080)
+    SECMAN_BACKEND_URL  - Server URL (default: http://localhost:8080)
 """
 
 import json
@@ -28,7 +28,7 @@ except ImportError:
 def main():
     api_key = os.environ.get("SECMAN_API_KEY")
     user_email = os.environ.get("SECMAN_USER_EMAIL")
-    base_url = os.environ.get("SECMAN_BASE_URL", "http://localhost:8080")
+    base_url = os.environ.get("SECMAN_BACKEND_URL", "http://localhost:8080")
 
     if not api_key:
         print("Error: SECMAN_API_KEY environment variable is required")

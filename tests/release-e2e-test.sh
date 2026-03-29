@@ -29,7 +29,7 @@ export SECMAN_ADMIN_PASS="op://test/secman/SECMAN_ADMIN_PASS"
 export SECMAN_API_KEY="op://test/secman/SECMAN_API_KEY"
 
 # Configuration
-BASE_URL="${SECMAN_BASE_URL:-http://localhost:8080}"
+BASE_URL="${SECMAN_BACKEND_URL:-http://localhost:8080}"
 TIMESTAMP=$(date +%s)
 TEST_REQ_SHORTREQ_1="E2E_REQ_ALPHA_${TIMESTAMP}"
 TEST_REQ_SHORTREQ_2="E2E_REQ_BETA_${TIMESTAMP}"

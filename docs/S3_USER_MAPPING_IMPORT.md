@@ -308,7 +308,7 @@ DEBUG=1 ./tests/s3-user-mapping-import-e2e-test.sh
 | `AWS_ACCESS_KEY_ID`     | Yes      | 1Password URI           | AWS credentials              |
 | `AWS_SECRET_ACCESS_KEY` | Yes      | 1Password URI           | AWS credentials              |
 | `SECMAN_ADMIN_EMAIL`    | Yes      | 1Password URI           | Admin email for CLI commands |
-| `SECMAN_BASE_URL`       | No       | `http://localhost:8080` | Backend URL                  |
+| `SECMAN_BACKEND_URL`       | No       | `http://localhost:8080` | Backend URL                  |
 
 ### Expected Output
 

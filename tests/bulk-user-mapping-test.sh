@@ -16,7 +16,7 @@
 # Usage:
 #   ./tests/bulk-user-mapping-test.sh
 #   DEBUG=1 ./tests/bulk-user-mapping-test.sh                           # Verbose output
-#   SECMAN_BASE_URL=http://localhost:8080 ./tests/bulk-user-mapping-test.sh  # Custom URL
+#   SECMAN_BACKEND_URL=http://localhost:8080 ./tests/bulk-user-mapping-test.sh  # Custom URL
 #   SECMAN_INSECURE=false ./tests/bulk-user-mapping-test.sh             # Enforce SSL verification
 
 set -euo pipefail
@@ -27,7 +27,7 @@ export SECMAN_ADMIN_PASS="${SECMAN_ADMIN_PASS:-op://test/secman/SECMAN_ADMIN_PAS
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BASE_URL="${SECMAN_BASE_URL:-https://secman.covestro.net}"
+BASE_URL="${SECMAN_BACKEND_URL:-https://secman.covestro.net}"
 INSECURE="${SECMAN_INSECURE:-true}"  # Skip SSL verification (internal cert)
 TIMESTAMP=$(date +%s)
 TEST_EMAIL="e2e-bulk-${TIMESTAMP}@test.secman.local"

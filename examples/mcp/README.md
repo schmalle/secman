@@ -17,7 +17,7 @@ pip install requests
 
 export SECMAN_API_KEY="sk-your-api-key"
 export SECMAN_USER_EMAIL="admin@company.com"
-export SECMAN_BASE_URL="http://localhost:8080"  # optional, this is the default
+export SECMAN_BACKEND_URL="http://localhost:8080"  # optional, this is the default
 ```
 
 > **Important:** `SECMAN_USER_EMAIL` is mandatory. The server requires the `X-MCP-User-Email` header for all data-accessing endpoints (`tools/list`, `tools/call`). Requests without this header will receive a `DELEGATION_REQUIRED` error.
@@ -85,7 +85,7 @@ python secman_mcp_client.py --api-key sk-xxx --user-email admin@co.com -v list-t
 |----------|----------|---------|-------------|
 | `SECMAN_API_KEY` | Yes | - | MCP API key (starts with `sk-`) |
 | `SECMAN_USER_EMAIL` | Yes | - | User email for delegation |
-| `SECMAN_BASE_URL` | No | `http://localhost:8080` | Secman server URL |
+| `SECMAN_BACKEND_URL` | No | `http://localhost:8080` | Secman server URL |
 
 ## Error Handling
 

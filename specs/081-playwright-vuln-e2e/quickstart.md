@@ -30,7 +30,7 @@ The runner script resolves credentials from 1Password vault `test/secman` and ru
 
 ```bash
 cd tests/e2e
-SECMAN_BASE_URL=http://localhost:4321 \
+SECMAN_BACKEND_URL=http://localhost:4321 \
 SECMAN_ADMIN_NAME=adminuser \
 SECMAN_ADMIN_PASS=adminpass \
 SECMAN_USER_USER=normaluser \

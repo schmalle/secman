@@ -13,7 +13,7 @@
 # - op (1Password CLI) optional — env vars can be plain text
 # - Environment variables:
 #   SECMAN_ADMIN_NAME, SECMAN_ADMIN_PASS, SECMAN_API_KEY
-#   Optionally: SECMAN_BASE_URL (default: http://localhost:8080)
+#   Optionally: SECMAN_BACKEND_URL (default: http://localhost:8080)
 #
 # Usage:
 #   ./scripts/release-e2e-test.sh
@@ -26,7 +26,7 @@ export SECMAN_ADMIN_PASS="${SECMAN_ADMIN_PASS:-op://test/secman/SECMAN_ADMIN_PAS
 export SECMAN_API_KEY="${SECMAN_API_KEY:-op://test/secman/SECMAN_API_KEY}"
 
 # Configuration
-BASE_URL="${SECMAN_BASE_URL:-http://localhost:8080}"
+BASE_URL="${SECMAN_BACKEND_URL:-http://localhost:8080}"
 TIMESTAMP=$(date +%s)
 TEST_REQ_SHORTREQ_1="E2E_RELEASE_REQ_A_${TIMESTAMP}"
 TEST_REQ_SHORTREQ_2="E2E_RELEASE_REQ_B_${TIMESTAMP}"

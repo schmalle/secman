@@ -5,7 +5,7 @@
 //
 // Usage:
 //
-//	export SECMAN_BASE_URL=http://localhost:8080
+//	export SECMAN_BACKEND_URL=http://localhost:8080
 //	export SECMAN_API_KEY=sk-your-api-key
 //	export SECMAN_USER_EMAIL=admin@example.com  # optional, for user delegation
 //	go run main.go [command] [flags]
@@ -242,7 +242,7 @@ Commands:
   scans                 List scan history
 
 Environment Variables:
-  SECMAN_BASE_URL       Backend URL (default: http://localhost:8080)
+  SECMAN_BACKEND_URL    Backend URL (default: http://localhost:8080)
   SECMAN_API_KEY        MCP API key (required)
   SECMAN_USER_EMAIL     User email for delegation (optional)
 
@@ -277,7 +277,7 @@ func main() {
 		usage()
 	}
 
-	baseURL := envOrDefault("SECMAN_BASE_URL", "http://localhost:8080")
+	baseURL := envOrDefault("SECMAN_BACKEND_URL", "http://localhost:8080")
 	apiKey := os.Getenv("SECMAN_API_KEY")
 	userEmail := os.Getenv("SECMAN_USER_EMAIL")
 
