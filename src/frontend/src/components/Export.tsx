@@ -16,16 +16,18 @@ const Export = () => {
     const [isLoadingUseCases, setIsLoadingUseCases] = useState<boolean>(false);
     const [selectedLanguage, setSelectedLanguage] = useState<string>('english');
     const [translationConfigured, setTranslationConfigured] = useState<boolean>(false);
-    const [selectedReleaseId, setSelectedReleaseId] = useState<number | null>(() => {
-        if (typeof window !== 'undefined') {
-            const stored = sessionStorage.getItem('secman_selectedReleaseId');
-            if (stored) {
-                const parsed = parseInt(stored, 10);
-                return isNaN(parsed) ? null : parsed;
+    const [selectedReleaseId, setSelectedReleaseId] = useState<number | null>(null);
+
+    // Restore release selection from sessionStorage after mount (avoids SSR hydration mismatch)
+    useEffect(() => {
+        const stored = sessionStorage.getItem('secman_selectedReleaseId');
+        if (stored) {
+            const parsed = parseInt(stored, 10);
+            if (!isNaN(parsed)) {
+                setSelectedReleaseId(parsed);
             }
         }
-        return null;
-    });
+    }, []);
 
     useEffect(() => {
         const fetchUseCases = async () => {

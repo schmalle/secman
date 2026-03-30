@@ -5,9 +5,7 @@ export const API_CONFIG = {
   // Backend URL - Using Kotlin backend on port 8080
   // In production (when served from secman.covestro.net), use relative URLs
   // In development, use localhost
-  BACKEND_URL: typeof window !== 'undefined' && window.location.hostname !== 'localhost'
-    ? '' // Use relative URLs in production
-    : 'http://localhost:8080', // Use localhost in development
+  BACKEND_URL: '', // Always use relative URLs — Vite dev server proxies /api to the backend
   
   // Legacy migration flags - kept for reference, all APIs are now migrated ✅
   USE_KOTLIN_FOR: {

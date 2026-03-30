@@ -1,11 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { isAdmin, authenticatedPost } from '../../utils/auth';
 
 const AdminAddSystem: React.FC = () => {
-    if (!isAdmin()) {
-        return <div className="alert alert-danger">Access denied. Admin role required.</div>;
-    }
+    // Defer the admin check to a useEffect to avoid SSR/client hydration mismatch.
+    // During SSR there is no localStorage, so isAdmin() returns false and would render
+    // the "Access denied" alert, while the client (with a JWT in storage) would render
+    // the full form — causing a hydration error.
+    const [adminChecked, setAdminChecked] = useState(false);
+    const [authorized, setAuthorized] = useState(false);
 
+    // All hooks must be declared unconditionally (Rules of Hooks).
     // Asset form state
     const [assetName, setAssetName] = useState('');
     const [assetType, setAssetType] = useState('SERVER');
@@ -23,6 +27,11 @@ const AdminAddSystem: React.FC = () => {
     const [vulnDaysOpen, setVulnDaysOpen] = useState(0);
     const [vulnLoading, setVulnLoading] = useState(false);
     const [vulnMessage, setVulnMessage] = useState<{ type: string; text: string } | null>(null);
+
+    useEffect(() => {
+        setAuthorized(isAdmin());
+        setAdminChecked(true);
+    }, []);
 
     const handleAddAsset = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -96,6 +105,14 @@ const AdminAddSystem: React.FC = () => {
             setVulnLoading(false);
         }
     };
+
+    if (!adminChecked) {
+        return <div className="text-center py-4"><span className="spinner-border spinner-border-sm me-2"></span>Loading...</div>;
+    }
+
+    if (!authorized) {
+        return <div className="alert alert-danger">Access denied. Admin role required.</div>;
+    }
 
     return (
         <div className="row">

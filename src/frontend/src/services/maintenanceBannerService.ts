@@ -4,10 +4,8 @@ import axios from 'axios';
  * API base URL from environment or default to localhost
  * Uses relative URLs in production to avoid CORS issues
  */
-const API_BASE = import.meta.env.PUBLIC_API_URL ||
-  (typeof window !== 'undefined' && window.location.hostname !== 'localhost'
-    ? '/api' // Use relative URLs in production
-    : 'http://localhost:8080/api'); // Use localhost in development
+const API_BASE = import.meta.env.PUBLIC_API_URL || '/api';
+// Always use relative URLs — Vite dev server proxies /api to the backend
 
 /**
  * Maintenance Banner interface matching backend MaintenanceBannerResponse DTO

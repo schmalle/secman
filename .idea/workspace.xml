@@ -5,7 +5,11 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="94ada8b3-9f4e-473c-9fea-3bc9651b5bdd" name="Changes" comment="test change">
-      <change beforePath="$PROJECT_DIR$/bin/backenddev.sh" beforeDir="false" afterPath="$PROJECT_DIR$/bin/backenddev.sh" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/src/components/admin/AdminAddSystem.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/components/admin/AdminAddSystem.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/src/services/api/index.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/services/api/index.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/src/services/api/vulnerabilityStatisticsApi.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/services/api/vulnerabilityStatisticsApi.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/src/services/maintenanceBannerService.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/services/maintenanceBannerService.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/src/utils/api-config.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/utils/api-config.ts" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
