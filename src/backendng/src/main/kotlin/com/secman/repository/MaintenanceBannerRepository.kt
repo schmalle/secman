@@ -30,6 +30,7 @@ interface MaintenanceBannerRepository : JpaRepository<MaintenanceBanner, Long> {
      */
     @Query("""
         SELECT b FROM MaintenanceBanner b
+        LEFT JOIN FETCH b.createdBy
         WHERE :currentTime BETWEEN b.startTime AND b.endTime
         ORDER BY b.createdAt DESC
     """)
@@ -44,6 +45,7 @@ interface MaintenanceBannerRepository : JpaRepository<MaintenanceBanner, Long> {
      */
     @Query("""
         SELECT b FROM MaintenanceBanner b
+        LEFT JOIN FETCH b.createdBy
         ORDER BY b.createdAt DESC
     """)
     fun findAllOrderByCreatedAtDesc(): List<MaintenanceBanner>
