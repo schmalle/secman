@@ -2,7 +2,7 @@
 
 Security requirement and risk assessment management tool.
 
-**Last Updated:** 2026-03-24
+**Last Updated:** 2026-03-31
 
 ---
 
@@ -21,6 +21,7 @@ Security requirement and risk assessment management tool.
 | [E2E Exception Workflow](./E2E_EXCEPTION_WORKFLOW_TEST.md) | End-to-end exception workflow test    |
 | [S3 User Mapping Import](./S3_USER_MAPPING_IMPORT.md) | S3-based user mapping imports            |
 | [Skills & Agents](./SKILLS_AND_AGENTS.md)             | Claude Code skills and agent reference   |
+| [1Password Integration](./1PASSWORD.md)               | 1Password secrets management setup       |
 
 ---
 
@@ -246,7 +247,7 @@ curl https://secman.yourdomain.com/
 | Issue               | Check                                |
 | ------------------- | ------------------------------------ |
 | Backend won't start | `journalctl -u secman-backend -n 50` |
-| Frontend blank page | Browser console, `PUBLIC_BACKEND_URL` |
+| Frontend blank page | Browser console, `PUBLIC_API_URL`     |
 | Database connection | `mysql -u secman -p secman`          |
 | 502 Bad Gateway     | `systemctl status secman-backend`    |
 | MCP auth fails      | API key valid? Headers correct?      |
@@ -278,7 +279,8 @@ docs/
 ├── TROUBLESHOOTING.md     <- Common issues & solutions
 ├── E2E_EXCEPTION_WORKFLOW_TEST.md  <- Exception E2E test
 ├── S3_USER_MAPPING_IMPORT.md      <- S3 import guide
-└── SKILLS_AND_AGENTS.md           <- Skills & agents reference
+├── SKILLS_AND_AGENTS.md           <- Skills & agents reference
+└── 1PASSWORD.md                   <- 1Password integration
 ```
 
 ---

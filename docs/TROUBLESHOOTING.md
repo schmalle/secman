@@ -82,7 +82,7 @@ curl -v http://localhost:8080/health
 3. Check for missing required fields in request
 4. Enable debug logging:
    ```bash
-   export SECMAN_LOG_LEVEL=DEBUG
+   export SECMAN_LOGGING=ALL
    sudo systemctl restart secman-backend
    ```
 
@@ -105,7 +105,7 @@ ls -la /opt/secman/app/src/frontend/dist/server/
    ```bash
    curl http://localhost:8080/health
    ```
-   Fix: Start backend first, verify `PUBLIC_BACKEND_URL`
+   Fix: Start backend first, verify `PUBLIC_API_URL`
 
 2. **Build artifacts missing**
    ```bash
@@ -124,7 +124,7 @@ ls -la /opt/secman/app/src/frontend/dist/server/
 - Clear browser cache and localStorage
 - Check browser console for JavaScript errors
 - Verify CORS configuration matches frontend URL
-- Check `PUBLIC_BACKEND_URL` is accessible from browser
+- Check `PUBLIC_API_URL` is accessible from browser
 
 ### Session Expires Immediately
 
@@ -482,7 +482,7 @@ mysql -u secman -p secman -e "SELECT email, last_login FROM users ORDER BY last_
 
 ```bash
 # Backend
-export SECMAN_LOG_LEVEL=DEBUG
+export SECMAN_LOGGING=ALL
 sudo systemctl restart secman-backend
 
 # Or in application.yml
@@ -514,4 +514,4 @@ If these solutions don't resolve your issue:
 
 ---
 
-*For backend debug logging: `export SECMAN_LOG_LEVEL=DEBUG && systemctl restart secman-backend`*
+*For backend debug logging: `export SECMAN_LOGGING=ALL && systemctl restart secman-backend`*

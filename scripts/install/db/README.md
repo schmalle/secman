@@ -14,7 +14,7 @@ SQL script that creates the Secman database and application database user.
 - Flushes privileges to apply changes
 
 **Requirements:**
-- MariaDB 10.5+ (for `CREATE USER IF NOT EXISTS` support)
+- MariaDB 12+ (project standard; 10.5+ minimum for `CREATE USER IF NOT EXISTS` support)
 - MariaDB root access to create the database and user
 
 ### installdb.sh
@@ -55,7 +55,7 @@ Override via environment variables: `DB_USERNAME`, `DB_PASSWORD`, `DB_CONNECT`
 2. Run the install script: `./installdb.sh`
 3. Enter MariaDB root password when prompted
 4. Start the Secman backend application
-5. Flyway migrations and Hibernate auto-update will create all tables automatically
+5. Hibernate auto-migration will create all tables automatically
 6. On first startup (when no users exist), a default admin user is created:
    - **Username:** admin
    - **Password:** password

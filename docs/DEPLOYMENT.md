@@ -1,6 +1,6 @@
 # Secman Deployment Guide
 
-**Last Updated:** 2026-03-24
+**Last Updated:** 2026-03-31
 **Version:** 2.0
 **Platforms:** Amazon Linux 2023, Ubuntu 20.04+, RHEL 8+
 
@@ -385,8 +385,9 @@ server {
 # Test configuration
 sudo nginx -t
 
-# Enable site (Ubuntu)
-sudo ln -s /etc/nginx/sites-available/secman /etc/nginx/sites-enabled/
+# If using sites-available (Ubuntu), create config there instead of conf.d:
+# sudo ln -s /etc/nginx/sites-available/secman /etc/nginx/sites-enabled/
+# Note: The config above was placed in /etc/nginx/conf.d/secman.conf which is auto-loaded.
 
 # Reload
 sudo systemctl reload nginx
@@ -689,7 +690,7 @@ Schedule daily:
 ### Frontend Won't Start
 
 1. Check logs: `sudo journalctl -u secman-frontend -n 100`
-2. Verify Node: `node -v` (must be 18+ or 20.x)
+2. Verify Node: `node -v` (must be 20.x)
 3. Check build: `ls -la /opt/secman/app/src/frontend/dist/server/`
 4. Verify backend: `curl http://localhost:8080/health`
 

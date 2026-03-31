@@ -8,7 +8,7 @@
 
 **Architecture**:
 - Backend: `src/backendng/` - Domain (JPA) → Repository → Service → Controller (REST)
-- Frontend: `src/frontend/` - Astro + React islands, Axios, sessionStorage JWT
+- Frontend: `src/frontend/` - Astro + React islands, Axios, HttpOnly cookie JWT
 - CLI: `src/cli/` - CrowdStrike API queries, notification emails
 - Security: JWT auth, OAuth2/OIDC, RBAC (USER, ADMIN, VULN, RELEASE_MANAGER, REQADMIN, SECCHAMPION, REPORT)
 - MCP: `X-MCP-User-Email` header is **mandatory** for `tools/list` and `tools/call` endpoints (only `initialize` and `ping` are exempt)
@@ -119,7 +119,7 @@ Users access assets if **ANY** is true:
 
 ### Authentication
 - Backend: `@Secured(SecurityRule.IS_AUTHENTICATED)`, `authentication.roles.contains("ADMIN"/"VULN")`
-- Frontend: JWT in localStorage (`authToken`) → Axios headers (`Authorization: Bearer <token>`)
+- Frontend: JWT in HttpOnly cookie (`authToken`) → sent automatically with requests
 - SSE: JWT passed as query parameter (`?token=<jwt>`) since EventSource doesn't support custom headers
 
 ### Duplicate Prevention Pattern
@@ -149,7 +149,7 @@ eventPublisher.publishEvent(UserCreatedEvent(savedUser, "MANUAL"))
 **Performance**: <5ms event delivery, non-blocking
 
 ### Test Infrastructure
-**Stack**: JUnit 5, Mockk, Testcontainers (MariaDB), AssertJ
+**Stack**: JUnit 6, Mockk, Testcontainers (MariaDB), AssertJ
 **Structure**:
 - Unit tests: `src/backendng/src/test/kotlin/com/secman/service/` - Mockk for mocking dependencies
 - Integration tests: `src/backendng/src/test/kotlin/com/secman/integration/` - Testcontainers for real DB
@@ -225,7 +225,7 @@ fun findStateByValueWithRetry(stateToken: String): Optional<OAuthState> {
 ## Quick Start
 
 Run `/e2e-runner` to start the full E2E test loop. This will:
-1. Start the Play backend and Astro frontend
+1. Start the Micronaut backend and Astro frontend
 2. Run the E2E test script
 3. Automatically fix failures and retry
 
@@ -236,9 +236,9 @@ Run `/e2e-runner` to start the full E2E test loop. This will:
 
 ## E2E Runner Rules
 
-- Backend changes (Java/Scala) always require a backend restart
+- Backend changes (Kotlin) always require a backend restart
 - Frontend changes usually hot-reload via Vite — no restart needed
-- Config changes (`astro.config.mjs`, `application.conf`) require restart
+- Config changes (`astro.config.mjs`, `application.yml`) require restart
 - Secrets are injected via `op run` — never hardcode them
 - Logs are written to `.e2e-logs/` — add this to `.gitignore`
 - The runner will attempt up to 5 fix iterations before stopping
@@ -250,7 +250,7 @@ Run `/e2e-runner` to start the full E2E test loop. This will:
 
 
 ---
-*Last updated: 2026-03-24*
+*Last updated: 2026-03-31*
 
 ## Active Technologies
 - **Backend**: Kotlin 2.3.20 / Java 21, Micronaut 4.10, Hibernate JPA, PicoCLI 4.7.7, Jakarta Mail, Apache POI, AWS SDK v2
@@ -262,4 +262,4 @@ Run `/e2e-runner` to start the full E2E test loop. This will:
 - **MCP**: Streamable HTTP transport, JSON-RPC 2.0
 
 ## Recent Changes
-- 058-ai-norm-mapping: Added Kotlin 2.2.21 / Java 21 (backend), TypeScript/React 19 (frontend) + Micronaut 4.10, Hibernate JPA, Axios, Bootstrap 5.3
+- 058-ai-norm-mapping: Added Kotlin 2.3.20 / Java 21 (backend), TypeScript/React 19 (frontend) + Micronaut 4.10, Hibernate JPA, Axios, Bootstrap 5.3

@@ -342,6 +342,7 @@ Users can access an asset if **ANY** of the following is true:
 5. **AWS Mapping**: Asset's `cloudAccountId` matches user's AWS mappings
 6. **AD Domain Mapping**: Asset's `adDomain` matches user's domain mappings (case-insensitive)
 7. **AWS Account Sharing**: Asset's `cloudAccountId` matches shared AWS accounts via `AwsAccountSharing` (directional, non-transitive)
+8. **Owner Match**: Asset's `owner` matches user's username
 
 ```kotlin
 // Access check in service layer (AssetFilterService)
@@ -352,7 +353,8 @@ fun canUserAccessAsset(user: User, asset: Asset): Boolean {
            asset.scanUploader?.id == user.id ||
            awsAccountMatches(asset, user) ||
            adDomainMatches(asset, user) ||
-           sharedAwsAccountMatches(asset, user)
+           sharedAwsAccountMatches(asset, user) ||
+           asset.owner == user.username
 }
 ```
 
@@ -360,7 +362,7 @@ fun canUserAccessAsset(user: User, asset: Asset): Boolean {
 
 | Method         | Storage                  | Use Case                    |
 | -------------- | ------------------------ | --------------------------- |
-| JWT            | `localStorage`           | Frontend API calls          |
+| JWT            | HttpOnly cookie          | Frontend API calls          |
 | OAuth2/OIDC    | Session + JWT            | SSO with Azure AD, Google   |
 | Passkeys       | WebAuthn credentials     | Passwordless authentication |
 | MCP API Key    | Header (`X-MCP-API-Key`) | AI assistant integration    |
