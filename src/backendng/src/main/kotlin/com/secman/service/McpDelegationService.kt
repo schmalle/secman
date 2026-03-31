@@ -345,8 +345,10 @@ class McpDelegationService {
      * @return true if the email format is valid
      */
     private fun isValidEmail(email: String): Boolean {
-        if (email.isBlank()) return false
-        val emailRegex = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\$".toRegex()
+        if (email.isBlank() || email.length > 254) return false
+        // Stricter regex: no leading/trailing dots or hyphens in local/domain parts,
+        // no consecutive dots, domain labels must start/end with alphanumeric
+        val emailRegex = "^[A-Za-z0-9+_]([A-Za-z0-9+_.-]*[A-Za-z0-9+_])?@[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)*\\.[A-Za-z]{2,}\$".toRegex()
         return emailRegex.matches(email)
     }
 

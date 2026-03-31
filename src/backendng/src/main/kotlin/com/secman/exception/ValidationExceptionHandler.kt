@@ -30,8 +30,8 @@ class ValidationExceptionHandler : ExceptionHandler<ConstraintViolationException
     private val log = LoggerFactory.getLogger(ValidationExceptionHandler::class.java)
 
     override fun handle(request: HttpRequest<*>, exception: ConstraintViolationException): HttpResponse<*> {
-        // Extract all constraint violations with detailed information
-        val violations = exception.constraintViolations.map { violation ->
+        // Extract all constraint violations with detailed information for logging
+        val detailedViolations = exception.constraintViolations.map { violation ->
             val path = violation.propertyPath.toString()
             val message = violation.message
             val invalidValue = violation.invalidValue?.let { value ->
@@ -45,22 +45,27 @@ class ValidationExceptionHandler : ExceptionHandler<ConstraintViolationException
             "$path: $message (value: $invalidValue)"
         }
 
-        // Log detailed validation failure
+        // Log detailed validation failure (server-side only, not exposed to client)
         log.error("Validation failed for {} {}: {} violation(s) found",
             request.method,
             request.uri,
-            violations.size
+            detailedViolations.size
         )
 
-        violations.forEach { violation ->
+        detailedViolations.forEach { violation ->
             log.error("  - {}", violation)
         }
 
-        // Return user-friendly error response
+        // Return safe error response without internal field names or submitted values
+        val safeViolations = exception.constraintViolations.map { violation ->
+            val fieldName = violation.propertyPath.toString().substringAfterLast(".")
+            "$fieldName: ${violation.message}"
+        }
+
         return HttpResponse.badRequest(mapOf(
             "error" to "Validation failed",
-            "message" to "Request contains ${violations.size} validation error(s)",
-            "violations" to violations
+            "message" to "Request contains ${safeViolations.size} validation error(s)",
+            "violations" to safeViolations
         ))
     }
 }

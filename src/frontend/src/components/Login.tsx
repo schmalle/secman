@@ -78,8 +78,10 @@ const Login = () => {
             console.warn('[OAuth] Failed to clear session cookie (non-fatal):', err);
         }
 
-        // Generate a fresh login nonce to ensure state uniqueness
-        const loginNonce = Date.now().toString(36) + Math.random().toString(36).substr(2);
+        // Generate a cryptographically secure login nonce to ensure state uniqueness
+        const nonceBytes = new Uint8Array(16);
+        crypto.getRandomValues(nonceBytes);
+        const loginNonce = Array.from(nonceBytes, b => b.toString(16).padStart(2, '0')).join('');
         sessionStorage.setItem('oauth_login_nonce', loginNonce);
         console.log('[OAuth] Generated login nonce:', loginNonce);
 

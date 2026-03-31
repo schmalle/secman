@@ -216,9 +216,9 @@ data class McpApiKey(
         val emailDomain = "@" + email.substringAfter("@").lowercase()
         val allowedDomains = getDelegationDomainsList()
 
-        // Case-insensitive suffix match
+        // Case-insensitive exact domain match (suffix match would allow @evil-company.com to match @company.com)
         return allowedDomains.any { allowedDomain ->
-            emailDomain.endsWith(allowedDomain)
+            emailDomain == allowedDomain
         }
     }
 
