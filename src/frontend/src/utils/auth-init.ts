@@ -30,10 +30,8 @@ export function initializeAuth(): void {
         if (userStr) {
             const user = JSON.parse(userStr);
             window.currentUser = user;
-            console.log('Auth initialized with user:', user);
         } else {
             window.currentUser = null;
-            console.log('No authentication data found');
         }
 
         // Dispatch event to notify components

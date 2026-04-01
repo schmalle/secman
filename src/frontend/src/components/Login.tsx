@@ -21,11 +21,24 @@ const Login = () => {
     }, []);
 
     // Read OAuth error from URL parameter (redirected from backend on OAuth failure)
+    // SECURITY: Only allow known error codes to prevent reflected content injection
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         const errorParam = params.get('error');
         if (errorParam) {
-            setError(decodeURIComponent(errorParam));
+            const ERROR_MESSAGES: Record<string, string> = {
+                'oauth_failed': 'OAuth authentication failed. Please try again.',
+                'oauth_timeout': 'OAuth authentication timed out. Please try again.',
+                'oauth_state_mismatch': 'Authentication state mismatch. Please try again.',
+                'oauth_no_email': 'No email address was provided by the identity provider.',
+                'oauth_user_not_found': 'No account found for this identity. Please contact your administrator.',
+                'oauth_provider_error': 'The identity provider returned an error. Please try again.',
+                'session_expired': 'Your session has expired. Please log in again.',
+                'access_denied': 'Access denied. You do not have permission to access this resource.',
+                'mfa_required': 'Multi-factor authentication is required.',
+            };
+            const safeMessage = ERROR_MESSAGES[errorParam] || 'An authentication error occurred. Please try again.';
+            setError(safeMessage);
             // Clean URL to prevent error persisting on refresh
             window.history.replaceState({}, '', '/login');
         }
@@ -33,32 +46,19 @@ const Login = () => {
 
     const fetchExternalProviders = async () => {
         try {
-            console.log('[OAuth] Fetching enabled identity providers from /api/identity-providers/enabled');
             const response = await fetch('/api/identity-providers/enabled');
             if (response.ok) {
                 const data = await response.json();
-                console.log('[OAuth] Successfully fetched identity providers:', data);
-                console.log('[OAuth] Number of providers:', data.length);
                 setExternalProviders(data);
-            } else {
-                console.error('[OAuth] Failed to fetch providers, status:', response.status);
             }
-        } catch (err) {
-            console.error('[OAuth] Failed to load external providers:', err);
+        } catch {
+            // Silently fail - external providers are optional
         }
     };
 
     const handleExternalLogin = async (providerId: number) => {
-        const provider = externalProviders.find(p => p.id === providerId);
-        console.log('=== OAuth Login Flow START ===');
-        console.log('[OAuth] Provider ID:', providerId);
-        console.log('[OAuth] Provider details:', provider);
-        console.log('[OAuth] Current window.location.origin:', window.location.origin);
-        console.log('[OAuth] Current window.location.href:', window.location.href);
-
         // Clear any stale authentication data before starting fresh OAuth flow
         // This prevents issues with cached OAuth states in corporate AAD environments
-        console.log('[OAuth] Clearing stale authentication data...');
         localStorage.removeItem('authToken'); // Legacy cleanup
         localStorage.removeItem('user');
         sessionStorage.clear(); // Clear any cached OAuth-related data
@@ -70,12 +70,9 @@ const Login = () => {
         // This is the primary defense against the stale-cookie login loop where an expired
         // secman_auth cookie causes Micronaut to reject OAuth requests before the controller runs.
         try {
-            console.log('[OAuth] Clearing HttpOnly auth cookie via /api/auth/clear-session...');
             await fetch('/api/auth/clear-session', { method: 'POST', credentials: 'include' });
-            console.log('[OAuth] HttpOnly auth cookie cleared successfully');
-        } catch (err) {
+        } catch {
             // Non-fatal: CookieTokenReader path-skip is the primary fix
-            console.warn('[OAuth] Failed to clear session cookie (non-fatal):', err);
         }
 
         // Generate a cryptographically secure login nonce to ensure state uniqueness
@@ -83,15 +80,9 @@ const Login = () => {
         crypto.getRandomValues(nonceBytes);
         const loginNonce = Array.from(nonceBytes, b => b.toString(16).padStart(2, '0')).join('');
         sessionStorage.setItem('oauth_login_nonce', loginNonce);
-        console.log('[OAuth] Generated login nonce:', loginNonce);
 
         // Add cache-busting parameter to force fresh OAuth state generation
         const redirectUrl = `/oauth/authorize/${providerId}?_t=${loginNonce}`;
-        console.log('[OAuth] Redirecting to:', redirectUrl);
-        console.log('[OAuth] Full URL will be:', window.location.origin + redirectUrl);
-        console.log('[OAuth] Browser will now redirect to backend OAuth endpoint');
-        console.log('=== OAuth Login Flow - Browser Redirect ===');
-
         window.location.href = redirectUrl;
     };
 

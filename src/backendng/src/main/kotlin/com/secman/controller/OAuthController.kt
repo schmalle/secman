@@ -129,17 +129,18 @@ open class OAuthController(
             // Check for OAuth error
             if (error != null) {
                 logger.error("OAuth provider returned error: {}", error)
-                val errorMessage = when (error) {
-                    "access_denied" -> "Access was denied. Please try again if you wish to log in."
-                    "unauthorized_client" -> "OAuth application is not properly configured. Please contact support."
-                    "invalid_request" -> "Invalid OAuth request. Please try logging in again."
-                    "unsupported_response_type" -> "OAuth configuration error. Please contact support."
-                    "invalid_scope" -> "Requested permissions are not available. Please contact support."
-                    "server_error" -> "OAuth provider encountered an error. Please try again later."
-                    "temporarily_unavailable" -> "OAuth service is temporarily unavailable. Please try again later."
-                    else -> "OAuth authentication failed. Please try again."
+                // SECURITY: Send only safe error codes in URL, never freeform text
+                val errorCode = when (error) {
+                    "access_denied" -> "access_denied"
+                    "unauthorized_client" -> "oauth_provider_error"
+                    "invalid_request" -> "oauth_failed"
+                    "unsupported_response_type" -> "oauth_provider_error"
+                    "invalid_scope" -> "oauth_provider_error"
+                    "server_error" -> "oauth_provider_error"
+                    "temporarily_unavailable" -> "oauth_timeout"
+                    else -> "oauth_failed"
                 }
-                return HttpResponse.redirect<Any>(URI.create("$frontendBaseUrl/login?error=${java.net.URLEncoder.encode(errorMessage, "UTF-8")}"))
+                return HttpResponse.redirect<Any>(URI.create("$frontendBaseUrl/login?error=$errorCode"))
             }
 
             // Validate required parameters
@@ -147,7 +148,7 @@ open class OAuthController(
                 logger.error("Missing required OAuth parameters: code={}, state={}",
                     if (code.isNullOrBlank()) "MISSING" else "present",
                     if (state.isNullOrBlank()) "MISSING" else "present(${state.take(10)}...)")
-                return HttpResponse.redirect<Any>(URI.create("$frontendBaseUrl/login?error=${java.net.URLEncoder.encode("Invalid OAuth callback parameters", "UTF-8")}"))
+                return HttpResponse.redirect<Any>(URI.create("$frontendBaseUrl/login?error=oauth_failed"))
             }
 
             logger.info("Looking up OAuth state: {}...", state.take(10))
@@ -159,7 +160,7 @@ open class OAuthController(
             if (!stateOpt.isPresent) {
                 logger.error("Invalid OAuth state: state token not found in database after retries (first 10 chars: {})", state.take(10) + "...")
                 logger.error("Possible causes: state never saved, state expired (>10min), or state already consumed by another callback")
-                return HttpResponse.redirect<Any>(URI.create("$frontendBaseUrl/login?error=${java.net.URLEncoder.encode("Invalid or expired state parameter. Please try logging in again.", "UTF-8")}"))
+                return HttpResponse.redirect<Any>(URI.create("$frontendBaseUrl/login?error=oauth_state_mismatch"))
             }
 
             val oauthState = stateOpt.get()
@@ -186,7 +187,11 @@ open class OAuthController(
 
                 is OAuthService.CallbackResult.Error -> {
                     logger.error("OAuth callback failed: {}", result.message)
-                    HttpResponse.redirect<Any>(URI.create("$frontendBaseUrl/login?error=${java.net.URLEncoder.encode(result.message, "UTF-8")}"))
+                    // SECURITY: Send only safe error code, not the raw error message
+                    val errorCode = if (result.message.contains("not found", ignoreCase = true) ||
+                        result.message.contains("no account", ignoreCase = true))
+                        "oauth_user_not_found" else "oauth_failed"
+                    HttpResponse.redirect<Any>(URI.create("$frontendBaseUrl/login?error=$errorCode"))
                 }
             }
         } catch (e: Exception) {
@@ -199,8 +204,7 @@ open class OAuthController(
                 cause = cause.cause
                 depth++
             }
-            val errorMsg = "An unexpected error occurred during login. Please try again."
-            HttpResponse.redirect<Any>(URI.create("$frontendBaseUrl/login?error=${java.net.URLEncoder.encode(errorMsg, "UTF-8")}"))
+            HttpResponse.redirect<Any>(URI.create("$frontendBaseUrl/login?error=oauth_failed"))
         }
     }
 

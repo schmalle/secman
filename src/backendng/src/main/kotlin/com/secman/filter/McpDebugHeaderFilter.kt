@@ -47,15 +47,15 @@ class McpDebugHeaderFilter : HttpServerFilter {
                 headers
             )
 
-            // Decode JWT claims if Authorization Bearer header is present
+            // Log only non-sensitive JWT metadata (never log full claims which contain PII)
             val authHeader = request.headers.get("Authorization")
             if (authHeader != null && authHeader.startsWith("Bearer ", ignoreCase = true)) {
                 val token = authHeader.substring(7)
-                val claims = decodeJwtPayload(token)
-                if (claims != null) {
-                    logger.debug("JWT claims [{} {}]: {}", request.method, request.uri, claims)
+                val safeMetadata = extractSafeJwtMetadata(token)
+                if (safeMetadata != null) {
+                    logger.debug("JWT metadata [{} {}]: {}", request.method, request.uri, safeMetadata)
                 } else {
-                    logger.debug("JWT claims [{} {}]: [could not decode payload]", request.method, request.uri)
+                    logger.debug("JWT metadata [{} {}]: [could not decode payload]", request.method, request.uri)
                 }
             }
         }
@@ -64,16 +64,21 @@ class McpDebugHeaderFilter : HttpServerFilter {
     }
 
     /**
-     * Decode the payload section of a JWT token (base64url-encoded JSON).
-     * Returns the raw JSON string of claims, or null if the token is malformed.
-     * The signature is never logged.
+     * Extract only non-sensitive JWT metadata (issuer, expiration, issued-at).
+     * Never logs PII fields like email, name, sub, or roles.
      */
-    private fun decodeJwtPayload(token: String): String? {
+    private fun extractSafeJwtMetadata(token: String): String? {
         return try {
             val parts = token.split(".")
             if (parts.size < 2) return null
-            val payload = parts[1]
-            String(Base64.getUrlDecoder().decode(payload), Charsets.UTF_8)
+            val payload = String(Base64.getUrlDecoder().decode(parts[1]), Charsets.UTF_8)
+            // Parse only safe fields - never log sub, email, name, roles, or other PII
+            val safeFields = listOf("iss", "exp", "iat", "nbf", "jti")
+            val result = safeFields.mapNotNull { field ->
+                val regex = """"$field"\s*:\s*("([^"]*)"|\d+)""".toRegex()
+                regex.find(payload)?.let { "$field=${it.groupValues[1]}" }
+            }
+            if (result.isEmpty()) "[no safe metadata found]" else result.joinToString(", ")
         } catch (e: Exception) {
             null
         }
