@@ -83,3 +83,4 @@ src/helper/.venv/
 .env.*
 !.env.example
 .e2e-logs/
+/.playwright-mcp

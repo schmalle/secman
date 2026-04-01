@@ -48,6 +48,40 @@ const AccountVulnsView: React.FC = () => {
         });
     };
 
+    const formatDataFreshness = (timestamp: string): { text: string; color: string } => {
+        const date = new Date(timestamp);
+        if (Number.isNaN(date.getTime())) {
+            return { text: timestamp, color: 'text-muted' };
+        }
+        const now = new Date();
+        const diffMs = now.getTime() - date.getTime();
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMins / 60);
+        const diffDays = Math.floor(diffHours / 24);
+
+        let text: string;
+        if (diffMins < 1) {
+            text = 'Just now';
+        } else if (diffMins < 60) {
+            text = `${diffMins} min ago`;
+        } else if (diffHours < 24) {
+            text = `${diffHours}h ${diffMins % 60}m ago`;
+        } else {
+            text = `${diffDays}d ${diffHours % 24}h ago`;
+        }
+
+        let color: string;
+        if (diffHours < 4) {
+            color = 'text-success';
+        } else if (diffHours < 24) {
+            color = 'text-warning';
+        } else {
+            color = 'text-danger';
+        }
+
+        return { text, color };
+    };
+
     useEffect(() => {
         console.log('[AccountVulnsView] useEffect triggered, calling fetchAccountVulns...');
         // Admin users should use System Vulnerabilities view — skip the API call entirely
@@ -191,6 +225,7 @@ const AccountVulnsView: React.FC = () => {
     }
 
     const lastImport = summary.lastImport ?? null;
+    const dataFreshness = summary.dataFreshness ?? null;
 
     // Success state - display account groups
     return (
@@ -257,37 +292,37 @@ const AccountVulnsView: React.FC = () => {
                 </div>
             </div>
 
-            {lastImport && (
+            {(dataFreshness || lastImport) && (
                 <div className="row mb-4">
                     <div className="col-12">
                         <div className="card border-0 shadow-sm bg-light">
                             <div className="card-body d-flex flex-column flex-lg-row align-items-start align-items-lg-center gap-3">
-                                <div>
-                                    <h6 className="text-muted mb-1">Last CrowdStrike Import</h6>
-                                    <div className="fw-semibold">{formatImportTimestamp(lastImport.importedAt)}</div>
-                                    <small className="text-muted">
-                                        Imported by {lastImport.importedBy || 'system automation'}
-                                    </small>
-                                </div>
-                                <div className="d-flex flex-wrap gap-2 ms-lg-auto">
-                                    <span className="badge bg-primary bg-opacity-10 text-primary border border-primary">
-                                        {lastImport.serversProcessed} servers processed
-                                    </span>
-                                    <span className="badge bg-success bg-opacity-10 text-success border border-success">
-                                        {lastImport.vulnerabilitiesImported} vulnerabilities imported
-                                    </span>
-                                    <span className="badge bg-secondary bg-opacity-10 text-secondary border border-secondary">
-                                        {lastImport.vulnerabilitiesSkipped} skipped
-                                    </span>
-                                    <span className="badge bg-info bg-opacity-10 text-info border border-info">
-                                        {lastImport.serversCreated} created / {lastImport.serversUpdated} updated
-                                    </span>
-                                    {lastImport.errorCount > 0 && (
-                                        <span className="badge bg-danger bg-opacity-10 text-danger border border-danger">
-                                            {lastImport.errorCount} error{lastImport.errorCount !== 1 ? 's' : ''}
+                                {dataFreshness && (() => {
+                                    const freshness = formatDataFreshness(dataFreshness);
+                                    return (
+                                        <div>
+                                            <h6 className="text-muted mb-1">Data Freshness</h6>
+                                            <div className={`fw-semibold ${freshness.color}`}>
+                                                {freshness.text}
+                                            </div>
+                                            <small className="text-muted">
+                                                Last updated {formatImportTimestamp(dataFreshness)}
+                                            </small>
+                                        </div>
+                                    );
+                                })()}
+                                {lastImport && (
+                                    <div className="d-flex flex-wrap gap-2 ms-lg-auto">
+                                        <span className="badge bg-secondary bg-opacity-10 text-secondary border border-secondary" title={`Bulk import: ${formatImportTimestamp(lastImport.importedAt)} by ${lastImport.importedBy || 'system automation'}`}>
+                                            {lastImport.serversCreated} created / {lastImport.serversUpdated} updated
                                         </span>
-                                    )}
-                                </div>
+                                        {lastImport.errorCount > 0 && (
+                                            <span className="badge bg-danger bg-opacity-10 text-danger border border-danger">
+                                                {lastImport.errorCount} error{lastImport.errorCount !== 1 ? 's' : ''}
+                                            </span>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>

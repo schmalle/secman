@@ -273,6 +273,11 @@ class AccountVulnsService(
         val latestImport = importHistoryRepository.findLatest()
             ?.let { CrowdStrikeImportStatusDto.fromEntity(it) }
 
+        // Compute actual data freshness from vulnerability import timestamps
+        val dataFreshness = if (assetIds.isNotEmpty()) {
+            vulnerabilityRepository.findLatestImportTimestampByAssetIds(assetIds.toSet())
+        } else null
+
         return AccountVulnsSummaryDto(
             accountGroups = accountGroups,
             totalAssets = totalAssets,
@@ -281,7 +286,8 @@ class AccountVulnsService(
             globalCritical = globalCritical,
             globalHigh = globalHigh,
             globalMedium = globalMedium,
-            lastImport = latestImport
+            lastImport = latestImport,
+            dataFreshness = dataFreshness
         )
     }
 }

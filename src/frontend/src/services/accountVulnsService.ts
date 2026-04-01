@@ -54,6 +54,9 @@ export interface AccountVulnsSummary {
 
   // Metadata about the most recent CrowdStrike import
   lastImport?: CrowdStrikeImportStatus | null;
+
+  // Actual data freshness: most recent vulnerability import timestamp
+  dataFreshness?: string | null;
 }
 
 /**

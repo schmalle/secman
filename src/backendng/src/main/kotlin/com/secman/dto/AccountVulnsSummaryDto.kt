@@ -1,6 +1,7 @@
 package com.secman.dto
 
 import io.micronaut.serde.annotation.Serdeable
+import java.time.LocalDateTime
 
 /**
  * DTO representing the top-level response for Account Vulns view.
@@ -20,12 +21,15 @@ data class AccountVulnsSummaryDto(
     val accountGroups: List<AccountGroupDto>,
     val totalAssets: Int,
     val totalVulnerabilities: Int,
-    
+
     // Global severity totals (Feature 019 - nullable for backward compatibility)
     val globalCritical: Int? = null,
     val globalHigh: Int? = null,
     val globalMedium: Int? = null,
 
     // Metadata about the latest CrowdStrike import (nullable for backward compatibility)
-    val lastImport: CrowdStrikeImportStatusDto? = null
+    val lastImport: CrowdStrikeImportStatusDto? = null,
+
+    // Actual data freshness: MAX(import_timestamp) from user's vulnerability data
+    val dataFreshness: LocalDateTime? = null
 )
