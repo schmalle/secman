@@ -110,10 +110,7 @@ export async function authenticatedFetch(url: string, options: RequestInit = {})
  * Convenience method for GET requests
  */
 export async function authenticatedGet(url: string): Promise<Response> {
-    console.log('[auth] authenticatedGet called with URL:', url);
-    const response = await authenticatedFetch(url, { method: 'GET' });
-    console.log('[auth] authenticatedGet completed for URL:', url, 'status:', response.status);
-    return response;
+    return authenticatedFetch(url, { method: 'GET' });
 }
 
 /**
@@ -191,13 +188,11 @@ export async function refreshToken(): Promise<string | null> {
         });
 
         if (response.ok) {
-            const data = await response.json();
-            console.log('[auth] Token refreshed successfully (stored in HttpOnly cookie)');
-            // Token is now in the updated HttpOnly cookie, not accessible via JS
-            return data.token || 'refreshed';
+            // Token is set in the HttpOnly cookie by the server, never exposed in response body
+            return 'refreshed';
         } else if (response.status === 401) {
             // Token is invalid/expired, clear auth and redirect
-            console.log('[auth] Token refresh failed - session expired');
+            // Session expired
             clearAuth();
             if (typeof window !== 'undefined') {
                 window.location.href = '/login';
@@ -226,11 +221,11 @@ export async function sendHeartbeat(): Promise<boolean> {
         });
 
         if (response.ok) {
-            console.log('[auth] Heartbeat successful');
+            // Heartbeat OK
             return true;
         } else if (response.status === 401) {
             // Session expired, try to refresh
-            console.log('[auth] Heartbeat failed - attempting token refresh');
+            // Heartbeat failed, attempting refresh
             const newToken = await refreshToken();
             return newToken !== null;
         }
@@ -256,7 +251,7 @@ export function startSessionKeepAlive(): void {
         return;
     }
 
-    console.log('[auth] Starting session keep-alive service');
+    // Session keep-alive started
 
     // Periodic heartbeat to validate session
     heartbeatIntervalId = window.setInterval(async () => {
@@ -293,7 +288,7 @@ export function stopSessionKeepAlive(): void {
         refreshIntervalId = null;
     }
 
-    console.log('[auth] Session keep-alive service stopped');
+    // Session keep-alive stopped
 }
 
 /**

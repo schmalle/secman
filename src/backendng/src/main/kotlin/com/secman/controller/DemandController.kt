@@ -99,26 +99,33 @@ open class DemandController(
     open fun listDemands(@QueryValue @Nullable status: DemandStatus?,
                         @QueryValue @Nullable demandType: DemandType?,
                         @QueryValue @Nullable priority: Priority?,
-                        @QueryValue @Nullable requestorId: Long?): HttpResponse<List<Demand>> {
+                        @QueryValue @Nullable requestorId: Long?,
+                        authentication: Authentication): HttpResponse<List<Demand>> {
         return try {
-            log.debug("Fetching demands with filters - status: {}, type: {}, priority: {}, requestor: {}", 
-                     status, demandType, priority, requestorId)
-            
-            val demands = if (status != null || demandType != null || priority != null || requestorId != null) {
-                demandRepository.findWithFilters(status, demandType, priority, requestorId)
+            val isAdmin = authentication.roles.contains("ADMIN")
+            val userId = authentication.attributes["userId"]?.toString()?.toLongOrNull()
+
+            // SECURITY: Non-admin users can only see their own demands
+            val effectiveRequestorId = if (isAdmin) requestorId else userId
+
+            log.debug("Fetching demands with filters - status: {}, type: {}, priority: {}, requestor: {}",
+                     status, demandType, priority, effectiveRequestorId)
+
+            val demands = if (status != null || demandType != null || priority != null || effectiveRequestorId != null) {
+                demandRepository.findWithFilters(status, demandType, priority, effectiveRequestorId)
             } else {
                 entityManager.createQuery(
                     """
-                    SELECT DISTINCT d FROM Demand d 
-                    LEFT JOIN FETCH d.requestor 
-                    LEFT JOIN FETCH d.approver 
-                    LEFT JOIN FETCH d.existingAsset 
+                    SELECT DISTINCT d FROM Demand d
+                    LEFT JOIN FETCH d.requestor
+                    LEFT JOIN FETCH d.approver
+                    LEFT JOIN FETCH d.existingAsset
                     ORDER BY d.requestedDate DESC
                     """,
                     Demand::class.java
                 ).resultList
             }
-            
+
             log.debug("Found {} demands", demands.size)
             HttpResponse.ok(demands)
         } catch (e: Exception) {
@@ -129,22 +136,29 @@ open class DemandController(
 
     @Get("/{id}")
     @Transactional(readOnly = true)
-    open fun getDemand(id: Long): HttpResponse<*> {
+    open fun getDemand(id: Long, authentication: Authentication): HttpResponse<*> {
         return try {
             log.debug("Fetching demand with id: {}", id)
-            
+
             val demand = entityManager.createQuery(
                 """
-                SELECT d FROM Demand d 
-                LEFT JOIN FETCH d.requestor 
-                LEFT JOIN FETCH d.approver 
-                LEFT JOIN FETCH d.existingAsset 
+                SELECT d FROM Demand d
+                LEFT JOIN FETCH d.requestor
+                LEFT JOIN FETCH d.approver
+                LEFT JOIN FETCH d.existingAsset
                 WHERE d.id = :id
                 """,
                 Demand::class.java
             ).setParameter("id", id).resultList.firstOrNull()
-            
+
             if (demand != null) {
+                // SECURITY: Only the requestor or ADMIN can view a specific demand
+                val userId = authentication.attributes["userId"]?.toString()?.toLongOrNull()
+                val isAdmin = authentication.roles.contains("ADMIN")
+                if (!isAdmin && demand.requestor.id != userId) {
+                    return HttpResponse.status<ErrorResponse>(HttpStatus.FORBIDDEN)
+                        .body(ErrorResponse("FORBIDDEN", "Access denied"))
+                }
                 log.debug("Found demand: {}", demand.id)
                 HttpResponse.ok(demand)
             } else {
@@ -158,6 +172,7 @@ open class DemandController(
     }
 
     @Get("/summary")
+    @Secured("ADMIN")
     @Transactional(readOnly = true)
     open fun getDemandSummary(): HttpResponse<DemandSummary> {
         return try {
@@ -181,6 +196,7 @@ open class DemandController(
     }
 
     @Get("/approved/available")
+    @Secured("ADMIN", "RISK", "SECCHAMPION")
     @Transactional(readOnly = true)
     open fun getApprovedDemandsForRiskAssessment(): HttpResponse<List<Demand>> {
         return try {
