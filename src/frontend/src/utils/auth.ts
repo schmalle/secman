@@ -188,10 +188,8 @@ export async function refreshToken(): Promise<string | null> {
         });
 
         if (response.ok) {
-            const data = await response.json();
-            // Token is now in the updated HttpOnly cookie
-            // Token is now in the updated HttpOnly cookie, not accessible via JS
-            return data.token || 'refreshed';
+            // Token is set in the HttpOnly cookie by the server, never exposed in response body
+            return 'refreshed';
         } else if (response.status === 401) {
             // Token is invalid/expired, clear auth and redirect
             // Session expired

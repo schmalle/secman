@@ -666,12 +666,9 @@ open class OAuthService(
                 tokenUrl = tokenUrl.replace("{tenantId}", tenantId)
             }
 
-            logger.info("=== Token Exchange Debug ===")
-            logger.info("Provider: {}", provider.name)
-            logger.info("Token URL: {}", tokenUrl)
-            logger.info("Redirect URI being sent: {}", redirectUri)
-            logger.info("Client ID: {}", provider.clientId)
-            logger.info("Code (first 20 chars): {}", code.take(20) + "...")
+            // SECURITY: Only log non-sensitive token exchange metadata
+            logger.info("Token exchange: provider={}, tokenUrl={}", provider.name, tokenUrl)
+            logger.debug("Token exchange: redirectUri={}", redirectUri)
 
             // Build OAuth 2.0 token exchange request (required by Microsoft, GitHub, etc.)
             val formData = "grant_type=authorization_code" +

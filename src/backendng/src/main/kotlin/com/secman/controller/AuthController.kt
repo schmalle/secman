@@ -246,7 +246,7 @@ open class AuthController(
 
     @Serdeable
     data class RefreshResponse(
-        val token: String,
+        val success: Boolean = true,
         val expiresIn: Int = 28800  // 8 hours in seconds
     )
 
@@ -289,8 +289,8 @@ open class AuthController(
         }
 
         val token = tokenOptional.get()
-        // Update both the cookie and return the token in response
-        return HttpResponse.ok(RefreshResponse(token = token))
+        // SECURITY: Only set the token in the HttpOnly cookie, never expose in response body
+        return HttpResponse.ok(RefreshResponse())
             .cookie(authCookieService.createAuthCookie(token))
     }
 
