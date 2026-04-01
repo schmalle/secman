@@ -342,7 +342,7 @@ To run in CI/CD pipelines:
     API_KEY: ${{ secrets.MCP_ADMIN_API_KEY }}
     BASE_URL: http://localhost:8080
   run: |
-    ./bin/test-e2e-exception-workflow.sh
+    ./bin/test-e2e-exception-workflowsupport.sh
 ```
 
 Ensure the backend is running before executing the test step.
