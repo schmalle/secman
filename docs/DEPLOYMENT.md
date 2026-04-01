@@ -1,6 +1,6 @@
 # Secman Deployment Guide
 
-**Last Updated:** 2026-03-24
+**Last Updated:** 2026-04-01
 **Version:** 2.0
 **Platforms:** Amazon Linux 2023, Ubuntu 20.04+, RHEL 8+
 
@@ -50,7 +50,7 @@ Complete production deployment guide for the Secman security management applicat
 
 - **Backend**: Kotlin 2.3.20, Java 21, Micronaut 4.10
 - **Frontend**: Astro 6.0, React 19, Node.js 20.x
-- **Database**: MariaDB 12
+- **Database**: MariaDB 11.4
 - **Reverse Proxy**: Nginx with SSL termination
 
 ---
@@ -134,14 +134,14 @@ sudo passwd secman  # Set strong password
 **Amazon Linux / RHEL:**
 
 ```bash
-sudo curl -sS https://downloads.mariadb.com/MariaDB/mariadb_repo_setup | sudo bash -s -- --mariadb-server-version="mariadb-12.0"
+sudo curl -sS https://downloads.mariadb.com/MariaDB/mariadb_repo_setup | sudo bash -s -- --mariadb-server-version="mariadb-11.4"
 sudo dnf install -y MariaDB-server MariaDB-client
 ```
 
 **Ubuntu/Debian:**
 
 ```bash
-curl -LsS https://r.mariadb.com/downloads/mariadb_repo_setup | sudo bash -s -- --mariadb-server-version=12.0
+curl -LsS https://r.mariadb.com/downloads/mariadb_repo_setup | sudo bash -s -- --mariadb-server-version=11.4
 sudo apt update && sudo apt install -y mariadb-server mariadb-client
 ```
 

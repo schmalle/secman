@@ -1,6 +1,6 @@
 # Secman Environment Variables Reference
 
-**Last Updated:** 2026-03-29
+**Last Updated:** 2026-04-01
 **Version:** 1.1
 
 This document provides a comprehensive reference for all environment variables used by Secman components.
@@ -296,8 +296,8 @@ The CLI tool supports multiple sources for configuration with the following prio
 
 | Variable               | Description                          |
 | ---------------------- | ------------------------------------ |
-| `FALCON_CLIENT_ID`     | Alias for`CROWDSTRIKE_CLIENT_ID`     |
-| `FALCON_CLIENT_SECRET` | Alias for`CROWDSTRIKE_CLIENT_SECRET` |
+| `FALCON_CLIENT_ID`     | Alias for `CROWDSTRIKE_CLIENT_ID`    |
+| `FALCON_CLIENT_SECRET` | Alias for `CROWDSTRIKE_CLIENT_SECRET`|
 | `FALCON_CLOUD_REGION`  | CrowdStrike cloud region             |
 
 **Base URL by Region:**
@@ -352,11 +352,11 @@ export SECMAN_BACKEND_URL=https://api.yourdomain.com
 | `SMTP_PASSWORD`              | Backend   | Yes         |
 | `SECMAN_BACKEND_URL`           | Backend   | Yes         |
 | `FRONTEND_URL`               | Backend   | Yes         |
-| `CROWDSTRIKE_CLIENT_SECRET`  | CLI       | Yes         |
+| `FALCON_CLIENT_SECRET`       | CLI       | Yes         |
 
 ### All Variables by Component
 
-#### Backend (33 variables)
+#### Backend (28 variables)
 
 ```
 DB_CONNECT, DB_USERNAME, DB_PASSWORD
@@ -380,11 +380,10 @@ VULN_USE_PATCH_PUBLICATION_DATE, VULN_REQUIRE_PATCH_PUBLICATION_DATE
 PUBLIC_API_URL
 ```
 
-#### CLI (9 variables)
+#### CLI (7 variables)
 
 ```
-FALCON_CLIENT_ID, FALCON_CLIENT_SECRET, FALCON_BASE_URL
-FALCON_CLIENT_ID, FALCON_CLIENT_SECRET, FALCON_CLOUD_REGION
+FALCON_CLIENT_ID, FALCON_CLIENT_SECRET, FALCON_BASE_URL, FALCON_CLOUD_REGION
 SECMAN_ADMIN_NAME, SECMAN_ADMIN_PASS, SECMAN_BACKEND_URL
 ```
 
@@ -532,9 +531,9 @@ baseUrl: https://api.crowdstrike.com
 
 **"CrowdStrike API: 401 Unauthorized"**
 
-- Verify `CROWDSTRIKE_CLIENT_ID` and `CROWDSTRIKE_CLIENT_SECRET` are correct
+- Verify `FALCON_CLIENT_ID` and `FALCON_CLIENT_SECRET` are correct
 - Ensure the API credentials have the required scopes
-- Check `CROWDSTRIKE_BASE_URL` matches your CrowdStrike cloud region
+- Check `FALCON_BASE_URL` matches your CrowdStrike cloud region
 
 **"Your login session was not found" (OAuth)**
 

@@ -1,6 +1,6 @@
 # Secman Architecture
 
-**Last Updated:** 2026-03-24
+**Last Updated:** 2026-04-01
 
 This document describes the system architecture, data model, and design patterns used in Secman.
 
@@ -67,10 +67,10 @@ Secman is a security requirement and risk assessment management tool consisting 
 |              | React         | 19                   |
 |              | Bootstrap     | 5.3                  |
 |              | Axios         | (HTTP client)        |
-| **Database** | MariaDB       | 12                   |
+| **Database** | MariaDB       | 11.4                 |
 | **CLI**      | Picocli       | 4.7.7                |
 |              | AWS SDK       | v2                   |
-| **Build**    | Gradle        | 9.4.0                |
+| **Build**    | Gradle        | 9.4.1                |
 
 ---
 
@@ -576,7 +576,8 @@ secman/
 │   ├── TROUBLESHOOTING.md            # Troubleshooting guide
 │   ├── E2E_EXCEPTION_WORKFLOW_TEST.md # Exception E2E test
 │   ├── S3_USER_MAPPING_IMPORT.md     # S3 import guide
-│   └── SKILLS_AND_AGENTS.md          # Skills & agents reference
+│   ├── SKILLS_AND_AGENTS.md          # Skills & agents reference
+│   └── 1PASSWORD.md                  # Secret management with 1Password CLI
 │
 ├── scripts/                          # Utility scripts
 ├── specs/                            # Feature specifications

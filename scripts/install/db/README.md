@@ -14,7 +14,7 @@ SQL script that creates the Secman database and application database user.
 - Flushes privileges to apply changes
 
 **Requirements:**
-- MariaDB 10.5+ (for `CREATE USER IF NOT EXISTS` support)
+- MariaDB 11.4+ (recommended; minimum 10.5 for `CREATE USER IF NOT EXISTS` support)
 - MariaDB root access to create the database and user
 
 ### installdb.sh

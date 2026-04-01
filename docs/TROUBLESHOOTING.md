@@ -1,6 +1,6 @@
 # Troubleshooting Guide
 
-**Last Updated:** 2026-03-24
+**Last Updated:** 2026-04-01
 
 This guide consolidates common issues and solutions for all Secman components.
 
@@ -82,7 +82,7 @@ curl -v http://localhost:8080/health
 3. Check for missing required fields in request
 4. Enable debug logging:
    ```bash
-   export SECMAN_LOG_LEVEL=DEBUG
+   export SECMAN_LOGGING=ALL
    sudo systemctl restart secman-backend
    ```
 
@@ -105,7 +105,7 @@ ls -la /opt/secman/app/src/frontend/dist/server/
    ```bash
    curl http://localhost:8080/health
    ```
-   Fix: Start backend first, verify `PUBLIC_BACKEND_URL`
+   Fix: Start backend first, verify `PUBLIC_API_URL`
 
 2. **Build artifacts missing**
    ```bash
@@ -195,10 +195,10 @@ JAVA_HOME=/usr/lib/jvm/java-21-amazon-corretto
 Verify credentials file format (no spaces around `=`):
 ```bash
 # Correct
-CROWDSTRIKE_CLIENT_ID=abc123
+FALCON_CLIENT_ID=abc123
 
 # Wrong
-CROWDSTRIKE_CLIENT_ID = abc123
+FALCON_CLIENT_ID = abc123
 ```
 
 ### "Authentication failed" (CrowdStrike)
@@ -482,7 +482,7 @@ mysql -u secman -p secman -e "SELECT email, last_login FROM users ORDER BY last_
 
 ```bash
 # Backend
-export SECMAN_LOG_LEVEL=DEBUG
+export SECMAN_LOGGING=ALL
 sudo systemctl restart secman-backend
 
 # Or in application.yml
@@ -514,4 +514,4 @@ If these solutions don't resolve your issue:
 
 ---
 
-*For backend debug logging: `export SECMAN_LOG_LEVEL=DEBUG && systemctl restart secman-backend`*
+*For backend debug logging: `export SECMAN_LOGGING=ALL && systemctl restart secman-backend`*

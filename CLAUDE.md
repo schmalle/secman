@@ -4,7 +4,7 @@
 
 **secman** - Security requirement and risk assessment management tool
 
-**Stack**: Kotlin 2.3.20 / Java 21, Micronaut 4.10, Hibernate JPA | Astro 6.0, React 19, Bootstrap 5.3 | MariaDB 12, Gradle 9.4
+**Stack**: Kotlin 2.3.20 / Java 21, Micronaut 4.10, Hibernate JPA | Astro 6.1, React 19, Bootstrap 5.3 | MariaDB 11.4, Gradle 9.4.1
 
 **Architecture**:
 - Backend: `src/backendng/` - Domain (JPA) → Repository → Service → Controller (REST)
@@ -254,9 +254,9 @@ Run `/e2e-runner` to start the full E2E test loop. This will:
 
 ## Active Technologies
 - **Backend**: Kotlin 2.3.20 / Java 21, Micronaut 4.10, Hibernate JPA, PicoCLI 4.7.7, Jakarta Mail, Apache POI, AWS SDK v2
-- **Frontend**: Astro 6.0, React 19, TypeScript, Bootstrap 5.3, Axios
-- **Database**: MariaDB 12, HikariCP connection pool
-- **Build**: Gradle 9.4.0 (Kotlin DSL)
+- **Frontend**: Astro 6.1, React 19, TypeScript, Bootstrap 5.3, Axios
+- **Database**: MariaDB 11.4, HikariCP connection pool
+- **Build**: Gradle 9.4.1 (Kotlin DSL)
 - **Testing**: JUnit 6, Mockk, Testcontainers, AssertJ, Playwright
 - **CLI**: PicoCLI, CrowdStrike Falcon API, AWS SDK v2 (S3)
 - **MCP**: Streamable HTTP transport, JSON-RPC 2.0

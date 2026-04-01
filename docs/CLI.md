@@ -1,6 +1,6 @@
 # Secman CLI Reference
 
-**Last Updated:** 2026-03-24
+**Last Updated:** 2026-04-01
 **Version:** 1.0
 
 Command-line interface for CrowdStrike vulnerability queries, notifications, user mapping management, and manual vulnerability entry.
@@ -90,9 +90,9 @@ See [ENVIRONMENT.md](./ENVIRONMENT.md#cli-environment-variables) for complete re
 
 **CrowdStrike credentials:**
 ```bash
-export CROWDSTRIKE_CLIENT_ID=your-client-id
-export CROWDSTRIKE_CLIENT_SECRET=your-client-secret
-export CROWDSTRIKE_BASE_URL=https://api.crowdstrike.com
+export FALCON_CLIENT_ID=your-client-id
+export FALCON_CLIENT_SECRET=your-client-secret
+export FALCON_BASE_URL=https://api.crowdstrike.com
 ```
 
 **Backend authentication (for --save):**
@@ -113,8 +113,8 @@ baseUrl: https://api.crowdstrike.com
 
 **`~/.secman/credentials.conf`:**
 ```bash
-CROWDSTRIKE_CLIENT_ID=your-client-id
-CROWDSTRIKE_CLIENT_SECRET=your-client-secret
+FALCON_CLIENT_ID=your-client-id
+FALCON_CLIENT_SECRET=your-client-secret
 SECMAN_ADMIN_NAME=adminuser
 SECMAN_ADMIN_PASS=your-password
 ```
@@ -605,8 +605,8 @@ SECRETS=$(aws secretsmanager get-secret-value \
     --query SecretString \
     --output text)
 
-export CROWDSTRIKE_CLIENT_ID=$(echo $SECRETS | jq -r .client_id)
-export CROWDSTRIKE_CLIENT_SECRET=$(echo $SECRETS | jq -r .client_secret)
+export FALCON_CLIENT_ID=$(echo $SECRETS | jq -r .client_id)
+export FALCON_CLIENT_SECRET=$(echo $SECRETS | jq -r .client_secret)
 export SECMAN_ADMIN_NAME=$(echo $SECRETS | jq -r .username)
 export SECMAN_ADMIN_PASS=$(echo $SECRETS | jq -r .password)
 
@@ -674,10 +674,10 @@ JAVA_HOME=/usr/lib/jvm/java-21-amazon-corretto
 Verify format (no spaces around `=`):
 ```bash
 # Correct
-CROWDSTRIKE_CLIENT_ID=abc123
+FALCON_CLIENT_ID=abc123
 
 # Wrong
-CROWDSTRIKE_CLIENT_ID = abc123
+FALCON_CLIENT_ID = abc123
 ```
 
 #### "Authentication failed"
