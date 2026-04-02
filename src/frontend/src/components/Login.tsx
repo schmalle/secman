@@ -104,7 +104,80 @@ const Login = () => {
             const data = await response.json();
 
             if (response.ok) {
-                // Login successful - JWT is now stored in HttpOnly cookie by backend
+                // Check if MFA is required before full authentication
+                if (data.mfaRequired) {
+                    // Password verified but MFA needed - initiate passkey authentication
+                    try {
+                        const optionsRes = await fetch('/api/passkey/login-options', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ username: data.username }),
+                        });
+                        if (!optionsRes.ok) {
+                            setError('Failed to initiate MFA. Please try again.');
+                            return;
+                        }
+                        const options = await optionsRes.json();
+
+                        // Trigger browser passkey prompt via WebAuthn API
+                        const credential = await navigator.credentials.get({
+                            publicKey: {
+                                ...options,
+                                challenge: Uint8Array.from(atob(options.challenge), c => c.charCodeAt(0)),
+                                allowCredentials: (options.allowCredentials || []).map((c: any) => ({
+                                    ...c,
+                                    id: Uint8Array.from(atob(c.id), ch => ch.charCodeAt(0)),
+                                })),
+                            },
+                        }) as PublicKeyCredential;
+
+                        const authResponse = credential.response as AuthenticatorAssertionResponse;
+                        const authRes = await fetch('/api/passkey/authenticate', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            credentials: 'include',
+                            body: JSON.stringify({
+                                username: data.username,
+                                credential: {
+                                    id: credential.id,
+                                    rawId: btoa(String.fromCharCode(...new Uint8Array(credential.rawId))),
+                                    response: {
+                                        authenticatorData: btoa(String.fromCharCode(...new Uint8Array(authResponse.authenticatorData))),
+                                        clientDataJSON: btoa(String.fromCharCode(...new Uint8Array(authResponse.clientDataJSON))),
+                                        signature: btoa(String.fromCharCode(...new Uint8Array(authResponse.signature))),
+                                    },
+                                    type: credential.type,
+                                },
+                            }),
+                        });
+
+                        if (!authRes.ok) {
+                            setError('Passkey verification failed. Please try again.');
+                            return;
+                        }
+
+                        const authData = await authRes.json();
+                        const userData = {
+                            id: authData.userId,
+                            username: authData.username,
+                            email: authData.email,
+                            roles: authData.roles,
+                            workgroupCount: 0,
+                            awsAccountCount: 0,
+                            domainCount: 0,
+                        };
+                        localStorage.setItem('user', JSON.stringify(userData));
+                        (window as any).currentUser = userData;
+                        window.dispatchEvent(new CustomEvent('userLoaded'));
+                        setTimeout(() => { window.location.href = '/'; }, 100);
+                    } catch (mfaErr) {
+                        console.error('MFA authentication failed:', mfaErr);
+                        setError('MFA authentication was cancelled or failed. Please try again.');
+                    }
+                    return;
+                }
+
+                // Login successful (no MFA) - JWT is now stored in HttpOnly cookie by backend
                 // Store user data for UI display (non-sensitive info only)
                 const userData = {
                     id: data.id,

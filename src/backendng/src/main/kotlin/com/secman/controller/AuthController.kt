@@ -87,6 +87,12 @@ open class AuthController(
     )
 
     @Serdeable
+    data class MfaRequiredResponse(
+        val mfaRequired: Boolean = true,
+        val username: String
+    )
+
+    @Serdeable
     data class LoginResponse(
         val id: Long,
         val username: String,
@@ -158,6 +164,12 @@ open class AuthController(
 
         // Successful login - clear failed attempts
         clearFailedLogins(rateLimitKey)
+
+        // Check if MFA is required - do NOT issue JWT until MFA is completed
+        if (user.mfaEnabled) {
+            logger.info("MFA required for user: {}", user.username)
+            return HttpResponse.ok(MfaRequiredResponse(username = user.username))
+        }
 
         // Generate JWT token
         val userDetails = mapOf(
