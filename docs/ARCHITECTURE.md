@@ -1,6 +1,6 @@
 # Secman Architecture
 
-**Last Updated:** 2026-04-01
+**Last Updated:** 2026-04-02
 
 This document describes the system architecture, data model, and design patterns used in Secman.
 
@@ -63,7 +63,7 @@ Secman is a security requirement and risk assessment management tool consisting 
 |              | Java          | 21                   |
 |              | Micronaut     | 4.10                 |
 |              | Hibernate JPA | (via Micronaut Data) |
-| **Frontend** | Astro         | 6.0                  |
+| **Frontend** | Astro         | 6.1                  |
 |              | React         | 19                   |
 |              | Bootstrap     | 5.3                  |
 |              | Axios         | (HTTP client)        |
@@ -78,7 +78,7 @@ Secman is a security requirement and risk assessment management tool consisting 
 
 ### Backend (`src/backendng/`)
 
-The backend follows a layered architecture with 57 controllers:
+The backend follows a layered architecture with 61 controllers:
 
 ```
 +-----------------------------------------------------------------+
@@ -124,7 +124,7 @@ The backend follows a layered architecture with 57 controllers:
 
 ### Frontend (`src/frontend/`)
 
-Astro with React islands architecture, 64 pages:
+Astro with React islands architecture, 68 pages:
 
 ```
 +-----------------------------------------------------------------+
@@ -151,7 +151,7 @@ Astro with React islands architecture, 64 pages:
 - **Risk & Compliance**: Risks, Risk assessments, Demands, Products, Use cases
 - **Import/Export**: Import, Export
 - **Notifications**: Preferences, Logs
-- **Admin (16 pages)**: App settings, Classification rules, Config bundle, Email config, Falcon config, Identity providers, Maintenance banners, MCP API keys, Notification settings, Requirements, Releases, Test email accounts, Translation config, User management, User mappings, Vulnerability config
+- **Admin (20 pages)**: App settings, Classification rules, Config bundle, Email config, Falcon config, Identity providers, Maintenance banners, MCP API keys, Notification settings, Requirements, Releases, Test email accounts, Translation config, User management, User mappings, Vulnerability config
 
 **Authentication flow:**
 
@@ -161,7 +161,7 @@ Astro with React islands architecture, 64 pages:
 
 ### CLI (`src/cli/`)
 
-Command-line interface with 23 commands for automated operations:
+Command-line interface with 24 commands for automated operations:
 
 ```
 +-----------------------------------------------------------------+
@@ -328,6 +328,7 @@ identity_providers, oauth_states, maintenance_banners, app_settings
 | `RELEASE_MANAGER` | Release coordinator   | Manage releases, view requirements    |
 | `REQ`             | Requirements editor   | Create/edit requirements              |
 | `REQADMIN`        | Requirements admin    | Create/delete releases, alignment decisions |
+| `REPORT`          | Report viewer         | Report generation and viewing         |
 | `RISK`            | Risk assessor         | Risk assessments read/write/execute   |
 | `SECCHAMPION`     | Security champion     | Extended read access, product listing |
 
@@ -342,6 +343,7 @@ Users can access an asset if **ANY** of the following is true:
 5. **AWS Mapping**: Asset's `cloudAccountId` matches user's AWS mappings
 6. **AD Domain Mapping**: Asset's `adDomain` matches user's domain mappings (case-insensitive)
 7. **AWS Account Sharing**: Asset's `cloudAccountId` matches shared AWS accounts via `AwsAccountSharing` (directional, non-transitive)
+8. **Owner Match**: Asset's `owner` matches user's username
 
 ```kotlin
 // Access check in service layer (AssetFilterService)
@@ -544,7 +546,7 @@ secman/
 │   │       ├── repository/           # Data access
 │   │       ├── service/              # Business logic
 │   │       │   └── mcp/              # MCP-specific services
-│   │       ├── controller/           # REST endpoints (57 controllers)
+│   │       ├── controller/           # REST endpoints (61 controllers)
 │   │       ├── config/               # Configuration
 │   │       ├── dto/                  # DTOs
 │   │       │   └── mcp/              # MCP DTOs
@@ -553,15 +555,15 @@ secman/
 │   │
 │   ├── frontend/                     # Astro/React frontend
 │   │   └── src/
-│   │       ├── pages/                # Astro pages (64 pages)
-│   │       │   └── admin/            # Admin pages (16 pages)
+│   │       ├── pages/                # Astro pages (68 pages)
+│   │       │   └── admin/            # Admin pages (20 pages)
 │   │       ├── components/           # React components
 │   │       ├── services/             # API services
 │   │       └── layouts/              # Layout templates
 │   │
 │   └── cli/                          # CLI tool
 │       └── src/main/kotlin/com/secman/cli/
-│           ├── commands/             # Picocli commands (23 commands)
+│           ├── commands/             # Picocli commands (24 commands)
 │           └── service/              # CLI services
 │
 ├── docs/                             # Documentation

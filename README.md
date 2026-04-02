@@ -40,7 +40,7 @@ SecMan is a full-stack security management platform that helps organizations man
 ### Requirements Management
 
 - Create, edit, and organize security requirements
-- Version control with release management (DRAFT, PUBLISHED, ARCHIVED)
+- Version control with release management (PREPARATION, ALIGNMENT, ACTIVE, ARCHIVED)
 - Release comparison and diff visualization
 - Point-in-time requirement snapshots
 - Excel and Word export with customizable templates
@@ -91,6 +91,8 @@ SecMan is a full-stack security management platform that helps organizations man
   - `RELEASE_MANAGER` - Release creation and management
   - `SECCHAMPION` - Security champion access
   - `REQ` - Requirements editor
+  - `REQADMIN` - Requirements admin (create/delete releases, alignment decisions)
+  - `REPORT` - Report generation and viewing
 - **Row-Level Security**: Users see only their workgroup resources + owned items
 - **Last Admin Protection**: System prevents deletion/demotion of the last ADMIN user
 - **Unified Access Control**: AWS account ID and AD domain-based asset filtering
@@ -107,7 +109,7 @@ SecMan is a full-stack security management platform that helps organizations man
 
 - **Model Context Protocol** support for AI assistants (Claude, etc.)
 - Streamable HTTP transport (direct connection, no middleware required)
-- 14+ MCP tools for requirements, assets, vulnerabilities, scans, releases, user mappings
+- 48 MCP tools for requirements, assets, vulnerabilities, scans, releases, user mappings, workgroups, and more
 - User delegation (act on behalf of users)
 - API key management with granular permissions
 - Rate limiting and session management
@@ -231,10 +233,10 @@ secman/
 ├── src/
 │   ├── backendng/          # Kotlin/Micronaut backend
 │   │   ├── src/main/kotlin/com/secman/
-│   │   │   ├── controller/ # REST controllers (52 controllers)
+│   │   │   ├── controller/ # REST controllers (61 controllers)
 │   │   │   ├── domain/     # JPA entities
 │   │   │   ├── repository/ # Data repositories
-│   │   │   ├── service/    # Business logic (98+ services)
+│   │   │   ├── service/    # Business logic (94 services)
 │   │   │   ├── config/     # Configuration classes
 │   │   │   ├── dto/        # Data transfer objects
 │   │   │   ├── filter/     # HTTP filters
@@ -242,12 +244,12 @@ secman/
 │   │   └── src/test/       # Backend tests (unit + integration)
 │   ├── cli/                # Kotlin CLI tools
 │   │   └── src/main/kotlin/com/secman/cli/
-│   │       ├── commands/   # CLI commands (21 commands)
+│   │       ├── commands/   # CLI commands (24 commands)
 │   │       └── service/    # Business logic
 │   ├── frontend/           # Astro + React frontend
 │   │   ├── src/
 │   │   │   ├── components/ # React components
-│   │   │   ├── pages/      # Astro pages (61 pages)
+│   │   │   ├── pages/      # Astro pages (68 pages)
 │   │   │   └── services/   # API clients
 ├── docs/                   # Documentation
 │   ├── ARCHITECTURE.md     # System architecture

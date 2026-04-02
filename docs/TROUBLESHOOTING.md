@@ -1,6 +1,6 @@
 # Troubleshooting Guide
 
-**Last Updated:** 2026-04-01
+**Last Updated:** 2026-04-02
 
 This guide consolidates common issues and solutions for all Secman components.
 
@@ -124,7 +124,7 @@ ls -la /opt/secman/app/src/frontend/dist/server/
 - Clear browser cache and localStorage
 - Check browser console for JavaScript errors
 - Verify CORS configuration matches frontend URL
-- Check `PUBLIC_BACKEND_URL` is accessible from browser
+- Check `PUBLIC_API_URL` is accessible from browser
 
 ### Session Expires Immediately
 

@@ -2,7 +2,7 @@
 
 Security requirement and risk assessment management tool.
 
-**Last Updated:** 2026-04-01
+**Last Updated:** 2026-04-02
 
 ---
 
@@ -79,7 +79,7 @@ Using Secman for security management:
 **Technology Stack:**
 
 - **Backend**: Kotlin 2.3.20, Java 21, Micronaut 4.10, Hibernate JPA
-- **Frontend**: Astro 6.0, React 19, Bootstrap 5.3, Axios
+- **Frontend**: Astro 6.1, React 19, Bootstrap 5.3, Axios
 - **Database**: MariaDB 11.4 with Flyway migrations + Hibernate auto-update
 - **CLI**: Picocli 4.7.7, CrowdStrike API, AWS SDK v2
 - **Build**: Gradle 9.4.1 (Kotlin DSL)

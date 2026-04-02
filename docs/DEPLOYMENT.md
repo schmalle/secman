@@ -1,6 +1,6 @@
 # Secman Deployment Guide
 
-**Last Updated:** 2026-04-01
+**Last Updated:** 2026-04-02
 **Version:** 2.0
 **Platforms:** Amazon Linux 2023, Ubuntu 20.04+, RHEL 8+
 
@@ -49,7 +49,7 @@ Complete production deployment guide for the Secman security management applicat
 **Components:**
 
 - **Backend**: Kotlin 2.3.20, Java 21, Micronaut 4.10
-- **Frontend**: Astro 6.0, React 19, Node.js 20.x
+- **Frontend**: Astro 6.1, React 19, Node.js 20.x
 - **Database**: MariaDB 11.4
 - **Reverse Proxy**: Nginx with SSL termination
 
