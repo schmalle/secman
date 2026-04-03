@@ -11,6 +11,7 @@ import org.apache.poi.ss.usermodel.Workbook
 import org.apache.poi.xssf.streaming.SXSSFWorkbook
 import org.slf4j.LoggerFactory
 import java.io.ByteArrayOutputStream
+import com.secman.util.ExcelSanitizer
 import java.time.format.DateTimeFormatter
 
 /**
@@ -174,67 +175,67 @@ class AssetExportService(
 
         // Name
         row.createCell(0).apply {
-            setCellValue(dto.name)
+            setCellValue(ExcelSanitizer.sanitize(dto.name))
             cellStyle = styles.text
         }
 
         // Type
         row.createCell(1).apply {
-            setCellValue(dto.type)
+            setCellValue(ExcelSanitizer.sanitize(dto.type))
             cellStyle = styles.text
         }
 
         // IP Address
         row.createCell(2).apply {
-            setCellValue(dto.ip ?: "")
+            setCellValue(ExcelSanitizer.sanitize(dto.ip))
             cellStyle = styles.text
         }
 
         // Owner
         row.createCell(3).apply {
-            setCellValue(dto.owner)
+            setCellValue(ExcelSanitizer.sanitize(dto.owner))
             cellStyle = styles.text
         }
 
         // Description
         row.createCell(4).apply {
-            setCellValue(dto.description ?: "")
+            setCellValue(ExcelSanitizer.sanitize(dto.description))
             cellStyle = styles.wrapText
         }
 
         // Groups
         row.createCell(5).apply {
-            setCellValue(dto.groups ?: "")
+            setCellValue(ExcelSanitizer.sanitize(dto.groups))
             cellStyle = styles.text
         }
 
         // Cloud Account ID
         row.createCell(6).apply {
-            setCellValue(dto.cloudAccountId ?: "")
+            setCellValue(ExcelSanitizer.sanitize(dto.cloudAccountId))
             cellStyle = styles.text
         }
 
         // Cloud Instance ID
         row.createCell(7).apply {
-            setCellValue(dto.cloudInstanceId ?: "")
+            setCellValue(ExcelSanitizer.sanitize(dto.cloudInstanceId))
             cellStyle = styles.text
         }
 
         // OS Version
         row.createCell(8).apply {
-            setCellValue(dto.osVersion ?: "")
+            setCellValue(ExcelSanitizer.sanitize(dto.osVersion))
             cellStyle = styles.text
         }
 
         // AD Domain
         row.createCell(9).apply {
-            setCellValue(dto.adDomain ?: "")
+            setCellValue(ExcelSanitizer.sanitize(dto.adDomain))
             cellStyle = styles.text
         }
 
         // Workgroups (comma-separated)
         row.createCell(10).apply {
-            setCellValue(dto.workgroups)
+            setCellValue(ExcelSanitizer.sanitize(dto.workgroups))
             cellStyle = styles.text
         }
 

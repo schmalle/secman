@@ -122,18 +122,18 @@ open class ImportController(
         
         // Check content type
         val contentType = file.contentType.map { it.toString() }.orElse("")
-        if (!contentType.contains("spreadsheetml.sheet") && !contentType.contains("excel")) {
+        if (!isValidExcelContentType(contentType)) {
             return "Invalid file format. Please upload a valid Excel file."
         }
-        
+
         // Check file is not empty
         if (file.size == 0L) {
             return "File is empty"
         }
-        
+
         return null
     }
-    
+
     private fun parseExcelFile(file: CompletedFileUpload): List<Requirement> {
         val requirements = mutableListOf<Requirement>()
         
@@ -460,7 +460,7 @@ open class ImportController(
 
         // Check content type
         val contentType = file.contentType.map { it.toString() }.orElse("")
-        if (!contentType.contains("spreadsheetml.sheet") && !contentType.contains("excel")) {
+        if (!isValidExcelContentType(contentType)) {
             return "Invalid file format. Please upload a valid Excel file (.xlsx)."
         }
 
@@ -851,7 +851,7 @@ open class ImportController(
 
         // Check content type
         val contentType = file.contentType.map { it.toString() }.orElse("")
-        if (!contentType.contains("xml")) {
+        if (!isValidXmlContentType(contentType)) {
             return "Invalid file format. Please upload a valid XML file."
         }
 
@@ -955,6 +955,30 @@ open class ImportController(
             log.error("Asset import failed for user: {}", authentication.name, e)
             HttpResponse.serverError<ErrorResponse>()
                 .body(ErrorResponse("An internal error occurred"))
+        }
+    }
+
+    companion object {
+        private val VALID_EXCEL_CONTENT_TYPES = setOf(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/vnd.ms-excel",
+            "application/octet-stream"
+        )
+
+        private val VALID_XML_CONTENT_TYPES = setOf(
+            "application/xml",
+            "text/xml",
+            "application/octet-stream"
+        )
+
+        fun isValidExcelContentType(contentType: String): Boolean {
+            if (contentType.isEmpty()) return true
+            return VALID_EXCEL_CONTENT_TYPES.any { contentType.startsWith(it) }
+        }
+
+        fun isValidXmlContentType(contentType: String): Boolean {
+            if (contentType.isEmpty()) return true
+            return VALID_XML_CONTENT_TYPES.any { contentType.startsWith(it) }
         }
     }
 }

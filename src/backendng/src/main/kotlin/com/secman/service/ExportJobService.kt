@@ -1,6 +1,7 @@
 package com.secman.service
 
 import com.secman.config.MemoryOptimizationConfig
+import com.secman.util.ExcelSanitizer
 import com.secman.domain.ExportJob
 import com.secman.domain.ExportJobStatus
 import com.secman.domain.ExportType
@@ -681,22 +682,22 @@ open class ExportJobService(
         val row = sheet.createRow(rowNum)
 
         row.createCell(0).apply {
-            setCellValue(dto.assetName)
+            setCellValue(ExcelSanitizer.sanitize(dto.assetName))
             cellStyle = styles.text
         }
 
         row.createCell(1).apply {
-            setCellValue(dto.assetIp ?: "")
+            setCellValue(ExcelSanitizer.sanitize(dto.assetIp))
             cellStyle = styles.text
         }
 
         row.createCell(2).apply {
-            setCellValue(dto.cveId ?: "")
+            setCellValue(ExcelSanitizer.sanitize(dto.cveId))
             cellStyle = styles.text
         }
 
         row.createCell(3).apply {
-            setCellValue(dto.severity ?: "")
+            setCellValue(ExcelSanitizer.sanitize(dto.severity))
             cellStyle = when (dto.severity?.lowercase()) {
                 "critical" -> styles.critical
                 "high" -> styles.high
@@ -707,12 +708,12 @@ open class ExportJobService(
         }
 
         row.createCell(4).apply {
-            setCellValue(dto.product ?: "")
+            setCellValue(ExcelSanitizer.sanitize(dto.product))
             cellStyle = styles.wrapText
         }
 
         row.createCell(5).apply {
-            setCellValue(dto.daysOpen ?: "")
+            setCellValue(ExcelSanitizer.sanitize(dto.daysOpen))
             cellStyle = styles.text
         }
 
@@ -722,7 +723,7 @@ open class ExportJobService(
         }
 
         row.createCell(7).apply {
-            setCellValue(dto.overdueStatus)
+            setCellValue(ExcelSanitizer.sanitize(dto.overdueStatus))
             cellStyle = when (dto.overdueStatus.uppercase()) {
                 "OVERDUE" -> styles.overdue
                 "EXCEPTED" -> styles.excepted
@@ -737,7 +738,7 @@ open class ExportJobService(
         }
 
         row.createCell(9).apply {
-            setCellValue(dto.exceptionReason ?: "")
+            setCellValue(ExcelSanitizer.sanitize(dto.exceptionReason))
             cellStyle = styles.wrapText
         }
     }

@@ -2,6 +2,7 @@ package com.secman.controller
 
 import com.secman.domain.Requirement
 import com.secman.domain.RequirementSnapshot
+import com.secman.util.ExcelSanitizer
 import com.secman.domain.UseCase
 import com.secman.domain.Norm
 import com.secman.repository.RequirementRepository
@@ -691,10 +692,10 @@ open class RequirementController(
             val row = sheet.createRow(index + 1)
 
             // ID.Revision - first column
-            row.createCell(0).setCellValue(requirement.idRevision)
+            row.createCell(0).setCellValue(ExcelSanitizer.sanitize(requirement.idRevision))
 
             // Chapter
-            row.createCell(1).setCellValue(requirement.chapter ?: "")
+            row.createCell(1).setCellValue(ExcelSanitizer.sanitize(requirement.chapter))
 
             // Norm - combine all parsed norms for round-trip compatibility
             val normString = if (requirement.norms.isNotEmpty()) {
@@ -708,19 +709,19 @@ open class RequirementController(
             } else {
                 requirement.norm ?: "" // Fallback to original norm string
             }
-            row.createCell(2).setCellValue(normString)
+            row.createCell(2).setCellValue(ExcelSanitizer.sanitize(normString))
 
             // Short req
-            row.createCell(3).setCellValue(requirement.shortreq)
+            row.createCell(3).setCellValue(ExcelSanitizer.sanitize(requirement.shortreq))
 
             // DetailsEN
-            row.createCell(4).setCellValue(requirement.details ?: "")
+            row.createCell(4).setCellValue(ExcelSanitizer.sanitize(requirement.details))
 
             // MotivationEN
-            row.createCell(5).setCellValue(requirement.motivation ?: "")
+            row.createCell(5).setCellValue(ExcelSanitizer.sanitize(requirement.motivation))
 
             // ExampleEN
-            row.createCell(6).setCellValue(requirement.example ?: "")
+            row.createCell(6).setCellValue(ExcelSanitizer.sanitize(requirement.example))
 
             // UseCase - combine all use case names
             val useCaseString = if (requirement.usecases.isNotEmpty()) {
@@ -728,7 +729,7 @@ open class RequirementController(
             } else {
                 requirement.usecase ?: "" // Fallback to original usecase string
             }
-            row.createCell(7).setCellValue(useCaseString)
+            row.createCell(7).setCellValue(ExcelSanitizer.sanitize(useCaseString))
         }
 
         // Auto-size columns with minimum width
@@ -1139,41 +1140,41 @@ open class RequirementController(
             val row = sheet.createRow(index + 2) // +2 to account for info and header rows
             
             // Chapter (not translated)
-            row.createCell(0).setCellValue(requirement.chapter ?: "")
-            
+            row.createCell(0).setCellValue(ExcelSanitizer.sanitize(requirement.chapter))
+
             // Norm (not translated)
-            row.createCell(1).setCellValue(requirement.norms.joinToString(", ") { it.name })
-            
+            row.createCell(1).setCellValue(ExcelSanitizer.sanitize(requirement.norms.joinToString(", ") { it.name }))
+
             // Short requirement (use batch-translated value)
             val shortReqTranslated = translationMap[requirement.shortreq] ?: requirement.shortreq
-            row.createCell(2).setCellValue(shortReqTranslated)
-            
+            row.createCell(2).setCellValue(ExcelSanitizer.sanitize(shortReqTranslated))
+
             // Details (use batch-translated value)
             val detailsTranslated = if (!requirement.details.isNullOrBlank()) {
                 translationMap[requirement.details] ?: requirement.details!!
             } else {
                 ""
             }
-            row.createCell(3).setCellValue(detailsTranslated)
-            
+            row.createCell(3).setCellValue(ExcelSanitizer.sanitize(detailsTranslated))
+
             // Motivation (use batch-translated value)
             val motivationTranslated = if (!requirement.motivation.isNullOrBlank()) {
                 translationMap[requirement.motivation] ?: requirement.motivation!!
             } else {
                 ""
             }
-            row.createCell(4).setCellValue(motivationTranslated)
-            
+            row.createCell(4).setCellValue(ExcelSanitizer.sanitize(motivationTranslated))
+
             // Example (use batch-translated value)
             val exampleTranslated = if (!requirement.example.isNullOrBlank()) {
                 translationMap[requirement.example] ?: requirement.example!!
             } else {
                 ""
             }
-            row.createCell(5).setCellValue(exampleTranslated)
-            
+            row.createCell(5).setCellValue(ExcelSanitizer.sanitize(exampleTranslated))
+
             // Use Cases (not translated)
-            row.createCell(6).setCellValue(requirement.usecases.joinToString(", ") { it.name })
+            row.createCell(6).setCellValue(ExcelSanitizer.sanitize(requirement.usecases.joinToString(", ") { it.name }))
         }
         
         // Auto-size columns

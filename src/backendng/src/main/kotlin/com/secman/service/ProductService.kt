@@ -1,6 +1,7 @@
 package com.secman.service
 
 import com.secman.dto.PaginatedProductSystemsResponse
+import com.secman.util.ExcelSanitizer
 import com.secman.dto.ProductListResponse
 import com.secman.dto.ProductSystemDto
 import com.secman.dto.TopProductDto
@@ -247,11 +248,11 @@ open class ProductService(
             // Write data rows
             systems.forEachIndexed { index, system ->
                 val row = sheet.createRow(index + 1)
-                row.createCell(0).setCellValue(system.name)
-                row.createCell(1).setCellValue(system.ip ?: "")
-                row.createCell(2).setCellValue(system.adDomain ?: "")
-                row.createCell(3).setCellValue(system.cloudAccountId ?: "")
-                row.createCell(4).setCellValue(system.cloudInstanceId ?: "")
+                row.createCell(0).setCellValue(ExcelSanitizer.sanitize(system.name))
+                row.createCell(1).setCellValue(ExcelSanitizer.sanitize(system.ip))
+                row.createCell(2).setCellValue(ExcelSanitizer.sanitize(system.adDomain))
+                row.createCell(3).setCellValue(ExcelSanitizer.sanitize(system.cloudAccountId))
+                row.createCell(4).setCellValue(ExcelSanitizer.sanitize(system.cloudInstanceId))
             }
 
             // Set fixed column widths

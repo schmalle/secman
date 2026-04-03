@@ -1,6 +1,7 @@
 package com.secman.service
 
 import com.secman.domain.OutdatedAssetMaterializedView
+import com.secman.util.ExcelSanitizer
 import com.secman.domain.Vulnerability
 import com.secman.repository.AssetRepository
 import com.secman.repository.OutdatedAssetMaterializedViewRepository
@@ -265,16 +266,16 @@ class OutdatedAssetService(
             // Data rows
             assets.forEachIndexed { index, asset ->
                 val row = sheet.createRow(index + 1)
-                row.createCell(0).setCellValue(asset.assetName)
-                row.createCell(1).setCellValue(asset.assetType)
-                row.createCell(2).setCellValue(asset.adDomain ?: "")
+                row.createCell(0).setCellValue(ExcelSanitizer.sanitize(asset.assetName))
+                row.createCell(1).setCellValue(ExcelSanitizer.sanitize(asset.assetType))
+                row.createCell(2).setCellValue(ExcelSanitizer.sanitize(asset.adDomain))
                 row.createCell(3).setCellValue(asset.totalOverdueCount.toDouble())
                 row.createCell(4).setCellValue(asset.criticalCount.toDouble())
                 row.createCell(5).setCellValue(asset.highCount.toDouble())
                 row.createCell(6).setCellValue(asset.mediumCount.toDouble())
                 row.createCell(7).setCellValue(asset.lowCount.toDouble())
                 row.createCell(8).setCellValue(asset.oldestVulnDays.toDouble())
-                row.createCell(9).setCellValue(asset.oldestVulnId ?: "")
+                row.createCell(9).setCellValue(ExcelSanitizer.sanitize(asset.oldestVulnId))
             }
 
             // Column widths

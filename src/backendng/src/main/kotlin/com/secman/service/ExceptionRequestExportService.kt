@@ -10,6 +10,7 @@ import org.apache.poi.xssf.streaming.SXSSFWorkbook
 import org.slf4j.LoggerFactory
 import java.io.ByteArrayOutputStream
 import java.time.LocalDateTime
+import com.secman.util.ExcelSanitizer
 import java.time.format.DateTimeFormatter
 
 /**
@@ -195,25 +196,25 @@ open class ExceptionRequestExportService(
 
         // CVE ID
         row.createCell(colNum++).apply {
-            setCellValue(request.vulnerability?.vulnerabilityId ?: "N/A")
+            setCellValue(ExcelSanitizer.sanitize(request.vulnerability?.vulnerabilityId ?: "N/A"))
             cellStyle = normalStyle
         }
 
         // Asset Name
         row.createCell(colNum++).apply {
-            setCellValue(request.vulnerability?.asset?.name ?: "N/A")
+            setCellValue(ExcelSanitizer.sanitize(request.vulnerability?.asset?.name ?: "N/A"))
             cellStyle = normalStyle
         }
 
         // Asset IP
         row.createCell(colNum++).apply {
-            setCellValue(request.vulnerability?.asset?.ip ?: "N/A")
+            setCellValue(ExcelSanitizer.sanitize(request.vulnerability?.asset?.ip ?: "N/A"))
             cellStyle = normalStyle
         }
 
         // Requester
         row.createCell(colNum++).apply {
-            setCellValue(request.requestedByUsername)
+            setCellValue(ExcelSanitizer.sanitize(request.requestedByUsername))
             cellStyle = normalStyle
         }
 
@@ -231,7 +232,7 @@ open class ExceptionRequestExportService(
 
         // Reviewer
         row.createCell(colNum++).apply {
-            setCellValue(request.reviewedByUsername ?: "N/A")
+            setCellValue(ExcelSanitizer.sanitize(request.reviewedByUsername ?: "N/A"))
             cellStyle = normalStyle
         }
 
@@ -243,13 +244,13 @@ open class ExceptionRequestExportService(
 
         // Reason
         row.createCell(colNum++).apply {
-            setCellValue(request.reason)
+            setCellValue(ExcelSanitizer.sanitize(request.reason))
             cellStyle = normalStyle
         }
 
         // Review Comment
         row.createCell(colNum++).apply {
-            setCellValue(request.reviewComment ?: "N/A")
+            setCellValue(ExcelSanitizer.sanitize(request.reviewComment ?: "N/A"))
             cellStyle = normalStyle
         }
 

@@ -1,6 +1,7 @@
 package com.secman.mcp.tools
 
 import com.secman.domain.McpOperation
+import com.secman.util.ExcelSanitizer
 import com.secman.domain.Requirement
 import com.secman.dto.mcp.McpExecutionContext
 import com.secman.repository.RequirementRepository
@@ -126,7 +127,7 @@ class ExportRequirementsTool(
         requirements.forEachIndexed { index, requirement ->
             val row = sheet.createRow(index + 1)
 
-            row.createCell(0).setCellValue(requirement.chapter ?: "")
+            row.createCell(0).setCellValue(ExcelSanitizer.sanitize(requirement.chapter))
 
             val normString = if (requirement.norms.isNotEmpty()) {
                 requirement.norms.joinToString("; ") { norm ->
@@ -139,19 +140,19 @@ class ExportRequirementsTool(
             } else {
                 requirement.norm ?: ""
             }
-            row.createCell(1).setCellValue(normString)
+            row.createCell(1).setCellValue(ExcelSanitizer.sanitize(normString))
 
-            row.createCell(2).setCellValue(requirement.shortreq)
-            row.createCell(3).setCellValue(requirement.details ?: "")
-            row.createCell(4).setCellValue(requirement.motivation ?: "")
-            row.createCell(5).setCellValue(requirement.example ?: "")
+            row.createCell(2).setCellValue(ExcelSanitizer.sanitize(requirement.shortreq))
+            row.createCell(3).setCellValue(ExcelSanitizer.sanitize(requirement.details))
+            row.createCell(4).setCellValue(ExcelSanitizer.sanitize(requirement.motivation))
+            row.createCell(5).setCellValue(ExcelSanitizer.sanitize(requirement.example))
 
             val useCaseString = if (requirement.usecases.isNotEmpty()) {
                 requirement.usecases.joinToString(", ") { it.name }
             } else {
                 requirement.usecase ?: ""
             }
-            row.createCell(6).setCellValue(useCaseString)
+            row.createCell(6).setCellValue(ExcelSanitizer.sanitize(useCaseString))
         }
 
         // Auto-size columns

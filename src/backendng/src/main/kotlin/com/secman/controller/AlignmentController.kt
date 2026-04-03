@@ -1,6 +1,8 @@
 package com.secman.controller
 
+import com.secman.controller.ImportController.Companion.isValidExcelContentType
 import com.secman.domain.AlignmentReviewer.ReviewerStatus
+import com.secman.util.ExcelSanitizer
 import com.secman.domain.AlignmentSession.AlignmentStatus
 import com.secman.domain.AlignmentSnapshot.ChangeType
 import com.secman.domain.RequirementReview.ReviewAssessment
@@ -759,9 +761,7 @@ open class AlignmentController(
             }
             val contentType = file.contentType.map { it.toString() }.orElse("")
             if (contentType.isNotEmpty()
-                && !contentType.contains("spreadsheetml.sheet", ignoreCase = true)
-                && !contentType.contains("excel", ignoreCase = true)
-                && !contentType.contains("octet-stream", ignoreCase = true)) {
+                && !ImportController.isValidExcelContentType(contentType)) {
                 return HttpResponse.badRequest(mapOf(
                     "success" to false,
                     "message" to "Invalid file type. Please upload a valid .xlsx Excel file"
@@ -1041,14 +1041,14 @@ open class AlignmentController(
             // Data rows
             rows.forEachIndexed { index, row ->
                 val excelRow = sheet.createRow(index + 1)
-                excelRow.createCell(0).setCellValue(row.requirementId)
-                excelRow.createCell(1).setCellValue(row.shortreq)
-                excelRow.createCell(2).setCellValue(row.changeType)
-                excelRow.createCell(3).setCellValue(row.reviewerName)
-                excelRow.createCell(4).setCellValue(row.assessment)
-                excelRow.createCell(5).setCellValue(row.comment ?: "")
-                excelRow.createCell(6).setCellValue(row.adminDecision ?: "")
-                excelRow.createCell(7).setCellValue(row.adminComment ?: "")
+                excelRow.createCell(0).setCellValue(ExcelSanitizer.sanitize(row.requirementId))
+                excelRow.createCell(1).setCellValue(ExcelSanitizer.sanitize(row.shortreq))
+                excelRow.createCell(2).setCellValue(ExcelSanitizer.sanitize(row.changeType))
+                excelRow.createCell(3).setCellValue(ExcelSanitizer.sanitize(row.reviewerName))
+                excelRow.createCell(4).setCellValue(ExcelSanitizer.sanitize(row.assessment))
+                excelRow.createCell(5).setCellValue(ExcelSanitizer.sanitize(row.comment))
+                excelRow.createCell(6).setCellValue(ExcelSanitizer.sanitize(row.adminDecision))
+                excelRow.createCell(7).setCellValue(ExcelSanitizer.sanitize(row.adminComment))
             }
 
             // Auto-size columns
@@ -1125,18 +1125,18 @@ open class AlignmentController(
         snapshots.forEachIndexed { index, snapshot ->
             val row = sheet.createRow(index + 1)
             row.createCell(0).setCellValue(snapshot.id?.toDouble() ?: 0.0)
-            row.createCell(1).setCellValue(snapshot.requirementInternalId)
+            row.createCell(1).setCellValue(ExcelSanitizer.sanitize(snapshot.requirementInternalId))
             row.createCell(2).setCellValue(snapshot.changeType.name)
-            row.createCell(3).setCellValue(snapshot.chapter ?: "")
-            row.createCell(4).setCellValue(snapshot.shortreq)
-            row.createCell(5).setCellValue(snapshot.details ?: "")
-            row.createCell(6).setCellValue(snapshot.previousShortreq ?: "")
-            row.createCell(7).setCellValue(snapshot.previousDetails ?: "")
+            row.createCell(3).setCellValue(ExcelSanitizer.sanitize(snapshot.chapter))
+            row.createCell(4).setCellValue(ExcelSanitizer.sanitize(snapshot.shortreq))
+            row.createCell(5).setCellValue(ExcelSanitizer.sanitize(snapshot.details))
+            row.createCell(6).setCellValue(ExcelSanitizer.sanitize(snapshot.previousShortreq))
+            row.createCell(7).setCellValue(ExcelSanitizer.sanitize(snapshot.previousDetails))
 
             // Pre-populate from existing reviews
             val review = existingReviews[snapshot.id]
             row.createCell(8).setCellValue(review?.assessment?.name ?: "")
-            row.createCell(9).setCellValue(review?.comment ?: "")
+            row.createCell(9).setCellValue(ExcelSanitizer.sanitize(review?.comment))
         }
 
         // Add data validation dropdown for Assessment column (column 8)
