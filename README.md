@@ -109,7 +109,7 @@ SecMan is a full-stack security management platform that helps organizations man
 
 - **Model Context Protocol** support for AI assistants (Claude, etc.)
 - Streamable HTTP transport (direct connection, no middleware required)
-- 48 MCP tools for requirements, assets, vulnerabilities, scans, releases, user mappings, workgroups, and more
+- 51 MCP tools for requirements, assets, vulnerabilities, scans, releases, user mappings, workgroups, and more
 - User delegation (act on behalf of users)
 - API key management with granular permissions
 - Rate limiting and session management
@@ -187,7 +187,7 @@ SecMan is a full-stack security management platform that helps organizations man
 - Java 21 (JDK 21, Amazon Corretto recommended)
 - Node.js 20+
 - MariaDB 11.4+
-- Gradle 9.3+ (wrapper included)
+- Gradle 9.4+ (wrapper included)
 - Git
 - Docker (optional, for integration tests)
 
@@ -199,9 +199,9 @@ git clone https://github.com/schmalle/secman.git
 cd secman
 
 # Create database
-cd scripts/install
+cd scripts/install/db
 ./install.sh
-cd ../..
+cd ../../..
 
 # Start backend (in one terminal)
 cd src/backendng
@@ -215,14 +215,13 @@ npm run dev
 
 ### Default Credentials
 
-| Username      | Password   | Roles                 |
-| ------------- | ---------- | --------------------- |
-| `adminuser`   | `password` | ADMIN, USER           |
-| `normaluser`  | `password` | USER                  |
-| `vulnuser`    | `password` | VULN, USER            |
-| `releaseuser` | `password` | RELEASE_MANAGER, USER |
+On first startup (when no users exist), a default admin user is auto-created:
 
-**IMPORTANT:** Change default passwords immediately in production!
+| Username | Password   | Roles       |
+| -------- | ---------- | ----------- |
+| `admin`  | `password` | ADMIN, USER |
+
+**IMPORTANT:** Change the default password immediately after first login in production!
 
 ## Development
 
@@ -233,10 +232,10 @@ secman/
 ├── src/
 │   ├── backendng/          # Kotlin/Micronaut backend
 │   │   ├── src/main/kotlin/com/secman/
-│   │   │   ├── controller/ # REST controllers (61 controllers)
+│   │   │   ├── controller/ # REST controllers (60 controllers)
 │   │   │   ├── domain/     # JPA entities
 │   │   │   ├── repository/ # Data repositories
-│   │   │   ├── service/    # Business logic (94 services)
+│   │   │   ├── service/    # Business logic (95 services)
 │   │   │   ├── config/     # Configuration classes
 │   │   │   ├── dto/        # Data transfer objects
 │   │   │   ├── filter/     # HTTP filters
@@ -495,6 +494,9 @@ Comprehensive documentation is available in the `docs/` directory:
 | [Testing Guide](docs/TESTING.md)                      | Test infrastructure and patterns               |
 | [Troubleshooting](docs/TROUBLESHOOTING.md)            | Common issues and solutions                    |
 | [Skills & Agents](docs/SKILLS_AND_AGENTS.md)          | Claude Code skills and agent reference         |
+| [S3 User Mapping Import](docs/S3_USER_MAPPING_IMPORT.md) | S3-based user mapping imports               |
+| [E2E Exception Workflow](docs/E2E_EXCEPTION_WORKFLOW_TEST.md) | End-to-end exception workflow test      |
+| [1Password Credentials](docs/1PASSWORD.md)            | Secret management with 1Password CLI           |
 
 ## Contributing
 

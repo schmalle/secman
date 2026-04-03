@@ -78,7 +78,7 @@ Secman is a security requirement and risk assessment management tool consisting 
 
 ### Backend (`src/backendng/`)
 
-The backend follows a layered architecture with 61 controllers:
+The backend follows a layered architecture with 60 controllers:
 
 ```
 +-----------------------------------------------------------------+
@@ -546,7 +546,7 @@ secman/
 │   │       ├── repository/           # Data access
 │   │       ├── service/              # Business logic
 │   │       │   └── mcp/              # MCP-specific services
-│   │       ├── controller/           # REST endpoints (61 controllers)
+│   │       ├── controller/           # REST endpoints (60 controllers)
 │   │       ├── config/               # Configuration
 │   │       ├── dto/                  # DTOs
 │   │       │   └── mcp/              # MCP DTOs

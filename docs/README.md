@@ -2,7 +2,7 @@
 
 Security requirement and risk assessment management tool.
 
-**Last Updated:** 2026-04-02
+**Last Updated:** 2026-04-03
 
 ---
 
@@ -22,6 +22,9 @@ Security requirement and risk assessment management tool.
 | [S3 User Mapping Import](./S3_USER_MAPPING_IMPORT.md) | S3-based user mapping imports            |
 | [Skills & Agents](./SKILLS_AND_AGENTS.md)             | Claude Code skills and agent reference   |
 | [1Password Credentials](./1PASSWORD.md)               | Secret management with 1Password CLI     |
+| [Database Installation](../scripts/install/db/README.md) | Database setup scripts and defaults    |
+| [MCP Go Client](../scripts/mcp/README.md)             | Standalone Go MCP client example         |
+| [UI Screenshots](../pictures/README.md)               | Latest UI screenshots                    |
 
 ---
 
@@ -280,7 +283,13 @@ docs/
 ├── E2E_EXCEPTION_WORKFLOW_TEST.md  <- Exception E2E test
 ├── S3_USER_MAPPING_IMPORT.md      <- S3 import guide
 ├── SKILLS_AND_AGENTS.md           <- Skills & agents reference
-└── 1PASSWORD.md                   <- Secret management with 1Password CLI
+├── 1PASSWORD.md                   <- Secret management with 1Password CLI
+scripts/install/db/
+└── README.md                      <- Database setup scripts
+scripts/mcp/
+└── README.md                      <- Go MCP client example
+pictures/
+└── README.md                      <- UI screenshots
 ```
 
 ---

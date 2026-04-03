@@ -52,7 +52,7 @@ Skills run in `fork` mode (dedicated context) or inline, and may spawn agents as
 
 #### `/e2e-runner`
 
-**File:** `.claude/skills/e2e-runner/SKILL.md`
+**File:** Configured via Claude Code settings (skill definition)
 
 End-to-end test orchestrator. Starts the full stack (backend + frontend), runs the E2E test script, and iteratively fixes failures until all tests pass or the retry budget is exhausted.
 
@@ -439,10 +439,8 @@ Configured in `.claude/settings.json`. Key hooks relevant to skills:
 
 ### Helper Scripts
 
-Located in `.claude/skills/e2e-runner/scripts/`:
+The E2E runner uses the following scripts:
 
 | Script | Purpose |
 |--------|---------|
-| `service-ctl.sh` | Start and stop backend/frontend services |
-| `wait-for-health.sh` | Poll health endpoints until ready or timeout |
-| `on-file-changed.sh` | Detect file changes and signal rebuild needs |
+| `scripts/e2e-test.sh` | Main E2E test execution script |

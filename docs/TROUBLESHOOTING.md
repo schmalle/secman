@@ -95,7 +95,7 @@ curl -v http://localhost:8080/health
 **Diagnostics:**
 ```bash
 sudo journalctl -u secman-frontend -n 100
-node -v  # Must be 18+ or 20.x
+node -v  # Must be 20.x
 ls -la /opt/secman/app/src/frontend/dist/server/
 ```
 

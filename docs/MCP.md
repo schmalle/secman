@@ -34,7 +34,7 @@ Secman supports the Model Context Protocol (MCP), allowing AI assistants to prog
 - **Vulnerability Data** - Search vulnerabilities by severity, CVE, or affected asset
 - **Scan Results** - Review network scan history and discovered services
 
-The MCP server exposes **48 tools** for comprehensive security management workflows.
+The MCP server exposes **51 tools** for comprehensive security management workflows.
 
 ### Prerequisites
 
