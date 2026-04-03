@@ -26,6 +26,9 @@ const PermissionDenied: React.FC<PermissionDeniedProps> = ({
     showContactAdmin = true,
     backPath = "/"
 }) => {
+    // Security: Validate backPath to prevent open redirects to external domains
+    const safeBackPath = backPath.startsWith('/') && !backPath.startsWith('//') ? backPath : '/';
+
     return (
         <div className="container mt-5">
             <div className="row justify-content-center">
@@ -57,7 +60,7 @@ const PermissionDenied: React.FC<PermissionDeniedProps> = ({
                             )}
 
                             <div className="d-flex justify-content-center gap-3 mt-4">
-                                <a href={backPath} className="btn btn-primary">
+                                <a href={safeBackPath} className="btn btn-primary">
                                     <i className="bi bi-arrow-left me-2"></i>
                                     Go Back
                                 </a>

@@ -1,6 +1,7 @@
 package com.secman.domain
 
 import com.fasterxml.jackson.annotation.JsonIgnore
+import com.secman.util.EncryptedStringConverter
 import io.micronaut.serde.annotation.Serdeable
 import jakarta.persistence.*
 import java.time.LocalDateTime
@@ -25,6 +26,7 @@ data class IdentityProvider(
 
     @Column(name = "client_secret")
     @JsonIgnore
+    @Convert(converter = EncryptedStringConverter::class)
     var clientSecret: String? = null,
 
     @Column(name = "tenant_id")

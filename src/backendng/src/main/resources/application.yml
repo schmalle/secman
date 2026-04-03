@@ -153,9 +153,9 @@ micronaut:
 secman:
   debug: ${SECMAN_DEBUG:false}
   auth:
-    # Set to false for local development over HTTP, true for production HTTPS
-    # When false, auth cookies will be sent over HTTP (insecure but needed for localhost)
-    cookie-secure: ${SECMAN_AUTH_COOKIE_SECURE:false}
+    # Controls the Secure flag on auth cookies (HTTPS-only transmission)
+    # Default: true (production-safe). Set SECMAN_AUTH_COOKIE_SECURE=false for local HTTP development.
+    cookie-secure: ${SECMAN_AUTH_COOKIE_SECURE:true}
   encryption:
     # Encryption password for sensitive data - MUST be overridden in production
     password: ${SECMAN_ENCRYPTION_PASSWORD:SecManDefaultEncryptionPassword2024}

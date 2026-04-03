@@ -90,8 +90,11 @@ open class PublicRequirementDownloadController(
         document.close()
 
         val dateStr = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"))
-        val filename = "requirements${filenameSuffix}_$dateStr.docx"
-            .replace("\"", "").replace("\r", "").replace("\n", "")
+        // Security: Sanitize filename to prevent Content-Disposition header injection
+        // Allow only alphanumeric, dash, underscore, and dot characters
+        val safeSuffix = filenameSuffix.replace(Regex("[^a-zA-Z0-9_-]"), "")
+        val filename = "requirements${safeSuffix}_$dateStr.docx"
+            .take(200) // Limit filename length
         val inputStream = ByteArrayInputStream(outputStream.toByteArray())
 
         return HttpResponse.ok(StreamedFile(inputStream, MediaType.of("application/vnd.openxmlformats-officedocument.wordprocessingml.document")))
