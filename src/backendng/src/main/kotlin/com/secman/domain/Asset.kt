@@ -20,7 +20,8 @@ import java.time.LocalDateTime
         Index(name = "idx_asset_owner", columnList = "owner"),                    // Owner-based filtering
         Index(name = "idx_asset_last_seen", columnList = "last_seen"),            // Outdated asset queries
         Index(name = "idx_asset_manual_creator", columnList = "manual_creator_id"), // Access control by creator
-        Index(name = "idx_asset_scan_uploader", columnList = "scan_uploader_id")    // Access control by uploader
+        Index(name = "idx_asset_scan_uploader", columnList = "scan_uploader_id"),   // Access control by uploader
+        Index(name = "idx_asset_network_zone", columnList = "network_zone")         // Network zone filtering (port-scan addon)
     ]
 )
 @Serdeable
@@ -122,6 +123,37 @@ data class Asset(
     var criticality: Criticality? = null,
 
     /**
+     * Network zone classification for this asset
+     * Determines internet-facing exposure level for port scanning
+     * nullable: null treated as UNKNOWN for existing assets
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "network_zone", nullable = true, length = 20)
+    var networkZone: NetworkZone? = null,
+
+    /**
+     * Cached count of open ports from the latest scan
+     * Updated by ScanImportService after each scan import
+     * Avoids expensive joins for list views and filtering
+     */
+    @Column(name = "open_port_count", nullable = true)
+    var openPortCount: Int? = null,
+
+    /**
+     * Type of the last scan performed (e.g., "nmap", "masscan")
+     * Updated by ScanImportService after each scan import
+     */
+    @Column(name = "last_scan_type", nullable = true, length = 50)
+    var lastScanType: String? = null,
+
+    /**
+     * Timestamp of the last completed scan
+     * Updated by ScanImportService after each scan import
+     */
+    @Column(name = "last_scan_date", nullable = true)
+    var lastScanDate: LocalDateTime? = null,
+
+    /**
      * Many-to-many relationship with Workgroup
      * Feature: 008-create-an-additional (Workgroup-Based Access Control)
      * Feature: 073-memory-optimization (LAZY loading)
@@ -189,7 +221,15 @@ data class Asset(
      */
     @JsonIgnore
     @OneToMany(mappedBy = "asset", fetch = FetchType.LAZY)
-    var vulnerabilities: MutableList<Vulnerability> = mutableListOf()
+    var vulnerabilities: MutableList<Vulnerability> = mutableListOf(),
+
+    /**
+     * Flexible key-value tags for arbitrary asset classification
+     * Examples: environment=production, role=web-server, team=platform
+     */
+    @JsonIgnore
+    @OneToMany(mappedBy = "asset", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
+    var tags: MutableList<AssetTag> = mutableListOf()
 ) {
     /**
      * Computed effective criticality for this asset
@@ -211,6 +251,38 @@ data class Asset(
         return criticality ?: workgroups
             .filter { it.criticality != Criticality.NA }  // Filter out N/A workgroups
             .maxByOrNull { it.criticality }?.criticality ?: Criticality.MEDIUM
+    }
+
+    /**
+     * Check if this asset's IP address is a public (non-private) IP.
+     * Returns false for RFC1918 (10.x, 172.16-31.x, 192.168.x),
+     * RFC6598 (100.64-127.x), loopback (127.x), and link-local (169.254.x).
+     */
+    @JsonIgnore
+    fun isPublicIp(): Boolean {
+        val ipAddr = ip ?: return false
+        val parts = ipAddr.split('.')
+        if (parts.size != 4) return false
+        val octets = parts.mapNotNull { it.toIntOrNull() }
+        if (octets.size != 4) return false
+        val (a, b) = octets
+        return when {
+            a == 10 -> false                                    // 10.0.0.0/8
+            a == 172 && b in 16..31 -> false                    // 172.16.0.0/12
+            a == 192 && b == 168 -> false                       // 192.168.0.0/16
+            a == 100 && b in 64..127 -> false                   // 100.64.0.0/10 (CGN)
+            a == 127 -> false                                   // 127.0.0.0/8 (loopback)
+            a == 169 && b == 254 -> false                       // 169.254.0.0/16 (link-local)
+            else -> true
+        }
+    }
+
+    /**
+     * Check if this asset is classified as internet-facing (EXTERNAL or DMZ zone)
+     */
+    @JsonIgnore
+    fun isInternetFacing(): Boolean {
+        return networkZone == NetworkZone.EXTERNAL || networkZone == NetworkZone.DMZ
     }
 
     @PrePersist
