@@ -2,6 +2,7 @@ package com.secman.controller
 
 import com.secman.domain.Asset
 import com.secman.domain.Criticality
+import com.secman.domain.NetworkZone
 import com.secman.domain.Vulnerability
 import com.secman.dto.*
 import io.micronaut.data.model.Page
@@ -62,7 +63,8 @@ open class AssetController(
         @NotBlank @Size(max = 255) val owner: String,
         @Nullable val description: String? = null,
         @Nullable val criticality: Criticality? = null,
-        @Nullable val adDomain: String? = null
+        @Nullable val adDomain: String? = null,
+        @Nullable val networkZone: NetworkZone? = null
     )
 
     @Serdeable
@@ -74,7 +76,8 @@ open class AssetController(
         @Nullable val description: String? = null,
         @Nullable val workgroupIds: List<Long>? = null,
         @Nullable val criticality: Criticality? = null,
-        @Nullable val adDomain: String? = null
+        @Nullable val adDomain: String? = null,
+        @Nullable val networkZone: NetworkZone? = null
     )
 
     @Serdeable
@@ -108,7 +111,12 @@ open class AssetController(
         val cloudInstanceId: String?,
         val adDomain: String?,
         val createdAt: String?,
-        val workgroups: List<WorkgroupSummary>? = null
+        val workgroups: List<WorkgroupSummary>? = null,
+        val networkZone: NetworkZone? = null,
+        val openPortCount: Int? = null,
+        val lastScanType: String? = null,
+        val lastScanDate: String? = null,
+        val tags: List<TagSummary>? = null
     ) {
         @Serdeable
         data class WorkgroupSummary(
@@ -116,11 +124,23 @@ open class AssetController(
             val name: String
         )
 
+        @Serdeable
+        data class TagSummary(
+            val key: String,
+            val value: String
+        )
+
         companion object {
             fun from(asset: Asset): AssetResponse {
                 // Access workgroups safely - may be lazy-loaded
                 val workgroupSummaries = try {
                     asset.workgroups.map { WorkgroupSummary(it.id!!, it.name) }
+                } catch (e: Exception) {
+                    null
+                }
+
+                val tagSummaries = try {
+                    asset.tags.map { TagSummary(it.key, it.value) }
                 } catch (e: Exception) {
                     null
                 }
@@ -139,7 +159,12 @@ open class AssetController(
                     cloudInstanceId = asset.cloudInstanceId,
                     adDomain = asset.adDomain,
                     createdAt = asset.createdAt?.toString(),
-                    workgroups = workgroupSummaries
+                    workgroups = workgroupSummaries,
+                    networkZone = asset.networkZone,
+                    openPortCount = asset.openPortCount,
+                    lastScanType = asset.lastScanType,
+                    lastScanDate = asset.lastScanDate?.toString(),
+                    tags = tagSummaries
                 )
             }
         }
@@ -184,6 +209,29 @@ open class AssetController(
             HttpResponse.ok(assets)
         } catch (e: Exception) {
             log.error("Error fetching assets for user: {}", authentication.name, e)
+            HttpResponse.serverError<List<AssetResponse>>()
+        }
+    }
+
+    /**
+     * Get internet-facing assets (EXTERNAL or DMZ network zone) that have an IP address.
+     * Used by the CLI port-scan command to determine scan targets.
+     *
+     * GET /api/assets/internet-facing
+     * Auth: ADMIN role required (port scanning is an admin operation)
+     */
+    @Get("/internet-facing")
+    @Secured("ADMIN")
+    @Transactional(readOnly = true)
+    open fun getInternetFacingAssets(): HttpResponse<List<AssetResponse>> {
+        return try {
+            log.debug("Fetching internet-facing assets")
+            val assets = assetRepository.findInternetFacingWithIp()
+                .map { AssetResponse.from(it) }
+            log.debug("Found {} internet-facing assets", assets.size)
+            HttpResponse.ok(assets)
+        } catch (e: Exception) {
+            log.error("Error fetching internet-facing assets", e)
             HttpResponse.serverError<List<AssetResponse>>()
         }
     }
@@ -294,7 +342,8 @@ open class AssetController(
                 owner = trimmedOwner,
                 description = request.description?.trim()?.takeIf { it.isNotBlank() },
                 criticality = request.criticality,
-                manualCreator = manualCreator
+                manualCreator = manualCreator,
+                networkZone = request.networkZone
             )
             asset.adDomain = request.adDomain?.trim()?.takeIf { it.isNotBlank() }
 
@@ -364,6 +413,11 @@ open class AssetController(
             // Feature 053: Handle adDomain update
             request.adDomain?.let { newAdDomain ->
                 asset.adDomain = newAdDomain.trim().takeIf { it.isNotBlank() }
+            }
+
+            // Handle networkZone update
+            request.networkZone?.let { newNetworkZone ->
+                asset.networkZone = newNetworkZone
             }
 
             request.workgroupIds?.let { workgroupIds ->

@@ -1,6 +1,7 @@
 package com.secman.repository
 
 import com.secman.domain.Asset
+import com.secman.domain.NetworkZone
 import io.micronaut.data.annotation.Repository
 import io.micronaut.data.jpa.repository.JpaRepository
 import io.micronaut.data.model.Page
@@ -467,4 +468,26 @@ interface AssetRepository : JpaRepository<Asset, Long> {
      */
     @io.micronaut.data.annotation.Query("SELECT a.id FROM Asset a")
     fun findAllIds(): List<Long>
+
+    // Network Zone filtering - Port Scan Addon
+
+    fun findByNetworkZone(zone: NetworkZone): List<Asset>
+
+    fun findByNetworkZoneIn(zones: List<NetworkZone>): List<Asset>
+
+    /**
+     * Find internet-facing assets (EXTERNAL or DMZ) that have an IP address.
+     * Used by the CLI port-scan command to determine scan targets.
+     */
+    @io.micronaut.data.annotation.Query(
+        value = """
+            SELECT a.* FROM asset a
+            WHERE a.network_zone IN ('EXTERNAL', 'DMZ')
+            AND a.ip IS NOT NULL
+            AND a.ip != ''
+            ORDER BY a.name ASC
+        """,
+        nativeQuery = true
+    )
+    fun findInternetFacingWithIp(): List<Asset>
 }

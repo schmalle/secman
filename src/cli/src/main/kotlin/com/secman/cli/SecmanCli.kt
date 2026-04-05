@@ -9,6 +9,7 @@ import com.secman.cli.commands.ExportRequirementsCommand
 import com.secman.cli.commands.ManageUserMappingsCommand
 import com.secman.cli.commands.ManageWorkgroupsCommand
 import com.secman.cli.commands.MonitorCommand
+import com.secman.cli.commands.PortScanCommand
 import com.secman.cli.commands.QueryCommand
 import com.secman.cli.commands.SendAdminSummaryCommand
 import com.secman.cli.commands.SendNotificationsCommand
@@ -289,6 +290,14 @@ class SecmanCli {
                 }
                 0
             }
+            args[0] == "port-scan" -> {
+                // Port-scan internet-facing assets using nmap
+                val subArgs = args.drop(1).toTypedArray()
+                createCliContext().use { ctx ->
+                    PicocliRunner.run(PortScanCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
             else -> {
                 System.err.println("ERROR: Unknown command: '${args[0]}'")
 
@@ -337,6 +346,9 @@ class SecmanCli {
               User & Access Management:
                 manage-user-mappings   Manage user mappings for domains and AWS accounts
                 manage-workgroups      Manage workgroup asset assignments (list, assign, remove)
+
+              Scanning:
+                port-scan              Port-scan internet-facing assets using nmap
 
               Vulnerabilities:
                 add-vulnerability      Add or update a vulnerability for an asset
@@ -749,6 +761,46 @@ class SecmanCli {
                   secman delete-all-requirements --confirm
                   secman delete-all-requirements --confirm --verbose
                   secman delete-all-requirements --confirm --backend-url http://test-server:8080
+            """.trimIndent(),
+
+            "port-scan" to """
+                secman port-scan - Port-scan internet-facing assets using nmap
+
+                Usage: secman port-scan [options]
+
+                Requires: ADMIN role, nmap installed on the local machine
+
+                Options:
+                  --backend-url <url>      Backend API URL (default: SECMAN_HOST or http://localhost:8080)
+                  --username <user>        Backend username (or SECMAN_ADMIN_NAME env var)
+                  --password <pass>        Backend password (or SECMAN_ADMIN_PASS env var)
+                  --nmap-path <path>       Path to nmap binary (default: "nmap")
+                  --nmap-args <args>       Additional nmap arguments (default: "-sV -T4")
+                  --ports, -p <range>      Port range to scan (default: nmap top 1000)
+                  --targets <pattern>      Filter assets by name pattern (e.g., "web-*")
+                  --dry-run                Show scan targets without running nmap
+                  --verbose, -v            Enable verbose output
+                  --output-dir <path>      Directory to save nmap XML files (default: temp dir)
+
+                Workflow:
+                  1. Authenticates with backend API
+                  2. Fetches assets with networkZone EXTERNAL or DMZ that have an IP
+                  3. Validates nmap is installed
+                  4. Runs nmap against each target
+                  5. Uploads XML results to backend via /api/scan/upload-nmap
+                  6. Reports scan summary
+
+                Prerequisites:
+                  - Assets must have networkZone set to EXTERNAL or DMZ
+                  - Assets must have a non-empty IP address
+                  - nmap must be installed on the machine running this command
+
+                Examples:
+                  secman port-scan --dry-run
+                  secman port-scan --verbose
+                  secman port-scan --targets "web-*" --ports "80,443,8080"
+                  secman port-scan --nmap-args "-sV -sC -T4 --top-ports 100"
+                  secman port-scan --output-dir /tmp/scans --verbose
             """.trimIndent(),
 
             "environment" to """

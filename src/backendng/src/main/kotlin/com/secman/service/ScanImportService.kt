@@ -217,8 +217,11 @@ open class ScanImportService(
         scan.addResult(scanResult)
         asset.addScanResult(scanResult)
 
-        // Update asset last_seen
+        // Update asset last_seen and scan cache fields
         asset.lastSeen = scan.scanDate
+        asset.lastScanType = scan.scanType
+        asset.lastScanDate = scan.scanDate
+        asset.openPortCount = host.ports.count { it.state == "open" }
         assetRepository.update(asset)
 
         // Audit log asset creation
