@@ -1,70 +1,6 @@
 {
   "hooks": {
-    "SessionStart": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "entire hooks claude-code session-start"
-          }
-        ]
-      }
-    ],
-    "SessionEnd": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "entire hooks claude-code session-end"
-          }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "entire hooks claude-code user-prompt-submit"
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "entire hooks claude-code stop"
-          }
-        ]
-      }
-    ],
-    "PreToolUse": [
-      {
-        "matcher": "Task",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "entire hooks claude-code pre-task"
-          }
-        ]
-      }
-    ],
     "PostToolUse": [
-      {
-        "matcher": "Task",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "entire hooks claude-code post-task"
-          }
-        ]
-      },
       {
         "matcher": "Edit|Write",
         "hooks": [
@@ -73,20 +9,7 @@
             "command": ".claude/skills/e2e-runner/scripts/on-file-changed.sh"
           }
         ]
-      },
-
-      {
-        "matcher": "TodoWrite",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "entire hooks claude-code post-todo"
-          }
-        ]
       }
     ]
-  },
-  "permissions": {
-    "deny": ["Read(./.entire/metadata/**)"]
   }
 }
