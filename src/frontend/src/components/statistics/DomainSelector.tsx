@@ -134,7 +134,7 @@ export default function DomainSelector({ selectedDomain, onDomainChange }: Domai
   }
 
   // No domains available
-  if (!domainsData || domainsData.domains.length === 0) {
+  if (!domainsData || !domainsData.domains || domainsData.domains.length === 0) {
     return (
       <div className="d-flex align-items-center gap-2">
         <label className="form-label mb-0 text-muted">
@@ -164,7 +164,7 @@ export default function DomainSelector({ selectedDomain, onDomainChange }: Domai
         aria-label="Select domain to filter statistics"
       >
         <option value="">All Domains</option>
-        {domainsData.domains.map((domain) => (
+        {(domainsData.domains || []).map((domain) => (
           <option key={domain} value={domain}>
             {domain}
           </option>

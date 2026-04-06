@@ -55,7 +55,7 @@ Build the CLI fat JAR:
 Verify the command is available:
 
 ```bash
-./bin/secmanng manage-user-mappings import-s3 --help
+./scripts/secmanng manage-user-mappings import-s3 --help
 ```
 
 ### 3. Required Tools
@@ -98,14 +98,14 @@ Before importing, you can browse an S3 bucket to discover available files using 
 ### List All Objects
 
 ```bash
-./bin/secmanng manage-user-mappings list-bucket \
+./scripts/secmanng manage-user-mappings list-bucket \
   --bucket my-company-mappings
 ```
 
 ### Filter by Prefix
 
 ```bash
-./bin/secmanng manage-user-mappings list-bucket \
+./scripts/secmanng manage-user-mappings list-bucket \
   --bucket my-company-mappings \
   --prefix user-mappings/
 ```
@@ -113,7 +113,7 @@ Before importing, you can browse an S3 bucket to discover available files using 
 ### With AWS Profile and Region
 
 ```bash
-./bin/secmanng manage-user-mappings list-bucket \
+./scripts/secmanng manage-user-mappings list-bucket \
   --bucket my-company-mappings \
   --prefix user-mappings/ \
   --aws-profile production \
@@ -171,7 +171,7 @@ The `list-bucket` command requires the `s3:ListBucket` permission on the target 
 ### Basic Import
 
 ```bash
-./bin/secmanng manage-user-mappings import-s3 \
+./scripts/secmanng manage-user-mappings import-s3 \
   --bucket my-company-mappings \
   --key user-mappings/latest.csv
 ```
@@ -179,7 +179,7 @@ The `list-bucket` command requires the `s3:ListBucket` permission on the target 
 ### Dry-Run (Validation Only)
 
 ```bash
-./bin/secmanng manage-user-mappings import-s3 \
+./scripts/secmanng manage-user-mappings import-s3 \
   --bucket my-company-mappings \
   --key user-mappings/latest.csv \
   --dry-run
@@ -188,7 +188,7 @@ The `list-bucket` command requires the `s3:ListBucket` permission on the target 
 ### With AWS Profile
 
 ```bash
-./bin/secmanng manage-user-mappings import-s3 \
+./scripts/secmanng manage-user-mappings import-s3 \
   --bucket my-company-mappings \
   --key user-mappings/latest.csv \
   --aws-profile production
@@ -197,7 +197,7 @@ The `list-bucket` command requires the `s3:ListBucket` permission on the target 
 ### With Explicit Region
 
 ```bash
-./bin/secmanng manage-user-mappings import-s3 \
+./scripts/secmanng manage-user-mappings import-s3 \
   --bucket my-company-mappings \
   --key user-mappings/latest.csv \
   --aws-region eu-west-1
@@ -206,7 +206,7 @@ The `list-bucket` command requires the `s3:ListBucket` permission on the target 
 ### JSON Format
 
 ```bash
-./bin/secmanng manage-user-mappings import-s3 \
+./scripts/secmanng manage-user-mappings import-s3 \
   --bucket my-company-mappings \
   --key user-mappings/latest.json \
   --format JSON
@@ -361,7 +361,7 @@ aws configure
 
 # Option 3: Named profile
 aws configure --profile myprofile
-./bin/secman manage-user-mappings import-s3 --aws-profile myprofile ...
+./scripts/secman manage-user-mappings import-s3 --aws-profile myprofile ...
 ```
 
 ### "Access denied" (403)
@@ -439,12 +439,12 @@ aws s3api put-object --bucket test --key mappings.csv --body ./test-mappings.csv
 
 ```bash
 # List bucket contents
-./bin/secmanng manage-user-mappings list-bucket \
+./scripts/secmanng manage-user-mappings list-bucket \
   --bucket test \
   --endpoint-url http://localhost:9090
 
 # Dry-run import
-./bin/secmanng manage-user-mappings import-s3 \
+./scripts/secmanng manage-user-mappings import-s3 \
   --bucket test \
   --key mappings.csv \
   --endpoint-url http://localhost:9090 \
@@ -456,8 +456,8 @@ aws s3api put-object --bucket test --key mappings.csv --body ./test-mappings.csv
 ```bash
 export AWS_ENDPOINT_URL=http://localhost:9090
 
-./bin/secman manage-user-mappings list-bucket --bucket test
-./bin/secman manage-user-mappings import-s3 --bucket test --key mappings.csv --dry-run
+./scripts/secman manage-user-mappings list-bucket --bucket test
+./scripts/secman manage-user-mappings import-s3 --bucket test --key mappings.csv --dry-run
 ```
 
 When `--endpoint-url` is set (or `AWS_ENDPOINT_URL`), the CLI automatically enables path-style S3 access, which is required by local S3 simulators.

@@ -7,7 +7,7 @@ cd src/backendng
 
 # CLI usage (from repository root)
 ./gradlew :cli:shadowJar
-./bin/secman query servers --severity HIGH --min-days-open 1 --save
+./scripts/secman query servers --severity HIGH --min-days-open 1 --save
 
 # Set backend URL for remote use
 export SECMAN_BACKEND_URL=https://api.yourdomain.com

@@ -5,35 +5,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="94ada8b3-9f4e-473c-9fea-3bc9651b5bdd" name="Changes" comment="test change">
-      <change beforePath="$PROJECT_DIR$/.claude/settings.json" beforeDir="false" afterPath="$PROJECT_DIR$/.claude/settings.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SECURITY.md" beforeDir="false" afterPath="$PROJECT_DIR$/SECURITY.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/SECURITY_REVIEW.md" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bin/backend" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bin/backenddev.sh" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bin/frontenddev.sh" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bin/secmancli" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bin/secmanclienv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bin/secmanclisupport" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bin/secmanng" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bin/secmanreportenv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bin/secmanserverca" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bin/test-e2e-exception-workflow.sh" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bin/test-e2e-exception-workflowsupport.sh" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/1PASSWORD.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/1PASSWORD.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/e2e-test.sh" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/e2e-test.sh" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/secman.env" beforeDir="false" afterPath="$PROJECT_DIR$/secman.env" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/ImportController.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/ImportController.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/domain/McpApiKey.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/domain/McpApiKey.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/TranslationService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/TranslationService.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/VulnerabilityExceptionRequestService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/VulnerabilityExceptionRequestService.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/VulnerabilityService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/VulnerabilityService.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/WebAuthnService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/WebAuthnService.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/util/EncryptedStringConverter.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/util/EncryptedStringConverter.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/service/S3DownloadService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/service/S3DownloadService.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/service/UserMappingCliService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/service/UserMappingCliService.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/service/VulnerabilityStorageService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/service/VulnerabilityStorageService.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/frontend/src/components/McpApiKeyManagement.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/components/McpApiKeyManagement.tsx" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

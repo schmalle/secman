@@ -8,9 +8,9 @@ import jakarta.inject.Singleton
  * CLI command to remove user mappings (Feature 049)
  *
  * Usage:
- *   ./bin/secman manage-user-mappings remove --email user@example.com --domain example.com
- *   ./bin/secman manage-user-mappings remove --email user@example.com --account 123456789012
- *   ./bin/secman manage-user-mappings remove --email user@example.com --all
+ *   ./scripts/secman manage-user-mappings remove --email user@example.com --domain example.com
+ *   ./scripts/secman manage-user-mappings remove --email user@example.com --account 123456789012
+ *   ./scripts/secman manage-user-mappings remove --email user@example.com --all
  */
 @Singleton
 @Command(

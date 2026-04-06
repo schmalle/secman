@@ -121,19 +121,19 @@ The test is designed to be **idempotent** - it cleans up before and after execut
 ### Basic Usage
 
 ```bash
-API_KEY=sk-your-api-key ./bin/test-e2e-exception-workflowsupport.sh
+API_KEY=sk-your-api-key ./scripts/test/test-e2e-exception-workflowsupport.sh
 ```
 
 ### With Custom Backend URL
 
 ```bash
-BASE_URL=http://localhost:8080 API_KEY=sk-your-api-key ./bin/test-e2e-exception-workflowsupport.sh
+BASE_URL=http://localhost:8080 API_KEY=sk-your-api-key ./scripts/test/test-e2e-exception-workflowsupport.sh
 ```
 
 ### With Verbose Output
 
 ```bash
-API_KEY=sk-your-api-key ./bin/test-e2e-exception-workflowsupport.sh --verbose
+API_KEY=sk-your-api-key ./scripts/test/test-e2e-exception-workflowsupport.sh --verbose
 ```
 
 ### Environment Variables
@@ -238,7 +238,7 @@ Workflow completed:
 Set the API key:
 ```bash
 export API_KEY=sk-your-api-key
-./bin/test-e2e-exception-workflowsupport.sh
+./scripts/test/test-e2e-exception-workflowsupport.sh
 ```
 
 ### "Cannot connect to backend"
@@ -250,7 +250,7 @@ export API_KEY=sk-your-api-key
 
 2. Check the BASE_URL is correct:
    ```bash
-   BASE_URL=http://localhost:8080 API_KEY=sk-xxx ./bin/test-e2e-exception-workflowsupport.sh
+   BASE_URL=http://localhost:8080 API_KEY=sk-xxx ./scripts/test/test-e2e-exception-workflowsupport.sh
    ```
 
 ### "DELEGATION_REQUIRED" or "User Delegation must be enabled"
@@ -294,7 +294,7 @@ sudo apt-get install jq
 1. Check backend logs for errors
 2. Enable verbose mode:
    ```bash
-   API_KEY=sk-xxx ./bin/test-e2e-exception-workflowsupport.sh --verbose
+   API_KEY=sk-xxx ./scripts/test/test-e2e-exception-workflowsupport.sh --verbose
    ```
 3. Check network connectivity to the backend
 
@@ -342,7 +342,7 @@ To run in CI/CD pipelines:
     API_KEY: ${{ secrets.MCP_ADMIN_API_KEY }}
     BASE_URL: http://localhost:8080
   run: |
-    ./bin/test-e2e-exception-workflowsupport.sh
+    ./scripts/test/test-e2e-exception-workflowsupport.sh
 ```
 
 Ensure the backend is running before executing the test step.

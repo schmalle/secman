@@ -14,10 +14,10 @@
 # 8. Cleanup test data
 #
 # Usage:
-#   ./bin/test-e2e-exception-workflowsupport.sh
-#   BASE_URL=http://localhost:8080 API_KEY=sk-xxx ./bin/test-e2e-exception-workflowsupport.sh
-#   ./bin/test-e2e-exception-workflowsupport.sh --verbose
-#   ./bin/test-e2e-exception-workflowsupport.sh --help
+#   ./scripts/test/test-e2e-exception-workflowsupport.sh
+#   BASE_URL=http://localhost:8080 API_KEY=sk-xxx ./scripts/test/test-e2e-exception-workflowsupport.sh
+#   ./scripts/test/test-e2e-exception-workflowsupport.sh --verbose
+#   ./scripts/test/test-e2e-exception-workflowsupport.sh --help
 #
 
 set -euo pipefail

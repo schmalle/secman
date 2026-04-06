@@ -7,7 +7,7 @@
 ```
 SECMAN_BACKEND_URL=<URL> \                                                                                                                                                
     SECMAN_SSL_INSECURE=true \                                                                                                                                                                    
-    ./bin/secmanng query servers --device-type SERVER --severity CRITICAL,HIGH \                                                                                                                  
+    ./scripts/secmanng query servers --device-type SERVER --severity CRITICAL,HIGH \                                                                                                                  
     --min-days-open 1 --save --last-seen-days 1  
 
 ```

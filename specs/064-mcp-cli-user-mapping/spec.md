@@ -37,9 +37,9 @@ An administrator needs to import user mappings from a file (CSV or JSON) via the
 
 **Acceptance Scenarios**:
 
-1. **Given** a valid CSV file with user mappings, **When** the admin runs `./bin/secman manage-user-mappings import --file mappings.csv`, **Then** the mappings are imported and a summary is displayed.
+1. **Given** a valid CSV file with user mappings, **When** the admin runs `./scripts/secman manage-user-mappings import --file mappings.csv`, **Then** the mappings are imported and a summary is displayed.
 
-2. **Given** a valid JSON file with user mappings, **When** the admin runs `./bin/secman manage-user-mappings import --file mappings.json`, **Then** the mappings are imported and a summary is displayed.
+2. **Given** a valid JSON file with user mappings, **When** the admin runs `./scripts/secman manage-user-mappings import --file mappings.json`, **Then** the mappings are imported and a summary is displayed.
 
 3. **Given** a file with invalid entries, **When** the admin runs the import command with `--dry-run`, **Then** validation results are shown without any database changes.
 
@@ -71,9 +71,9 @@ An administrator needs to view current user mappings via command line for verifi
 
 **Acceptance Scenarios**:
 
-1. **Given** existing user mappings in the system, **When** the admin runs `./bin/secman manage-user-mappings list`, **Then** all mappings are displayed in a readable format.
+1. **Given** existing user mappings in the system, **When** the admin runs `./scripts/secman manage-user-mappings list`, **Then** all mappings are displayed in a readable format.
 
-2. **Given** existing user mappings in the system, **When** the admin runs `./bin/secman manage-user-mappings list --email user@example.com`, **Then** only mappings for that email are displayed.
+2. **Given** existing user mappings in the system, **When** the admin runs `./scripts/secman manage-user-mappings list --email user@example.com`, **Then** only mappings for that email are displayed.
 
 ---
 

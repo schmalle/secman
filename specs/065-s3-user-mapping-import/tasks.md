@@ -52,7 +52,7 @@
 
 **Goal**: Administrator can import user mappings from S3 bucket with proper AWS authentication
 
-**Independent Test**: Upload a CSV mapping file to S3, run `./bin/secman manage-user-mappings import-s3 --bucket <bucket> --key <key> --admin-user admin@example.com`, verify mappings appear in database
+**Independent Test**: Upload a CSV mapping file to S3, run `./scripts/secman manage-user-mappings import-s3 --bucket <bucket> --key <key> --admin-user admin@example.com`, verify mappings appear in database
 
 ### Implementation for User Stories 1 & 2
 

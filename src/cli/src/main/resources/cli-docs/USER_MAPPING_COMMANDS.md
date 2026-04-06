@@ -463,7 +463,7 @@ Errors:
 
 **Syntax**:
 ```bash
-./bin/secman manage-user-mappings import-s3 \
+./scripts/secman manage-user-mappings import-s3 \
   --bucket <bucket-name> \
   --key <object-key> \
   [--aws-region <region>] \
@@ -510,13 +510,13 @@ The command uses the standard AWS SDK credential chain:
 **Examples**:
 ```bash
 # Basic import
-./bin/secman manage-user-mappings import-s3 \
+./scripts/secman manage-user-mappings import-s3 \
   --bucket my-mapping-bucket \
   --key user-mappings/current.csv \
   --admin-user admin@example.com
 
 # With specific region and profile
-./bin/secman manage-user-mappings import-s3 \
+./scripts/secman manage-user-mappings import-s3 \
   --bucket my-mapping-bucket \
   --key user-mappings/current.csv \
   --aws-region eu-west-1 \
@@ -524,7 +524,7 @@ The command uses the standard AWS SDK credential chain:
   --admin-user admin@example.com
 
 # Dry-run validation
-./bin/secman manage-user-mappings import-s3 \
+./scripts/secman manage-user-mappings import-s3 \
   --bucket my-mapping-bucket \
   --key user-mappings/current.csv \
   --dry-run \

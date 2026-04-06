@@ -13,11 +13,11 @@ import java.io.StringWriter
  * CLI command to list user mappings (Feature 049)
  *
  * Usage:
- *   ./bin/secman manage-user-mappings list
- *   ./bin/secman manage-user-mappings list --email user@example.com
- *   ./bin/secman manage-user-mappings list --status PENDING
- *   ./bin/secman manage-user-mappings list --format JSON
- *   ./bin/secman manage-user-mappings list --format CSV
+ *   ./scripts/secman manage-user-mappings list
+ *   ./scripts/secman manage-user-mappings list --email user@example.com
+ *   ./scripts/secman manage-user-mappings list --status PENDING
+ *   ./scripts/secman manage-user-mappings list --format JSON
+ *   ./scripts/secman manage-user-mappings list --format CSV
  */
 @Singleton
 @Command(

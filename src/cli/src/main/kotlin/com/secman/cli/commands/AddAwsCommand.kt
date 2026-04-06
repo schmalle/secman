@@ -8,7 +8,7 @@ import jakarta.inject.Singleton
  * CLI command to add AWS-account-to-user mappings (Feature 049)
  *
  * Usage:
- *   ./bin/secman manage-user-mappings add-aws \
+ *   ./scripts/secman manage-user-mappings add-aws \
  *     --emails user1@example.com,user2@example.com \
  *     --accounts 123456789012,987654321098
  */

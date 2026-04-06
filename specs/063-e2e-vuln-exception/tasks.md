@@ -229,7 +229,7 @@ Task: "Create AddVulnerabilityTool.kt in src/backendng/src/main/kotlin/com/secma
 ### Full Delivery
 
 1. Complete all phases sequentially
-2. Run full test script: `./bin/test-e2e-exception-workflow.sh`
+2. Run full test script: `./scripts/test/test-e2e-exception-workflow.sh`
 3. Verify completes in under 60 seconds (SC-001)
 4. Verify script is idempotent (run twice, both succeed)
 

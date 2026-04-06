@@ -11,11 +11,11 @@ import jakarta.inject.Singleton
  * CLI command to import user mappings from AWS S3 bucket (Feature 065)
  *
  * Usage:
- *   ./bin/secman manage-user-mappings import-s3 --bucket my-bucket --key mappings.csv
- *   ./bin/secman manage-user-mappings import-s3 --bucket my-bucket --key data/users.json --aws-profile prod
- *   ./bin/secman manage-user-mappings import-s3 --bucket my-bucket --key mappings.csv --aws-region eu-west-1
- *   ./bin/secman manage-user-mappings import-s3 --bucket my-bucket --key mappings.csv --dry-run
- *   ./bin/secman manage-user-mappings import-s3 --bucket my-bucket --key mappings.csv \
+ *   ./scripts/secman manage-user-mappings import-s3 --bucket my-bucket --key mappings.csv
+ *   ./scripts/secman manage-user-mappings import-s3 --bucket my-bucket --key data/users.json --aws-profile prod
+ *   ./scripts/secman manage-user-mappings import-s3 --bucket my-bucket --key mappings.csv --aws-region eu-west-1
+ *   ./scripts/secman manage-user-mappings import-s3 --bucket my-bucket --key mappings.csv --dry-run
+ *   ./scripts/secman manage-user-mappings import-s3 --bucket my-bucket --key mappings.csv \
  *       --aws-access-key-id AKIA... --aws-secret-access-key ...
  *
  * AWS Credential Resolution (highest priority first):

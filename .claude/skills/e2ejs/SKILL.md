@@ -17,8 +17,8 @@ every failure** until all pages are clean or you've exhausted the retry budget.
 ## High-Level Loop
 
 ```
-1. Start backend   (./bin/backenddev.sh)
-2. Start frontend  (./bin/frontenddev.sh)
+1. Start backend   (./scripts/startbackenddev.sh)
+2. Start frontend  (./scripts/startfrontenddev.sh)
 3. Wait for both to be healthy
 4. Run JS error scanner (./tests/js-error-scanner.sh)
 5. IF all clean → done, report success
@@ -27,7 +27,7 @@ every failure** until all pages are clean or you've exhausted the retry budget.
    a. Parse the structured error output
    b. Classify each error (backend vs frontend)
    c. Fix backend errors first, then frontend errors
-   d. Restart backend (kill → restart ./bin/backenddev.sh)
+   d. Restart backend (kill → restart ./scripts/startbackenddev.sh)
    e. Wait for backend health check
    f. Go to step 4
 8. After 5 iterations without progress → stop and report remaining failures
@@ -44,14 +44,14 @@ every failure** until all pages are clean or you've exhausted the retry budget.
 
 2. **Start backend** in background:
    ```bash
-   nohup ./bin/backenddev.sh > .e2e-logs/backend.log 2>&1 &
+   nohup ./scripts/startbackenddev.sh > .e2e-logs/backend.log 2>&1 &
    ```
    Record the PID. The backend uses `op run -- gradle :backendng:clean :backendng:run`
    internally with 1Password secret injection.
 
 3. **Start frontend** in background:
    ```bash
-   nohup ./bin/frontenddev.sh > .e2e-logs/frontend.log 2>&1 &
+   nohup ./scripts/startfrontenddev.sh > .e2e-logs/frontend.log 2>&1 &
    ```
    Record the PID. The frontend uses `op run -- npm run dev` internally.
 
@@ -151,7 +151,7 @@ After applying fixes (whether backend or frontend):
    ```
 2. **Restart backend**:
    ```bash
-   nohup ./bin/backenddev.sh > .e2e-logs/backend.log 2>&1 &
+   nohup ./scripts/startbackenddev.sh > .e2e-logs/backend.log 2>&1 &
    ```
 3. **Wait for backend health check** — poll `http://localhost:8080` until healthy (120s timeout).
 4. Frontend hot-reloads via Vite — no restart needed, but wait 3 seconds for changes to propagate.
@@ -186,7 +186,7 @@ Re-run the scanner (`./tests/js-error-scanner.sh`) and check if the error count 
 ## Important Notes
 
 - **Never commit or push** — only edit files locally.
-- **Secrets are handled by the dev scripts** — `backenddev.sh` and `frontenddev.sh`
+- **Secrets are handled by the dev scripts** — `startbackenddev.sh` and `startfrontenddev.sh`
   use `op run` to inject 1Password secrets. Do not set secrets manually.
 - **Port collisions**: Before starting, check if ports 8080 and 4321 are already
   in use and kill existing processes.

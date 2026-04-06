@@ -10,13 +10,13 @@
 
 ```bash
 # Basic usage (uses defaults)
-./bin/test-e2e-exception-workflowsupport.sh
+./scripts/test/test-e2e-exception-workflowsupport.sh
 
 # With custom configuration
-BASE_URL=http://localhost:8080 API_KEY=sk-your-admin-key ./bin/test-e2e-exception-workflowsupport.sh
+BASE_URL=http://localhost:8080 API_KEY=sk-your-admin-key ./scripts/test/test-e2e-exception-workflowsupport.sh
 
 # With verbose output
-./bin/test-e2e-exception-workflowsupport.sh --verbose
+./scripts/test/test-e2e-exception-workflowsupport.sh --verbose
 ```
 
 ## Test Workflow

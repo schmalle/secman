@@ -739,4 +739,4 @@ exit 0
 
 ---
 
-*For CLI help: `./bin/secman help`*
+*For CLI help: `./scripts/secman help`*

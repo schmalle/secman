@@ -115,9 +115,9 @@ npm run dev
 ./gradlew :cli:shadowJar
 
 # Use via wrapper
-./bin/secman help
-./bin/secman query servers --dry-run
-./bin/secman send-admin-summary --dry-run
+./scripts/secman help
+./scripts/secman query servers --dry-run
+./scripts/secman send-admin-summary --dry-run
 ```
 
 ---
@@ -294,4 +294,4 @@ pictures/
 
 ---
 
-*For CLI help: `./bin/secman help`*
+*For CLI help: `./scripts/secman help`*

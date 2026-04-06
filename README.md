@@ -280,14 +280,14 @@ npm run build                # Production build
 
 # CLI Tools (from repository root)
 ./gradlew :cli:shadowJar                                           # Build standalone JAR
-./bin/secman help                                                   # Show all commands
-./bin/secman query servers --dry-run                                # Query CrowdStrike
-./bin/secman send-notifications --dry-run --verbose                 # Email notifications
-./bin/secman send-admin-summary --dry-run                           # Admin summary
-./bin/secman manage-workgroups list                                 # List workgroups
-./bin/secman manage-user-mappings --help                            # User mappings
-./bin/secman add-vulnerability --help                               # Add vulnerability
-./bin/secman export-requirements --format xlsx                      # Export requirements
+./scripts/secman help                                                   # Show all commands
+./scripts/secman query servers --dry-run                                # Query CrowdStrike
+./scripts/secman send-notifications --dry-run --verbose                 # Email notifications
+./scripts/secman send-admin-summary --dry-run                           # Admin summary
+./scripts/secman manage-workgroups list                                 # List workgroups
+./scripts/secman manage-user-mappings --help                            # User mappings
+./scripts/secman add-vulnerability --help                               # Add vulnerability
+./scripts/secman export-requirements --format xlsx                      # Export requirements
 
 # Tests
 ./gradlew build                                         # All tests
@@ -374,7 +374,7 @@ mysql -u secman -pCHANGEME secman
 
 **Backend:** `src/backendng/src/main/resources/application.yml`
 **Frontend:** `src/frontend/astro.config.mjs`
-**CLI:** Environment variables and `./bin/secman config`
+**CLI:** Environment variables and `./scripts/secman config`
 
 ### Key Environment Variables
 

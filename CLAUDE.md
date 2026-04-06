@@ -78,14 +78,14 @@ Users access assets if **ANY** is true:
 **Commands**:
 - Backend: `./gradlew build`
 - Frontend: `npm run dev`
-- CLI: Build JAR once with `./gradlew :cli:shadowJar`, then use `./bin/secman <command>`
-  - `./bin/secman help` - Show all commands and options
-  - `./bin/secman query servers --dry-run` - Query CrowdStrike
-  - `./bin/secman send-notifications --dry-run` - Email notifications
-  - `./bin/secman manage-user-mappings --help` - User mappings
-  - `./bin/secman export-requirements --format xlsx` - Export requirements
-  - `./bin/secman add-requirement --shortreq "text"` - Add requirement
-  - `./bin/secman add-vulnerability --hostname host --cve CVE-xxx --criticality HIGH` - Add vulnerability
+- CLI: Build JAR once with `./gradlew :cli:shadowJar`, then use `./scripts/secman <command>`
+  - `./scripts/secman help` - Show all commands and options
+  - `./scripts/secman query servers --dry-run` - Query CrowdStrike
+  - `./scripts/secman send-notifications --dry-run` - Email notifications
+  - `./scripts/secman manage-user-mappings --help` - User mappings
+  - `./scripts/secman export-requirements --format xlsx` - Export requirements
+  - `./scripts/secman add-requirement --shortreq "text"` - Add requirement
+  - `./scripts/secman add-vulnerability --hostname host --cve CVE-xxx --criticality HIGH` - Add vulnerability
 
 **Test Commands**:
 - All tests: `./gradlew build` (includes unit + integration tests)
