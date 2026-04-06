@@ -1,0 +1,27 @@
+---
+layout: default
+---
+
+<div class="container">
+  <header class="post-header">
+    <h1>{{ page.title }}</h1>
+    <div class="post-meta">
+      <time datetime="{{ page.date | date_to_xmlschema }}">{{ page.date | date: "%B %-d, %Y" }}</time>
+      {% if page.author %}<span>by {{ page.author }}</span>{% endif %}
+      {% if page.category %}<span class="tag">{{ page.category }}</span>{% endif %}
+    </div>
+  </header>
+
+  <article class="post-content">
+    {{ content }}
+
+    {% if page.tags.size > 0 %}
+    <hr>
+    <div>
+      {% for tag in page.tags %}
+      <span class="tag">{{ tag }}</span>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </article>
+</div>

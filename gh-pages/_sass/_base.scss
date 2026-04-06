@@ -1,0 +1,123 @@
+@import 'variables';
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 16px;
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: $font-family;
+  color: $text-primary;
+  background-color: $bg-page;
+  line-height: 1.7;
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: $primary;
+  text-decoration: none;
+  transition: color 200ms ease;
+
+  &:hover {
+    color: $primary-hover;
+  }
+}
+
+h1, h2, h3, h4, h5, h6 {
+  color: $dark-header;
+  font-weight: 600;
+  line-height: 1.3;
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+}
+
+h1 { font-size: 2rem; }
+h2 { font-size: 1.5rem; }
+h3 { font-size: 1.25rem; }
+
+p {
+  margin-bottom: 1.25em;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+  border-radius: $radius;
+}
+
+code {
+  background: $primary-light;
+  color: $primary-hover;
+  padding: 0.15em 0.4em;
+  border-radius: $radius-sm;
+  font-size: 0.9em;
+}
+
+pre {
+  background: $dark-header;
+  color: $text-light;
+  padding: 1.25rem;
+  border-radius: $radius-lg;
+  overflow-x: auto;
+  line-height: 1.5;
+  margin-bottom: 1.5em;
+
+  code {
+    background: none;
+    color: inherit;
+    padding: 0;
+    border-radius: 0;
+    font-size: 0.875rem;
+  }
+}
+
+blockquote {
+  border-left: 4px solid $primary;
+  margin: 1.5em 0;
+  padding: 0.75em 1.25em;
+  background: $primary-light;
+  border-radius: 0 $radius $radius 0;
+  color: $text-secondary;
+
+  p:last-child {
+    margin-bottom: 0;
+  }
+}
+
+hr {
+  border: none;
+  border-top: 1px solid $border-color;
+  margin: 2rem 0;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1.5em;
+
+  th {
+    background: $dark-header;
+    color: $text-light;
+    padding: 0.75rem 1rem;
+    text-align: left;
+    font-weight: 600;
+  }
+
+  td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid $border-color;
+  }
+
+  tr:nth-child(even) {
+    background: $bg-page;
+  }
+
+  tr:hover {
+    background: $bg-hover;
+  }
+}
