@@ -2,6 +2,7 @@
 
 ## Supported Versions
 
+
 | Version | Status |
 | ------- | ------ |
 | Current | Alpha  |
@@ -40,10 +41,6 @@ SecMan implements the following security measures:
 - **Web Security**: HttpOnly cookies, Content Security Policy headers, SameSite CSRF protection
 - **Input Validation**: File size limits, content-type validation, header validation on imports
 - **Audit**: MCP operation audit logging, notification logging
-
-## Security Review
-
-For a detailed security assessment, see [SECURITY_REVIEW.md](SECURITY_REVIEW.md).
 
 ## Contact
 
