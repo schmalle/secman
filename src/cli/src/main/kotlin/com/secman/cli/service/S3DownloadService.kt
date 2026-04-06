@@ -229,7 +229,7 @@ class S3DownloadService {
             }
             else -> {
                 log.debug("Using default AWS credential chain")
-                builder.credentialsProvider(DefaultCredentialsProvider.create())
+                builder.credentialsProvider(DefaultCredentialsProvider.builder().build())
             }
         }
 

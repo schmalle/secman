@@ -19,7 +19,7 @@ secman uses [1Password CLI](https://developer.1password.com/docs/cli/) (`op`) to
 | `SECMAN_ADMIN_EMAIL` | `SECMAN_ADMIN_EMAIL` | Admin email address | Backend, CLI, S3 import tests |
 | `SECMAN_USER_USER` | `SECMAN_USER_USER` | Regular user username | E2E tests (Playwright) |
 | `SECMAN_USER_PASS` | `SECMAN_USER_PASS` | Regular user password | E2E tests (Playwright) |
-| `API_KEY` | `API_KEY` | MCP API key | Backend, CLI |
+| `API_KEY` | `MCP_API_KEY` | MCP API key | Backend, CLI |
 | `SECMAN_API_KEY` | `SECMAN_API_KEY` | API key (alternative reference) | MCP E2E tests, release tests |
 | `SECMAN_HOST` | `SECMAN_HOST` / `SECMAN_BACKEND_URL` | Backend server URL | CLI, JS error scanner |
 | `SECMAN_BACKEND_BASE_URL` | `SECMAN_BACKEND_URL` / `SECMAN_DOMAIN` | Backend base URL for API calls | Backend dev, Frontend dev |
@@ -54,7 +54,7 @@ FALCON_CLOUD_REGION=op://test/secman/FALCON_CLOUD_REGION
 SECMAN_OPENROUTER_API_KEY=op://test/secman/OPENROUTER_API_KEY
 SECMAN_ADMIN_NAME=op://test/secman/SECMAN_ADMIN_NAME
 SECMAN_ADMIN_PASS=op://test/secman/SECMAN_ADMIN_PASS
-API_KEY=op://test/secman/API_KEY
+API_KEY=op://test/secman/MCP_API_KEY
 SECMAN_ADMIN_EMAIL=op://test/secman/SECMAN_ADMIN_EMAIL
 AWS_ACCESS_KEY_ID=op://test/secman/SECMAN_AWS_ACCESS_KEY_ID
 AWS_SECRET_ACCESS_KEY=op://test/secman/SECMAN_AWS_SECRET_ACCESS_KEY

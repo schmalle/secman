@@ -152,7 +152,7 @@ open class TranslationService(
                         CompletableFuture.completedFuture(text)
                     }
                 } catch (e: Exception) {
-                    logger.error("Failed to parse translation response: {}", responseBodyString?.take(200), e)
+                    logger.error("Failed to parse translation response: {}", responseBodyString.take(200), e)
                     CompletableFuture.completedFuture(text)
                 }
             } else {

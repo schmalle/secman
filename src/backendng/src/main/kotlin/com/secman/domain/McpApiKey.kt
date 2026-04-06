@@ -133,7 +133,13 @@ data class McpApiKey(
             permissions.split(",")
                 .map { it.trim() }
                 .filter { it.isNotBlank() }
-                .map { McpPermission.valueOf(it) }
+                .mapNotNull { name ->
+                    try {
+                        McpPermission.valueOf(name)
+                    } catch (e: IllegalArgumentException) {
+                        null // skip unknown permission values (stale DB data)
+                    }
+                }
                 .toSet()
         }
     }

@@ -56,6 +56,7 @@ class UserMappingCliService {
         }
         // Always use the 2-argument constructor — the 3-arg variant with
         // ClientSslBuilder has a scheme-initialization bug in Micronaut 4.10.x
+        @Suppress("DEPRECATION")
         httpClient = DefaultHttpClient(URI.create(backendUrl), config)
     }
 
@@ -425,15 +426,13 @@ class UserMappingCliService {
 
         try {
             FileReader(file).use { reader ->
-                val csvParser = CSVParser(
-                    reader,
-                    CSVFormat.DEFAULT.builder()
-                        .setHeader()
-                        .setSkipHeaderRecord(true)
-                        .setIgnoreEmptyLines(true)
-                        .setTrim(true)
-                        .build()
-                )
+                val csvFormat = CSVFormat.DEFAULT.builder()
+                    .setHeader()
+                    .setSkipHeaderRecord(true)
+                    .setIgnoreEmptyLines(true)
+                    .setTrim(true)
+                    .get()
+                val csvParser = csvFormat.parse(reader)
 
                 csvParser.forEach { record ->
                     lineNumber++
@@ -497,7 +496,7 @@ class UserMappingCliService {
             val mappingsData: List<Map<String, Any>> = when {
                 rootNode.isArray -> objectMapper.convertValue(rootNode, typeRef)
                 rootNode.isObject -> {
-                    val arrayField = rootNode.fields().asSequence()
+                    val arrayField = rootNode.properties().asSequence()
                         .firstOrNull { it.value.isArray }
                     if (arrayField != null) {
                         log.info("JSON root is an object; using '${arrayField.key}' array (${arrayField.value.size()} entries)")
@@ -632,12 +631,14 @@ class UserMappingCliService {
                         )
                     }
 
+                    @Suppress("UNCHECKED_CAST")
+                    val errorsList = (responseBody["errors"] as? List<String>) ?: emptyList()
                     return BulkResponse(
                         totalProcessed = (responseBody["totalProcessed"] as? Number)?.toInt() ?: entries.size,
                         created = (responseBody["created"] as? Number)?.toInt() ?: 0,
                         createdPending = (responseBody["createdPending"] as? Number)?.toInt() ?: 0,
                         skipped = (responseBody["skipped"] as? Number)?.toInt() ?: 0,
-                        errors = (responseBody["errors"] as? List<String>) ?: emptyList(),
+                        errors = errorsList,
                         comparison = comparison
                     )
                 }

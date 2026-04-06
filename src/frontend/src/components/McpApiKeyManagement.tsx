@@ -449,7 +449,7 @@ const McpApiKeyManagement: React.FC = () => {
                     )}
                   </td>
                   <td>
-                    {apiKey.permissions.map(permission => (
+                    {(apiKey.permissions ?? []).map(permission => (
                       <span key={permission} className="badge bg-light text-dark me-1">
                         {permission.replace(/_/g, ' ')}
                       </span>

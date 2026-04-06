@@ -172,7 +172,7 @@ class WebAuthnService(
             val attestedCredentialDataBytes = attestedCredentialDataConverter.convert(attestedCredentialData)
             val attestedCredentialDataBase64 = Base64.getEncoder().encodeToString(attestedCredentialDataBytes)
 
-            val aaguid = attestedCredentialData.aaguid?.toString()
+            val aaguid = attestedCredentialData.aaguid.toString()
 
             val credential = PasskeyCredential(
                 user = user,

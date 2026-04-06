@@ -87,14 +87,17 @@ class EncryptedStringConverter : AttributeConverter<String?, String?> {
     /**
      * Convert the database column value to an entity attribute.
      * Decrypts the encrypted string for use in the application.
+     * Falls back to returning raw data if decryption fails (e.g., legacy plaintext values
+     * stored before encryption was enabled). The value will be re-encrypted on next save.
      */
     override fun convertToEntityAttribute(dbData: String?): String? {
         return dbData?.let { encrypted ->
             try {
                 textEncryptor.decrypt(encrypted)
             } catch (e: Exception) {
-                throw RuntimeException("Failed to decrypt sensitive data. " +
-                    "This may indicate corrupted data or mismatched encryption keys.", e)
+                log.warn("Failed to decrypt value — returning as plaintext (legacy data or key mismatch). " +
+                    "Value will be re-encrypted on next save.")
+                encrypted
             }
         }
     }

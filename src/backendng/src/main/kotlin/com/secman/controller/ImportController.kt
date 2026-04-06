@@ -58,6 +58,28 @@ open class ImportController(
         private val REQUIRED_HEADERS = listOf(
             "Chapter", "Norm", "Short req", "DetailsEN", "MotivationEN", "ExampleEN", "UseCase"
         )
+
+        private val VALID_EXCEL_CONTENT_TYPES = setOf(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/vnd.ms-excel",
+            "application/octet-stream"
+        )
+
+        private val VALID_XML_CONTENT_TYPES = setOf(
+            "application/xml",
+            "text/xml",
+            "application/octet-stream"
+        )
+
+        fun isValidExcelContentType(contentType: String): Boolean {
+            if (contentType.isEmpty()) return true
+            return VALID_EXCEL_CONTENT_TYPES.any { contentType.startsWith(it) }
+        }
+
+        fun isValidXmlContentType(contentType: String): Boolean {
+            if (contentType.isEmpty()) return true
+            return VALID_XML_CONTENT_TYPES.any { contentType.startsWith(it) }
+        }
     }
 
     @Serdeable
@@ -958,27 +980,4 @@ open class ImportController(
         }
     }
 
-    companion object {
-        private val VALID_EXCEL_CONTENT_TYPES = setOf(
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            "application/vnd.ms-excel",
-            "application/octet-stream"
-        )
-
-        private val VALID_XML_CONTENT_TYPES = setOf(
-            "application/xml",
-            "text/xml",
-            "application/octet-stream"
-        )
-
-        fun isValidExcelContentType(contentType: String): Boolean {
-            if (contentType.isEmpty()) return true
-            return VALID_EXCEL_CONTENT_TYPES.any { contentType.startsWith(it) }
-        }
-
-        fun isValidXmlContentType(contentType: String): Boolean {
-            if (contentType.isEmpty()) return true
-            return VALID_XML_CONTENT_TYPES.any { contentType.startsWith(it) }
-        }
-    }
 }
