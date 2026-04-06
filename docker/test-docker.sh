@@ -51,7 +51,7 @@ echo "[step 3] Extracting admin credentials from backend logs..."
 
 ADMIN_PASSWORD=""
 for i in $(seq 1 30); do
-  ADMIN_PASSWORD=$(docker logs secman-backend 2>&1 | grep -oP 'Password: \K[^\s]+' | tail -1 || true)
+  ADMIN_PASSWORD=$(docker logs secman-backend 2>&1 | sed -n 's/.*Password: \([^ ]*\).*/\1/p' | tail -1 || true)
   if [[ -n "$ADMIN_PASSWORD" ]]; then
     break
   fi
@@ -74,23 +74,23 @@ echo ""
 echo "[step 4] Testing login via REST API..."
 
 if [[ -n "$ADMIN_PASSWORD" ]]; then
-  LOGIN_RESPONSE=$(curl -ks -X POST https://localhost:8443/api/auth/login \
+  LOGIN_RESPONSE=$(curl -ks -D - -X POST https://localhost:8443/api/auth/login \
     -H "Content-Type: application/json" \
     -d "{\"username\":\"admin\",\"password\":\"$ADMIN_PASSWORD\"}" \
     -w "\n%{http_code}" 2>&1)
 
   HTTP_CODE=$(echo "$LOGIN_RESPONSE" | tail -1)
-  RESPONSE_BODY=$(echo "$LOGIN_RESPONSE" | head -n -1)
+  RESPONSE_BODY=$(echo "$LOGIN_RESPONSE" | sed '$d')
 
   if [[ "$HTTP_CODE" == "200" ]]; then
     pass "Login (HTTP $HTTP_CODE)"
 
-    # Extract token
-    TOKEN=$(echo "$RESPONSE_BODY" | grep -oP '"access_token"\s*:\s*"\K[^"]+' || true)
+    # Extract JWT from Set-Cookie header (token is in HttpOnly cookie, not response body)
+    TOKEN=$(echo "$LOGIN_RESPONSE" | sed -n 's/.*[Ss]et-[Cc]ookie:.*secman_auth=\([^;]*\).*/\1/p' | head -1 || true)
     if [[ -n "$TOKEN" ]]; then
-      pass "JWT token received"
+      pass "JWT token received (cookie)"
     else
-      fail "JWT token extraction from response"
+      fail "JWT token extraction from Set-Cookie header"
     fi
   else
     fail "Login (HTTP $HTTP_CODE)"
@@ -123,7 +123,7 @@ fi
 # Database connectivity via backend
 if [[ -n "${TOKEN:-}" ]]; then
   AUTH_STATUS=$(curl -ks -o /dev/null -w "%{http_code}" \
-    -H "Authorization: Bearer $TOKEN" \
+    -b "secman_auth=$TOKEN" \
     https://localhost:8443/api/auth/status)
   if [[ "$AUTH_STATUS" == "200" ]]; then
     pass "Auth status endpoint (HTTP $AUTH_STATUS)"

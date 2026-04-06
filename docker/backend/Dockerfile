@@ -1,32 +1,6 @@
 # Secman Backend Container
-# Multi-stage build: Gradle build → minimal JRE runtime
-FROM eclipse-temurin:21-jdk AS builder
-
-WORKDIR /build
-
-# Copy Gradle wrapper and config first (cache dependencies)
-COPY gradlew gradlew
-COPY gradle/ gradle/
-COPY settings.gradle.kts settings.gradle.kts
-COPY build.gradle.kts build.gradle.kts
-COPY gradle.properties gradle.properties
-
-# Copy subproject build files
-COPY src/backendng/build.gradle.kts src/backendng/build.gradle.kts
-COPY src/shared/build.gradle.kts src/shared/build.gradle.kts
-COPY src/cli/build.gradle.kts src/cli/build.gradle.kts
-
-# Download dependencies (cached layer)
-RUN chmod +x gradlew && ./gradlew dependencies --no-daemon || true
-
-# Copy source code
-COPY src/shared/ src/shared/
-COPY src/backendng/ src/backendng/
-
-# Build the fat JAR (skip tests per project conventions)
-RUN ./gradlew :backendng:shadowJar -x test --no-daemon
-
-# --- Runtime stage ---
+# Expects the fat JAR to be pre-built on the host (build-all.sh handles this).
+# This avoids needing 4GB+ RAM inside Docker for the Kotlin/Gradle compilation.
 FROM eclipse-temurin:21-jre
 
 LABEL maintainer="secman"
@@ -34,8 +8,8 @@ LABEL description="Secman backend (Micronaut/Kotlin)"
 
 WORKDIR /app
 
-# Copy the built JAR
-COPY --from=builder /build/src/backendng/build/libs/*-all.jar app.jar
+# Copy the pre-built fat JAR from the host
+COPY docker/backend/app.jar app.jar
 
 # Backend port
 EXPOSE 8080
@@ -48,6 +22,10 @@ ENV JWT_SECRET=docker-secman-jwt-secret-must-be-at-least-256-bits-long-for-hs256
 ENV SECMAN_AUTH_COOKIE_SECURE=false
 ENV FRONTEND_URL=https://localhost:8443
 ENV SECMAN_BACKEND_URL=https://localhost:8443
+
+# Disable Flyway on fresh Docker databases — Hibernate auto-DDL creates the full schema.
+# Flyway migrations assume pre-existing tables (created by Hibernate on existing deployments).
+ENV FLYWAY_DATASOURCES_DEFAULT_ENABLED=false
 
 # JVM tuning for container
 ENV JAVA_OPTS="-Xmx512m -Xms256m -XX:+UseContainerSupport"

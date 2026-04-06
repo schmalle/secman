@@ -84,3 +84,4 @@ src/helper/.venv/
 !.env.example
 .e2e-logs/
 /.playwright-mcp
+docker/backend/app.jar

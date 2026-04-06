@@ -43,6 +43,7 @@ docker run -d \
   -e SECMAN_AUTH_COOKIE_SECURE=false \
   -e FRONTEND_URL="https://localhost:8443" \
   -e SECMAN_BACKEND_URL="https://localhost:8443" \
+  -e FLYWAY_DATASOURCES_DEFAULT_ENABLED=false \
   -p 8080:8080 \
   secman-backend
 

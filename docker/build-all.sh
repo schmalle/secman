@@ -25,7 +25,14 @@ echo "  ✓ secman-db built"
 echo ""
 
 # 2. Backend
-echo "[2/3] Building secman-backend (this may take a few minutes)..."
+echo "[2/3] Building backend JAR locally..."
+./gradlew :backendng:shadowJar -x test --no-daemon
+# Copy the fat JAR to docker/backend/ for the Docker build context
+cp src/backendng/build/libs/*-all.jar docker/backend/app.jar
+echo "  ✓ Backend JAR built"
+echo ""
+
+echo "[2/3] Building secman-backend Docker image..."
 docker build -t secman-backend -f docker/backend/Dockerfile .
 echo "  ✓ secman-backend built"
 echo ""
