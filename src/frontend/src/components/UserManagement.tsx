@@ -59,6 +59,7 @@ const UserManagement = () => {
     const [addUserError, setAddUserError] = useState<string | null>(null);
     const [isSubmittingUser, setIsSubmittingUser] = useState(false);
     const [deletingUserId, setDeletingUserId] = useState<number | null>(null);
+    const [isExportingEmails, setIsExportingEmails] = useState(false);
 
     // State for search, sort, pagination
     const [searchQuery, setSearchQuery] = useState('');
@@ -281,6 +282,39 @@ const UserManagement = () => {
         setEditingMappingId(null);
         setMappingsError(null);
         setMappingsSuccess(null);
+    };
+
+    const handleExportEmails = async () => {
+        setIsExportingEmails(true);
+        try {
+            const response = await authenticatedGet('/api/users/export/emails');
+            if (!response.ok) {
+                const message = `Failed to export emails (status ${response.status})`;
+                alert(message);
+                return;
+            }
+
+            // Derive filename from Content-Disposition, fall back to a dated default
+            const disposition = response.headers.get('Content-Disposition') ?? '';
+            const filenameMatch = disposition.match(/filename="?([^"]+)"?/i);
+            const filename = filenameMatch?.[1]
+                ?? `secman-user-emails-${new Date().toISOString().slice(0, 10)}.csv`;
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+        } catch (err: any) {
+            console.error('Export emails request failed:', err);
+            alert(err?.message || 'An error occurred while exporting user emails.');
+        } finally {
+            setIsExportingEmails(false);
+        }
     };
 
     const handleDeleteUser = async (userId: number, username: string) => {
@@ -672,9 +706,20 @@ const UserManagement = () => {
                 </div>
             )}
 
-            <button className="btn btn-success mb-3" onClick={() => setShowAddUserModal(true)}>
-                 <i className="bi bi-plus-circle me-2"></i> Add User
-            </button>
+            <div className="d-flex gap-2 mb-3">
+                <button className="btn btn-success" onClick={() => setShowAddUserModal(true)}>
+                     <i className="bi bi-plus-circle me-2"></i> Add User
+                </button>
+                <button
+                    className="btn btn-outline-primary"
+                    onClick={handleExportEmails}
+                    disabled={isExportingEmails}
+                    title="Download a CSV of all user email addresses"
+                >
+                    <i className="bi bi-download me-2"></i>
+                    {isExportingEmails ? 'Exporting…' : 'Export Emails'}
+                </button>
+            </div>
 
             {/* Add User Modal */}
             {showAddUserModal && (

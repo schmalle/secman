@@ -9,6 +9,7 @@ import com.secman.service.UserMappingService
 import io.micronaut.data.model.Pageable
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.HttpStatus
+import io.micronaut.http.MediaType
 import io.micronaut.http.annotation.*
 import io.micronaut.security.annotation.Secured
 import io.micronaut.security.rules.SecurityRule
@@ -17,6 +18,9 @@ import jakarta.transaction.Transactional
 import jakarta.validation.constraints.*
 import jakarta.validation.Valid
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
+import java.io.StringWriter
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 
 @Controller("/api/users")
 @Secured("ADMIN")
@@ -105,6 +109,56 @@ open class UserController(
             userRepository.findAll().map { UserResponse.from(it, false) }
         }
         return HttpResponse.ok(users)
+    }
+
+    /**
+     * Export all user email addresses as a CSV file.
+     *
+     * Inherits ADMIN authorization from the class-level @Secured("ADMIN").
+     * Returns a CSV with two columns (Username, Email), one row per user.
+     * Fields are sanitized to prevent CSV formula injection (CWE-1236).
+     */
+    @Get("/export/emails")
+    @Produces(MediaType.TEXT_CSV)
+    fun exportEmails(): HttpResponse<String> {
+        val users = userRepository.findAll()
+
+        val writer = StringWriter()
+        writer.append("Username,Email\n")
+        users.forEach { user ->
+            writer.append("\"${sanitizeCsvField(user.username)}\",")
+            writer.append("\"${sanitizeCsvField(user.email)}\"\n")
+        }
+
+        val timestamp = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
+        val filename = "secman-user-emails-$timestamp.csv"
+
+        return HttpResponse.ok(writer.toString())
+            .header("Content-Disposition", "attachment; filename=\"$filename\"")
+    }
+
+    /**
+     * Sanitize CSV field to prevent formula injection attacks (CWE-1236).
+     * Prefixes formula-triggering characters with a single quote so spreadsheet
+     * programs (Excel/LibreOffice) treat them as text instead of executing them.
+     */
+    private fun sanitizeCsvField(value: String): String {
+        if (value.isEmpty()) return ""
+        val trimmed = value.trim()
+        val quotesEscaped = trimmed.replace("\"", "\"\"")
+        return if (trimmed.startsWith("=") ||
+            trimmed.startsWith("+") ||
+            trimmed.startsWith("-") ||
+            trimmed.startsWith("@") ||
+            trimmed.startsWith("|") ||
+            trimmed.startsWith("%") ||
+            trimmed.startsWith("\t") ||
+            trimmed.startsWith("\r")
+        ) {
+            "'" + quotesEscaped
+        } else {
+            quotesEscaped
+        }
     }
 
     @Post
