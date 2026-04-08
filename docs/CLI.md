@@ -22,6 +22,7 @@ Command-line interface for CrowdStrike vulnerability queries, notifications, use
 ## Overview
 
 The Secman CLI provides command-line access to:
+
 - Query CrowdStrike Falcon API for vulnerabilities
 - Send automated notification emails for outdated assets
 - Manage user-to-asset mappings (AWS accounts, AD domains)
@@ -89,6 +90,7 @@ java -jar /opt/secman/bin/secman-cli.jar --help
 See [ENVIRONMENT.md](./ENVIRONMENT.md#cli-environment-variables) for complete reference.
 
 **CrowdStrike credentials:**
+
 ```bash
 export FALCON_CLIENT_ID=your-client-id
 export FALCON_CLIENT_SECRET=your-client-secret
@@ -96,6 +98,7 @@ export FALCON_BASE_URL=https://api.crowdstrike.com
 ```
 
 **Backend authentication (for --save):**
+
 ```bash
 export SECMAN_ADMIN_NAME=adminuser
 export SECMAN_ADMIN_PASS=your-password
@@ -105,6 +108,7 @@ export SECMAN_BACKEND_URL=https://api.yourdomain.com
 ### Config File Format
 
 **`~/.secman/crowdstrike.yaml`:**
+
 ```yaml
 clientId: your-client-id-here
 clientSecret: your-client-secret-here
@@ -112,6 +116,7 @@ baseUrl: https://api.crowdstrike.com
 ```
 
 **`~/.secman/credentials.conf`:**
+
 ```bash
 FALCON_CLIENT_ID=your-client-id
 FALCON_CLIENT_SECRET=your-client-secret
@@ -120,6 +125,7 @@ SECMAN_ADMIN_PASS=your-password
 ```
 
 Secure credentials file:
+
 ```bash
 chmod 600 ~/.secman/credentials.conf
 chmod 600 ~/.secman/crowdstrike.yaml
@@ -163,19 +169,20 @@ java -jar secman-cli.jar query servers \
 
 **Options:**
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--hostname` | Target hostname (required) | - |
-| `--severity` | Filter by severity (comma-separated) | All |
-| `--min-days-open` | Minimum days vulnerability has been open | 0 |
-| `--limit` | Maximum results | 100 |
-| `--save` | Save results to backend database | false |
-| `--username` | Backend authentication username | - |
-| `--password` | Backend authentication password | - |
-| `--backend-url` | Backend API URL | http://localhost:8080 |
-| `--output-file` | Export to file | - |
-| `--format` | Export format (json, csv) | json |
-| `--verbose` | Show detailed output | false |
+
+| Option            | Description                              | Default               |
+| ----------------- | ---------------------------------------- | --------------------- |
+| `--hostname`      | Target hostname (required)               | -                     |
+| `--severity`      | Filter by severity (comma-separated)     | All                   |
+| `--min-days-open` | Minimum days vulnerability has been open | 0                     |
+| `--limit`         | Maximum results                          | 100                   |
+| `--save`          | Save results to backend database         | false                 |
+| `--username`      | Backend authentication username          | -                     |
+| `--password`      | Backend authentication password          | -                     |
+| `--backend-url`   | Backend API URL                          | http://localhost:8080 |
+| `--output-file`   | Export to file                           | -                     |
+| `--format`        | Export format (json, csv)                | json                  |
+| `--verbose`       | Show detailed output                     | false                 |
 
 ### Send Notifications
 
@@ -194,17 +201,22 @@ java -jar secman-cli.jar send-notifications --outdated-only
 
 **Options:**
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--dry-run` | Report planned emails without sending | false |
-| `--verbose` | Show detailed per-asset information | false |
-| `--outdated-only` | Only process outdated assets | false |
+
+| Option            | Description                           | Default |
+| ----------------- | ------------------------------------- | ------- |
+| `--dry-run`       | Report planned emails without sending | false   |
+| `--verbose`       | Show detailed per-asset information   | false   |
+| `--outdated-only` | Only process outdated assets          | false   |
 
 ### Manage User Mappings
 
 Manage user-to-asset mappings for access control. User mappings associate email addresses with AWS accounts or AD domains, enabling automatic asset visibility based on these attributes.
 
 ```bash
+
+
+
+
 # List all mappings (table format - default)
 java -jar secman-cli.jar manage-user-mappings list
 
@@ -237,33 +249,39 @@ java -jar secman-cli.jar manage-user-mappings import \
   --file mappings.json \
   --format json
 
+# Import via S3
+./scripts/secmanng manage-user-mappings import-s3 --bucket BUCKETNAME --key FILE
+
 # Remove mapping
 java -jar secman-cli.jar manage-user-mappings remove --id 42
 ```
 
 **Subcommands:**
 
-| Command | Description |
-|---------|-------------|
-| `list` | List all user mappings |
-| `add-aws` | Add AWS account mapping |
-| `add-domain` | Add AD domain mapping |
-| `import` | Bulk import from CSV/JSON |
-| `remove` | Remove mapping by ID |
+
+| Command      | Description               |
+| ------------ | ------------------------- |
+| `list`       | List all user mappings    |
+| `add-aws`    | Add AWS account mapping   |
+| `add-domain` | Add AD domain mapping     |
+| `import`     | Bulk import from CSV/JSON |
+| `remove`     | Remove mapping by ID      |
 
 **List Command Options:**
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--format` | Output format: `table` or `json` | `table` |
+
+| Option     | Description                     | Default |
+| ---------- | ------------------------------- | ------- |
+| `--format` | Output format:`table` or `json` | `table` |
 
 **Import Command Options:**
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--file` | Path to import file (required) | - |
-| `--format` | File format: `csv` or `json` | `csv` |
-| `--dry-run` | Validate without persisting | `false` |
+
+| Option      | Description                    | Default |
+| ----------- | ------------------------------ | ------- |
+| `--file`    | Path to import file (required) | -       |
+| `--format`  | File format:`csv` or `json`    | `csv`   |
+| `--dry-run` | Validate without persisting    | `false` |
 
 #### CSV Import Format
 
@@ -277,6 +295,7 @@ user3@example.com,987654321098,prod.example.com
 ```
 
 **Column requirements:**
+
 - `email` (required): Valid email address
 - `awsAccountId` (optional): 12-digit AWS account ID
 - `domain` (optional): AD domain name
@@ -378,18 +397,20 @@ java -jar secman-cli.jar add-vulnerability \
 
 **Options:**
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--hostname` | Target asset hostname (required) | - |
-| `--cve` | CVE identifier or custom ID (required) | - |
-| `--criticality` | CRITICAL, HIGH, MEDIUM, or LOW (required) | - |
-| `--days-open` | Days the vulnerability has been open | 0 |
-| `--username` | Backend authentication username (required) | - |
-| `--password` | Backend authentication password (required) | - |
-| `--backend-url` | Backend API URL | http://localhost:8080 |
-| `--verbose` | Show detailed output | false |
+
+| Option          | Description                                | Default               |
+| --------------- | ------------------------------------------ | --------------------- |
+| `--hostname`    | Target asset hostname (required)           | -                     |
+| `--cve`         | CVE identifier or custom ID (required)     | -                     |
+| `--criticality` | CRITICAL, HIGH, MEDIUM, or LOW (required)  | -                     |
+| `--days-open`   | Days the vulnerability has been open       | 0                     |
+| `--username`    | Backend authentication username (required) | -                     |
+| `--password`    | Backend authentication password (required) | -                     |
+| `--backend-url` | Backend API URL                            | http://localhost:8080 |
+| `--verbose`     | Show detailed output                       | false                 |
 
 **Behavior:**
+
 - **Upsert pattern**: If same CVE exists for asset, updates instead of creating duplicate
 - **Auto-create**: If hostname not found, creates asset with type=SERVER, owner=CLI-IMPORT
 - **Exit codes**: 0=success, 1=validation/auth error, 2=connection error
@@ -452,19 +473,21 @@ java -jar secman-cli.jar manage-workgroups list --format CSV
 
 **Subcommands:**
 
-| Command | Description |
-|---------|-------------|
-| `list` | List workgroups or assets in a workgroup |
+
+| Command         | Description                                    |
+| --------------- | ---------------------------------------------- |
+| `list`          | List workgroups or assets in a workgroup       |
 | `assign-assets` | Assign assets to a workgroup by pattern or IDs |
-| `remove-assets` | Remove assets from a workgroup |
+| `remove-assets` | Remove assets from a workgroup                 |
 
 **Wildcard Patterns:**
 
-| Pattern | Description | Example |
-|---------|-------------|---------|
-| `*` | Matches any characters | `ip-10-*` matches `ip-10-255-75-85` |
-| `?` | Matches single character | `server?` matches `server1`, `serverA` |
-| `*text*` | Contains text | `*prod*` matches `web-prod-01` |
+
+| Pattern  | Description              | Example                                |
+| -------- | ------------------------ | -------------------------------------- |
+| `*`      | Matches any characters   | `ip-10-*` matches `ip-10-255-75-85`    |
+| `?`      | Matches single character | `server?` matches `server1`, `serverA` |
+| `*text*` | Contains text            | `*prod*` matches `web-prod-01`         |
 
 ---
 
@@ -529,6 +552,7 @@ main
 ```
 
 Make executable:
+
 ```bash
 chmod +x /opt/secman/bin/cron-query-servers.sh
 ```
@@ -540,16 +564,19 @@ crontab -e
 ```
 
 **Daily at 2:00 AM:**
+
 ```cron
 0 2 * * * /opt/secman/bin/cron-query-servers.sh >> /opt/secman/logs/cronjob.log 2>&1
 ```
 
 **Every hour:**
+
 ```cron
 0 * * * * /opt/secman/bin/cron-query-servers.sh >> /opt/secman/logs/cronjob.log 2>&1
 ```
 
 **Business hours (Mon-Fri, 9 AM - 5 PM):**
+
 ```cron
 0 9-17 * * 1-5 /opt/secman/bin/cron-query-servers.sh >> /opt/secman/logs/cronjob.log 2>&1
 ```
@@ -614,6 +641,7 @@ java -jar /opt/secman/bin/secman-cli.jar "$@"
 ```
 
 **Required IAM permissions:**
+
 ```json
 {
   "Version": "2012-10-17",
@@ -647,6 +675,7 @@ Create `/opt/aws/amazon-cloudwatch-agent/etc/config.json`:
 ```
 
 Start agent:
+
 ```bash
 sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
     -a fetch-config -m ec2 -s \
@@ -662,6 +691,7 @@ sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
 #### "Command not found" in cron
 
 Add Java to PATH in crontab:
+
 ```cron
 PATH=/usr/bin:/bin:/usr/local/bin:/usr/lib/jvm/java-21-amazon-corretto/bin
 JAVA_HOME=/usr/lib/jvm/java-21-amazon-corretto
@@ -672,6 +702,7 @@ JAVA_HOME=/usr/lib/jvm/java-21-amazon-corretto
 #### "Credentials not found"
 
 Verify format (no spaces around `=`):
+
 ```bash
 # Correct
 FALCON_CLIENT_ID=abc123
@@ -689,6 +720,7 @@ FALCON_CLIENT_ID = abc123
 #### "Out of Memory"
 
 Add JVM options:
+
 ```bash
 java -Xmx512m -Xms256m -jar secman-cli.jar ...
 ```
@@ -733,6 +765,7 @@ exit 0
 - [Troubleshooting](./TROUBLESHOOTING.md) - Common issues and solutions
 
 **CLI-specific docs:**
+
 - [User Mapping Commands](../src/cli/src/main/resources/cli-docs/USER_MAPPING_COMMANDS.md)
 - [Workgroup Commands](../src/cli/src/main/resources/cli-docs/WORKGROUP_COMMANDS.md)
 - [Add Vulnerability Command](../src/cli/src/main/resources/cli-docs/ADD_VULNERABILITY_COMMANDS.md)
