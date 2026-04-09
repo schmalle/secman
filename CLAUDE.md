@@ -101,7 +101,7 @@ Users access assets if **ANY** is true:
 1. Security-First: File validation, input sanitization, RBAC, security review required
 2. API-First: RESTful, backward compatible
 3. RBAC: @Secured on endpoints, role checks in UI
-4. Schema Evolution: Hibernate auto-migration
+4. Schema Evolution: Flyway migrations + Hibernate auto-update
 5. Never write testcases
 6. A feature is only complete. if gradlew build is showing no errors anymore
 
@@ -149,7 +149,7 @@ eventPublisher.publishEvent(UserCreatedEvent(savedUser, "MANUAL"))
 **Performance**: <5ms event delivery, non-blocking
 
 ### Test Infrastructure
-**Stack**: JUnit 5, Mockk, Testcontainers (MariaDB), AssertJ
+**Stack**: JUnit 6, Mockk, Testcontainers (MariaDB), AssertJ
 **Structure**:
 - Unit tests: `src/backendng/src/test/kotlin/com/secman/service/` - Mockk for mocking dependencies
 - Integration tests: `src/backendng/src/test/kotlin/com/secman/integration/` - Testcontainers for real DB
@@ -250,7 +250,7 @@ Run `/e2e-runner` to start the full E2E test loop. This will:
 
 
 ---
-*Last updated: 2026-03-24*
+*Last updated: 2026-04-09*
 
 ## Active Technologies
 - **Backend**: Kotlin 2.3.20 / Java 21, Micronaut 4.10, Hibernate JPA, PicoCLI 4.7.7, Jakarta Mail, Apache POI, AWS SDK v2

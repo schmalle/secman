@@ -1,6 +1,6 @@
 # Secman Architecture
 
-**Last Updated:** 2026-04-02
+**Last Updated:** 2026-04-09
 
 This document describes the system architecture, data model, and design patterns used in Secman.
 
@@ -78,7 +78,7 @@ Secman is a security requirement and risk assessment management tool consisting 
 
 ### Backend (`src/backendng/`)
 
-The backend follows a layered architecture with 60 controllers:
+The backend follows a layered architecture with 61 controllers:
 
 ```
 +-----------------------------------------------------------------+
@@ -116,7 +116,7 @@ The backend follows a layered architecture with 60 controllers:
 - **Core Domain**: Asset, Requirement, Release, Workgroup, Product, Standard, Norm, UseCase
 - **Vulnerability**: VulnerabilityManagement, VulnerabilityExceptionRequest, VulnerabilityStatistics, VulnerabilityConfig, AccountVulns, DomainVulns, WorkgroupVulns
 - **Authentication**: Auth, OAuth, Passkey, UserProfile
-- **Admin**: AppSettings, IdentityProvider, MaintenanceBanner, UserMapping, User, TranslationConfig, NotificationSettings, EmailConfig, EmailProviderConfig, FalconConfig, ConfigBundle
+- **Admin**: AppSettings, IdentityProvider, MaintenanceBanner, UserMapping, User, TranslationConfig, NotificationSettings, EmailConfig, EmailProviderConfig, FalconConfig, ConfigBundle, AwsAccountSharing
 - **Import/Export**: Import, RequirementFile, Scan
 - **Email & Notifications**: Notification, NotificationPreference, NotificationLog, TestEmailAccount
 - **MCP**: Mcp, McpAdmin, McpStreamableHttp
@@ -151,7 +151,7 @@ Astro with React islands architecture, 68 pages:
 - **Risk & Compliance**: Risks, Risk assessments, Demands, Products, Use cases
 - **Import/Export**: Import, Export
 - **Notifications**: Preferences, Logs
-- **Admin (20 pages)**: App settings, Classification rules, Config bundle, Email config, Falcon config, Identity providers, Maintenance banners, MCP API keys, Notification settings, Requirements, Releases, Test email accounts, Translation config, User management, User mappings, Vulnerability config
+- **Admin (20 pages)**: Add system, App settings, AWS account sharing, Classification rules, Config bundle, EC2 compliance, Email config, Falcon config, Identity providers, Maintenance banners, MCP API keys, Notification settings, Requirements, Releases, Test email accounts, Translation config, User management, User mappings, Vulnerability config
 
 **Authentication flow:**
 
@@ -161,7 +161,7 @@ Astro with React islands architecture, 68 pages:
 
 ### CLI (`src/cli/`)
 
-Command-line interface with 24 commands for automated operations:
+Command-line interface with 25 commands for automated operations:
 
 ```
 +-----------------------------------------------------------------+
@@ -196,6 +196,8 @@ Command-line interface with 24 commands for automated operations:
 - `remove` - Remove assets/data
 - `delete-all-requirements` - Bulk requirement deletion
 - `deduplicate-vulnerabilities` - Remove duplicate vulnerability records
+- `port-scan` - Scan network ports on assets
+- `send-notification-users` - Send notifications to specific users
 
 ---
 
@@ -546,7 +548,7 @@ secman/
 │   │       ├── repository/           # Data access
 │   │       ├── service/              # Business logic
 │   │       │   └── mcp/              # MCP-specific services
-│   │       ├── controller/           # REST endpoints (60 controllers)
+│   │       ├── controller/           # REST endpoints (61 controllers)
 │   │       ├── config/               # Configuration
 │   │       ├── dto/                  # DTOs
 │   │       │   └── mcp/              # MCP DTOs
@@ -563,7 +565,7 @@ secman/
 │   │
 │   └── cli/                          # CLI tool
 │       └── src/main/kotlin/com/secman/cli/
-│           ├── commands/             # Picocli commands (24 commands)
+│           ├── commands/             # Picocli commands (25 commands)
 │           └── service/              # CLI services
 │
 ├── docs/                             # Documentation
