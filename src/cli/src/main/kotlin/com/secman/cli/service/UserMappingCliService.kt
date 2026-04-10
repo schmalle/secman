@@ -805,6 +805,79 @@ class UserMappingCliService {
         )
     }
 
+    // --- Feature 085: send-statistics-email ---
+
+    /**
+     * Call POST /api/cli/user-mappings/send-statistics-email on the backend.
+     *
+     * Uses java.net.http.HttpClient (matching [postBulk]) to bypass Micronaut
+     * Serde generics issues with Map bodies. Returns a [StatisticsEmailResult]
+     * wrapping the HTTP status code and parsed body so callers can distinguish
+     * auth denials (403), validation errors (400), and server errors (5xx) to
+     * map them to distinct CLI exit codes.
+     *
+     * Feature: 085-cli-mappings-email
+     */
+    fun sendStatisticsEmail(
+        backendUrl: String,
+        authToken: String,
+        filterEmail: String?,
+        filterStatus: String?,
+        dryRun: Boolean,
+        verbose: Boolean,
+        importSummary: Map<String, Any?>? = null
+    ): StatisticsEmailResult {
+        val bodyMap: Map<String, Any?> = buildMap {
+            if (!filterEmail.isNullOrBlank()) put("filterEmail", filterEmail)
+            if (!filterStatus.isNullOrBlank()) put("filterStatus", filterStatus)
+            put("dryRun", dryRun)
+            put("verbose", verbose)
+            if (importSummary != null) put("importSummary", importSummary)
+        }
+        val jsonBody = objectMapper.writeValueAsString(bodyMap)
+
+        return try {
+            val clientBuilder = java.net.http.HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(30))
+                .followRedirects(java.net.http.HttpClient.Redirect.NORMAL)
+            if (insecureMode) {
+                clientBuilder.sslContext(createTrustAllSslContext())
+                val sslParams = javax.net.ssl.SSLParameters()
+                sslParams.endpointIdentificationAlgorithm = null
+                clientBuilder.sslParameters(sslParams)
+            }
+            val javaClient = clientBuilder.build()
+
+            val httpRequest = java.net.http.HttpRequest.newBuilder()
+                .uri(URI.create("$backendUrl/api/cli/user-mappings/send-statistics-email"))
+                .header("Content-Type", "application/json")
+                .header("Authorization", "Bearer $authToken")
+                .POST(java.net.http.HttpRequest.BodyPublishers.ofString(jsonBody))
+                .timeout(Duration.ofSeconds(120))
+                .build()
+
+            val response = javaClient.send(httpRequest, java.net.http.HttpResponse.BodyHandlers.ofString())
+            val statusCode = response.statusCode()
+
+            @Suppress("UNCHECKED_CAST")
+            val responseBody: Map<String, Any?>? = if (response.body().isNullOrBlank()) {
+                null
+            } else {
+                try {
+                    objectMapper.readValue(response.body(), Map::class.java) as Map<String, Any?>
+                } catch (e: Exception) {
+                    log.warn("Failed to parse statistics-email response body: {}", e.message)
+                    null
+                }
+            }
+
+            StatisticsEmailResult(statusCode, responseBody)
+        } catch (e: Exception) {
+            log.error("send-statistics-email HTTP call failed: {}", e.message)
+            StatisticsEmailResult(-1, null)
+        }
+    }
+
     // --- Internal DTOs for HTTP responses ---
 
     private data class BulkResponse(
@@ -874,4 +947,16 @@ data class MappingComparisonResult(
     val unchangedCount: Int,
     val removedCount: Int,
     val dbAvailable: Boolean
+)
+
+/**
+ * Wrapper returned by [UserMappingCliService.sendStatisticsEmail] carrying the
+ * HTTP status code and the parsed response body so CLI callers can map distinct
+ * failure modes to distinct exit codes.
+ *
+ * Feature: 085-cli-mappings-email
+ */
+data class StatisticsEmailResult(
+    val statusCode: Int,
+    val body: Map<String, Any?>?
 )

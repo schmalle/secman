@@ -82,7 +82,7 @@ Users access assets if **ANY** is true:
   - `./scripts/secman help` - Show all commands and options
   - `./scripts/secman query servers --dry-run` - Query CrowdStrike
   - `./scripts/secman send-notifications --dry-run` - Email notifications
-  - `./scripts/secman manage-user-mappings --help` - User mappings
+  - `./scripts/secman manage-user-mappings --help` - User mappings (the `list` subcommand supports `--send-email` to distribute statistics to ADMIN/REPORT users)
   - `./scripts/secman export-requirements --format xlsx` - Export requirements
   - `./scripts/secman add-requirement --shortreq "text"` - Add requirement
   - `./scripts/secman add-vulnerability --hostname host --cve CVE-xxx --criticality HIGH` - Add vulnerability
@@ -250,7 +250,7 @@ Run `/e2e-runner` to start the full E2E test loop. This will:
 
 
 ---
-*Last updated: 2026-04-09*
+*Last updated: 2026-04-08*
 
 ## Active Technologies
 - **Backend**: Kotlin 2.3.20 / Java 21, Micronaut 4.10, Hibernate JPA, PicoCLI 4.7.7, Jakarta Mail, Apache POI, AWS SDK v2
@@ -260,6 +260,8 @@ Run `/e2e-runner` to start the full E2E test loop. This will:
 - **Testing**: JUnit 6, Mockk, Testcontainers, AssertJ, Playwright
 - **CLI**: PicoCLI, CrowdStrike Falcon API, AWS SDK v2 (S3)
 - **MCP**: Streamable HTTP transport, JSON-RPC 2.0
+- Kotlin 2.3.20 / Java 21 (backend + CLI), bundled via Gradle 9.4.1 (085-cli-mappings-email)
+- MariaDB 11.4 — one new table `user_mapping_statistics_log` created via Hibernate auto-migration + a Flyway script (per Constitution VI) (085-cli-mappings-email)
 
 ## Recent Changes
 - 058-ai-norm-mapping: Added Kotlin 2.2.21 / Java 21 (backend), TypeScript/React 19 (frontend) + Micronaut 4.10, Hibernate JPA, Axios, Bootstrap 5.3

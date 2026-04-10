@@ -124,7 +124,9 @@ SecMan is a full-stack security management platform that helps organizations man
 - **Admin Summary** (`send-admin-summary`):
   Generate and send admin summary reports
 - **User Mapping Management** (`manage-user-mappings`):
-  Manage AWS account and AD domain mappings
+  Manage AWS account and AD domain mappings. The `list` subcommand supports
+  `--send-email` to distribute the statistics report to all ADMIN and REPORT
+  users in a single invocation.
 - **Workgroup Management** (`manage-workgroups`):
   Pattern-based asset assignment to workgroups
 - **Manual Vulnerability Entry** (`add-vulnerability`):
@@ -286,6 +288,8 @@ npm run build                # Production build
 ./scripts/secman send-admin-summary --dry-run                           # Admin summary
 ./scripts/secman manage-workgroups list                                 # List workgroups
 ./scripts/secman manage-user-mappings --help                            # User mappings
+./scripts/secman manage-user-mappings list --send-email --dry-run       # Preview stats email
+./scripts/secman manage-user-mappings list --send-email                 # Email stats to admins
 ./scripts/secman add-vulnerability --help                               # Add vulnerability
 ./scripts/secman export-requirements --format xlsx                      # Export requirements
 

@@ -5,6 +5,7 @@ import com.secman.repository.OutdatedAssetMaterializedViewRepository
 import com.secman.repository.UserMappingRepository
 import com.secman.service.AdminSummaryService
 import com.secman.service.NotificationService
+import com.secman.service.UserMappingStatisticsService
 import com.secman.service.UserVulnerabilityNotificationService
 import io.micronaut.data.model.Pageable
 import io.micronaut.http.HttpResponse
@@ -35,7 +36,8 @@ class CliController(
     private val assetRepository: AssetRepository,
     private val userMappingRepository: UserMappingRepository,
     private val adminSummaryService: AdminSummaryService,
-    private val userVulnerabilityNotificationService: UserVulnerabilityNotificationService
+    private val userVulnerabilityNotificationService: UserVulnerabilityNotificationService,
+    private val userMappingStatisticsService: UserMappingStatisticsService
 ) {
     private val logger = LoggerFactory.getLogger(CliController::class.java)
 
@@ -233,6 +235,134 @@ class CliController(
         } catch (e: Exception) {
             logger.error("Error sending admin summary", e)
             HttpResponse.serverError()
+        }
+    }
+
+    // --- User Mapping Statistics Email Endpoint (Feature 085) ---
+
+    @Serdeable
+    data class SendUserMappingStatisticsRequest(
+        val filterEmail: String? = null,
+        val filterStatus: String? = null,
+        val dryRun: Boolean = false,
+        val verbose: Boolean = false,
+        val importSummary: ImportSummaryDto? = null
+    )
+
+    @Serdeable
+    data class ImportSummaryDto(
+        val source: String? = null,
+        val totalProcessed: Int? = null,
+        val created: Int? = null,
+        val createdPending: Int? = null,
+        val skipped: Int? = null,
+        val errorCount: Int? = null,
+        val dbMappingCount: Int? = null,
+        val fileMappingCount: Int? = null,
+        val newCount: Int? = null,
+        val unchangedCount: Int? = null,
+        val removedCount: Int? = null
+    )
+
+    @Serdeable
+    data class AggregatesDto(
+        val totalUsers: Int,
+        val totalMappings: Int,
+        val activeMappings: Int,
+        val pendingMappings: Int,
+        val domainMappings: Int,
+        val awsAccountMappings: Int
+    )
+
+    @Serdeable
+    data class UserMappingStatisticsResultDto(
+        val status: String,
+        val recipientCount: Int,
+        val emailsSent: Int,
+        val emailsFailed: Int,
+        val recipients: List<String>,
+        val failedRecipients: List<String>,
+        val appliedFilters: Map<String, String>,
+        val aggregates: AggregatesDto
+    )
+
+    /**
+     * POST /api/cli/user-mappings/send-statistics-email
+     *
+     * Computes user-mapping statistics (aggregates + per-user detail) for the given
+     * filters and emails the report to every ADMIN or REPORT user with a valid email
+     * address. Writes one audit row to user_mapping_statistics_log per invocation.
+     *
+     * Feature: 085-cli-mappings-email
+     */
+    @Post("/user-mappings/send-statistics-email")
+    @Produces(MediaType.APPLICATION_JSON)
+    fun sendUserMappingStatistics(
+        @Body request: SendUserMappingStatisticsRequest,
+        authentication: Authentication
+    ): HttpResponse<Any> {
+        logger.info("CLI user-mappings send-statistics-email requested by user: {} (dryRun={}, filterEmail={}, filterStatus={})",
+            authentication.name, request.dryRun, request.filterEmail, request.filterStatus)
+
+        return try {
+            val importSummary = request.importSummary?.let {
+                UserMappingStatisticsService.ImportSummary(
+                    source = it.source,
+                    totalProcessed = it.totalProcessed,
+                    created = it.created,
+                    createdPending = it.createdPending,
+                    skipped = it.skipped,
+                    errorCount = it.errorCount,
+                    dbMappingCount = it.dbMappingCount,
+                    fileMappingCount = it.fileMappingCount,
+                    newCount = it.newCount,
+                    unchangedCount = it.unchangedCount,
+                    removedCount = it.removedCount
+                )
+            }
+            val result = userMappingStatisticsService.sendStatisticsEmail(
+                filterEmail = request.filterEmail,
+                filterStatus = request.filterStatus,
+                dryRun = request.dryRun,
+                verbose = request.verbose,
+                invokedBy = authentication.name,
+                importSummary = importSummary
+            )
+            HttpResponse.ok(
+                UserMappingStatisticsResultDto(
+                    status = result.status.name,
+                    recipientCount = result.recipientCount,
+                    emailsSent = result.emailsSent,
+                    emailsFailed = result.emailsFailed,
+                    recipients = result.recipients,
+                    failedRecipients = result.failedRecipients,
+                    appliedFilters = result.appliedFilters,
+                    aggregates = AggregatesDto(
+                        totalUsers = result.aggregates.totalUsers,
+                        totalMappings = result.aggregates.totalMappings,
+                        activeMappings = result.aggregates.activeMappings,
+                        pendingMappings = result.aggregates.pendingMappings,
+                        domainMappings = result.aggregates.domainMappings,
+                        awsAccountMappings = result.aggregates.awsAccountMappings
+                    )
+                ) as Any
+            )
+        } catch (e: IllegalArgumentException) {
+            logger.warn("Invalid filter for user-mapping statistics: {}", e.message)
+            HttpResponse.badRequest(
+                mapOf(
+                    "error" to "Validation Error",
+                    "message" to (e.message ?: "Invalid filter parameter")
+                ) as Any
+            )
+        } catch (e: Exception) {
+            logger.error("Error sending user-mapping statistics email", e)
+            HttpResponse.serverError(
+                mapOf(
+                    "error" to "Internal Server Error",
+                    "message" to "Failed to send user-mapping statistics email"
+                ) as Any
+            )
         }
     }
 

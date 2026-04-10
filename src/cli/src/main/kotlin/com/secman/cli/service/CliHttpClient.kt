@@ -160,6 +160,37 @@ class CliHttpClient(
     }
 
     /**
+     * Send a POST request with JWT authentication and JSON body, returning both
+     * the HTTP status code and the parsed body. Used by callers that need to
+     * distinguish between auth denials (403), validation errors (400), and
+     * server errors (5xx) — e.g. for mapping to distinct CLI exit codes.
+     *
+     * Feature: 085-cli-mappings-email
+     */
+    fun postMapWithStatus(url: String, body: Any, authToken: String): Pair<Int, Map<*, *>?> {
+        val request = HttpRequest.POST(url, body)
+            .header("Authorization", "Bearer $authToken")
+            .contentType(MediaType.APPLICATION_JSON)
+
+        return try {
+            val response = httpClient.toBlocking().exchange(request, Map::class.java)
+            response.status.code to response.body()
+        } catch (e: io.micronaut.http.client.exceptions.HttpClientResponseException) {
+            val status = e.status.code
+            val errorBody = try {
+                e.response.getBody(Map::class.java).orElse(null)
+            } catch (_: Exception) {
+                null
+            }
+            log.warn("POST {} returned {}: {}", url, status, e.message)
+            status to errorBody
+        } catch (e: Exception) {
+            log.error("POST {} error: {}", url, e.message)
+            -1 to null
+        }
+    }
+
+    /**
      * Send a POST request returning raw string body
      */
     fun postString(url: String, body: Any, authToken: String): String? {

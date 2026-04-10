@@ -223,6 +223,18 @@ java -jar secman-cli.jar manage-user-mappings list
 # List all mappings (JSON format for scripting)
 java -jar secman-cli.jar manage-user-mappings list --format json
 
+# List AND email statistics to all ADMIN/REPORT users (Feature 085)
+java -jar secman-cli.jar manage-user-mappings list --send-email
+
+# Preview intended recipients without dispatching (dry-run)
+java -jar secman-cli.jar manage-user-mappings list --send-email --dry-run
+
+# Per-recipient delivery status
+java -jar secman-cli.jar manage-user-mappings list --send-email --verbose
+
+# Filter and email the filtered view only
+java -jar secman-cli.jar manage-user-mappings list --email user@example.com --send-email
+
 # Add AWS account mapping
 java -jar secman-cli.jar manage-user-mappings add-aws \
   --email user@example.com \
@@ -252,6 +264,10 @@ java -jar secman-cli.jar manage-user-mappings import \
 # Import via S3
 ./scripts/secmanng manage-user-mappings import-s3 --bucket BUCKETNAME --key FILE
 
+# Import via S3, then email statistics to ADMIN/REPORT users
+./scripts/secmanng manage-user-mappings import-s3 --bucket BUCKETNAME --key FILE && \
+  ./scripts/secmanng manage-user-mappings list --send-email
+
 # Remove mapping
 java -jar secman-cli.jar manage-user-mappings remove --id 42
 ```
@@ -259,20 +275,43 @@ java -jar secman-cli.jar manage-user-mappings remove --id 42
 **Subcommands:**
 
 
-| Command      | Description               |
-| ------------ | ------------------------- |
-| `list`       | List all user mappings    |
-| `add-aws`    | Add AWS account mapping   |
-| `add-domain` | Add AD domain mapping     |
-| `import`     | Bulk import from CSV/JSON |
-| `remove`     | Remove mapping by ID      |
+| Command      | Description                                                                 |
+| ------------ | --------------------------------------------------------------------------- |
+| `list`       | List all user mappings (supports `--send-email` to notify ADMIN/REPORT users) |
+| `add-aws`    | Add AWS account mapping                                                     |
+| `add-domain` | Add AD domain mapping                                                       |
+| `import`     | Bulk import from CSV/JSON                                                   |
+| `import-s3`  | Import from AWS S3 bucket (follow with `list --send-email` to notify admins)  |
+| `remove`     | Remove mapping by ID                                                        |
 
 **List Command Options:**
 
 
-| Option     | Description                     | Default |
-| ---------- | ------------------------------- | ------- |
-| `--format` | Output format:`table` or `json` | `table` |
+| Option         | Description                                                                       | Default |
+| -------------- | --------------------------------------------------------------------------------- | ------- |
+| `--format`     | Output format:`table`, `json`, or `csv`                                           | `table` |
+| `--email`      | Filter to a specific user email                                                   | -       |
+| `--status`     | Filter by `ACTIVE`, `PENDING`, or `ALL`                                           | `ALL`   |
+| `--send-email` | Email the statistics report to all ADMIN/REPORT users after printing the console output (Feature 085) | `false` |
+| `--dry-run`    | Used with `--send-email`: preview intended recipients without dispatching         | `false` |
+| `--verbose`, `-v` | Used with `--send-email`: show per-recipient delivery status                   | `false` |
+
+**Exit codes (when `--send-email` is set):**
+
+
+| Code | Meaning |
+| ---- | ------- |
+| 0    | Success, dry-run, or default `list` without `--send-email` |
+| 1    | Generic error (network, parse, unexpected) or `--dry-run` used without `--send-email` |
+| 2    | Authorization denied (invoker does not hold ADMIN role) |
+| 3    | No eligible recipients (no ADMIN/REPORT users with valid email) |
+| 4    | Partial failure (at least one sent, at least one failed) |
+| 5    | Full failure (zero sent, at least one attempted) |
+
+Recipients are every user holding the `ADMIN` or `REPORT` role with a non-empty
+email address. This matches the recipient set used by `send-admin-summary`. The
+command writes an audit row to `user_mapping_statistics_log` on every
+invocation, including dry-runs and zero-recipient failures.
 
 **Import Command Options:**
 

@@ -171,6 +171,9 @@ Created: 2 pending
   [--email <email>] \
   [--status <ACTIVE|PENDING|ALL>] \
   [--format <TABLE|JSON|CSV>] \
+  [--send-email] \
+  [--dry-run] \
+  [--verbose | -v] \
   [--admin-user <admin-email>]'
 ```
 
@@ -178,6 +181,9 @@ Created: 2 pending
 - `--email`: Filter by specific user email
 - `--status`: Filter by mapping status (ACTIVE, PENDING, ALL)
 - `--format`: Output format (default: TABLE)
+- `--send-email`: **(Feature 085)** After printing the console output, email the statistics report (aggregates + per-user detail) to every user holding the `ADMIN` or `REPORT` role with a valid email address. Recipient selection matches the existing `send-admin-summary` command.
+- `--dry-run`: Used with `--send-email`. Preview the intended recipient list without dispatching any email. Still prints the console output and still writes a `DRY_RUN` row to the audit log.
+- `--verbose`, `-v`: Used with `--send-email`. Show per-recipient send status (`SUCCESS <addr>` / `FAILED <addr>`) in addition to the summary block.
 - `--admin-user` or `-u`: Admin user email
 
 **Output Formats**:
@@ -261,6 +267,55 @@ bob@example.com,DOMAIN,corp.local,PENDING,2025-01-19T10:00:00Z,
 ./gradlew cli:run --args='manage-user-mappings list \
   --format CSV \
   --admin-user admin@example.com' > mappings.csv
+
+# Feature 085: Email statistics to all ADMIN/REPORT users (happy path)
+./gradlew cli:run --args='manage-user-mappings list --send-email'
+
+# Preview intended recipients without dispatching
+./gradlew cli:run --args='manage-user-mappings list --send-email --dry-run'
+
+# Per-recipient delivery status (useful for troubleshooting SMTP)
+./gradlew cli:run --args='manage-user-mappings list --send-email --verbose'
+
+# Email a filtered view (only mappings for one user)
+./gradlew cli:run --args='manage-user-mappings list \
+  --email alice@example.com \
+  --send-email'
+```
+
+**Email Distribution (Feature 085)**
+
+When `--send-email` is set, the command:
+
+1. Prints the normal TABLE/JSON/CSV console output (unchanged behavior).
+2. Calls `POST /api/cli/user-mappings/send-statistics-email` on the backend.
+3. Backend re-queries mappings with the same filters, computes aggregates and
+   per-user detail, renders a plain-text + HTML email, and dispatches to every
+   `ADMIN` or `REPORT` user with a valid email address.
+4. Writes one row to the `user_mapping_statistics_log` table on every
+   invocation (including dry-runs and zero-recipient failures) for audit.
+5. Prints a summary block and exits with a status-specific exit code.
+
+**Exit codes when `--send-email` is set:**
+
+| Code | Meaning                                                               |
+| ---- | --------------------------------------------------------------------- |
+| 0    | Success, dry-run, or default `list` without `--send-email`            |
+| 1    | Generic error (network, parse, unexpected) or `--dry-run` without `--send-email` |
+| 2    | Authorization denied — invoker does not hold ADMIN                    |
+| 3    | No eligible recipients (no ADMIN/REPORT users with valid email)       |
+| 4    | Partial failure (≥1 sent, ≥1 failed)                                  |
+| 5    | Full failure (0 sent, ≥1 attempted)                                   |
+
+These codes are only emitted when `--send-email` is set — without it, the
+command retains its pre-Feature-085 exit behavior (0 on success, 1 on error).
+
+**Cron example:**
+
+```bash
+# Weekly Monday 08:00 distribution
+0 8 * * 1 /opt/secman/scripts/secmancli manage-user-mappings list --send-email \
+  || echo "user-mapping stats distribution failed with exit $?" | mail -s "secman alert" ops@example.com
 ```
 
 ---
@@ -531,15 +586,27 @@ The command uses the standard AWS SDK credential chain:
   --admin-user admin@example.com
 ```
 
-**Cron Setup** (daily import at 2 AM):
+**Email Notification (Feature 085)**:
+
+To notify ADMIN/REPORT users about the imported mappings, follow up with:
 ```bash
-# Using environment variables
+./scripts/secman manage-user-mappings list --send-email
+```
+
+Use `--dry-run` to preview recipients, or `--verbose` for per-recipient delivery status.
+See [Section 3 (List Mappings)](#3-list-mappings) for full `--send-email` documentation.
+
+**Cron Setup** (daily import at 2 AM with email notification):
+```bash
+# Using environment variables — import then notify admins
 0 2 * * * root AWS_ACCESS_KEY_ID=xxx AWS_SECRET_ACCESS_KEY=xxx \
   /opt/secman/bin/secman manage-user-mappings import-s3 \
   --bucket company-mappings --key daily/users.csv \
-  --admin-user admin@company.com >> /var/log/secman/s3-import.log 2>&1
+  --admin-user admin@company.com \
+  && /opt/secman/bin/secman manage-user-mappings list --send-email \
+  >> /var/log/secman/s3-import.log 2>&1
 
-# Using IAM role (EC2)
+# Using IAM role (EC2) — import only, no email
 0 2 * * * root /opt/secman/bin/secman manage-user-mappings import-s3 \
   --bucket company-mappings --key daily/users.csv \
   --admin-user admin@company.com >> /var/log/secman/s3-import.log 2>&1
@@ -622,7 +689,25 @@ Import successful
   --admin-user admin@example.com'
 ```
 
-### 4. Audit User Access
+### 4. S3 Import with Admin Notification
+```bash
+# 1. Import mappings from S3
+./scripts/secman manage-user-mappings import-s3 \
+  --bucket company-mappings --key daily/users.csv
+
+# 2. Preview who would receive the email
+./scripts/secman manage-user-mappings list --send-email --dry-run
+
+# 3. Send statistics email to all ADMIN/REPORT users
+./scripts/secman manage-user-mappings list --send-email
+
+# Or chain both steps (email only sent if import succeeds)
+./scripts/secman manage-user-mappings import-s3 \
+  --bucket company-mappings --key daily/users.csv && \
+  ./scripts/secman manage-user-mappings list --send-email
+```
+
+### 5. Audit User Access
 ```bash
 # Export all mappings to JSON for analysis
 ./gradlew cli:run --args='manage-user-mappings list \
