@@ -154,6 +154,9 @@ java -jar secman-cli.jar query servers --hostname web-server-01 \
 java -jar secman-cli.jar query servers --hostname web-server-01 \
   --output-file results.json --format json
 
+# secmanng (1password based)
+/bin/secmanng query servers --severity CRITICAL,HIGH --verbose --min-days-open 1 --save --device-type SERVER  --last-seen-days 1 --insecure
+
 # Full options
 java -jar secman-cli.jar query servers \
   --hostname web-server-01 \
@@ -275,38 +278,38 @@ java -jar secman-cli.jar manage-user-mappings remove --id 42
 **Subcommands:**
 
 
-| Command      | Description                                                                 |
-| ------------ | --------------------------------------------------------------------------- |
-| `list`       | List all user mappings (supports `--send-email` to notify ADMIN/REPORT users) |
-| `add-aws`    | Add AWS account mapping                                                     |
-| `add-domain` | Add AD domain mapping                                                       |
-| `import`     | Bulk import from CSV/JSON                                                   |
-| `import-s3`  | Import from AWS S3 bucket (follow with `list --send-email` to notify admins)  |
-| `remove`     | Remove mapping by ID                                                        |
+| Command      | Description                                                                  |
+| ------------ | ---------------------------------------------------------------------------- |
+| `list`       | List all user mappings (supports`--send-email` to notify ADMIN/REPORT users) |
+| `add-aws`    | Add AWS account mapping                                                      |
+| `add-domain` | Add AD domain mapping                                                        |
+| `import`     | Bulk import from CSV/JSON                                                    |
+| `import-s3`  | Import from AWS S3 bucket (follow with`list --send-email` to notify admins)  |
+| `remove`     | Remove mapping by ID                                                         |
 
 **List Command Options:**
 
 
-| Option         | Description                                                                       | Default |
-| -------------- | --------------------------------------------------------------------------------- | ------- |
-| `--format`     | Output format:`table`, `json`, or `csv`                                           | `table` |
-| `--email`      | Filter to a specific user email                                                   | -       |
-| `--status`     | Filter by `ACTIVE`, `PENDING`, or `ALL`                                           | `ALL`   |
-| `--send-email` | Email the statistics report to all ADMIN/REPORT users after printing the console output (Feature 085) | `false` |
-| `--dry-run`    | Used with `--send-email`: preview intended recipients without dispatching         | `false` |
-| `--verbose`, `-v` | Used with `--send-email`: show per-recipient delivery status                   | `false` |
+| Option            | Description                                                                                           | Default |
+| ----------------- | ----------------------------------------------------------------------------------------------------- | ------- |
+| `--format`        | Output format:`table`, `json`, or `csv`                                                               | `table` |
+| `--email`         | Filter to a specific user email                                                                       | -       |
+| `--status`        | Filter by`ACTIVE`, `PENDING`, or `ALL`                                                                | `ALL`   |
+| `--send-email`    | Email the statistics report to all ADMIN/REPORT users after printing the console output (Feature 085) | `false` |
+| `--dry-run`       | Used with`--send-email`: preview intended recipients without dispatching                              | `false` |
+| `--verbose`, `-v` | Used with`--send-email`: show per-recipient delivery status                                           | `false` |
 
 **Exit codes (when `--send-email` is set):**
 
 
-| Code | Meaning |
-| ---- | ------- |
-| 0    | Success, dry-run, or default `list` without `--send-email` |
-| 1    | Generic error (network, parse, unexpected) or `--dry-run` used without `--send-email` |
-| 2    | Authorization denied (invoker does not hold ADMIN role) |
-| 3    | No eligible recipients (no ADMIN/REPORT users with valid email) |
-| 4    | Partial failure (at least one sent, at least one failed) |
-| 5    | Full failure (zero sent, at least one attempted) |
+| Code | Meaning                                                                              |
+| ---- | ------------------------------------------------------------------------------------ |
+| 0    | Success, dry-run, or default`list` without `--send-email`                            |
+| 1    | Generic error (network, parse, unexpected) or`--dry-run` used without `--send-email` |
+| 2    | Authorization denied (invoker does not hold ADMIN role)                              |
+| 3    | No eligible recipients (no ADMIN/REPORT users with valid email)                      |
+| 4    | Partial failure (at least one sent, at least one failed)                             |
+| 5    | Full failure (zero sent, at least one attempted)                                     |
 
 Recipients are every user holding the `ADMIN` or `REPORT` role with a non-empty
 email address. This matches the recipient set used by `send-admin-summary`. The

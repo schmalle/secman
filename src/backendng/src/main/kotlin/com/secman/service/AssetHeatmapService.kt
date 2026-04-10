@@ -33,6 +33,7 @@ open class AssetHeatmapService(
      * Uses a single aggregate SQL query to compute severity counts per asset,
      * then writes the results in batches.
      */
+    @Transactional
     open fun recalculateHeatmap() {
         val startTime = System.currentTimeMillis()
         log.info("Starting heatmap recalculation")

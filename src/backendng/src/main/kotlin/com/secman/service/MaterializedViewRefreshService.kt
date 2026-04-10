@@ -171,6 +171,10 @@ open class MaterializedViewRefreshService(
         if (assetsWithOverdueVulns.isEmpty()) {
             job.markCompleted()
             updateJob(job)
+
+            // Always refresh statistics cache and heatmap, even when no overdue assets
+            refreshDerivedData()
+
             publishProgressEvent(job, "Refresh completed: no outdated assets")
             return
         }
@@ -200,21 +204,8 @@ open class MaterializedViewRefreshService(
         job.markCompleted()
         updateJob(job)
 
-        // Step 6: Refresh vulnerability statistics cache (piggyback on refresh lifecycle)
-        try {
-            log.info("Refreshing vulnerability statistics cache after materialized view refresh")
-            vulnerabilityStatisticsCacheService.refreshCache()
-        } catch (e: Exception) {
-            log.error("Statistics cache refresh failed (non-fatal): {}", e.message, e)
-        }
-
-        // Step 7: Refresh asset heatmap (piggyback on refresh lifecycle)
-        try {
-            log.info("Refreshing asset heatmap after materialized view refresh")
-            assetHeatmapService.recalculateHeatmap()
-        } catch (e: Exception) {
-            log.error("Asset heatmap refresh failed (non-fatal): {}", e.message, e)
-        }
+        // Step 6 & 7: Refresh derived data (statistics cache + heatmap)
+        refreshDerivedData()
 
         // Publish completion event
         publishProgressEvent(job, "Refresh completed successfully")
@@ -249,6 +240,26 @@ open class MaterializedViewRefreshService(
     @Transactional
     open fun updateJob(job: MaterializedViewRefreshJob) {
         refreshJobRepository.update(job)
+    }
+
+    /**
+     * Refresh derived data that piggybacks on the materialized view refresh lifecycle.
+     * Always runs after import, regardless of whether overdue assets exist.
+     */
+    private fun refreshDerivedData() {
+        try {
+            log.info("Refreshing vulnerability statistics cache after materialized view refresh")
+            vulnerabilityStatisticsCacheService.refreshCache()
+        } catch (e: Exception) {
+            log.error("Statistics cache refresh failed (non-fatal): {}", e.message, e)
+        }
+
+        try {
+            log.info("Refreshing asset heatmap after materialized view refresh")
+            assetHeatmapService.recalculateHeatmap()
+        } catch (e: Exception) {
+            log.error("Asset heatmap refresh failed (non-fatal): {}", e.message, e)
+        }
     }
 
     /**
