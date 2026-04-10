@@ -454,6 +454,10 @@ Secman includes a command-line tool for CrowdStrike integration, notifications, 
 # Manage user mappings
 ./scripts/secman manage-user-mappings --help
 
+# Email user-mapping statistics to all ADMIN/REPORT users
+./scripts/secman manage-user-mappings list --send-email --dry-run   # preview recipients
+./scripts/secman manage-user-mappings list --send-email             # dispatch
+
 # Export requirements
 ./scripts/secman export-requirements --format xlsx
 

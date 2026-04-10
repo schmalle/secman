@@ -11,6 +11,8 @@
 #   ./scripts/secmancli help
 #   ./scripts/secmancli manage-user-mappings list-bucket --bucket my-bucket
 #   ./scripts/secmancli manage-user-mappings import-s3 --bucket my-bucket --key mappings.csv
+#   ./scripts/secmancli manage-user-mappings list --send-email --dry-run
+#   ./scripts/secmancli manage-user-mappings list --send-email
 #   ./scripts/secmancli query servers --dry-run
 #   ./scripts/secmancli send-notifications --dry-run
 #

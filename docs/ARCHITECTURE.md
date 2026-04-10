@@ -180,7 +180,7 @@ Command-line interface with 24 commands for automated operations:
 - `query servers` - Query CrowdStrike for vulnerabilities
 - `send-notifications` - Send email notifications (outdated assets, new vulnerabilities)
 - `send-admin-summary` - Generate and send admin summary reports
-- `manage-user-mappings` - Manage AWS/AD domain mappings
+- `manage-user-mappings` - Manage AWS/AD domain mappings; the `list` subcommand additionally supports `--send-email` (Feature 085) to distribute the statistics report to all ADMIN/REPORT users via `POST /api/cli/user-mappings/send-statistics-email`
 - `manage-workgroups` - Manage workgroup asset assignments
 - `export-requirements` - Export to Excel/Word
 - `add-requirement` - Create requirements

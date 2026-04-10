@@ -1,5 +1,6 @@
 package com.secman.cli.commands
 
+import com.secman.cli.service.MappingResult
 import com.secman.cli.service.S3DownloadException
 import com.secman.cli.service.S3DownloadService
 import com.secman.cli.service.UserMappingCliService
@@ -47,11 +48,19 @@ import jakarta.inject.Singleton
  * - 10MB file size limit
  * - Automatic temp file cleanup
  * - Requires ADMIN role
+ *
+ * To notify ADMIN/REPORT users about the imported mappings, follow up with:
+ *   ./scripts/secman manage-user-mappings list --send-email
+ * See [ListCommand] for --send-email, --dry-run, and --verbose details.
  */
 @Singleton
 @Command(
     name = "import-s3",
-    description = ["Import user mappings from AWS S3 bucket"],
+    description = [
+        "Import user mappings from AWS S3 bucket. " +
+            "Use --send-email to email statistics to ADMIN/REPORT users " +
+            "after a successful import."
+    ],
     mixinStandardHelpOptions = true
 )
 class ImportS3Command(
@@ -123,6 +132,24 @@ class ImportS3Command(
         description = ["Validate file without creating mappings"]
     )
     var dryRun: Boolean = false
+
+    // Feature 085: Email distribution options (same as ListCommand)
+    @Option(
+        names = ["--send-email"],
+        description = [
+            "Email the statistics report to all ADMIN and REPORT users " +
+                "after a successful import."
+        ]
+    )
+    var sendEmail: Boolean = false
+
+    @Option(
+        names = ["--verbose", "-v"],
+        description = [
+            "Used with --send-email: print per-recipient send status."
+        ]
+    )
+    var verbose: Boolean = false
 
     @ParentCommand
     lateinit var parent: ManageUserMappingsCommand
@@ -248,6 +275,11 @@ class ImportS3Command(
             }
             println()
 
+            // Feature 085: send statistics email after import (even with partial errors)
+            if (sendEmail) {
+                sendStatisticsEmail(backendUrl, token, dryRun, result)
+            }
+
             // Exit status (T019-T022: cron-friendly exit codes)
             if (result.errors.isNotEmpty()) {
                 if (dryRun) {
@@ -289,6 +321,158 @@ class ImportS3Command(
         } finally {
             // Clean up temp file
             s3DownloadService.cleanupTempFile(tempFilePath)
+        }
+    }
+
+    /**
+     * Feature 085: POST to /api/cli/user-mappings/send-statistics-email after
+     * a successful import. Reuses the same service method as [ListCommand].
+     */
+    private fun sendStatisticsEmail(backendUrl: String, token: String, dryRun: Boolean, importResult: MappingResult) {
+        val importSummary: Map<String, Any?> = buildMap {
+            put("source", "s3://$bucket/$key")
+            put("totalProcessed", importResult.totalProcessed)
+            put("created", importResult.created)
+            put("createdPending", importResult.createdPending)
+            put("skipped", importResult.skipped)
+            put("errorCount", importResult.errors.size)
+            importResult.comparison?.let { cmp ->
+                put("dbMappingCount", cmp.dbMappingCount)
+                put("fileMappingCount", cmp.fileMappingCount)
+                put("newCount", cmp.newCount)
+                put("unchangedCount", cmp.unchangedCount)
+                put("removedCount", cmp.removedCount)
+            }
+        }
+        val result = userMappingCliService.sendStatisticsEmail(
+            backendUrl = backendUrl,
+            authToken = token,
+            filterEmail = null,
+            filterStatus = null,
+            dryRun = dryRun,
+            verbose = verbose,
+            importSummary = importSummary
+        )
+
+        val separator = "=".repeat(60)
+        println()
+        println(separator)
+
+        when (result.statusCode) {
+            200 -> {
+                val body = result.body
+                if (body == null) {
+                    System.err.println("Email Distribution")
+                    println(separator)
+                    System.err.println("Error: empty response body from backend")
+                    System.exit(1)
+                    return
+                }
+
+                val backendStatus = body["status"]?.toString() ?: "UNKNOWN"
+                val recipientCount = (body["recipientCount"] as? Number)?.toInt() ?: 0
+                val emailsSent = (body["emailsSent"] as? Number)?.toInt() ?: 0
+                val emailsFailed = (body["emailsFailed"] as? Number)?.toInt() ?: 0
+
+                @Suppress("UNCHECKED_CAST")
+                val recipients = (body["recipients"] as? List<String>) ?: emptyList()
+                @Suppress("UNCHECKED_CAST")
+                val failedRecipients = (body["failedRecipients"] as? List<String>) ?: emptyList()
+
+                when (backendStatus) {
+                    "DRY_RUN" -> {
+                        println("Email Distribution (DRY RUN)")
+                        println(separator)
+                        println("Would send to $recipientCount ADMIN/REPORT recipients:")
+                        recipients.forEach { println("  - $it") }
+                        println("No emails dispatched.")
+                    }
+
+                    "SUCCESS" -> {
+                        println("Email Distribution")
+                        println(separator)
+                        println("Recipients: $recipientCount")
+                        println("Emails sent: $emailsSent")
+                        println("Failures: $emailsFailed")
+                        if (verbose) {
+                            recipients.forEach { println("  SUCCESS $it") }
+                        }
+                        println("Statistics delivered successfully.")
+                    }
+
+                    "PARTIAL_FAILURE" -> {
+                        println("Email Distribution")
+                        println(separator)
+                        println("Recipients: $recipientCount")
+                        println("Emails sent: $emailsSent")
+                        println("Failures: $emailsFailed")
+                        if (verbose) {
+                            recipients.forEach { println("  SUCCESS $it") }
+                            failedRecipients.forEach { println("  FAILED  $it") }
+                        }
+                        println("Failed recipients:")
+                        failedRecipients.forEach { println("  - $it") }
+                        println("Email distribution completed with failures.")
+                        System.exit(4)
+                    }
+
+                    "FAILURE" -> {
+                        println("Email Distribution")
+                        println(separator)
+                        if (recipientCount == 0) {
+                            println("No eligible recipients found.")
+                            println("Reason: no users with ADMIN or REPORT role have a valid email address.")
+                            System.exit(3)
+                        } else {
+                            println("Recipients: $recipientCount")
+                            println("Emails sent: $emailsSent")
+                            println("Failures: $emailsFailed")
+                            if (failedRecipients.isNotEmpty()) {
+                                println("Failed recipients:")
+                                failedRecipients.forEach { println("  - $it") }
+                            }
+                            println("Email distribution failed — zero successful sends.")
+                            System.exit(5)
+                        }
+                    }
+
+                    else -> {
+                        System.err.println("Email Distribution")
+                        println(separator)
+                        System.err.println("Error: unexpected backend status '$backendStatus'")
+                        System.exit(1)
+                    }
+                }
+            }
+
+            403 -> {
+                System.err.println("Email Distribution")
+                println(separator)
+                System.err.println("Error: ADMIN role required to send email — use an ADMIN account")
+                System.exit(2)
+            }
+
+            400 -> {
+                System.err.println("Email Distribution")
+                println(separator)
+                val msg = result.body?.get("message")?.toString() ?: "validation error"
+                System.err.println("Error: $msg")
+                System.exit(1)
+            }
+
+            -1 -> {
+                System.err.println("Email Distribution")
+                println(separator)
+                System.err.println("Error: network or client error contacting backend")
+                System.exit(1)
+            }
+
+            else -> {
+                System.err.println("Email Distribution")
+                println(separator)
+                System.err.println("Error: backend returned HTTP ${result.statusCode}")
+                System.exit(1)
+            }
         }
     }
 }

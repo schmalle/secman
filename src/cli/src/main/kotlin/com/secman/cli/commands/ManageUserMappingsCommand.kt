@@ -31,7 +31,12 @@ import jakarta.inject.Singleton
 @Singleton
 @Command(
     name = "manage-user-mappings",
-    description = ["Manage user mappings for domains and AWS accounts"],
+    description = [
+        "Manage user mappings for domains and AWS accounts. " +
+            "The 'list' subcommand supports --send-email to distribute a " +
+            "statistics report (aggregates + per-user detail) to all ADMIN/REPORT " +
+            "users in a single invocation."
+    ],
     mixinStandardHelpOptions = true,
     subcommands = [
         AddDomainCommand::class,

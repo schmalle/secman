@@ -576,6 +576,10 @@ class SecmanCli {
                   secman manage-user-mappings import-s3 --bucket my-bucket --key mappings.csv -u admin@company.com
                   secman manage-user-mappings list-bucket --bucket my-bucket --prefix user-mappings/
 
+                Tip: To email statistics to ADMIN/REPORT users after an import (S3 or local),
+                     run: secman manage-user-mappings list --send-email
+                     Use --dry-run with --send-email to preview recipients without sending.
+
                 Run 'secman manage-user-mappings <subcommand> --help' for subcommand-specific options.
 
                 See also: secman help manage-user-mappings-s3
@@ -621,6 +625,12 @@ class SecmanCli {
                   1  Partial import (some mappings skipped)
                   2+ Fatal error (S3 access, parsing, or authentication failure)
 
+                Email Notification:
+                  To email statistics to ADMIN/REPORT users after an S3 import,
+                  follow up with: secman manage-user-mappings list --send-email
+                  Use --dry-run with --send-email to preview recipients without sending.
+                  Use --verbose with --send-email to see per-recipient delivery status.
+
                 Examples:
                   export AWS_ACCESS_KEY_ID=AKIA...
                   export AWS_SECRET_ACCESS_KEY=...
@@ -629,6 +639,10 @@ class SecmanCli {
                   secman manage-user-mappings import-s3 --bucket my-bucket --key data/users.json --aws-profile prod -u admin@company.com
                   secman manage-user-mappings list-bucket --bucket my-bucket -u admin@company.com
                   secman manage-user-mappings list-bucket --bucket my-bucket --prefix user-mappings/ -u admin@company.com
+
+                  # Import from S3, then email statistics to admins:
+                  secman manage-user-mappings import-s3 --bucket my-bucket --key mappings.csv && \
+                    secman manage-user-mappings list --send-email
             """.trimIndent(),
 
             "manage-workgroups" to """

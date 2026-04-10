@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>SecMan User Mapping Statistics Report</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                line-height: 1.6;
+                color: #333;
+                max-width: 720px;
+                margin: 0 auto;
+                padding: 20px;
+            }
+            .header {
+                background-color: #0d6efd;
+                color: white;
+                padding: 20px;
+                text-align: center;
+                border-radius: 5px 5px 0 0;
+            }
+            .content {
+                background-color: #f8f9fa;
+                padding: 20px;
+                border-radius: 0 0 5px 5px;
+            }
+            .stats-box {
+                background-color: white;
+                border-radius: 5px;
+                padding: 20px;
+                margin: 20px 0;
+            }
+            .stat-item {
+                display: flex;
+                justify-content: space-between;
+                padding: 10px 0;
+                border-bottom: 1px solid #e9ecef;
+            }
+            .stat-item:last-child {
+                border-bottom: none;
+            }
+            .stat-label {
+                font-weight: bold;
+                color: #495057;
+            }
+            .stat-value {
+                font-size: 1.15em;
+                color: #0d6efd;
+                font-weight: bold;
+            }
+            .section-title {
+                margin-top: 24px;
+                color: #0d6efd;
+                border-bottom: 2px solid #0d6efd;
+                padding-bottom: 4px;
+            }
+            .filters {
+                background-color: #e7f1ff;
+                border-left: 4px solid #0d6efd;
+                padding: 10px 14px;
+                margin: 12px 0;
+                font-size: 0.95em;
+            }
+            table.users {
+                width: 100%;
+                border-collapse: collapse;
+                margin-top: 10px;
+            }
+            table.users th {
+                background-color: #e9ecef;
+                text-align: left;
+                padding: 8px 12px;
+                font-size: 0.9em;
+            }
+            table.users td {
+                padding: 8px 12px;
+                border-bottom: 1px solid #e9ecef;
+                vertical-align: top;
+                font-size: 0.9em;
+            }
+            table.users .status-active {
+                color: #198754;
+                font-weight: bold;
+            }
+            table.users .status-pending {
+                color: #fd7e14;
+                font-weight: bold;
+            }
+            table.users .status-mixed {
+                color: #6c757d;
+                font-weight: bold;
+            }
+            .footer {
+                margin-top: 20px;
+                font-size: 0.85em;
+                color: #6c757d;
+                text-align: center;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>SecMan User Mapping Statistics Report</h1>
+        </div>
+        <div class="content">
+            <p>Hello,</p>
+            <p>
+                This is an automated report triggered by an administrator
+                running <code>manage-user-mappings --send-email</code>.
+            </p>
+            <p><strong>Generated on:</strong> ${executionDate}</p>
+
+            ${appliedFiltersHtml}
+
+            <h3 class="section-title">Aggregate Statistics</h3>
+            <div class="stats-box">
+                <div class="stat-item">
+                    <span class="stat-label">Total users</span>
+                    <span class="stat-value">${totalUsers}</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Total mappings</span>
+                    <span class="stat-value">${totalMappings}</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Active mappings</span>
+                    <span class="stat-value">${activeMappings}</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Pending mappings</span>
+                    <span class="stat-value">${pendingMappings}</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Domain mappings</span>
+                    <span class="stat-value">${domainMappings}</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">AWS account mappings</span>
+                    <span class="stat-value">${awsAccountMappings}</span>
+                </div>
+            </div>
+
+            ${importSummaryHtml}
+        </div>
+        <div class="footer">
+            <p>
+                This is an automated notification from the Security Management
+                System. Please do not reply to this email.
+            </p>
+        </div>
+    </body>
+</html>
