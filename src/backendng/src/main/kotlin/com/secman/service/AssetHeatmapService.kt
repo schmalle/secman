@@ -28,13 +28,16 @@ open class AssetHeatmapService(
 
     /**
      * Recalculate the entire heatmap table.
-     * Called during materialized view refresh after CrowdStrike import.
+     * Called during materialized view refresh after CrowdStrike import,
+     * on startup when the table is empty, or via manual refresh endpoint.
      *
      * Uses a single aggregate SQL query to compute severity counts per asset,
      * then writes the results in batches.
+     *
+     * @return number of heatmap entries created
      */
     @Transactional
-    open fun recalculateHeatmap() {
+    open fun recalculateHeatmap(): Int {
         val startTime = System.currentTimeMillis()
         log.info("Starting heatmap recalculation")
 
@@ -102,6 +105,7 @@ open class AssetHeatmapService(
 
         val durationMs = System.currentTimeMillis() - startTime
         log.info("Heatmap recalculation completed: {} entries in {}ms", entries.size, durationMs)
+        return entries.size
     }
 
     @Transactional
@@ -132,5 +136,9 @@ open class AssetHeatmapService(
 
     fun getLastCalculatedAt(): LocalDateTime? {
         return assetHeatmapRepository.findLatestCalculatedAt()
+    }
+
+    fun isEmpty(): Boolean {
+        return assetHeatmapRepository.count() == 0L
     }
 }

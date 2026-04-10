@@ -35,6 +35,22 @@ micronaut:
             - Authorization
           allow-credentials: true
           max-age: 3600
+        # External API CORS configuration (Feature 086: Heatmap MCP and API Exposure)
+        # Allows external web applications to consume heatmap data via API key auth
+        external:
+          allowed-origins-regex:
+            - ".*"  # External consumers authenticated via API key, not cookies
+          allowed-methods:
+            - GET
+            - OPTIONS
+          allowed-headers:
+            - Content-Type
+            - Accept
+            - X-MCP-API-Key
+            - X-MCP-User-Email
+            - Origin
+          allow-credentials: false
+          max-age: 3600
         # MCP Streamable HTTP Transport CORS configuration
         # Allows direct connections from Claude Desktop and other MCP clients
         mcp:

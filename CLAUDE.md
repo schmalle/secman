@@ -63,6 +63,9 @@ Users access assets if **ANY** is true:
 **AWS Account Sharing**: GET/POST /api/aws-account-sharing (ADMIN), DELETE /api/aws-account-sharing/{id} (ADMIN)
 - MCP tools: `list_aws_account_sharing`, `create_aws_account_sharing`, `delete_aws_account_sharing` (all require ADMIN + User Delegation)
 
+**Vulnerability Heatmap**: GET /api/vulnerability-heatmap (authenticated), POST /api/vulnerability-heatmap/refresh (ADMIN), GET /api/external/vulnerability-heatmap (API key auth, CORS-enabled for external consumers)
+- MCP tools: `get_vulnerability_heatmap` (VULNERABILITIES_READ + User Delegation), `refresh_vulnerability_heatmap` (ADMIN + User Delegation)
+
 **Identity Providers**: GET /api/identity-providers[/{enabled,{id}}], POST/PUT/DELETE /api/identity-providers[/{id}], POST /api/identity-providers/{id}/test
 
 **Maintenance Banners**: GET /api/maintenance-banners/active (PUBLIC), GET /api/maintenance-banners (ADMIN), GET/POST /api/maintenance-banners[/{id}] (ADMIN), PUT/DELETE /api/maintenance-banners/{id} (ADMIN)
@@ -250,7 +253,7 @@ Run `/e2e-runner` to start the full E2E test loop. This will:
 
 
 ---
-*Last updated: 2026-04-08*
+*Last updated: 2026-04-10*
 
 ## Active Technologies
 - **Backend**: Kotlin 2.3.20 / Java 21, Micronaut 4.10, Hibernate JPA, PicoCLI 4.7.7, Jakarta Mail, Apache POI, AWS SDK v2
