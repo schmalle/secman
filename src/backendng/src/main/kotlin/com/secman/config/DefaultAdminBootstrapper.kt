@@ -17,7 +17,7 @@ import java.security.SecureRandom
  * Default credentials:
  *   Username: admin
  *   Email:    admin@localhost
- *   Password: password
+ *   Password: randomly generated (20 characters, printed to console)
  *   Roles:    ADMIN, USER
  *
  * IMPORTANT: Change the default password immediately after first login in production.

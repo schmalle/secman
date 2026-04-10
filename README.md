@@ -202,7 +202,7 @@ cd secman
 
 # Create database
 cd scripts/install/db
-./install.sh
+./installdb.sh
 cd ../../..
 
 # Start backend (in one terminal)
@@ -219,9 +219,11 @@ npm run dev
 
 On first startup (when no users exist), a default admin user is auto-created:
 
-| Username | Password   | Roles       |
-| -------- | ---------- | ----------- |
-| `admin`  | `password` | ADMIN, USER |
+| Username | Password                       | Roles       |
+| -------- | ------------------------------ | ----------- |
+| `admin`  | *randomly generated (20 chars)* | ADMIN, USER |
+
+The auto-generated password is printed to the **backend console output** on first startup. Look for the `DEFAULT ADMIN USER CREATED` log message and copy the password immediately.
 
 **IMPORTANT:** Change the default password immediately after first login in production!
 
@@ -234,10 +236,10 @@ secman/
 ├── src/
 │   ├── backendng/          # Kotlin/Micronaut backend
 │   │   ├── src/main/kotlin/com/secman/
-│   │   │   ├── controller/ # REST controllers (60 controllers)
+│   │   │   ├── controller/ # REST controllers (61 controllers)
 │   │   │   ├── domain/     # JPA entities
 │   │   │   ├── repository/ # Data repositories
-│   │   │   ├── service/    # Business logic (95 services)
+│   │   │   ├── service/    # Business logic (90 services)
 │   │   │   ├── config/     # Configuration classes
 │   │   │   ├── dto/        # Data transfer objects
 │   │   │   ├── filter/     # HTTP filters
@@ -245,12 +247,12 @@ secman/
 │   │   └── src/test/       # Backend tests (unit + integration)
 │   ├── cli/                # Kotlin CLI tools
 │   │   └── src/main/kotlin/com/secman/cli/
-│   │       ├── commands/   # CLI commands (24 commands)
+│   │       ├── commands/   # CLI commands (25 commands)
 │   │       └── service/    # Business logic
 │   ├── frontend/           # Astro + React frontend
 │   │   ├── src/
 │   │   │   ├── components/ # React components
-│   │   │   ├── pages/      # Astro pages (68 pages)
+│   │   │   ├── pages/      # Astro pages (69 pages)
 │   │   │   └── services/   # API clients
 ├── docs/                   # Documentation
 │   ├── ARCHITECTURE.md     # System architecture
