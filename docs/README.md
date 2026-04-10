@@ -2,7 +2,7 @@
 
 Security requirement and risk assessment management tool.
 
-**Last Updated:** 2026-04-03
+**Last Updated:** 2026-04-09
 
 ---
 
@@ -126,7 +126,7 @@ npm run dev
 
 ### 1. Prerequisites
 
-- Linux server (Amazon Linux 2023, Ubuntu 22.04, RHEL 9)
+- Linux server (Amazon Linux 2023, Ubuntu 20.04+, RHEL 8+)
 - Java 21 (Amazon Corretto recommended)
 - Node.js 20.x
 - MariaDB 11.4+

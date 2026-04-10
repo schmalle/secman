@@ -1,6 +1,6 @@
 # SecMan Testing Guide
 
-**Last Updated:** 2026-04-01
+**Last Updated:** 2026-04-09
 **Version:** 1.1
 
 Comprehensive guide for testing the SecMan security management platform.
@@ -48,8 +48,8 @@ testImplementation("org.junit.jupiter:junit-jupiter-engine:6.0.3")
 testImplementation("io.micronaut.test:micronaut-test-junit5")
 testImplementation("io.mockk:mockk:1.14.9")
 testImplementation("org.testcontainers:testcontainers:2.0.4")
-testImplementation("org.testcontainers:mariadb:2.0.4")
-testImplementation("org.testcontainers:junit-jupiter:2.0.4")
+testImplementation("org.testcontainers:mariadb:1.21.4")
+testImplementation("org.testcontainers:junit-jupiter:1.21.4")
 testImplementation("org.assertj:assertj-core:3.27.7")
 ```
 
