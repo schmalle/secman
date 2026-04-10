@@ -100,7 +100,7 @@ This script sets `SECMAN_DOMAIN` and `SECMAN_HOST` as `op://` references and wra
 ./scripts/secmancli query servers --dry-run
 ```
 
-The `bin/secmancli` script exports all `op://` references and wraps the command with `op run`.
+The `scripts/secmancli` script exports all `op://` references and wraps the command with `op run`.
 
 ### Run E2E tests (Playwright)
 
@@ -132,12 +132,12 @@ op read "op://test/secman/SECMAN_ADMIN_NAME"
 
 | Script | Secrets Required |
 |---|---|
-| `bin/backend` | All from `secman.env` |
-| `bin/backenddev.sh` | `DB_CONNECT`, `SECMAN_BACKEND_BASE_URL` (via `op run`) |
-| `bin/frontenddev.sh` | `SECMAN_BACKEND_BASE_URL`, `SECMAN_HOST` (via `op run`) |
-| `bin/secmancli` | CrowdStrike, admin creds, AWS, API key, host |
-| `bin/secmanng` | Admin creds, host, SSL setting |
-| `bin/secmanserverca` | All from `secman.env` |
+| `scripts/backend` | All from `secman.env` |
+| `scripts/startbackenddev.sh` | `DB_CONNECT`, `SECMAN_BACKEND_BASE_URL` (via `op run`) |
+| `scripts/startfrontenddev.sh` | `SECMAN_BACKEND_BASE_URL`, `SECMAN_HOST` (via `op run`) |
+| `scripts/secmancli` | CrowdStrike, admin creds, AWS, API key, host |
+| `scripts/secmanng` | Admin creds, host, SSL setting |
+| `scripts/secmanserverca` | All from `secman.env` |
 | `scripts/import.sh` | All from `secman.env` |
 | `tests/e2e/run-e2e.sh` | Admin + user creds |
 | `tests/js-error-scanner.sh` | Admin creds, host, SSL setting |

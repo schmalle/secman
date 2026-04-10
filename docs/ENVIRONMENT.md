@@ -1,7 +1,7 @@
 # Secman Environment Variables Reference
 
-**Last Updated:** 2026-04-01
-**Version:** 1.1
+**Last Updated:** 2026-04-10
+**Version:** 1.2
 
 This document provides a comprehensive reference for all environment variables used by Secman components.
 
@@ -46,6 +46,7 @@ export DB_PASSWORD=your_secure_password
 | `JWT_SECRET`                 | JWT signing secret (must be 256 bits / 32 bytes)  | Development default | **Yes (Production)** |
 | `SECMAN_ENCRYPTION_PASSWORD` | Encryption password for sensitive database fields | Development default | **Yes (Production)** |
 | `SECMAN_ENCRYPTION_SALT`     | Encryption salt (16 hex characters)               | Development default | **Yes (Production)** |
+| `SECMAN_AUTH_COOKIE_SECURE`  | Set `Secure` flag on auth cookies (HTTPS-only)    | `true`              | No                   |
 
 **Security Notes:**
 
@@ -55,6 +56,7 @@ export DB_PASSWORD=your_secure_password
 - Generate with: `openssl rand -hex 32`
 - `SECMAN_ENCRYPTION_SALT` must be exactly 16 hex characters
 - Generate with: `openssl rand -hex 8`
+- `SECMAN_AUTH_COOKIE_SECURE` defaults to `true` (requires HTTPS). Set to `false` only for local HTTP development.
 
 **Example:**
 
@@ -356,12 +358,12 @@ export SECMAN_BACKEND_URL=https://api.yourdomain.com
 
 ### All Variables by Component
 
-#### Backend (28 variables)
+#### Backend (29 variables)
 
 ```
 DB_CONNECT, DB_USERNAME, DB_PASSWORD
 JWT_SECRET
-SECMAN_ENCRYPTION_PASSWORD, SECMAN_ENCRYPTION_SALT
+SECMAN_ENCRYPTION_PASSWORD, SECMAN_ENCRYPTION_SALT, SECMAN_AUTH_COOKIE_SECURE
 SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD
 SMTP_FROM_ADDRESS, SMTP_FROM_NAME, SMTP_ENABLE_TLS
 SECMAN_BACKEND_URL, FRONTEND_URL
@@ -425,6 +427,9 @@ SMTP_ENABLE_TLS=true
 # --- URL Configuration ---
 SECMAN_BACKEND_URL=https://api.yourdomain.com
 FRONTEND_URL=https://secman.yourdomain.com
+
+# --- Cookie Security (set to false only for local HTTP development) ---
+SECMAN_AUTH_COOKIE_SECURE=true
 
 # --- Optional: Vulnerability Settings ---
 VULN_USE_PATCH_PUBLICATION_DATE=false

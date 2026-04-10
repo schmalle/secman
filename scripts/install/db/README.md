@@ -58,22 +58,25 @@ Override via environment variables: `DB_USERNAME`, `DB_PASSWORD`, `DB_CONNECT`
 5. Flyway migrations and Hibernate auto-update will create all tables automatically
 6. On first startup (when no users exist), a default admin user is created:
    - **Username:** admin
-   - **Password:** password
+   - **Password:** *randomly generated (printed to console log)*
    - **Roles:** ADMIN, USER
-7. Log in and change the default admin password immediately
+7. Copy the generated password from the console output and log in
+8. Change the default admin password immediately
 
 ## Default Admin User
 
 The application automatically creates a default admin user on first startup if the `users` table is empty. This is handled by the `DefaultAdminBootstrapper` component in the backend.
 
-| Field    | Value           |
-|----------|-----------------|
-| Username | admin           |
-| Email    | admin@localhost |
-| Password | password        |
-| Roles    | ADMIN, USER     |
+| Field    | Value                                  |
+|----------|----------------------------------------|
+| Username | admin                                  |
+| Email    | admin@localhost                         |
+| Password | *randomly generated (20 characters)*   |
+| Roles    | ADMIN, USER                            |
 
-**IMPORTANT:** Change the default admin password immediately after first login.
+The auto-generated password is printed to the **backend console output** on first startup. Look for the `DEFAULT ADMIN USER CREATED` log message.
+
+**IMPORTANT:** Copy the password immediately and change it after first login.
 
 ## Security Notes
 

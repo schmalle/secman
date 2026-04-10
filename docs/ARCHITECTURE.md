@@ -124,7 +124,7 @@ The backend follows a layered architecture with 61 controllers:
 
 ### Frontend (`src/frontend/`)
 
-Astro with React islands architecture, 68 pages:
+Astro with React islands architecture, 69 pages:
 
 ```
 +-----------------------------------------------------------------+
@@ -557,7 +557,7 @@ secman/
 │   │
 │   ├── frontend/                     # Astro/React frontend
 │   │   └── src/
-│   │       ├── pages/                # Astro pages (68 pages)
+│   │       ├── pages/                # Astro pages (69 pages)
 │   │       │   └── admin/            # Admin pages (20 pages)
 │   │       ├── components/           # React components
 │   │       ├── services/             # API services
