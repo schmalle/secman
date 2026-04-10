@@ -79,7 +79,10 @@ class McpToolRegistry(
     @Inject private val deleteAwsAccountSharingTool: DeleteAwsAccountSharingTool,
     // Feature: MCP Asset Management Tools
     @Inject private val createAssetTool: CreateAssetTool,
-    @Inject private val updateAssetTool: UpdateAssetTool
+    @Inject private val updateAssetTool: UpdateAssetTool,
+    // Feature 086: MCP Heatmap Tools
+    @Inject private val getVulnerabilityHeatmapTool: GetVulnerabilityHeatmapTool,
+    @Inject private val refreshVulnerabilityHeatmapTool: RefreshVulnerabilityHeatmapTool
 ) {
     private val logger = LoggerFactory.getLogger(McpToolRegistry::class.java)
 
@@ -155,7 +158,10 @@ class McpToolRegistry(
             deleteAwsAccountSharingTool,
             // Feature: MCP Asset Management Tools
             createAssetTool,
-            updateAssetTool
+            updateAssetTool,
+            // Feature 086: MCP Heatmap Tools
+            getVulnerabilityHeatmapTool,
+            refreshVulnerabilityHeatmapTool
         ).forEach { tool ->
             toolMap[tool.name] = tool
             logger.debug("Registered MCP tool: {}", tool.name)
@@ -393,6 +399,14 @@ class McpToolRegistry(
             // Feature: MCP Asset Management Tools
             "create_asset", "update_asset" -> {
                 permissions.contains(McpPermission.ASSETS_WRITE)
+            }
+
+            // Feature 086: MCP Heatmap Tools
+            "get_vulnerability_heatmap" -> {
+                permissions.contains(McpPermission.VULNERABILITIES_READ)
+            }
+            "refresh_vulnerability_heatmap" -> {
+                permissions.contains(McpPermission.VULNERABILITIES_READ) // ADMIN role checked in tool execute()
             }
 
             else -> false

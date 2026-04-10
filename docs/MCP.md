@@ -34,7 +34,7 @@ Secman supports the Model Context Protocol (MCP), allowing AI assistants to prog
 - **Vulnerability Data** - Search vulnerabilities by severity, CVE, or affected asset
 - **Scan Results** - Review network scan history and discovered services
 
-The MCP server exposes **51 tools** for comprehensive security management workflows.
+The MCP server exposes **53 tools** for comprehensive security management workflows.
 
 ### Prerequisites
 
@@ -258,7 +258,7 @@ curl -X POST http://localhost:8080/api/mcp/admin/api-keys \
 | `REQUIREMENTS_WRITE` | Create/modify requirements | `add_requirement` |
 | `REQUIREMENTS_DELETE` | Delete requirements | `delete_all_requirements` |
 | `ASSETS_READ` | Read asset inventory | `get_assets`, `get_all_assets_detail`, `get_asset_profile`, `get_asset_complete_profile` |
-| `VULNERABILITIES_READ` | Read vulnerability data | `get_vulnerabilities`, `get_all_vulnerabilities_detail`, `get_asset_most_vulnerabilities`, `get_overdue_assets`, `get_my_exception_requests`, `get_pending_exception_requests`, `create_exception_request`, `approve_exception_request`, `reject_exception_request`, `cancel_exception_request` |
+| `VULNERABILITIES_READ` | Read vulnerability data | `get_vulnerabilities`, `get_all_vulnerabilities_detail`, `get_asset_most_vulnerabilities`, `get_overdue_assets`, `get_my_exception_requests`, `get_pending_exception_requests`, `create_exception_request`, `approve_exception_request`, `reject_exception_request`, `cancel_exception_request`, `get_vulnerability_heatmap`, `refresh_vulnerability_heatmap` |
 | `SCANS_READ` | Read scan history | `get_scans`, `get_asset_scan_results`, `search_products` |
 | `USER_ACTIVITY` | User management and mappings | `list_users`, `add_user`, `delete_user`, `import_user_mappings`, `list_user_mappings`, `list_aws_account_sharing`, `create_aws_account_sharing`, `delete_aws_account_sharing` (all require delegation) |
 | `WORKGROUPS_WRITE` | Workgroup management | `create_workgroup`, `delete_workgroup`, `assign_assets_to_workgroup`, `assign_users_to_workgroup` (all require delegation) |
@@ -866,6 +866,46 @@ Finalize the alignment process and activate a release. **Requires ADMIN or REQAD
 |-----------|------|----------|-------------|
 | `releaseId` | number | Yes | ID of the release to finalize |
 
+### Vulnerability Heatmap
+
+#### `get_vulnerability_heatmap`
+Get the vulnerability heatmap showing per-asset severity counts and heat levels. **Requires User Delegation.**
+
+Returns a list of heatmap entries (one per asset) with severity breakdown and a summary. Results are scoped by the delegated user's access control: ADMIN/SECCHAMPION users see all assets; others see only their accessible assets.
+
+No parameters required.
+
+**Response fields:**
+| Field | Type | Description |
+|-------|------|-------------|
+| `entries` | array | Per-asset heatmap entries with severity counts |
+| `entries[].assetId` | number | Asset ID |
+| `entries[].assetName` | string | Asset hostname/name |
+| `entries[].assetType` | string | Asset type (e.g., SERVER) |
+| `entries[].criticalCount` | number | CRITICAL severity vulnerabilities |
+| `entries[].highCount` | number | HIGH severity vulnerabilities |
+| `entries[].mediumCount` | number | MEDIUM severity vulnerabilities |
+| `entries[].lowCount` | number | LOW severity vulnerabilities |
+| `entries[].totalCount` | number | Total vulnerabilities |
+| `entries[].heatLevel` | string | RED, YELLOW, or GREEN |
+| `summary.totalAssets` | number | Total assets in result |
+| `summary.redCount` | number | Assets with RED heat level |
+| `summary.yellowCount` | number | Assets with YELLOW heat level |
+| `summary.greenCount` | number | Assets with GREEN heat level |
+| `lastCalculatedAt` | string/null | ISO timestamp of last heatmap calculation |
+
+**Heat level rules:**
+- **RED**: Any CRITICAL vulnerability, or more than 100 HIGH vulnerabilities
+- **YELLOW**: 1-100 HIGH vulnerabilities
+- **GREEN**: No CRITICAL or HIGH vulnerabilities
+
+#### `refresh_vulnerability_heatmap`
+Recalculate the vulnerability heatmap from current vulnerability data. **Requires ADMIN role and User Delegation.**
+
+No parameters required. Triggers a full recalculation of severity counts for all assets.
+
+**Returns:** Success message with the number of heatmap entries created.
+
 ### System Tools
 
 #### `send_admin_summary`
@@ -981,6 +1021,12 @@ All MCP operations are logged with:
 - "Delete draft release 3" → `delete_release` with `releaseId: 3`
 - "Compare release 1.0.0 with 2.0.0" → `compare_releases` with `fromReleaseId: 1, toReleaseId: 5`
 - "What changed between the last two releases?" → `list_releases` then `compare_releases`
+
+**Vulnerability Heatmap:**
+- "Show me the vulnerability heatmap" → `get_vulnerability_heatmap`
+- "How many critical systems do we have?" → `get_vulnerability_heatmap` (check summary.redCount)
+- "Give me a security overview of all assets" → `get_vulnerability_heatmap`
+- "Refresh the heatmap data" → `refresh_vulnerability_heatmap` (ADMIN only)
 
 ### Programmatic Access
 
