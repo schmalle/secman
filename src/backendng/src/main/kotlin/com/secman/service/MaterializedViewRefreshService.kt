@@ -40,7 +40,8 @@ open class MaterializedViewRefreshService(
     private val vulnerabilityConfigService: VulnerabilityConfigService,
     private val eventPublisher: ApplicationEventPublisher<RefreshProgressEvent>,
     private val vulnerabilityExceptionService: VulnerabilityExceptionService,  // For checking active exceptions
-    private val vulnerabilityStatisticsCacheService: VulnerabilityStatisticsCacheService
+    private val vulnerabilityStatisticsCacheService: VulnerabilityStatisticsCacheService,
+    private val assetHeatmapService: AssetHeatmapService
 ) {
     private val log = LoggerFactory.getLogger(MaterializedViewRefreshService::class.java)
 
@@ -205,6 +206,14 @@ open class MaterializedViewRefreshService(
             vulnerabilityStatisticsCacheService.refreshCache()
         } catch (e: Exception) {
             log.error("Statistics cache refresh failed (non-fatal): {}", e.message, e)
+        }
+
+        // Step 7: Refresh asset heatmap (piggyback on refresh lifecycle)
+        try {
+            log.info("Refreshing asset heatmap after materialized view refresh")
+            assetHeatmapService.recalculateHeatmap()
+        } catch (e: Exception) {
+            log.error("Asset heatmap refresh failed (non-fatal): {}", e.message, e)
         }
 
         // Publish completion event
