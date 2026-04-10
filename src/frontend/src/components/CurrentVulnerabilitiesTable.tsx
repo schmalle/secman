@@ -62,6 +62,8 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
   // Filter states
   const [severityFilter, setSeverityFilter] = useState<string>("");
   const [systemFilter, setSystemFilter] = useState<string>("");
+  const [debouncedSystemFilter, setDebouncedSystemFilter] = useState<string>("");
+  const systemFilterTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [exceptionFilter, setExceptionFilter] = useState<string>("not_excepted");
   const [productFilter, setProductFilter] = useState<string>("");
   const [adDomainFilter, setAdDomainFilter] = useState<string>("");
@@ -90,6 +92,15 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
   // When only page/sort changes, we pass knownTotal to skip the expensive count query
   const prevFiltersRef = useRef<string>("");
 
+  // Cleanup debounce timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (systemFilterTimeoutRef.current) {
+        clearTimeout(systemFilterTimeoutRef.current);
+      }
+    };
+  }, []);
+
   // Check access on mount - ADMIN, VULN, or SECCHAMPION
   useEffect(() => {
     const checkAccess = () => {
@@ -117,7 +128,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
     }
   }, [
     severityFilter,
-    systemFilter,
+    debouncedSystemFilter,
     exceptionFilter,
     productFilter,
     adDomainFilter,
@@ -184,7 +195,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
 
       // PERFORMANCE: When only page/sort changes (filters unchanged), pass the known total
       // to skip the expensive COUNT query with NOT EXISTS on 358k+ rows
-      const currentFilterKey = `${severityFilter}|${systemFilter}|${exceptionFilter}|${productFilter}|${adDomainFilter}|${cloudAccountIdFilter}`;
+      const currentFilterKey = `${severityFilter}|${debouncedSystemFilter}|${exceptionFilter}|${productFilter}|${adDomainFilter}|${cloudAccountIdFilter}`;
       const filtersUnchanged = currentFilterKey === prevFiltersRef.current;
       const knownTotal = filtersUnchanged && paginatedResponse
         ? paginatedResponse.totalElements
@@ -193,7 +204,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
 
       const data = await getCurrentVulnerabilities(
         severityFilter || undefined,
-        systemFilter || undefined,
+        debouncedSystemFilter || undefined,
         exceptionFilter || undefined,
         productFilter || undefined,
         adDomainFilter || undefined,
@@ -712,8 +723,15 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
             placeholder="Filter by system name..."
             value={systemFilter}
             onChange={(e) => {
-              setSystemFilter(e.target.value);
-              handleFilterChange();
+              const value = e.target.value;
+              setSystemFilter(value);
+              if (systemFilterTimeoutRef.current) {
+                clearTimeout(systemFilterTimeoutRef.current);
+              }
+              systemFilterTimeoutRef.current = setTimeout(() => {
+                setDebouncedSystemFilter(value);
+                handleFilterChange();
+              }, 300);
             }}
           />
         </div>
