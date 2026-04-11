@@ -87,18 +87,46 @@ class EncryptedStringConverter : AttributeConverter<String?, String?> {
     /**
      * Convert the database column value to an entity attribute.
      * Decrypts the encrypted string for use in the application.
-     * Falls back to returning raw data if decryption fails (e.g., legacy plaintext values
-     * stored before encryption was enabled). The value will be re-encrypted on next save.
+     *
+     * Legacy fallback: Spring's Encryptors.text() emits lowercase hex strings whose
+     * length is a multiple of 2 (and >= 32 chars to cover salt + IV + at least one
+     * AES block). If the stored value clearly does NOT match that shape we treat it
+     * as legacy plaintext (pre-encryption schema) and return it as-is so it can be
+     * re-encrypted on next save.
+     *
+     * SECURITY: We must NOT silently swallow decryption errors on values that DO
+     * look like ciphertext — that would let an attacker with DB write access bypass
+     * encryption by storing plaintext-looking blobs. In that case we fail loudly so
+     * the operator notices a key mismatch instead of silently leaking the raw value.
      */
     override fun convertToEntityAttribute(dbData: String?): String? {
-        return dbData?.let { encrypted ->
+        return dbData?.let { stored ->
+            if (!looksLikeCiphertext(stored)) {
+                // Pre-encryption legacy plaintext — return as-is so the entity can
+                // round-trip and the next save will encrypt it.
+                return@let stored
+            }
             try {
-                textEncryptor.decrypt(encrypted)
+                textEncryptor.decrypt(stored)
             } catch (e: Exception) {
-                log.warn("Failed to decrypt value — returning as plaintext (legacy data or key mismatch). " +
-                    "Value will be re-encrypted on next save.")
-                encrypted
+                // Looks like ciphertext but decryption failed — almost certainly a
+                // key/salt mismatch. Failing loud is safer than returning the raw
+                // ciphertext and pretending nothing happened.
+                log.error("Failed to decrypt value that appears to be ciphertext. " +
+                    "Check SECMAN_ENCRYPTION_PASSWORD / SECMAN_ENCRYPTION_SALT — they must match " +
+                    "the values used when the data was originally encrypted.")
+                throw RuntimeException("Failed to decrypt sensitive data", e)
             }
         }
+    }
+
+    private fun looksLikeCiphertext(value: String): Boolean {
+        // Spring's Encryptors.text() produces lowercase hex output. The minimum useful
+        // size is salt(16) + iv(16) + 1 AES block(16) = 48 bytes -> 96 hex chars, but
+        // we use 32 as a generous lower bound to err on the side of treating short
+        // values as plaintext rather than failing on them.
+        if (value.length < 32) return false
+        if (value.length % 2 != 0) return false
+        return value.all { it in '0'..'9' || it in 'a'..'f' }
     }
 }

@@ -327,7 +327,7 @@ open class WorkgroupController(
      * Returns: 200 OK with list of child workgroups, 404 if parent not found
      */
     @Get("/{id}/children")
-    @Secured(SecurityRule.IS_AUTHENTICATED)
+    @Secured("ADMIN")
     @Transactional
     open fun getChildren(@PathVariable id: Long): HttpResponse<List<WorkgroupResponse>> {
         return try {
@@ -347,7 +347,7 @@ open class WorkgroupController(
      * Returns: 200 OK with list of root-level workgroups
      */
     @Get("/root")
-    @Secured(SecurityRule.IS_AUTHENTICATED)
+    @Secured("ADMIN")
     @Transactional
     open fun getRootWorkgroups(): HttpResponse<List<WorkgroupResponse>> {
         val roots = workgroupService.getRootWorkgroups()
@@ -363,7 +363,7 @@ open class WorkgroupController(
      * Returns: 200 OK with list of ancestors (root first), 404 if not found
      */
     @Get("/{id}/ancestors")
-    @Secured(SecurityRule.IS_AUTHENTICATED)
+    @Secured("ADMIN")
     @Transactional
     open fun getAncestors(@PathVariable id: Long): HttpResponse<List<BreadcrumbItem>> {
         return try {
@@ -383,7 +383,7 @@ open class WorkgroupController(
      * Returns: 200 OK with list of all descendants
      */
     @Get("/{id}/descendants")
-    @Secured(SecurityRule.IS_AUTHENTICATED)
+    @Secured("ADMIN")
     @Transactional
     open fun getDescendants(@PathVariable id: Long): HttpResponse<List<WorkgroupResponse>> {
         val descendants = workgroupService.getDescendants(id)

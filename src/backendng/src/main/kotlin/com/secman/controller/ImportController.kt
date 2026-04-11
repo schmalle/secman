@@ -595,7 +595,14 @@ open class ImportController(
             // Validate file extension
             val filename = csvFile.filename.orEmpty()
             if (!filename.lowercase().endsWith(".csv")) {
-                val errorMsg = "Invalid file type: expected .csv file, received ${filename.substringAfterLast('.')}"
+                // Security: sanitize the extension before reflecting it back. The original
+                // filename is attacker-controlled and could contain HTML/script payloads,
+                // header-injection bytes, or noisy unicode. We strip everything that is not
+                // a plain alphanumeric so the response stays a stable, harmless ASCII token.
+                val rawExt = filename.substringAfterLast('.', "")
+                val safeExt = rawExt.take(16).replace(Regex("[^A-Za-z0-9]"), "")
+                val displayExt = if (safeExt.isNotEmpty()) ".$safeExt" else "(none)"
+                val errorMsg = "Invalid file type: expected .csv file, received $displayExt"
                 log.warn("CSV upload rejected: {}", errorMsg)
                 return HttpResponse.badRequest(ErrorResponse(errorMsg))
             }

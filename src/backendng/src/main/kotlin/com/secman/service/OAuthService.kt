@@ -182,6 +182,7 @@ open class OAuthService(
         EMAIL_REQUIRED("Your account does not have an email address configured."),
         TENANT_MISMATCH("Your account is not from the expected organization."),
         PROVIDER_NOT_FOUND("Identity provider not found. Please contact support."),
+        MFA_REQUIRED("Your account requires multi-factor authentication. Please log in with username and password to complete MFA."),
         UNEXPECTED_ERROR("An unexpected error occurred during login. Please try again.")
     }
 
@@ -531,6 +532,17 @@ open class OAuthService(
                 val user = userResult.user
                 logger.info("[{}] User resolved: id={}, username={}, isNew={}, roles={}",
                     correlationId, user.id, user.username, userResult.isNewUser, user.roles)
+
+                // SECURITY: enforce MFA — OAuth must not bypass an account's MFA setting.
+                // Local login (AuthController.login) refuses to issue a JWT when user.mfaEnabled
+                // is true; the OAuth flow must do the same, otherwise an attacker who controls
+                // the OAuth identity can sidestep the second factor entirely.
+                if (user.mfaEnabled) {
+                    logger.warn("[{}] OAuth login blocked: user '{}' has MFA enabled and must use local login to complete second factor",
+                        correlationId, user.username)
+                    deleteOAuthStateQuietly(state)
+                    return CallbackResult.Error(OAuthErrorCode.MFA_REQUIRED.userMessage)
+                }
 
                 // Send notification if user was newly created via OAuth (Feature 027)
                 if (userResult.isNewUser) {
