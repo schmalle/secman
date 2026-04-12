@@ -1,0 +1,39 @@
+#!/bin/bash
+# secman - General-purpose CLI wrapper with Proton Pass secret injection
+#
+# Usage: ./scriptpp/secmancli <command> [options]
+#
+# All environment secrets (AWS credentials, CrowdStrike keys, backend auth)
+# are injected from Proton Pass via secmanpp.env. Any command-line arguments
+# are forwarded to the secman CLI JAR.
+#
+# Examples:
+#   ./scriptpp/secmancli help
+#   ./scriptpp/secmancli manage-user-mappings list-bucket --bucket my-bucket
+#   ./scriptpp/secmancli manage-user-mappings import-s3 --bucket my-bucket --key mappings.csv
+#   ./scriptpp/secmancli manage-user-mappings list --send-email --dry-run
+#   ./scriptpp/secmancli manage-user-mappings list --send-email
+#   ./scriptpp/secmancli query servers --dry-run
+#   ./scriptpp/secmancli send-notifications --dry-run
+#
+# Prerequisites:
+#   1. Java 21 must be installed and in PATH
+#   2. Proton Pass CLI (pass-cli) must be installed and logged in
+#   3. Build the JAR first: ./gradlew :cli:shadowJar
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+JAR_PATH="$REPO_ROOT/src/cli/build/libs/cli-0.1.0-all.jar"
+export DB_CONNECT="pass://test/secman/DB_CONNECT"
+
+
+
+if [ ! -f "$JAR_PATH" ]; then
+    echo "Error: CLI JAR not found at $JAR_PATH"
+    echo ""
+    echo "Build it first with:"
+    echo "  ./gradlew :cli:shadowJar"
+    exit 1
+fi
+
+pass-cli run --env-file "$REPO_ROOT/secmanpp.env" -- java -Xmx512m -jar "$JAR_PATH" "$@"
