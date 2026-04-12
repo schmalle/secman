@@ -2,8 +2,8 @@
 # secman - CLI wrapper for secman security management tool
 
 cd src/frontend
-export SECMAN_DOMAIN="pass://test/secman/SECMAN_BACKEND_BASE_URL"
-export SECMAN_HOST="pass://test/secman/SECMAN_HOST"
+export SECMAN_DOMAIN="pass://Test/SECMAN/SECMAN_BACKEND_BASE_URL"
+export SECMAN_HOST="pass://Test/SECMAN/SECMAN_HOST"
 
 pass-cli run -- npm run dev
 
