@@ -252,6 +252,20 @@ open class ScanImportService(
             return existing
         }
 
+        // Fallback: try hostname match (covers assets created by recon-agent via /api/assets/import)
+        if (host.hostname != null) {
+            val byName = assetRepository.findByNameIgnoreCase(host.hostname)
+            if (byName != null) {
+                logger.debug("Found existing asset by hostname ${host.hostname}: id=${byName.id}")
+                // Backfill IP if missing so future lookups hit the fast path
+                if (byName.ip == null) {
+                    byName.ip = host.ipAddress
+                    return assetRepository.update(byName)
+                }
+                return byName
+            }
+        }
+
         // Create new asset
         val assetName = host.hostname ?: host.ipAddress // Decision 1
         val asset = Asset(

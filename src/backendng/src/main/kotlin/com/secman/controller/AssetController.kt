@@ -50,7 +50,8 @@ open class AssetController(
     private val workgroupRepository: com.secman.repository.WorkgroupRepository,
     private val assetBulkDeleteService: com.secman.service.AssetBulkDeleteService,
     private val assetExportService: com.secman.service.AssetExportService,
-    private val assetCascadeDeleteService: com.secman.service.AssetCascadeDeleteService
+    private val assetCascadeDeleteService: com.secman.service.AssetCascadeDeleteService,
+    private val assetMergeService: com.secman.service.AssetMergeService
 ) {
     
     private val log = LoggerFactory.getLogger(AssetController::class.java)
@@ -78,6 +79,23 @@ open class AssetController(
         @Nullable val criticality: Criticality? = null,
         @Nullable val adDomain: String? = null,
         @Nullable val networkZone: NetworkZone? = null
+    )
+
+    @Serdeable
+    data class ImportAssetRequest(
+        @NotBlank @Size(max = 255) val name: String,
+        @NotBlank val type: String,
+        @NotBlank @Size(max = 255) val owner: String,
+        @Nullable val ip: String? = null,
+        @Nullable val description: String? = null,
+        @Nullable val networkZone: NetworkZone? = null,
+        @Nullable val tags: Map<String, String>? = null
+    )
+
+    @Serdeable
+    data class ImportAssetResponse(
+        val asset: AssetResponse,
+        val created: Boolean
     )
 
     @Serdeable
@@ -294,6 +312,59 @@ open class AssetController(
         } catch (e: Exception) {
             log.error("Error fetching asset by name: {}", name, e)
             HttpResponse.serverError<Any>()
+        }
+    }
+
+    /**
+     * Idempotent asset import endpoint for external tools (recon-agent, scanners).
+     *
+     * Looks up by name (case-insensitive). If found, merges new data into existing
+     * asset while preserving operator-set fields. If not found, creates new.
+     * Tags are merged additively (update existing keys, add new, never delete).
+     *
+     * PUT /api/assets/import
+     * Auth: ADMIN role required
+     */
+    @Put("/import")
+    @Secured("ADMIN")
+    @Transactional
+    open fun importAsset(@Valid @Body request: ImportAssetRequest, authentication: Authentication): HttpResponse<*> {
+        return try {
+            val trimmedName = request.name.trim()
+            val trimmedType = request.type.trim()
+            val trimmedOwner = request.owner.trim()
+
+            if (trimmedName.isBlank()) {
+                return HttpResponse.badRequest(ErrorResponse("Name cannot be empty"))
+            }
+            if (trimmedType.isBlank()) {
+                return HttpResponse.badRequest(ErrorResponse("Type cannot be empty"))
+            }
+            if (trimmedOwner.isBlank()) {
+                return HttpResponse.badRequest(ErrorResponse("Owner cannot be empty"))
+            }
+
+            val (asset, created) = assetMergeService.importAsset(
+                name = trimmedName,
+                type = trimmedType,
+                owner = trimmedOwner,
+                ip = request.ip?.trim()?.takeIf { it.isNotBlank() },
+                description = request.description?.trim()?.takeIf { it.isNotBlank() },
+                networkZone = request.networkZone,
+                tags = request.tags
+            )
+
+            log.info("Asset import: {} {} (id={}) by user: {}",
+                if (created) "created" else "updated", asset.name, asset.id, authentication.name)
+
+            val response = ImportAssetResponse(
+                asset = AssetResponse.from(asset),
+                created = created
+            )
+            HttpResponse.ok(response)
+        } catch (e: Exception) {
+            log.error("Error importing asset: {}", request.name, e)
+            HttpResponse.badRequest(ErrorResponse("An internal error occurred"))
         }
     }
 

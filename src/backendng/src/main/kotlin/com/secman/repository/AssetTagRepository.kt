@@ -13,6 +13,8 @@ interface AssetTagRepository : JpaRepository<AssetTag, Long> {
 
     fun findByKeyAndValue(key: String, value: String): List<AssetTag>
 
+    fun findByAssetIdAndKey(assetId: Long, key: String): List<AssetTag>
+
     @io.micronaut.data.annotation.Query("""
         SELECT DISTINCT t.key FROM AssetTag t ORDER BY t.key
     """)

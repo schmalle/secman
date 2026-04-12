@@ -1,7 +1,11 @@
 package com.secman.service
 
 import com.secman.domain.Asset
+import com.secman.domain.AssetTag
+import com.secman.domain.NetworkZone
 import com.secman.repository.AssetRepository
+import com.secman.repository.AssetTagRepository
+import io.micronaut.transaction.annotation.Transactional
 import jakarta.inject.Singleton
 import org.slf4j.LoggerFactory
 import java.time.LocalDateTime
@@ -17,8 +21,9 @@ import java.time.LocalDateTime
  * Related to: Feature 003-i-want-to (Vulnerability Management System)
  */
 @Singleton
-class AssetMergeService(
-    private val assetRepository: AssetRepository
+open class AssetMergeService(
+    private val assetRepository: AssetRepository,
+    private val assetTagRepository: AssetTagRepository
 ) {
     private val log = LoggerFactory.getLogger(AssetMergeService::class.java)
 
@@ -198,5 +203,97 @@ class AssetMergeService(
 
         log.info("Created new asset: {} with defaults (owner={}, type={})", hostname, DEFAULT_OWNER, DEFAULT_TYPE)
         return assetRepository.save(asset)
+    }
+
+    /**
+     * Idempotent asset import: find by name (case-insensitive) and merge, or create new.
+     *
+     * Merge strategy for existing assets:
+     * - ip, description: update if provided
+     * - networkZone: update if provided AND current is null or UNKNOWN (never downgrade EXTERNAL/DMZ)
+     * - lastSeen: always set to now()
+     * - tags: additive merge — update value for existing keys, add new keys, never delete
+     * - owner, type, criticality, workgroups, manualCreator, adDomain, groups: preserved
+     *
+     * @return Pair of (saved asset, wasCreated)
+     */
+    @Transactional
+    open fun importAsset(
+        name: String,
+        type: String,
+        owner: String,
+        ip: String? = null,
+        description: String? = null,
+        networkZone: NetworkZone? = null,
+        tags: Map<String, String>? = null
+    ): Pair<Asset, Boolean> {
+        val existing = assetRepository.findByNameIgnoreCase(name)
+
+        val (asset, created) = if (existing != null) {
+            log.debug("Import upsert: merging into existing asset {} (id={})", existing.name, existing.id)
+            mergeImportData(existing, ip, description, networkZone)
+            Pair(existing, false)
+        } else {
+            log.debug("Import upsert: creating new asset {}", name)
+            val newAsset = Asset(
+                name = name,
+                type = type,
+                owner = owner,
+                ip = ip,
+                description = description,
+                networkZone = networkZone
+            )
+            newAsset.lastSeen = LocalDateTime.now()
+            Pair(assetRepository.save(newAsset), true)
+        }
+
+        if (!tags.isNullOrEmpty()) {
+            mergeTags(asset, tags)
+        }
+
+        val saved = if (!created) assetRepository.update(asset) else asset
+        log.info("Import upsert complete: {} (id={}, created={})", saved.name, saved.id, created)
+        return Pair(saved, created)
+    }
+
+    private fun mergeImportData(
+        asset: Asset,
+        newIp: String?,
+        newDescription: String?,
+        newNetworkZone: NetworkZone?
+    ) {
+        if (!newIp.isNullOrBlank() && newIp != asset.ip) {
+            asset.ip = newIp
+        }
+
+        if (!newDescription.isNullOrBlank()) {
+            asset.description = newDescription
+        }
+
+        // Only upgrade networkZone — never downgrade EXTERNAL/DMZ to UNKNOWN/null
+        if (newNetworkZone != null && (asset.networkZone == null || asset.networkZone == NetworkZone.UNKNOWN)) {
+            asset.networkZone = newNetworkZone
+        }
+
+        asset.lastSeen = LocalDateTime.now()
+        asset.updatedAt = LocalDateTime.now()
+    }
+
+    private fun mergeTags(asset: Asset, tags: Map<String, String>) {
+        for ((key, value) in tags) {
+            if (key.isBlank() || value.isBlank()) continue
+
+            val existing = assetTagRepository.findByAssetIdAndKey(asset.id!!, key)
+            if (existing.isNotEmpty()) {
+                // Update the first tag with this key if value differs
+                val tag = existing.first()
+                if (tag.value != value) {
+                    tag.value = value
+                    assetTagRepository.update(tag)
+                }
+            } else {
+                assetTagRepository.save(AssetTag(asset = asset, key = key, value = value))
+            }
+        }
     }
 }
