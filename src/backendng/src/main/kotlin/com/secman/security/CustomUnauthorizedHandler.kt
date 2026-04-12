@@ -25,10 +25,12 @@ class CustomUnauthorizedHandler : ExceptionHandler<AuthorizationException, Mutab
 
     override fun handle(request: HttpRequest<*>, exception: AuthorizationException): MutableHttpResponse<*> {
         return if (exception.isForbidden) {
-            HttpResponse.status<Any>(HttpStatus.FORBIDDEN)
+            HttpResponse.status<Map<String, String>>(HttpStatus.FORBIDDEN)
+                .body(mapOf("error" to "Access denied"))
         } else {
             // Return 401 without WWW-Authenticate header to prevent Basic Auth popup
-            HttpResponse.status<Any>(HttpStatus.UNAUTHORIZED)
+            HttpResponse.status<Map<String, String>>(HttpStatus.UNAUTHORIZED)
+                .body(mapOf("error" to "Authentication required"))
         }
     }
 }

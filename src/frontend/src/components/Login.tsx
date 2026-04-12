@@ -101,7 +101,13 @@ const Login = () => {
                 body: JSON.stringify({ username, password }),
             });
 
-            const data = await response.json();
+            let data: any;
+            try {
+                const text = await response.text();
+                data = text ? JSON.parse(text) : {};
+            } catch {
+                data = {};
+            }
 
             if (response.ok) {
                 // Check if MFA is required before full authentication
@@ -201,7 +207,11 @@ const Login = () => {
                     window.location.href = '/'; // Or '/dashboard' if you have a dedicated page
                 }, 100);
             } else {
-                setError(data.error || 'Login failed. Please check your credentials.');
+                if (response.status === 403) {
+                    setError('Login blocked by server security policy. Please contact IT support.');
+                } else {
+                    setError(data.error || 'Login failed. Please check your credentials.');
+                }
             }
         } catch (err) {
             console.error('Login request failed:', err);

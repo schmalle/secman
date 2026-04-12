@@ -19,6 +19,8 @@ micronaut:
           allowed-origins:
             - "http://localhost:4321"
             - "http://localhost:3000"
+            - "https://secman.covestro.net"
+            - "http://secman.covestro.net"
           allowed-methods:
             - GET
             - POST
