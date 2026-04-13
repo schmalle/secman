@@ -89,7 +89,7 @@ class DomainVulnsController(
             log.warn("User {} has no domain mappings: {}", email, e.message)
             HttpResponse.status<Any>(io.micronaut.http.HttpStatus.NOT_FOUND)
                 .body(mapOf(
-                    "message" to (e.message ?: "No domain mappings found for user"),
+                    "message" to "No domain mappings found for user",
                     "error" to "NO_DOMAIN_MAPPINGS"
                 ))
         } catch (e: IllegalStateException) {
@@ -97,7 +97,7 @@ class DomainVulnsController(
             log.error("Service error for user {}: {}", email, e.message)
             HttpResponse.status<Any>(io.micronaut.http.HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(mapOf(
-                    "message" to (e.message ?: "Service configuration error"),
+                    "message" to "Service configuration error",
                     "error" to "SERVICE_ERROR"
                 ))
         } catch (e: Exception) {
@@ -170,7 +170,7 @@ class DomainVulnsController(
             log.error("CrowdStrike configuration error for user {}: {}", email, e.message)
             HttpResponse.status<Any>(io.micronaut.http.HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(mapOf(
-                    "message" to (e.message ?: "CrowdStrike API not configured"),
+                    "message" to "CrowdStrike API is not configured",
                     "error" to "CONFIG_ERROR"
                 ))
         } catch (e: Exception) {

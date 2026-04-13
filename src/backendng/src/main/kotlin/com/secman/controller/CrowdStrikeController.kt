@@ -181,15 +181,15 @@ open class CrowdStrikeController(
             val retryAfter = e.retryAfterSeconds ?: 60
             HttpResponse.status<Map<String, String>>(HttpStatus.TOO_MANY_REQUESTS)
                 .header("Retry-After", retryAfter.toString())
-                .body(mapOf("error" to e.message))
+                .body(mapOf("error" to "Rate limit exceeded. Please retry later."))
         } catch (e: CrowdStrikeError.ConfigurationError) {
             log.error("Configuration error: {}", e.message)
             HttpResponse.status<Map<String, String>>(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(mapOf("error" to e.message))
+                .body(mapOf("error" to "CrowdStrike API is not configured properly"))
         } catch (e: CrowdStrikeError) {
             log.error("CrowdStrike error: {}", e.message)
             HttpResponse.status<Map<String, String>>(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(mapOf("error" to e.message))
+                .body(mapOf("error" to "An error occurred communicating with CrowdStrike"))
         } catch (e: Exception) {
             log.error("Unexpected error", e)
             HttpResponse.serverError(mapOf("error" to "An unexpected error occurred"))

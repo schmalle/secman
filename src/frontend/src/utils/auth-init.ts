@@ -21,11 +21,11 @@ declare global {
  * Should be called on app startup.
  *
  * Note: The JWT token is stored in an HttpOnly cookie (secman_auth)
- * for XSS protection. Only user data is stored in localStorage.
+ * for XSS protection. Only user data is stored in sessionStorage.
  */
 export function initializeAuth(): void {
     try {
-        const userStr = localStorage.getItem('user');
+        const userStr = sessionStorage.getItem('user');
 
         if (userStr) {
             const user = JSON.parse(userStr);
@@ -39,7 +39,7 @@ export function initializeAuth(): void {
     } catch (error) {
         console.error('Failed to initialize auth:', error);
         // Clear invalid data
-        localStorage.removeItem('user');
+        sessionStorage.removeItem('user');
         window.currentUser = null;
         window.dispatchEvent(new CustomEvent('userLoaded'));
     }
@@ -51,7 +51,7 @@ export function initializeAuth(): void {
  */
 export async function validateToken(): Promise<boolean> {
     // Check if we have user data (indicates a logged-in session)
-    const userStr = localStorage.getItem('user');
+    const userStr = sessionStorage.getItem('user');
     if (!userStr) return false;
 
     try {
@@ -66,13 +66,13 @@ export async function validateToken(): Promise<boolean> {
         if (response.ok) {
             const userData = await response.json();
             // Update stored user data
-            localStorage.setItem('user', JSON.stringify(userData));
+            sessionStorage.setItem('user', JSON.stringify(userData));
             window.currentUser = userData;
             window.dispatchEvent(new CustomEvent('userLoaded'));
             return true;
         } else {
             // Session is invalid - clear user data
-            localStorage.removeItem('user');
+            sessionStorage.removeItem('user');
             window.currentUser = null;
             window.dispatchEvent(new CustomEvent('userLoaded'));
             return false;

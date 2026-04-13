@@ -60,7 +60,7 @@ const Login = () => {
         // Clear any stale authentication data before starting fresh OAuth flow
         // This prevents issues with cached OAuth states in corporate AAD environments
         localStorage.removeItem('authToken'); // Legacy cleanup
-        localStorage.removeItem('user');
+        sessionStorage.removeItem('user');
         sessionStorage.clear(); // Clear any cached OAuth-related data
 
         // Delete legacy auth cookies to ensure fresh OAuth flow
@@ -172,7 +172,7 @@ const Login = () => {
                             awsAccountCount: 0,
                             domainCount: 0,
                         };
-                        localStorage.setItem('user', JSON.stringify(userData));
+                        sessionStorage.setItem('user', JSON.stringify(userData));
                         (window as any).currentUser = userData;
                         window.dispatchEvent(new CustomEvent('userLoaded'));
                         setTimeout(() => { window.location.href = '/'; }, 100);
@@ -194,7 +194,7 @@ const Login = () => {
                     awsAccountCount: data.awsAccountCount || 0,
                     domainCount: data.domainCount || 0
                 };
-                localStorage.setItem('user', JSON.stringify(userData));
+                sessionStorage.setItem('user', JSON.stringify(userData));
                 // Note: Token is NOT stored in localStorage for security (XSS protection)
                 // Authentication is handled via HttpOnly cookie set by backend
 

@@ -75,7 +75,7 @@
             })
             .then(function(userData) {
                 // Store user metadata for UI display and role checks
-                localStorage.setItem('user', JSON.stringify(userData));
+                sessionStorage.setItem('user', JSON.stringify(userData));
 
                 // Set global user state for Header component
                 window.currentUser = userData;
