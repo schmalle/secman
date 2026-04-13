@@ -69,7 +69,7 @@ curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
 sudo dnf install -y nodejs
 
 # MariaDB 11.4
-sudo curl -sS https://downloads.mariadb.com/MariaDB/mariadb_repo_setup | sudo bash -s -- --mariadb-server-version="mariadb-11.4"
+curl -LsS https://r.mariadb.com/downloads/mariadb_repo_setup | sudo bash -s -- --mariadb-server-version=11.4
 sudo dnf install -y MariaDB-server MariaDB-client
 ```
 

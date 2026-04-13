@@ -1058,7 +1058,7 @@ response = requests.post(base_url,
 print(response.json())
 ```
 
-See `examples/mcp/` for complete Python client examples.
+See `scripts/mcp/` for a standalone Go MCP client example.
 
 #### Node.js
 

@@ -134,7 +134,7 @@ sudo passwd secman  # Set strong password
 **Amazon Linux / RHEL:**
 
 ```bash
-sudo curl -sS https://downloads.mariadb.com/MariaDB/mariadb_repo_setup | sudo bash -s -- --mariadb-server-version="mariadb-11.4"
+curl -LsS https://r.mariadb.com/downloads/mariadb_repo_setup | sudo bash -s -- --mariadb-server-version=11.4
 sudo dnf install -y MariaDB-server MariaDB-client
 ```
 
@@ -162,7 +162,8 @@ sudo mysql -u root -p
 ```sql
 CREATE DATABASE secman CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE USER 'secman'@'localhost' IDENTIFIED BY 'YOUR_SECURE_PASSWORD';
-GRANT ALL PRIVILEGES ON secman.* TO 'secman'@'localhost';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP, INDEX, REFERENCES
+    ON secman.* TO 'secman'@'localhost';
 FLUSH PRIVILEGES;
 EXIT;
 ```

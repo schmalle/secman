@@ -29,7 +29,7 @@ Please include:
 
 - **Acknowledgment**: Within 48 hours
 - **Initial assessment**: Within 7 days
-- **Fix timeline**: Depends on severity (critical: ASAP, high: 14 days, medium: 30 days)
+- **Fix timeline**: Depends on severity (critical: within 72 hours, high: 14 days, medium: 30 days)
 
 ## Security Measures
 
