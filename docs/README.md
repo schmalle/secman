@@ -189,16 +189,17 @@ claude mcp add --transport http secman http://localhost:8080/mcp \
 {
   "mcpServers": {
     "secman": {
-      "command": "npx",
-      "args": ["-y", "mcp-remote", "http://localhost:8080/mcp",
-               "--header", "X-MCP-API-Key: sk-your-api-key",
-               "--header", "X-MCP-User-Email: your.email@company.com"]
+      "url": "http://localhost:8080/mcp",
+      "headers": {
+        "X-MCP-API-Key": "sk-your-api-key",
+        "X-MCP-User-Email": "your.email@company.com"
+      }
     }
   }
 }
 ```
 
-See [MCP.md](./MCP.md) for complete setup and available tools.
+See [MCP.md](./MCP.md) for complete setup, fallback options, and available tools.
 
 ---
 

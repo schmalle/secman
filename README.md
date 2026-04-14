@@ -109,7 +109,7 @@ SecMan is a full-stack security management platform that helps organizations man
 
 - **Model Context Protocol** support for AI assistants (Claude, etc.)
 - Streamable HTTP transport (direct connection, no middleware required)
-- 51 MCP tools for requirements, assets, vulnerabilities, scans, releases, user mappings, workgroups, and more
+- 53 MCP tools for requirements, assets, vulnerabilities, scans, releases, user mappings, workgroups, and more
 - User delegation (act on behalf of users)
 - API key management with granular permissions
 - Rate limiting and session management
@@ -236,10 +236,10 @@ secman/
 ├── src/
 │   ├── backendng/          # Kotlin/Micronaut backend
 │   │   ├── src/main/kotlin/com/secman/
-│   │   │   ├── controller/ # REST controllers (61 controllers)
+│   │   │   ├── controller/ # REST controllers (62 controllers)
 │   │   │   ├── domain/     # JPA entities
 │   │   │   ├── repository/ # Data repositories
-│   │   │   ├── service/    # Business logic (90 services)
+│   │   │   ├── service/    # Business logic (95 services)
 │   │   │   ├── config/     # Configuration classes
 │   │   │   ├── dto/        # Data transfer objects
 │   │   │   ├── filter/     # HTTP filters
@@ -439,16 +439,17 @@ claude mcp add --transport http secman http://localhost:8080/mcp \
 {
   "mcpServers": {
     "secman": {
-      "command": "npx",
-      "args": ["-y", "mcp-remote", "http://localhost:8080/mcp",
-               "--header", "X-MCP-API-Key: sk-your-api-key",
-               "--header", "X-MCP-User-Email: your.email@company.com"]
+      "url": "http://localhost:8080/mcp",
+      "headers": {
+        "X-MCP-API-Key": "sk-your-api-key",
+        "X-MCP-User-Email": "your.email@company.com"
+      }
     }
   }
 }
 ```
 
-See [docs/MCP.md](docs/MCP.md) for the complete MCP setup guide, available tools, and user delegation.
+See [docs/MCP.md](docs/MCP.md) for the complete MCP setup guide, fallback options, and user delegation.
 
 ## Development Workflow
 

@@ -8,10 +8,10 @@ Core code sits in `src/`: `backendng/` holds the Micronaut service (`src/main/ko
 
 - `./scripts/startbackenddev.sh` starts the backend / MCP / API; `./gradlew build` compiles all Gradle modules.
 - `cd src/frontend && npm install` once, then `npm run dev` for hot reload and `npm run build && npm run preview` to verify production output.
-- Verification: `./gradlew test` (when enabled), `npm run lint`, `npm run test:checkin`, `npm run test:e2e`.
+- Verification: `./gradlew build`, `npm run lint`.
 - Coding Style & Naming Conventions
 
-Kotlin uses 4-space indentation, `UpperCamelCase` types, constructor injection, and immutable data classes; run ktlint (`./gradlew ktlintCheck` if configured) before pushing. TypeScript/TSX sticks to 2-space indentation, named exports, and ESLint via `npm run lint`, ordering imports external → internal → relative. Python follows PEP 8 with type hints, exposes entry points from `src/cli/`, and wraps scripts in `if __name__ == "__main__":`.
+Kotlin uses 4-space indentation, `UpperCamelCase` types, constructor injection, and immutable data classes; run ktlint (`./gradlew ktlintCheck` if configured) before pushing. TypeScript/TSX sticks to 2-space indentation, named exports, and ESLint via `npm run lint`, ordering imports external → internal → relative.
 
 ## Testing Guidelines
 
@@ -19,7 +19,7 @@ Do not create any testcase.
 
 ## Commit & Pull Request Guidelines
 
-Commits use the `Type: Summary` convention (`Add: Admin User Notification System`); keep subjects imperative and squash noisy WIP steps. Pull requests should include motivation, verification commands (`./gradlew build`, `npm run test:checkin`, `pytest`), and screenshots for UI changes. Flag schema changes, feature toggles, and manual data steps, linking issues or specs before review.
+Commits use the `Type: Summary` convention (`Add: Admin User Notification System`); keep subjects imperative and squash noisy WIP steps. Pull requests should include motivation, verification commands (`./gradlew build`, `npm run lint`), and screenshots for UI changes. Flag schema changes, feature toggles, and manual data steps, linking issues or specs before review.
 
 ## Security & Configuration Tips
 
