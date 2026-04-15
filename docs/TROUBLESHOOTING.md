@@ -1,6 +1,6 @@
 # Troubleshooting Guide
 
-**Last Updated:** 2026-04-02
+**Last Updated:** 2026-04-15
 
 This guide consolidates common issues and solutions for all Secman components.
 
@@ -36,7 +36,7 @@ sudo systemctl status secman-backend
 sudo journalctl -u secman-backend -n 100
 
 # Check JAR exists
-ls -la /opt/secman/app/build/libs/backendng-*-all.jar
+ls -la /opt/secman/app/src/backendng/build/libs/backendng-*-all.jar
 ```
 
 **Common causes:**
@@ -220,7 +220,7 @@ java -Xmx512m -Xms256m -jar secman-cli.jar ...
 Or in wrapper script:
 ```bash
 #!/bin/bash
-java -Xmx1g -jar /opt/secman/app/build/libs/secman-cli.jar "$@"
+java -Xmx1g -jar /opt/secman/bin/secman-cli.jar "$@"
 ```
 
 ### Dry Run Mode

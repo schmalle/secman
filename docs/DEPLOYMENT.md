@@ -1,6 +1,6 @@
 # Secman Deployment Guide
 
-**Last Updated:** 2026-04-02
+**Last Updated:** 2026-04-15
 **Version:** 2.0
 **Platforms:** Amazon Linux 2023, Ubuntu 20.04+, RHEL 8+
 
@@ -386,8 +386,12 @@ server {
 # Test configuration
 sudo nginx -t
 
-# Enable site (Ubuntu)
+# If using sites-available (Ubuntu default):
+# Save config to /etc/nginx/sites-available/secman instead of conf.d/
 sudo ln -s /etc/nginx/sites-available/secman /etc/nginx/sites-enabled/
+
+# If using conf.d (Amazon Linux/RHEL default):
+# Config at /etc/nginx/conf.d/secman.conf is auto-loaded
 
 # Reload
 sudo systemctl reload nginx

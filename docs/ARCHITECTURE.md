@@ -1,6 +1,6 @@
 # Secman Architecture
 
-**Last Updated:** 2026-04-09
+**Last Updated:** 2026-04-15
 
 This document describes the system architecture, data model, and design patterns used in Secman.
 
@@ -78,7 +78,7 @@ Secman is a security requirement and risk assessment management tool consisting 
 
 ### Backend (`src/backendng/`)
 
-The backend follows a layered architecture with 62 controllers:
+The backend follows a layered architecture with 63 controllers:
 
 ```
 +-----------------------------------------------------------------+
@@ -113,14 +113,15 @@ The backend follows a layered architecture with 62 controllers:
 
 **Controller categories:**
 
-- **Core Domain**: Asset, Requirement, Release, Workgroup, Product, Standard, Norm, UseCase
-- **Vulnerability**: VulnerabilityManagement, VulnerabilityExceptionRequest, VulnerabilityStatistics, VulnerabilityConfig, AccountVulns, DomainVulns, WorkgroupVulns
+- **Core Domain**: Asset, AssetCompliance, Requirement, Release, ReleaseComparison, Workgroup, Product, Standard, Norm, NormMapping, UseCase
+- **Vulnerability**: VulnerabilityManagement, VulnerabilityExceptionRequest, VulnerabilityStatistics, VulnerabilityConfig, VulnerabilityHeatmap, VulnerabilityMaintenance, ExternalHeatmap, AccountVulns, DomainVulns, WorkgroupVulns
 - **Authentication**: Auth, OAuth, Passkey, UserProfile
 - **Admin**: AppSettings, IdentityProvider, MaintenanceBanner, UserMapping, User, TranslationConfig, NotificationSettings, EmailConfig, EmailProviderConfig, FalconConfig, ConfigBundle, AwsAccountSharing
-- **Import/Export**: Import, RequirementFile, Scan
+- **Import/Export**: Import, RequirementFile, PublicRequirementDownload, Scan
 - **Email & Notifications**: Notification, NotificationPreference, NotificationLog, TestEmailAccount
 - **MCP**: Mcp, McpAdmin, McpStreamableHttp
-- **Other**: Health, Alignment, ReleaseComparison, Risk, RiskAssessment, Demand, DemandClassification, NormMapping, CrowdStrike, OutdatedAsset, MaterializedViewRefresh, AwsAccountSharing, GenericExceptionHandler
+- **CLI Integration**: Cli
+- **Other**: Health, Memory, Alignment, Response, Risk, RiskAssessment, Demand, DemandClassification, CrowdStrike, CveLookup, OutdatedAsset, MaterializedViewRefresh, Report
 
 ### Frontend (`src/frontend/`)
 
@@ -548,7 +549,7 @@ secman/
 │   │       ├── repository/           # Data access
 │   │       ├── service/              # Business logic
 │   │       │   └── mcp/              # MCP-specific services
-│   │       ├── controller/           # REST endpoints (62 controllers)
+│   │       ├── controller/           # REST endpoints (63 controllers)
 │   │       ├── config/               # Configuration
 │   │       ├── dto/                  # DTOs
 │   │       │   └── mcp/              # MCP DTOs

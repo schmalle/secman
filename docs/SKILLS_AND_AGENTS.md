@@ -9,8 +9,9 @@ This document describes all Claude Code skills (slash commands) and autonomous a
 - [Overview](#overview)
 - [Skills (Slash Commands)](#skills-slash-commands)
   - [E2E Skills](#e2e-skills)
-    - [`/e2e-runner`](#e2e-runner)
+    - [`/e2eexception`](#e2eexception)
     - [`/admin-asset-e2e`](#admin-asset-e2e)
+    - [`/e2ejs`](#e2ejs)
   - [SpecKit Commands](#speckit-commands)
     - [`/speckit.constitution`](#speckitconstitution)
     - [`/speckit.specify`](#speckitspecify)
@@ -39,7 +40,7 @@ The project has two categories of Claude Code automation:
 
 | Category | Count | Purpose |
 |----------|-------|---------|
-| **Skills** | 11 | User-invoked slash commands (`/skill-name`) that perform structured workflows |
+| **Skills** | 12 | User-invoked slash commands (`/skill-name`) that perform structured workflows |
 | **Agents** | 2 | Autonomous sub-agents spawned by skills to fix specific error categories |
 
 Skills run in `fork` mode (dedicated context) or inline, and may spawn agents as sub-processes.
@@ -50,21 +51,23 @@ Skills run in `fork` mode (dedicated context) or inline, and may spawn agents as
 
 ### E2E Skills
 
-#### `/e2e-runner`
+#### `/e2eexception`
 
-**File:** Configured via Claude Code settings (skill definition)
+**File:** `.claude/skills/e2eexception/SKILL.md`
 
-End-to-end test orchestrator. Starts the full stack (backend + frontend), runs the E2E test script, and iteratively fixes failures until all tests pass or the retry budget is exhausted.
+End-to-end vulnerability exception workflow test orchestrator. Starts the full stack (backend + frontend), runs the MCP-based exception workflow test script, and iteratively fixes failures until the test passes or the retry budget is exhausted.
 
-**Trigger phrases:** "run e2e tests", "run end to end", "test the whole stack", "e2e loop", "get the tests green"
+**Trigger phrases:** "run exception e2e", "test exception workflow", "e2eexception"
 
 **Workflow:**
-1. Start backend (`gradle :backendng:clean :backendng:run`)
-2. Start frontend (`npm run dev`)
+1. Start backend (`./scripts/startbackenddev.sh`)
+2. Start frontend (`./scripts/startfrontenddev.sh`)
 3. Wait for health checks (backend: `localhost:8080`, frontend: `localhost:4321`)
-4. Run E2E test script (`./scripts/e2e-test.sh`)
+4. Run E2E test script (`scripts/test/test-e2e-exception-workflowsupport.sh`)
 5. If failures: classify error, apply fix, restart services if needed, re-run
 6. Repeat up to `maxRetries` (default: 5) or until green
+
+**Test steps:** 11-step MCP-based workflow covering user creation, vulnerability management, exception request lifecycle, and cleanup.
 
 **Error classification:**
 
@@ -111,6 +114,31 @@ Runs the admin asset and vulnerability Playwright E2E test that verifies the ful
 **Required environment variables:**
 - `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS`
 - `SECMAN_USER_USER` / `SECMAN_USER_PASS`
+
+---
+
+#### `/e2ejs`
+
+**File:** `.claude/skills/e2ejs/SKILL.md`
+
+JavaScript error scanner that visits all application pages and fixes errors. Starts backend and frontend using dev scripts, runs the JS error scanner, and iteratively fixes every page error — restarting the backend after each fix.
+
+**Trigger phrases:** "run js error scanner", "scan pages for errors", "e2ejs", "check all pages", "fix js errors"
+
+**Workflow:**
+1. Start backend (`./scripts/startbackenddev.sh`)
+2. Start frontend (`./scripts/startfrontenddev.sh`)
+3. Wait for both to be healthy
+4. Run JS error scanner (`./tests/js-error-scanner.sh`)
+5. If all clean -> done, report success
+6. If exit code 2 -> fatal error (host unreachable / login failed), stop
+7. If exit code 1 (page errors) -> parse errors, classify (backend vs frontend), fix, restart backend, re-run
+8. Repeat until all pages are clean or retry budget exhausted
+
+**Error classification:**
+- Backend errors are fixed first, then frontend errors
+- Backend changes always require a backend restart
+- Frontend changes typically hot-reload via Vite
 
 ---
 
@@ -350,7 +378,7 @@ Astro + React frontend specialist. Spawned when E2E failures are classified as f
 ### E2E Fix Loop
 
 ```
-User: "/e2e-runner" or "/admin-asset-e2e"
+User: "/e2eexception", "/admin-asset-e2e", or "/e2ejs"
          |
          v
     Skill (fork context)
