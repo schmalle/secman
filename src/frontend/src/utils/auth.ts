@@ -16,7 +16,7 @@ export interface User {
  */
 export function getUser(): User | null {
     if (typeof window === 'undefined') return null;
-    const userStr = localStorage.getItem('user');
+    const userStr = sessionStorage.getItem('user');
     if (!userStr) return null;
 
     try {
@@ -74,10 +74,11 @@ export function hasVulnAccess(): boolean {
  */
 export function clearAuth(): void {
     if (typeof window === 'undefined') return;
-    // Clear user data
-    localStorage.removeItem('user');
+    // Clear user data (stored in sessionStorage for XSS protection)
+    sessionStorage.removeItem('user');
     // Clean up any legacy token storage from previous versions
     localStorage.removeItem('authToken');
+    localStorage.removeItem('user'); // Clean up legacy localStorage usage
     document.cookie = 'authToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
 }
 
