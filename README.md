@@ -92,6 +92,7 @@ SecMan is a full-stack security management platform that helps organizations man
   - `SECCHAMPION` - Security champion access
   - `REQ` - Requirements editor
   - `REQADMIN` - Requirements admin (create/delete releases, alignment decisions)
+  - `RISK` - Risk assessment access (read/write/execute risk assessments)
   - `REPORT` - Report generation and viewing
 - **Row-Level Security**: Users see only their workgroup resources + owned items
 - **Last Admin Protection**: System prevents deletion/demotion of the last ADMIN user
@@ -109,7 +110,7 @@ SecMan is a full-stack security management platform that helps organizations man
 
 - **Model Context Protocol** support for AI assistants (Claude, etc.)
 - Streamable HTTP transport (direct connection, no middleware required)
-- 53 MCP tools for requirements, assets, vulnerabilities, scans, releases, user mappings, workgroups, and more
+- 52 MCP tools for requirements, assets, vulnerabilities, scans, releases, user mappings, workgroups, AWS account sharing, vulnerability heatmap, and more
 - User delegation (act on behalf of users)
 - API key management with granular permissions
 - Rate limiting and session management
@@ -239,7 +240,7 @@ secman/
 │   │   │   ├── controller/ # REST controllers (62 controllers)
 │   │   │   ├── domain/     # JPA entities
 │   │   │   ├── repository/ # Data repositories
-│   │   │   ├── service/    # Business logic (95 services)
+│   │   │   ├── service/    # Business logic (97 services)
 │   │   │   ├── config/     # Configuration classes
 │   │   │   ├── dto/        # Data transfer objects
 │   │   │   ├── filter/     # HTTP filters
@@ -341,6 +342,11 @@ POST /api/auth/login
 | `/api/notification-logs`                              | GET     | Notification audit logs          | ADMIN                  |
 | `/api/account-vulns`                                  | GET     | Account-scoped vulnerabilities   | USER                   |
 | `/api/workgroups`                                     | GET/POST| List/create workgroups           | ADMIN                  |
+| `/api/aws-account-sharing`                            | GET/POST| List/create AWS account sharing  | ADMIN                  |
+| `/api/aws-account-sharing/{id}`                       | DELETE  | Remove AWS account sharing rule  | ADMIN                  |
+| `/api/vulnerability-heatmap`                          | GET     | Vulnerability heatmap            | Authenticated          |
+| `/api/vulnerability-heatmap/refresh`                  | POST    | Recalculate heatmap              | ADMIN                  |
+| `/api/external/vulnerability-heatmap`                 | GET     | External heatmap (API key)       | API Key                |
 | `/api/import/upload-nmap-xml`                         | POST    | Import Nmap scan                 | ADMIN                  |
 | `/api/import/upload-vulnerability-xlsx`               | POST    | Import vulnerabilities           | ADMIN                  |
 | `/api/import/upload-user-mappings-csv`                | POST    | Import user mappings             | ADMIN                  |

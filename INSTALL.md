@@ -1,6 +1,6 @@
 # Secman Installation Guide
 
-**Last Updated:** 2026-04-03
+**Last Updated:** 2026-04-16
 
 Complete installation instructions for new users of the Secman security management application.
 
@@ -478,7 +478,7 @@ After installation, verify everything is working:
 
 ```bash
 curl http://localhost:8080/health
-# Expected: {"status":"UP"}
+# Expected: {"status":"UP","service":"secman-backend-ng","version":"0.1"}
 ```
 
 ### 2. Check Frontend
