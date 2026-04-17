@@ -78,7 +78,7 @@ Secman is a security requirement and risk assessment management tool consisting 
 
 ### Backend (`src/backendng/`)
 
-The backend follows a layered architecture with 63 controllers:
+The backend follows a layered architecture with 62 controllers:
 
 ```
 +-----------------------------------------------------------------+
@@ -86,7 +86,7 @@ The backend follows a layered architecture with 63 controllers:
 |   REST endpoints, request validation, response formatting       |
 |   @Controller, @Secured, @PathVariable, @Body                   |
 +-----------------------------------------------------------------+
-|                     Service Layer (95 services)                   |
+|                     Service Layer (90 services)                   |
 |   Business logic, transaction management, domain operations     |
 |   @Singleton, @Transactional                                    |
 +-----------------------------------------------------------------+
@@ -357,7 +357,8 @@ fun canUserAccessAsset(user: User, asset: Asset): Boolean {
            asset.scanUploader?.id == user.id ||
            awsAccountMatches(asset, user) ||
            adDomainMatches(asset, user) ||
-           sharedAwsAccountMatches(asset, user)
+           sharedAwsAccountMatches(asset, user) ||
+           asset.owner == user.username
 }
 ```
 
@@ -549,7 +550,7 @@ secman/
 │   │       ├── repository/           # Data access
 │   │       ├── service/              # Business logic
 │   │       │   └── mcp/              # MCP-specific services
-│   │       ├── controller/           # REST endpoints (63 controllers)
+│   │       ├── controller/           # REST endpoints (62 controllers)
 │   │       ├── config/               # Configuration
 │   │       ├── dto/                  # DTOs
 │   │       │   └── mcp/              # MCP DTOs

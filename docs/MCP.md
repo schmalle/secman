@@ -1,6 +1,6 @@
 # MCP (Model Context Protocol) Integration Guide
 
-**Last Updated:** 2026-04-02
+**Last Updated:** 2026-04-17
 **Version:** 5.0
 
 This guide covers integrating Secman with AI assistants (Claude Desktop, Claude Code, ChatGPT, etc.) using the Model Context Protocol (MCP).
@@ -34,7 +34,7 @@ Secman supports the Model Context Protocol (MCP), allowing AI assistants to prog
 - **Vulnerability Data** - Search vulnerabilities by severity, CVE, or affected asset
 - **Scan Results** - Review network scan history and discovered services
 
-The MCP server exposes **53 tools** for comprehensive security management workflows.
+The MCP server exposes **52 tools** for comprehensive security management workflows.
 
 ### Prerequisites
 
@@ -1163,7 +1163,7 @@ curl -X POST http://localhost:8080/mcp \
 
 **Enable debug logging:**
 ```bash
-export SECMAN_LOG_LEVEL=DEBUG
+export SECMAN_LOGGING=ALL
 ```
 
 ---

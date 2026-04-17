@@ -1,5 +1,6 @@
 # CrowdStrike Vulnerability Import
 
+**Last Updated:** 2026-04-17
 **Feature**: 048-prevent-duplicate-vulnerabilities
 **Service**: `CrowdStrikeVulnerabilityImportService`
 **Location**: `src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeVulnerabilityImportService.kt`

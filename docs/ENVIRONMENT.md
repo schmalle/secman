@@ -1,6 +1,6 @@
 # Secman Environment Variables Reference
 
-**Last Updated:** 2026-04-10
+**Last Updated:** 2026-04-17
 **Version:** 1.2
 
 This document provides a comprehensive reference for all environment variables used by Secman components.

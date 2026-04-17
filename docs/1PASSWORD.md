@@ -1,5 +1,7 @@
 # 1Password Credentials
 
+**Last Updated:** 2026-04-17
+
 secman uses [1Password CLI](https://developer.1password.com/docs/cli/) (`op`) to inject secrets at runtime. All secret references use the `op://` URI format and are resolved by `op run` before reaching the application.
 
 ## Prerequisites

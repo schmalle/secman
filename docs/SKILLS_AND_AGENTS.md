@@ -1,5 +1,7 @@
 # Skills and Agents Reference
 
+**Last Updated:** 2026-04-17
+
 This document describes all Claude Code skills (slash commands) and autonomous agents configured for the secman project. These are defined in the `.claude/` directory and provide AI-assisted development workflows.
 
 ---
