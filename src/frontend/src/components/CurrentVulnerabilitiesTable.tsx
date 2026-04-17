@@ -24,16 +24,28 @@ import {
   exportVulnerabilitiesServerSide,
   cancelExportJob,
   resetStuckExportJobs,
+  describeExportStage,
   type CurrentVulnerability,
   type PaginatedVulnerabilitiesResponse,
   type VulnerabilityCleanupResult,
   type ExportJob,
+  type ExportProgressUpdate,
 } from "../services/vulnerabilityManagementService";
 import OverdueStatusBadge from "./OverdueStatusBadge";
 import ExceptionRequestModal from "./ExceptionRequestModal";
 import CveLink from "./CveLink";
 import { isAdmin, hasRole, hasVulnAccess } from "../utils/auth";
 import SearchableSelect from "./SearchableSelect";
+
+function formatDuration(totalSec: number): string {
+  if (totalSec < 60) return `${totalSec}s`;
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  if (m < 60) return s > 0 ? `${m}m ${s}s` : `${m}m`;
+  const h = Math.floor(m / 60);
+  const mr = m % 60;
+  return mr > 0 ? `${h}h ${mr}m` : `${h}h`;
+}
 
 const CurrentVulnerabilitiesTable: React.FC = () => {
   const [paginatedResponse, setPaginatedResponse] =
@@ -58,6 +70,8 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
   const [exportLoading, setExportLoading] = useState(false);
   const [exportProgress, setExportProgress] = useState<ExportJob | null>(null);
   const [exportJobId, setExportJobId] = useState<string | null>(null);
+  const [exportUpdate, setExportUpdate] = useState<ExportProgressUpdate | null>(null);
+  const [exportStallWarning, setExportStallWarning] = useState<string | null>(null);
 
   // Filter states
   const [severityFilter, setSeverityFilter] = useState<string>("");
@@ -292,17 +306,31 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
     try {
       setExportLoading(true);
       setExportProgress(null);
+      setExportUpdate(null);
+      setExportStallWarning(null);
       setError(null);
 
-      // Use server-side export with progress tracking
-      await exportVulnerabilitiesServerSide((job) => {
-        setExportProgress(job);
-        setExportJobId(job.jobId);
+      await exportVulnerabilitiesServerSide({
+        onProgress: (update) => {
+          setExportProgress(update.job);
+          setExportJobId(update.job.jobId);
+          setExportUpdate(update);
+          // Stall warning auto-clears when progress resumes; the service
+          // resets stalledSec to 0 on the next poll after progress moves.
+          if (update.stalledSec < 60) {
+            setExportStallWarning(null);
+          }
+        },
+        onStall: (update) => {
+          const stage = describeExportStage(update.job);
+          setExportStallWarning(
+            `No progress for ${update.stalledSec}s at stage "${stage}". The export may still be running; you can wait or cancel.`,
+          );
+        },
       });
 
       setSuccessMessage("Export completed successfully!");
       setTimeout(() => setSuccessMessage(null), 5000);
-
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to export vulnerabilities",
@@ -310,6 +338,8 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
     } finally {
       setExportLoading(false);
       setExportProgress(null);
+      setExportUpdate(null);
+      setExportStallWarning(null);
       setExportJobId(null);
     }
   };
@@ -594,7 +624,11 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                     className="btn btn-success"
                     onClick={handleExport}
                     disabled={exportLoading}
-                    title="Export all vulnerabilities to Excel"
+                    title={
+                      exportLoading && exportProgress
+                        ? `${describeExportStage(exportProgress)} — ${exportProgress.processedItems.toLocaleString()} / ${exportProgress.totalItems.toLocaleString()}`
+                        : "Export all vulnerabilities to Excel"
+                    }
                   >
                     {exportLoading ? (
                       <>
@@ -603,9 +637,15 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                           role="status"
                           aria-hidden="true"
                         ></span>
-                        {exportProgress
-                          ? `${exportProgress.progressPercent}%`
-                          : "Starting..."}
+                        {exportProgress ? (
+                          <>
+                            {describeExportStage(exportProgress)}
+                            {exportProgress.totalItems > 0 &&
+                              ` ${exportProgress.progressPercent}%`}
+                          </>
+                        ) : (
+                          "Starting..."
+                        )}
                       </>
                     ) : (
                       <>
@@ -622,6 +662,17 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                     >
                       <i className="bi bi-x-circle"></i>
                     </button>
+                  )}
+                  {exportLoading && exportUpdate && exportProgress && (
+                    <span className="text-muted small ms-2 align-self-center">
+                      {exportProgress.totalItems > 0 &&
+                        `${exportProgress.processedItems.toLocaleString()} / ${exportProgress.totalItems.toLocaleString()}`}
+                      {exportUpdate.rowsPerSec > 0 &&
+                        ` · ${exportUpdate.rowsPerSec.toLocaleString()} rows/s`}
+                      {exportUpdate.etaSec !== null &&
+                        exportUpdate.etaSec > 0 &&
+                        ` · ETA ${formatDuration(exportUpdate.etaSec)}`}
+                    </span>
                   )}
                 </>
               )}
@@ -658,8 +709,29 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
         </div>
       )}
 
+      {/* Export Stall Warning */}
+      {exportStallWarning && (
+        <div className="row mb-3">
+          <div className="col-12">
+            <div
+              className="alert alert-warning alert-dismissible fade show"
+              role="alert"
+            >
+              <i className="bi bi-hourglass-split me-2"></i>
+              {exportStallWarning}
+              <button
+                type="button"
+                className="btn-close"
+                onClick={() => setExportStallWarning(null)}
+                aria-label="Close"
+              ></button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Export Error Message with Reset Option */}
-      {error && error.includes("export") && (
+      {error && error.toLowerCase().includes("export") && (
         <div className="row mb-3">
           <div className="col-12">
             <div
@@ -668,17 +740,33 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
             >
               <i className="bi bi-exclamation-triangle me-2"></i>
               {error}
-              {error.includes("already have an export") && (
-                <button
-                  type="button"
-                  className="btn btn-sm btn-outline-dark ms-3"
-                  onClick={handleResetStuckExports}
-                  disabled={exportLoading}
-                >
-                  <i className="bi bi-arrow-counterclockwise me-1"></i>
-                  Reset Stuck Exports
-                </button>
-              )}
+              {/*
+                Reset button appears for any rate-limit or stuck-export
+                condition. Matches multiple phrasings the backend can emit,
+                case-insensitively — previously we keyed on literal
+                "already have an export" which the backend never produces
+                ("already have A VULNERABILITIES export ...").
+              */}
+              {(() => {
+                const lower = error.toLowerCase();
+                const showReset =
+                  lower.includes("already have") ||
+                  lower.includes("export in progress") ||
+                  lower.includes("stuck") ||
+                  lower.includes("appears stuck");
+                if (!showReset) return null;
+                return (
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline-dark ms-3"
+                    onClick={handleResetStuckExports}
+                    disabled={exportLoading}
+                  >
+                    <i className="bi bi-arrow-counterclockwise me-1"></i>
+                    Reset Stuck Exports
+                  </button>
+                );
+              })()}
               <button
                 type="button"
                 className="btn-close"

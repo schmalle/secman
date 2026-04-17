@@ -16,6 +16,7 @@ import jakarta.inject.Named
 import jakarta.inject.Singleton
 import jakarta.persistence.EntityManager
 import jakarta.transaction.Transactional
+import jakarta.transaction.Transactional.TxType
 import java.util.concurrent.ExecutorService
 import org.apache.poi.ss.usermodel.CellStyle
 import org.apache.poi.ss.usermodel.FillPatternType
@@ -65,6 +66,22 @@ open class ExportJobService(
 ) {
     private val log = LoggerFactory.getLogger(ExportJobService::class.java)
     private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+
+    companion object {
+        // Lifecycle stage labels persisted to ExportJob.currentStage so the UI can
+        // surface "Counting rows...", "Writing file...", etc. instead of a bare %.
+        const val STAGE_STARTING = "STARTING"
+        const val STAGE_COUNTING = "COUNTING"
+        const val STAGE_EXPORTING = "EXPORTING"
+        const val STAGE_WRITING_FILE = "WRITING_FILE"
+        const val STAGE_FINALIZING = "FINALIZING"
+
+        // Job is considered stale if (lastHeartbeatAt ?: createdAt) is older
+        // than this many minutes. The worker heartbeats every ~2s during
+        // EXPORTING and immediately on entering the background thread, so
+        // anything >5 minutes of silence is almost certainly dead.
+        const val HEARTBEAT_STALE_MIN = 5L
+    }
 
     init {
         // Ensure export directory exists
@@ -145,17 +162,34 @@ open class ExportJobService(
      * in background threads, preventing users from being permanently blocked.
      */
     private fun autoResetStaleJobs(username: String, exportType: ExportType, runningStatuses: List<ExportJobStatus>) {
-        val staleThreshold = LocalDateTime.now().minusMinutes(30)
+        // Use (lastHeartbeatAt ?: createdAt) as the "last known activity" timestamp
+        // and apply a single HEARTBEAT_STALE_MIN threshold. Under the new code path
+        // every healthy job heartbeats within seconds of entering the background
+        // thread (stage transitions STARTING/COUNTING immediately record one). So:
+        //   * healthy job       -> recent heartbeat -> not stale
+        //   * crashed-new job   -> null heartbeat, createdAt > 5min -> STALE
+        //   * legacy stuck job  -> null heartbeat, createdAt > 5min -> STALE
+        //   * just-submitted    -> null heartbeat, createdAt < 5min -> not stale (yet)
+        val now = LocalDateTime.now()
+        val staleThreshold = now.minusMinutes(HEARTBEAT_STALE_MIN)
+
         val runningJobs = exportJobRepository.findByUsernameAndStatusIn(username, runningStatuses)
 
         runningJobs
-            .filter { it.exportType == exportType && it.createdAt.isBefore(staleThreshold) }
+            .filter { it.exportType == exportType }
+            .filter { job -> (job.lastHeartbeatAt ?: job.createdAt).isBefore(staleThreshold) }
             .forEach { job ->
-                log.warn("Auto-resetting stale export job: {} (status: {}, created: {}, type: {})",
-                    job.id, job.status, job.createdAt, job.exportType)
+                val effective = job.lastHeartbeatAt ?: job.createdAt
+                val staleReason = if (job.lastHeartbeatAt != null) {
+                    "no heartbeat for >${HEARTBEAT_STALE_MIN}min (last=${job.lastHeartbeatAt})"
+                } else {
+                    "never heartbeated; created ${job.createdAt} (>${HEARTBEAT_STALE_MIN}min ago)"
+                }
+                log.warn("Auto-resetting stale export job: {} ({}, status: {}, stage: {}, effectiveActivity: {})",
+                    job.id, staleReason, job.status, job.currentStage, effective)
                 job.status = ExportJobStatus.FAILED
                 job.completedAt = LocalDateTime.now()
-                job.errorMessage = "Auto-reset: job was stale (running > 30 minutes)"
+                job.errorMessage = "Auto-reset: $staleReason"
                 exportJobRepository.update(job)
             }
     }
@@ -289,37 +323,53 @@ open class ExportJobService(
         isAdmin: Boolean,
         accessibleAssetIds: Set<Long>
     ) {
-        log.info("Starting background processing for job: {} (user: {})", jobId, username)
+        val shortId = jobId.take(8)
+        val originalThreadName = Thread.currentThread().name
+        Thread.currentThread().name = "export-job-$shortId"
+        val backgroundStart = System.currentTimeMillis()
 
         try {
+            log.info("[export {}] background processing started (user={}, thread={})",
+                shortId, username, originalThreadName)
+
             // Load job in its own transaction
             val job = loadJobForProcessing(jobId)
             if (job == null) {
-                log.error("Job not found for background processing: {}", jobId)
+                log.error("[export {}] job not found for background processing", shortId)
                 return
             }
 
+            val pendingMs = System.currentTimeMillis() -
+                job.createdAt.atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+            log.info("[export {}] QUEUED -> PROCESSING after {}ms in queue", shortId, pendingMs)
+
             // Check if cancelled before starting
             if (job.status == ExportJobStatus.CANCELLED) {
-                log.info("Job {} was cancelled before processing started", jobId)
+                log.info("[export {}] was cancelled before processing started", shortId)
                 return
             }
 
             // Update status to processing (separate transaction)
             markJobAsProcessing(jobId)
+            updateJobStage(jobId, STAGE_STARTING)
 
             when (job.exportType) {
                 ExportType.VULNERABILITIES -> processVulnerabilityExport(jobId, isAdmin, accessibleAssetIds)
                 else -> throw IllegalArgumentException("Unsupported export type: ${job.exportType}")
             }
+
+            val totalMs = System.currentTimeMillis() - backgroundStart
+            log.info("[export {}] background processing finished in {}ms", shortId, totalMs)
         } catch (e: Exception) {
-            log.error("Export job {} failed", jobId, e)
+            log.error("[export {}] failed", shortId, e)
             // Update job status in a separate transaction
             try {
                 markJobAsFailed(jobId, e.message?.take(1000) ?: "Unknown error")
             } catch (updateEx: Exception) {
-                log.error("Failed to update job {} status after error", jobId, updateEx)
+                log.error("[export {}] failed to update status after error", shortId, updateEx)
             }
+        } finally {
+            Thread.currentThread().name = originalThreadName
         }
     }
 
@@ -329,17 +379,24 @@ open class ExportJobService(
     // ============================================================
 
     /**
-     * Load a job by ID in its own transaction
+     * Load a job by ID in its own transaction.
+     *
+     * TxType.REQUIRES_NEW is CRITICAL here: this method is called from a
+     * background thread via executorService.submit. Micronaut's instrumented
+     * IO executor propagates the submitter's transactional context, and by
+     * the time we run the submitter's transaction (and its EntityManager)
+     * has already closed. REQUIRES_NEW forces a fresh session each call.
+     * All helpers below follow the same pattern for the same reason.
      */
-    @Transactional
+    @Transactional(TxType.REQUIRES_NEW)
     open fun loadJobForProcessing(jobId: String): ExportJob? {
         return exportJobRepository.findById(jobId).orElse(null)
     }
 
     /**
-     * Mark a job as processing
+     * Mark a job as processing. REQUIRES_NEW — see note on loadJobForProcessing.
      */
-    @Transactional
+    @Transactional(TxType.REQUIRES_NEW)
     open fun markJobAsProcessing(jobId: String) {
         val job = exportJobRepository.findById(jobId).orElse(null) ?: return
         job.status = ExportJobStatus.PROCESSING
@@ -348,18 +405,18 @@ open class ExportJobService(
     }
 
     /**
-     * Check if a job has been cancelled
+     * Check if a job has been cancelled. REQUIRES_NEW — see note on loadJobForProcessing.
      */
-    @Transactional
+    @Transactional(TxType.REQUIRES_NEW)
     open fun isJobCancelled(jobId: String): Boolean {
         val job = exportJobRepository.findById(jobId).orElse(null)
         return job?.status == ExportJobStatus.CANCELLED
     }
 
     /**
-     * Update job total items count
+     * Update job total items count. REQUIRES_NEW — see note on loadJobForProcessing.
      */
-    @Transactional
+    @Transactional(TxType.REQUIRES_NEW)
     open fun updateJobTotalItems(jobId: String, totalItems: Long) {
         val job = exportJobRepository.findById(jobId).orElse(null) ?: return
         job.totalItems = totalItems
@@ -367,9 +424,9 @@ open class ExportJobService(
     }
 
     /**
-     * Update job progress
+     * Update job progress. REQUIRES_NEW — see note on loadJobForProcessing.
      */
-    @Transactional
+    @Transactional(TxType.REQUIRES_NEW)
     open fun updateJobProgress(jobId: String, processedItems: Long) {
         val job = exportJobRepository.findById(jobId).orElse(null) ?: return
         job.processedItems = processedItems
@@ -377,9 +434,9 @@ open class ExportJobService(
     }
 
     /**
-     * Mark a job as completed with file info
+     * Mark a job as completed with file info. REQUIRES_NEW — see note on loadJobForProcessing.
      */
-    @Transactional
+    @Transactional(TxType.REQUIRES_NEW)
     open fun markJobAsCompleted(jobId: String, filePath: String, fileName: String, fileSizeBytes: Long, totalItems: Long) {
         val job = exportJobRepository.findById(jobId).orElse(null) ?: return
         job.status = ExportJobStatus.COMPLETED
@@ -392,9 +449,9 @@ open class ExportJobService(
     }
 
     /**
-     * Mark a job as failed
+     * Mark a job as failed. REQUIRES_NEW — see note on loadJobForProcessing.
      */
-    @Transactional
+    @Transactional(TxType.REQUIRES_NEW)
     open fun markJobAsFailed(jobId: String, errorMessage: String) {
         val job = exportJobRepository.findById(jobId).orElse(null) ?: return
         job.status = ExportJobStatus.FAILED
@@ -404,41 +461,116 @@ open class ExportJobService(
     }
 
     /**
+     * Update the currentStage field and heartbeat so the frontend can show progress
+     * phase-by-phase even before item counts are known.
+     * REQUIRES_NEW — see note on loadJobForProcessing.
+     */
+    @Transactional(TxType.REQUIRES_NEW)
+    open fun updateJobStage(jobId: String, stage: String) {
+        val job = exportJobRepository.findById(jobId).orElse(null) ?: return
+        job.currentStage = stage
+        job.lastHeartbeatAt = LocalDateTime.now()
+        exportJobRepository.update(job)
+    }
+
+    /**
+     * Update lastHeartbeatAt only. Called periodically during long sub-steps (e.g. counting)
+     * so stall detection in the UI can distinguish "still working" from "dead".
+     * REQUIRES_NEW — see note on loadJobForProcessing.
+     */
+    @Transactional(TxType.REQUIRES_NEW)
+    open fun recordHeartbeat(jobId: String) {
+        val job = exportJobRepository.findById(jobId).orElse(null) ?: return
+        job.lastHeartbeatAt = LocalDateTime.now()
+        exportJobRepository.update(job)
+    }
+
+    /**
+     * Fetch a page of vulnerabilities through VulnerabilityService in a fresh
+     * transaction. Wrapping this call is necessary because VulnerabilityService
+     * is annotated @Transactional (default REQUIRED), so from the background
+     * thread it joins the propagated HTTP-request transaction (which is closed
+     * by the time we run) and throws "Session/EntityManager is closed".
+     *
+     * REQUIRES_NEW opens a brand-new transaction/session for each batch, which
+     * is exactly what we want: one short-lived TX per batch keeps JPA heap
+     * pressure bounded.
+     */
+    @Transactional(TxType.REQUIRES_NEW)
+    open fun fetchVulnerabilityPageForExport(
+        accessibleAssetIds: Set<Long>,
+        isAdmin: Boolean,
+        page: Int,
+        size: Int
+    ): com.secman.dto.PaginatedVulnerabilitiesResponse {
+        return vulnerabilityService.getCurrentVulnerabilitiesOptimized(
+            accessibleAssetIds = accessibleAssetIds,
+            isAdmin = isAdmin,
+            severity = null,
+            system = null,
+            exceptionStatus = "not_excepted",
+            product = null,
+            adDomain = null,
+            cloudAccountId = null,
+            page = page,
+            size = size
+        )
+    }
+
+    /**
      * Process vulnerability export
-     * Uses jobId and calls transactional helper methods for all DB operations
+     * Uses jobId and calls transactional helper methods for all DB operations.
+     *
+     * Progress lifecycle:
+     *   STARTING -> COUNTING -> EXPORTING -> WRITING_FILE -> FINALIZING -> (COMPLETED)
+     *
+     * Correctness notes:
+     * - Count query and export loop now share identical filters ("not_excepted"),
+     *   so processedItems == totalItems on success (previously diverged and progress
+     *   never reached 100%).
+     * - processedItems increments by actual returned rows, not (page+1)*batchSize,
+     *   so the final (partial) batch doesn't over-count.
      */
     private fun processVulnerabilityExport(
         jobId: String,
         isAdmin: Boolean,
         accessibleAssetIds: Set<Long>
     ) {
-        // First, get total count for progress tracking
-        val firstPage = vulnerabilityService.getCurrentVulnerabilitiesOptimized(
+        val shortId = jobId.take(8)
+
+        // --- STAGE 1: COUNTING ------------------------------------------------
+        updateJobStage(jobId, STAGE_COUNTING)
+        log.info("[export {}] COUNTING started (isAdmin={}, accessibleAssets={})",
+            shortId, isAdmin, if (isAdmin) "ALL" else accessibleAssetIds.size.toString())
+
+        val countStart = System.currentTimeMillis()
+        // IMPORTANT: use the SAME filter as the export loop below. If this
+        // diverges, progressPercent will never reach 100.
+        // Use the REQUIRES_NEW wrapper — see fetchVulnerabilityPageForExport.
+        val firstPage = fetchVulnerabilityPageForExport(
             accessibleAssetIds = accessibleAssetIds,
             isAdmin = isAdmin,
-            severity = null,
-            system = null,
-            exceptionStatus = null,
-            product = null,
-            adDomain = null,
-            cloudAccountId = null,
             page = 0,
             size = 1
         )
+        val countMs = System.currentTimeMillis() - countStart
         val totalItems = firstPage.totalElements
         updateJobTotalItems(jobId, totalItems)
+        recordHeartbeat(jobId)
+        log.info("[export {}] COUNTING done in {}ms: totalItems={}", shortId, countMs, totalItems)
 
-        log.info("Job {}: Total items to export: {}", jobId, totalItems)
+        // --- STAGE 2: EXPORTING ----------------------------------------------
+        updateJobStage(jobId, STAGE_EXPORTING)
 
         // Create output file
         val dateStr = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
-        val fileName = "vulnerabilities_export_${dateStr}_${jobId.take(8)}.xlsx"
+        val fileName = "vulnerabilities_export_${dateStr}_${shortId}.xlsx"
         val filePath = "$exportDirectory/$fileName"
 
         // Create streaming workbook and write directly to file
         val workbook = SXSSFWorkbook(100)
         workbook.setCompressTempFiles(true)
-        val startTime = LocalDateTime.now()
+        val exportStart = System.currentTimeMillis()
 
         try {
             val sheet = workbook.createSheet("Vulnerabilities")
@@ -455,20 +587,17 @@ open class ExportJobService(
             while (hasMore) {
                 // Check for cancellation (separate transaction)
                 if (isJobCancelled(jobId)) {
-                    log.info("Job {} was cancelled during processing", jobId)
+                    log.info("[export {}] cancelled during EXPORTING at row {}/{}",
+                        shortId, processedItems, totalItems)
                     workbook.close()
                     return
                 }
 
-                val response = vulnerabilityService.getCurrentVulnerabilitiesOptimized(
+                val batchStart = System.currentTimeMillis()
+                // Use the REQUIRES_NEW wrapper — see fetchVulnerabilityPageForExport.
+                val response = fetchVulnerabilityPageForExport(
                     accessibleAssetIds = accessibleAssetIds,
                     isAdmin = isAdmin,
-                    severity = null,
-                    system = null,
-                    exceptionStatus = "not_excepted",
-                    product = null,
-                    adDomain = null,
-                    cloudAccountId = null,
                     page = page,
                     size = batchSize
                 )
@@ -478,23 +607,37 @@ open class ExportJobService(
                     createVulnerabilityRow(sheet, rowNum++, dto, styles)
                 }
 
-                processedItems = (page + 1).toLong() * batchSize
-                if (processedItems > totalItems) {
-                    processedItems = totalItems
-                }
+                // Correct: count ACTUAL returned rows, not (page+1)*batchSize
+                processedItems += response.content.size
+                val batchMs = System.currentTimeMillis() - batchStart
 
-                // Update progress every 2 seconds or every 10k rows (separate transaction)
+                // Update progress every 2 seconds of wall time
                 val now = System.currentTimeMillis()
-                if (now - lastProgressUpdate > 2000 || processedItems % 10000 == 0L) {
+                if (now - lastProgressUpdate > 2000 || !response.hasNext) {
                     updateJobProgress(jobId, processedItems)
+                    recordHeartbeat(jobId)
                     lastProgressUpdate = now
-                    val progressPercent = if (totalItems > 0) (processedItems * 100 / totalItems) else 0
-                    log.debug("Job {}: Progress {}% ({}/{})", jobId, progressPercent, processedItems, totalItems)
+                    val elapsed = (now - exportStart).coerceAtLeast(1L)
+                    val rowsPerSec = processedItems * 1000 / elapsed
+                    val etaSec = if (rowsPerSec > 0 && totalItems > processedItems) {
+                        (totalItems - processedItems) / rowsPerSec
+                    } else 0
+                    val pct = if (totalItems > 0) (processedItems * 100 / totalItems) else 0
+                    log.info(
+                        "[export {}] EXPORTING batch {}: +{} rows ({}/{} = {}%, {} rows/s, batch {}ms, ETA {}s)",
+                        shortId, page, response.content.size, processedItems, totalItems,
+                        pct, rowsPerSec, batchMs, etaSec
+                    )
                 }
 
                 hasMore = response.hasNext
                 page++
             }
+
+            // --- STAGE 3: WRITING_FILE ----------------------------------------
+            updateJobStage(jobId, STAGE_WRITING_FILE)
+            log.info("[export {}] WRITING_FILE: {} rows -> {}", shortId, rowNum - 1, filePath)
+            val writeStart = System.currentTimeMillis()
 
             // Set column widths
             setFixedColumnWidths(sheet)
@@ -503,15 +646,20 @@ open class ExportJobService(
             FileOutputStream(filePath).use { fos ->
                 workbook.write(fos)
             }
+            val writeMs = System.currentTimeMillis() - writeStart
 
-            // Update job with file info (separate transaction)
+            // --- STAGE 4: FINALIZING ------------------------------------------
+            updateJobStage(jobId, STAGE_FINALIZING)
             val file = File(filePath)
-            markJobAsCompleted(jobId, filePath, fileName, file.length(), totalItems)
+            // Pass the actual count we wrote so status reflects reality even if
+            // totalItems drifts from live data between count and finish.
+            markJobAsCompleted(jobId, filePath, fileName, file.length(), processedItems)
 
-            val completedTime = LocalDateTime.now()
-            log.info("Job {} completed: {} rows, {} bytes, took {}ms",
-                jobId, rowNum - 1, file.length(),
-                java.time.Duration.between(startTime, completedTime).toMillis())
+            val totalMs = System.currentTimeMillis() - exportStart
+            log.info(
+                "[export {}] COMPLETED: rows={}, fileBytes={}, exportMs={}, writeMs={}, countMs={}",
+                shortId, rowNum - 1, file.length(), totalMs, writeMs, countMs
+            )
 
         } finally {
             workbook.close()

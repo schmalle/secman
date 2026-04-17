@@ -46,6 +46,12 @@ class ExportJob(
     @Column(length = 1000)
     var errorMessage: String? = null,
 
+    @Column(length = 30)
+    var currentStage: String? = null,
+
+    @Column
+    var lastHeartbeatAt: LocalDateTime? = null,
+
     @Column(nullable = false)
     var createdAt: LocalDateTime = LocalDateTime.now(),
 
