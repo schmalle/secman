@@ -34,26 +34,26 @@ dependencies {
     implementation("io.micronaut.data:micronaut-data-hibernate-jpa:4.14.3")
     implementation("io.micronaut.sql:micronaut-hibernate-jpa:7.0.0")
     implementation("io.micronaut.sql:micronaut-jdbc-hikari:7.0.0")
-    runtimeOnly("org.mariadb.jdbc:mariadb-java-client:3.5.7")
+    runtimeOnly("org.mariadb.jdbc:mariadb-java-client:3.5.8")
 
 	implementation("io.micronaut.flyway:micronaut-flyway:7.9.2")
-	runtimeOnly("org.flywaydb:flyway-core:12.1.1")
-	runtimeOnly("org.flywaydb:flyway-mysql:12.1.1")
+	runtimeOnly("org.flywaydb:flyway-core:12.4.0")
+	runtimeOnly("org.flywaydb:flyway-mysql:12.4.0")
 	
     // Security
     implementation("io.micronaut.security:micronaut-security-jwt:4.17.1")
     implementation("io.micronaut.security:micronaut-security-oauth2:4.17.1")
 
     // WebAuthn/Passkey support
-    implementation("com.webauthn4j:webauthn4j-core:0.31.1.RELEASE")
-    implementation("com.webauthn4j:webauthn4j-metadata:0.31.1.RELEASE")
+    implementation("com.webauthn4j:webauthn4j-core:0.31.3.RELEASE")
+    implementation("com.webauthn4j:webauthn4j-metadata:0.31.3.RELEASE")
 
     // Validation
     implementation("io.micronaut.validation:micronaut-validation")
     implementation("jakarta.validation:jakarta.validation-api")
 
     // XSS Prevention - Feature 047
-    implementation("com.googlecode.owasp-java-html-sanitizer:owasp-java-html-sanitizer:20260102.1")
+    implementation("com.googlecode.owasp-java-html-sanitizer:owasp-java-html-sanitizer:20260313.1")
 
     // Email
     implementation("io.micronaut.email:micronaut-email-javamail:2.11.0")
@@ -61,7 +61,7 @@ dependencies {
 
     // Email templates (Thymeleaf) - Feature 035
     implementation("io.micronaut.views:micronaut-views-thymeleaf")
-    implementation("org.thymeleaf:thymeleaf:3.1.3.RELEASE")
+    implementation("org.thymeleaf:thymeleaf:3.1.4.RELEASE")
     
     // Serialization
     implementation("io.micronaut.serde:micronaut-serde-jackson:2.16.2")
@@ -75,7 +75,7 @@ dependencies {
     // MCP (Model Context Protocol) Dependencies
     // Note: Using JSON-RPC and reactive streams for MCP implementation
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.10.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
     implementation("io.micronaut.reactor:micronaut-reactor")
     implementation("io.micronaut.reactor:micronaut-reactor-http-client")
     

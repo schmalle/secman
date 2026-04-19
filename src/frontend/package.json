@@ -16,7 +16,7 @@
     "@popperjs/core": "^2.11.8",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "astro": "6.1.7",
+    "astro": "6.1.8",
     "axios": "^1.15.0",
     "bootstrap": "^5.3.8",
     "bootstrap-icons": "^1.13.1",
@@ -24,18 +24,18 @@
     "chartjs-plugin-zoom": "^2.2.0",
     "date-fns": "^4.1.0",
     "exceljs": "^4.4.0",
-    "react": "^19.2.4",
+    "react": "^19.2.5",
     "react-chartjs-2": "^5.3.1",
-    "react-dom": "^19.2.4",
+    "react-dom": "^19.2.5",
     "react-markdown": "^10.1.0"
   },
   "devDependencies": {
-    "@types/node": "^25.5.0",
-    "@typescript-eslint/eslint-plugin": "^8.57.2",
-    "@typescript-eslint/parser": "^8.57.2",
+    "@types/node": "^25.6.0",
+    "@typescript-eslint/eslint-plugin": "^8.58.2",
+    "@typescript-eslint/parser": "^8.58.2",
     "eslint": "^9.39.4",
     "eslint-plugin-react": "^7.37.5",
-    "eslint-plugin-react-hooks": "^7.0.1"
+    "eslint-plugin-react-hooks": "^7.1.1"
   },
   "overrides": {
     "glob": "^11.1.0",

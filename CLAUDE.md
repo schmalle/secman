@@ -253,7 +253,7 @@ Run `/e2eexception`, `/admin-asset-e2e`, or `/e2ejs` to start the full E2E test 
 
 
 ---
-*Last updated: 2026-04-15*
+*Last updated: 2026-04-19*
 
 ## Active Technologies
 - **Backend**: Kotlin 2.3.20 / Java 21, Micronaut 4.10, Hibernate JPA, PicoCLI 4.7.7, Jakarta Mail, Apache POI, AWS SDK v2
