@@ -2,7 +2,7 @@
 
 Security requirement and risk assessment management tool.
 
-**Last Updated:** 2026-04-15
+**Last Updated:** 2026-04-16
 
 ---
 
@@ -235,7 +235,7 @@ See [CLI.md](./CLI.md) for all commands and cron setup.
 ```bash
 # Backend
 curl http://localhost:8080/health
-# Expected: {"status":"UP","service":"secman-backend-ng"}
+# Expected: {"status":"UP","service":"secman-backend-ng","version":"0.1"}
 
 # Frontend
 curl http://localhost:4321/

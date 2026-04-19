@@ -1,7 +1,7 @@
 # S3 User Mapping Import
 
 **Feature**: 065-s3-user-mapping-import
-**Last Updated**: 2026-02-13
+**Last Updated**: 2026-04-16
 
 Import user mappings (domain and AWS account associations) directly from CSV or JSON files stored in AWS S3 buckets via the CLI.
 

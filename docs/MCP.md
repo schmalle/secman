@@ -1,7 +1,7 @@
 # MCP (Model Context Protocol) Integration Guide
 
-**Last Updated:** 2026-04-02
-**Version:** 5.0
+**Last Updated:** 2026-04-16
+**Version:** 5.1
 
 This guide covers integrating Secman with AI assistants (Claude Desktop, Claude Code, ChatGPT, etc.) using the Model Context Protocol (MCP).
 
@@ -34,7 +34,7 @@ Secman supports the Model Context Protocol (MCP), allowing AI assistants to prog
 - **Vulnerability Data** - Search vulnerabilities by severity, CVE, or affected asset
 - **Scan Results** - Review network scan history and discovered services
 
-The MCP server exposes **53 tools** for comprehensive security management workflows.
+The MCP server exposes **52 tools** for comprehensive security management workflows.
 
 ### Prerequisites
 
@@ -434,6 +434,38 @@ Retrieve profile for a single asset including vulnerabilities and scan history.
 
 #### `get_asset_complete_profile`
 Retrieve complete asset profile with all vulnerabilities and scan results.
+
+#### `create_asset`
+Create a new asset in the inventory. **Requires User Delegation.**
+
+Duplicate detection: returns an error if an asset with the same name already exists (case-insensitive). The delegated user is recorded as `manualCreator` for access control.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `name` | string | Yes | Asset hostname or name (max 255 characters) |
+| `type` | string | Yes | Asset type (e.g., `SERVER`, `WORKSTATION`, `NETWORK_DEVICE`) |
+| `owner` | string | Yes | Owner username (max 255 characters) |
+| `ip` | string | No | IP address |
+| `description` | string | No | Asset description |
+| `criticality` | enum | No | `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, or `NA` |
+| `adDomain` | string | No | Active Directory domain |
+| `cloudAccountId` | string | No | AWS account ID |
+
+#### `update_asset`
+Update an existing asset's properties. **Requires User Delegation.**
+
+Supports partial updates — only provided fields are modified. Row-level access control applies: users can only update assets they have access to. Workgroup reassignment is handled via `assign_assets_to_workgroup` instead.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `assetId` | number | Yes | ID of the asset to update |
+| `name` | string | No | New asset name (max 255 characters) |
+| `type` | string | No | New asset type |
+| `owner` | string | No | New owner username |
+| `ip` | string | No | New IP address |
+| `description` | string | No | New asset description |
+| `criticality` | enum | No | `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, or `NA` |
+| `adDomain` | string | No | New Active Directory domain |
 
 ### Vulnerability Management
 

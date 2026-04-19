@@ -1,9 +1,16 @@
 # Secman CLI Reference
 
-**Last Updated:** 2026-04-01
-**Version:** 1.0
+**Last Updated:** 2026-04-16
+**Version:** 1.1
 
 Command-line interface for CrowdStrike vulnerability queries, notifications, user mapping management, and manual vulnerability entry.
+
+> **Invocation Styles:** The examples below use `java -jar secman-cli.jar ...` to document the raw JAR invocation. During local development or scripted usage, you can substitute any of the following equivalent wrappers:
+>
+> - `./scripts/secman <command>` — symlink to `secmancli`, uses 1Password to inject secrets from `secman.env`
+> - `./scripts/secmanng <command>` — alternative 1Password-based wrapper with explicit env exports (e.g. `SECMAN_INSECURE` for self-signed SSL)
+>
+> See [1PASSWORD.md](./1PASSWORD.md) for details on which secrets each wrapper resolves.
 
 ---
 
