@@ -25,8 +25,8 @@ The E2E test (`tests/e2e/admin-asset-vuln.spec.ts`) performs:
 ## High-Level Loop
 
 ```
-1. Start backend   (gradle :backendng:clean :backendng:run)
-2. Start frontend  (npm run dev)
+1. Start backend   (./scriptpp/startbackenddev.sh)
+2. Start frontend  (./scriptpp/startfrontenddev.sh)
 3. Wait for both to be healthy
 4. Run E2E test
 5. IF all green → done, report success
@@ -44,17 +44,19 @@ The E2E test (`tests/e2e/admin-asset-vuln.spec.ts`) performs:
 
 ### Phase 1 — Environment Setup
 
-Read the project-specific configuration from `e2e-runner.config.json` in the
-project root. Fall back to sensible defaults if the file is missing:
+This skill is **pinned to Proton Pass** — always start services via the
+Proton Pass wrapper scripts below, ignoring `backend.start` / `frontend.start`
+in `e2e-runner.config.json` (which still references the 1Password `op run`
+wrapper). The health URLs and timeouts may still come from the config file.
 
-| Setting                  | Default                                  |
-| ------------------------ | ---------------------------------------- |
-| `backend.start`          | `gradle :backendng:clean :backendng:run` |
-| `backend.healthUrl`      | `http://localhost:8080`                  |
-| `backend.healthTimeout`  | `120` (seconds)                          |
-| `frontend.start`         | `npm run dev`                            |
-| `frontend.healthUrl`     | `http://localhost:4321`                  |
-| `frontend.healthTimeout` | `60` (seconds)                           |
+| Setting                  | Default                           |
+| ------------------------ | --------------------------------- |
+| `backend.start`          | `./scriptpp/startbackenddev.sh`   |
+| `backend.healthUrl`      | `http://localhost:8080`           |
+| `backend.healthTimeout`  | `120` (seconds)                   |
+| `frontend.start`         | `./scriptpp/startfrontenddev.sh`  |
+| `frontend.healthUrl`     | `http://localhost:4321`           |
+| `frontend.healthTimeout` | `60` (seconds)                    |
 
 **Starting services:**
 
@@ -65,13 +67,18 @@ project root. Fall back to sensible defaults if the file is missing:
 
 ### Phase 2 — Run Tests
 
-Execute the specific admin asset test:
+Execute the specific admin asset test with Proton Pass secret injection:
 
 ```bash
-cd tests/e2e && npx playwright test admin-asset-vuln.spec.ts --project=chrome
+export SECMAN_ADMIN_NAME="pass://Test/SECMAN/SECMAN_ADMIN_NAME"
+export SECMAN_ADMIN_PASS="pass://Test/SECMAN/SECMAN_ADMIN_PASS"
+export SECMAN_USER_USER="pass://Test/SECMAN/SECMAN_USER_USER"
+export SECMAN_USER_PASS="pass://Test/SECMAN/SECMAN_USER_PASS"
+
+cd tests/e2e && pass-cli run -- npx playwright test admin-asset-vuln.spec.ts --project=chrome
 ```
 
-Set environment variables for credentials:
+Credentials used by Playwright:
 - `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS` (admin credentials)
 - `SECMAN_USER_USER` / `SECMAN_USER_PASS` (normal user credentials)
 
@@ -131,7 +138,11 @@ Fix in priority order: **backend errors first**, then frontend.
 ## Important Notes
 
 - **Never commit or push** — only edit files locally.
-- **Secrets**: If the backend needs secrets via `op run`, the user's config
-  should wrap the start command accordingly.
+- **Secrets are handled by Proton Pass** — `scriptpp/startbackenddev.sh` and
+  `scriptpp/startfrontenddev.sh` use `pass-cli run` to inject secrets into the
+  backend/frontend. The Playwright test invocation is also wrapped with
+  `pass-cli run` to resolve `SECMAN_*` credentials.
+- **Always use the Proton Pass variants** (`scriptpp/*.sh`). Do not fall back
+  to the 1Password scripts in `scripts/` — this skill is pinned to Proton Pass.
 - **Port collisions**: Before starting, check if ports are in use.
 - Prefer reading `scripts/wait-for-health.sh` for health-checking logic.

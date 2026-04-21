@@ -16,7 +16,7 @@ until the test passes or you've exhausted the retry budget.
 
 ## Test Overview
 
-The test script (`scripts/test/test-e2e-exception-workflowsupport.sh`) performs
+The test script (`scriptpp/test/test-e2e-exception-workflowsupport.sh`) performs
 an 11-step MCP-based workflow:
 
 1. Clean up pre-existing test user (if any)
@@ -37,8 +37,8 @@ for direct database operations (cleanup, view truncation, ID lookups).
 ## High-Level Loop
 
 ```
-1. Start backend   (scripts/startbackenddev.sh)
-2. Start frontend  (scripts/startfrontenddev.sh)
+1. Start backend   (scriptpp/startbackenddev.sh)
+2. Start frontend  (scriptpp/startfrontenddev.sh)
 3. Wait for both to be healthy
 4. Run E2E exception workflow test
 5. IF all green -> done, report success
@@ -69,13 +69,13 @@ running. This ensures a clean state for each attempt.
 
 3. **Start backend** in background:
    ```bash
-   nohup ./scripts/startbackenddev.sh > .e2e-logs/backend.log 2>&1 &
+   nohup ./scriptpp/startbackenddev.sh > .e2e-logs/backend.log 2>&1 &
    ```
    Record the PID so you can kill it later.
 
 4. **Start frontend** in background:
    ```bash
-   nohup ./scripts/startfrontenddev.sh > .e2e-logs/frontend.log 2>&1 &
+   nohup ./scriptpp/startfrontenddev.sh > .e2e-logs/frontend.log 2>&1 &
    ```
    Record the PID.
 
@@ -85,19 +85,19 @@ running. This ensures a clean state for each attempt.
 
 ### Phase 2 — Run Tests
 
-Execute the exception workflow test with 1Password secret injection:
+Execute the exception workflow test with Proton Pass secret injection:
 
 ```bash
 export BASE_URL="http://localhost:8080"
-export API_KEY="op://test/secman/MCP_API_KEY"
-export SECMAN_ADMIN_EMAIL="op://test/secman/SECMAN_ADMIN_EMAIL"
+export API_KEY="pass://Test/SECMAN/MCP_API_KEY"
+export SECMAN_ADMIN_EMAIL="pass://Test/SECMAN/SECMAN_ADMIN_EMAIL"
 
-op run -- ./scripts/test/test-e2e-exception-workflowsupport.sh --verbose 2>&1 | tee .e2e-logs/e2e-exception-run-<N>.log
+pass-cli run -- ./scriptpp/test/test-e2e-exception-workflowsupport.sh --verbose 2>&1 | tee .e2e-logs/e2e-exception-run-<N>.log
 ```
 
 Where `<N>` is the iteration number (starting at 1).
 
-**Required tools on the system**: `curl`, `jq`, `mariadb`, `op` (1Password CLI).
+**Required tools on the system**: `curl`, `jq`, `mariadb`, `pass-cli` (Proton Pass CLI).
 
 ### Phase 2.5 — Error Classification
 
@@ -176,11 +176,11 @@ After fixing, restart **both** services:
 
 ```bash
 # Start backend
-nohup ./scripts/startbackenddev.sh > .e2e-logs/backend.log 2>&1 &
+nohup ./scriptpp/startbackenddev.sh > .e2e-logs/backend.log 2>&1 &
 BACKEND_PID=$!
 
 # Start frontend
-nohup ./scripts/startfrontenddev.sh > .e2e-logs/frontend.log 2>&1 &
+nohup ./scriptpp/startfrontenddev.sh > .e2e-logs/frontend.log 2>&1 &
 FRONTEND_PID=$!
 ```
 
@@ -216,9 +216,11 @@ Go back to Phase 2 and re-run the test script. Increment the iteration counter.
 ## Important Notes
 
 - **Never commit or push** — only edit files locally.
-- **Secrets are handled by 1Password** — `scripts/startbackenddev.sh` and
-  `scripts/startfrontenddev.sh` use `op run` to inject secrets. The test script
-  must also be run with `op run` to resolve `API_KEY` and `SECMAN_ADMIN_EMAIL`.
+- **Secrets are handled by Proton Pass** — `scriptpp/startbackenddev.sh` and
+  `scriptpp/startfrontenddev.sh` use `pass-cli run` to inject secrets. The test script
+  must also be run with `pass-cli run` to resolve `API_KEY` and `SECMAN_ADMIN_EMAIL`.
+- **Always use the Proton Pass variants** (`scriptpp/*.sh` and `scriptpp/test/*.sh`).
+  Do not fall back to the 1Password scripts in `scripts/` — this skill is pinned to Proton Pass.
 - **Port collisions**: Before starting, check if ports 8080 and 4321 are in use
   and kill existing processes.
 - **Log files** go to `.e2e-logs/` — this directory is gitignored.
