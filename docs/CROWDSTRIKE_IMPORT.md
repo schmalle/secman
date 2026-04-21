@@ -561,6 +561,19 @@ $ curl -s https://secman.example.com/api/crowdstrike/last-checkin
 never
 ```
 
+### Ready-made monitoring script
+
+A stdlib-only Python script that polls this endpoint and raises a Telegram
+alert when the checkin is older than a configurable threshold (or `never`)
+lives at [`src/clinotify/check_crowdstrike_checkin.py`](../src/clinotify/README.md).
+Typical cron usage:
+
+```bash
+*/10 * * * * TELEGRAM_BOT_TOKEN=... TELEGRAM_CHAT_ID=... \
+  /opt/secman/src/clinotify/check_crowdstrike_checkin.py \
+  --url https://secman.example.com --max-age-minutes 120
+```
+
 ---
 
 ## See Also
