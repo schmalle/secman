@@ -15,6 +15,7 @@ import com.secman.util.ValidationUtils
 import io.micronaut.cache.annotation.CacheInvalidate
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.HttpStatus
+import io.micronaut.http.MediaType
 import io.micronaut.http.annotation.*
 import io.micronaut.scheduling.TaskExecutors
 import io.micronaut.scheduling.annotation.ExecuteOn
@@ -343,6 +344,23 @@ open class CrowdStrikeController(
     open fun getLatestImportStatus(): HttpResponse<*> {
         val status: CrowdStrikeImportStatusDto? = importService.getLatestImportStatus()
         return status?.let { HttpResponse.ok(it) } ?: HttpResponse.noContent<CrowdStrikeImportStatusDto>()
+    }
+
+    /**
+     * Public endpoint: returns the timestamp of the most recent CrowdStrike
+     * checkin (i.e. the latest successful CrowdStrike import) as an ISO-8601
+     * string, or the literal string "never" if no import has ever occurred.
+     *
+     * Unauthenticated by design so that external monitoring / dashboards can
+     * poll the freshness of CrowdStrike data without needing API credentials.
+     * Only a single timestamp (or "never") is exposed — no other information.
+     */
+    @Get("/crowdstrike/last-checkin", produces = [MediaType.TEXT_PLAIN])
+    @Secured(SecurityRule.IS_ANONYMOUS)
+    open fun getLastCheckin(): HttpResponse<String> {
+        val status = importService.getLatestImportStatus()
+        val body = status?.importedAt?.toString() ?: "never"
+        return HttpResponse.ok(body)
     }
 
     /**
