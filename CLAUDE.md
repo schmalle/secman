@@ -58,6 +58,8 @@ Users access assets if **ANY** is true:
 
 **Auth**: POST /api/auth/login, GET /oauth/{authorize,callback}
 
+**CrowdStrike**: POST /api/crowdstrike/servers/import (ADMIN/VULN), GET /api/crowdstrike/servers/import/latest (ADMIN/VULN), POST /api/crowdstrike/vulnerabilities/save (ADMIN/VULN), GET /api/crowdstrike/vulnerabilities (ADMIN/VULN), GET /api/crowdstrike/last-checkin (PUBLIC, returns ISO-8601 timestamp of the last import as `text/plain`, or `"never"` if no import has happened)
+
 **User Mappings**: GET /api/user-mappings/{current,applied-history} (ADMIN), POST/PUT/DELETE /api/user-mappings[/{id}] (ADMIN)
 
 **AWS Account Sharing**: GET/POST /api/aws-account-sharing (ADMIN), DELETE /api/aws-account-sharing/{id} (ADMIN)
