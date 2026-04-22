@@ -255,7 +255,7 @@ Run `/e2eexception`, `/admin-asset-e2e`, or `/e2ejs` to start the full E2E test 
 
 
 ---
-*Last updated: 2026-04-19*
+*Last updated: 2026-04-22*
 
 ## Active Technologies
 - **Backend**: Kotlin 2.3.20 / Java 21, Micronaut 4.10, Hibernate JPA, PicoCLI 4.7.7, Jakarta Mail, Apache POI, AWS SDK v2
@@ -269,4 +269,5 @@ Run `/e2eexception`, `/admin-asset-e2e`, or `/e2ejs` to start the full E2E test 
 - MariaDB 11.4 — one new table `user_mapping_statistics_log` created via Hibernate auto-migration + a Flyway script (per Constitution VI) (085-cli-mappings-email)
 
 ## Recent Changes
-- 058-ai-norm-mapping: Added Kotlin 2.2.21 / Java 21 (backend), TypeScript/React 19 (frontend) + Micronaut 4.10, Hibernate JPA, Axios, Bootstrap 5.3
+- 085-cli-mappings-email: Added `--send-email` flag to `manage-user-mappings list` CLI command, `user_mapping_statistics_log` table
+- 058-ai-norm-mapping: Added AI-powered norm mapping feature

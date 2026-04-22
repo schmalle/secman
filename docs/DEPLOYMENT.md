@@ -1,6 +1,6 @@
 # Secman Deployment Guide
 
-**Last Updated:** 2026-04-15
+**Last Updated:** 2026-04-22
 **Version:** 2.0
 **Platforms:** Amazon Linux 2023, Ubuntu 20.04+, RHEL 8+
 

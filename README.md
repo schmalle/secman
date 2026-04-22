@@ -110,7 +110,7 @@ SecMan is a full-stack security management platform that helps organizations man
 
 - **Model Context Protocol** support for AI assistants (Claude, etc.)
 - Streamable HTTP transport (direct connection, no middleware required)
-- 52 MCP tools for requirements, assets, vulnerabilities, scans, releases, user mappings, workgroups, AWS account sharing, vulnerability heatmap, and more
+- 53 MCP tools for requirements, assets, vulnerabilities, scans, releases, user mappings, workgroups, AWS account sharing, vulnerability heatmap, and more
 - User delegation (act on behalf of users)
 - API key management with granular permissions
 - Rate limiting and session management
@@ -237,7 +237,7 @@ secman/
 ├── src/
 │   ├── backendng/          # Kotlin/Micronaut backend
 │   │   ├── src/main/kotlin/com/secman/
-│   │   │   ├── controller/ # REST controllers (62 controllers)
+│   │   │   ├── controller/ # REST controllers (63 controllers)
 │   │   │   ├── domain/     # JPA entities
 │   │   │   ├── repository/ # Data repositories
 │   │   │   ├── service/    # Business logic (97 services)
@@ -510,6 +510,7 @@ Comprehensive documentation is available in the `docs/` directory:
 | [S3 User Mapping Import](docs/S3_USER_MAPPING_IMPORT.md) | S3-based user mapping imports               |
 | [E2E Exception Workflow](docs/E2E_EXCEPTION_WORKFLOW_TEST.md) | End-to-end exception workflow test      |
 | [1Password Credentials](docs/1PASSWORD.md)            | Secret management with 1Password CLI           |
+| [Docker Deployment](docker/README.md)                 | Docker container deployment                    |
 
 ## Contributing
 
