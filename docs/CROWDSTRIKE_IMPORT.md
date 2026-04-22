@@ -528,6 +528,41 @@ Comprehensive integration tests verify duplicate prevention:
 
 ---
 
+## Public Checkin Freshness Endpoint
+
+For external monitoring / dashboards that need to verify CrowdStrike data is
+still being refreshed, secman exposes a single **unauthenticated** endpoint:
+
+```
+GET /api/crowdstrike/last-checkin
+```
+
+- **Auth**: none (public)
+- **Content-Type**: `text/plain`
+- **Response body**: either the ISO-8601 timestamp of the most recent
+  successful CrowdStrike import (e.g. `2026-04-21T08:42:13.511`), or the
+  literal string `never` if no import has ever been recorded.
+- **No other information** is returned — not the user who triggered it, not
+  the number of vulnerabilities imported, etc.
+
+The timestamp comes from the latest row in `crowdstrike_import_history`
+(`imported_at`), which is written by
+`CrowdStrikeVulnerabilityImportService.recordImportHistory()` at the end of
+every batch import (including CLI-driven imports via
+`./scripts/secman query servers --save`).
+
+**Example**:
+
+```bash
+$ curl -s https://secman.example.com/api/crowdstrike/last-checkin
+2026-04-21T08:42:13.511
+
+$ curl -s https://secman.example.com/api/crowdstrike/last-checkin
+never
+```
+
+---
+
 ## See Also
 
 - [CLI Reference](./CLI.md) - CrowdStrike query commands
