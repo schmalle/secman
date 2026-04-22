@@ -1,6 +1,6 @@
 # Troubleshooting Guide
 
-**Last Updated:** 2026-04-15
+**Last Updated:** 2026-04-22
 
 This guide consolidates common issues and solutions for all Secman components.
 

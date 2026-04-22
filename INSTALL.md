@@ -1,6 +1,6 @@
 # Secman Installation Guide
 
-**Last Updated:** 2026-04-16
+**Last Updated:** 2026-04-22
 
 Complete installation instructions for new users of the Secman security management application.
 
