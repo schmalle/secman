@@ -338,7 +338,7 @@ const MyExceptionRequests: React.FC = () => {
                                         <br />
                                         Request an exception from the vulnerabilities view.
                                     </p>
-                                    <a href="/current-vulnerabilities" className="btn btn-primary mt-2">
+                                    <a href="/vulnerabilities/current" className="btn btn-primary mt-2">
                                         <i className="bi bi-shield-exclamation me-2"></i>
                                         View Vulnerabilities
                                     </a>

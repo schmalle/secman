@@ -153,12 +153,8 @@ export async function getMyRequests(
     throw new Error('Unauthorized. Please login again.');
   }
 
-  if (response.status === 500) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to fetch exception requests.');
-  }
-
-  throw new Error(`Failed to fetch exception requests: ${response.status}`);
+  const error = await safeReadError(response);
+  throw new Error(error || `Failed to fetch exception requests: ${response.status}`);
 }
 
 /**
@@ -179,12 +175,29 @@ export async function getMySummary(): Promise<ExceptionRequestSummaryDto> {
     throw new Error('Unauthorized. Please login again.');
   }
 
-  if (response.status === 500) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to fetch request summary.');
-  }
+  const error = await safeReadError(response);
+  throw new Error(error || `Failed to fetch request summary: ${response.status}`);
+}
 
-  throw new Error(`Failed to fetch request summary: ${response.status}`);
+/**
+ * Read an error body tolerantly — the server may emit a JSON ErrorResponse,
+ * a plain string, or an empty body (which would otherwise break JSON.parse
+ * with "Unexpected end of JSON input"). Returns the best human-readable
+ * message available, or an empty string if nothing usable was returned.
+ */
+async function safeReadError(response: Response): Promise<string> {
+  try {
+    const text = await response.text();
+    if (!text) return '';
+    try {
+      const parsed = JSON.parse(text);
+      return parsed.error || parsed.details || parsed.message || text;
+    } catch {
+      return text;
+    }
+  } catch {
+    return '';
+  }
 }
 
 /**
