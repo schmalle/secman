@@ -44,7 +44,7 @@ The scripts create a database setup matching the application defaults:
 
 This configuration is used by:
 - `src/backendng/src/main/resources/application.yml` - Backend database configuration
-- `docker-compose.yml` - Docker Compose database service
+- `docker/` - Docker container setup scripts
 - All database management scripts in this directory
 
 Override via environment variables: `DB_USERNAME`, `DB_PASSWORD`, `DB_CONNECT`
@@ -81,7 +81,7 @@ The auto-generated password is printed to the **backend console output** on firs
 ## Security Notes
 
 - **Database password:** Change `CHANGEME` to a strong password in production. Set via `DB_PASSWORD` environment variable.
-- **Admin password:** The default admin password (`password`) must be changed immediately after first login.
+- **Admin password:** The auto-generated admin password (printed to console on first startup) must be changed immediately after first login.
 - **Privileges:** The `secman` database user is granted only the privileges needed for application operation (no SUPER, GRANT, or global privileges).
 - **Localhost only:** The database user is restricted to localhost connections.
 - See `docs/ENVIRONMENT.md` for the full production security checklist.

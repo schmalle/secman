@@ -1,6 +1,6 @@
 # Secman Architecture
 
-**Last Updated:** 2026-04-22
+**Last Updated:** 2026-04-23
 
 This document describes the system architecture, data model, and design patterns used in Secman.
 
@@ -78,7 +78,7 @@ Secman is a security requirement and risk assessment management tool consisting 
 
 ### Backend (`src/backendng/`)
 
-The backend follows a layered architecture with 63 controllers:
+The backend follows a layered architecture with 62 controllers:
 
 ```
 +-----------------------------------------------------------------+
@@ -549,7 +549,7 @@ secman/
 │   │       ├── repository/           # Data access
 │   │       ├── service/              # Business logic
 │   │       │   └── mcp/              # MCP-specific services
-│   │       ├── controller/           # REST endpoints (63 controllers)
+│   │       ├── controller/           # REST endpoints (62 controllers)
 │   │       ├── config/               # Configuration
 │   │       ├── dto/                  # DTOs
 │   │       │   └── mcp/              # MCP DTOs
