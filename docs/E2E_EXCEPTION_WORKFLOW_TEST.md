@@ -1,7 +1,7 @@
 # E2E Vulnerability Exception Workflow Test
 
 **Feature**: 063-e2e-vuln-exception
-**Last Updated**: 2026-04-16
+**Last Updated**: 2026-04-23
 
 This document describes how to run the end-to-end test for the vulnerability exception workflow.
 
