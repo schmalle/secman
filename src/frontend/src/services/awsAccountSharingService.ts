@@ -22,8 +22,26 @@ export interface AwsAccountSharing {
 }
 
 export interface CreateAwsAccountSharingRequest {
-    sourceUserId: number;
-    targetUserId: number;
+    // Either *UserId or *UserEmail must be provided for each side.
+    // Use email when selecting a "pending" user (one known only via
+    // UserMapping who hasn't logged in yet) — the backend creates the
+    // User record lazily so the sharing rule's FK is satisfied.
+    sourceUserId?: number | null;
+    sourceUserEmail?: string | null;
+    targetUserId?: number | null;
+    targetUserEmail?: string | null;
+}
+
+/**
+ * Entry in the sharing-form user dropdown. Returned by
+ * GET /api/aws-account-sharing/users — includes both active users and
+ * pending users (users recorded in UserMapping who have never logged in).
+ */
+export interface SharingUser {
+    id: number | null;
+    username: string;
+    email: string;
+    isPending: boolean;
 }
 
 export interface AwsAccountSharingListResponse {

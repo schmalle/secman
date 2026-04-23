@@ -1,11 +1,31 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { authenticatedGet, getUser, isAdmin as checkIsAdmin } from '../utils/auth';
+import { authenticatedGet, getUser, hasRole } from '../utils/auth';
 import {
     listSharingRules,
     createSharingRule,
     deleteSharingRule,
     type AwsAccountSharing,
+    type SharingUser,
 } from '../services/awsAccountSharingService';
+
+// Dropdown selection is encoded as "id:<number>" for active users or
+// "email:<addr>" for pending users (those recorded in UserMapping but never
+// logged in). This keeps a single string value on the <select> while
+// preserving which side of the API contract to use at submit time.
+const encodeUserOption = (u: SharingUser): string =>
+    u.id != null ? `id:${u.id}` : `email:${u.email}`;
+
+// View-all users (ADMIN, SECCHAMPION) see every sharing rule in the system.
+// Everyone else (including VULN) is scoped on the backend to rules where they
+// are source OR target — the component still renders the "admin-style" layout
+// for those users, because they see rules involving OTHER accounts (as target).
+const checkHasFullViewAccess = (): boolean =>
+    hasRole('ADMIN') || hasRole('SECCHAMPION');
+
+// Manage-any users (ADMIN, SECCHAMPION) can create rules with any source and
+// delete any rule. VULN and everyone else are restricted to source = self.
+const checkCanManageAnyRule = (): boolean =>
+    hasRole('ADMIN') || hasRole('SECCHAMPION');
 
 interface User {
     id: number;
@@ -16,11 +36,12 @@ interface User {
 
 const AwsAccountSharingManager: React.FC = () => {
     const [sharingRules, setSharingRules] = useState<AwsAccountSharing[]>([]);
-    const [users, setUsers] = useState<User[]>([]);
+    const [users, setUsers] = useState<SharingUser[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
-    const [isAdmin, setIsAdmin] = useState(false);
+    const [hasFullViewAccess, setHasFullViewAccess] = useState(false);
+    const [canManageAnyRule, setCanManageAnyRule] = useState(false);
     const [currentUser, setCurrentUser] = useState<User | null>(null);
 
     // Pagination
@@ -31,16 +52,17 @@ const AwsAccountSharingManager: React.FC = () => {
 
     // Create form
     const [showCreateForm, setShowCreateForm] = useState(false);
-    const [sourceUserId, setSourceUserId] = useState<number | ''>('');
-    const [targetUserId, setTargetUserId] = useState<number | ''>('');
+    // Encoded "id:<n>" or "email:<addr>" — see encodeUserOption.
+    const [sourceSelection, setSourceSelection] = useState<string>('');
+    const [targetSelection, setTargetSelection] = useState<string>('');
     const [isCreating, setIsCreating] = useState(false);
 
     // Delete confirmation
     const [deletingId, setDeletingId] = useState<number | null>(null);
 
     useEffect(() => {
-        const admin = checkIsAdmin();
-        setIsAdmin(admin);
+        setHasFullViewAccess(checkHasFullViewAccess());
+        setCanManageAnyRule(checkCanManageAnyRule());
         const user = getUser();
         setCurrentUser(user);
     }, []);
@@ -71,11 +93,13 @@ const AwsAccountSharingManager: React.FC = () => {
 
     const fetchUsers = useCallback(async () => {
         try {
-            // Admins use the full user list; non-admins use the lightweight sharing endpoint
-            const url = checkIsAdmin() ? '/api/users' : '/api/aws-account-sharing/users';
-            const response = await authenticatedGet(url);
+            // Always use the sharing-specific endpoint — it returns both active
+            // users and pending users (known via UserMapping but never logged in).
+            // The admin /api/users endpoint, by contrast, only lists real User
+            // records and would drop pending entries from the dropdowns.
+            const response = await authenticatedGet('/api/aws-account-sharing/users');
             if (response.ok) {
-                const data = await response.json();
+                const data = (await response.json()) as SharingUser[];
                 setUsers(data);
             }
         } catch {
@@ -91,29 +115,45 @@ const AwsAccountSharingManager: React.FC = () => {
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        const effectiveSourceUserId = isAdmin ? sourceUserId : currentUser?.id;
-        if (!effectiveSourceUserId || targetUserId === '') {
-            showError(isAdmin ? 'Please select both source and target users' : 'Please select a target user');
+        // Non-privileged users never pick a source — it's forced to self.
+        const effectiveSourceSelection = canManageAnyRule
+            ? sourceSelection
+            : (currentUser ? `id:${currentUser.id}` : '');
+
+        if (!effectiveSourceSelection || !targetSelection) {
+            showError(canManageAnyRule ? 'Please select both source and target users' : 'Please select a target user');
             return;
         }
-        if (effectiveSourceUserId === targetUserId) {
+        if (effectiveSourceSelection === targetSelection) {
             showError('Source and target user cannot be the same');
             return;
         }
 
+        // Decode "id:<n>" or "email:<addr>" into the matching request fields.
+        const decode = (value: string): { id?: number; email?: string } => {
+            if (value.startsWith('id:')) return { id: Number(value.slice(3)) };
+            if (value.startsWith('email:')) return { email: value.slice(6) };
+            return {};
+        };
+        const src = decode(effectiveSourceSelection);
+        const tgt = decode(targetSelection);
+
         setIsCreating(true);
         try {
             const result = await createSharingRule({
-                sourceUserId: effectiveSourceUserId as number,
-                targetUserId: targetUserId as number,
+                sourceUserId: src.id ?? null,
+                sourceUserEmail: src.email ?? null,
+                targetUserId: tgt.id ?? null,
+                targetUserEmail: tgt.email ?? null,
             });
             showSuccess(
                 `Sharing rule created: ${result.sourceUserEmail} → ${result.targetUserEmail} (${result.sharedAwsAccountCount} accounts)`
             );
             setShowCreateForm(false);
-            setSourceUserId('');
-            setTargetUserId('');
+            setSourceSelection('');
+            setTargetSelection('');
             fetchSharingRules();
+            fetchUsers(); // A pending user may have just been materialized — refresh dropdowns.
         } catch (err: any) {
             showError(err.message || 'Failed to create sharing rule');
         } finally {
@@ -157,12 +197,12 @@ const AwsAccountSharingManager: React.FC = () => {
             </div>
 
             <p className="text-muted mb-3">
-                {isAdmin ? (
+                {hasFullViewAccess ? (
                     <>Share AWS account visibility between users. When User A's accounts are shared with User B,
                     User B can see all assets belonging to User A's AWS accounts. Sharing is directional and non-transitive.</>
                 ) : (
-                    <>Share your AWS account visibility with other users. When you share your accounts with another user,
-                    they can see all assets belonging to your AWS accounts. Sharing is directional and non-transitive.</>
+                    <>View the AWS account sharing rules you are involved in — either sharing your AWS accounts
+                    out, or receiving visibility into another user's accounts. Sharing is directional and non-transitive.</>
                 )}
             </p>
 
@@ -187,8 +227,8 @@ const AwsAccountSharingManager: React.FC = () => {
                         <h5 className="card-title">Create Sharing Rule</h5>
                         <form onSubmit={handleCreate}>
                             <div className="row g-3">
-                                {isAdmin ? (
-                                    /* Admin: full source user selector */
+                                {canManageAnyRule ? (
+                                    /* ADMIN/SECCHAMPION: full source user selector */
                                     <div className="col-md-5">
                                         <label htmlFor="sourceUser" className="form-label">
                                             Source User (shares their AWS accounts)
@@ -196,20 +236,20 @@ const AwsAccountSharingManager: React.FC = () => {
                                         <select
                                             id="sourceUser"
                                             className="form-select"
-                                            value={sourceUserId}
-                                            onChange={(e) => setSourceUserId(e.target.value ? Number(e.target.value) : '')}
+                                            value={sourceSelection}
+                                            onChange={(e) => setSourceSelection(e.target.value)}
                                             required
                                         >
                                             <option value="">-- Select source user --</option>
                                             {users.map((user) => (
-                                                <option key={user.id} value={user.id}>
-                                                    {user.username} ({user.email})
+                                                <option key={encodeUserOption(user)} value={encodeUserOption(user)}>
+                                                    {user.username} ({user.email}){user.isPending ? ' — pending' : ''}
                                                 </option>
                                             ))}
                                         </select>
                                     </div>
                                 ) : (
-                                    /* Non-admin: source is fixed to current user */
+                                    /* VULN and other users: source is fixed to current user */
                                     <div className="col-md-5">
                                         <label className="form-label">
                                             Source User (you)
@@ -232,16 +272,19 @@ const AwsAccountSharingManager: React.FC = () => {
                                     <select
                                         id="targetUser"
                                         className="form-select"
-                                        value={targetUserId}
-                                        onChange={(e) => setTargetUserId(e.target.value ? Number(e.target.value) : '')}
+                                        value={targetSelection}
+                                        onChange={(e) => setTargetSelection(e.target.value)}
                                         required
                                     >
                                         <option value="">-- Select target user --</option>
-                                        {users.filter(u => u.id !== currentUser?.id).map((user) => (
-                                            <option key={user.id} value={user.id}>
-                                                {user.username} ({user.email})
-                                            </option>
-                                        ))}
+                                        {users
+                                            .filter(u => u.id !== currentUser?.id &&
+                                                u.email.toLowerCase() !== currentUser?.email.toLowerCase())
+                                            .map((user) => (
+                                                <option key={encodeUserOption(user)} value={encodeUserOption(user)}>
+                                                    {user.username} ({user.email}){user.isPending ? ' — pending' : ''}
+                                                </option>
+                                            ))}
                                     </select>
                                 </div>
                                 <div className="col-md-1 d-flex align-items-end">
@@ -273,9 +316,9 @@ const AwsAccountSharingManager: React.FC = () => {
                 </div>
             ) : sharingRules.length === 0 ? (
                 <div className="alert alert-info">
-                    {isAdmin
+                    {hasFullViewAccess
                         ? 'No AWS account sharing rules configured. Click "Create Sharing Rule" to add one.'
-                        : 'You have not shared your AWS accounts with anyone yet. Click "Create Sharing Rule" to share.'}
+                        : 'No sharing rules involve you yet. Click "Create Sharing Rule" to share your accounts with someone else.'}
                 </div>
             ) : (
                 <>
@@ -283,7 +326,10 @@ const AwsAccountSharingManager: React.FC = () => {
                         <table className="table table-striped table-hover">
                             <thead className="table-dark">
                                 <tr>
-                                    {isAdmin && <th>Source User</th>}
+                                    {/* Always show source — non-privileged users now see rules
+                                        where they're the TARGET, so the source column is their
+                                        view into who shared accounts with them. */}
+                                    <th>Source User</th>
                                     <th>Target User</th>
                                     <th>Shared Accounts</th>
                                     <th>Created By</th>
@@ -294,13 +340,11 @@ const AwsAccountSharingManager: React.FC = () => {
                             <tbody>
                                 {sharingRules.map((rule) => (
                                     <tr key={rule.id}>
-                                        {isAdmin && (
-                                            <td>
-                                                <strong>{rule.sourceUserUsername}</strong>
-                                                <br />
-                                                <small className="text-muted">{rule.sourceUserEmail}</small>
-                                            </td>
-                                        )}
+                                        <td>
+                                            <strong>{rule.sourceUserUsername}</strong>
+                                            <br />
+                                            <small className="text-muted">{rule.sourceUserEmail}</small>
+                                        </td>
                                         <td>
                                             <strong>{rule.targetUserUsername}</strong>
                                             <br />
@@ -312,30 +356,37 @@ const AwsAccountSharingManager: React.FC = () => {
                                         <td>{rule.createdByUsername}</td>
                                         <td>{formatDate(rule.createdAt)}</td>
                                         <td>
-                                            {deletingId === rule.id ? (
-                                                <div className="btn-group btn-group-sm">
+                                            {(() => {
+                                                // A user may delete a rule if they can manage any rule,
+                                                // or they are the source user on this specific rule.
+                                                const canDeleteThisRule = canManageAnyRule ||
+                                                    rule.sourceUserId === currentUser?.id;
+                                                if (!canDeleteThisRule) return null;
+                                                return deletingId === rule.id ? (
+                                                    <div className="btn-group btn-group-sm">
+                                                        <button
+                                                            className="btn btn-danger"
+                                                            onClick={() => handleDelete(rule.id)}
+                                                        >
+                                                            Confirm
+                                                        </button>
+                                                        <button
+                                                            className="btn btn-secondary"
+                                                            onClick={() => setDeletingId(null)}
+                                                        >
+                                                            Cancel
+                                                        </button>
+                                                    </div>
+                                                ) : (
                                                     <button
-                                                        className="btn btn-danger"
-                                                        onClick={() => handleDelete(rule.id)}
+                                                        className="btn btn-outline-danger btn-sm"
+                                                        onClick={() => setDeletingId(rule.id)}
+                                                        title="Delete sharing rule"
                                                     >
-                                                        Confirm
+                                                        <i className="bi bi-trash"></i>
                                                     </button>
-                                                    <button
-                                                        className="btn btn-secondary"
-                                                        onClick={() => setDeletingId(null)}
-                                                    >
-                                                        Cancel
-                                                    </button>
-                                                </div>
-                                            ) : (
-                                                <button
-                                                    className="btn btn-outline-danger btn-sm"
-                                                    onClick={() => setDeletingId(rule.id)}
-                                                    title="Delete sharing rule"
-                                                >
-                                                    <i className="bi bi-trash"></i>
-                                                </button>
-                                            )}
+                                                );
+                                            })()}
                                         </td>
                                     </tr>
                                 ))}

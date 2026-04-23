@@ -1,7 +1,9 @@
 package com.secman.controller
 
 import com.secman.dto.CreateAwsAccountSharingRequest
+import com.secman.domain.MappingStatus
 import com.secman.service.AwsAccountSharingService
+import com.secman.repository.UserMappingRepository
 import com.secman.repository.UserRepository
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.HttpStatus
@@ -18,21 +20,23 @@ import org.slf4j.LoggerFactory
  *
  * Feature: AWS Account Sharing
  *
- * - ADMIN users: full access to all sharing rules (list all, create any, delete any)
- * - Non-admin users with AWS accounts: scoped access to their own outgoing sharing rules
- *   (list own, create where they are source, delete their own)
+ * - ADMIN / SECCHAMPION: full management — list all rules, create with any source, delete any rule
+ * - Everyone else (including VULN): scoped — list only rules where they are source OR target,
+ *   create only where they are source, delete only their own outgoing rules
  */
 @Controller("/api/aws-account-sharing")
 @Secured(SecurityRule.IS_AUTHENTICATED)
 open class AwsAccountSharingController(
     private val awsAccountSharingService: AwsAccountSharingService,
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val userMappingRepository: UserMappingRepository
 ) {
     private val logger = LoggerFactory.getLogger(AwsAccountSharingController::class.java)
 
     /**
      * GET /api/aws-account-sharing - List sharing rules.
-     * ADMINs see all rules; non-admins see only rules where they are the source user.
+     * ADMIN/SECCHAMPION see all rules; every other authenticated user (including VULN)
+     * sees only rules where they are source OR target.
      */
     @Get
     fun listSharingRules(
@@ -43,11 +47,13 @@ open class AwsAccountSharingController(
         logger.debug("Listing AWS account sharing rules: page=$page, size=$size")
 
         return try {
-            val result = if (isAdmin(authentication)) {
+            val result = if (hasFullViewAccess(authentication)) {
                 awsAccountSharingService.listSharingRules(page ?: 0, size ?: 20)
             } else {
+                // Non-privileged users (including VULN) see only rules they are
+                // personally involved in — as source OR target.
                 val userId = getUserIdFromAuthentication(authentication)
-                awsAccountSharingService.listSharingRulesForSourceUser(userId, page ?: 0, size ?: 20)
+                awsAccountSharingService.listSharingRulesForInvolvedUser(userId, page ?: 0, size ?: 20)
             }
             HttpResponse.ok(result)
         } catch (e: Exception) {
@@ -61,27 +67,41 @@ open class AwsAccountSharingController(
 
     /**
      * POST /api/aws-account-sharing - Create a new sharing rule.
-     * ADMINs can create any rule; non-admins can only create rules where they are the source.
+     * ADMIN/SECCHAMPION can create any rule; other users (including VULN)
+     * can only create rules where they are the source.
      */
     @Post
     open fun createSharingRule(
         @Valid @Body request: CreateAwsAccountSharingRequest,
         authentication: Authentication
     ): HttpResponse<*> {
-        logger.info("Creating AWS account sharing rule: source=${request.sourceUserId}, target=${request.targetUserId}")
+        logger.info(
+            "Creating AWS account sharing rule: sourceId={}, sourceEmail={}, targetId={}, targetEmail={}",
+            request.sourceUserId, request.sourceUserEmail, request.targetUserId, request.targetUserEmail
+        )
 
         return try {
             val currentUserId = getUserIdFromAuthentication(authentication)
 
-            // Non-admin users can only share their own accounts
-            if (!isAdmin(authentication) && request.sourceUserId != currentUserId) {
-                return HttpResponse.status<Any>(HttpStatus.FORBIDDEN).body(mapOf(
-                    "error" to "Forbidden",
-                    "message" to "You can only share your own AWS accounts"
-                ))
+            // Users without manage-any access can only share their own accounts —
+            // the request must not name a different source user by id or email.
+            val effectiveRequest = if (!hasFullManagementAccess(authentication)) {
+                val triesDifferentId = request.sourceUserId != null && request.sourceUserId != currentUserId
+                val triesForeignEmail = !request.sourceUserEmail.isNullOrBlank() &&
+                    !userRepository.findById(currentUserId).map { it.email.equals(request.sourceUserEmail, ignoreCase = true) }.orElse(false)
+                if (triesDifferentId || triesForeignEmail) {
+                    return HttpResponse.status<Any>(HttpStatus.FORBIDDEN).body(mapOf(
+                        "error" to "Forbidden",
+                        "message" to "You can only share your own AWS accounts"
+                    ))
+                }
+                // Force source to the caller regardless of what the client sent.
+                request.copy(sourceUserId = currentUserId, sourceUserEmail = null)
+            } else {
+                request
             }
 
-            val result = awsAccountSharingService.createSharingRule(request, currentUserId)
+            val result = awsAccountSharingService.createSharingRule(effectiveRequest, currentUserId)
             HttpResponse.status<Any>(HttpStatus.CREATED).body(result)
         } catch (e: IllegalArgumentException) {
             logger.warn("AWS account sharing creation failed: ${e.message}")
@@ -105,7 +125,8 @@ open class AwsAccountSharingController(
 
     /**
      * DELETE /api/aws-account-sharing/{id} - Delete a sharing rule.
-     * ADMINs can delete any rule; non-admins can only delete rules where they are the source.
+     * ADMIN/SECCHAMPION can delete any rule; other users (including VULN)
+     * can only delete rules where they are the source.
      */
     @Delete("/{id}")
     fun deleteSharingRule(
@@ -115,8 +136,8 @@ open class AwsAccountSharingController(
         logger.info("Deleting AWS account sharing rule: id=$id")
 
         return try {
-            // Non-admin users can only delete their own rules
-            if (!isAdmin(authentication)) {
+            // Users without manage-any access can only delete their own rules
+            if (!hasFullManagementAccess(authentication)) {
                 val currentUserId = getUserIdFromAuthentication(authentication)
                 if (!awsAccountSharingService.isOwnedByUser(id, currentUserId)) {
                     return HttpResponse.status<Any>(HttpStatus.FORBIDDEN).body(mapOf(
@@ -146,29 +167,80 @@ open class AwsAccountSharingController(
 
     /**
      * GET /api/aws-account-sharing/users - Lightweight user list for the sharing form.
-     * Returns minimal user info (id, username, email) for populating target user dropdowns.
-     * Available to all authenticated users so non-admins can select sharing targets.
+     *
+     * Returns minimal user info for populating source/target dropdowns. Includes:
+     *  - All existing Users (isPending = false)
+     *  - Emails known only via PENDING UserMappings (users recorded in AWS
+     *    account or domain mappings but who have never logged in).
+     *    For these entries `id = null`, `isPending = true`, and the UI must
+     *    submit them by email — the backend will create the User record on
+     *    rule creation so the FK constraint is satisfied.
+     *
+     * Available to all authenticated users.
      */
     @Get("/users")
     fun listUsersForSharing(): HttpResponse<List<SharingUserResponse>> {
-        val users = userRepository.findAll().map { user ->
+        val activeUsers = userRepository.findAll().map { user ->
             SharingUserResponse(
-                id = user.id!!,
+                id = user.id,
                 username = user.username,
-                email = user.email
+                email = user.email,
+                isPending = false
             )
         }
-        return HttpResponse.ok(users)
+        val activeEmails = activeUsers.mapNotNull { it.email.lowercase().takeIf { e -> e.isNotBlank() } }.toHashSet()
+
+        // Distinct emails from PENDING mappings that don't already correspond to a real User.
+        // findByStatus(PENDING) reliably lists mappings with no user_id link.
+        val pendingEntries = userMappingRepository.findByStatus(MappingStatus.PENDING)
+            .asSequence()
+            .map { it.email.trim() }
+            .filter { it.isNotEmpty() }
+            .distinctBy { it.lowercase() }
+            .filter { it.lowercase() !in activeEmails }
+            .map { email ->
+                SharingUserResponse(
+                    id = null,
+                    username = email.substringBefore("@").ifBlank { email },
+                    email = email,
+                    isPending = true
+                )
+            }
+            .toList()
+
+        val combined = (activeUsers + pendingEntries).sortedBy { it.email.lowercase() }
+        return HttpResponse.ok(combined)
     }
 
-    private fun isAdmin(authentication: Authentication): Boolean {
-        return authentication.roles.contains("ADMIN")
+    /**
+     * View-all access — ADMIN or SECCHAMPION.
+     * Allowed to see every sharing rule in the system.
+     * All other authenticated users (including VULN) see only rules where they
+     * are source OR target — handled via listSharingRulesForInvolvedUser.
+     */
+    private fun hasFullViewAccess(authentication: Authentication): Boolean {
+        return authentication.roles.contains("ADMIN") ||
+            authentication.roles.contains("SECCHAMPION")
+    }
+
+    /**
+     * Manage-any access — ADMIN or SECCHAMPION.
+     * Allowed to create rules with any sourceUserId and delete any rule.
+     * Other authenticated users (including VULN) can only create rules with
+     * themselves as the source and delete rules they own.
+     */
+    private fun hasFullManagementAccess(authentication: Authentication): Boolean {
+        return authentication.roles.contains("ADMIN") ||
+            authentication.roles.contains("SECCHAMPION")
     }
 
     @Serdeable
     data class SharingUserResponse(
-        val id: Long,
+        // null for pending users — the client must submit them by email and
+        // the backend lazily creates a User record when a sharing rule is saved.
+        val id: Long?,
         val username: String,
-        val email: String
+        val email: String,
+        val isPending: Boolean = false
     )
 }

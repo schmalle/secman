@@ -26,11 +26,18 @@ data class AwsAccountSharingResponse(
 
 /**
  * Request DTO for creating an AWS Account Sharing rule.
+ *
+ * Either `*UserId` or `*UserEmail` must be provided for each side; when only
+ * email is given (for a "pending" user known via UserMapping but never
+ * logged in), the backend will find-or-create a User record before saving
+ * the sharing rule.
  */
 @Serdeable
 data class CreateAwsAccountSharingRequest(
-    val sourceUserId: Long,
-    val targetUserId: Long
+    val sourceUserId: Long? = null,
+    val sourceUserEmail: String? = null,
+    val targetUserId: Long? = null,
+    val targetUserEmail: String? = null
 )
 
 /**

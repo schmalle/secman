@@ -63,6 +63,22 @@ interface AwsAccountSharingRepository : JpaRepository<AwsAccountSharing, Long> {
     fun findAllWithUsersBySourceUserId(sourceUserId: Long): List<AwsAccountSharing>
 
     /**
+     * Find sharing rules where the given user is either source OR target, with
+     * eager-loaded associations. Used for non-privileged users who should see
+     * only the sharing rules they are personally involved in — as the account
+     * owner sharing out, or as the recipient receiving visibility.
+     */
+    @Query("""
+        SELECT s FROM AwsAccountSharing s
+        LEFT JOIN FETCH s.sourceUser
+        LEFT JOIN FETCH s.targetUser
+        LEFT JOIN FETCH s.createdBy
+        WHERE s.sourceUser.id = :userId OR s.targetUser.id = :userId
+        ORDER BY s.createdAt DESC
+    """)
+    fun findAllWithUsersByInvolvedUserId(userId: Long): List<AwsAccountSharing>
+
+    /**
      * Find all AWS account IDs accessible to a target user via sharing rules.
      * Joins aws_account_sharing -> users -> user_mapping to resolve shared accounts.
      *
