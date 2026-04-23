@@ -4,7 +4,6 @@ import com.secman.config.AppConfig
 import com.secman.domain.User
 import com.secman.domain.VulnerabilityExceptionRequest
 import com.secman.repository.UserRepository
-import io.micronaut.scheduling.annotation.Async
 import jakarta.inject.Inject
 import jakarta.inject.Singleton
 import org.slf4j.LoggerFactory
@@ -65,68 +64,81 @@ open class ExceptionRequestNotificationService(
      * @param request The newly created exception request
      * @return CompletableFuture indicating if at least one email was sent successfully
      */
-    @Async
     open fun notifyAdminsOfNewRequest(request: VulnerabilityExceptionRequest): CompletableFuture<Boolean> {
+        // Resolve all Hibernate-backed fields on the caller's (transactional) thread so
+        // the async lambda never touches LAZY proxies. Accessing proxies from another
+        // thread concurrently with the caller corrupts the Hibernate session and produces
+        // "Illegal pop() with non-matching JdbcValuesSourceProcessingState".
+        val requestId = request.id
+        val cveId = request.vulnerability?.vulnerabilityId ?: "Unknown CVE"
+        val assetName = request.vulnerability?.asset?.name ?: "Unknown Asset"
+        val subject = "New Exception Request: $cveId on $assetName"
+        val adminRecipients: List<AdminRecipient> = userRepository.findAll()
+            .filter { it.hasRole(User.Role.ADMIN) || it.hasRole(User.Role.SECCHAMPION) }
+            .map { user ->
+                AdminRecipient(
+                    email = user.email,
+                    username = user.username,
+                    htmlContent = generateNewRequestEmail(request, user.username),
+                    textContent = generateNewRequestTextEmail(request, user.username)
+                )
+            }
+        val inlineImages = loadLogoInlineImage()
+
         return CompletableFuture.supplyAsync {
             try {
-                logger.info("Sending new request notifications for requestId={}", request.id)
+                logger.info("Sending new request notifications for requestId={}", requestId)
 
-                // Find all users with ADMIN or SECCHAMPION roles
-                val adminUsers = userRepository.findAll().filter { user ->
-                    user.hasRole(User.Role.ADMIN) || user.hasRole(User.Role.SECCHAMPION)
-                }
-
-                if (adminUsers.isEmpty()) {
-                    logger.warn("No ADMIN or SECCHAMPION users found to notify about request {}", request.id)
+                if (adminRecipients.isEmpty()) {
+                    logger.warn("No ADMIN or SECCHAMPION users found to notify about request {}", requestId)
                     return@supplyAsync false
                 }
-
-                val cveId = request.vulnerability?.vulnerabilityId ?: "Unknown CVE"
-                val assetName = request.vulnerability?.asset?.name ?: "Unknown Asset"
-                val subject = "New Exception Request: $cveId on $assetName"
 
                 var successCount = 0
                 var failureCount = 0
 
-                val inlineImages = loadLogoInlineImage()
-
-                for (user in adminUsers) {
+                for (recipient in adminRecipients) {
                     try {
-                        val htmlContent = generateNewRequestEmail(request, user.username)
-                        val textContent = generateNewRequestTextEmail(request, user.username)
                         val future = emailService.sendEmailWithInlineImages(
-                            to = user.email,
+                            to = recipient.email,
                             subject = subject,
-                            textContent = textContent,
-                            htmlContent = htmlContent,
+                            textContent = recipient.textContent,
+                            htmlContent = recipient.htmlContent,
                             inlineImages = inlineImages
                         )
                         val sent = future.get() // Block to ensure delivery attempt
 
                         if (sent) {
                             successCount++
-                            logger.debug("Sent new request notification to {}", user.email)
+                            logger.debug("Sent new request notification to {}", recipient.email)
                         } else {
                             failureCount++
-                            logger.warn("Failed to send new request notification to {}", user.email)
+                            logger.warn("Failed to send new request notification to {}", recipient.email)
                         }
                     } catch (e: Exception) {
                         failureCount++
-                        logger.error("Error sending new request notification to {}: {}", user.email, e.message)
+                        logger.error("Error sending new request notification to {}: {}", recipient.email, e.message)
                     }
                 }
 
                 logger.info("New request notifications sent: {} success, {} failures (requestId={})",
-                    successCount, failureCount, request.id)
+                    successCount, failureCount, requestId)
 
                 return@supplyAsync successCount > 0
 
             } catch (e: Exception) {
-                logger.error("Failed to send new request notifications for requestId={}", request.id, e)
+                logger.error("Failed to send new request notifications for requestId={}", requestId, e)
                 return@supplyAsync false
             }
         }
     }
+
+    private data class AdminRecipient(
+        val email: String,
+        val username: String,
+        val htmlContent: String,
+        val textContent: String
+    )
 
     /**
      * Notify requester of request approval.
@@ -136,34 +148,36 @@ open class ExceptionRequestNotificationService(
      * @param request The approved exception request
      * @return CompletableFuture indicating if email was sent successfully
      */
-    @Async
     open fun notifyRequesterOfApproval(request: VulnerabilityExceptionRequest): CompletableFuture<Boolean> {
+        // Resolve entity fields synchronously on the caller's (transactional) thread;
+        // see notifyAdminsOfNewRequest for rationale.
+        val requestId = request.id
+        val requesterEmail = request.requestedByUser?.email
+        val cveId = request.vulnerability?.vulnerabilityId ?: "Unknown CVE"
+        val assetName = request.vulnerability?.asset?.name ?: "Unknown Asset"
+        val htmlContent = if (!requesterEmail.isNullOrBlank()) generateApprovalEmail(request) else null
+
         return CompletableFuture.supplyAsync {
             try {
-                val requesterEmail = request.requestedByUser?.email
-                if (requesterEmail.isNullOrBlank()) {
-                    logger.warn("No requester email for approved request {}", request.id)
+                if (requesterEmail.isNullOrBlank() || htmlContent == null) {
+                    logger.warn("No requester email for approved request {}", requestId)
                     return@supplyAsync false
                 }
 
-                val cveId = request.vulnerability?.vulnerabilityId ?: "Unknown CVE"
-                val assetName = request.vulnerability?.asset?.name ?: "Unknown Asset"
                 val subject = "Exception Approved: $cveId on $assetName"
-
-                val htmlContent = generateApprovalEmail(request)
                 val future = emailService.sendHtmlEmail(requesterEmail, subject, htmlContent)
                 val sent = future.get()
 
                 if (sent) {
-                    logger.info("Sent approval notification to {} for requestId={}", requesterEmail, request.id)
+                    logger.info("Sent approval notification to {} for requestId={}", requesterEmail, requestId)
                 } else {
-                    logger.warn("Failed to send approval notification to {} for requestId={}", requesterEmail, request.id)
+                    logger.warn("Failed to send approval notification to {} for requestId={}", requesterEmail, requestId)
                 }
 
                 return@supplyAsync sent
 
             } catch (e: Exception) {
-                logger.error("Failed to send approval notification for requestId={}", request.id, e)
+                logger.error("Failed to send approval notification for requestId={}", requestId, e)
                 return@supplyAsync false
             }
         }
@@ -178,34 +192,36 @@ open class ExceptionRequestNotificationService(
      * @param request The rejected exception request
      * @return CompletableFuture indicating if email was sent successfully
      */
-    @Async
     open fun notifyRequesterOfRejection(request: VulnerabilityExceptionRequest): CompletableFuture<Boolean> {
+        // Resolve entity fields synchronously on the caller's (transactional) thread;
+        // see notifyAdminsOfNewRequest for rationale.
+        val requestId = request.id
+        val requesterEmail = request.requestedByUser?.email
+        val cveId = request.vulnerability?.vulnerabilityId ?: "Unknown CVE"
+        val assetName = request.vulnerability?.asset?.name ?: "Unknown Asset"
+        val htmlContent = if (!requesterEmail.isNullOrBlank()) generateRejectionEmail(request) else null
+
         return CompletableFuture.supplyAsync {
             try {
-                val requesterEmail = request.requestedByUser?.email
-                if (requesterEmail.isNullOrBlank()) {
-                    logger.warn("No requester email for rejected request {}", request.id)
+                if (requesterEmail.isNullOrBlank() || htmlContent == null) {
+                    logger.warn("No requester email for rejected request {}", requestId)
                     return@supplyAsync false
                 }
 
-                val cveId = request.vulnerability?.vulnerabilityId ?: "Unknown CVE"
-                val assetName = request.vulnerability?.asset?.name ?: "Unknown Asset"
                 val subject = "Exception Rejected: $cveId on $assetName"
-
-                val htmlContent = generateRejectionEmail(request)
                 val future = emailService.sendHtmlEmail(requesterEmail, subject, htmlContent)
                 val sent = future.get()
 
                 if (sent) {
-                    logger.info("Sent rejection notification to {} for requestId={}", requesterEmail, request.id)
+                    logger.info("Sent rejection notification to {} for requestId={}", requesterEmail, requestId)
                 } else {
-                    logger.warn("Failed to send rejection notification to {} for requestId={}", requesterEmail, request.id)
+                    logger.warn("Failed to send rejection notification to {} for requestId={}", requesterEmail, requestId)
                 }
 
                 return@supplyAsync sent
 
             } catch (e: Exception) {
-                logger.error("Failed to send rejection notification for requestId={}", request.id, e)
+                logger.error("Failed to send rejection notification for requestId={}", requestId, e)
                 return@supplyAsync false
             }
         }
@@ -219,34 +235,36 @@ open class ExceptionRequestNotificationService(
      * @param request The exception request expiring soon
      * @return CompletableFuture indicating if email was sent successfully
      */
-    @Async
     open fun notifyRequesterOfExpiration(request: VulnerabilityExceptionRequest): CompletableFuture<Boolean> {
+        // Resolve entity fields synchronously on the caller's (transactional) thread;
+        // see notifyAdminsOfNewRequest for rationale.
+        val requestId = request.id
+        val requesterEmail = request.requestedByUser?.email
+        val cveId = request.vulnerability?.vulnerabilityId ?: "Unknown CVE"
+        val assetName = request.vulnerability?.asset?.name ?: "Unknown Asset"
+        val htmlContent = if (!requesterEmail.isNullOrBlank()) generateExpirationReminderEmail(request) else null
+
         return CompletableFuture.supplyAsync {
             try {
-                val requesterEmail = request.requestedByUser?.email
-                if (requesterEmail.isNullOrBlank()) {
-                    logger.warn("No requester email for expiring request {}", request.id)
+                if (requesterEmail.isNullOrBlank() || htmlContent == null) {
+                    logger.warn("No requester email for expiring request {}", requestId)
                     return@supplyAsync false
                 }
 
-                val cveId = request.vulnerability?.vulnerabilityId ?: "Unknown CVE"
-                val assetName = request.vulnerability?.asset?.name ?: "Unknown Asset"
                 val subject = "Exception Expiring Soon: $cveId on $assetName"
-
-                val htmlContent = generateExpirationReminderEmail(request)
                 val future = emailService.sendHtmlEmail(requesterEmail, subject, htmlContent)
                 val sent = future.get()
 
                 if (sent) {
-                    logger.info("Sent expiration reminder to {} for requestId={}", requesterEmail, request.id)
+                    logger.info("Sent expiration reminder to {} for requestId={}", requesterEmail, requestId)
                 } else {
-                    logger.warn("Failed to send expiration reminder to {} for requestId={}", requesterEmail, request.id)
+                    logger.warn("Failed to send expiration reminder to {} for requestId={}", requesterEmail, requestId)
                 }
 
                 return@supplyAsync sent
 
             } catch (e: Exception) {
-                logger.error("Failed to send expiration reminder for requestId={}", request.id, e)
+                logger.error("Failed to send expiration reminder for requestId={}", requestId, e)
                 return@supplyAsync false
             }
         }

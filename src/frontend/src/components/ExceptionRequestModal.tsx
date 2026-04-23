@@ -281,7 +281,7 @@ const ExceptionRequestModal: React.FC<ExceptionRequestModalProps> = ({
                                         Exception Scope <span className="text-danger">*</span>
                                     </label>
                                     <div className="form-text mb-2">
-                                        Choose whether to except only this specific vulnerability or all instances of this CVE across all assets.
+                                        This controls <em>where</em> the exception applies. Pick carefully — Single Vulnerability only hides this row on this asset; other assets with the same CVE will still show as overdue.
                                     </div>
                                     <div className="form-check">
                                         <input
@@ -295,7 +295,7 @@ const ExceptionRequestModal: React.FC<ExceptionRequestModalProps> = ({
                                             disabled={loading}
                                         />
                                         <label className="form-check-label" htmlFor="scopeSingle">
-                                            <strong>Single Vulnerability</strong> - Only this specific vulnerability on {assetName}
+                                            <strong>This asset only</strong> — hides {vulnerabilityCveId || 'this CVE'} on <code>{assetName}</code>. Other assets keep reporting this CVE.
                                         </label>
                                     </div>
                                     <div className="form-check">
@@ -310,8 +310,24 @@ const ExceptionRequestModal: React.FC<ExceptionRequestModalProps> = ({
                                             disabled={loading}
                                         />
                                         <label className="form-check-label" htmlFor="scopePattern">
-                                            <strong>CVE Pattern</strong> - All instances of {vulnerabilityCveId || 'this CVE'} across all assets
+                                            <strong>All assets with this CVE</strong> — hides {vulnerabilityCveId || 'this CVE'} everywhere it appears, including assets discovered after approval.
                                         </label>
+                                    </div>
+                                    <div
+                                        className={`alert ${formData.scope === 'CVE_PATTERN' ? 'alert-warning' : 'alert-info'} mt-2 mb-0 py-2`}
+                                        role="status"
+                                    >
+                                        {formData.scope === 'CVE_PATTERN' ? (
+                                            <>
+                                                <i className="bi bi-exclamation-triangle me-1" />
+                                                <strong>Broad scope:</strong> this exception will mask {vulnerabilityCveId || 'this CVE'} across <strong>every asset</strong> in the system.
+                                            </>
+                                        ) : (
+                                            <>
+                                                <i className="bi bi-info-circle me-1" />
+                                                <strong>Scoped to one asset:</strong> only rows for <code>{assetName}</code> will be affected. If you need coverage across multiple assets, switch to "All assets with this CVE".
+                                            </>
+                                        )}
                                     </div>
                                 </div>
 

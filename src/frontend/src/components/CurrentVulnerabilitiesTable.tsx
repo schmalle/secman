@@ -1036,16 +1036,45 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                               />
                             </td>
                             <td>
-                              {vuln.overdueStatus === "OVERDUE" ? (
+                              {vuln.hasException ? (
+                                <span
+                                  className="badge bg-success-subtle text-success-emphasis border border-success-subtle"
+                                  title={(() => {
+                                    const parts: string[] = [];
+                                    if (vuln.exceptionScopesAsset === true) {
+                                      parts.push("Applies to this asset only");
+                                    } else if (vuln.exceptionScopesAsset === false) {
+                                      parts.push(
+                                        `Applies to all assets matching ${vuln.vulnerabilityId ?? "this pattern"}`,
+                                      );
+                                    }
+                                    if (vuln.exceptionEndDate) {
+                                      parts.push(
+                                        `Expires ${new Date(vuln.exceptionEndDate).toLocaleDateString()}`,
+                                      );
+                                    }
+                                    if (vuln.exceptionReason) {
+                                      parts.push(`Reason: ${vuln.exceptionReason}`);
+                                    }
+                                    return parts.join(" — ") || "Exception active";
+                                  })()}
+                                >
+                                  <i className="bi bi-shield-check me-1"></i>
+                                  Exception active
+                                  {vuln.exceptionEndDate && (
+                                    <span className="ms-1 text-muted">
+                                      · until{" "}
+                                      {new Date(
+                                        vuln.exceptionEndDate,
+                                      ).toLocaleDateString()}
+                                    </span>
+                                  )}
+                                </span>
+                              ) : vuln.overdueStatus === "OVERDUE" ? (
                                 <button
                                   className="btn btn-sm btn-outline-primary"
                                   onClick={() => handleRequestException(vuln)}
-                                  disabled={vuln.hasException}
-                                  title={
-                                    vuln.hasException
-                                      ? "Exception already exists"
-                                      : "Request an exception for this vulnerability"
-                                  }
+                                  title="Request an exception for this vulnerability"
                                 >
                                   <i className="bi bi-shield-plus me-1"></i>
                                   Request Exception

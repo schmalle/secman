@@ -3,6 +3,7 @@ package com.secman.scheduler
 import com.secman.domain.ExceptionRequestStatus
 import com.secman.repository.VulnerabilityExceptionRequestRepository
 import com.secman.repository.VulnerabilityExceptionRepository
+import com.secman.service.ActiveExceptionsCacheInvalidator
 import com.secman.service.ExceptionRequestAuditService
 import com.secman.service.ExceptionRequestNotificationService
 import io.micronaut.scheduling.annotation.Scheduled
@@ -40,7 +41,8 @@ open class ExceptionExpirationScheduler(
     @Inject private val requestRepository: VulnerabilityExceptionRequestRepository,
     @Inject private val exceptionRepository: VulnerabilityExceptionRepository,
     @Inject private val auditService: ExceptionRequestAuditService,
-    @Inject private val notificationService: ExceptionRequestNotificationService
+    @Inject private val notificationService: ExceptionRequestNotificationService,
+    @Inject private val activeExceptionsCacheInvalidator: ActiveExceptionsCacheInvalidator
 ) {
     private val logger = LoggerFactory.getLogger(ExceptionExpirationScheduler::class.java)
 
@@ -121,6 +123,10 @@ open class ExceptionExpirationScheduler(
                 "Expiration processing completed: {} requests expired, {} exceptions deactivated, {} notifications sent",
                 expiredCount, deactivatedCount, notificationCount
             )
+
+            if (deactivatedCount > 0) {
+                activeExceptionsCacheInvalidator.invalidate()
+            }
 
         } catch (e: Exception) {
             logger.error("Failed to process expirations", e)
