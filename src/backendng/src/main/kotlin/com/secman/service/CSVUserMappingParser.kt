@@ -433,24 +433,29 @@ open class CSVUserMappingParser(
             throw IllegalArgumentException("Invalid email format: $ownerEmail")
         }
 
-        // Handle domain (default to "-NONE-" if empty)
-        val domain = if (domainRaw.isNullOrBlank()) {
-            DEFAULT_DOMAIN
+        // Domain handling: an empty/sentinel domain ("-NONE-", "none", etc.)
+        // means "no domain assigned" and is stored as SQL NULL. Earlier
+        // versions of this parser substituted the literal "-NONE-" string;
+        // that produced rows that the (then NULL-blind) dedup check could not
+        // match against real-NULL rows from other import paths, leaving two
+        // physical rows for the same logical mapping. Coercing to NULL here
+        // keeps every import path on the same canonical key.
+        val normalizedDomain: String? = if (domainRaw.isNullOrBlank()) {
+            null
         } else {
-            domainRaw
+            val canonical = UserMapping.normalizeNullSentinel(domainRaw.lowercase().trim())
+            if (canonical != null && !validateDomain(canonical)) {
+                throw IllegalArgumentException("Invalid domain format: $domainRaw")
+            }
+            canonical
         }
 
-        // Validate domain format
-        if (!validateDomain(domain)) {
-            throw IllegalArgumentException("Invalid domain format: $domain")
-        }
-
-        // Normalize
+        // Normalize email
         val normalizedEmail = ownerEmail.lowercase()
-        val normalizedDomain = domain.lowercase()
 
-        // Check for duplicate within file
-        val mappingKey = "$normalizedEmail|$accountId|$normalizedDomain"
+        // Check for duplicate within file (use canonical key — null collapses
+        // empties and sentinels into the same bucket)
+        val mappingKey = "$normalizedEmail|$accountId|${normalizedDomain ?: ""}"
         if (seenMappings.contains(mappingKey)) {
             log.debug("Skipped duplicate within file at line {}: {}", lineNumber, mappingKey)
             // Return null to skip without error

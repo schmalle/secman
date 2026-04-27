@@ -113,7 +113,12 @@ data class UserMapping(
 ) {
     /**
      * Lifecycle callback - executed before entity is persisted to database
-     * Normalizes email and domain to lowercase, trims whitespace
+     * Normalizes email and domain to lowercase, trims whitespace,
+     * and coerces "no value" sentinels (e.g. "-none-", "none", "null") in
+     * `domain` to SQL NULL so logically-equivalent rows hit the same unique
+     * key. Without this, Cloud Custodian-style imports that use `-none-` as
+     * a placeholder created a second row per AWS account that the dedup
+     * checks could not collapse against the real-NULL row.
      */
     @PrePersist
     fun onCreate() {
@@ -122,7 +127,7 @@ data class UserMapping(
         updatedAt = now
         // Normalize email and domain to lowercase for case-insensitive matching
         email = email.lowercase().trim()
-        domain = domain?.lowercase()?.trim()
+        domain = normalizeNullSentinel(domain?.lowercase()?.trim())
         awsAccountId = awsAccountId?.trim()
 
         // Feature 049: Set status based on user existence
@@ -169,5 +174,24 @@ data class UserMapping(
 
     override fun hashCode(): Int {
         return id?.hashCode() ?: 0
+    }
+
+    companion object {
+        // Sentinel strings imported from source files (Cloud Custodian, ad-hoc CSVs)
+        // that mean "no value" rather than a real domain. Compared after
+        // lowercase()+trim().
+        private val NULL_SENTINELS: Set<String> = setOf(
+            "", "-", "--", "-none-", "none", "null", "nil", "n/a", "na"
+        )
+
+        /**
+         * Coerces a "no value" sentinel string to SQL NULL.
+         * Pass an already-trimmed, lowercased value (or null). Returns the
+         * original value if it is a real domain, or null if it is a sentinel.
+         */
+        fun normalizeNullSentinel(value: String?): String? {
+            if (value == null) return null
+            return if (value in NULL_SENTINELS) null else value
+        }
     }
 }

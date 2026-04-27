@@ -62,16 +62,21 @@ open class UserMappingService(
             }
         }
 
+        // Canonicalize the domain so the existsBy check, the @PrePersist
+        // callback, and the unique constraint all see the same key. Without
+        // this, a UI add of "-none-" lands beside the existing real-NULL row.
+        val normalizedDomain = UserMapping.normalizeNullSentinel(request.domain?.lowercase()?.trim())
+
         // Check for duplicates (extended for IP addresses - Feature 020)
         if (request.ipAddress != null) {
             if (userMappingRepository.existsByEmailAndIpAddressAndDomain(
-                    user.email, request.ipAddress, request.domain
+                    user.email, request.ipAddress, normalizedDomain
                 )) {
                 throw IllegalStateException("IP mapping already exists for this email, IP address, and domain")
             }
         } else {
             if (userMappingRepository.existsByEmailAndAwsAccountIdAndDomain(
-                    user.email, request.awsAccountId, request.domain
+                    user.email, request.awsAccountId, normalizedDomain
                 )) {
                 throw IllegalStateException("AWS mapping already exists for this email, AWS account, and domain")
             }
@@ -81,7 +86,7 @@ open class UserMappingService(
         val mapping = UserMapping(
             email = user.email,
             awsAccountId = request.awsAccountId,
-            domain = request.domain
+            domain = normalizedDomain
         )
 
         // Set IP fields if IP address was provided (Feature 020)
@@ -125,19 +130,22 @@ open class UserMappingService(
             }
         }
 
+        // Canonicalize the domain — see createMapping for rationale.
+        val normalizedRequestDomain = UserMapping.normalizeNullSentinel(request.domain?.lowercase()?.trim())
+
         // Check for duplicates (excluding current mapping) - Feature 020
         if (request.ipAddress != null) {
             val isDuplicate = userMappingRepository.existsByEmailAndIpAddressAndDomain(
-                user.email, request.ipAddress, request.domain
-            ) && (mapping.ipAddress != request.ipAddress || mapping.domain != request.domain)
+                user.email, request.ipAddress, normalizedRequestDomain
+            ) && (mapping.ipAddress != request.ipAddress || mapping.domain != normalizedRequestDomain)
 
             if (isDuplicate) {
                 throw IllegalStateException("IP mapping already exists for this email, IP address, and domain")
             }
         } else {
             val isDuplicate = userMappingRepository.existsByEmailAndAwsAccountIdAndDomain(
-                user.email, request.awsAccountId, request.domain
-            ) && (mapping.awsAccountId != request.awsAccountId || mapping.domain != request.domain)
+                user.email, request.awsAccountId, normalizedRequestDomain
+            ) && (mapping.awsAccountId != request.awsAccountId || mapping.domain != normalizedRequestDomain)
 
             if (isDuplicate) {
                 throw IllegalStateException("AWS mapping already exists for this email, AWS account, and domain")
@@ -146,7 +154,7 @@ open class UserMappingService(
 
         // Update
         mapping.awsAccountId = request.awsAccountId
-        mapping.domain = request.domain
+        mapping.domain = normalizedRequestDomain
 
         // Update IP fields if IP address was provided (Feature 020)
         if (ipParseResult != null) {
@@ -262,13 +270,29 @@ open class UserMappingService(
             )
         }
 
-        // Non-dry-run: create mappings
+        // Non-dry-run: create mappings.
+        // Defense in depth: dedupe the *input list itself* on the same key the
+        // unique constraint uses, so a single import containing repeated rows
+        // (common with Cloud Custodian JSON listing the same account multiple
+        // times under regions/envs) collapses to one save call. Without this,
+        // the only thing standing between us and duplicates is the in-transaction
+        // existsBy check, which is fragile if the persistence context skips an
+        // auto-flush between iterations.
+        val seenKeys = mutableSetOf<Triple<String, String?, String?>>()
         validEntries.forEach { entry ->
             val email = entry.email.lowercase().trim()
             val awsAccountId = entry.awsAccountId?.trim()
-            val domain = entry.domain?.trim()?.ifBlank { null }
+            // Match the entity's @PrePersist sentinel coercion so the dedup
+            // key here is the same one the unique constraint will see.
+            val domain = UserMapping.normalizeNullSentinel(entry.domain?.trim()?.lowercase())
 
-            // Duplicate check
+            val key = Triple(email, awsAccountId, domain)
+            if (!seenKeys.add(key)) {
+                skipped++
+                return@forEach
+            }
+
+            // Duplicate check (NULL-safe — see UserMappingRepository @Query).
             val exists = userMappingRepository.existsByEmailAndAwsAccountIdAndDomain(email, awsAccountId, domain)
             if (exists) {
                 skipped++

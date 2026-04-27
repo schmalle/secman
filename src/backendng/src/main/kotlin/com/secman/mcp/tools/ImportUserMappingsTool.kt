@@ -188,9 +188,11 @@ class ImportUserMappingsTool(
                 return@forEachIndexed
             }
 
-            // Check for duplicate
+            // Check for duplicate. Coerce "no value" sentinels in domain
+            // ("-none-", "none", "null", etc.) to NULL so the existsBy check
+            // and the @PrePersist callback agree on the canonical key.
             val normalizedAwsAccountId = awsAccountId?.takeIf { it.isNotBlank() }
-            val normalizedDomain = domain?.takeIf { it.isNotBlank() }
+            val normalizedDomain = UserMapping.normalizeNullSentinel(domain?.takeIf { it.isNotBlank() })
 
             val exists = userMappingRepository.existsByEmailAndAwsAccountIdAndDomain(
                 email, normalizedAwsAccountId, normalizedDomain

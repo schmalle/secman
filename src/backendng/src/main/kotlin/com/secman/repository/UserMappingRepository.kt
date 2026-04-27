@@ -53,13 +53,28 @@ interface UserMappingRepository : JpaRepository<UserMapping, Long> {
     /**
      * Check if a specific mapping exists (duplicate detection)
      *
-     * Use case: Skip duplicate mappings during Excel import
+     * Use case: Skip duplicate mappings during Excel/CSV/JSON/S3 import
+     *
+     * NULL-safe: derived queries translate `domain = ?` to bind NULL, but in SQL
+     * `column = NULL` is UNKNOWN (never true), so the implicit derived query
+     * silently misses every row where domain IS NULL. We use explicit JPQL with
+     * `(:param IS NULL AND col IS NULL) OR col = :param` so duplicates with
+     * NULL columns are detected. Without this, every reimport of an
+     * AWS-account-only mapping (domain/ip = NULL) creates a fresh duplicate
+     * row, since MariaDB's UNIQUE constraint also treats NULLs as distinct.
      *
      * @param email User's email address (required)
      * @param awsAccountId AWS account identifier (nullable)
      * @param domain Organizational domain name (nullable)
      * @return true if mapping exists, false otherwise
      */
+    @Query("""
+        SELECT CASE WHEN COUNT(m) > 0 THEN TRUE ELSE FALSE END FROM UserMapping m
+        WHERE m.email = :email
+          AND ((:awsAccountId IS NULL AND m.awsAccountId IS NULL) OR m.awsAccountId = :awsAccountId)
+          AND ((:domain IS NULL AND m.domain IS NULL) OR m.domain = :domain)
+          AND m.ipAddress IS NULL
+    """)
     fun existsByEmailAndAwsAccountIdAndDomain(
         email: String,
         awsAccountId: String?,
@@ -69,13 +84,21 @@ interface UserMappingRepository : JpaRepository<UserMapping, Long> {
     /**
      * Find a specific mapping by composite key
      *
-     * Use case: Retrieve mapping for update or verification
+     * Use case: Retrieve mapping for update or verification.
+     * NULL-safe (see [existsByEmailAndAwsAccountIdAndDomain]).
      *
      * @param email User's email address (required)
      * @param awsAccountId AWS account identifier (nullable)
      * @param domain Organizational domain name (nullable)
      * @return Optional containing the mapping if found
      */
+    @Query("""
+        SELECT m FROM UserMapping m
+        WHERE m.email = :email
+          AND ((:awsAccountId IS NULL AND m.awsAccountId IS NULL) OR m.awsAccountId = :awsAccountId)
+          AND ((:domain IS NULL AND m.domain IS NULL) OR m.domain = :domain)
+          AND m.ipAddress IS NULL
+    """)
     fun findByEmailAndAwsAccountIdAndDomain(
         email: String,
         awsAccountId: String?,
@@ -149,9 +172,8 @@ interface UserMappingRepository : JpaRepository<UserMapping, Long> {
     fun findIpMappingsByEmail(email: String): List<UserMapping>
 
     /**
-     * Check if a specific IP mapping exists (duplicate detection)
-     *
-     * Use case: Skip duplicate IP mappings during CSV/Excel import
+     * Check if a specific IP mapping exists (duplicate detection).
+     * NULL-safe (see [existsByEmailAndAwsAccountIdAndDomain]).
      *
      * Related to: Feature 020 (IP Address Mapping)
      *
@@ -160,6 +182,13 @@ interface UserMappingRepository : JpaRepository<UserMapping, Long> {
      * @param domain Organizational domain name (nullable)
      * @return true if mapping exists, false otherwise
      */
+    @Query("""
+        SELECT CASE WHEN COUNT(m) > 0 THEN TRUE ELSE FALSE END FROM UserMapping m
+        WHERE m.email = :email
+          AND ((:ipAddress IS NULL AND m.ipAddress IS NULL) OR m.ipAddress = :ipAddress)
+          AND ((:domain IS NULL AND m.domain IS NULL) OR m.domain = :domain)
+          AND m.awsAccountId IS NULL
+    """)
     fun existsByEmailAndIpAddressAndDomain(
         email: String,
         ipAddress: String?,
@@ -167,9 +196,8 @@ interface UserMappingRepository : JpaRepository<UserMapping, Long> {
     ): Boolean
 
     /**
-     * Find a specific IP mapping by composite key
-     *
-     * Use case: Retrieve IP mapping for update or verification
+     * Find a specific IP mapping by composite key.
+     * NULL-safe (see [findByEmailAndAwsAccountIdAndDomain]).
      *
      * Related to: Feature 020 (IP Address Mapping)
      *
@@ -178,6 +206,13 @@ interface UserMappingRepository : JpaRepository<UserMapping, Long> {
      * @param domain Organizational domain name (nullable)
      * @return Optional containing the mapping if found
      */
+    @Query("""
+        SELECT m FROM UserMapping m
+        WHERE m.email = :email
+          AND ((:ipAddress IS NULL AND m.ipAddress IS NULL) OR m.ipAddress = :ipAddress)
+          AND ((:domain IS NULL AND m.domain IS NULL) OR m.domain = :domain)
+          AND m.awsAccountId IS NULL
+    """)
     fun findByEmailAndIpAddressAndDomain(
         email: String,
         ipAddress: String?,
