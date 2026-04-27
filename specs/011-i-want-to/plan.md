@@ -493,7 +493,7 @@ From user stories in spec:
 
 ### 5. Agent Context Update
 
-Will run `.specify/scripts/bash/update-agent-context.sh claude` to update CLAUDE.md with:
+Will run `.specify/scriptpp/bash/update-agent-context.sh claude` to update CLAUDE.md with:
 - Feature 011: Release-Based Requirement Version Management
 - New entities: RequirementSnapshot
 - New services: ReleaseService, RequirementComparisonService

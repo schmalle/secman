@@ -14,10 +14,10 @@
 # 8. Cleanup test data
 #
 # Usage:
-#   ./scripts/test/test-e2e-exception-workflowsupport.sh
-#   BASE_URL=http://localhost:8080 API_KEY=sk-xxx ./scripts/test/test-e2e-exception-workflowsupport.sh
-#   ./scripts/test/test-e2e-exception-workflowsupport.sh --verbose
-#   ./scripts/test/test-e2e-exception-workflowsupport.sh --help
+#   ./scriptpp/test/test-e2e-exception-workflowsupport.sh
+#   BASE_URL=http://localhost:8080 API_KEY=sk-xxx ./scriptpp/test/test-e2e-exception-workflowsupport.sh
+#   ./scriptpp/test/test-e2e-exception-workflowsupport.sh --verbose
+#   ./scriptpp/test/test-e2e-exception-workflowsupport.sh --help
 #
 
-op run --env-file ./secman.env -- ./scripts/test/test-e2e-exception-workflowsupport.sh
+op run --env-file ./secman.env -- ./scriptpp/test/test-e2e-exception-workflowsupport.sh

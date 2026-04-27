@@ -1,11 +1,11 @@
 #!/bin/bash
 # secman - CLI wrapper for secman security management tool
-# Usage: ./scripts/secman <command> [options]
+# Usage: ./scriptpp/secman <command> [options]
 #
 # Examples:
-#   ./scripts/secman help
-#   ./scripts/secman export-requirements --format xlsx
-#   ./scripts/secman query servers --dry-run
+#   ./scriptpp/secman help
+#   ./scriptpp/secman export-requirements --format xlsx
+#   ./scriptpp/secman query servers --dry-run
 #
 # Prerequisites:
 #   1. Java 21 must be installed and in PATH

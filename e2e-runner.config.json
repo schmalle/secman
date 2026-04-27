@@ -11,7 +11,7 @@
     "cwd": "./frontend"
   },
   "e2e": {
-    "script": "./scripts/e2e-test.sh",
+    "script": "./scriptpp/e2e-test.sh",
     "maxRetries": 5,
     "retryDelay": 5,
     "env": {

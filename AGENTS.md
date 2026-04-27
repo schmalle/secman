@@ -6,7 +6,7 @@ Core code sits in `src/`: `backendng/` holds the Micronaut service (`src/main/ko
 
 ## Build, Test, and Development Commands
 
-- `./scripts/startbackenddev.sh` starts the backend / MCP / API; `./gradlew build` compiles all Gradle modules.
+- `./scriptpp/startbackenddev.sh` starts the backend / MCP / API; `./gradlew build` compiles all Gradle modules.
 - `cd src/frontend && npm install` once, then `npm run dev` for hot reload and `npm run build && npm run preview` to verify production output.
 - Verification: `./gradlew build`, `npm run lint`.
 - Coding Style & Naming Conventions

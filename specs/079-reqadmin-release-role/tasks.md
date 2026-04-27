@@ -82,7 +82,7 @@ No setup tasks required.
 
 **Goal**: Create comprehensive bash e2e test script that validates the complete release lifecycle with REQADMIN role enforcement.
 
-**Independent Test**: Run `./scripts/release-e2e-test.sh` with SECMAN_ADMIN_NAME, SECMAN_ADMIN_PASS, SECMAN_API_KEY env vars set — all tests pass.
+**Independent Test**: Run `./scriptpp/release-e2e-test.sh` with SECMAN_ADMIN_NAME, SECMAN_ADMIN_PASS, SECMAN_API_KEY env vars set — all tests pass.
 
 ### Implementation
 

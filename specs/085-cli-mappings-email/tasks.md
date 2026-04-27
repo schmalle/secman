@@ -32,7 +32,7 @@ description: "Task list for implementing CLI manage-user-mappings --send-email o
 
 - [x] T001 Verify local backend build compiles cleanly before any edits by running `./gradlew :backendng:compileKotlin` and recording the current state (any pre-existing warnings should be documented so we don't blame them on this feature)
 - [x] T002 Verify local CLI build compiles cleanly before any edits by running `./gradlew :cli:compileKotlin`
-- [x] T003 [P] Capture a pre-implementation console snapshot of `./scripts/secman manage-user-mappings list` against a seeded dev DB to `/tmp/085-baseline.txt` — used in Phase 6 to verify SC-005 (byte-identical default output) **[DEFERRED — requires live backend + DB; user to run before merge]**
+- [x] T003 [P] Capture a pre-implementation console snapshot of `./scriptpp/secman manage-user-mappings list` against a seeded dev DB to `/tmp/085-baseline.txt` — used in Phase 6 to verify SC-005 (byte-identical default output) **[DEFERRED — requires live backend + DB; user to run before merge]**
 
 ---
 
@@ -87,7 +87,7 @@ description: "Task list for implementing CLI manage-user-mappings --send-email o
 ### Build + smoke test
 
 - [x] T023 [US1] Run `./gradlew :backendng:compileKotlin :cli:compileKotlin` to confirm end-to-end compilation of the US1 code changes.
-- [x] T024 [US1] Smoke test the happy path by running the backend locally and executing `./scripts/secman manage-user-mappings list --send-email --dry-run` — verify the console prints the existing TABLE output plus a "DRY RUN" summary block, no email is sent, and a row with `status=DRY_RUN` appears in `user_mapping_statistics_log`.
+- [x] T024 [US1] Smoke test the happy path by running the backend locally and executing `./scriptpp/secman manage-user-mappings list --send-email --dry-run` — verify the console prints the existing TABLE output plus a "DRY RUN" summary block, no email is sent, and a row with `status=DRY_RUN` appears in `user_mapping_statistics_log`.
 
 **Checkpoint**: User Story 1 (MVP) is fully functional. An admin can distribute user-mapping statistics by email in a single command. Failure modes are not yet polished — that's US2.
 
@@ -116,7 +116,7 @@ description: "Task list for implementing CLI manage-user-mappings --send-email o
 
 **Goal**: Every documentation surface that mentions `manage-user-mappings` also describes the new `--send-email` option, its interaction with `--dry-run` / `--format`, and the fact that recipients are ADMIN+REPORT users. Operators can discover the feature using only `manage-user-mappings list --help`.
 
-**Independent Test**: Run `manage-user-mappings list --help` and verify the three new flags are listed with descriptions. Then run `grep -n "manage-user-mappings" <each-file-in-the-sweep>` and verify each match that describes the command ALSO mentions `--send-email`. Run `./scripts/secman manage-user-mappings --help` and verify the top-level help advertises the email capability.
+**Independent Test**: Run `manage-user-mappings list --help` and verify the three new flags are listed with descriptions. Then run `grep -n "manage-user-mappings" <each-file-in-the-sweep>` and verify each match that describes the command ALSO mentions `--send-email`. Run `./scriptpp/secman manage-user-mappings --help` and verify the top-level help advertises the email capability.
 
 ### Picocli help text (generated at runtime from annotations)
 
@@ -135,7 +135,7 @@ description: "Task list for implementing CLI manage-user-mappings --send-email o
 
 ### Verification
 
-- [x] T040 [US3] Run `./gradlew :cli:shadowJar` to rebuild the CLI JAR with the new Picocli descriptions, then run `./scripts/secman manage-user-mappings list --help` and confirm the output shows `--send-email`, `--dry-run`, and `--verbose` with their descriptions. Also run `./scripts/secman manage-user-mappings --help` and confirm the top-level description mentions email distribution.
+- [x] T040 [US3] Run `./gradlew :cli:shadowJar` to rebuild the CLI JAR with the new Picocli descriptions, then run `./scriptpp/secman manage-user-mappings list --help` and confirm the output shows `--send-email`, `--dry-run`, and `--verbose` with their descriptions. Also run `./scriptpp/secman manage-user-mappings --help` and confirm the top-level description mentions email distribution.
 - [x] T041 [US3] Run `grep -n "manage-user-mappings" CLAUDE.md README.md INSTALL.md docs/CLI.md docs/ARCHITECTURE.md src/cli/src/main/resources/cli-docs/USER_MAPPING_COMMANDS.md scripts/secmancli` and manually verify every occurrence that describes the command also mentions the new option (SC-004 validation).
 
 **Checkpoint**: Every user story is complete. A new operator can discover the feature from help text alone and every doc surface is consistent.
@@ -147,7 +147,7 @@ description: "Task list for implementing CLI manage-user-mappings --send-email o
 **Purpose**: Final verification gates per Constitution (full build must pass, security review must be done, quickstart must validate end-to-end).
 
 - [x] T042 Run the full `./gradlew build` and verify zero errors. Per CLAUDE.md: "A feature is only complete if gradlew build is showing no errors anymore." This is a hard gate — do not mark the feature complete until this passes.
-- [x] T043 Compare the post-implementation console output of `./scripts/secman manage-user-mappings list` (no `--send-email`) against `/tmp/085-baseline.txt` captured in T003. They MUST be byte-identical (SC-005, FR-014). Any difference is a regression and must be fixed before merge.
+- [x] T043 Compare the post-implementation console output of `./scriptpp/secman manage-user-mappings list` (no `--send-email`) against `/tmp/085-baseline.txt` captured in T003. They MUST be byte-identical (SC-005, FR-014). Any difference is a regression and must be fixed before merge.
 - [~] T044 Walk through every scenario in `specs/085-cli-mappings-email/quickstart.md` (Scenarios 1-10) and verify each produces the expected outcome. This is the authoritative UAT.
 - [x] T045 Conduct a security review per Constitution Principle I: verify `@Secured("ADMIN")` is present on the new endpoint (inherited from `CliController` class-level annotation — confirm it hasn't been overridden), verify no recipient email addresses or statistics data are exposed in error messages or logged at INFO level without authorization context, verify the audit log writes cover dry-run + zero-recipient + partial-failure + full-failure paths, and verify the Flyway migration has no destructive operations.
 - [x] T046 Run a final `grep -rn "manage-user-mappings" CLAUDE.md README.md INSTALL.md docs/ src/cli/src/main/resources/cli-docs/ scripts/secmancli src/cli/src/main/kotlin/com/secman/cli/commands/ManageUserMappingsCommand.kt src/cli/src/main/kotlin/com/secman/cli/commands/ListCommand.kt` and cross-check against the Phase 5 checklist — SC-004 requires 100% coverage.

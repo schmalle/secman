@@ -443,29 +443,29 @@ Secman includes a command-line tool for CrowdStrike integration, notifications, 
 
 ```bash
 # Show all commands
-./scripts/secman help
+./scriptpp/secman help
 
 # Query CrowdStrike servers (dry run)
-./scripts/secman query servers --dry-run
+./scriptpp/secman query servers --dry-run
 
 # Send vulnerability notifications (dry run)
-./scripts/secman send-notifications --dry-run
+./scriptpp/secman send-notifications --dry-run
 
 # Manage user mappings
-./scripts/secman manage-user-mappings --help
+./scriptpp/secman manage-user-mappings --help
 
 # Email user-mapping statistics to all ADMIN/REPORT users
-./scripts/secman manage-user-mappings list --send-email --dry-run   # preview recipients
-./scripts/secman manage-user-mappings list --send-email             # dispatch
+./scriptpp/secman manage-user-mappings list --send-email --dry-run   # preview recipients
+./scriptpp/secman manage-user-mappings list --send-email             # dispatch
 
 # Export requirements
-./scripts/secman export-requirements --format xlsx
+./scriptpp/secman export-requirements --format xlsx
 
 # Add a requirement
-./scripts/secman add-requirement --shortreq "New security requirement"
+./scriptpp/secman add-requirement --shortreq "New security requirement"
 
 # Add a vulnerability
-./scripts/secman add-vulnerability --hostname server01 --cve CVE-2024-1234 --criticality HIGH
+./scriptpp/secman add-vulnerability --hostname server01 --cve CVE-2024-1234 --criticality HIGH
 ```
 
 ---

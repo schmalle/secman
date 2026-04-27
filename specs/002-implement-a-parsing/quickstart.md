@@ -16,7 +16,7 @@ This guide walks through the complete nmap scan import workflow from upload to v
 
 ```bash
 cd /Users/flake/sources/misc/secman
-./docker/scripts/dev.sh up -d
+./docker/scriptpp/dev.sh up -d
 ```
 
 **Verify**:

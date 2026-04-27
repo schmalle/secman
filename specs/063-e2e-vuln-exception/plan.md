@@ -113,7 +113,7 @@ No constitutional violations. Implementation uses existing patterns and services
 ```bash
 #!/bin/bash
 # E2E Vulnerability Exception Workflow Test
-# Usage: ./scripts/test/test-e2e-exception-workflowsupport.sh [--base-url URL] [--api-key KEY]
+# Usage: ./scriptpp/test/test-e2e-exception-workflowsupport.sh [--base-url URL] [--api-key KEY]
 
 # Configuration
 BASE_URL="${BASE_URL:-http://localhost:8080}"

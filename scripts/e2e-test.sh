@@ -24,4 +24,4 @@ export SECMAN_INSECURE="op://test/secman/SECMAN_SSL_ACCEPT_ALL"
 
 export JWT_SECRET=$(openssl rand -base64 48)
 
-op run -- ./scripts/e2e-test.2.sh
+op run -- ./scriptpp/e2e-test.2.sh

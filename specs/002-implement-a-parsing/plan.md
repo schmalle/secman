@@ -185,7 +185,7 @@ Proceeding directly to research documentation (research.md creation in next step
    - View port history → data displayed correctly
 
 5. **Update agent file incrementally**:
-   - Run `.specify/scripts/bash/update-agent-context.sh claude`
+   - Run `.specify/scriptpp/bash/update-agent-context.sh claude`
    - Add nmap import tech/patterns to AGENTS.md
 
 **Output**: data-model.md, /contracts/*, failing tests, quickstart.md, AGENTS.md

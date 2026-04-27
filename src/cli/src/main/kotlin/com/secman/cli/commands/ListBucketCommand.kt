@@ -12,10 +12,10 @@ import java.time.format.DateTimeFormatter
  * CLI command to list objects in an AWS S3 bucket (Feature 065)
  *
  * Usage:
- *   ./scripts/secman manage-user-mappings list-bucket --bucket my-bucket
- *   ./scripts/secman manage-user-mappings list-bucket --bucket my-bucket --prefix user-mappings/
- *   ./scripts/secman manage-user-mappings list-bucket --bucket my-bucket --aws-profile prod
- *   ./scripts/secman manage-user-mappings list-bucket --bucket my-bucket --aws-region eu-west-1
+ *   ./scriptpp/secman manage-user-mappings list-bucket --bucket my-bucket
+ *   ./scriptpp/secman manage-user-mappings list-bucket --bucket my-bucket --prefix user-mappings/
+ *   ./scriptpp/secman manage-user-mappings list-bucket --bucket my-bucket --aws-profile prod
+ *   ./scriptpp/secman manage-user-mappings list-bucket --bucket my-bucket --aws-region eu-west-1
  *
  * Displays a table of S3 objects with key, size, and last modified timestamp.
  * Useful for discovering available mapping files before running import-s3.

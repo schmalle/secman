@@ -311,7 +311,7 @@ def test_export_to_xlsx_matches_required_columns():
 
 #### Step 5: Update Agent Context File
 
-Will execute: `.specify/scripts/bash/update-agent-context.sh claude`
+Will execute: `.specify/scriptpp/bash/update-agent-context.sh claude`
 
 This will create/update `CLAUDE.md` with:
 - Project overview: CrowdStrike Falcon vulnerability query CLI

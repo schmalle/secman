@@ -12,11 +12,11 @@ import jakarta.inject.Singleton
  * CLI command to import user mappings from AWS S3 bucket (Feature 065)
  *
  * Usage:
- *   ./scripts/secman manage-user-mappings import-s3 --bucket my-bucket --key mappings.csv
- *   ./scripts/secman manage-user-mappings import-s3 --bucket my-bucket --key data/users.json --aws-profile prod
- *   ./scripts/secman manage-user-mappings import-s3 --bucket my-bucket --key mappings.csv --aws-region eu-west-1
- *   ./scripts/secman manage-user-mappings import-s3 --bucket my-bucket --key mappings.csv --dry-run
- *   ./scripts/secman manage-user-mappings import-s3 --bucket my-bucket --key mappings.csv \
+ *   ./scriptpp/secman manage-user-mappings import-s3 --bucket my-bucket --key mappings.csv
+ *   ./scriptpp/secman manage-user-mappings import-s3 --bucket my-bucket --key data/users.json --aws-profile prod
+ *   ./scriptpp/secman manage-user-mappings import-s3 --bucket my-bucket --key mappings.csv --aws-region eu-west-1
+ *   ./scriptpp/secman manage-user-mappings import-s3 --bucket my-bucket --key mappings.csv --dry-run
+ *   ./scriptpp/secman manage-user-mappings import-s3 --bucket my-bucket --key mappings.csv \
  *       --aws-access-key-id AKIA... --aws-secret-access-key ...
  *
  * AWS Credential Resolution (highest priority first):
@@ -50,7 +50,7 @@ import jakarta.inject.Singleton
  * - Requires ADMIN role
  *
  * To notify ADMIN/REPORT users about the imported mappings, follow up with:
- *   ./scripts/secman manage-user-mappings list --send-email
+ *   ./scriptpp/secman manage-user-mappings list --send-email
  * See [ListCommand] for --send-email, --dry-run, and --verbose details.
  */
 @Singleton

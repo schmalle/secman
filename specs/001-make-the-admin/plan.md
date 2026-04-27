@@ -153,7 +153,7 @@ tests/
 - Validation criteria from functional requirements
 
 ### 5. Update AGENTS.md (agent-specific file)
-- Run `.specify/scripts/bash/update-agent-context.sh claude`
+- Run `.specify/scriptpp/bash/update-agent-context.sh claude`
 - Add context about sidebar role-based rendering
 - Keep incremental (O(1) operation)
 

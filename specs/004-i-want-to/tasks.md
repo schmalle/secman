@@ -429,7 +429,7 @@ export function hasVulnAccess(): boolean {
 
 ### T027: Update CLAUDE.md documentation
 **File**: `/Users/flake/sources/misc/secman/CLAUDE.md`
-**Action**: Already updated by `.specify/scripts/bash/update-agent-context.sh claude` in Phase 1
+**Action**: Already updated by `.specify/scriptpp/bash/update-agent-context.sh claude` in Phase 1
 - Verify Recent Changes section includes Feature 004
 - Verify VulnerabilityException entity in Key Entities
 - Verify new API endpoints in API Endpoints section

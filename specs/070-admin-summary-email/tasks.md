@@ -40,7 +40,7 @@ Based on plan.md project structure:
 
 **Goal**: Core CLI command that sends summary email to all ADMIN users with system statistics.
 
-**Independent Test**: Run `./scripts/secman send-admin-summary` and verify all ADMIN users receive email with user/vuln/asset counts.
+**Independent Test**: Run `./scriptpp/secman send-admin-summary` and verify all ADMIN users receive email with user/vuln/asset counts.
 
 **FR Coverage**: FR-001 through FR-006, FR-009, FR-010, FR-011, FR-012, FR-013
 
@@ -57,7 +57,7 @@ Based on plan.md project structure:
 - [ ] T014 [US1] Implement summary output showing recipients count, emails sent, failures
 - [ ] T015 [US1] Implement exit code logic (0 for success, 1 for any failures)
 
-**Checkpoint**: US1 complete - basic email sending works. Can run `./scripts/secman send-admin-summary` successfully.
+**Checkpoint**: US1 complete - basic email sending works. Can run `./scriptpp/secman send-admin-summary` successfully.
 
 ---
 
@@ -65,7 +65,7 @@ Based on plan.md project structure:
 
 **Goal**: Preview mode that shows what would be sent without actually sending emails.
 
-**Independent Test**: Run `./scripts/secman send-admin-summary --dry-run` and verify output shows recipients and statistics but no emails sent.
+**Independent Test**: Run `./scriptpp/secman send-admin-summary --dry-run` and verify output shows recipients and statistics but no emails sent.
 
 **FR Coverage**: FR-007
 
@@ -85,7 +85,7 @@ Based on plan.md project structure:
 
 **Goal**: Detailed per-recipient logging for troubleshooting.
 
-**Independent Test**: Run `./scripts/secman send-admin-summary --verbose` and verify per-recipient status is displayed.
+**Independent Test**: Run `./scriptpp/secman send-admin-summary --verbose` and verify per-recipient status is displayed.
 
 **FR Coverage**: FR-008
 

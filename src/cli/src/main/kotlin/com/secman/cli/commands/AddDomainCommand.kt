@@ -8,7 +8,7 @@ import jakarta.inject.Singleton
  * CLI command to add domain-to-user mappings (Feature 049)
  *
  * Usage:
- *   ./scripts/secman manage-user-mappings add-domain \
+ *   ./scriptpp/secman manage-user-mappings add-domain \
  *     --emails user1@example.com,user2@example.com \
  *     --domains example.com,corp.local
  */

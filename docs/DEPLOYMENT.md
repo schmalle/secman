@@ -638,6 +638,29 @@ Add to cron:
 */5 * * * * /opt/secman/bin/monitor.sh
 ```
 
+### CrowdStrike Checkin Freshness (Telegram alert)
+
+The backend exposes an unauthenticated freshness endpoint
+(`GET /api/crowdstrike/last-checkin`) returning the ISO-8601 timestamp of the
+most recent CrowdStrike import, or the literal string `never`.
+
+A stdlib-only Python script at
+[`src/clinotify/check_crowdstrike_checkin.py`](../src/clinotify/README.md)
+polls this endpoint and sends a Telegram alert when the last import is older
+than a configurable threshold (or `never`). No build step, no JVM, no secman
+credentials required.
+
+```cron
+*/10 * * * * TELEGRAM_BOT_TOKEN=... TELEGRAM_CHAT_ID=... \
+  /opt/secman/src/clinotify/check_crowdstrike_checkin.py \
+  --url https://secman.yourdomain.com --max-age-minutes 120 \
+  >> /var/log/secman-checkin.log 2>&1
+```
+
+Exit codes: `0` fresh, `1` transport/parse error, `2` bad args, `3` alert
+fired. See [`src/clinotify/README.md`](../src/clinotify/README.md) for Telegram
+bot setup, flag reference, and a systemd timer example.
+
 ---
 
 ## Maintenance

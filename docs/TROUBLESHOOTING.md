@@ -227,8 +227,8 @@ java -Xmx1g -jar /opt/secman/bin/secman-cli.jar "$@"
 
 Test commands without making changes:
 ```bash
-./scripts/secman query servers --dry-run
-./scripts/secman send-notifications --dry-run
+./scriptpp/secman query servers --dry-run
+./scriptpp/secman send-notifications --dry-run
 ```
 
 ---
@@ -456,13 +456,13 @@ mysql -u secman -p secman -e "SELECT email, last_login FROM users ORDER BY last_
 
 ```bash
 # Show help
-./scripts/secman help
+./scriptpp/secman help
 
 # Test with dry run
-./scripts/secman query servers --dry-run --limit 10
+./scriptpp/secman query servers --dry-run --limit 10
 
 # Verbose output
-./scripts/secman query servers --verbose
+./scriptpp/secman query servers --verbose
 ```
 
 ---

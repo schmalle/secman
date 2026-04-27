@@ -39,7 +39,7 @@
 
 **Goal**: Add a clickable link to the vulnerability statistics page in the admin summary email
 
-**Independent Test**: Send email with `./scripts/secmanng send-admin-summary --dry-run` and verify the URL `{base-url}/vulnerability-statistics` appears in output
+**Independent Test**: Send email with `./scriptpp/secmanng send-admin-summary --dry-run` and verify the URL `{base-url}/vulnerability-statistics` appears in output
 
 ### Implementation for User Story 1
 
@@ -48,7 +48,7 @@
 - [x] T006 [US1] Update `renderHtmlTemplate()` and `renderTextTemplate()` methods to replace `${vulnerabilityStatisticsUrl}` with the actual URL from `SystemStatistics` in `src/backendng/src/main/kotlin/com/secman/service/AdminSummaryService.kt`
 - [x] T007 [US1] Update `SendAdminSummaryCommand.run()` to print the vulnerability statistics URL in dry-run and verbose output in `src/cli/src/main/kotlin/com/secman/cli/commands/SendAdminSummaryCommand.kt`
 
-**Checkpoint**: Email contains clickable link to vulnerability statistics page. Verify with `./gradlew build && ./scripts/secmanng send-admin-summary --dry-run`
+**Checkpoint**: Email contains clickable link to vulnerability statistics page. Verify with `./gradlew build && ./scriptpp/secmanng send-admin-summary --dry-run`
 
 ---
 
@@ -56,7 +56,7 @@
 
 **Goal**: Add a top 10 most affected products section to the admin summary email
 
-**Independent Test**: Send email with `./scripts/secmanng send-admin-summary --dry-run --verbose` and verify top 10 products list appears
+**Independent Test**: Send email with `./scriptpp/secmanng send-admin-summary --dry-run --verbose` and verify top 10 products list appears
 
 ### Implementation for User Story 2
 
@@ -65,7 +65,7 @@
 - [x] T010 [US2] Add `renderTopProductsHtml(products: List<ProductSummary>): String` and `renderTopProductsText(products: List<ProductSummary>): String` helper methods that generate the pre-rendered HTML table rows / ASCII lines, handling empty list with "No vulnerability data available" message, and wire into `renderHtmlTemplate()` and `renderTextTemplate()` in `src/backendng/src/main/kotlin/com/secman/service/AdminSummaryService.kt`
 - [x] T011 [US2] Update `SendAdminSummaryCommand.run()` to print top 10 products (name + count) in dry-run and verbose output in `src/cli/src/main/kotlin/com/secman/cli/commands/SendAdminSummaryCommand.kt`
 
-**Checkpoint**: Email contains top 10 products section. Verify with `./gradlew build && ./scripts/secmanng send-admin-summary --dry-run --verbose`
+**Checkpoint**: Email contains top 10 products section. Verify with `./gradlew build && ./scriptpp/secmanng send-admin-summary --dry-run --verbose`
 
 ---
 
@@ -73,7 +73,7 @@
 
 **Goal**: Add a top 10 most affected servers section to the admin summary email
 
-**Independent Test**: Send email with `./scripts/secmanng send-admin-summary --dry-run --verbose` and verify top 10 servers list appears
+**Independent Test**: Send email with `./scriptpp/secmanng send-admin-summary --dry-run --verbose` and verify top 10 servers list appears
 
 ### Implementation for User Story 3
 
@@ -82,7 +82,7 @@
 - [x] T014 [US3] Add `renderTopServersHtml(servers: List<ServerSummary>): String` and `renderTopServersText(servers: List<ServerSummary>): String` helper methods that generate the pre-rendered HTML table rows / ASCII lines, handling empty list with "No vulnerability data available" message, and wire into `renderHtmlTemplate()` and `renderTextTemplate()` in `src/backendng/src/main/kotlin/com/secman/service/AdminSummaryService.kt`
 - [x] T015 [US3] Update `SendAdminSummaryCommand.run()` to print top 10 servers (name + count) in dry-run and verbose output in `src/cli/src/main/kotlin/com/secman/cli/commands/SendAdminSummaryCommand.kt`
 
-**Checkpoint**: Email contains top 10 servers section. Verify with `./gradlew build && ./scripts/secmanng send-admin-summary --dry-run --verbose`
+**Checkpoint**: Email contains top 10 servers section. Verify with `./gradlew build && ./scriptpp/secmanng send-admin-summary --dry-run --verbose`
 
 ---
 
@@ -91,7 +91,7 @@
 **Purpose**: Final verification and documentation
 
 - [x] T016 Run full build verification with `./gradlew build` to ensure no compilation errors or test regressions
-- [x] T017 Run end-to-end dry-run verification with `./scripts/secmanng send-admin-summary --dry-run --verbose` and confirm all three new sections (link, products, servers) appear correctly
+- [x] T017 Run end-to-end dry-run verification with `./scriptpp/secmanng send-admin-summary --dry-run --verbose` and confirm all three new sections (link, products, servers) appear correctly
 
 ---
 

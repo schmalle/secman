@@ -75,13 +75,13 @@ DB_PASSWORD=op://test/secman/SECMAN_DB_PASSWORD
 ```bash
 op run --env-file ./secman.env -- gradle :backendng:run
 # or use the convenience script:
-./scripts/backend
+./scriptpp/backend
 ```
 
 ### Run backend (development)
 
 ```bash
-./scripts/startbackenddev.sh
+./scriptpp/startbackenddev.sh
 ```
 
 This script sets `MICRONAUT_ENVIRONMENTS=dev`, `SECMAN_DEBUG=true`, generates a random `JWT_SECRET`, and wraps `gradle` with `op run` to resolve `op://` references for `DB_CONNECT` and `SECMAN_BACKEND_URL`.
@@ -89,7 +89,7 @@ This script sets `MICRONAUT_ENVIRONMENTS=dev`, `SECMAN_DEBUG=true`, generates a 
 ### Run frontend (development)
 
 ```bash
-./scripts/startfrontenddev.sh
+./scriptpp/startfrontenddev.sh
 ```
 
 This script sets `SECMAN_DOMAIN` and `SECMAN_HOST` as `op://` references and wraps `npm run dev` with `op run` for resolution.
@@ -97,7 +97,7 @@ This script sets `SECMAN_DOMAIN` and `SECMAN_HOST` as `op://` references and wra
 ### Run CLI commands
 
 ```bash
-./scripts/secmancli query servers --dry-run
+./scriptpp/secmancli query servers --dry-run
 ```
 
 The `scripts/secmancli` script exports all `op://` references and wraps the command with `op run`.

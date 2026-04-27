@@ -285,16 +285,16 @@ npm run build                # Production build
 
 # CLI Tools (from repository root)
 ./gradlew :cli:shadowJar                                           # Build standalone JAR
-./scripts/secman help                                                   # Show all commands
-./scripts/secman query servers --dry-run                                # Query CrowdStrike
-./scripts/secman send-notifications --dry-run --verbose                 # Email notifications
-./scripts/secman send-admin-summary --dry-run                           # Admin summary
-./scripts/secman manage-workgroups list                                 # List workgroups
-./scripts/secman manage-user-mappings --help                            # User mappings
-./scripts/secman manage-user-mappings list --send-email --dry-run       # Preview stats email
-./scripts/secman manage-user-mappings list --send-email                 # Email stats to admins
-./scripts/secman add-vulnerability --help                               # Add vulnerability
-./scripts/secman export-requirements --format xlsx                      # Export requirements
+./scriptpp/secman help                                                   # Show all commands
+./scriptpp/secman query servers --dry-run                                # Query CrowdStrike
+./scriptpp/secman send-notifications --dry-run --verbose                 # Email notifications
+./scriptpp/secman send-admin-summary --dry-run                           # Admin summary
+./scriptpp/secman manage-workgroups list                                 # List workgroups
+./scriptpp/secman manage-user-mappings --help                            # User mappings
+./scriptpp/secman manage-user-mappings list --send-email --dry-run       # Preview stats email
+./scriptpp/secman manage-user-mappings list --send-email                 # Email stats to admins
+./scriptpp/secman add-vulnerability --help                               # Add vulnerability
+./scriptpp/secman export-requirements --format xlsx                      # Export requirements
 
 # Tests
 ./gradlew build                                         # All tests
@@ -379,14 +379,14 @@ See [CLAUDE.md](CLAUDE.md) for the complete API reference.
 mysql -u secman -pCHANGEME secman
 
 # Reset database (development only)
-./scripts/reset_database.sh
+./scriptpp/reset_database.sh
 ```
 
 ## Configuration
 
 **Backend:** `src/backendng/src/main/resources/application.yml`
 **Frontend:** `src/frontend/astro.config.mjs`
-**CLI:** Environment variables and `./scripts/secman config`
+**CLI:** Environment variables and `./scriptpp/secman config`
 
 ### Key Environment Variables
 

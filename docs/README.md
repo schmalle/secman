@@ -22,9 +22,10 @@ Security requirement and risk assessment management tool.
 | [S3 User Mapping Import](./S3_USER_MAPPING_IMPORT.md) | S3-based user mapping imports            |
 | [Skills & Agents](./SKILLS_AND_AGENTS.md)             | Claude Code skills and agent reference   |
 | [1Password Credentials](./1PASSWORD.md)               | Secret management with 1Password CLI     |
+| [CrowdStrike Checkin Monitor](../src/clinotify/README.md) | Telegram alert when CrowdStrike imports go stale |
 | [Docker Deployment](../docker/README.md)                  | Docker container deployment             |
-| [Database Installation](../scripts/install/db/README.md) | Database setup scripts and defaults    |
-| [MCP Go Client](../scripts/mcp/README.md)             | Standalone Go MCP client example         |
+| [Database Installation](../scriptpp/install/db/README.md) | Database setup scripts and defaults    |
+| [MCP Go Client](../scriptpp/mcp/README.md)             | Standalone Go MCP client example         |
 | [UI Screenshots](../pictures/README.md)               | Latest UI screenshots                    |
 
 ---
@@ -116,9 +117,9 @@ npm run dev
 ./gradlew :cli:shadowJar
 
 # Use via wrapper
-./scripts/secman help
-./scripts/secman query servers --dry-run
-./scripts/secman send-admin-summary --dry-run
+./scriptpp/secman help
+./scriptpp/secman query servers --dry-run
+./scriptpp/secman send-admin-summary --dry-run
 ```
 
 ---
@@ -286,6 +287,8 @@ docs/
 ├── S3_USER_MAPPING_IMPORT.md      <- S3 import guide
 ├── SKILLS_AND_AGENTS.md           <- Skills & agents reference
 ├── 1PASSWORD.md                   <- Secret management with 1Password CLI
+src/clinotify/
+└── README.md                      <- CrowdStrike checkin Telegram monitor
 docker/
 └── README.md                      <- Docker container deployment
 scripts/install/db/
@@ -298,4 +301,4 @@ pictures/
 
 ---
 
-*For CLI help: `./scripts/secman help`*
+*For CLI help: `./scriptpp/secman help`*

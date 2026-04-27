@@ -7,8 +7,8 @@ Command-line interface for CrowdStrike vulnerability queries, notifications, use
 
 > **Invocation Styles:** The examples below use `java -jar secman-cli.jar ...` to document the raw JAR invocation. During local development or scripted usage, you can substitute any of the following equivalent wrappers:
 >
-> - `./scripts/secman <command>` — symlink to `secmancli`, uses 1Password to inject secrets from `secman.env`
-> - `./scripts/secmanng <command>` — alternative 1Password-based wrapper with explicit env exports (e.g. `SECMAN_INSECURE` for self-signed SSL)
+> - `./scriptpp/secman <command>` — symlink to `secmancli`, uses 1Password to inject secrets from `secman.env`
+> - `./scriptpp/secmanng <command>` — alternative 1Password-based wrapper with explicit env exports (e.g. `SECMAN_INSECURE` for self-signed SSL)
 >
 > See [1PASSWORD.md](./1PASSWORD.md) for details on which secrets each wrapper resolves.
 
@@ -245,6 +245,17 @@ java -jar secman-cli.jar manage-user-mappings list --send-email --verbose
 # Filter and email the filtered view only
 java -jar secman-cli.jar manage-user-mappings list --email user@example.com --send-email
 
+# Download AWS account mappings only to a file (CSV, round-trips through `import`)
+java -jar secman-cli.jar manage-user-mappings list \
+  --type AWS \
+  --format csv \
+  --output aws-mappings.csv
+
+# Download all mappings as JSON
+java -jar secman-cli.jar manage-user-mappings list \
+  --format json \
+  --output mappings.json
+
 # Add AWS account mapping
 java -jar secman-cli.jar manage-user-mappings add-aws \
   --email user@example.com \
@@ -272,11 +283,33 @@ java -jar secman-cli.jar manage-user-mappings import \
   --format json
 
 # Import via S3
-./scripts/secmanng manage-user-mappings import-s3 --bucket BUCKETNAME --key FILE
+./scriptpp/secmanng manage-user-mappings import-s3 --bucket BUCKETNAME --key FILE
+
+# Download the AWS account mapping file directly from S3 to a local path
+# (no backend involved — only AWS credentials needed)
+./scriptpp/secmanng manage-user-mappings download-s3 \
+  --bucket BUCKETNAME --key mappings.csv --output ./aws-mappings.csv
+
+# Download with a named AWS profile, overwriting any existing local file
+./scriptpp/secmanng manage-user-mappings download-s3 \
+  --bucket BUCKETNAME --key mappings.csv \
+  --aws-profile prod \
+  --output ./aws-mappings.csv \
+  --force
+
+# Print the parsed AWS account mappings from an S3 file straight to the console
+# (no disk write, no backend involvement)
+./scriptpp/secmanng manage-user-mappings print-s3 \
+  --bucket BUCKETNAME --key mappings.csv
+
+# Print everything (AWS + domains) as JSON
+./scriptpp/secmanng manage-user-mappings print-s3 \
+  --bucket BUCKETNAME --key mappings.csv \
+  --type ALL --format JSON
 
 # Import via S3, then email statistics to ADMIN/REPORT users
-./scripts/secmanng manage-user-mappings import-s3 --bucket BUCKETNAME --key FILE && \
-  ./scripts/secmanng manage-user-mappings list --send-email
+./scriptpp/secmanng manage-user-mappings import-s3 --bucket BUCKETNAME --key FILE && \
+  ./scriptpp/secmanng manage-user-mappings list --send-email
 
 # Remove mapping
 java -jar secman-cli.jar manage-user-mappings remove --id 42
@@ -292,6 +325,8 @@ java -jar secman-cli.jar manage-user-mappings remove --id 42
 | `add-domain` | Add AD domain mapping                                                        |
 | `import`     | Bulk import from CSV/JSON                                                    |
 | `import-s3`  | Import from AWS S3 bucket (follow with`list --send-email` to notify admins)  |
+| `download-s3`| Download an AWS account mapping file directly from S3 to a local path (no backend involvement) |
+| `print-s3`   | Download a mapping file from S3 and print the parsed AWS account mappings to the console (no disk write, no backend) |
 | `remove`     | Remove mapping by ID                                                         |
 
 **List Command Options:**
@@ -302,6 +337,8 @@ java -jar secman-cli.jar manage-user-mappings remove --id 42
 | `--format`        | Output format:`table`, `json`, or `csv`                                                               | `table` |
 | `--email`         | Filter to a specific user email                                                                       | -       |
 | `--status`        | Filter by`ACTIVE`, `PENDING`, or `ALL`                                                                | `ALL`   |
+| `--type`          | Restrict by mapping kind:`AWS` (AWS account mappings only), `DOMAIN` (domain mappings only), or `ALL` | `ALL`   |
+| `--output`, `-o`  | Write mappings to FILE instead of stdout. With`--format CSV` the file round-trips through `import`. Forces CSV when used with `--format TABLE`. | -       |
 | `--send-email`    | Email the statistics report to all ADMIN/REPORT users after printing the console output (Feature 085) | `false` |
 | `--dry-run`       | Used with`--send-email`: preview intended recipients without dispatching                              | `false` |
 | `--verbose`, `-v` | Used with`--send-email`: show per-recipient delivery status                                           | `false` |
@@ -331,6 +368,132 @@ invocation, including dry-runs and zero-recipient failures.
 | `--file`    | Path to import file (required) | -       |
 | `--format`  | File format:`csv` or `json`    | `csv`   |
 | `--dry-run` | Validate without persisting    | `false` |
+
+**Download-S3 Command Options:**
+
+`download-s3` fetches an AWS account mapping file straight from an S3 bucket to a local path. **It does not contact the secman backend** — only AWS credentials with `s3:GetObject` (and ideally `s3:HeadObject` for a pre-download size check) on the target object are required. Use this when you want to inspect the source-of-truth file, diff against backend state, or pipe the contents into other tooling without touching the secman API.
+
+| Option                    | Description                                                                                       | Default |
+| ------------------------- | ------------------------------------------------------------------------------------------------- | ------- |
+| `--bucket`, `-b`          | S3 bucket name (plain name — not a URL or ARN). **Required.**                                     | -       |
+| `--key`, `-k`             | S3 object key (path inside the bucket). **Required.**                                             | -       |
+| `--output`, `-o`          | Local destination file path. **Required.** Parent directory must already exist.                   | -       |
+| `--force`, `-f`           | Overwrite the destination file if it already exists.                                              | `false` |
+| `--aws-region`            | AWS region. Defaults to SDK resolution from env/config.                                           | -       |
+| `--aws-profile`           | AWS credential profile name (reads`~/.aws/credentials`).                                          | -       |
+| `--aws-access-key-id`     | Explicit AWS access key ID (or set`AWS_ACCESS_KEY_ID`).                                           | -       |
+| `--aws-secret-access-key` | Explicit AWS secret access key (or set`AWS_SECRET_ACCESS_KEY`).                                   | -       |
+| `--aws-session-token`     | AWS session token for temporary credentials (or set`AWS_SESSION_TOKEN`).                          | -       |
+| `--endpoint-url`          | Custom S3 endpoint URL for local testing (e.g.`http://localhost:9090`). Also reads `AWS_ENDPOINT_URL`. | -       |
+| `--quiet`, `-q`           | Suppress progress output. Errors still print to stderr; success line still prints to stderr.      | `false` |
+
+**Exit codes:**
+
+
+| Code | Meaning                                                            |
+| ---- | ------------------------------------------------------------------ |
+| 0    | Success — file written to`--output`                                |
+| 1    | Generic / I/O error                                                |
+| 2    | S3, credentials, or argument error (fatal — won't succeed on retry) |
+| 3    | Unexpected error                                                   |
+
+**Constraints:**
+
+- 10 MB hard size limit (matches`import-s3`).
+- The destination's parent directory must already exist; the command does not auto-create it.
+- Existing destination files are not overwritten unless`--force` is set.
+- File contents are written verbatim — there is no parsing, validation, or normalization. Use`import-s3 --dry-run` if you want validation.
+
+**Examples:**
+
+```bash
+# Default credential chain
+./scriptpp/secman manage-user-mappings download-s3 \
+  --bucket my-bucket --key mappings.csv \
+  --output ./aws-mappings.csv
+
+# Named profile, force overwrite
+./scriptpp/secman manage-user-mappings download-s3 \
+  --bucket my-bucket --key data/users.json \
+  --aws-profile prod \
+  --output ./users.json \
+  --force
+
+# Explicit credentials + custom region (e.g. for cron jobs)
+./scriptpp/secman manage-user-mappings download-s3 \
+  --bucket my-bucket --key mappings.csv \
+  --aws-access-key-id "$AWS_KEY" \
+  --aws-secret-access-key "$AWS_SECRET" \
+  --aws-region eu-west-1 \
+  --output /var/lib/secman/aws-mappings.csv \
+  --quiet
+```
+
+**Print-S3 Command Options:**
+
+`print-s3` downloads a mapping file from S3, parses it, and prints the **identified mappings** to the console. **It does not write to disk** (the temp file used during download is deleted on exit) and **does not contact the secman backend**. Default scope is AWS account mappings — broaden with `--type DOMAIN` or `--type ALL`.
+
+| Option                    | Description                                                                                                | Default |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------- | ------- |
+| `--bucket`, `-b`          | S3 bucket name (plain name — not a URL or ARN). **Required.**                                              | -       |
+| `--key`, `-k`             | S3 object key (path inside the bucket). **Required.**                                                      | -       |
+| `--type`                  | Restrict by mapping kind:`AWS` (AWS account mappings only), `DOMAIN` (domain mappings only), or `ALL`. | `AWS`   |
+| `--format`                | Output format:`TABLE`, `JSON`, or `CSV`.                                                                   | `TABLE` |
+| `--file-format`           | Format of the source file in S3:`CSV`, `JSON`, or `AUTO` (auto-detects from extension or content).        | `AUTO`  |
+| `--show-errors`           | Print parse errors (malformed rows) to stderr after the mapping output. Without this flag, errors are silently dropped and only valid rows are printed. | `false` |
+| `--aws-region`            | AWS region. Defaults to SDK resolution from env/config.                                                    | -       |
+| `--aws-profile`           | AWS credential profile name (reads`~/.aws/credentials`).                                                   | -       |
+| `--aws-access-key-id`     | Explicit AWS access key ID (or set`AWS_ACCESS_KEY_ID`).                                                    | -       |
+| `--aws-secret-access-key` | Explicit AWS secret access key (or set`AWS_SECRET_ACCESS_KEY`).                                            | -       |
+| `--aws-session-token`     | AWS session token for temporary credentials (or set`AWS_SESSION_TOKEN`).                                   | -       |
+| `--endpoint-url`          | Custom S3 endpoint URL for local testing. Also reads`AWS_ENDPOINT_URL`.                                    | -       |
+| `--quiet`, `-q`           | Suppress the header banner. The mapping output is still printed to stdout so the command remains pipeable. | `false` |
+
+**Stdout / stderr split:**
+
+- **stdout**: only the parsed mapping output (TABLE/JSON/CSV) — safe to pipe into `diff`, `jq`, `awk`, or `> file`.
+- **stderr**: the header banner ("Source: ...", "Scope: ...") and the trailing summary line ("Parsed N mapping(s) ..."). Suppressed by `--quiet`. Parse errors only appear here when `--show-errors` is set.
+
+**Exit codes:**
+
+
+| Code | Meaning                                                          |
+| ---- | ---------------------------------------------------------------- |
+| 0    | Success — file parsed and printed without errors                 |
+| 1    | Parse errors found in the file (valid rows still printed)        |
+| 2    | S3, credentials, or argument error (fatal — won't succeed on retry) |
+| 3    | Unexpected error                                                 |
+
+**Examples:**
+
+```bash
+# Default: print AWS account mappings as a table
+./scriptpp/secman manage-user-mappings print-s3 \
+  --bucket my-bucket --key mappings.csv
+
+# Print everything as JSON for downstream tooling
+./scriptpp/secman manage-user-mappings print-s3 \
+  --bucket my-bucket --key mappings.csv \
+  --type ALL --format JSON
+
+# Print as CSV and pipe through jq-style filtering
+./scriptpp/secman manage-user-mappings print-s3 \
+  --bucket my-bucket --key mappings.csv \
+  --format CSV --quiet | grep '^alice@'
+
+# Diff S3 source-of-truth against the secman DB
+./scriptpp/secman manage-user-mappings print-s3 \
+  --bucket my-bucket --key mappings.csv \
+  --format CSV --quiet > /tmp/s3.csv
+./scriptpp/secman manage-user-mappings list \
+  --type AWS --format CSV --output /tmp/db.csv
+diff /tmp/s3.csv /tmp/db.csv
+
+# Show parse errors when troubleshooting a malformed file
+./scriptpp/secman manage-user-mappings print-s3 \
+  --bucket my-bucket --key mappings.csv \
+  --show-errors
+```
 
 #### CSV Import Format
 
@@ -821,4 +984,4 @@ exit 0
 
 ---
 
-*For CLI help: `./scripts/secman help`*
+*For CLI help: `./scriptpp/secman help`*

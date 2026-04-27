@@ -43,7 +43,7 @@
 ./gradlew :cli:shadowJar
 
 # Test with dry-run (no emails sent)
-./scripts/secmanng send-admin-summary --dry-run --verbose
+./scriptpp/secmanng send-admin-summary --dry-run --verbose
 
 # Expected output should now include:
 # - Vulnerability Statistics URL
@@ -60,4 +60,4 @@
 5. Update template rendering methods with new variable replacements
 6. Update CLI command output for dry-run preview
 7. Build and verify with `./gradlew build`
-8. Test end-to-end with `./scripts/secmanng send-admin-summary --dry-run --verbose`
+8. Test end-to-end with `./scriptpp/secmanng send-admin-summary --dry-run --verbose`

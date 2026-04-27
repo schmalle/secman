@@ -15,11 +15,17 @@ import jakarta.inject.Singleton
  * Subcommands:
  *   add-domain  - Add domain-to-user mappings
  *   add-aws     - Add AWS-account-to-user mappings
- *   list        - List existing mappings
+ *   list        - List existing mappings; supports `--type AWS|DOMAIN|ALL` and
+ *                 `--output <file>` to download mappings (CSV round-trips
+ *                 through `import`)
  *   remove      - Remove user mappings
  *   import      - Batch import from CSV/JSON file
  *   import-s3   - Batch import from AWS S3 bucket (Feature 065)
  *   list-bucket - List objects in an S3 bucket (Feature 065)
+ *   download-s3 - Download an AWS account mapping file directly from S3 to a
+ *                 local path (no backend involvement)
+ *   print-s3    - Download a mapping file from S3 and print the parsed
+ *                 mappings to the console (no disk write, no backend)
  *
  * Authentication:
  *   All operations require ADMIN role and backend credentials.
@@ -35,7 +41,14 @@ import jakarta.inject.Singleton
         "Manage user mappings for domains and AWS accounts. " +
             "The 'list' subcommand supports --send-email to distribute a " +
             "statistics report (aggregates + per-user detail) to all ADMIN/REPORT " +
-            "users in a single invocation."
+            "users in a single invocation, and --type AWS|DOMAIN|ALL combined " +
+            "with --output <file> to download a scoped mapping file (the CSV " +
+            "form is round-trip compatible with the 'import' subcommand). " +
+            "The 'download-s3' subcommand fetches an AWS account mapping file " +
+            "directly from an S3 bucket to a local path without touching the " +
+            "secman backend. The 'print-s3' subcommand downloads a mapping " +
+            "file from S3 and prints the parsed mappings to the console " +
+            "(no disk write, no backend; defaults to AWS account mappings)."
     ],
     mixinStandardHelpOptions = true,
     subcommands = [
@@ -45,7 +58,9 @@ import jakarta.inject.Singleton
         RemoveCommand::class,
         ImportCommand::class,
         ImportS3Command::class,
-        ListBucketCommand::class
+        ListBucketCommand::class,
+        DownloadS3Command::class,
+        PrintS3Command::class
     ]
 )
 class ManageUserMappingsCommand : Runnable {

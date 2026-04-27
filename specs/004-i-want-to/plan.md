@@ -210,7 +210,7 @@ No NEEDS CLARIFICATION markers remain in spec after clarification session. Resea
    - Attempt access as normal user (should fail)
 
 5. **CLAUDE.md update** - Incremental O(1) operation:
-   - Run `.specify/scripts/bash/update-agent-context.sh claude`
+   - Run `.specify/scriptpp/bash/update-agent-context.sh claude`
    - Add "Feature 004: VULN Role & Vulnerability Management UI" to Recent Changes
    - Add VulnerabilityException entity to Key Entities section
    - Add new API endpoints to API Endpoints section

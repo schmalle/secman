@@ -332,7 +332,7 @@ secman query servers --verbose
 
 ```bash
 #!/bin/bash
-# cron job: 0 2 * * * /opt/secman/scripts/daily-import.sh
+# cron job: 0 2 * * * /opt/secman/scriptpp/daily-import.sh
 
 cd /opt/secman
 ./secman query servers --verbose > /var/log/secman/import-$(date +\%Y\%m\%d).log 2>&1

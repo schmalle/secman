@@ -68,10 +68,10 @@ manager@example.com,DOMAIN,mgmt.example.com
 Import:
 ```bash
 # Dry-run first
-./scripts/secman manage-user-mappings import --file mappings.csv --dry-run
+./scriptpp/secman manage-user-mappings import --file mappings.csv --dry-run
 
 # Actual import
-./scripts/secman manage-user-mappings import --file mappings.csv
+./scriptpp/secman manage-user-mappings import --file mappings.csv
 ```
 
 ### 3. Import from JSON
@@ -93,20 +93,20 @@ Create `mappings.json`:
 
 Import:
 ```bash
-./scripts/secman manage-user-mappings import --file mappings.json
+./scriptpp/secman manage-user-mappings import --file mappings.json
 ```
 
 ### 4. List Mappings
 
 ```bash
 # All mappings
-./scripts/secman manage-user-mappings list
+./scriptpp/secman manage-user-mappings list
 
 # Filter by email
-./scripts/secman manage-user-mappings list --email developer@example.com
+./scriptpp/secman manage-user-mappings list --email developer@example.com
 
 # JSON output for scripting
-./scripts/secman manage-user-mappings list --format json
+./scriptpp/secman manage-user-mappings list --format json
 ```
 
 ## Common Workflows
@@ -138,7 +138,7 @@ print(f"Created: {result['created']}, Skipped: {result['skipped']}")
 - name: Import user mappings
   run: |
     export SECMAN_ADMIN_EMAIL="${{ secrets.SECMAN_ADMIN_EMAIL }}"
-    ./scripts/secman manage-user-mappings import --file ./config/user-mappings.csv
+    ./scriptpp/secman manage-user-mappings import --file ./config/user-mappings.csv
 ```
 
 ### Audit Script
@@ -146,7 +146,7 @@ print(f"Created: {result['created']}, Skipped: {result['skipped']}")
 ```bash
 #!/bin/bash
 # Export all mappings for audit
-./scripts/secman manage-user-mappings list --format json > /var/log/secman/mappings-$(date +%Y%m%d).json
+./scriptpp/secman manage-user-mappings list --format json > /var/log/secman/mappings-$(date +%Y%m%d).json
 ```
 
 ## Troubleshooting

@@ -312,7 +312,7 @@ From user stories:
 
 Execute update script:
 ```bash
-.specify/scripts/bash/update-agent-context.sh claude
+.specify/scriptpp/bash/update-agent-context.sh claude
 ```
 
 This will:

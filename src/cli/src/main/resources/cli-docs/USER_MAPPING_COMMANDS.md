@@ -170,7 +170,9 @@ Created: 2 pending
 ./gradlew cli:run --args='manage-user-mappings list \
   [--email <email>] \
   [--status <ACTIVE|PENDING|ALL>] \
+  [--type <AWS|DOMAIN|ALL>] \
   [--format <TABLE|JSON|CSV>] \
+  [--output <file> | -o <file>] \
   [--send-email] \
   [--dry-run] \
   [--verbose | -v] \
@@ -180,7 +182,9 @@ Created: 2 pending
 **Options**:
 - `--email`: Filter by specific user email
 - `--status`: Filter by mapping status (ACTIVE, PENDING, ALL)
+- `--type`: Restrict by mapping kind. `AWS` returns AWS account mappings only, `DOMAIN` returns domain mappings only, `ALL` (default) returns both. Useful for downloading only the AWS account mapping subset.
 - `--format`: Output format (default: TABLE)
+- `--output`, `-o`: Write the rendered output to FILE instead of stdout. When combined with `--format CSV` the file is round-trip compatible with `manage-user-mappings import`. If `--format TABLE` is set, the format is auto-coerced to CSV (TABLE is interactive only). On success the byte count and absolute path are printed to **stderr** (so stdout can still be piped). Refuses to overwrite a path that exists and is not a regular file.
 - `--send-email`: **(Feature 085)** After printing the console output, email the statistics report (aggregates + per-user detail) to every user holding the `ADMIN` or `REPORT` role with a valid email address. Recipient selection matches the existing `send-admin-summary` command.
 - `--dry-run`: Used with `--send-email`. Preview the intended recipient list without dispatching any email. Still prints the console output and still writes a `DRY_RUN` row to the audit log.
 - `--verbose`, `-v`: Used with `--send-email`. Show per-recipient send status (`SUCCESS <addr>` / `FAILED <addr>`) in addition to the summary block.
@@ -263,10 +267,29 @@ bob@example.com,DOMAIN,corp.local,PENDING,2025-01-19T10:00:00Z,
   --format JSON \
   --admin-user admin@example.com' > mappings.json
 
-# Export to CSV
+# Export to CSV (stdout redirection)
 ./gradlew cli:run --args='manage-user-mappings list \
   --format CSV \
   --admin-user admin@example.com' > mappings.csv
+
+# Download AWS account mappings only to a file (round-trip compatible with `import`)
+./gradlew cli:run --args='manage-user-mappings list \
+  --type AWS \
+  --format CSV \
+  --output aws-mappings.csv'
+
+# Download all domain mappings as JSON
+./gradlew cli:run --args='manage-user-mappings list \
+  --type DOMAIN \
+  --format JSON \
+  --output domain-mappings.json'
+
+# Download AWS mappings for one user only
+./gradlew cli:run --args='manage-user-mappings list \
+  --type AWS \
+  --email alice@example.com \
+  --format CSV \
+  --output alice-aws.csv'
 
 # Feature 085: Email statistics to all ADMIN/REPORT users (happy path)
 ./gradlew cli:run --args='manage-user-mappings list --send-email'
@@ -314,7 +337,7 @@ command retains its pre-Feature-085 exit behavior (0 on success, 1 on error).
 
 ```bash
 # Weekly Monday 08:00 distribution
-0 8 * * 1 /opt/secman/scripts/secmancli manage-user-mappings list --send-email \
+0 8 * * 1 /opt/secman/scriptpp/secmancli manage-user-mappings list --send-email \
   || echo "user-mapping stats distribution failed with exit $?" | mail -s "secman alert" ops@example.com
 ```
 
@@ -518,7 +541,7 @@ Errors:
 
 **Syntax**:
 ```bash
-./scripts/secman manage-user-mappings import-s3 \
+./scriptpp/secman manage-user-mappings import-s3 \
   --bucket <bucket-name> \
   --key <object-key> \
   [--aws-region <region>] \
@@ -565,13 +588,13 @@ The command uses the standard AWS SDK credential chain:
 **Examples**:
 ```bash
 # Basic import
-./scripts/secman manage-user-mappings import-s3 \
+./scriptpp/secman manage-user-mappings import-s3 \
   --bucket my-mapping-bucket \
   --key user-mappings/current.csv \
   --admin-user admin@example.com
 
 # With specific region and profile
-./scripts/secman manage-user-mappings import-s3 \
+./scriptpp/secman manage-user-mappings import-s3 \
   --bucket my-mapping-bucket \
   --key user-mappings/current.csv \
   --aws-region eu-west-1 \
@@ -579,7 +602,7 @@ The command uses the standard AWS SDK credential chain:
   --admin-user admin@example.com
 
 # Dry-run validation
-./scripts/secman manage-user-mappings import-s3 \
+./scriptpp/secman manage-user-mappings import-s3 \
   --bucket my-mapping-bucket \
   --key user-mappings/current.csv \
   --dry-run \
@@ -590,7 +613,7 @@ The command uses the standard AWS SDK credential chain:
 
 To notify ADMIN/REPORT users about the imported mappings, follow up with:
 ```bash
-./scripts/secman manage-user-mappings list --send-email
+./scriptpp/secman manage-user-mappings list --send-email
 ```
 
 Use `--dry-run` to preview recipients, or `--verbose` for per-recipient delivery status.
@@ -635,6 +658,266 @@ Created: 3 pending mapping(s)
 Skipped: 2 duplicate(s)
 
 Import successful
+```
+
+---
+
+### 7. S3 Download (Direct, Bypasses Backend)
+
+**Command**: `download-s3`
+
+**Purpose**: Download an AWS account mapping file *straight* from an S3 bucket to a local file path. **Does not contact the secman backend** — only AWS credentials with `s3:GetObject` (and optionally `s3:HeadObject` for a pre-download size check) are required. Useful for inspecting the source-of-truth file, diffing it against backend state, or piping its contents into other tooling without going through secman.
+
+This is the read-only counterpart to `import-s3`:
+- `import-s3` downloads AND POSTs the file to the secman backend for processing.
+- `download-s3` only copies the file to disk.
+
+**Syntax**:
+```bash
+./gradlew cli:run --args='manage-user-mappings download-s3 \
+  --bucket <bucket-name> \
+  --key <object-key> \
+  --output <local-file> \
+  [--force | -f] \
+  [--aws-region <region>] \
+  [--aws-profile <profile>] \
+  [--aws-access-key-id <key>] \
+  [--aws-secret-access-key <secret>] \
+  [--aws-session-token <token>] \
+  [--endpoint-url <url>] \
+  [--quiet | -q]'
+```
+
+**Required Options**:
+- `--bucket`, `-b`: S3 bucket name (plain name — not a URL or ARN)
+- `--key`, `-k`: S3 object key (path inside the bucket)
+- `--output`, `-o`: Local destination file path (parent dir must already exist)
+
+**Optional Options**:
+- `--force`, `-f`: Overwrite the destination file if it already exists. Without `--force` the command refuses to clobber an existing file.
+- `--aws-region`: AWS region (default: SDK resolution from env/config)
+- `--aws-profile`: AWS credential profile name (reads `~/.aws/credentials`)
+- `--aws-access-key-id` / `--aws-secret-access-key` / `--aws-session-token`: Explicit credentials (also read from `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_SESSION_TOKEN` env vars)
+- `--endpoint-url`: Custom S3 endpoint URL (e.g. `http://localhost:9090` for S3Mock; also reads `AWS_ENDPOINT_URL`)
+- `--quiet`, `-q`: Suppress progress output. The "Wrote N bytes to ..." confirmation line is still printed to **stderr** so cron logs and shell wrappers can capture it.
+
+**AWS Credential Resolution** (highest priority first):
+1. Explicit CLI flags (`--aws-access-key-id` + `--aws-secret-access-key` [+ `--aws-session-token`])
+2. Environment variables (`AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` [+ `AWS_SESSION_TOKEN`])
+3. Named profile (`--aws-profile`)
+4. Default credential chain (IAM role, SSO, ECS task role, etc.)
+
+**Constraints**:
+- 10 MB hard size limit (matches `import-s3`).
+- Parent directory must already exist; the command does not auto-create it.
+- Existing destination files are not overwritten unless `--force` is set.
+- File contents are written verbatim — no parsing, validation, or normalization. Use `import-s3 --dry-run` if you want validation.
+
+**Examples**:
+```bash
+# Download with default credential chain
+./gradlew cli:run --args='manage-user-mappings download-s3 \
+  --bucket my-bucket \
+  --key mappings.csv \
+  --output ./aws-mappings.csv'
+
+# Use a named AWS profile, overwrite if file exists
+./gradlew cli:run --args='manage-user-mappings download-s3 \
+  --bucket my-bucket \
+  --key data/users.json \
+  --aws-profile prod \
+  --output ./users.json \
+  --force'
+
+# Explicit credentials + region (typical cron usage)
+./scriptpp/secman manage-user-mappings download-s3 \
+  --bucket my-bucket \
+  --key mappings.csv \
+  --aws-access-key-id "$AWS_KEY" \
+  --aws-secret-access-key "$AWS_SECRET" \
+  --aws-region eu-west-1 \
+  --output /var/lib/secman/aws-mappings.csv \
+  --quiet
+
+# Local S3Mock testing
+./gradlew cli:run --args='manage-user-mappings download-s3 \
+  --bucket test-bucket \
+  --key mappings.csv \
+  --endpoint-url http://localhost:9090 \
+  --output /tmp/mappings.csv'
+
+# Diff S3 source-of-truth against backend state
+./gradlew cli:run --args='manage-user-mappings download-s3 \
+  --bucket my-bucket --key mappings.csv --output /tmp/s3.csv'
+./gradlew cli:run --args='manage-user-mappings list \
+  --type AWS --format CSV --output /tmp/db.csv'
+diff /tmp/s3.csv /tmp/db.csv
+```
+
+**Exit codes**:
+| Code | Meaning |
+| ---- | ------- |
+| 0    | Success — file written to `--output` |
+| 1    | Generic / I/O error |
+| 2    | S3, credentials, or argument error (fatal — won't succeed on retry) |
+| 3    | Unexpected error |
+
+**Output (default mode)**:
+```
+============================================================
+Download AWS Account Mapping from S3
+============================================================
+
+Source: s3://my-bucket/mappings.csv
+Destination: ./aws-mappings.csv
+AWS Credentials: profile 'prod'
+
+Downloading from S3...
+
+============================================================
+Summary
+============================================================
+Wrote 4096 bytes to /path/to/aws-mappings.csv
+Download successful
+```
+
+**Output (`--quiet`)**: nothing on stdout; only `Wrote N bytes to /abs/path` on stderr.
+
+---
+
+### 8. S3 Print (Direct, Bypasses Backend, No Disk Write)
+
+**Command**: `print-s3`
+
+**Purpose**: Download a mapping file from S3, parse it, and print the **identified mappings** straight to the console. Like `download-s3` it bypasses the secman backend entirely. Unlike `download-s3` it never writes the file to disk — the temp file used during the download is deleted on exit. Default scope is `--type AWS` because the typical use case is inspecting AWS account → email assignments.
+
+This is the parse-and-pretty-print counterpart in the S3 family:
+- `import-s3` downloads, parses, and POSTs to the secman backend.
+- `download-s3` only copies the raw file to disk.
+- `print-s3` (this command) downloads and parses, then prints. No disk write, no backend.
+
+**Syntax**:
+```bash
+./gradlew cli:run --args='manage-user-mappings print-s3 \
+  --bucket <bucket-name> \
+  --key <object-key> \
+  [--type <AWS|DOMAIN|ALL>] \
+  [--format <TABLE|JSON|CSV>] \
+  [--file-format <CSV|JSON|AUTO>] \
+  [--show-errors] \
+  [--aws-region <region>] \
+  [--aws-profile <profile>] \
+  [--aws-access-key-id <key>] \
+  [--aws-secret-access-key <secret>] \
+  [--aws-session-token <token>] \
+  [--endpoint-url <url>] \
+  [--quiet | -q]'
+```
+
+**Required Options**:
+- `--bucket`, `-b`: S3 bucket name (plain name — not a URL or ARN)
+- `--key`, `-k`: S3 object key (path inside the bucket)
+
+**Optional Options**:
+- `--type` (default `AWS`): `AWS` prints only AWS account mappings, `DOMAIN` prints only domain mappings, `ALL` prints both.
+- `--format` (default `TABLE`): `TABLE` (per-user grouped, human-friendly), `JSON` (structured aggregate), or `CSV` (`Email,Type,Value` rows; pipe-friendly).
+- `--file-format` (default `AUTO`): format of the source file in S3 — `CSV`, `JSON`, or `AUTO` (auto-detected from `.csv`/`.json` extension, then by content sniffing).
+- `--show-errors`: print parse errors (malformed rows, invalid email/account/domain syntax) to stderr after the mapping output. Without this flag, errors are silently dropped and only valid rows are printed.
+- `--aws-region` / `--aws-profile` / `--aws-access-key-id` / `--aws-secret-access-key` / `--aws-session-token` / `--endpoint-url`: same AWS credential-resolution chain as `import-s3` and `download-s3` (CLI flag → env var → profile → default chain).
+- `--quiet`, `-q`: suppress the header banner ("Source: ...", "Scope: ...") and the trailing summary line. The parsed mapping output is still printed on stdout so the command remains pipeable.
+
+**Stdout / stderr split (important for piping)**:
+- **stdout** carries only the parsed mapping output (TABLE / JSON / CSV).
+- **stderr** carries the header banner and trailing summary line. Suppressed by `--quiet`.
+- Parse errors only appear (also on stderr) when `--show-errors` is set.
+
+This split lets you do things like `print-s3 ... --format CSV --quiet | jq -R 'split(",")'` or pipe straight into `diff` against a `list --output` capture.
+
+**Constraints**:
+- 10 MB hard size limit on the S3 object (matches `import-s3`).
+- The temp download is created in the system temp dir with owner-only permissions and removed on exit.
+- File contents are parsed but not modified — invalid rows are reported via `--show-errors`, valid rows are echoed verbatim.
+- The secman DB is **never queried**. The only source of truth is the S3 file.
+
+**Examples**:
+```bash
+# Print AWS account mappings as a table (default)
+./gradlew cli:run --args='manage-user-mappings print-s3 \
+  --bucket my-bucket \
+  --key mappings.csv'
+
+# Print everything (AWS + domains) as JSON
+./gradlew cli:run --args='manage-user-mappings print-s3 \
+  --bucket my-bucket \
+  --key mappings.csv \
+  --type ALL \
+  --format JSON'
+
+# Print as CSV, pipe through downstream tooling
+./scriptpp/secman manage-user-mappings print-s3 \
+  --bucket my-bucket --key mappings.csv \
+  --format CSV --quiet | grep '^alice@'
+
+# Diff S3 source-of-truth against secman DB
+./scriptpp/secman manage-user-mappings print-s3 \
+  --bucket my-bucket --key mappings.csv \
+  --format CSV --quiet > /tmp/s3.csv
+./scriptpp/secman manage-user-mappings list \
+  --type AWS --format CSV --output /tmp/db.csv
+diff /tmp/s3.csv /tmp/db.csv
+
+# Troubleshoot a malformed file
+./gradlew cli:run --args='manage-user-mappings print-s3 \
+  --bucket my-bucket \
+  --key broken.csv \
+  --show-errors'
+```
+
+**Exit codes**:
+| Code | Meaning |
+| ---- | ------- |
+| 0    | Success — file parsed and printed without errors |
+| 1    | Parse errors found in the file (valid rows still printed) |
+| 2    | S3, credentials, or argument error (fatal — won't succeed on retry) |
+| 3    | Unexpected error |
+
+**Output (default mode, `--format TABLE`)**:
+
+`stderr`:
+```
+============================================================
+Print Mapping File from S3
+============================================================
+Source: s3://my-bucket/mappings.csv
+Scope: AWS  Format: TABLE  File-format: AUTO
+
+============================================================
+Parsed 12 mapping(s) from s3://my-bucket/mappings.csv (8 after --type filter)
+```
+
+`stdout`:
+```
+alice@example.com
+  AWS Accounts:
+    - 123456789012
+    - 987654321098
+bob@example.com
+  AWS Accounts:
+    - 555566667777
+
+Total: 8 mapping(s) across 5 user(s)
+```
+
+**Output (`--quiet --format CSV`)**:
+
+`stderr`: empty.
+
+`stdout`:
+```
+Email,Type,Value
+alice@example.com,AWS_ACCOUNT,123456789012
+alice@example.com,AWS_ACCOUNT,987654321098
+bob@example.com,AWS_ACCOUNT,555566667777
 ```
 
 ---
@@ -692,19 +975,19 @@ Import successful
 ### 4. S3 Import with Admin Notification
 ```bash
 # 1. Import mappings from S3
-./scripts/secman manage-user-mappings import-s3 \
+./scriptpp/secman manage-user-mappings import-s3 \
   --bucket company-mappings --key daily/users.csv
 
 # 2. Preview who would receive the email
-./scripts/secman manage-user-mappings list --send-email --dry-run
+./scriptpp/secman manage-user-mappings list --send-email --dry-run
 
 # 3. Send statistics email to all ADMIN/REPORT users
-./scripts/secman manage-user-mappings list --send-email
+./scriptpp/secman manage-user-mappings list --send-email
 
 # Or chain both steps (email only sent if import succeeds)
-./scripts/secman manage-user-mappings import-s3 \
+./scriptpp/secman manage-user-mappings import-s3 \
   --bucket company-mappings --key daily/users.csv && \
-  ./scripts/secman manage-user-mappings list --send-email
+  ./scriptpp/secman manage-user-mappings list --send-email
 ```
 
 ### 5. Audit User Access

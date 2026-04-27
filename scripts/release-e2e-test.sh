@@ -16,8 +16,8 @@
 #   Optionally: SECMAN_BASE_URL (default: http://localhost:8080)
 #
 # Usage:
-#   ./scripts/release-e2e-test.sh
-#   DEBUG=1 ./scripts/release-e2e-test.sh  # Verbose output
+#   ./scriptpp/release-e2e-test.sh
+#   DEBUG=1 ./scriptpp/release-e2e-test.sh  # Verbose output
 
 set -euo pipefail
 

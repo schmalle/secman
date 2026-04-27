@@ -1,20 +1,20 @@
 #!/bin/bash
 # secman - General-purpose CLI wrapper with 1Password secret injection
 #
-# Usage: ./scripts/secmancli <command> [options]
+# Usage: ./scriptpp/secmancli <command> [options]
 #
 # All environment secrets (AWS credentials, CrowdStrike keys, backend auth)
 # are injected from 1Password via secman.env. Any command-line arguments
 # are forwarded to the secman CLI JAR.
 #
 # Examples:
-#   ./scripts/secmancli help
-#   ./scripts/secmancli manage-user-mappings list-bucket --bucket my-bucket
-#   ./scripts/secmancli manage-user-mappings import-s3 --bucket my-bucket --key mappings.csv
-#   ./scripts/secmancli manage-user-mappings list --send-email --dry-run
-#   ./scripts/secmancli manage-user-mappings list --send-email
-#   ./scripts/secmancli query servers --dry-run
-#   ./scripts/secmancli send-notifications --dry-run
+#   ./scriptpp/secmancli help
+#   ./scriptpp/secmancli manage-user-mappings list-bucket --bucket my-bucket
+#   ./scriptpp/secmancli manage-user-mappings import-s3 --bucket my-bucket --key mappings.csv
+#   ./scriptpp/secmancli manage-user-mappings list --send-email --dry-run
+#   ./scriptpp/secmancli manage-user-mappings list --send-email
+#   ./scriptpp/secmancli query servers --dry-run
+#   ./scriptpp/secmancli send-notifications --dry-run
 #
 # Prerequisites:
 #   1. Java 21 must be installed and in PATH

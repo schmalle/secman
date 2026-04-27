@@ -188,7 +188,7 @@ See [quickstart.md](./quickstart.md) for manual verification steps covering:
 
 ### 1.4 Agent context update
 
-Run `.specify/scripts/bash/update-agent-context.sh claude` after this plan is finalized to refresh CLAUDE.md's Active Technologies / Recent Changes sections. The script preserves manual additions between markers.
+Run `.specify/scriptpp/bash/update-agent-context.sh claude` after this plan is finalized to refresh CLAUDE.md's Active Technologies / Recent Changes sections. The script preserves manual additions between markers.
 
 **Output**: data-model.md, contracts/cli-user-mapping-email.md, quickstart.md, updated CLAUDE.md
 

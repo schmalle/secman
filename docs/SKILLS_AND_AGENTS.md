@@ -60,8 +60,8 @@ End-to-end vulnerability exception workflow test orchestrator. Starts the full s
 **Trigger phrases:** "run exception e2e", "test exception workflow", "e2eexception"
 
 **Workflow:**
-1. Start backend (`./scripts/startbackenddev.sh`)
-2. Start frontend (`./scripts/startfrontenddev.sh`)
+1. Start backend (`./scriptpp/startbackenddev.sh`)
+2. Start frontend (`./scriptpp/startfrontenddev.sh`)
 3. Wait for health checks (backend: `localhost:8080`, frontend: `localhost:4321`)
 4. Run E2E test script (`scripts/test/test-e2e-exception-workflowsupport.sh`)
 5. If failures: classify error, apply fix, restart services if needed, re-run
@@ -126,8 +126,8 @@ JavaScript error scanner that visits all application pages and fixes errors. Sta
 **Trigger phrases:** "run js error scanner", "scan pages for errors", "e2ejs", "check all pages", "fix js errors"
 
 **Workflow:**
-1. Start backend (`./scripts/startbackenddev.sh`)
-2. Start frontend (`./scripts/startfrontenddev.sh`)
+1. Start backend (`./scriptpp/startbackenddev.sh`)
+2. Start frontend (`./scriptpp/startfrontenddev.sh`)
 3. Wait for both to be healthy
 4. Run JS error scanner (`./tests/js-error-scanner.sh`)
 5. If all clean -> done, report success
@@ -171,7 +171,7 @@ Create or update a feature specification from a natural language description. Th
 
 **What it does:**
 - Generates a short feature branch name (2-4 words)
-- Creates a feature branch via `.specify/scripts/bash/create-new-feature.sh`
+- Creates a feature branch via `.specify/scriptpp/bash/create-new-feature.sh`
 - Fills the spec template with feature details
 - Generates a Specification Quality Checklist
 - Validates against quality criteria (completeness, clarity, consistency, measurability)
@@ -451,7 +451,7 @@ Optional file at project root: `e2e-runner.config.json`
 | `frontend.start` | `npm run dev` | Frontend start command |
 | `frontend.healthUrl` | `http://localhost:4321` | Health check endpoint |
 | `frontend.healthTimeout` | `60` (seconds) | Max wait for frontend health |
-| `e2e.script` | `./scripts/e2e-test.sh` | E2E test script path |
+| `e2e.script` | `./scriptpp/e2e-test.sh` | E2E test script path |
 | `e2e.maxRetries` | `5` | Max fix-and-retry iterations |
 | `e2e.retryDelay` | `5` (seconds) | Delay between retries |
 

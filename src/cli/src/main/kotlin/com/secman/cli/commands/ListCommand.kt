@@ -7,17 +7,32 @@ import org.apache.commons.csv.CSVFormat
 import org.apache.commons.csv.CSVPrinter
 import picocli.CommandLine.*
 import jakarta.inject.Singleton
+import java.io.File
 import java.io.StringWriter
 
 /**
  * CLI command to list user mappings (Feature 049)
  *
  * Usage:
- *   ./scripts/secman manage-user-mappings list
- *   ./scripts/secman manage-user-mappings list --email user@example.com
- *   ./scripts/secman manage-user-mappings list --status PENDING
- *   ./scripts/secman manage-user-mappings list --format JSON
- *   ./scripts/secman manage-user-mappings list --format CSV
+ *   ./scriptpp/secman manage-user-mappings list
+ *   ./scriptpp/secman manage-user-mappings list --email user@example.com
+ *   ./scriptpp/secman manage-user-mappings list --status PENDING
+ *   ./scriptpp/secman manage-user-mappings list --format JSON
+ *   ./scriptpp/secman manage-user-mappings list --format CSV
+ *
+ * Download mappings to a file (CSV is round-trip compatible with `import`):
+ *   ./scriptpp/secman manage-user-mappings list --type AWS --format CSV --output aws.csv
+ *   ./scriptpp/secman manage-user-mappings list --type DOMAIN --format JSON --output domains.json
+ *   ./scriptpp/secman manage-user-mappings list --format CSV --output all-mappings.csv
+ *
+ * Filters:
+ *   --email   single user
+ *   --status  ACTIVE | PENDING | ALL
+ *   --type    AWS | DOMAIN | ALL  (scope by mapping kind)
+ *   --format  TABLE | JSON | CSV  (TABLE is interactive only; auto-coerced to
+ *             CSV when --output is set)
+ *   --output  write rendered output to FILE; the byte count and absolute path
+ *             are reported on stderr so stdout stays clean for piping
  */
 @Singleton
 @Command(
@@ -50,6 +65,26 @@ class ListCommand(
         defaultValue = "TABLE"
     )
     var format: String = "TABLE"
+
+    @Option(
+        names = ["--output", "-o"],
+        description = [
+            "Download mappings to FILE instead of printing to stdout. " +
+                "When combined with --format CSV the file is round-trip " +
+                "compatible with 'manage-user-mappings import'."
+        ]
+    )
+    var outputFile: String? = null
+
+    @Option(
+        names = ["--type"],
+        description = [
+            "Restrict downloaded mappings by kind: AWS (AWS account mappings only), " +
+                "DOMAIN (domain mappings only), or ALL (default)."
+        ],
+        defaultValue = "ALL"
+    )
+    var type: String = "ALL"
 
     // Feature 085: Email distribution options
     @Option(
@@ -111,18 +146,36 @@ class ListCommand(
             }
 
             // Fetch mappings via HTTP
-            val mappings = userMappingCliService.listMappings(
+            val rawMappings = userMappingCliService.listMappings(
                 email = email,
                 status = status,
                 backendUrl = backendUrl,
                 authToken = token
             )
 
-            // Display based on format
-            when (format.uppercase()) {
+            // Apply --type filter (AWS-only / DOMAIN-only / ALL)
+            val mappings = when (type.uppercase()) {
+                "AWS" -> rawMappings.filter { it.awsAccountId != null }
+                "DOMAIN" -> rawMappings.filter { it.domain != null }
+                "ALL" -> rawMappings
+                else -> {
+                    System.err.println("Error: Invalid --type. Use AWS, DOMAIN, or ALL")
+                    System.exit(1)
+                    return
+                }
+            }
+
+            // --output forces a file-friendly format (TABLE is interactive only)
+            val effectiveFormat = if (outputFile != null && format.uppercase() == "TABLE") {
+                "CSV"
+            } else {
+                format.uppercase()
+            }
+
+            when (effectiveFormat) {
                 "TABLE" -> displayTable(mappings)
-                "JSON" -> displayJson(mappings)
-                "CSV" -> displayCsv(mappings)
+                "JSON" -> writeOrPrint(renderJson(mappings))
+                "CSV" -> writeOrPrint(renderCsv(mappings))
                 else -> {
                     System.err.println("Error: Invalid format. Use TABLE, JSON, or CSV")
                     System.exit(1)
@@ -342,7 +395,7 @@ class ListCommand(
         displaySummary(mappings, groupedByEmail.size)
     }
 
-    private fun displayJson(mappings: List<UserMappingCliResponse>) {
+    private fun renderJson(mappings: List<UserMappingCliResponse>): String {
         val objectMapper = jacksonObjectMapper()
 
         val groupedByEmail = mappings.groupBy { it.email }.map { (email, userMappings) ->
@@ -373,11 +426,11 @@ class ListCommand(
             "mappings" to groupedByEmail
         )
 
-        println(objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(output))
+        return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(output)
     }
 
     @Suppress("DEPRECATION")
-    private fun displayCsv(mappings: List<UserMappingCliResponse>) {
+    private fun renderCsv(mappings: List<UserMappingCliResponse>): String {
         val stringWriter = StringWriter()
         val csvPrinter = CSVPrinter(
             stringWriter,
@@ -400,7 +453,27 @@ class ListCommand(
         }
 
         csvPrinter.flush()
-        println(stringWriter.toString())
+        return stringWriter.toString()
+    }
+
+    /**
+     * If --output is set, write the rendered payload to disk and emit a short
+     * confirmation line on stdout. Otherwise print to stdout as before.
+     * Refuses to overwrite an existing file unless the path points to /dev/null
+     * or the parent dir doesn't exist (the latter surfaces as an IOException).
+     */
+    private fun writeOrPrint(content: String) {
+        val target = outputFile
+        if (target == null) {
+            println(content)
+            return
+        }
+        val file = File(target)
+        if (file.exists() && !file.isFile) {
+            throw IllegalArgumentException("--output path '$target' exists and is not a regular file")
+        }
+        file.writeText(content)
+        System.err.println("Downloaded ${file.length()} bytes to ${file.absolutePath}")
     }
 
     private fun displaySummary(mappings: List<UserMappingCliResponse>, userCount: Int) {

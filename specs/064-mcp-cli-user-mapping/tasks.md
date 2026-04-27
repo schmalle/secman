@@ -68,7 +68,7 @@
 
 **Goal**: Ensure CLI import command is fully documented and matches web UI parity
 
-**Independent Test**: Run `./scripts/secman manage-user-mappings import --file test.csv` and verify output
+**Independent Test**: Run `./scriptpp/secman manage-user-mappings import --file test.csv` and verify output
 
 ### Implementation for User Story 2
 
@@ -105,7 +105,7 @@
 
 **Goal**: Add JSON output format to CLI list command for scripting
 
-**Independent Test**: Run `./scripts/secman manage-user-mappings list --format json` and verify JSON output
+**Independent Test**: Run `./scriptpp/secman manage-user-mappings list --format json` and verify JSON output
 
 ### Implementation for User Story 4
 

@@ -242,7 +242,7 @@ Research will be consolidated in `research.md` with format:
    - Troubleshooting common errors (invalid format, missing columns, duplicate mappings)
 
 4. **Agent Context Update**:
-   - Run `.specify/scripts/bash/update-agent-context.sh claude`
+   - Run `.specify/scriptpp/bash/update-agent-context.sh claude`
    - Add CSV upload endpoint to CLAUDE.md API Endpoints section
    - Add CSVUserMappingParser to File Locations
    - Preserve manual additions between markers

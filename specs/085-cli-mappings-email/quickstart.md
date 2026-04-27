@@ -23,7 +23,7 @@ This guide walks through manual verification of the feature after implementation
 ## Scenario 1: Happy path — send to all admins
 
 ```bash
-./scripts/secman manage-user-mappings list --send-email
+./scriptpp/secman manage-user-mappings list --send-email
 ```
 
 **Expected console output**:
@@ -49,7 +49,7 @@ This guide walks through manual verification of the feature after implementation
 ## Scenario 2: Dry-run preview
 
 ```bash
-./scripts/secman manage-user-mappings list --send-email --dry-run
+./scriptpp/secman manage-user-mappings list --send-email --dry-run
 ```
 
 **Expected**:
@@ -74,7 +74,7 @@ This guide walks through manual verification of the feature after implementation
 ## Scenario 3: Filters flow through
 
 ```bash
-./scripts/secman manage-user-mappings list --email foo@example.com --send-email
+./scriptpp/secman manage-user-mappings list --email foo@example.com --send-email
 ```
 
 **Expected**:
@@ -93,7 +93,7 @@ This guide walks through manual verification of the feature after implementation
 ## Scenario 4: JSON format + email
 
 ```bash
-./scripts/secman manage-user-mappings list --format JSON --send-email
+./scriptpp/secman manage-user-mappings list --format JSON --send-email
 ```
 
 **Expected**:
@@ -108,7 +108,7 @@ This guide walks through manual verification of the feature after implementation
 **Setup**: Temporarily set one ADMIN user's email to a domain that will be rejected by the SMTP server (e.g., `nobody@invalid.invalid`).
 
 ```bash
-./scripts/secman manage-user-mappings list --send-email --verbose
+./scriptpp/secman manage-user-mappings list --send-email --verbose
 ```
 
 **Expected**:
@@ -138,7 +138,7 @@ This guide walks through manual verification of the feature after implementation
 **Setup**: Temporarily remove the ADMIN and REPORT role from every user except the invoker, AND clear the invoker's email address.
 
 ```bash
-./scripts/secman manage-user-mappings list --send-email
+./scriptpp/secman manage-user-mappings list --send-email
 ```
 
 **Expected**:
@@ -160,7 +160,7 @@ This guide walks through manual verification of the feature after implementation
 **Setup**: Create a non-ADMIN user (e.g., role `USER` only) with valid credentials. Set `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS` to those credentials.
 
 ```bash
-./scripts/secman manage-user-mappings list --send-email
+./scriptpp/secman manage-user-mappings list --send-email
 ```
 
 **Expected**:
@@ -173,7 +173,7 @@ This guide walks through manual verification of the feature after implementation
 ## Scenario 8: Backward compatibility (SC-005)
 
 ```bash
-./scripts/secman manage-user-mappings list > /tmp/baseline-after.txt
+./scriptpp/secman manage-user-mappings list > /tmp/baseline-after.txt
 
 # Compare against a snapshot taken BEFORE implementation
 diff /tmp/baseline-before.txt /tmp/baseline-after.txt
@@ -186,7 +186,7 @@ diff /tmp/baseline-before.txt /tmp/baseline-after.txt
 ## Scenario 9: Help text verification (FR-011, FR-012, SC-006)
 
 ```bash
-./scripts/secman manage-user-mappings list --help
+./scriptpp/secman manage-user-mappings list --help
 ```
 
 **Expected**: Output must include:
@@ -195,7 +195,7 @@ diff /tmp/baseline-before.txt /tmp/baseline-after.txt
 - `--verbose` option with description mentioning per-recipient status
 
 ```bash
-./scripts/secman manage-user-mappings --help
+./scriptpp/secman manage-user-mappings --help
 ```
 
 **Expected**: The `list` subcommand description mentions email distribution.

@@ -82,7 +82,7 @@ A bash-based end-to-end test script validates the complete release lifecycle wit
 
 **Why this priority**: Automated tests ensure the feature works correctly and prevents regressions.
 
-**Independent Test**: The script itself is the test. Run `./scripts/release-e2e-test.sh` and verify all test cases pass.
+**Independent Test**: The script itself is the test. Run `./scriptpp/release-e2e-test.sh` and verify all test cases pass.
 
 **Acceptance Scenarios**:
 

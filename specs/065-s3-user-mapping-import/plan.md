@@ -13,7 +13,7 @@ Add a new CLI subcommand `import-s3` under `manage-user-mappings` that downloads
 **Primary Dependencies**: Micronaut 4.10, PicoCLI 4.7.5, AWS SDK for Java v2 (S3)
 **Storage**: MariaDB 11.4 (existing user_mapping table), local temp files for S3 downloads
 **Testing**: JUnit 5, Mockk 1.13.13, AssertJ 3.26.3
-**Target Platform**: Linux/macOS server (CLI JAR via `./scripts/secman`)
+**Target Platform**: Linux/macOS server (CLI JAR via `./scriptpp/secman`)
 **Project Type**: Single project (CLI module within monorepo)
 **Performance Goals**: Import 10,000 mapping entries within reasonable time
 **Constraints**: 10MB max file size, temporary file cleanup required

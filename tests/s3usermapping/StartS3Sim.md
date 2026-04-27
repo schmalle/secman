@@ -22,16 +22,16 @@ aws s3api put-object --bucket test --key mappings.csv --body ./test-mappings.csv
 
 ```shell
 # List bucket contents
-./scripts/secman manage-user-mappings list-bucket --bucket test --endpoint-url http://localhost:9090
+./scriptpp/secman manage-user-mappings list-bucket --bucket test --endpoint-url http://localhost:9090
 
 # Dry-run import (validate without creating mappings)
-./scripts/secman manage-user-mappings import-s3 --bucket test --key mappings.csv --endpoint-url http://localhost:9090 --dry-run
+./scriptpp/secman manage-user-mappings import-s3 --bucket test --key mappings.csv --endpoint-url http://localhost:9090 --dry-run
 
 # Actual import
-./scripts/secman manage-user-mappings import-s3 --bucket test --key mappings.csv --endpoint-url http://localhost:9090
+./scriptpp/secman manage-user-mappings import-s3 --bucket test --key mappings.csv --endpoint-url http://localhost:9090
 
 # Using AWS_ENDPOINT_URL environment variable instead of --endpoint-url
 export AWS_ENDPOINT_URL=http://localhost:9090
-./scripts/secman manage-user-mappings list-bucket --bucket mapping
-./scripts/secman manage-user-mappings import-s3 --bucket test --key mappings.csv --dry-run
+./scriptpp/secman manage-user-mappings list-bucket --bucket mapping
+./scriptpp/secman manage-user-mappings import-s3 --bucket test --key mappings.csv --dry-run
 ```

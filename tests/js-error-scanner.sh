@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # If a local frontend dev server is reachable on the configured port, override
 # the backend URL to point at it. This prevents the scanner from accidentally
 # targeting the production host (op://test/secman/SECMAN_HOST) when an e2e run
-# is clearly aimed at the local stack started by ./scripts/startfrontenddev.sh.
+# is clearly aimed at the local stack started by ./scriptpp/startfrontenddev.sh.
 #
 # Detection rules:
 #   - SECMAN_BACKEND_URL is "preference-bearing" only when it starts with

@@ -116,7 +116,7 @@ On every successful endpoint invocation (including dry-run and zero-recipient ca
 
 ### 2.1 Modified command: `manage-user-mappings list`
 
-**Binary**: `./scripts/secman manage-user-mappings list [options]`
+**Binary**: `./scriptpp/secman manage-user-mappings list [options]`
 **Picocli class**: `src/cli/src/main/kotlin/com/secman/cli/commands/ListCommand.kt`
 
 ### 2.2 New flags (added to `ListCommand`)

@@ -7,7 +7,7 @@
 ```
 SECMAN_BACKEND_URL=<URL> \                                                                                                                                                
     SECMAN_SSL_INSECURE=true \                                                                                                                                                                    
-    ./scripts/secmanng query servers --device-type SERVER --severity CRITICAL,HIGH \                                                                                                                  
+    ./scriptpp/secmanng query servers --device-type SERVER --severity CRITICAL,HIGH \                                                                                                                  
     --min-days-open 1 --save --last-seen-days 1  
 
 ```
@@ -549,7 +549,7 @@ The timestamp comes from the latest row in `crowdstrike_import_history`
 (`imported_at`), which is written by
 `CrowdStrikeVulnerabilityImportService.recordImportHistory()` at the end of
 every batch import (including CLI-driven imports via
-`./scripts/secman query servers --save`).
+`./scriptpp/secman query servers --save`).
 
 **Example**:
 

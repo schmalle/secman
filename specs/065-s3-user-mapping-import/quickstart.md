@@ -32,7 +32,7 @@
 ### Import from S3 (Default Credentials)
 
 ```bash
-./scripts/secman manage-user-mappings import-s3 \
+./scriptpp/secman manage-user-mappings import-s3 \
   --bucket my-mapping-bucket \
   --key user-mappings/current.csv \
   --admin-user admin@example.com
@@ -41,7 +41,7 @@
 ### Dry-Run (Validate Without Importing)
 
 ```bash
-./scripts/secman manage-user-mappings import-s3 \
+./scriptpp/secman manage-user-mappings import-s3 \
   --bucket my-mapping-bucket \
   --key user-mappings/current.csv \
   --admin-user admin@example.com \
@@ -51,7 +51,7 @@
 ### Specify Region and Profile
 
 ```bash
-./scripts/secman manage-user-mappings import-s3 \
+./scriptpp/secman manage-user-mappings import-s3 \
   --bucket my-mapping-bucket \
   --key user-mappings/current.csv \
   --aws-region eu-west-1 \
@@ -62,7 +62,7 @@
 ### Specify File Format
 
 ```bash
-./scripts/secman manage-user-mappings import-s3 \
+./scriptpp/secman manage-user-mappings import-s3 \
   --bucket my-mapping-bucket \
   --key data/users.txt \
   --format CSV \
@@ -179,7 +179,7 @@ Split the mapping file into smaller chunks or remove duplicate entries.
 After import, verify mappings were created:
 
 ```bash
-./scripts/secman manage-user-mappings list \
+./scriptpp/secman manage-user-mappings list \
   --admin-user admin@example.com \
   --format TABLE
 ```

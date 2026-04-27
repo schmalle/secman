@@ -88,7 +88,7 @@ The script logs in through the actual login form (`/login` page) rather than cal
 
 - **Bash wrapper**: Reads `SECMAN_SSL_ACCEPT_ALL` from 1Password, sets `NODE_TLS_REJECT_UNAUTHORIZED=0` when enabled
 - **Playwright**: Uses `ignoreHTTPSErrors: true` in browser context launch options when SSL flag is set
-- Follows the same `true`/`1`/`yes` case-insensitive pattern as `./scripts/secmanng`
+- Follows the same `true`/`1`/`yes` case-insensitive pattern as `./scriptpp/secmanng`
 
 ### 5. Error Classification
 

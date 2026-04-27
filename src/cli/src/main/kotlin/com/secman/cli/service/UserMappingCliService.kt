@@ -414,7 +414,41 @@ class UserMappingCliService {
 
     // --- File parsing (kept in CLI for Cloud Custodian format support) ---
 
-    private data class ParseResult(
+    /**
+     * Parse a local mapping file (CSV or JSON, with format auto-detection)
+     * without contacting the secman backend. Used by `print-s3` and other
+     * read-only inspection commands.
+     *
+     * @param filePath Path to a CSV or JSON file
+     * @param format   "CSV", "JSON", or "AUTO" (default — sniffs by extension or content)
+     * @return ParseResult with valid entries and a list of per-line errors
+     * @throws IllegalArgumentException if the file is missing or malformed
+     */
+    fun parseLocalMappingFile(filePath: String, format: String = "AUTO"): ParseResult {
+        val file = File(filePath)
+        if (!file.exists()) {
+            throw IllegalArgumentException("File not found: $filePath")
+        }
+        val detectedFormat = when {
+            format.uppercase() != "AUTO" -> format.uppercase()
+            filePath.endsWith(".csv", ignoreCase = true) -> "CSV"
+            filePath.endsWith(".json", ignoreCase = true) -> "JSON"
+            else -> {
+                val content = file.readText()
+                when {
+                    content.trim().startsWith("[") || content.trim().startsWith("{") -> "JSON"
+                    else -> "CSV"
+                }
+            }
+        }
+        return when (detectedFormat) {
+            "CSV" -> parseFromCsv(file)
+            "JSON" -> parseFromJson(file)
+            else -> throw IllegalArgumentException("Unsupported format: $detectedFormat")
+        }
+    }
+
+    data class ParseResult(
         val entries: List<Map<String, Any?>>,
         val errors: List<String>
     )

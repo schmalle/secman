@@ -190,7 +190,9 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
   const fetchVulnerabilities = async () => {
     try {
       setLoading(true);
-      // Map frontend field names to backend sort field names
+      // Map frontend field names to backend sort field names.
+      // Note: the Overdue Status column is intentionally not sortable — the previous
+      // scanTimestamp proxy was misleading because it did not reflect the badge value.
       const sortFieldMap: Record<string, string> = {
         assetName: "assetName",
         assetIp: "assetIp",
@@ -199,7 +201,6 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
         vulnerableProductVersions: "vulnerableProductVersions",
         daysOpen: "scanTimestamp",
         scanTimestamp: "scanTimestamp",
-        overdueStatus: "scanTimestamp", // Sort by scan age as proxy for overdue status
       };
       const backendSortField = sortFieldMap[sortField] || undefined;
       // Invert sort direction for daysOpen: ascending days = descending scanTimestamp
@@ -982,13 +983,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                             Open
                             <SortIcon field="daysOpen" />
                           </th>
-                          <th
-                            onClick={() => handleSort("overdueStatus")}
-                            style={{ cursor: "pointer" }}
-                          >
-                            Overdue Status
-                            <SortIcon field="overdueStatus" />
-                          </th>
+                          <th>Overdue Status</th>
                           <th>Actions</th>
                         </tr>
                       </thead>

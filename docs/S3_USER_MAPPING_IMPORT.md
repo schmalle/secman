@@ -55,7 +55,7 @@ Build the CLI fat JAR:
 Verify the command is available:
 
 ```bash
-./scripts/secmanng manage-user-mappings import-s3 --help
+./scriptpp/secmanng manage-user-mappings import-s3 --help
 ```
 
 ### 3. Required Tools
@@ -98,14 +98,14 @@ Before importing, you can browse an S3 bucket to discover available files using 
 ### List All Objects
 
 ```bash
-./scripts/secmanng manage-user-mappings list-bucket \
+./scriptpp/secmanng manage-user-mappings list-bucket \
   --bucket my-company-mappings
 ```
 
 ### Filter by Prefix
 
 ```bash
-./scripts/secmanng manage-user-mappings list-bucket \
+./scriptpp/secmanng manage-user-mappings list-bucket \
   --bucket my-company-mappings \
   --prefix user-mappings/
 ```
@@ -113,7 +113,7 @@ Before importing, you can browse an S3 bucket to discover available files using 
 ### With AWS Profile and Region
 
 ```bash
-./scripts/secmanng manage-user-mappings list-bucket \
+./scriptpp/secmanng manage-user-mappings list-bucket \
   --bucket my-company-mappings \
   --prefix user-mappings/ \
   --aws-profile production \
@@ -156,6 +156,178 @@ Total: 3 object(s)
 
 The `list-bucket` command requires the `s3:ListBucket` permission on the target bucket:
 
+---
+
+## Downloading the Mapping File Directly (No Backend)
+
+The `download-s3` subcommand fetches an AWS account mapping file straight from an S3 bucket to a local file path. **It does not contact the secman backend** — only AWS credentials with `s3:GetObject` (and ideally `s3:HeadObject` for a pre-download size check) on the target object are required.
+
+This is the read-only counterpart to `import-s3`:
+- `import-s3` downloads AND POSTs the file to the secman backend.
+- `download-s3` only copies the file to disk — useful for inspecting the source-of-truth file, diffing against backend state, or piping its contents into other tooling without going through secman.
+
+### Basic Download
+
+```bash
+./scriptpp/secmanng manage-user-mappings download-s3 \
+  --bucket my-company-mappings \
+  --key user-mappings/latest.csv \
+  --output ./aws-mappings.csv
+```
+
+### With Profile and Force Overwrite
+
+```bash
+./scriptpp/secmanng manage-user-mappings download-s3 \
+  --bucket my-company-mappings \
+  --key user-mappings/latest.csv \
+  --aws-profile production \
+  --aws-region eu-west-1 \
+  --output ./aws-mappings.csv \
+  --force
+```
+
+### Cron-Friendly Quiet Mode
+
+```bash
+./scriptpp/secmanng manage-user-mappings download-s3 \
+  --bucket my-company-mappings \
+  --key user-mappings/latest.csv \
+  --output /var/lib/secman/aws-mappings.csv \
+  --force \
+  --quiet
+```
+
+In `--quiet` mode, stdout is silent. Errors still print to stderr, and the success line `Wrote N bytes to /abs/path` is also written to stderr so cron logs capture it.
+
+### download-s3 Options
+
+| Option                    | Short | Required | Default               | Description                                                                       |
+| ------------------------- | ----- | -------- | --------------------- | --------------------------------------------------------------------------------- |
+| `--bucket`                | `-b`  | Yes      | -                     | S3 bucket name (plain name, not URL or ARN)                                       |
+| `--key`                   | `-k`  | Yes      | -                     | S3 object key (path inside the bucket)                                            |
+| `--output`                | `-o`  | Yes      | -                     | Local destination file path. Parent directory must already exist.                 |
+| `--force`                 | `-f`  | No       | `false`               | Overwrite the destination if it already exists                                    |
+| `--aws-region`            | -     | No       | SDK default           | AWS region                                                                        |
+| `--aws-profile`           | -     | No       | default chain         | AWS credential profile name                                                       |
+| `--aws-access-key-id`     | -     | No       | `$AWS_ACCESS_KEY_ID`  | Explicit AWS access key ID                                                        |
+| `--aws-secret-access-key` | -     | No       | `$AWS_SECRET_ACCESS_KEY` | Explicit AWS secret access key                                                 |
+| `--aws-session-token`     | -     | No       | `$AWS_SESSION_TOKEN`  | AWS session token for temporary credentials                                       |
+| `--endpoint-url`          | -     | No       | `$AWS_ENDPOINT_URL`   | Custom S3 endpoint URL for local testing                                          |
+| `--quiet`                 | `-q`  | No       | `false`               | Suppress progress output. Success/error lines are still written to stderr.        |
+
+### Required IAM Permissions
+
+`download-s3` needs the same permissions as `import-s3`:
+
+- `s3:GetObject` on the target bucket and object — required.
+- `s3:HeadObject` on the target object — recommended (used for the pre-download 10 MB size check; the command falls back to a post-download size check if denied).
+
+### Constraints
+
+- 10 MB hard size limit (matches `import-s3`).
+- Parent directory of `--output` must already exist; the command does not auto-create it.
+- Existing destination files are not overwritten unless `--force` is set.
+- File contents are written verbatim — no parsing, validation, or normalization. Use `import-s3 --dry-run` if you want validation.
+
+### Exit Codes (Cron-Friendly)
+
+| Code | Meaning                                                            |
+| ---- | ------------------------------------------------------------------ |
+| 0    | Success — file written to `--output`                               |
+| 1    | Generic / I/O error                                                |
+| 2    | S3, credentials, or argument error (fatal — won't succeed on retry) |
+| 3    | Unexpected error                                                   |
+
+---
+
+## Printing the Mapping File to the Console (No Disk Write, No Backend)
+
+The `print-s3` subcommand downloads a mapping file from S3, parses it, and prints the **identified mappings** straight to stdout. It does not write to disk (the temp download is deleted on exit) and does not contact the secman backend. Default scope is AWS account mappings (`--type AWS`); use `--type DOMAIN` or `--type ALL` to widen.
+
+### Basic Usage
+
+```bash
+./scriptpp/secmanng manage-user-mappings print-s3 \
+  --bucket my-company-mappings \
+  --key user-mappings/latest.csv
+```
+
+### As JSON for downstream tooling
+
+```bash
+./scriptpp/secmanng manage-user-mappings print-s3 \
+  --bucket my-company-mappings \
+  --key user-mappings/latest.csv \
+  --type ALL \
+  --format JSON
+```
+
+### Diff S3 source-of-truth against the secman DB
+
+```bash
+./scriptpp/secmanng manage-user-mappings print-s3 \
+  --bucket my-company-mappings --key user-mappings/latest.csv \
+  --format CSV --quiet > /tmp/s3.csv
+
+./scriptpp/secmanng manage-user-mappings list \
+  --type AWS --format CSV --output /tmp/db.csv
+
+diff /tmp/s3.csv /tmp/db.csv
+```
+
+### print-s3 Options
+
+| Option                    | Short | Required | Default               | Description                                                                       |
+| ------------------------- | ----- | -------- | --------------------- | --------------------------------------------------------------------------------- |
+| `--bucket`                | `-b`  | Yes      | -                     | S3 bucket name (plain name, not URL or ARN)                                       |
+| `--key`                   | `-k`  | Yes      | -                     | S3 object key (path inside the bucket)                                            |
+| `--type`                  | -     | No       | `AWS`                 | Mapping kind to print: `AWS`, `DOMAIN`, or `ALL`                                  |
+| `--format`                | -     | No       | `TABLE`               | Console output format: `TABLE`, `JSON`, or `CSV`                                  |
+| `--file-format`           | -     | No       | `AUTO`                | Source-file format in S3: `CSV`, `JSON`, or `AUTO`                                |
+| `--show-errors`           | -     | No       | `false`               | Print parse errors (malformed rows) to stderr after the mapping output            |
+| `--aws-region`            | -     | No       | SDK default           | AWS region                                                                        |
+| `--aws-profile`           | -     | No       | default chain         | AWS credential profile name                                                       |
+| `--aws-access-key-id`     | -     | No       | `$AWS_ACCESS_KEY_ID`  | Explicit AWS access key ID                                                        |
+| `--aws-secret-access-key` | -     | No       | `$AWS_SECRET_ACCESS_KEY` | Explicit AWS secret access key                                                 |
+| `--aws-session-token`     | -     | No       | `$AWS_SESSION_TOKEN`  | AWS session token for temporary credentials                                       |
+| `--endpoint-url`          | -     | No       | `$AWS_ENDPOINT_URL`   | Custom S3 endpoint URL for local testing                                          |
+| `--quiet`                 | `-q`  | No       | `false`               | Suppress the header banner and trailing summary; mapping output stays on stdout   |
+
+### Stdout / Stderr Split (Important for Piping)
+
+- **stdout** carries only the parsed mapping output (TABLE / JSON / CSV) — safe to pipe through `diff`, `jq`, `awk`, or `> file`.
+- **stderr** carries the header banner ("Source: ...", "Scope: ...") and the trailing summary line. Suppressed by `--quiet`.
+- Parse errors only print (also on stderr) when `--show-errors` is set.
+
+### Required IAM Permissions
+
+`print-s3` needs the same permissions as `download-s3` and `import-s3`:
+
+- `s3:GetObject` on the target bucket and object — required.
+- `s3:HeadObject` on the target object — recommended (used for the pre-download 10 MB size check).
+
+### Constraints
+
+- 10 MB hard size limit (matches `import-s3` / `download-s3`).
+- File contents are parsed but never written to disk — the temp download is removed on exit.
+- The secman DB is never queried. The only source of truth is the S3 file.
+
+### Exit Codes
+
+| Code | Meaning                                                          |
+| ---- | ---------------------------------------------------------------- |
+| 0    | Success — file parsed and printed without errors                 |
+| 1    | Parse errors found in the file (valid rows still printed)        |
+| 2    | S3, credentials, or argument error (fatal — won't succeed on retry) |
+| 3    | Unexpected error                                                 |
+
+---
+
+### list-bucket — Required IAM Permissions
+
+The `list-bucket` command requires the `s3:ListBucket` permission on the target bucket:
+
 ```json
 {
   "Effect": "Allow",
@@ -171,7 +343,7 @@ The `list-bucket` command requires the `s3:ListBucket` permission on the target 
 ### Basic Import
 
 ```bash
-./scripts/secmanng manage-user-mappings import-s3 \
+./scriptpp/secmanng manage-user-mappings import-s3 \
   --bucket my-company-mappings \
   --key user-mappings/latest.csv
 ```
@@ -179,7 +351,7 @@ The `list-bucket` command requires the `s3:ListBucket` permission on the target 
 ### Dry-Run (Validation Only)
 
 ```bash
-./scripts/secmanng manage-user-mappings import-s3 \
+./scriptpp/secmanng manage-user-mappings import-s3 \
   --bucket my-company-mappings \
   --key user-mappings/latest.csv \
   --dry-run
@@ -188,7 +360,7 @@ The `list-bucket` command requires the `s3:ListBucket` permission on the target 
 ### With AWS Profile
 
 ```bash
-./scripts/secmanng manage-user-mappings import-s3 \
+./scriptpp/secmanng manage-user-mappings import-s3 \
   --bucket my-company-mappings \
   --key user-mappings/latest.csv \
   --aws-profile production
@@ -197,7 +369,7 @@ The `list-bucket` command requires the `s3:ListBucket` permission on the target 
 ### With Explicit Region
 
 ```bash
-./scripts/secmanng manage-user-mappings import-s3 \
+./scriptpp/secmanng manage-user-mappings import-s3 \
   --bucket my-company-mappings \
   --key user-mappings/latest.csv \
   --aws-region eu-west-1
@@ -206,7 +378,7 @@ The `list-bucket` command requires the `s3:ListBucket` permission on the target 
 ### JSON Format
 
 ```bash
-./scripts/secmanng manage-user-mappings import-s3 \
+./scriptpp/secmanng manage-user-mappings import-s3 \
   --bucket my-company-mappings \
   --key user-mappings/latest.json \
   --format JSON
@@ -361,7 +533,7 @@ aws configure
 
 # Option 3: Named profile
 aws configure --profile myprofile
-./scripts/secman manage-user-mappings import-s3 --aws-profile myprofile ...
+./scriptpp/secman manage-user-mappings import-s3 --aws-profile myprofile ...
 ```
 
 ### "Access denied" (403)
@@ -439,12 +611,12 @@ aws s3api put-object --bucket test --key mappings.csv --body ./test-mappings.csv
 
 ```bash
 # List bucket contents
-./scripts/secmanng manage-user-mappings list-bucket \
+./scriptpp/secmanng manage-user-mappings list-bucket \
   --bucket test \
   --endpoint-url http://localhost:9090
 
 # Dry-run import
-./scripts/secmanng manage-user-mappings import-s3 \
+./scriptpp/secmanng manage-user-mappings import-s3 \
   --bucket test \
   --key mappings.csv \
   --endpoint-url http://localhost:9090 \
@@ -456,8 +628,8 @@ aws s3api put-object --bucket test --key mappings.csv --body ./test-mappings.csv
 ```bash
 export AWS_ENDPOINT_URL=http://localhost:9090
 
-./scripts/secman manage-user-mappings list-bucket --bucket test
-./scripts/secman manage-user-mappings import-s3 --bucket test --key mappings.csv --dry-run
+./scriptpp/secman manage-user-mappings list-bucket --bucket test
+./scriptpp/secman manage-user-mappings import-s3 --bucket test --key mappings.csv --dry-run
 ```
 
 When `--endpoint-url` is set (or `AWS_ENDPOINT_URL`), the CLI automatically enables path-style S3 access, which is required by local S3 simulators.

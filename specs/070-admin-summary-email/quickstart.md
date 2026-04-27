@@ -13,16 +13,16 @@ CLI command to send system statistics summary email to all ADMIN users.
 
 ```bash
 # Send admin summary email
-./scripts/secman send-admin-summary
+./scriptpp/secman send-admin-summary
 
 # Preview without sending (dry run)
-./scripts/secman send-admin-summary --dry-run
+./scriptpp/secman send-admin-summary --dry-run
 
 # Detailed output
-./scripts/secman send-admin-summary --verbose
+./scriptpp/secman send-admin-summary --verbose
 
 # Combined
-./scripts/secman send-admin-summary --dry-run --verbose
+./scriptpp/secman send-admin-summary --dry-run --verbose
 ```
 
 ### Expected Output
@@ -93,7 +93,7 @@ Weekly summary (every Monday at 8 AM):
 
 1. Email configuration must be active in database
 2. At least one user must have ADMIN role with valid email
-3. CLI environment configured (see `./scripts/secman help`)
+3. CLI environment configured (see `./scriptpp/secman help`)
 
 ## Troubleshooting
 

@@ -6,4 +6,4 @@ FALCON_CLIENT_SECRET=
 FALCON_CLOUD_REGION=
 SECMAN_ADMIN_NAME=
 SECMAN_ADMIN_PASS=
-./scripts/secmanclisupport
+./scriptpp/secmanclisupport

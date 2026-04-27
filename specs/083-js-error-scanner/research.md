@@ -60,13 +60,13 @@
 
 **Rationale**: `NODE_TLS_REJECT_UNAUTHORIZED=0` handles any Node.js-level HTTPS calls (e.g., if the script makes direct fetch calls). `ignoreHTTPSErrors: true` in the Playwright browser context handles the browser's certificate validation. Both are needed for complete coverage.
 
-**Detection**: Read `SECMAN_SSL_ACCEPT_ALL` from environment (resolved by `op run` from 1Password). Parse `true`/`1`/`yes` case-insensitively, matching the pattern in `./scripts/secmanng`.
+**Detection**: Read `SECMAN_SSL_ACCEPT_ALL` from environment (resolved by `op run` from 1Password). Parse `true`/`1`/`yes` case-insensitively, matching the pattern in `./scriptpp/secmanng`.
 
 ### 5. 1Password Credential Fields
 
 **Decision**: Use `SECMAN_ADMIN_NAME` and `SECMAN_ADMIN_PASS` from `op://test/secman/` vault, plus `SECMAN_HOST` and `SECMAN_SSL_ACCEPT_ALL`.
 
-**Rationale**: These are the same fields used by `./scripts/secmanng`. The e2e tests use different fields (`SECMAN_ADMIN_NAME`, `SECMAN_ADMIN_PASS`) but the user explicitly requested the `./scripts/secmanng` pattern.
+**Rationale**: These are the same fields used by `./scriptpp/secmanng`. The e2e tests use different fields (`SECMAN_ADMIN_NAME`, `SECMAN_ADMIN_PASS`) but the user explicitly requested the `./scriptpp/secmanng` pattern.
 
 **Fields**:
 - `SECMAN_ADMIN_NAME` → `op://test/secman/SECMAN_ADMIN_NAME`
