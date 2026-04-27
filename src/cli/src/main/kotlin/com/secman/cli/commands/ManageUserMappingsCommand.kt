@@ -26,6 +26,9 @@ import jakarta.inject.Singleton
  *                 local path (no backend involvement)
  *   print-s3    - Download a mapping file from S3 and print the parsed
  *                 mappings to the console (no disk write, no backend)
+ *   download-parse - Download an AWS account mapping file from S3 and print,
+ *                 per user, which AWS accounts are mapped and how many
+ *                 (no disk write, no backend)
  *
  * Authentication:
  *   All operations require ADMIN role and backend credentials.
@@ -60,7 +63,8 @@ import jakarta.inject.Singleton
         ImportS3Command::class,
         ListBucketCommand::class,
         DownloadS3Command::class,
-        PrintS3Command::class
+        PrintS3Command::class,
+        DownloadParseCommand::class
     ]
 )
 class ManageUserMappingsCommand : Runnable {
