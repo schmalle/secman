@@ -113,8 +113,11 @@ Fix in priority order: **backend errors first**, then frontend.
 
 #### Restart Rules
 
-- `backend` → kill process, re-run start command, wait for health check
-- `frontend` → Astro/Vite hot-reloads. Wait 3 seconds, then proceed.
+- `backend` → run `./scriptpp/stopbackenddev.sh`, then `./scriptpp/startbackenddev.sh`,
+  wait for health check. Never `kill` inline.
+- `frontend` → Astro/Vite hot-reloads. Wait 3 seconds, then proceed. If a full
+  restart is required, use `./scriptpp/stopfrontenddev.sh` then
+  `./scriptpp/startfrontenddev.sh`.
 - `test` → no service restart needed.
 
 #### Guard Rails
@@ -125,7 +128,8 @@ Fix in priority order: **backend errors first**, then frontend.
 
 ### Phase 4 — Teardown & Report
 
-- Kill backend and frontend processes.
+- Stop backend and frontend via `./scriptpp/stopbackenddev.sh` and
+  `./scriptpp/stopfrontenddev.sh` (never raw `kill`).
 - Print a summary table:
 
 ```

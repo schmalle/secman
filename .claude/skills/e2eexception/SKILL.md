@@ -127,17 +127,17 @@ On **any** failure:
 
 #### Step 3a: Stop Both Services
 
-```bash
-# Kill backend
-kill $BACKEND_PID 2>/dev/null
-lsof -ti :8080 | xargs kill -9 2>/dev/null
+Always stop via the canonical scripts in `./scriptpp/` — never call `kill`
+or `lsof | xargs kill` inline:
 
-# Kill frontend
-kill $FRONTEND_PID 2>/dev/null
-lsof -ti :4321 | xargs kill -9 2>/dev/null
+```bash
+./scriptpp/stopbackenddev.sh
+./scriptpp/stopfrontenddev.sh
 ```
 
-Wait 3 seconds for processes to fully terminate.
+Both scripts target the dev ports (8080 and 4321), graceful-kill first, then
+force-kill if anything is still listening. They are no-ops when nothing is
+running. Wait 3 seconds for processes to fully terminate.
 
 #### Step 3b: Diagnose and Fix
 
@@ -200,7 +200,8 @@ Go back to Phase 2 and re-run the test script. Increment the iteration counter.
 
 ### Phase 4 — Teardown & Report
 
-- Kill backend and frontend processes.
+- Stop backend and frontend via `./scriptpp/stopbackenddev.sh` and
+  `./scriptpp/stopfrontenddev.sh` (never raw `kill`).
 - Print a summary table:
 
 ```
