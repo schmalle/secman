@@ -199,12 +199,12 @@ For each failure, fix in priority order: **backend errors first**, then frontend
 
 After applying fixes (whether backend or frontend):
 
-1. **Kill the backend process** — find and kill the entire process tree:
+1. **Stop the backend** via the canonical script (handles graceful + force kill,
+   port 8080):
    ```bash
-   kill $BACKEND_PID
-   # Also kill any orphaned gradle/java processes on port 8080
-   lsof -ti :8080 | xargs kill -9 2>/dev/null
+   ./scriptpp/stopbackenddev.sh
    ```
+   Never call `kill` or `lsof | xargs kill` inline — always go through the script.
 2. **Restart backend**:
    ```bash
    nohup ./scriptpp/startbackenddev.sh > .e2e-logs/backend.log 2>&1 &
@@ -230,7 +230,8 @@ error count decreased.
 
 ### Phase 4 — Teardown & Report
 
-- Kill backend and frontend processes.
+- Stop backend and frontend via `./scriptpp/stopbackenddev.sh` and
+  `./scriptpp/stopfrontenddev.sh` (never raw `kill`).
 - Leave any user-managed local reverse proxy alone.
 - Print a summary table:
 
