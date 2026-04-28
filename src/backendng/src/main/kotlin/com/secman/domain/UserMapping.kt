@@ -1,6 +1,8 @@
 package com.secman.domain
 
 import io.micronaut.serde.annotation.Serdeable
+import org.hibernate.annotations.JdbcTypeCode
+import org.hibernate.type.SqlTypes
 import jakarta.persistence.*
 import jakarta.validation.constraints.Email
 import jakarta.validation.constraints.NotBlank
@@ -91,6 +93,7 @@ data class UserMapping(
     var ipAddress: String? = null,
 
     @Column(name = "ip_range_type", nullable = true, length = 20)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Enumerated(EnumType.STRING)
     var ipRangeType: IpRangeType? = null,
 
@@ -108,6 +111,7 @@ data class UserMapping(
 
     // Feature 049: Status tracking for pending vs active mappings
     @Column(name = "status", nullable = false, length = 20)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Enumerated(EnumType.STRING)
     var status: MappingStatus = MappingStatus.ACTIVE
 ) {

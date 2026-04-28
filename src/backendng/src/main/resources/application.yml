@@ -325,6 +325,16 @@ jpa:
       hibernate:
         hbm2ddl:
           auto: update
+        # Force @Enumerated(EnumType.STRING) to map to VARCHAR rather than
+        # MariaDB native ENUM. Hibernate 6.4+ on MariaDB defaults to NAMED_ENUM
+        # (native ENUM column), which causes MariaDB error 1265 ("Data
+        # truncated") whenever a Kotlin enum gains a value that isn't in the
+        # live column's enum() value list. The value 12 is java.sql.Types.VARCHAR
+        # — supplied as an integer because Hibernate 6.4's string-name
+        # resolution path can be unreliable on MariaDB. See V197 / V198 / V199
+        # widener migrations and the user_roles.role saga.
+        type:
+          preferred_enum_jdbc_type: 12
         show_sql: false
         format_sql: true
         # Query optimization settings (Feature: Database Structure Optimization)

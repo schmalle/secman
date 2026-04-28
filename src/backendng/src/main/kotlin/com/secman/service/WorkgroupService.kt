@@ -102,7 +102,7 @@ open class WorkgroupService(
 
     /**
      * Delete workgroup
-     * FR-003, FR-026: Delete workgroup and clear all memberships (cascade handled by JPA)
+     * FR-003, FR-026: Delete workgroup and clear all memberships
      *
      * @param id Workgroup ID
      * @throws IllegalArgumentException if workgroup not found
@@ -113,8 +113,30 @@ open class WorkgroupService(
             IllegalArgumentException("Workgroup not found: $id")
         }
 
-        // JPA cascade will automatically remove join table entries in user_workgroups and asset_workgroups
+        clearWorkgroupMemberships(id)
         workgroupRepository.delete(workgroup)
+    }
+
+    /**
+     * Clear user_workgroups and asset_workgroups join-table rows for a workgroup.
+     * Why: Workgroup.users / Workgroup.assets are the inverse side (mappedBy = "workgroups"),
+     * so JPA does NOT cascade-remove join-table entries. The owning sides on User and Asset
+     * must be mutated and flushed before the workgroup row can be deleted, otherwise
+     * MariaDB rejects the parent delete with FK constraint FK6j9r8w7d56uuai13rkudmf8o8.
+     */
+    private fun clearWorkgroupMemberships(workgroupId: Long) {
+        userRepository.findByWorkgroupsIdOrderByUsernameAsc(workgroupId).forEach { user ->
+            userRepository.findByIdWithWorkgroups(user.id!!).ifPresent { managed ->
+                managed.workgroups.removeIf { it.id == workgroupId }
+                userRepository.update(managed)
+            }
+        }
+        assetRepository.findByWorkgroupsIdOrderByNameAsc(workgroupId).forEach { asset ->
+            assetRepository.findByIdWithWorkgroups(asset.id!!).ifPresent { managed ->
+                managed.workgroups.removeIf { it.id == workgroupId }
+                assetRepository.update(managed)
+            }
+        }
     }
 
     /**
@@ -337,7 +359,7 @@ open class WorkgroupService(
             workgroupRepository.update(child)
         }
 
-        // Now delete the workgroup
+        clearWorkgroupMemberships(workgroupId)
         workgroupRepository.delete(workgroup)
     }
 

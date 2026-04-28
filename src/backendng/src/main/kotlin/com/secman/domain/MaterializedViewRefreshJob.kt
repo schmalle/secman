@@ -1,5 +1,7 @@
 package com.secman.domain
 
+import org.hibernate.annotations.JdbcTypeCode
+import org.hibernate.type.SqlTypes
 import jakarta.persistence.*
 import java.time.LocalDateTime
 
@@ -35,6 +37,7 @@ data class MaterializedViewRefreshJob(
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     var id: Long? = null,
 
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     var status: RefreshJobStatus = RefreshJobStatus.RUNNING,

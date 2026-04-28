@@ -2,6 +2,8 @@ package com.secman.domain
 
 import com.secman.util.EncryptedStringConverter
 import io.micronaut.serde.annotation.Serdeable
+import org.hibernate.annotations.JdbcTypeCode
+import org.hibernate.type.SqlTypes
 import jakarta.persistence.*
 import jakarta.validation.constraints.Email
 import jakarta.validation.constraints.Max
@@ -31,6 +33,7 @@ data class EmailConfig(
     @NotBlank
     val name: String,
 
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Enumerated(EnumType.STRING)
     @Column(name = "provider", nullable = false, length = 20)
     val provider: EmailProvider = EmailProvider.SMTP,

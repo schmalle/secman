@@ -2,6 +2,8 @@ package com.secman.domain
 
 import com.secman.domain.enums.EmailStatus
 import io.micronaut.serde.annotation.Serdeable
+import org.hibernate.annotations.JdbcTypeCode
+import org.hibernate.type.SqlTypes
 import jakarta.persistence.*
 import org.hibernate.annotations.CreationTimestamp
 import org.hibernate.annotations.UpdateTimestamp
@@ -30,6 +32,7 @@ data class EmailNotificationLog(
     @Column(nullable = false, length = 500)
     val subject: String,
 
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     val status: EmailStatus = EmailStatus.PENDING,

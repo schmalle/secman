@@ -1,6 +1,8 @@
 package com.secman.domain
 
 import io.micronaut.serde.annotation.Serdeable
+import org.hibernate.annotations.JdbcTypeCode
+import org.hibernate.type.SqlTypes
 import jakarta.persistence.*
 import java.time.Instant
 
@@ -56,6 +58,7 @@ data class RequirementReview(
     /**
      * The reviewer's assessment of this requirement change.
      */
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 10)
     var assessment: ReviewAssessment,

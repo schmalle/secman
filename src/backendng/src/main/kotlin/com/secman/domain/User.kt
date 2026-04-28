@@ -2,6 +2,8 @@ package com.secman.domain
 
 import com.fasterxml.jackson.annotation.JsonIgnore
 import io.micronaut.serde.annotation.Serdeable
+import org.hibernate.annotations.JdbcTypeCode
+import org.hibernate.type.SqlTypes
 import jakarta.persistence.*
 import jakarta.validation.constraints.Email
 import jakarta.validation.constraints.NotBlank
@@ -38,6 +40,7 @@ data class User(
 
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "user_roles", joinColumns = [JoinColumn(name = "user_id")])
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Enumerated(EnumType.STRING)
     @Column(name = "role_name")
     var roles: MutableSet<Role> = mutableSetOf(Role.USER),
@@ -73,6 +76,7 @@ data class User(
      * Determines if user can change password via self-service
      */
     @Column(name = "auth_source", nullable = false, length = 20)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Enumerated(EnumType.STRING)
     var authSource: AuthSource = AuthSource.LOCAL,
 

@@ -1,6 +1,8 @@
 package com.secman.domain
 
 import io.micronaut.serde.annotation.Serdeable
+import org.hibernate.annotations.JdbcTypeCode
+import org.hibernate.type.SqlTypes
 import jakarta.persistence.*
 import java.time.LocalDateTime
 
@@ -33,6 +35,7 @@ data class AssetComplianceHistory(
     var assetId: Long,
 
     @Column(nullable = false, length = 15)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Enumerated(EnumType.STRING)
     var status: ComplianceStatus,
 

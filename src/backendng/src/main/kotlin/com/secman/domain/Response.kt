@@ -1,6 +1,8 @@
 package com.secman.domain
 
 import io.micronaut.serde.annotation.Serdeable
+import org.hibernate.annotations.JdbcTypeCode
+import org.hibernate.type.SqlTypes
 import jakarta.persistence.*
 import jakarta.validation.constraints.Email
 import jakarta.validation.constraints.NotNull
@@ -15,6 +17,7 @@ data class Response(
     var id: Long? = null,
 
     @Column(name = "answer_type", length = 10)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Enumerated(EnumType.STRING)
     var answerType: AnswerType? = null,
 

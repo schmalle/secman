@@ -4,6 +4,8 @@ import com.secman.domain.enums.EmailProvider
 import com.secman.domain.enums.TestAccountStatus
 import com.secman.util.EncryptedStringConverter
 import io.micronaut.serde.annotation.Serdeable
+import org.hibernate.annotations.JdbcTypeCode
+import org.hibernate.type.SqlTypes
 import jakarta.persistence.*
 import org.hibernate.annotations.CreationTimestamp
 import org.hibernate.annotations.UpdateTimestamp
@@ -26,6 +28,7 @@ data class TestEmailAccount(
     @Column(nullable = false, length = 255, unique = true)
     val emailAddress: String,
 
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     val provider: EmailProvider,
@@ -34,6 +37,7 @@ data class TestEmailAccount(
     @Convert(converter = EncryptedStringConverter::class)
     val credentials: String? = null,
 
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     val status: TestAccountStatus = TestAccountStatus.VERIFICATION_PENDING,

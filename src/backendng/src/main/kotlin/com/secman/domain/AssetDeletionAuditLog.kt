@@ -2,6 +2,8 @@ package com.secman.domain
 
 import com.fasterxml.jackson.annotation.JsonIgnore
 import io.micronaut.serde.annotation.Serdeable
+import org.hibernate.annotations.JdbcTypeCode
+import org.hibernate.type.SqlTypes
 import jakarta.persistence.*
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
@@ -127,6 +129,7 @@ data class AssetDeletionAuditLog(
     /**
      * Type of operation: SINGLE asset deletion or BULK deletion
      */
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Enumerated(EnumType.STRING)
     @Column(name = "operation_type", nullable = false, length = 20)
     @NotNull

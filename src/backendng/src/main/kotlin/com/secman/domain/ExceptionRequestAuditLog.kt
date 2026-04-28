@@ -2,6 +2,8 @@ package com.secman.domain
 
 import com.fasterxml.jackson.annotation.JsonIgnore
 import io.micronaut.serde.annotation.Serdeable
+import org.hibernate.annotations.JdbcTypeCode
+import org.hibernate.type.SqlTypes
 import jakarta.persistence.*
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
@@ -58,6 +60,7 @@ data class ExceptionRequestAuditLog(
     /**
      * Type of audit event
      */
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Enumerated(EnumType.STRING)
     @Column(name = "event_type", nullable = false, length = 30)
     @NotNull
@@ -116,6 +119,7 @@ data class ExceptionRequestAuditLog(
     /**
      * Event severity for filtering and alerting
      */
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Enumerated(EnumType.STRING)
     @Column(name = "severity", nullable = false, length = 10)
     @NotNull

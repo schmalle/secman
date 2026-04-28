@@ -1,5 +1,7 @@
 package com.secman.domain
 
+import org.hibernate.annotations.JdbcTypeCode
+import org.hibernate.type.SqlTypes
 import jakarta.persistence.*
 import java.time.Instant
 
@@ -31,6 +33,7 @@ data class NotificationLog(
     @Column(name = "owner_email", nullable = false, length = 255)
     val ownerEmail: String,
 
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Enumerated(EnumType.STRING)
     @Column(name = "notification_type", nullable = false, length = 50)
     val notificationType: NotificationType,

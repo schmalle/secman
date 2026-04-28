@@ -1,5 +1,7 @@
 package com.secman.domain
 
+import org.hibernate.annotations.JdbcTypeCode
+import org.hibernate.type.SqlTypes
 import jakarta.persistence.*
 import java.time.LocalDateTime
 
@@ -20,10 +22,12 @@ class ExportJob(
     @Column(nullable = false, length = 50)
     var username: String,
 
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     var status: ExportJobStatus = ExportJobStatus.PENDING,
 
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     var exportType: ExportType = ExportType.VULNERABILITIES,

@@ -1,5 +1,7 @@
 package com.secman.domain
 
+import org.hibernate.annotations.JdbcTypeCode
+import org.hibernate.type.SqlTypes
 import jakarta.persistence.*
 import jakarta.validation.constraints.*
 import java.time.LocalDateTime
@@ -39,6 +41,7 @@ data class McpAuditLog(
      * Type of MCP event being audited.
      */
     @Column(name = "event_type", nullable = false, length = 30)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Enumerated(EnumType.STRING)
     @NotNull
     val eventType: McpEventType,
@@ -73,6 +76,7 @@ data class McpAuditLog(
      * Type of MCP operation performed (if applicable).
      */
     @Column(name = "operation", length = 30)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Enumerated(EnumType.STRING)
     val operation: McpOperation? = null,
 
@@ -156,6 +160,7 @@ data class McpAuditLog(
      * INFO for normal operations, WARN for suspicious activity, ERROR for failures.
      */
     @Column(name = "severity", nullable = false, length = 10)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Enumerated(EnumType.STRING)
     @NotNull
     val severity: AuditSeverity = AuditSeverity.INFO,

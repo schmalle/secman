@@ -1,6 +1,8 @@
 package com.secman.domain
 
 import io.micronaut.serde.annotation.Serdeable
+import org.hibernate.annotations.JdbcTypeCode
+import org.hibernate.type.SqlTypes
 import jakarta.persistence.*
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
@@ -23,6 +25,7 @@ data class Demand(
     @Column(length = 1024)
     var description: String? = null,
 
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Enumerated(EnumType.STRING)
     @Column(name = "demand_type", nullable = false)
     @NotNull
@@ -54,10 +57,12 @@ data class Demand(
     @Column(name = "business_justification", length = 2048)
     var businessJustification: String? = null,
 
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     var priority: Priority = Priority.MEDIUM,
 
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     var status: DemandStatus = DemandStatus.PENDING,

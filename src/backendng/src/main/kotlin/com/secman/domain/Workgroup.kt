@@ -2,6 +2,8 @@ package com.secman.domain
 
 import com.fasterxml.jackson.annotation.JsonIgnore
 import io.micronaut.serde.annotation.Serdeable
+import org.hibernate.annotations.JdbcTypeCode
+import org.hibernate.type.SqlTypes
 import jakarta.persistence.*
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Pattern
@@ -54,6 +56,7 @@ data class Workgroup(
      * - Assets inherit this criticality unless they have an explicit override
      * - Higher criticality workgroups take precedence when asset belongs to multiple workgroups
      */
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Enumerated(EnumType.STRING)
     @Column(name = "criticality", nullable = false, length = 20)
     var criticality: Criticality = Criticality.MEDIUM,

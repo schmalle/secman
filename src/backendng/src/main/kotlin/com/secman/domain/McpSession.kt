@@ -1,5 +1,7 @@
 package com.secman.domain
 
+import org.hibernate.annotations.JdbcTypeCode
+import org.hibernate.type.SqlTypes
 import jakarta.persistence.*
 import jakarta.validation.constraints.*
 import java.time.LocalDateTime
@@ -67,6 +69,7 @@ data class McpSession(
      * Type of connection used for this session (SSE, WebSocket, HTTP).
      */
     @Column(name = "connection_type", nullable = false, length = 20)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Enumerated(EnumType.STRING)
     @NotNull
     val connectionType: McpConnectionType = McpConnectionType.HTTP,

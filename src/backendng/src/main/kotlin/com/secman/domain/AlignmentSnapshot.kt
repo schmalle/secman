@@ -1,6 +1,8 @@
 package com.secman.domain
 
 import io.micronaut.serde.annotation.Serdeable
+import org.hibernate.annotations.JdbcTypeCode
+import org.hibernate.type.SqlTypes
 import jakarta.persistence.*
 import java.time.Instant
 
@@ -44,6 +46,7 @@ data class AlignmentSnapshot(
     /**
      * Type of change detected.
      */
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Enumerated(EnumType.STRING)
     @Column(name = "change_type", nullable = false, length = 10)
     var changeType: ChangeType,

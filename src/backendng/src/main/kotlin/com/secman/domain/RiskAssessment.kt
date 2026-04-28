@@ -2,6 +2,8 @@ package com.secman.domain
 
 import com.fasterxml.jackson.annotation.JsonIgnore
 import io.micronaut.serde.annotation.Serdeable
+import org.hibernate.annotations.JdbcTypeCode
+import org.hibernate.type.SqlTypes
 import jakarta.persistence.*
 import jakarta.validation.constraints.NotNull
 import java.time.LocalDate
@@ -48,6 +50,7 @@ data class RiskAssessment(
     var releaseLockedAt: LocalDateTime? = null,
 
     // New unified approach: Assessment basis can be either DEMAND or ASSET
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Enumerated(EnumType.STRING)
     @Column(name = "assessment_basis_type", nullable = false)
     @NotNull

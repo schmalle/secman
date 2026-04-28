@@ -3,6 +3,8 @@ package com.secman.domain
 import com.fasterxml.jackson.annotation.JsonIgnore
 import com.secman.util.EncryptedStringConverter
 import io.micronaut.serde.annotation.Serdeable
+import org.hibernate.annotations.JdbcTypeCode
+import org.hibernate.type.SqlTypes
 import jakarta.persistence.*
 import java.time.LocalDateTime
 
@@ -17,6 +19,7 @@ data class IdentityProvider(
     @Column(nullable = false, unique = true)
     var name: String = "",
 
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     var type: ProviderType = ProviderType.OIDC,

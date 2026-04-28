@@ -1,6 +1,8 @@
 package com.secman.domain
 
 import io.micronaut.serde.annotation.Serdeable
+import org.hibernate.annotations.JdbcTypeCode
+import org.hibernate.type.SqlTypes
 import jakarta.persistence.*
 import java.time.Instant
 
@@ -38,6 +40,7 @@ data class AlignmentSession(
     /**
      * Current status of the alignment session.
      */
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     var status: AlignmentStatus = AlignmentStatus.OPEN,
@@ -89,6 +92,7 @@ data class AlignmentSession(
      * CHANGED = only requirements that differ from baseline.
      * ALL = all current requirements treated as ADDED.
      */
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Enumerated(EnumType.STRING)
     @Column(name = "review_scope", nullable = false, length = 10)
     var reviewScope: ReviewScope = ReviewScope.CHANGED,

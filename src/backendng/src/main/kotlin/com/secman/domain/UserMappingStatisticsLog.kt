@@ -1,6 +1,8 @@
 package com.secman.domain
 
 import io.micronaut.serde.annotation.Serdeable
+import org.hibernate.annotations.JdbcTypeCode
+import org.hibernate.type.SqlTypes
 import jakarta.persistence.*
 import java.time.Instant
 
@@ -64,6 +66,7 @@ data class UserMappingStatisticsLog(
     @Column(name = "emails_failed", nullable = false)
     val emailsFailed: Int = 0,
 
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     val status: ExecutionStatus,

@@ -2,6 +2,8 @@ package com.secman.domain
 
 import com.fasterxml.jackson.annotation.JsonIgnore
 import io.micronaut.serde.annotation.Serdeable
+import org.hibernate.annotations.JdbcTypeCode
+import org.hibernate.type.SqlTypes
 import jakarta.persistence.*
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
@@ -118,6 +120,7 @@ data class Asset(
      * - non-null: explicit override takes precedence over workgroup criticality
      * - See effectiveCriticality for computed value
      */
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Enumerated(EnumType.STRING)
     @Column(name = "criticality", nullable = true, length = 20)
     var criticality: Criticality? = null,
@@ -127,6 +130,7 @@ data class Asset(
      * Determines internet-facing exposure level for port scanning
      * nullable: null treated as UNKNOWN for existing assets
      */
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Enumerated(EnumType.STRING)
     @Column(name = "network_zone", nullable = true, length = 20)
     var networkZone: NetworkZone? = null,
