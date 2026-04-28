@@ -1,7 +1,7 @@
 package com.secman.mcp.tools
 
-import com.secman.domain.ExceptionScope
 import com.secman.domain.McpOperation
+import com.secman.domain.VulnerabilityException
 import com.secman.dto.CreateExceptionRequestDto
 import com.secman.dto.mcp.McpExecutionContext
 import com.secman.repository.VulnerabilityRepository
@@ -35,11 +35,33 @@ class CreateExceptionRequestTool(
 
     override val inputSchema = mapOf(
         "type" to "object",
-        "required" to listOf("vulnerabilityId", "reason", "expirationDate"),
+        "required" to listOf("vulnerabilityId", "subject", "scope", "reason", "expirationDate"),
         "properties" to mapOf(
             "vulnerabilityId" to mapOf(
                 "type" to "number",
                 "description" to "ID of the vulnerability to request exception for"
+            ),
+            "subject" to mapOf(
+                "type" to "string",
+                "enum" to listOf("ALL_VULNS", "PRODUCT", "CVE"),
+                "description" to "WHAT is excepted (Feature 196 two-axis model)"
+            ),
+            "scope" to mapOf(
+                "type" to "string",
+                "enum" to listOf("GLOBAL", "IP", "ASSET", "AWS_ACCOUNT"),
+                "description" to "WHERE the exception applies"
+            ),
+            "subjectValue" to mapOf(
+                "type" to "string",
+                "description" to "Product name pattern or comma-separated CVE list (required for PRODUCT/CVE; null for ALL_VULNS)"
+            ),
+            "scopeValue" to mapOf(
+                "type" to "string",
+                "description" to "IP address (scope=IP) or AWS account ID (scope=AWS_ACCOUNT); null for GLOBAL/ASSET"
+            ),
+            "assetId" to mapOf(
+                "type" to "number",
+                "description" to "Asset ID (required for scope=ASSET)"
             ),
             "reason" to mapOf(
                 "type" to "string",
@@ -51,12 +73,6 @@ class CreateExceptionRequestTool(
                 "type" to "string",
                 "format" to "date-time",
                 "description" to "When the exception should expire (ISO-8601, must be future date)"
-            ),
-            "scope" to mapOf(
-                "type" to "string",
-                "enum" to listOf("SINGLE_VULNERABILITY", "CVE_PATTERN"),
-                "default" to "SINGLE_VULNERABILITY",
-                "description" to "Exception scope (default: SINGLE_VULNERABILITY)"
             )
         )
     )
@@ -112,26 +128,46 @@ class CreateExceptionRequestTool(
                 return McpToolResult.error("VALIDATION_ERROR", "Expiration date must be in the future")
             }
 
-            // Parse scope with default
-            val scopeStr = arguments["scope"] as? String ?: "SINGLE_VULNERABILITY"
-            val scope = try {
-                ExceptionScope.valueOf(scopeStr)
+            // Parse subject (required)
+            val subjectStr = arguments["subject"] as? String
+                ?: return McpToolResult.error("VALIDATION_ERROR", "subject is required (ALL_VULNS, PRODUCT, CVE)")
+            val subject = try {
+                VulnerabilityException.Subject.valueOf(subjectStr)
             } catch (e: IllegalArgumentException) {
-                return McpToolResult.error("VALIDATION_ERROR", "Invalid scope. Must be SINGLE_VULNERABILITY or CVE_PATTERN")
+                return McpToolResult.error("VALIDATION_ERROR", "Invalid subject. Must be ALL_VULNS, PRODUCT, or CVE")
             }
+
+            // Parse scope (required)
+            val scopeStr = arguments["scope"] as? String
+                ?: return McpToolResult.error("VALIDATION_ERROR", "scope is required (GLOBAL, IP, ASSET, AWS_ACCOUNT)")
+            val scope = try {
+                VulnerabilityException.Scope.valueOf(scopeStr)
+            } catch (e: IllegalArgumentException) {
+                return McpToolResult.error("VALIDATION_ERROR", "Invalid scope. Must be GLOBAL, IP, ASSET, or AWS_ACCOUNT")
+            }
+
+            val subjectValue = arguments["subjectValue"] as? String
+            val scopeValue = arguments["scopeValue"] as? String
+            val assetIdArg = (arguments["assetId"] as? Number)?.toLong()
 
             // Create DTO
             val dto = CreateExceptionRequestDto(
                 vulnerabilityId = vulnerabilityId,
+                subject = subject,
                 scope = scope,
+                subjectValue = subjectValue,
+                scopeValue = scopeValue,
+                assetId = assetIdArg,
                 reason = reason,
                 expirationDate = expirationDate
             )
 
-            // Call service
+            // Call service. The MCP tool runs with the delegated user's role set; we pass
+            // those roles through so the service can enforce ALL_VULNS gating.
             val result = exceptionRequestService.createRequest(
                 dto = dto,
                 requesterUserId = context.delegatedUserId!!,
+                callerRoles = context.delegatedUserRoles ?: emptySet(),
                 clientIp = null
             )
 
@@ -151,7 +187,11 @@ class CreateExceptionRequestTool(
                         "assetName" to result.assetName,
                         "assetIp" to result.assetIp,
                         "requestedByUsername" to result.requestedByUsername,
+                        "subject" to result.subject.name,
                         "scope" to result.scope.name,
+                        "subjectValue" to result.subjectValue,
+                        "scopeValue" to result.scopeValue,
+                        "assetId" to result.assetId,
                         "reason" to result.reason,
                         "expirationDate" to result.expirationDate.toString(),
                         "status" to result.status.name,

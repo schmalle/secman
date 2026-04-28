@@ -89,8 +89,10 @@ open class ExceptionExpirationScheduler(
                     requestRepository.update(request)
                     expiredCount++
 
-                    logger.debug("Expired request {}: CVE={}, asset={}, expirationDate={}",
+                    logger.debug("Expired request {}: subject={}, scope={}, CVE={}, asset={}, expirationDate={}",
                         request.id,
+                        request.subject,
+                        request.scope,
                         request.vulnerability?.vulnerabilityId,
                         request.vulnerability?.asset?.name,
                         request.expirationDate
@@ -215,67 +217,41 @@ open class ExceptionExpirationScheduler(
     /**
      * Deactivate VulnerabilityException entries for an expired request.
      *
-     * **Logic**:
-     * - SINGLE_VULNERABILITY scope → Deactivate ASSET-type exception matching asset
-     * - CVE_PATTERN scope → Deactivate PRODUCT-type exception matching CVE
-     *
-     * **Note**: Deactivation means deleting the exception record. Once deleted, the
-     * vulnerability will reappear in active reports on next scan.
+     * Two-axis (Feature 196): match by (subject, scope, subjectValue, scopeValue, assetId,
+     * expirationDate, reason). Deactivation means deleting the exception record.
      *
      * @param request The expired exception request
      * @return Number of exceptions deactivated
      */
     private fun deactivateExceptionsForRequest(request: com.secman.domain.VulnerabilityExceptionRequest): Int {
-        val cveId = request.vulnerability?.vulnerabilityId ?: request.cveId
-        val assetId = request.vulnerability?.asset?.id ?: request.assetId
-
-        if (cveId == null) {
-            logger.warn("Cannot deactivate exceptions: no CVE ID available for requestId={}", request.id)
-            return 0
+        val effectiveSubjectValue = request.subjectValue ?: when (request.subject) {
+            com.secman.domain.VulnerabilityException.Subject.CVE ->
+                request.cveId ?: request.vulnerability?.vulnerabilityId
+            else -> null
         }
+        val effectiveAssetId = if (request.scope == com.secman.domain.VulnerabilityException.Scope.ASSET) {
+            request.assetId ?: request.vulnerability?.asset?.id
+        } else null
 
         var deactivatedCount = 0
 
         try {
-            when (request.scope) {
-                com.secman.domain.ExceptionScope.SINGLE_VULNERABILITY -> {
-                    if (assetId == null) {
-                        logger.warn("Cannot deactivate exceptions: no asset ID available for requestId={}", request.id)
-                        return 0
-                    }
-                    // createExceptionFromRequest creates CVE-type exceptions for SINGLE_VULNERABILITY scope
-                    val exceptions = exceptionRepository.findByExceptionTypeAndAssetId(
-                        com.secman.domain.VulnerabilityException.ExceptionType.CVE,
-                        assetId
+            val candidates = exceptionRepository.findBySubjectAndScope(request.subject, request.scope)
+
+            for (exception in candidates) {
+                if (exception.subjectValue == effectiveSubjectValue &&
+                    exception.scopeValue == request.scopeValue &&
+                    exception.assetId == effectiveAssetId &&
+                    exception.expirationDate == request.expirationDate &&
+                    exception.reason == request.reason
+                ) {
+                    exceptionRepository.delete(exception)
+                    deactivatedCount++
+                    logger.debug(
+                        "Deactivated exception {} for request {} (subject={}, scope={}, subjectValue={}, scopeValue={}, assetId={})",
+                        exception.id, request.id, request.subject, request.scope,
+                        effectiveSubjectValue, request.scopeValue, effectiveAssetId
                     )
-
-                    for (exception in exceptions) {
-                        if (exception.targetValue == cveId &&
-                            exception.expirationDate == request.expirationDate &&
-                            exception.reason == request.reason
-                        ) {
-                            exceptionRepository.delete(exception)
-                            deactivatedCount++
-                            logger.debug("Deactivated CVE exception {} for CVE {} on asset {}", exception.id, cveId, assetId)
-                        }
-                    }
-                }
-
-                com.secman.domain.ExceptionScope.CVE_PATTERN -> {
-                    val exceptions = exceptionRepository.findByExceptionTypeAndTargetValue(
-                        com.secman.domain.VulnerabilityException.ExceptionType.PRODUCT,
-                        cveId
-                    )
-
-                    for (exception in exceptions) {
-                        if (exception.expirationDate == request.expirationDate &&
-                            exception.reason == request.reason
-                        ) {
-                            exceptionRepository.delete(exception)
-                            deactivatedCount++
-                            logger.debug("Deactivated PRODUCT exception {} for CVE {}", exception.id, cveId)
-                        }
-                    }
                 }
             }
         } catch (e: Exception) {
