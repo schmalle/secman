@@ -8,6 +8,9 @@
  */
 
 import { authenticatedGet, authenticatedPost, authenticatedDelete } from '../utils/auth';
+import type { ExceptionSubject, ExceptionScope } from './vulnerabilityManagementService';
+
+export type { ExceptionSubject, ExceptionScope };
 
 /**
  * Exception request status values
@@ -15,16 +18,18 @@ import { authenticatedGet, authenticatedPost, authenticatedDelete } from '../uti
 export type ExceptionRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXPIRED' | 'CANCELLED';
 
 /**
- * Exception scope values
- */
-export type ExceptionScope = 'SINGLE_VULNERABILITY' | 'CVE_PATTERN';
-
-/**
- * DTO for creating an exception request
+ * DTO for creating an exception request.
+ *
+ * Feature 196: two-axis (subject × scope) vocabulary replaces the legacy
+ * SINGLE_VULNERABILITY / CVE_PATTERN enum.
  */
 export interface CreateExceptionRequestDto {
   vulnerabilityId: number;
+  subject: ExceptionSubject;
   scope: ExceptionScope;
+  subjectValue?: string | null;
+  scopeValue?: string | null;
+  assetId?: number | null;
   reason: string;
   expirationDate: string; // ISO 8601 datetime string
 }
@@ -36,23 +41,26 @@ export interface VulnerabilityExceptionRequestDto {
   id: number;
   vulnerabilityId: number;
   vulnerabilityCve: string | null;
-  assetId: number;
-  assetName: string;
+  assetId: number | null;
+  assetName: string | null;
   assetIp: string | null;
-  requestedByUserId: number;
+  requestedByUserId?: number;
   requestedByUsername: string;
+  subject: ExceptionSubject;
   scope: ExceptionScope;
+  subjectValue: string | null;
+  scopeValue: string | null;
   reason: string;
   expirationDate: string;
   status: ExceptionRequestStatus;
   autoApproved: boolean;
-  reviewedByUserId: number | null;
+  reviewedByUserId?: number | null;
   reviewedByUsername: string | null;
   reviewDate: string | null;
   reviewComment: string | null;
   createdAt: string;
   updatedAt: string;
-  version: number;
+  version?: number;
 }
 
 /**

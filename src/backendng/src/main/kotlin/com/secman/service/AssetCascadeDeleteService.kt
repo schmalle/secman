@@ -91,8 +91,8 @@ open class AssetCascadeDeleteService(
         }
 
         val vulnCount = vulnerabilityRepository.countByAssetId(assetId).toInt()
-        val exceptionCount = exceptionRepository.findByExceptionTypeAndAssetId(
-            VulnerabilityException.ExceptionType.ASSET,
+        val exceptionCount = exceptionRepository.findByScopeAndAssetId(
+            VulnerabilityException.Scope.ASSET,
             assetId
         ).size
 
@@ -277,8 +277,8 @@ open class AssetCascadeDeleteService(
      * Get ASSET-type exception IDs for an asset
      */
     private fun getAssetExceptionIdsByAssetId(assetId: Long): List<Long> {
-        return exceptionRepository.findByExceptionTypeAndAssetId(
-            VulnerabilityException.ExceptionType.ASSET,
+        return exceptionRepository.findByScopeAndAssetId(
+            VulnerabilityException.Scope.ASSET,
             assetId
         ).mapNotNull { it.id }
     }

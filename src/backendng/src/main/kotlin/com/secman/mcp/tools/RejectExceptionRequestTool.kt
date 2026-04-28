@@ -27,7 +27,7 @@ class RejectExceptionRequestTool(
 ) : McpTool {
 
     override val name = "reject_exception_request"
-    override val description = "Reject a pending exception request (ADMIN/SECCHAMPION role required, requires User Delegation)"
+    override val description = "Reject a pending exception request, identified by its exception subject and scope (ADMIN/SECCHAMPION role required, requires User Delegation)"
     override val operation = McpOperation.WRITE
 
     override val inputSchema = mapOf(
@@ -102,7 +102,11 @@ class RejectExceptionRequestTool(
                         "assetName" to result.assetName,
                         "assetIp" to result.assetIp,
                         "requestedByUsername" to result.requestedByUsername,
+                        "subject" to result.subject.name,
                         "scope" to result.scope.name,
+                        "subjectValue" to result.subjectValue,
+                        "scopeValue" to result.scopeValue,
+                        "assetId" to result.assetId,
                         "reason" to result.reason,
                         "expirationDate" to result.expirationDate.toString(),
                         "status" to result.status.name,

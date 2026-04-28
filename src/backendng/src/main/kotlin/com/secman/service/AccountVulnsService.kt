@@ -5,6 +5,7 @@ import com.secman.dto.AccountVulnsSummaryDto
 import com.secman.dto.AssetVulnCountDto
 import com.secman.dto.CrowdStrikeImportStatusDto
 import com.secman.repository.AssetRepository
+import com.secman.repository.ExceptionMatchSql
 import com.secman.repository.UserMappingRepository
 import com.secman.repository.VulnerabilityRepository
 import com.secman.repository.CrowdStrikeImportHistoryRepository
@@ -104,14 +105,7 @@ class AccountVulnsService(
             JOIN asset a ON v.asset_id = a.id
             WHERE v.asset_id IN (:assetIds)
             AND NOT EXISTS (
-                SELECT 1 FROM vulnerability_exception e
-                WHERE (e.expiration_date IS NULL OR e.expiration_date > NOW())
-                AND (
-                    (e.exception_type = 'IP' AND e.target_value = a.ip)
-                    OR (e.exception_type = 'PRODUCT' AND (e.target_value = v.vulnerability_id OR LOCATE(e.target_value, v.vulnerable_product_versions) > 0))
-                    OR (e.exception_type = 'ASSET' AND e.asset_id = a.id)
-                    OR (e.exception_type = 'CVE' AND FIND_IN_SET(v.vulnerability_id, e.target_value) > 0 AND (e.asset_id IS NULL OR e.asset_id = a.id))
-                )
+                SELECT 1 FROM vulnerability_exception e WHERE ${ExceptionMatchSql.EXCEPTION_MATCH}
             )
             GROUP BY v.asset_id
         """.trimIndent()

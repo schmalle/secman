@@ -216,7 +216,7 @@ const ExceptionRequestDetailModal: React.FC<ExceptionRequestDetailModalProps> = 
                                             <div className="col-md-6 mb-2">
                                                 <strong>Scope:</strong>
                                                 <br />
-                                                {request.scope === 'SINGLE_VULNERABILITY' ? (
+                                                {request.scope === 'ASSET' ? (
                                                     <span className="badge bg-info text-dark">
                                                         <i className="bi bi-bullseye me-1"></i>
                                                         Single Vulnerability

@@ -367,7 +367,7 @@ const ExceptionApprovalDashboard: React.FC = () => {
                               <td>{request.assetName}</td>
                               <td>{request.requestedByUsername}</td>
                               <td>
-                                {request.scope === 'SINGLE_VULNERABILITY' ? (
+                                {request.scope === 'ASSET' ? (
                                   <span
                                     className="badge bg-info text-dark"
                                     title={`Approving this exception hides ${request.vulnerabilityCve} on ${request.assetName} only. Other assets reporting this CVE will remain overdue.`}

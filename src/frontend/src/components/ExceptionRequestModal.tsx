@@ -1,72 +1,87 @@
 /**
  * ExceptionRequestModal Component
  *
- * Modal form for requesting vulnerability exceptions
+ * Modal form for requesting vulnerability exceptions.
  *
- * Features:
- * - Scope selection (Single vulnerability or CVE pattern)
- * - Reason validation (50-2048 characters with counter)
- * - Future expiration date selection
- * - Client-side validation
- * - Success/error handling
- * - Loading states
+ * Feature 196 (two-axis subject × scope):
+ *   The modal is anchored to a specific vulnerability and asset, so subject is
+ *   pre-filled to CVE with the vulnerability's CVE id. The user picks a scope
+ *   (this asset / all assets / specific IP / specific AWS account) using the
+ *   same sentence-builder vocabulary as the create-exception form.
  *
- * Feature: 031-vuln-exception-approval
- * User Story 1: Regular User Requests Exception (P1)
- * Reference: spec.md FR-003, FR-004
+ * Legacy SINGLE_VULNERABILITY/CVE_PATTERN scope is gone; the equivalent rows
+ * are now CVE × ASSET (this asset only) and CVE × GLOBAL (all assets).
  */
 
 import React, { useState, useEffect } from 'react';
-import { createRequest, type CreateExceptionRequestDto, type ExceptionScope } from '../services/exceptionRequestService';
+import {
+    createRequest,
+    type CreateExceptionRequestDto
+} from '../services/exceptionRequestService';
+import {
+    getValidCombinations,
+    getAccessibleAwsAccounts,
+    type ExceptionScope,
+    type ValidCombinationsResponse
+} from '../services/vulnerabilityManagementService';
 import CveLink from './CveLink';
 
 interface ExceptionRequestModalProps {
     isOpen: boolean;
     vulnerabilityId: number;
     vulnerabilityCveId: string | null;
+    assetId?: number | null;
+    assetIp?: string | null;
+    assetCloudAccountId?: string | null;
     assetName: string;
     onClose: () => void;
     onSuccess: () => void;
 }
 
+const SCOPE_OPTIONS: ReadonlyArray<{ value: ExceptionScope; label: string; helperKey: string }> = [
+    { value: 'ASSET',       label: 'on this asset',          helperKey: 'asset' },
+    { value: 'GLOBAL',      label: 'on all assets',          helperKey: 'global' },
+    { value: 'IP',          label: 'on a specific IP',       helperKey: 'ip' },
+    { value: 'AWS_ACCOUNT', label: 'in a specific AWS account', helperKey: 'aws' }
+];
+
 const ExceptionRequestModal: React.FC<ExceptionRequestModalProps> = ({
     isOpen,
     vulnerabilityId,
     vulnerabilityCveId,
+    assetId,
+    assetIp,
+    assetCloudAccountId,
     assetName,
     onClose,
     onSuccess
 }) => {
-    // Form state
-    const [formData, setFormData] = useState<{
-        scope: ExceptionScope;
-        reason: string;
-        expirationDate: string;
-    }>({
-        scope: 'SINGLE_VULNERABILITY',
-        reason: '',
-        expirationDate: '',
-    });
+    // Subject is always CVE in this modal (vulnerability-anchored flow).
+    const [scope, setScope] = useState<ExceptionScope>('ASSET');
+    const [scopeValue, setScopeValue] = useState<string>('');
+    const [reason, setReason] = useState<string>('');
+    const [expirationDate, setExpirationDate] = useState<string>('');
 
     // UI state
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [validationErrors, setValidationErrors] = useState<{
-        reason?: string;
-        expirationDate?: string;
-    }>({});
+    const [validationErrors, setValidationErrors] = useState<{ reason?: string; expirationDate?: string; scope?: string }>({});
     const [showLongExpirationWarning, setShowLongExpirationWarning] = useState(false);
     const [longExpirationConfirmed, setLongExpirationConfirmed] = useState(false);
     const [pendingExpirationDate, setPendingExpirationDate] = useState<string | null>(null);
 
-    // Reset form when modal opens/closes
+    // Reference data
+    const [combos, setCombos] = useState<ValidCombinationsResponse | null>(null);
+    const [awsAccounts, setAwsAccounts] = useState<string[]>([]);
+    const [loadingAwsAccounts, setLoadingAwsAccounts] = useState(false);
+
+    // Reset form when modal opens.
     useEffect(() => {
         if (isOpen) {
-            setFormData({
-                scope: 'SINGLE_VULNERABILITY',
-                reason: '',
-                expirationDate: '',
-            });
+            setScope('ASSET');
+            setScopeValue('');
+            setReason('');
+            setExpirationDate('');
             setError(null);
             setValidationErrors({});
             setLongExpirationConfirmed(false);
@@ -75,73 +90,94 @@ const ExceptionRequestModal: React.FC<ExceptionRequestModalProps> = ({
         }
     }, [isOpen]);
 
-    // Handle keyboard navigation (Escape to close)
+    // Load valid-combinations on open.
     useEffect(() => {
         if (!isOpen) return;
+        getValidCombinations()
+            .then(setCombos)
+            .catch(err => console.error('Failed to fetch valid combinations:', err));
+    }, [isOpen]);
 
+    // Load AWS accounts when AWS_ACCOUNT scope chosen.
+    useEffect(() => {
+        if (!isOpen || scope !== 'AWS_ACCOUNT') return;
+        let cancelled = false;
+        setLoadingAwsAccounts(true);
+        getAccessibleAwsAccounts()
+            .then(data => { if (!cancelled) setAwsAccounts(data); })
+            .catch(err => {
+                console.error('Failed to fetch AWS accounts:', err);
+            })
+            .finally(() => { if (!cancelled) setLoadingAwsAccounts(false); });
+        return () => { cancelled = true; };
+    }, [isOpen, scope]);
+
+    // When scope changes, prefill scopeValue with the asset's IP / cloud account
+    // when available — so the modal shows a sensible default.
+    useEffect(() => {
+        if (scope === 'IP') {
+            setScopeValue(assetIp ?? '');
+        } else if (scope === 'AWS_ACCOUNT') {
+            setScopeValue(assetCloudAccountId ?? '');
+        } else {
+            setScopeValue('');
+        }
+    }, [scope, assetIp, assetCloudAccountId]);
+
+    // Escape to close.
+    useEffect(() => {
+        if (!isOpen) return;
         function handleKeyDown(e: KeyboardEvent) {
             if (e.key === 'Escape' && !loading) {
-                handleCancel();
+                onClose();
             }
         }
-
         document.addEventListener('keydown', handleKeyDown);
         return () => document.removeEventListener('keydown', handleKeyDown);
-    }, [isOpen, loading]);
+    }, [isOpen, loading, onClose]);
 
-    // Handle input changes
-    function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
-        const { name, value } = e.target;
+    // Determine which scopes are allowed for subject=CVE.
+    const allowedScopes: ExceptionScope[] = combos
+        ? combos.allowed
+            .filter(c => c.subject === 'CVE')
+            .map(c => c.scope)
+        : ['GLOBAL', 'IP', 'ASSET', 'AWS_ACCOUNT'];
 
-        // Special handling for expiration date - check if > 365 days
-        if (name === 'expirationDate' && value) {
+    function handleExpirationDateChange(e: React.ChangeEvent<HTMLInputElement>) {
+        const value = e.target.value;
+        if (value && !longExpirationConfirmed) {
             const selectedDate = new Date(value);
             const now = new Date();
             const daysInFuture = Math.floor((selectedDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-
-            if (daysInFuture > 365 && !longExpirationConfirmed) {
-                // Show warning modal
+            if (daysInFuture > 365) {
                 setPendingExpirationDate(value);
                 setShowLongExpirationWarning(true);
                 return;
             }
         }
-
-        setFormData((prev) => ({ ...prev, [name]: value }));
-
-        // Clear validation error for this field
-        setValidationErrors((prev) => ({ ...prev, [name]: undefined }));
+        setExpirationDate(value);
+        setValidationErrors(prev => ({ ...prev, expirationDate: undefined }));
         setError(null);
     }
 
-    // Handle scope radio change
-    function handleScopeChange(e: React.ChangeEvent<HTMLInputElement>) {
-        setFormData((prev) => ({ ...prev, scope: e.target.value as ExceptionScope }));
-    }
-
-    // Handle long expiration warning confirmation
     function handleConfirmLongExpiration() {
         if (pendingExpirationDate) {
-            setFormData((prev) => ({ ...prev, expirationDate: pendingExpirationDate }));
+            setExpirationDate(pendingExpirationDate);
             setLongExpirationConfirmed(true);
         }
         setShowLongExpirationWarning(false);
         setPendingExpirationDate(null);
     }
 
-    // Handle long expiration warning rejection
     function handleRejectLongExpiration() {
         setShowLongExpirationWarning(false);
         setPendingExpirationDate(null);
-        // Date field remains unchanged (user can select a different date)
     }
 
-    // Validate form
     function validateForm(): boolean {
-        const errors: { reason?: string; expirationDate?: string } = {};
+        const errors: { reason?: string; expirationDate?: string; scope?: string } = {};
 
-        // Validate reason (50-2048 characters)
-        const reasonLength = formData.reason.trim().length;
+        const reasonLength = reason.trim().length;
         if (reasonLength === 0) {
             errors.reason = 'Reason is required';
         } else if (reasonLength < 50) {
@@ -150,48 +186,50 @@ const ExceptionRequestModal: React.FC<ExceptionRequestModalProps> = ({
             errors.reason = `Reason must not exceed 2048 characters (currently ${reasonLength})`;
         }
 
-        // Validate expiration date (must be in future)
-        if (!formData.expirationDate) {
+        if (!expirationDate) {
             errors.expirationDate = 'Expiration date is required';
         } else {
-            const selectedDate = new Date(formData.expirationDate);
-            const now = new Date();
-            if (selectedDate <= now) {
+            const selectedDate = new Date(expirationDate);
+            if (selectedDate <= new Date()) {
                 errors.expirationDate = 'Expiration date must be in the future';
             }
+        }
+
+        if (scope === 'ASSET' && !assetId) {
+            errors.scope = 'No asset is associated with this vulnerability — pick a different scope.';
+        }
+        if (scope === 'IP' && !scopeValue.trim()) {
+            errors.scope = 'IP address is required';
+        }
+        if (scope === 'AWS_ACCOUNT' && !scopeValue.trim()) {
+            errors.scope = 'AWS account is required';
         }
 
         setValidationErrors(errors);
         return Object.keys(errors).length === 0;
     }
 
-    // Handle form submission
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
-
-        // Validate form
-        if (!validateForm()) {
-            return;
-        }
+        if (!validateForm()) return;
 
         setLoading(true);
         setError(null);
 
         try {
-            // Create exception request
             const dto: CreateExceptionRequestDto = {
                 vulnerabilityId,
-                scope: formData.scope,
-                reason: formData.reason.trim(),
-                expirationDate: new Date(formData.expirationDate).toISOString(),
+                subject: 'CVE',
+                subjectValue: vulnerabilityCveId ?? '',
+                scope,
+                scopeValue: (scope === 'IP' || scope === 'AWS_ACCOUNT') ? scopeValue.trim() : null,
+                assetId: scope === 'ASSET' ? (assetId ?? null) : null,
+                reason: reason.trim(),
+                expirationDate: new Date(expirationDate).toISOString()
             };
-
             await createRequest(dto);
-
-            // Success - close modal and notify parent
             onSuccess();
             onClose();
-
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : 'Failed to create exception request. Please try again.';
             setError(errorMessage);
@@ -200,21 +238,13 @@ const ExceptionRequestModal: React.FC<ExceptionRequestModalProps> = ({
         }
     }
 
-    // Handle cancel
-    function handleCancel() {
-        onClose();
-    }
-
-    // Get character count for reason field
-    const reasonLength = formData.reason.length;
+    const reasonLength = reason.length;
     const reasonCountColor = reasonLength < 50 ? 'text-danger' : reasonLength > 2048 ? 'text-danger' : 'text-muted';
 
-    // Get minimum date for date picker (tomorrow)
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     const minDate = tomorrow.toISOString().split('T')[0];
 
-    // Don't render if not open
     if (!isOpen) {
         return null;
     }
@@ -224,7 +254,7 @@ const ExceptionRequestModal: React.FC<ExceptionRequestModalProps> = ({
             {/* Backdrop */}
             <div
                 className="modal-backdrop fade show"
-                onClick={handleCancel}
+                onClick={onClose}
                 style={{ zIndex: 1040 }}
             ></div>
 
@@ -248,7 +278,7 @@ const ExceptionRequestModal: React.FC<ExceptionRequestModalProps> = ({
                                 type="button"
                                 className="btn-close"
                                 aria-label="Close"
-                                onClick={handleCancel}
+                                onClick={onClose}
                                 disabled={loading}
                             ></button>
                         </div>
@@ -275,57 +305,88 @@ const ExceptionRequestModal: React.FC<ExceptionRequestModalProps> = ({
                                     </div>
                                 </div>
 
-                                {/* Scope Field */}
+                                {/* Sentence builder: subject is fixed to CVE; scope is selectable. */}
                                 <div className="mb-3">
                                     <label className="form-label">
                                         Exception Scope <span className="text-danger">*</span>
                                     </label>
                                     <div className="form-text mb-2">
-                                        This controls <em>where</em> the exception applies. Pick carefully — Single Vulnerability only hides this row on this asset; other assets with the same CVE will still show as overdue.
+                                        Pick where this CVE exception should apply.
                                     </div>
-                                    <div className="form-check">
-                                        <input
-                                            className="form-check-input"
-                                            type="radio"
-                                            name="scope"
-                                            id="scopeSingle"
-                                            value="SINGLE_VULNERABILITY"
-                                            checked={formData.scope === 'SINGLE_VULNERABILITY'}
-                                            onChange={handleScopeChange}
+                                    <div className="d-flex align-items-center flex-wrap gap-2 mb-2">
+                                        <span className="fs-6 fw-light">Except</span>
+                                        <span className="badge bg-info text-dark">CVE {vulnerabilityCveId ?? ''}</span>
+                                        <select
+                                            className="form-select form-select-sm"
+                                            style={{ width: 'auto' }}
+                                            value={scope}
+                                            onChange={e => setScope(e.target.value as ExceptionScope)}
                                             disabled={loading}
-                                        />
-                                        <label className="form-check-label" htmlFor="scopeSingle">
-                                            <strong>This asset only</strong> — hides {vulnerabilityCveId || 'this CVE'} on <code>{assetName}</code>. Other assets keep reporting this CVE.
-                                        </label>
+                                            aria-label="Exception scope"
+                                        >
+                                            {SCOPE_OPTIONS
+                                                .filter(opt => allowedScopes.includes(opt.value))
+                                                .map(opt => (
+                                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                                ))}
+                                        </select>
+                                        {scope === 'IP' && (
+                                            <input
+                                                type="text"
+                                                className="form-control form-control-sm"
+                                                style={{ minWidth: 160 }}
+                                                placeholder="e.g. 10.0.0.1"
+                                                value={scopeValue}
+                                                onChange={e => setScopeValue(e.target.value)}
+                                                disabled={loading}
+                                            />
+                                        )}
+                                        {scope === 'AWS_ACCOUNT' && (
+                                            <select
+                                                className="form-select form-select-sm"
+                                                style={{ minWidth: 200 }}
+                                                value={scopeValue}
+                                                onChange={e => setScopeValue(e.target.value)}
+                                                disabled={loading || loadingAwsAccounts}
+                                            >
+                                                <option value="">— pick account —</option>
+                                                {awsAccounts.map(a => (
+                                                    <option key={a} value={a}>{a}</option>
+                                                ))}
+                                            </select>
+                                        )}
                                     </div>
-                                    <div className="form-check">
-                                        <input
-                                            className="form-check-input"
-                                            type="radio"
-                                            name="scope"
-                                            id="scopePattern"
-                                            value="CVE_PATTERN"
-                                            checked={formData.scope === 'CVE_PATTERN'}
-                                            onChange={handleScopeChange}
-                                            disabled={loading}
-                                        />
-                                        <label className="form-check-label" htmlFor="scopePattern">
-                                            <strong>All assets with this CVE</strong> — hides {vulnerabilityCveId || 'this CVE'} everywhere it appears, including assets discovered after approval.
-                                        </label>
-                                    </div>
+                                    {validationErrors.scope && (
+                                        <div className="alert alert-danger py-2 mb-0">
+                                            <small>{validationErrors.scope}</small>
+                                        </div>
+                                    )}
                                     <div
-                                        className={`alert ${formData.scope === 'CVE_PATTERN' ? 'alert-warning' : 'alert-info'} mt-2 mb-0 py-2`}
+                                        className={`alert ${scope === 'GLOBAL' ? 'alert-warning' : 'alert-info'} mt-2 mb-0 py-2`}
                                         role="status"
                                     >
-                                        {formData.scope === 'CVE_PATTERN' ? (
+                                        {scope === 'ASSET' && (
+                                            <>
+                                                <i className="bi bi-info-circle me-1" />
+                                                <strong>Scoped to one asset:</strong> only rows for <code>{assetName}</code> will be affected.
+                                            </>
+                                        )}
+                                        {scope === 'GLOBAL' && (
                                             <>
                                                 <i className="bi bi-exclamation-triangle me-1" />
                                                 <strong>Broad scope:</strong> this exception will mask {vulnerabilityCveId || 'this CVE'} across <strong>every asset</strong> in the system.
                                             </>
-                                        ) : (
+                                        )}
+                                        {scope === 'IP' && (
                                             <>
                                                 <i className="bi bi-info-circle me-1" />
-                                                <strong>Scoped to one asset:</strong> only rows for <code>{assetName}</code> will be affected. If you need coverage across multiple assets, switch to "All assets with this CVE".
+                                                <strong>Scoped to one IP:</strong> only assets at that IP will be affected.
+                                            </>
+                                        )}
+                                        {scope === 'AWS_ACCOUNT' && (
+                                            <>
+                                                <i className="bi bi-info-circle me-1" />
+                                                <strong>Scoped to one AWS account:</strong> only assets in that account will be affected.
                                             </>
                                         )}
                                     </div>
@@ -342,8 +403,12 @@ const ExceptionRequestModal: React.FC<ExceptionRequestModalProps> = ({
                                         name="reason"
                                         rows={6}
                                         placeholder="Provide a detailed justification for this exception request (minimum 50 characters)..."
-                                        value={formData.reason}
-                                        onChange={handleChange}
+                                        value={reason}
+                                        onChange={(e) => {
+                                            setReason(e.target.value);
+                                            setValidationErrors(prev => ({ ...prev, reason: undefined }));
+                                            setError(null);
+                                        }}
                                         disabled={loading}
                                         autoFocus
                                     ></textarea>
@@ -367,8 +432,8 @@ const ExceptionRequestModal: React.FC<ExceptionRequestModalProps> = ({
                                         className={`form-control ${validationErrors.expirationDate ? 'is-invalid' : ''}`}
                                         id="expirationDate"
                                         name="expirationDate"
-                                        value={formData.expirationDate}
-                                        onChange={handleChange}
+                                        value={expirationDate}
+                                        onChange={handleExpirationDateChange}
                                         disabled={loading}
                                         min={minDate}
                                     />
@@ -395,7 +460,7 @@ const ExceptionRequestModal: React.FC<ExceptionRequestModalProps> = ({
                                 <button
                                     type="button"
                                     className="btn btn-secondary"
-                                    onClick={handleCancel}
+                                    onClick={onClose}
                                     disabled={loading}
                                 >
                                     Cancel

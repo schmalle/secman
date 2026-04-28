@@ -378,7 +378,7 @@ const MyExceptionRequests: React.FC = () => {
                                                         </td>
                                                         <td>{request.assetName || 'N/A'}</td>
                                                         <td>
-                                                            {request.scope === 'SINGLE_VULNERABILITY' ? (
+                                                            {request.scope === 'ASSET' ? (
                                                                 <span className="badge bg-info text-dark">
                                                                     <i className="bi bi-bullseye me-1"></i>
                                                                     Single
