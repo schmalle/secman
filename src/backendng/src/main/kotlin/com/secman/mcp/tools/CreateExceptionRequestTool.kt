@@ -6,6 +6,7 @@ import com.secman.dto.CreateExceptionRequestDto
 import com.secman.dto.mcp.McpExecutionContext
 import com.secman.repository.VulnerabilityRepository
 import com.secman.service.VulnerabilityExceptionRequestService
+import com.secman.service.VulnerabilityExceptionService
 import jakarta.inject.Inject
 import jakarta.inject.Singleton
 import java.time.LocalDateTime
@@ -26,7 +27,8 @@ import java.time.format.DateTimeParseException
 @Singleton
 class CreateExceptionRequestTool(
     @Inject private val exceptionRequestService: VulnerabilityExceptionRequestService,
-    @Inject private val vulnerabilityRepository: VulnerabilityRepository
+    @Inject private val vulnerabilityRepository: VulnerabilityRepository,
+    @Inject private val vulnerabilityExceptionService: VulnerabilityExceptionService
 ) : McpTool {
 
     override val name = "create_exception_request"
@@ -73,6 +75,11 @@ class CreateExceptionRequestTool(
                 "type" to "string",
                 "format" to "date-time",
                 "description" to "When the exception should expire (ISO-8601, must be future date)"
+            ),
+            "validate_only" to mapOf(
+                "type" to "boolean",
+                "description" to "If true, validate the request shape against spec invariants and return success without persisting (dry-run). Default: false.",
+                "default" to false
             )
         )
     )
@@ -149,6 +156,35 @@ class CreateExceptionRequestTool(
             val subjectValue = arguments["subjectValue"] as? String
             val scopeValue = arguments["scopeValue"] as? String
             val assetIdArg = (arguments["assetId"] as? Number)?.toLong()
+            val validateOnly = arguments["validate_only"] as? Boolean ?: false
+
+            // Dry-run path: enforce spec §4.2 invariants without persisting.
+            if (validateOnly) {
+                try {
+                    vulnerabilityExceptionService.validateInvariants(
+                        subject = subject,
+                        scope = scope,
+                        subjectValue = subjectValue,
+                        scopeValue = scopeValue,
+                        assetId = assetIdArg,
+                        callerRoles = context.delegatedUserRoles ?: emptySet()
+                    )
+                } catch (e: SecurityException) {
+                    return McpToolResult.error("INSUFFICIENT_ROLE", e.message ?: "Insufficient role")
+                }
+                return McpToolResult.success(
+                    mapOf(
+                        "validateOnly" to true,
+                        "valid" to true,
+                        "subject" to subject.name,
+                        "scope" to scope.name,
+                        "subjectValue" to subjectValue,
+                        "scopeValue" to scopeValue,
+                        "assetId" to assetIdArg,
+                        "message" to "Request payload is valid (dry-run; no record created)"
+                    )
+                )
+            }
 
             // Create DTO
             val dto = CreateExceptionRequestDto(

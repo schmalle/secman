@@ -25,7 +25,7 @@ class CancelExceptionRequestTool(
 ) : McpTool {
 
     override val name = "cancel_exception_request"
-    override val description = "Cancel your own pending exception request (requires User Delegation)"
+    override val description = "Cancel your own pending exception request, identified by its exception subject and scope (requires User Delegation)"
     override val operation = McpOperation.WRITE
 
     override val inputSchema = mapOf(
@@ -69,7 +69,11 @@ class CancelExceptionRequestTool(
                         "assetName" to result.assetName,
                         "assetIp" to result.assetIp,
                         "requestedByUsername" to result.requestedByUsername,
+                        "subject" to result.subject.name,
                         "scope" to result.scope.name,
+                        "subjectValue" to result.subjectValue,
+                        "scopeValue" to result.scopeValue,
+                        "assetId" to result.assetId,
                         "reason" to result.reason,
                         "expirationDate" to result.expirationDate.toString(),
                         "status" to result.status.name,
