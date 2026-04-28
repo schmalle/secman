@@ -1,0 +1,61 @@
+{
+  "cli_version": "0.5.5",
+  "checkpoint_id": "06321f4cf039",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 14,
+  "files_touched": [
+    "docs/superpowers/specs/2026-04-28-workgroup-aws-account-assignment-design.md",
+    "src/backendng/src/main/kotlin/com/secman/domain/AdminSummaryLog.kt",
+    "src/backendng/src/main/kotlin/com/secman/domain/AlignmentReviewer.kt",
+    "src/backendng/src/main/kotlin/com/secman/domain/AlignmentSession.kt",
+    "src/backendng/src/main/kotlin/com/secman/domain/AlignmentSnapshot.kt",
+    "src/backendng/src/main/kotlin/com/secman/domain/Asset.kt",
+    "src/backendng/src/main/kotlin/com/secman/domain/AssetComplianceHistory.kt",
+    "src/backendng/src/main/kotlin/com/secman/domain/AssetDeletionAuditLog.kt",
+    "src/backendng/src/main/kotlin/com/secman/domain/Demand.kt",
+    "src/backendng/src/main/kotlin/com/secman/domain/DemandClassification.kt",
+    "src/backendng/src/main/kotlin/com/secman/domain/EmailConfig.kt",
+    "src/backendng/src/main/kotlin/com/secman/domain/EmailNotificationLog.kt",
+    "src/backendng/src/main/kotlin/com/secman/domain/ExceptionRequestAuditLog.kt",
+    "src/backendng/src/main/kotlin/com/secman/domain/ExportJob.kt",
+    "src/backendng/src/main/kotlin/com/secman/domain/IdentityProvider.kt",
+    "src/backendng/src/main/kotlin/com/secman/domain/MaterializedViewRefreshJob.kt",
+    "src/backendng/src/main/kotlin/com/secman/domain/McpAuditLog.kt",
+    "src/backendng/src/main/kotlin/com/secman/domain/McpSession.kt",
+    "src/backendng/src/main/kotlin/com/secman/domain/NotificationLog.kt",
+    "src/backendng/src/main/kotlin/com/secman/domain/RequirementReview.kt",
+    "src/backendng/src/main/kotlin/com/secman/domain/Response.kt",
+    "src/backendng/src/main/kotlin/com/secman/domain/ReviewDecision.kt",
+    "src/backendng/src/main/kotlin/com/secman/domain/RiskAssessment.kt",
+    "src/backendng/src/main/kotlin/com/secman/domain/TestEmailAccount.kt",
+    "src/backendng/src/main/kotlin/com/secman/domain/User.kt",
+    "src/backendng/src/main/kotlin/com/secman/domain/UserMapping.kt",
+    "src/backendng/src/main/kotlin/com/secman/domain/UserMappingStatisticsLog.kt",
+    "src/backendng/src/main/kotlin/com/secman/domain/VulnerabilityException.kt",
+    "src/backendng/src/main/kotlin/com/secman/domain/VulnerabilityExceptionRequest.kt",
+    "src/backendng/src/main/kotlin/com/secman/domain/Workgroup.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/WorkgroupService.kt",
+    "src/backendng/src/main/resources/application.yml",
+    "src/backendng/src/main/resources/db/migration/V196__exception_two_axis_refactor.sql",
+    "src/backendng/src/main/resources/db/migration/V197__widen_native_enum_columns_to_varchar.sql",
+    "src/backendng/src/main/resources/db/migration/V198__rewiden_remaining_enum_columns.sql",
+    "src/backendng/src/main/resources/db/migration/V199__rewiden_enum_columns_third_pass.sql",
+    "src/backendng/src/main/resources/db/migration/V200__rewiden_enum_columns_final.sql"
+  ],
+  "sessions": [
+    {
+      "metadata": "/06/321f4cf039/0/metadata.json",
+      "transcript": "/06/321f4cf039/0/full.jsonl",
+      "content_hash": "/06/321f4cf039/0/content_hash.txt",
+      "prompt": "/06/321f4cf039/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 153,
+    "cache_creation_tokens": 267347,
+    "cache_read_tokens": 11497431,
+    "output_tokens": 121931,
+    "api_call_count": 73
+  }
+}

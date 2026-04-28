@@ -1,0 +1,216 @@
+[Image #1] [Image #2] [Image #3] please fix the code, it seems the latest changes make problems
+
+---
+
+add IF NOT EXISTS / IF EXISTS guards to the V196 DDL
+
+---
+
+[Image #4] still a problem exists
+
+---
+
+do a quick sweep for any other Hibernate-auto-update ENUM columns elsewhere in the schema that are likely candidates for the same trap
+
+---
+
+[Image #5] MariaDB [secman]>   SELECT TABLE_NAME, COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE
+    ->     FROM information_schema.COLUMNS
+    ->    WHERE TABLE_SCHEMA = 'secman'
+    ->      AND DATA_TYPE = 'enum'
+    ->    ORDER BY TABLE_NAME, COLUMN_NAME;
++---------------------------------+-----------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-------------+
+| TABLE_NAME                      | COLUMN_NAME           | COLUMN_TYPE                                                                                                                                                                                                                                                    | IS_NULLABLE |
++---------------------------------+-----------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-------------+
+| admin_summary_log               | status                | enum('DRY_RUN','FAILURE','PARTIAL_FAILURE','SUCCESS')                                                                                                                                                                                                          | NO          |
+| alignment_reviewer              | status                | enum('COMPLETED','IN_PROGRESS','PENDING')                                                                                                                                                                                                                      | NO          |
+| alignment_session               | review_scope          | enum('ALL','CHANGED')                                                                                                                                                                                                                                          | NO          |
+| alignment_session               | status                | enum('CANCELLED','COMPLETED','OPEN')                                                                                                                                                                                                                           | NO          |
+| alignment_snapshot              | change_type           | enum('ADDED','DELETED','MODIFIED')                                                                                                                                                                                                                             | NO          |
+| asset                           | criticality           | enum('CRITICAL','HIGH','LOW','MEDIUM','NA')                                                                                                                                                                                                                    | YES         |
+| asset                           | network_zone          | enum('DMZ','EXTERNAL','INTERNAL','UNKNOWN')                                                                                                                                                                                                                    | YES         |
+| asset_deletion_audit_log        | operation_type        | enum('BULK','SINGLE')                                                                                                                                                                                                                                          | NO          |
+| auth_audit_log                  | event_type            | enum('LOGIN_SUCCESS','LOGIN_FAILURE','LOGOUT','TOKEN_REFRESH','PROVISION_USER')                                                                                                                                                                                | NO          |
+| classification_session          | final_classification  | enum('A','B','C')                                                                                                                                                                                                                                              | YES         |
+| classification_session          | session_status        | enum('ABANDONED','ACTIVE','COMPLETED','EXPIRED')                                                                                                                                                                                                               | NO          |
+| decision_tree_node              | classification_result | enum('A','B','C')                                                                                                                                                                                                                                              | YES         |
+| decision_tree_node              | node_type             | enum('DECISION','START','TARGET')                                                                                                                                                                                                                              | NO          |
+| demand                          | demand_type           | enum('CHANGE','CREATE_NEW')                                                                                                                                                                                                                                    | NO          |
+| demand                          | priority              | enum('CRITICAL','HIGH','LOW','MEDIUM')                                                                                                                                                                                                                         | NO          |
+| demand                          | status                | enum('APPROVED','COMPLETED','IN_PROGRESS','PENDING','REJECTED')                                                                                                                                                                                                | NO          |
+| demand_classification_result    | classification        | enum('A','B','C')                                                                                                                                                                                                                                              | NO          |
+| email_configs                   | provider              | enum('AMAZON_SES','SMTP')                                                                                                                                                                                                                                      | NO          |
+| email_notification_logs         | status                | enum('FAILED','PENDING','PERMANENTLY_FAILED','RETRYING','SENT')                                                                                                                                                                                                | NO          |
+| exception_request_audit         | event_type            | enum('APPROVED','CANCELLED','EXPIRED','MODIFIED','REJECTED','REQUEST_CREATED','STATUS_CHANGED')                                                                                                                                                                | NO          |
+| exception_request_audit         | severity              | enum('ERROR','INFO','WARN')                                                                                                                                                                                                                                    | NO          |
+| export_jobs                     | export_type           | enum('ASSETS','REQUIREMENTS','VULNERABILITIES')                                                                                                                                                                                                                | NO          |
+| export_jobs                     | status                | enum('CANCELLED','COMPLETED','EXPIRED','FAILED','PENDING','PROCESSING')                                                                                                                                                                                        | NO          |
+| identity_providers              | type                  | enum('OIDC','SAML')                                                                                                                                                                                                                                            | NO          |
+| materialized_view_refresh_job   | status                | enum('COMPLETED','FAILED','RUNNING')                                                                                                                                                                                                                           | NO          |
+| mcp_audit_logs                  | event_type            | enum('API_KEY_MANAGEMENT','AUTH_FAILURE','AUTH_SUCCESS','CAPABILITIES_REQUEST','ERROR','INVALID_REQUEST','PERMISSION_DENIED','RATE_LIMITED','RESOURCE_ACCESS','SESSION_CLOSED','SESSION_CREATED','SESSION_EXPIRED','SSE_CONNECT','SSE_DISCONNECT','TOOL_CALL') | NO          |
+| mcp_audit_logs                  | operation             | enum('DELETE','EXECUTE','READ','WRITE')                                                                                                                                                                                                                        | YES         |
+| mcp_audit_logs                  | severity              | enum('ERROR','INFO','WARN')                                                                                                                                                                                                                                    | NO          |
+| mcp_sessions                    | connection_type       | enum('HTTP','SSE','STREAMABLE_HTTP','WEBSOCKET')                                                                                                                                                                                                               | NO          |
+| migration_log                   | status                | enum('STARTED','COMPLETED','FAILED')                                                                                                                                                                                                                           | NO          |
+| notification_log                | notification_type     | enum('NEW_VULNERABILITY','OUTDATED_LEVEL1','OUTDATED_LEVEL2')                                                                                                                                                                                                  | NO          |
+| response                        | answer                | enum('YES','NO','N_A')                                                                                                                                                                                                                                         | NO          |
+| response                        | answer_type           | enum('NO','N_A','YES')                                                                                                                                                                                                                                         | YES         |
+| risk_assessment                 | assessment_basis_type | enum('ASSET','DEMAND')                                                                                                                                                                                                                                         | NO          |
+| test_email_accounts             | provider              | enum('GMAIL','IMAP_CUSTOM','OUTLOOK','SMTP_CUSTOM','YAHOO')                                                                                                                                                                                                    | NO          |
+| test_email_accounts             | status                | enum('ACTIVE','FAILED','INACTIVE','VERIFICATION_PENDING')                                                                                                                                                                                                      | NO          |
+| users                           | auth_source           | enum('HYBRID','LOCAL','OAUTH')                                                                                                                                                                                                                                 | NO          |
+| user_mapping                    | ip_range_type         | enum('CIDR','DASH_RANGE','SINGLE')                                                                                                                                                                                                                             | YES         |
+| user_mapping                    | status                | enum('ACTIVE','PENDING')                                                                                                                                                                                                                                       | NO          |
+| user_roles                      | role                  | enum('ADMIN','USER')                                                                                                                                                                                                                                           | YES         |
+| vulnerability_exception_request | status                | enum('APPROVED','CANCELLED','EXPIRED','PENDING','REJECTED')                                                                                                                                                                                                    | NO          |
+| workgroup                       | criticality           | enum('CRITICAL','HIGH','LOW','MEDIUM','NA')                                                                                                                                                                                                                    | NO          |
++---------------------------------+-----------------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-------------+
+42 rows in set (0.023 sec)
+
+---
+
+MariaDB [secman]>   SELECT TABLE_NAME, COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE
+    ->     FROM information_schema.COLUMNS
+    ->    WHERE TABLE_SCHEMA = 'secman'
+    ->      AND DATA_TYPE = 'enum'
+    ->    ORDER BY TABLE_NAME, COLUMN_NAME;
++---------------------------------+-----------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-------------+
+| TABLE_NAME                      | COLUMN_NAME     | COLUMN_TYPE                                                                                                                                                                                                                                                    | IS_NULLABLE |
++---------------------------------+-----------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-------------+
+| admin_summary_log               | status          | enum('DRY_RUN','FAILURE','PARTIAL_FAILURE','SUCCESS')                                                                                                                                                                                                          | NO          |
+| alignment_reviewer              | status          | enum('COMPLETED','IN_PROGRESS','PENDING')                                                                                                                                                                                                                      | NO          |
+| alignment_session               | review_scope    | enum('ALL','CHANGED')                                                                                                                                                                                                                                          | NO          |
+| alignment_session               | status          | enum('CANCELLED','COMPLETED','OPEN')                                                                                                                                                                                                                           | NO          |
+| alignment_snapshot              | change_type     | enum('ADDED','DELETED','MODIFIED')                                                                                                                                                                                                                             | NO          |
+| asset                           | criticality     | enum('CRITICAL','HIGH','LOW','MEDIUM','NA')                                                                                                                                                                                                                    | YES         |
+| asset                           | network_zone    | enum('DMZ','EXTERNAL','INTERNAL','UNKNOWN')                                                                                                                                                                                                                    | YES         |
+| asset_deletion_audit_log        | operation_type  | enum('BULK','SINGLE')                                                                                                                                                                                                                                          | NO          |
+| email_configs                   | provider        | enum('AMAZON_SES','SMTP')                                                                                                                                                                                                                                      | NO          |
+| email_notification_logs         | status          | enum('FAILED','PENDING','PERMANENTLY_FAILED','RETRYING','SENT')                                                                                                                                                                                                | NO          |
+| exception_request_audit         | event_type      | enum('APPROVED','CANCELLED','EXPIRED','MODIFIED','REJECTED','REQUEST_CREATED','STATUS_CHANGED')                                                                                                                                                                | NO          |
+| exception_request_audit         | severity        | enum('ERROR','INFO','WARN')                                                                                                                                                                                                                                    | NO          |
+| export_jobs                     | export_type     | enum('ASSETS','REQUIREMENTS','VULNERABILITIES')                                                                                                                                                                                                                | NO          |
+| export_jobs                     | status          | enum('CANCELLED','COMPLETED','EXPIRED','FAILED','PENDING','PROCESSING')                                                                                                                                                                                        | NO          |
+| materialized_view_refresh_job   | status          | enum('COMPLETED','FAILED','RUNNING')                                                                                                                                                                                                                           | NO          |
+| mcp_audit_logs                  | event_type      | enum('API_KEY_MANAGEMENT','AUTH_FAILURE','AUTH_SUCCESS','CAPABILITIES_REQUEST','ERROR','INVALID_REQUEST','PERMISSION_DENIED','RATE_LIMITED','RESOURCE_ACCESS','SESSION_CLOSED','SESSION_CREATED','SESSION_EXPIRED','SSE_CONNECT','SSE_DISCONNECT','TOOL_CALL') | NO          |
+| mcp_audit_logs                  | operation       | enum('DELETE','EXECUTE','READ','WRITE')                                                                                                                                                                                                                        | YES         |
+| mcp_audit_logs                  | severity        | enum('ERROR','INFO','WARN')                                                                                                                                                                                                                                    | NO          |
+| mcp_sessions                    | connection_type | enum('HTTP','SSE','STREAMABLE_HTTP','WEBSOCKET')                                                                                                                                                                                                               | NO          |
+| response                        | answer_type     | enum('NO','N_A','YES')                                                                                                                                                                                                                                         | YES         |
+| test_email_accounts             | provider        | enum('GMAIL','IMAP_CUSTOM','OUTLOOK','SMTP_CUSTOM','YAHOO')                                                                                                                                                                                                    | NO          |
+| test_email_accounts             | status          | enum('ACTIVE','FAILED','INACTIVE','VERIFICATION_PENDING')                                                                                                                                                                                                      | NO          |
+| users                           | auth_source     | enum('HYBRID','LOCAL','OAUTH')                                                                                                                                                                                                                                 | NO          |
+| user_mapping                    | ip_range_type   | enum('CIDR','DASH_RANGE','SINGLE')                                                                                                                                                                                                                             | YES         |
+| user_mapping                    | status          | enum('ACTIVE','PENDING')                                                                                                                                                                                                                                       | NO          |
+| vulnerability_exception_request | status          | enum('APPROVED','CANCELLED','EXPIRED','PENDING','REJECTED')                                                                                                                                                                                                    | NO          |
+| workgroup                       | criticality     | enum('CRITICAL','HIGH','LOW','MEDIUM','NA')                                                                                                                                                                                                                    | NO          |
++---------------------------------+-----------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-------------+
+27 rows in set (0.009 sec)
+
+MariaDB [secman]>
+
+---
+
+MariaDB [secman]>  SELECT version, description, success, installed_on, execution_time
+    ->     FROM flyway_schema_history
+    ->    WHERE version IN ('196', '197')
+    ->    ORDER BY version;
++---------+--------------------------------------+---------+---------------------+----------------+
+| version | description                          | success | installed_on        | execution_time |
++---------+--------------------------------------+---------+---------------------+----------------+
+| 196     | exception two axis refactor          |       1 | 2026-04-28 21:57:55 |            401 |
+| 197     | widen native enum columns to varchar |       1 | 2026-04-28 22:03:06 |           3017 |
++---------+--------------------------------------+---------+---------------------+----------------+
+2 rows in set (0.000 sec)
+
+MariaDB [secman]>
+
+---
+
+MariaDB [secman]>
+MariaDB [secman]>
+MariaDB [secman]>   -- Should return 0 rows: nothing left as native ENUM
+MariaDB [secman]>   SELECT TABLE_NAME, COLUMN_NAME FROM information_schema.COLUMNS
+    ->    WHERE TABLE_SCHEMA = 'secman' AND DATA_TYPE = 'enum';
++---------------------------------+-----------------+
+| TABLE_NAME                      | COLUMN_NAME     |
++---------------------------------+-----------------+
+| asset                           | criticality     |
+| asset                           | network_zone    |
+| alignment_reviewer              | status          |
+| materialized_view_refresh_job   | status          |
+| vulnerability_exception_request | status          |
+| alignment_session               | status          |
+| alignment_session               | review_scope    |
+| email_notification_logs         | status          |
+| mcp_audit_logs                  | event_type      |
+| mcp_audit_logs                  | operation       |
+| mcp_audit_logs                  | severity        |
+| asset_deletion_audit_log        | operation_type  |
+| mcp_sessions                    | connection_type |
+| workgroup                       | criticality     |
+| users                           | auth_source     |
+| alignment_snapshot              | change_type     |
+| admin_summary_log               | status          |
+| test_email_accounts             | provider        |
+| test_email_accounts             | status          |
+| response                        | answer_type     |
+| export_jobs                     | export_type     |
+| export_jobs                     | status          |
+| exception_request_audit         | event_type      |
+| exception_request_audit         | severity        |
+| email_configs                   | provider        |
+| user_mapping                    | ip_range_type   |
+| user_mapping                    | status          |
++---------------------------------+-----------------+
+27 rows in set (0.022 sec)
+
+MariaDB [secman]>
+MariaDB [secman]>   -- Should show V198 with success=1
+MariaDB [secman]>   SELECT version, success, execution_time FROM flyway_schema_history WHERE version = '198';
++---------+---------+----------------+
+| version | success | execution_time |
++---------+---------+----------------+
+| 198     |       1 |           2038 |
++---------+---------+----------------+
+1 row in set (0.001 sec)
+
+MariaDB [secman]>
+
+---
+
+MariaDB [secman]>   SELECT COUNT(*) FROM information_schema.COLUMNS
+    ->    WHERE TABLE_SCHEMA = 'secman' AND DATA_TYPE = 'enum';
++----------+
+| COUNT(*) |
++----------+
+|       27 |
++----------+
+1 row in set (0.026 sec)
+
+---
+
+MariaDB [secman]>   SELECT COUNT(*) FROM information_schema.COLUMNS
+    ->    WHERE TABLE_SCHEMA = 'secman' AND DATA_TYPE = 'enum';
++----------+
+| COUNT(*) |
++----------+
+|        0 |
++----------+
+1 row in set (0.022 sec)
+
+---
+
+[Image #13] extend workgroups for accounts
+
+---
+
+A
+
+---
+
+A
+
+---
+
+approve
