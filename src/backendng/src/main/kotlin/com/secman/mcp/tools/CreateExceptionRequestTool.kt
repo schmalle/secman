@@ -76,7 +76,7 @@ class CreateExceptionRequestTool(
                 "format" to "date-time",
                 "description" to "When the exception should expire (ISO-8601, must be future date)"
             ),
-            "validate_only" to mapOf(
+            "validateOnly" to mapOf(
                 "type" to "boolean",
                 "description" to "If true, validate the request shape against spec invariants and return success without persisting (dry-run). Default: false.",
                 "default" to false
@@ -156,7 +156,7 @@ class CreateExceptionRequestTool(
             val subjectValue = arguments["subjectValue"] as? String
             val scopeValue = arguments["scopeValue"] as? String
             val assetIdArg = (arguments["assetId"] as? Number)?.toLong()
-            val validateOnly = arguments["validate_only"] as? Boolean ?: false
+            val validateOnly = arguments["validateOnly"] as? Boolean ?: false
 
             // Dry-run path: enforce spec §4.2 invariants without persisting.
             if (validateOnly) {
@@ -176,11 +176,14 @@ class CreateExceptionRequestTool(
                     mapOf(
                         "validateOnly" to true,
                         "valid" to true,
-                        "subject" to subject.name,
-                        "scope" to scope.name,
-                        "subjectValue" to subjectValue,
-                        "scopeValue" to scopeValue,
-                        "assetId" to assetIdArg,
+                        "request" to mapOf(
+                            "vulnerabilityId" to vulnerabilityId,
+                            "subject" to subject.name,
+                            "scope" to scope.name,
+                            "subjectValue" to subjectValue,
+                            "scopeValue" to scopeValue,
+                            "assetId" to assetIdArg
+                        ),
                         "message" to "Request payload is valid (dry-run; no record created)"
                     )
                 )
