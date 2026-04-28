@@ -107,10 +107,16 @@ class AccountVulnsService(
                 SELECT 1 FROM vulnerability_exception e
                 WHERE (e.expiration_date IS NULL OR e.expiration_date > NOW())
                 AND (
-                    (e.exception_type = 'IP' AND e.target_value = a.ip)
-                    OR (e.exception_type = 'PRODUCT' AND (e.target_value = v.vulnerability_id OR LOCATE(e.target_value, v.vulnerable_product_versions) > 0))
-                    OR (e.exception_type = 'ASSET' AND e.asset_id = a.id)
-                    OR (e.exception_type = 'CVE' AND FIND_IN_SET(v.vulnerability_id, e.target_value) > 0 AND (e.asset_id IS NULL OR e.asset_id = a.id))
+                    (
+                        (e.subject = 'ALL_VULNS')
+                        OR (e.subject = 'PRODUCT' AND (e.subject_value = v.vulnerability_id OR LOCATE(e.subject_value, v.vulnerable_product_versions) > 0))
+                        OR (e.subject = 'CVE' AND FIND_IN_SET(v.vulnerability_id, REPLACE(e.subject_value, ' ', '')) > 0)
+                    )
+                    AND (
+                        (e.scope = 'GLOBAL')
+                        OR (e.scope = 'IP' AND e.scope_value = a.ip)
+                        OR (e.scope = 'ASSET' AND e.asset_id = a.id)
+                    )
                 )
             )
             GROUP BY v.asset_id
