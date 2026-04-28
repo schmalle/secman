@@ -17,7 +17,7 @@
       </GradleProjectSettings>
       <GradleProjectSettings>
         <option name="externalProjectPath" value="$PROJECT_DIR$/src/backendng" />
-        <option name="gradleJvm" value="#JAVA_HOME" />
+        <option name="gradleJvm" value="temurin-25 (2)" />
         <option name="modules">
           <set>
             <option value="$PROJECT_DIR$" />
