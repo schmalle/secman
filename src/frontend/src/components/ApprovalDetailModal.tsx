@@ -252,7 +252,7 @@ const ApprovalDetailModal: React.FC<ApprovalDetailModalProps> = ({
                         <h6 className="text-muted mb-3">Request Information</h6>
                         <div className="mb-2">
                           <strong>Scope:</strong><br />
-                          {request.scope === 'SINGLE_VULNERABILITY' ? (
+                          {request.scope === 'ASSET' ? (
                             <span className="badge bg-info text-dark">
                               <i className="bi bi-bullseye me-1"></i>
                               Single Vulnerability
