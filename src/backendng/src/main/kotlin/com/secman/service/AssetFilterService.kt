@@ -59,6 +59,8 @@ open class AssetFilterService(
      * 5. Asset's cloudAccountId matches any of the user's AWS account mappings
      * 6. Asset's adDomain matches any of the user's domain mappings (case-insensitive)
      * 7. Asset's owner matches the user's username
+     * 8. Asset's cloudAccountId matches an AWS account shared with the user via AwsAccountSharing (directional, non-transitive)
+     * 9. Asset's cloudAccountId matches an AWS account assigned to a workgroup the user belongs to (WorkgroupAwsAccount, direct membership only)
      *
      * Feature 073: When lazyLoadingEnabled=true, uses unified query for single DB round trip.
      * Otherwise, falls back to original multi-query approach for stability.

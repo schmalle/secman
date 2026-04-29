@@ -39,6 +39,7 @@ interface AssetRepository : JpaRepository<Asset, Long> {
      * 4. Assets with cloudAccountId matching user's AWS mappings
      * 5. Assets with adDomain matching user's domain mappings
      * 6. Assets where owner matches the user's username
+     * 7. Assets with cloudAccountId matching an AWS account assigned to a workgroup the user belongs to (WorkgroupAwsAccount)
      *
      * Feature: 073-memory-optimization
      * Task: T031
