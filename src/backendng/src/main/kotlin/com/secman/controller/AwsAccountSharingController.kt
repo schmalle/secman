@@ -184,7 +184,12 @@ open class AwsAccountSharingController(
      *    rule creation so the FK constraint is satisfied.
      *
      * Available to all authenticated users.
+     *
+     * @deprecated Will be replaced by `GET /api/users?includePending=true` once
+     * that endpoint is opened to non-ADMIN callers with a public-safe DTO.
+     * Kept in place for one release.
      */
+    @Deprecated("Use /api/users?includePending=true once non-ADMIN access is added")
     @Get("/users")
     fun listUsersForSharing(): HttpResponse<List<SharingUserResponse>> {
         val activeUsers = userRepository.findAll().map { user ->
