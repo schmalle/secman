@@ -358,7 +358,7 @@ const RiskAssessmentManagement: React.FC = () => {
                       required
                     >
                       <option value={0}>Select Requestor</option>
-                      {users.map((user) => (
+                      {users.filter((u) => u.id != null).map((user) => (
                         <option key={user.id ?? `pending:${user.email}`} value={user.id ?? ''}>
                           {user.username} ({user.email})
                         </option>
