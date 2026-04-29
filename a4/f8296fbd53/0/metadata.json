@@ -1,0 +1,52 @@
+{
+  "cli_version": "0.5.5",
+  "checkpoint_id": "a4f8296fbd53",
+  "session_id": "b02b8020-7aec-4153-9f45-7597f91271c3",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-29T19:40:02.638961Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/backendng/src/main/kotlin/com/secman/service/VulnerabilityService.kt"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-4-7",
+  "turn_id": "0da28f53cd5f",
+  "token_usage": {
+    "input_tokens": 7,
+    "cache_creation_tokens": 31749,
+    "cache_read_tokens": 74160,
+    "output_tokens": 528,
+    "api_call_count": 2
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-29T19:40:02.624049Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 6,
+    "total_committed": 0,
+    "total_lines_changed": 6,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 18,
+      "user_lines_removed": 6,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "src/backendng/src/main/kotlin/com/secman/service/VulnerabilityService.kt": 18
+      },
+      "user_removed_per_file": {
+        "src/backendng/src/main/kotlin/com/secman/service/VulnerabilityService.kt": 6
+      }
+    }
+  ]
+}

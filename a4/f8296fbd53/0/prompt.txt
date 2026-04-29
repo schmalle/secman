@@ -1,0 +1,2 @@
+for the skill/agent e2ejs assume that there runs a nginx server on port 443 and frontend can also be found on this port. assume port 4321 as indication if the frontend is running, assume port 8080
+   that the backend is running. The URL is secman.covestro.net, now run /e2ejs
