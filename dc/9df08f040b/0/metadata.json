@@ -1,0 +1,23 @@
+{
+  "cli_version": "0.5.5",
+  "checkpoint_id": "dc9df08f040b",
+  "session_id": "4841cfe2-54c1-43c0-86c7-184680b3c2cf",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-29T05:21:24.143377Z",
+  "branch": "289-workgroup-aws-accounts",
+  "checkpoints_count": 1,
+  "files_touched": [],
+  "agent": "Claude Code",
+  "model": "claude-opus-4-7",
+  "turn_id": "eee04e762ad0",
+  "token_usage": {
+    "input_tokens": 259,
+    "cache_creation_tokens": 924907,
+    "cache_read_tokens": 24892638,
+    "output_tokens": 177960,
+    "api_call_count": 119
+  },
+  "session_metrics": {
+    "turn_count": 15
+  }
+}

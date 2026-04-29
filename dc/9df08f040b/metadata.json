@@ -1,0 +1,23 @@
+{
+  "cli_version": "0.5.5",
+  "checkpoint_id": "dc9df08f040b",
+  "strategy": "manual-commit",
+  "branch": "289-workgroup-aws-accounts",
+  "checkpoints_count": 1,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/dc/9df08f040b/0/metadata.json",
+      "transcript": "/dc/9df08f040b/0/full.jsonl",
+      "content_hash": "/dc/9df08f040b/0/content_hash.txt",
+      "prompt": "/dc/9df08f040b/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 259,
+    "cache_creation_tokens": 924907,
+    "cache_read_tokens": 24892638,
+    "output_tokens": 177960,
+    "api_call_count": 119
+  }
+}
