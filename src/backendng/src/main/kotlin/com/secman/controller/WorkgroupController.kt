@@ -6,6 +6,7 @@ import com.secman.dto.BreadcrumbItem
 import com.secman.dto.CreateChildWorkgroupRequest
 import com.secman.dto.WorkgroupResponse
 import com.secman.repository.AssetRepository
+import com.secman.repository.WorkgroupRepository
 import com.secman.service.ValidationException
 import com.secman.service.UserResolutionService
 import com.secman.service.WorkgroupService
@@ -46,7 +47,8 @@ open class WorkgroupController(
     private val workgroupService: WorkgroupService,
     private val assetRepository: AssetRepository,
     private val workgroupAwsAccountRepository: com.secman.repository.WorkgroupAwsAccountRepository,
-    private val userResolutionService: UserResolutionService
+    private val userResolutionService: UserResolutionService,
+    private val workgroupRepository: WorkgroupRepository
 ) {
     private val logger = LoggerFactory.getLogger(WorkgroupController::class.java)
 
@@ -192,8 +194,9 @@ open class WorkgroupController(
      * FR-007: ADMIN only, bulk user assignment
      *
      * POST /api/workgroups/{id}/users
-     * Body: { "userIds": [1, 2, 3] }
-     * Returns: 200 OK, 400 if user not found, 404 if workgroup not found
+     * Body: { "userIds": [1, 2, 3] }                  // legacy id-only shape, still supported
+     *   or  { "userRefs": [{"id": 1}, {"email": "x@y"}] }  // new shape; pending emails lazy-create User rows
+     * Returns: 200 OK, 400 if request empty, 404 if workgroup or user-by-id not found
      */
     @Post("/{id}/users")
     @Secured("ADMIN")
@@ -204,6 +207,14 @@ open class WorkgroupController(
         return try {
             if (request.isEmpty()) {
                 return HttpResponse.badRequest()
+            }
+
+            // Validate workgroup BEFORE resolving refs — UserResolutionService.resolveAll
+            // is @Transactional and lazy-creates User rows on its own. If we resolved
+            // first and the workgroup turned out to be missing, the new User rows
+            // would already be committed and orphaned.
+            if (!workgroupRepository.existsById(id)) {
+                return HttpResponse.notFound()
             }
 
             // userRefs wins when both shapes are present.
