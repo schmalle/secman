@@ -7,6 +7,7 @@ import com.secman.dto.CreateChildWorkgroupRequest
 import com.secman.dto.WorkgroupResponse
 import com.secman.repository.AssetRepository
 import com.secman.service.ValidationException
+import com.secman.service.UserResolutionService
 import com.secman.service.WorkgroupService
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.MediaType
@@ -44,7 +45,8 @@ import org.slf4j.LoggerFactory
 open class WorkgroupController(
     private val workgroupService: WorkgroupService,
     private val assetRepository: AssetRepository,
-    private val workgroupAwsAccountRepository: com.secman.repository.WorkgroupAwsAccountRepository
+    private val workgroupAwsAccountRepository: com.secman.repository.WorkgroupAwsAccountRepository,
+    private val userResolutionService: UserResolutionService
 ) {
     private val logger = LoggerFactory.getLogger(WorkgroupController::class.java)
 
@@ -200,8 +202,23 @@ open class WorkgroupController(
         @Body @Valid request: AssignUsersRequest
     ): HttpResponse<Void> {
         return try {
-            workgroupService.assignUsersToWorkgroup(id, request.userIds)
+            if (request.isEmpty()) {
+                return HttpResponse.badRequest()
+            }
+
+            // userRefs wins when both shapes are present.
+            val resolvedIds: List<Long> = if (!request.userRefs.isNullOrEmpty()) {
+                userResolutionService
+                    .resolveAll(request.userRefs, "workgroup member")
+                    .map { it.id!! }
+            } else {
+                request.userIds!!
+            }
+
+            workgroupService.assignUsersToWorkgroup(id, resolvedIds)
             HttpResponse.ok()
+        } catch (e: NoSuchElementException) {
+            HttpResponse.notFound()
         } catch (e: IllegalArgumentException) {
             if (e.message?.contains("Workgroup not found") == true) {
                 HttpResponse.notFound()
@@ -779,9 +796,13 @@ data class UpdateWorkgroupRequest(
  */
 @Serdeable
 data class AssignUsersRequest(
-    @field:NotNull(message = "User IDs are required")
-    val userIds: List<Long>
-)
+    // Legacy id-only shape — kept for back-compat with CLI / scripts.
+    val userIds: List<Long>? = null,
+    // New shape — supports both real users (by id) and pending users (by email).
+    val userRefs: List<UserResolutionService.UserRef>? = null
+) {
+    fun isEmpty(): Boolean = userIds.isNullOrEmpty() && userRefs.isNullOrEmpty()
+}
 
 /**
  * Request to assign assets to workgroup
