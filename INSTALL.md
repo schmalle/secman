@@ -103,7 +103,7 @@ cd secman
 # 2. Start and configure MariaDB
 sudo systemctl start mariadb
 sudo systemctl enable mariadb
-cd scripts/install/db && ./installdb.sh && cd ../../..
+cd scriptpp/install/db && ./installdb.sh && cd ../../..
 
 # 3. Start the backend (Terminal 1)
 cd src/backendng
@@ -146,7 +146,7 @@ sudo mysql_secure_installation
 Run the database installation script:
 
 ```bash
-cd scripts/install/db
+cd scriptpp/install/db
 ./installdb.sh
 cd ../../..
 ```
@@ -516,7 +516,7 @@ curl http://localhost:8080/memory
 If you missed the auto-generated admin password from the console output, reset the database:
 
 ```bash
-cd scripts
+cd scriptpp
 ./reset_database.sh
 ```
 

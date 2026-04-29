@@ -1,8 +1,10 @@
-# 1Password Credentials
+# Secret Management
 
-secman uses [1Password CLI](https://developer.1password.com/docs/cli/) (`op`) to inject secrets at runtime. All secret references use the `op://` URI format and are resolved by `op run` before reaching the application.
+> **Note:** The canonical secret management tool is now **Proton Pass `pass-cli`**. All new scripts source secrets via `pass-cli`. The 1Password CLI (`op`) references below are retained for legacy environments that have not yet migrated. See `./scriptpp/startbackenddev.sh` for the current approach.
 
-## Prerequisites
+secman uses secret injection at runtime. Legacy environments may still use [1Password CLI](https://developer.1password.com/docs/cli/) (`op`) with `op://` URI references resolved by `op run`.
+
+## Prerequisites (Legacy 1Password)
 
 1. Install the [1Password CLI](https://developer.1password.com/docs/cli/get-started/)
 2. Sign in: `op signin`
@@ -100,7 +102,7 @@ This script sets `SECMAN_DOMAIN` and `SECMAN_HOST` as `op://` references and wra
 ./scriptpp/secmancli query servers --dry-run
 ```
 
-The `scripts/secmancli` script exports all `op://` references and wraps the command with `op run`.
+The `scriptpp/secmancli` script exports all `op://` references and wraps the command with `op run`.
 
 ### Run E2E tests (Playwright)
 
@@ -132,13 +134,13 @@ op read "op://test/secman/SECMAN_ADMIN_NAME"
 
 | Script | Secrets Required |
 |---|---|
-| `scripts/backend` | All from `secman.env` |
-| `scripts/startbackenddev.sh` | `DB_CONNECT`, `SECMAN_BACKEND_BASE_URL` (via `op run`) |
-| `scripts/startfrontenddev.sh` | `SECMAN_BACKEND_BASE_URL`, `SECMAN_HOST` (via `op run`) |
-| `scripts/secmancli` | CrowdStrike, admin creds, AWS, API key, host |
-| `scripts/secmanng` | Admin creds, host, SSL setting |
-| `scripts/secmanserverca` | All from `secman.env` |
-| `scripts/import.sh` | All from `secman.env` |
+| `scriptpp/backend` | All from `secman.env` |
+| `scriptpp/startbackenddev.sh` | `DB_CONNECT`, `SECMAN_BACKEND_BASE_URL` (via `op run`) |
+| `scriptpp/startfrontenddev.sh` | `SECMAN_BACKEND_BASE_URL`, `SECMAN_HOST` (via `op run`) |
+| `scriptpp/secmancli` | CrowdStrike, admin creds, AWS, API key, host |
+| `scriptpp/secmanng` | Admin creds, host, SSL setting |
+| `scriptpp/secmanserverca` | All from `secman.env` |
+| `scriptpp/import.sh` | All from `secman.env` |
 | `tests/e2e/run-e2e.sh` | Admin + user creds |
 | `tests/js-error-scanner.sh` | Admin creds, host, SSL setting |
 | `tests/mcp-e2e-workgroup-test.sh` | Admin creds, API key, test domain |
@@ -148,7 +150,7 @@ op read "op://test/secman/SECMAN_ADMIN_NAME"
 | `tests/bulk-user-mapping-test.sh` | Admin creds |
 | `tests/s3-user-mapping-import-e2e-test.sh` | S3 config (secman-s3 vault), admin email |
 | `tests/s3-list-bucket-e2e-test.sh` | S3 config (secman-s3 vault) |
-| `scripts/release-e2e-test.sh` | Admin creds, API key |
+| `scriptpp/release-e2e-test.sh` | Admin creds, API key |
 
 ## Troubleshooting
 

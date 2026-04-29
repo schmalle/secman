@@ -63,7 +63,7 @@ End-to-end vulnerability exception workflow test orchestrator. Starts the full s
 1. Start backend (`./scriptpp/startbackenddev.sh`)
 2. Start frontend (`./scriptpp/startfrontenddev.sh`)
 3. Wait for health checks (backend: `localhost:8080`, frontend: `localhost:4321`)
-4. Run E2E test script (`scripts/test/test-e2e-exception-workflowsupport.sh`)
+4. Run E2E test script (`scriptpp/test/test-e2e-exception-workflowsupport.sh`)
 5. If failures: classify error, apply fix, restart services if needed, re-run
 6. Repeat up to `maxRetries` (default: 5) or until green
 
@@ -471,4 +471,4 @@ The E2E runner uses the following scripts:
 
 | Script | Purpose |
 |--------|---------|
-| `scripts/e2e-test.sh` | Main E2E test execution script |
+| `scriptpp/e2e-test.sh` | Main E2E test execution script |

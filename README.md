@@ -202,7 +202,7 @@ git clone https://github.com/schmalle/secman.git
 cd secman
 
 # Create database
-cd scripts/install/db
+cd scriptpp/install/db
 ./installdb.sh
 cd ../../..
 
@@ -266,7 +266,7 @@ secman/
 │   ├── TROUBLESHOOTING.md  # Troubleshooting
 │   ├── S3_USER_MAPPING_IMPORT.md # S3 import guide
 │   └── SKILLS_AND_AGENTS.md # Skills & agents reference
-├── scripts/                # Utility scripts
+├── scriptpp/               # Utility scripts
 └── specs/                  # Feature specifications
 ```
 
@@ -509,7 +509,7 @@ Comprehensive documentation is available in the `docs/` directory:
 | [Skills & Agents](docs/SKILLS_AND_AGENTS.md)          | Claude Code skills and agent reference         |
 | [S3 User Mapping Import](docs/S3_USER_MAPPING_IMPORT.md) | S3-based user mapping imports               |
 | [E2E Exception Workflow](docs/E2E_EXCEPTION_WORKFLOW_TEST.md) | End-to-end exception workflow test      |
-| [1Password Credentials](docs/1PASSWORD.md)            | Secret management with 1Password CLI           |
+| [Secret Management](docs/1PASSWORD.md)                | Secret management (pass-cli / 1Password)       |
 | [Docker Deployment](docker/README.md)                 | Docker container deployment                    |
 
 ## Contributing

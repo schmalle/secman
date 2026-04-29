@@ -1,6 +1,6 @@
 # Secman Architecture
 
-**Last Updated:** 2026-04-23
+**Last Updated:** 2026-04-29
 
 This document describes the system architecture, data model, and design patterns used in Secman.
 
@@ -347,6 +347,7 @@ Users can access an asset if **ANY** of the following is true:
 6. **AD Domain Mapping**: Asset's `adDomain` matches user's domain mappings (case-insensitive)
 7. **AWS Account Sharing**: Asset's `cloudAccountId` matches shared AWS accounts via `AwsAccountSharing` (directional, non-transitive)
 8. **Owner Match**: Asset's `owner` matches user's username
+9. **Workgroup AWS Account**: Asset's `cloudAccountId` matches an AWS account assigned to a workgroup the user belongs to (via `WorkgroupAwsAccount`, direct membership only — no hierarchy propagation)
 
 ```kotlin
 // Access check in service layer (AssetFilterService)
@@ -357,7 +358,9 @@ fun canUserAccessAsset(user: User, asset: Asset): Boolean {
            asset.scanUploader?.id == user.id ||
            awsAccountMatches(asset, user) ||
            adDomainMatches(asset, user) ||
-           sharedAwsAccountMatches(asset, user)
+           sharedAwsAccountMatches(asset, user) ||
+           ownerMatches(asset, user) ||
+           workgroupAwsAccountMatches(asset, user)
 }
 ```
 
@@ -584,7 +587,7 @@ secman/
 │   ├── SKILLS_AND_AGENTS.md          # Skills & agents reference
 │   └── 1PASSWORD.md                  # Secret management with 1Password CLI
 │
-├── scripts/                          # Utility scripts
+├── scriptpp/                         # Utility scripts
 ├── specs/                            # Feature specifications
 └── build.gradle.kts                  # Root build file
 ```

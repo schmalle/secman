@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-Core code sits in `src/`: `backendng/` holds the Micronaut service (`src/main/kotlin`, `src/main/resources`), `shared/` exposes reusable clients, and `cli/` ships terminal tooling. The Astro + React UI lives in `src/frontend/` (pages in `src/pages/`, components in `src/components/`, specs in `tests/`). Root-level `tests/`, `docker/`, `docs/`, and `scripts/`cover integration flows, container manifests, and setup aids. Additional shared code can be found in`src/shared/`, which is needed for both cli and backend development.
+Core code sits in `src/`: `backendng/` holds the Micronaut service (`src/main/kotlin`, `src/main/resources`), `shared/` exposes reusable clients, and `cli/` ships terminal tooling. The Astro + React UI lives in `src/frontend/` (pages in `src/pages/`, components in `src/components/`, specs in `tests/`). Root-level `tests/`, `docker/`, `docs/`, and `scriptpp/` cover integration flows, container manifests, and setup aids. Additional shared code can be found in`src/shared/`, which is needed for both cli and backend development.
 
 ## Build, Test, and Development Commands
 
