@@ -25,4 +25,6 @@ interface WorkgroupAwsAccountRepository : JpaRepository<WorkgroupAwsAccount, Lon
     ): Boolean
 
     fun deleteByWorkgroupId(workgroupId: Long): Long
+
+    fun countByWorkgroupId(workgroupId: Long): Long
 }
