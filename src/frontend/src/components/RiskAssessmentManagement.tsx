@@ -11,10 +11,27 @@ interface Asset {
 }
 
 interface User {
-  id: number;
+  id: number | null;
   username: string;
   email: string;
+  isPending?: boolean;
 }
+
+type UserRef = { id?: number; email?: string };
+
+const decodeRef = (raw: string): UserRef | undefined => {
+  if (raw.startsWith('id:')) {
+    const n = Number(raw.slice(3));
+    if (!Number.isFinite(n)) return undefined;
+    return { id: n };
+  }
+  if (raw.startsWith('email:')) {
+    const email = raw.slice(6).trim();
+    if (!email) return undefined;
+    return { email };
+  }
+  return undefined;
+};
 
 interface UseCase {
   id: number;
@@ -76,6 +93,8 @@ const RiskAssessmentManagement: React.FC = () => {
   const [showAssessmentModal, setShowAssessmentModal] = useState(false);
   const [assessmentModalMode, setAssessmentModalMode] = useState<'perform' | 'review'>('perform');
   const [selectedAssessmentId, setSelectedAssessmentId] = useState<number | null>(null);
+  const [assessorRefValue, setAssessorRefValue] = useState<string>('');
+  const [respondentRefValue, setRespondentRefValue] = useState<string>('');
   const [formData, setFormData] = useState<RiskAssessment>({
     assessmentBasisType: 'DEMAND',
     assessmentBasisId: 0,
@@ -163,7 +182,7 @@ const RiskAssessmentManagement: React.FC = () => {
 
   const fetchUsers = async () => {
     try {
-      const response = await authenticatedGet('/api/users');
+      const response = await authenticatedGet('/api/users?includePending=true');
       if (response.ok) {
         const data = await response.json();
         setUsers(data);
@@ -213,13 +232,23 @@ const RiskAssessmentManagement: React.FC = () => {
     
     try {
       // Prepare data for unified API
+      const assessorRef = decodeRef(assessorRefValue);
+      const respondentRef = respondentRefValue ? decodeRef(respondentRefValue) : undefined;
+
+      if (!assessorRef) {
+        setError('Please select an assessor');
+        return;
+      }
+
       const dataToSubmit: any = {
-        assessorId: formData.assessorId,
+        assessorRef,
         endDate: formData.endDate,
-        respondentId: formData.respondentId,
         notes: formData.notes,
         useCaseIds: formData.useCaseIds
       };
+      if (respondentRef) {
+        dataToSubmit.respondentRef = respondentRef;
+      }
       
       // Set basis-specific fields
       if (formData.assessmentBasisType === 'DEMAND') {
@@ -261,10 +290,14 @@ const RiskAssessmentManagement: React.FC = () => {
       status: assessment.status,
       assessorId: assessment.assessor?.id || assessment.assessorId,
       requestorId: assessment.requestor?.id || assessment.requestorId,
-      respondentId: assessment.respondent?.id,
+      respondentId: assessment.respondent?.id ?? undefined,  // null → undefined for type compat
       notes: assessment.notes || '',
       useCaseIds: assessment.useCases?.map(uc => uc.id) || []
     });
+    const assessorIdForEdit = assessment.assessor?.id ?? assessment.assessorId;
+    setAssessorRefValue(assessorIdForEdit ? `id:${assessorIdForEdit}` : '');
+    const respondentIdForEdit = assessment.respondent?.id ?? assessment.respondentId;
+    setRespondentRefValue(respondentIdForEdit ? `id:${respondentIdForEdit}` : '');
     setShowForm(true);
   };
 
@@ -356,6 +389,8 @@ const RiskAssessmentManagement: React.FC = () => {
       notes: '',
       useCaseIds: []
     });
+    setAssessorRefValue('');
+    setRespondentRefValue('');
     setEditingAssessment(null);
     setShowForm(false);
   };
@@ -545,37 +580,43 @@ const RiskAssessmentManagement: React.FC = () => {
                   )}
 
                   <div className="mb-3">
-                    <label htmlFor="assessorId" className="form-label">Assessor *</label>
+                    <label htmlFor="assessorRef" className="form-label">Assessor *</label>
                     <select
                       className="form-control"
-                      id="assessorId"
-                      name="assessorId"
-                      value={formData.assessorId}
-                      onChange={handleInputChange}
+                      id="assessorRef"
+                      name="assessorRef"
+                      value={assessorRefValue}
+                      onChange={(e) => setAssessorRefValue(e.target.value)}
                       required
                     >
-                      <option value={0}>Select Assessor</option>
+                      <option value="">Select Assessor</option>
                       {users.map((user) => (
-                        <option key={user.id} value={user.id}>
-                          {user.username} ({user.email})
+                        <option
+                          key={user.id ?? `pending:${user.email}`}
+                          value={user.id != null ? `id:${user.id}` : `email:${user.email}`}
+                        >
+                          {user.username} ({user.email}){user.isPending ? ' [pending]' : ''}
                         </option>
                       ))}
                     </select>
                   </div>
 
                   <div className="mb-3">
-                    <label htmlFor="respondentId" className="form-label">Respondent (Addressed Person)</label>
+                    <label htmlFor="respondentRef" className="form-label">Respondent (Addressed Person)</label>
                     <select
                       className="form-control"
-                      id="respondentId"
-                      name="respondentId"
-                      value={formData.respondentId || ''}
-                      onChange={handleInputChange}
+                      id="respondentRef"
+                      name="respondentRef"
+                      value={respondentRefValue}
+                      onChange={(e) => setRespondentRefValue(e.target.value)}
                     >
                       <option value="">Select Respondent (Optional)</option>
                       {users.map((user) => (
-                        <option key={user.id} value={user.id}>
-                          {user.username} ({user.email})
+                        <option
+                          key={user.id ?? `pending:${user.email}`}
+                          value={user.id != null ? `id:${user.id}` : `email:${user.email}`}
+                        >
+                          {user.username} ({user.email}){user.isPending ? ' [pending]' : ''}
                         </option>
                       ))}
                     </select>
