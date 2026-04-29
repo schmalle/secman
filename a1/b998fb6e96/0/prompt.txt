@@ -1,0 +1,5 @@
+[Image #1] whenever users can be selected in secman, always also take the pending users into account, which are stored in the AWS mapping. Ensure this requirement is valid everywhere in secman
+
+---
+
+go for option a and add ?includePending=true to /api/users
