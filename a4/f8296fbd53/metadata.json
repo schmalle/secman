@@ -3,7 +3,7 @@
   "checkpoint_id": "a4f8296fbd53",
   "strategy": "manual-commit",
   "branch": "main",
-  "checkpoints_count": 1,
+  "checkpoints_count": 2,
   "files_touched": [
     "src/backendng/src/main/kotlin/com/secman/service/VulnerabilityService.kt"
   ],
@@ -13,13 +13,19 @@
       "transcript": "/a4/f8296fbd53/0/full.jsonl",
       "content_hash": "/a4/f8296fbd53/0/content_hash.txt",
       "prompt": "/a4/f8296fbd53/0/prompt.txt"
+    },
+    {
+      "metadata": "/a4/f8296fbd53/1/metadata.json",
+      "transcript": "/a4/f8296fbd53/1/full.jsonl",
+      "content_hash": "/a4/f8296fbd53/1/content_hash.txt",
+      "prompt": "/a4/f8296fbd53/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 7,
-    "cache_creation_tokens": 31749,
-    "cache_read_tokens": 74160,
-    "output_tokens": 528,
-    "api_call_count": 2
+    "input_tokens": 36,
+    "cache_creation_tokens": 177264,
+    "cache_read_tokens": 1900796,
+    "output_tokens": 31519,
+    "api_call_count": 21
   }
 }
