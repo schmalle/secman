@@ -7,3 +7,7 @@ go for option a and add ?includePending=true to /api/users
 ---
 
 this section look right
+
+---
+
+proceed to writing-plans to draft the implementation plan
