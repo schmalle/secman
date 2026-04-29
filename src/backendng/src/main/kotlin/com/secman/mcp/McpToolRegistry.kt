@@ -82,7 +82,11 @@ class McpToolRegistry(
     @Inject private val updateAssetTool: UpdateAssetTool,
     // Feature 086: MCP Heatmap Tools
     @Inject private val getVulnerabilityHeatmapTool: GetVulnerabilityHeatmapTool,
-    @Inject private val refreshVulnerabilityHeatmapTool: RefreshVulnerabilityHeatmapTool
+    @Inject private val refreshVulnerabilityHeatmapTool: RefreshVulnerabilityHeatmapTool,
+    // Feature: Workgroup AWS Account Assignment
+    @Inject private val listWorkgroupAwsAccountsTool: ListWorkgroupAwsAccountsTool,
+    @Inject private val addWorkgroupAwsAccountTool: AddWorkgroupAwsAccountTool,
+    @Inject private val removeWorkgroupAwsAccountTool: RemoveWorkgroupAwsAccountTool
 ) {
     private val logger = LoggerFactory.getLogger(McpToolRegistry::class.java)
 
@@ -161,7 +165,11 @@ class McpToolRegistry(
             updateAssetTool,
             // Feature 086: MCP Heatmap Tools
             getVulnerabilityHeatmapTool,
-            refreshVulnerabilityHeatmapTool
+            refreshVulnerabilityHeatmapTool,
+            // Feature: Workgroup AWS Account Assignment
+            listWorkgroupAwsAccountsTool,
+            addWorkgroupAwsAccountTool,
+            removeWorkgroupAwsAccountTool
         ).forEach { tool ->
             toolMap[tool.name] = tool
             logger.debug("Registered MCP tool: {}", tool.name)
@@ -407,6 +415,11 @@ class McpToolRegistry(
             }
             "refresh_vulnerability_heatmap" -> {
                 permissions.contains(McpPermission.VULNERABILITIES_READ) // ADMIN role checked in tool execute()
+            }
+
+            // Feature: Workgroup AWS Account Assignment (ADMIN only via User Delegation)
+            "list_workgroup_aws_accounts", "add_workgroup_aws_account", "remove_workgroup_aws_account" -> {
+                permissions.contains(McpPermission.WORKGROUPS_WRITE) // ADMIN role checked in tool execute()
             }
 
             else -> false
