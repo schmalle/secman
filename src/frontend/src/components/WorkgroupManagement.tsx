@@ -19,10 +19,13 @@ interface Workgroup {
 }
 
 interface User {
-  id: number;
+  id: number | null;
   username: string;
   email: string;
+  isPending?: boolean;
 }
+
+type UserRef = { id?: number; email: string };
 
 interface Asset {
   id: number;
@@ -46,7 +49,7 @@ const WorkgroupManagement: React.FC = () => {
   const [showAssignUsers, setShowAssignUsers] = useState(false);
   const [showAssignAssets, setShowAssignAssets] = useState(false);
   const [selectedWorkgroup, setSelectedWorkgroup] = useState<Workgroup | null>(null);
-  const [selectedUserIds, setSelectedUserIds] = useState<number[]>([]);
+  const [selectedUserRefs, setSelectedUserRefs] = useState<UserRef[]>([]);
   const [selectedAssetIds, setSelectedAssetIds] = useState<number[]>([]);
   const [assetSearchTerm, setAssetSearchTerm] = useState<string>('');
   const [accountsModalState, setAccountsModalState] = useState<{
@@ -79,7 +82,7 @@ const WorkgroupManagement: React.FC = () => {
 
   const fetchUsers = async () => {
     try {
-      const response = await authenticatedGet('/api/users');
+      const response = await authenticatedGet('/api/users?includePending=true');
       if (response.ok) {
         const data = await response.json();
         setUsers(data);
@@ -159,7 +162,7 @@ const WorkgroupManagement: React.FC = () => {
 
   const handleAssignUsers = (workgroup: Workgroup) => {
     setSelectedWorkgroup(workgroup);
-    setSelectedUserIds([]);
+    setSelectedUserRefs([]);
     setShowAssignUsers(true);
   };
 
@@ -206,14 +209,14 @@ const WorkgroupManagement: React.FC = () => {
   const filteredAssets = filterAssets(assetSearchTerm);
 
   const submitAssignUsers = async () => {
-    if (!selectedWorkgroup || selectedUserIds.length === 0) {
+    if (!selectedWorkgroup || selectedUserRefs.length === 0) {
       setError('Please select at least one user');
       return;
     }
 
     try {
       const response = await authenticatedPost(`/api/workgroups/${selectedWorkgroup.id}/users`, {
-        userIds: selectedUserIds
+        userRefs: selectedUserRefs
       });
 
       if (!response.ok) {
@@ -224,7 +227,7 @@ const WorkgroupManagement: React.FC = () => {
       await fetchWorkgroups();
       setShowAssignUsers(false);
       setSelectedWorkgroup(null);
-      setSelectedUserIds([]);
+      setSelectedUserRefs([]);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -257,10 +260,18 @@ const WorkgroupManagement: React.FC = () => {
     }
   };
 
-  const toggleUserSelection = (userId: number) => {
-    setSelectedUserIds(prev =>
-      prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]
-    );
+  const toggleUserSelection = (user: User) => {
+    setSelectedUserRefs(prev => {
+      const matches = (r: UserRef) =>
+        (user.id != null && r.id === user.id) ||
+        (user.id == null && r.email.toLowerCase() === user.email.toLowerCase());
+      if (prev.some(matches)) {
+        return prev.filter(r => !matches(r));
+      }
+      return user.id != null
+        ? [...prev, { id: user.id, email: user.email }]
+        : [...prev, { email: user.email }];
+    });
   };
 
   const toggleAssetSelection = (assetId: number) => {
@@ -420,19 +431,33 @@ const WorkgroupManagement: React.FC = () => {
               <div className="modal-body">
                 <p className="text-muted">Select users to assign to this workgroup:</p>
                 <div className="list-group" style={{ maxHeight: '400px', overflowY: 'auto' }}>
-                  {users.map(user => (
-                    <label key={user.id} className="list-group-item list-group-item-action">
-                      <input
-                        type="checkbox"
-                        className="form-check-input me-2"
-                        checked={selectedUserIds.includes(user.id)}
-                        onChange={() => toggleUserSelection(user.id)}
-                      />
-                      <strong>{user.username}</strong> ({user.email})
-                    </label>
-                  ))}
+                  {users.map(user => {
+                    const checked = selectedUserRefs.some(r =>
+                      (user.id != null && r.id === user.id) ||
+                      (user.id == null && r.email.toLowerCase() === user.email.toLowerCase())
+                    );
+                    return (
+                      <label key={user.id ?? `pending:${user.email}`} className="list-group-item list-group-item-action">
+                        <input
+                          type="checkbox"
+                          className="form-check-input me-2"
+                          checked={checked}
+                          onChange={() => toggleUserSelection(user)}
+                        />
+                        <strong>{user.username}</strong> ({user.email})
+                        {user.isPending && (
+                          <span
+                            className="badge bg-warning text-dark ms-2"
+                            title="This email is known via AWS / domain mapping but has never logged in. Selecting it will create an account placeholder."
+                          >
+                            pending
+                          </span>
+                        )}
+                      </label>
+                    );
+                  })}
                 </div>
-                <p className="mt-3 text-muted">{selectedUserIds.length} user(s) selected</p>
+                <p className="mt-3 text-muted">{selectedUserRefs.length} user(s) selected</p>
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setShowAssignUsers(false)}>
