@@ -74,6 +74,11 @@ interface AssetRepository : JpaRepository<Asset, Long> {
                     JOIN user_mapping um2 ON um2.email = u_source.email AND um2.aws_account_id IS NOT NULL
                     WHERE acs.target_user_id = :userId
                 )
+                OR a.cloud_account_id IN (
+                    SELECT waa.aws_account_id FROM workgroup_aws_account waa
+                    JOIN user_workgroups uw ON uw.workgroup_id = waa.workgroup_id
+                    WHERE uw.user_id = :userId
+                )
                 OR a.owner = :username
             ORDER BY a.name ASC
         """,
