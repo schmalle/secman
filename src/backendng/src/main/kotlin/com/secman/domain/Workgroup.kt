@@ -110,6 +110,22 @@ data class Workgroup(
     @ManyToMany(mappedBy = "workgroups", fetch = FetchType.LAZY)
     var assets: MutableSet<Asset> = mutableSetOf(),
 
+    /**
+     * AWS accounts assigned to this workgroup (Spec: workgroup-aws-account-assignment).
+     * Direct membership grants asset visibility via access rule #9 — assets whose
+     * cloudAccountId matches any awsAccountId in this set become visible to all
+     * workgroup members. Hibernate cascade-removes child rows when the workgroup
+     * is deleted.
+     */
+    @JsonIgnore
+    @OneToMany(
+        mappedBy = "workgroup",
+        cascade = [CascadeType.ALL],
+        orphanRemoval = true,
+        fetch = FetchType.LAZY
+    )
+    var awsAccounts: MutableSet<WorkgroupAwsAccount> = mutableSetOf(),
+
     @Column(name = "created_at", updatable = false)
     var createdAt: Instant? = null,
 
