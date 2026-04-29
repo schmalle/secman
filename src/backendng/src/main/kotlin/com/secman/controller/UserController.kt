@@ -30,7 +30,8 @@ open class UserController(
     private val workgroupRepository: com.secman.repository.WorkgroupRepository,
     private val userMappingService: UserMappingService,
     private val adminNotificationService: com.secman.service.AdminNotificationService,
-    private val userService: com.secman.service.UserService
+    private val userService: com.secman.service.UserService,
+    private val userMappingRepository: com.secman.repository.UserMappingRepository
 ) {
 
     private val passwordEncoder = BCryptPasswordEncoder()
@@ -57,7 +58,7 @@ open class UserController(
 
     @Serdeable
     data class UserResponse(
-        val id: Long,
+        val id: Long?,
         val username: String,
         val email: String,
         val roles: List<String>,
@@ -66,7 +67,8 @@ open class UserController(
         val updatedAt: String?,
         val lastLogin: String?,
         val workgroups: List<WorkgroupSummary>? = null,
-        val workgroupCount: Int? = null
+        val workgroupCount: Int? = null,
+        val isPending: Boolean = false
     ) {
         companion object {
             fun from(user: User, includeWorkgroups: Boolean = false): UserResponse {
@@ -82,7 +84,25 @@ open class UserController(
                     workgroups = if (includeWorkgroups) {
                         user.workgroups.map { WorkgroupSummary(it.id!!, it.name) }
                     } else null,
-                    workgroupCount = if (includeWorkgroups) user.workgroups.size else null
+                    workgroupCount = if (includeWorkgroups) user.workgroups.size else null,
+                    isPending = false
+                )
+            }
+
+            fun pending(email: String): UserResponse {
+                val username = email.substringBefore("@").ifBlank { email }
+                return UserResponse(
+                    id = null,
+                    username = username,
+                    email = email,
+                    roles = emptyList(),
+                    mfaEnabled = false,
+                    createdAt = null,
+                    updatedAt = null,
+                    lastLogin = null,
+                    workgroups = null,
+                    workgroupCount = null,
+                    isPending = true
                 )
             }
         }
@@ -102,13 +122,37 @@ open class UserController(
      * FR-010: Display user workgroup membership in admin views
      */
     @Get
-    fun list(@QueryValue(defaultValue = "false") includeWorkgroups: Boolean): HttpResponse<List<UserResponse>> {
-        val users = if (includeWorkgroups) {
+    fun list(
+        @QueryValue(defaultValue = "false") includeWorkgroups: Boolean,
+        @QueryValue(defaultValue = "false") includePending: Boolean
+    ): HttpResponse<List<UserResponse>> {
+        val activeUsers = if (includeWorkgroups) {
             userRepository.findAllWithWorkgroups().map { UserResponse.from(it, true) }
         } else {
             userRepository.findAll().map { UserResponse.from(it, false) }
         }
-        return HttpResponse.ok(users)
+
+        if (!includePending) {
+            return HttpResponse.ok(activeUsers)
+        }
+
+        val activeEmails = activeUsers
+            .map { it.email.lowercase().trim() }
+            .filter { it.isNotEmpty() }
+            .toHashSet()
+
+        val pendingEntries = userMappingRepository
+            .findByStatus(com.secman.domain.MappingStatus.PENDING)
+            .asSequence()
+            .map { it.email.trim() }
+            .filter { it.isNotEmpty() && it.contains("@") }
+            .distinctBy { it.lowercase() }
+            .filter { it.lowercase() !in activeEmails }
+            .map { UserResponse.pending(it) }
+            .toList()
+
+        val combined = (activeUsers + pendingEntries).sortedBy { it.email.lowercase() }
+        return HttpResponse.ok(combined)
     }
 
     /**
