@@ -3,6 +3,7 @@ package com.secman.controller
 import com.secman.domain.*
 import com.secman.event.RiskAssessmentCreatedEvent
 import com.secman.repository.*
+import com.secman.service.UserResolutionService
 import io.micronaut.context.event.ApplicationEventPublisher
 import io.micronaut.core.annotation.Nullable
 import io.micronaut.http.HttpResponse
@@ -45,14 +46,15 @@ open class RiskAssessmentController(
     private val responseRepository: ResponseRepository,
     private val requirementRepository: RequirementRepository,
     private val entityManager: EntityManager,
-    private val eventPublisher: ApplicationEventPublisher<RiskAssessmentCreatedEvent>
+    private val eventPublisher: ApplicationEventPublisher<RiskAssessmentCreatedEvent>,
+    private val userResolutionService: UserResolutionService
 ) {
 
     private val log = LoggerFactory.getLogger(RiskAssessmentController::class.java)
 
     @Serdeable
     data class CreateRiskAssessmentRequest(
-        @NotNull val assessorId: Long,
+        @Nullable val assessorId: Long? = null,
         @NotNull val endDate: LocalDate,
         @Nullable val startDate: LocalDate? = null,
         @Nullable val respondentId: Long? = null,
@@ -60,12 +62,15 @@ open class RiskAssessmentController(
         @Nullable val useCaseIds: List<Long>? = null,
         // New unified approach - either demandId or assetId must be provided
         @Nullable val demandId: Long? = null,
-        @Nullable val assetId: Long? = null
+        @Nullable val assetId: Long? = null,
+        @Nullable val assessorRef: UserResolutionService.UserRef? = null,
+        @Nullable val respondentRef: UserResolutionService.UserRef? = null
     ) {
         fun validate(): String? {
             return when {
                 demandId != null && assetId != null -> "Only one of demandId or assetId should be provided"
                 demandId == null && assetId == null -> "Either demandId or assetId must be provided"
+                assessorId == null && assessorRef == null -> "Either assessorId or assessorRef must be provided"
                 else -> null
             }
         }
@@ -84,24 +89,28 @@ open class RiskAssessmentController(
     @Deprecated("Use CreateRiskAssessmentRequest instead")
     data class CreateRiskAssessmentRequestDemand(
         @NotNull val demandId: Long,
-        @NotNull val assessorId: Long,
+        @Nullable val assessorId: Long? = null,
         @NotNull val endDate: LocalDate,
         @Nullable val startDate: LocalDate? = null,
         @Nullable val respondentId: Long? = null,
         @Nullable val notes: String? = null,
-        @Nullable val useCaseIds: List<Long>? = null
+        @Nullable val useCaseIds: List<Long>? = null,
+        @Nullable val assessorRef: UserResolutionService.UserRef? = null,
+        @Nullable val respondentRef: UserResolutionService.UserRef? = null
     )
 
     @Serdeable
     @Deprecated("Use CreateRiskAssessmentRequest instead")
     data class CreateRiskAssessmentRequestAsset(
         @NotNull val assetId: Long,
-        @NotNull val assessorId: Long,
+        @Nullable val assessorId: Long? = null,
         @NotNull val endDate: LocalDate,
         @Nullable val startDate: LocalDate? = null,
         @Nullable val respondentId: Long? = null,
         @Nullable val notes: String? = null,
-        @Nullable val useCaseIds: List<Long>? = null
+        @Nullable val useCaseIds: List<Long>? = null,
+        @Nullable val assessorRef: UserResolutionService.UserRef? = null,
+        @Nullable val respondentRef: UserResolutionService.UserRef? = null
     )
 
     @Serdeable
@@ -110,7 +119,8 @@ open class RiskAssessmentController(
         @Nullable val respondentId: Long? = null,
         @Nullable val notes: String? = null,
         @Nullable val status: String? = null,
-        @Nullable val useCaseIds: List<Long>? = null
+        @Nullable val useCaseIds: List<Long>? = null,
+        @Nullable val respondentRef: UserResolutionService.UserRef? = null
     )
 
     @Serdeable
@@ -314,31 +324,61 @@ open class RiskAssessmentController(
             val basisId = request.getBasisId()
             
             log.debug("Creating risk assessment with basis type: {} and ID: {}", basisType, basisId)
-            
-            // Validate assessor exists
-            val assessor = userRepository.findById(request.assessorId).orElse(null)
-                ?: return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", "Assessor not found"))
-            
-            // Get requestor from current session (would need security context in real implementation)
-            // For now, assuming assessor is also requestor
-            val requestor = assessor
-            
-            // Validate respondent if provided
-            val respondent = request.respondentId?.let { respondentId ->
-                userRepository.findById(respondentId).orElse(null)
-                    ?: return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", "Respondent not found"))
-            }
-            
-            // Create risk assessment based on basis type
-            val riskAssessment = when (basisType) {
+
+            // 1. PRE-VALIDATE BASIS first so a missing basis doesn't orphan a lazy-created User row
+            val resolvedBasis: Any = when (basisType) {
                 AssessmentBasisType.DEMAND -> {
                     val demand = demandRepository.findById(basisId).orElse(null)
                         ?: return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", "Demand not found"))
-
                     if (demand.status != DemandStatus.APPROVED) {
                         return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR",
                             "Only approved demands can have risk assessments created"))
                     }
+                    demand
+                }
+                AssessmentBasisType.ASSET -> {
+                    assetRepository.findById(basisId).orElse(null)
+                        ?: return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", "Asset not found"))
+                }
+            }
+
+            // 2. Resolve assessor (basis is known to exist — no orphan risk)
+            val assessor = try {
+                userResolutionService.resolveByIdOrEmail(
+                    userId = request.assessorRef?.id ?: request.assessorId,
+                    email = request.assessorRef?.email,
+                    context = "risk assessment assessor"
+                )
+            } catch (e: NoSuchElementException) {
+                return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", "Assessor not found"))
+            } catch (e: IllegalArgumentException) {
+                return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", e.message ?: "Invalid assessor"))
+            }
+
+            // Get requestor from current session (would need security context in real implementation)
+            // For now, assuming assessor is also requestor
+            val requestor = assessor
+
+            // 3. Resolve respondent if provided
+            val respondent: User? = if (request.respondentRef != null || request.respondentId != null) {
+                try {
+                    userResolutionService.resolveByIdOrEmail(
+                        userId = request.respondentRef?.id ?: request.respondentId,
+                        email = request.respondentRef?.email,
+                        context = "risk assessment respondent"
+                    )
+                } catch (e: NoSuchElementException) {
+                    return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", "Respondent not found"))
+                } catch (e: IllegalArgumentException) {
+                    return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", e.message ?: "Invalid respondent"))
+                }
+            } else null
+
+            // 4. Build risk assessment from pre-validated basis
+            val riskAssessment = when (basisType) {
+                AssessmentBasisType.DEMAND -> {
+                    @Suppress("UNCHECKED_CAST")
+                    val demand = resolvedBasis as com.secman.domain.Demand
 
                     // Create demand-based risk assessment with proper fields
                     val assessment = RiskAssessment(
@@ -358,8 +398,8 @@ open class RiskAssessmentController(
                     assessment
                 }
                 AssessmentBasisType.ASSET -> {
-                    val asset = assetRepository.findById(basisId).orElse(null)
-                        ?: return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", "Asset not found"))
+                    @Suppress("UNCHECKED_CAST")
+                    val asset = resolvedBasis as com.secman.domain.Asset
 
                     // Create asset-based risk assessment with proper fields
                     RiskAssessment(
@@ -448,10 +488,19 @@ open class RiskAssessmentController(
             request.notes?.let { assessment.notes = it.trim().takeIf { it.isNotBlank() } }
             request.status?.let { assessment.status = it }
             
-            // Update respondent if provided
-            request.respondentId?.let { respondentId ->
-                val respondent = userRepository.findById(respondentId).orElse(null)
-                    ?: return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", "Respondent not found"))
+            // Update respondent if provided (assessment already pre-validated above)
+            if (request.respondentRef != null || request.respondentId != null) {
+                val respondent = try {
+                    userResolutionService.resolveByIdOrEmail(
+                        userId = request.respondentRef?.id ?: request.respondentId,
+                        email = request.respondentRef?.email,
+                        context = "risk assessment respondent"
+                    )
+                } catch (e: NoSuchElementException) {
+                    return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", "Respondent not found"))
+                } catch (e: IllegalArgumentException) {
+                    return HttpResponse.badRequest(ErrorResponse("VALIDATION_ERROR", e.message ?: "Invalid respondent"))
+                }
                 assessment.respondent = respondent
             }
             
@@ -618,7 +667,9 @@ open class RiskAssessmentController(
             notes = request.notes,
             useCaseIds = request.useCaseIds,
             demandId = request.demandId,
-            assetId = null
+            assetId = null,
+            assessorRef = request.assessorRef,
+            respondentRef = request.respondentRef
         ))
     }
 
@@ -637,7 +688,9 @@ open class RiskAssessmentController(
             notes = request.notes,
             useCaseIds = request.useCaseIds,
             demandId = null,
-            assetId = request.assetId
+            assetId = request.assetId,
+            assessorRef = request.assessorRef,
+            respondentRef = request.respondentRef
         ))
     }
 
