@@ -469,8 +469,11 @@ open class RiskAssessmentController(
             log.info("Created risk assessment with id: {} for {} basis: {}", savedAssessment.id, basisType, basisId)
             HttpResponse.status<RiskAssessment>(HttpStatus.CREATED).body(savedAssessment)
         } catch (e: Exception) {
+            // Rethrow so the @Transactional interceptor rolls back. Without this,
+            // a swallow + normal return would commit any User row already lazy-created
+            // by userResolutionService earlier in this method.
             log.error("Error creating risk assessment", e)
-            HttpResponse.serverError<Any>()
+            throw e
         }
     }
 
@@ -532,8 +535,11 @@ open class RiskAssessmentController(
             log.info("Updated risk assessment with id: {}", id)
             HttpResponse.ok(updatedAssessment)
         } catch (e: Exception) {
+            // Rethrow so the @Transactional interceptor rolls back. Without this,
+            // a swallow + normal return would commit any User row already lazy-created
+            // by userResolutionService earlier in this method.
             log.error("Error updating risk assessment with id: {}", id, e)
-            HttpResponse.serverError<Any>()
+            throw e
         }
     }
 
