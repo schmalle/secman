@@ -70,16 +70,16 @@ class AddWorkgroupAwsAccountTool(
         val awsAccountId = arguments["awsAccountId"] as? String
             ?: return McpToolResult.error("VALIDATION_ERROR", "awsAccountId is required and must be a string")
 
-        val actorUsername = context.delegatedUserEmail
-            ?: return McpToolResult.error("DELEGATION_REQUIRED", "Delegated user email is required")
+        val actorId = context.delegatedUserId
+            ?: return McpToolResult.error("DELEGATION_REQUIRED", "Delegated user id is required")
 
         try {
-            val saved = workgroupAwsAccountService.add(workgroupId, awsAccountId, actorUsername)
+            val saved = workgroupAwsAccountService.add(workgroupId, awsAccountId, actorId)
             val dto = WorkgroupAwsAccountDto.from(saved)
 
             log.info(
-                "AUDIT: MCP add_workgroup_aws_account: workgroupId={}, awsAccountId={}, actor={}",
-                workgroupId, awsAccountId, actorUsername
+                "AUDIT: MCP add_workgroup_aws_account: workgroupId={}, awsAccountId={}, actorId={}",
+                workgroupId, awsAccountId, actorId
             )
 
             return McpToolResult.success(mapOf(

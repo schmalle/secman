@@ -1,6 +1,7 @@
 package com.secman.controller
 
 import com.secman.dto.WorkgroupAwsAccountDto
+import com.secman.repository.UserRepository
 import com.secman.service.DuplicateAccountException
 import com.secman.service.WorkgroupAwsAccountService
 import io.micronaut.http.HttpResponse
@@ -26,7 +27,8 @@ import org.slf4j.LoggerFactory
 @Controller("/api/workgroups/{workgroupId}/aws-accounts")
 @Secured(SecurityRule.IS_AUTHENTICATED)
 open class WorkgroupAwsAccountController(
-    private val service: WorkgroupAwsAccountService
+    private val service: WorkgroupAwsAccountService,
+    private val userRepository: UserRepository
 ) {
     private val logger = LoggerFactory.getLogger(WorkgroupAwsAccountController::class.java)
 
@@ -48,8 +50,11 @@ open class WorkgroupAwsAccountController(
         @Body @Valid request: AddAwsAccountRequest,
         authentication: Authentication
     ): HttpResponse<*> {
+        val actor = userRepository.findByUsername(authentication.name).orElseThrow {
+            IllegalStateException("Authenticated user not found: ${authentication.name}")
+        }
         return try {
-            val saved = service.add(workgroupId, request.awsAccountId, authentication.name)
+            val saved = service.add(workgroupId, request.awsAccountId, actor.id!!)
             HttpResponse.created(WorkgroupAwsAccountDto.from(saved))
         } catch (e: DuplicateAccountException) {
             HttpResponse.status<Map<String, String>>(io.micronaut.http.HttpStatus.CONFLICT)

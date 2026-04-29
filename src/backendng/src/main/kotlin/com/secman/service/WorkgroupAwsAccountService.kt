@@ -38,12 +38,13 @@ open class WorkgroupAwsAccountService(
     /**
      * Assign an AWS account to a workgroup. Throws on duplicate or invalid input.
      *
+     * @param actorId the database id of the user performing the operation.
      * @throws IllegalArgumentException if the workgroup or actor user is not found,
      *         or if awsAccountId is not exactly 12 numeric digits.
      * @throws DuplicateAccountException if the (workgroup, account) pair already exists.
      */
     @Transactional
-    open fun add(workgroupId: Long, awsAccountId: String, actorUsername: String): WorkgroupAwsAccount {
+    open fun add(workgroupId: Long, awsAccountId: String, actorId: Long): WorkgroupAwsAccount {
         require(accountIdPattern.matches(awsAccountId)) {
             "AWS Account ID must be exactly 12 numeric digits (got '$awsAccountId')"
         }
@@ -51,8 +52,8 @@ open class WorkgroupAwsAccountService(
         val workgroup = workgroupRepository.findById(workgroupId).orElseThrow {
             IllegalArgumentException("Workgroup not found: $workgroupId")
         }
-        val actor: User = userRepository.findByUsername(actorUsername).orElseThrow {
-            IllegalArgumentException("Actor user not found: $actorUsername")
+        val actor: User = userRepository.findById(actorId).orElseThrow {
+            IllegalArgumentException("Actor user not found: $actorId")
         }
 
         if (workgroupAwsAccountRepository.existsByWorkgroupIdAndAwsAccountId(workgroupId, awsAccountId)) {
@@ -69,7 +70,7 @@ open class WorkgroupAwsAccountService(
         val saved = workgroupAwsAccountRepository.save(entity)
         logger.info(
             "Assigned AWS account {} to workgroup {} (actor={}, id={})",
-            awsAccountId, workgroupId, actorUsername, saved.id
+            awsAccountId, workgroupId, actor.username, saved.id
         )
         return saved
     }
