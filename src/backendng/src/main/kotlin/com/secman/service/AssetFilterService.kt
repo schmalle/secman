@@ -10,6 +10,7 @@ import com.secman.repository.ScanRepository
 import com.secman.repository.UserMappingRepository
 import com.secman.repository.UserRepository
 import com.secman.repository.VulnerabilityRepository
+import com.secman.repository.WorkgroupAwsAccountRepository
 import io.micronaut.security.authentication.Authentication
 import jakarta.inject.Singleton
 import org.hibernate.Hibernate
@@ -42,7 +43,8 @@ open class AssetFilterService(
     private val userRepository: UserRepository,
     private val userMappingRepository: UserMappingRepository,
     private val memoryConfig: MemoryOptimizationConfig,
-    private val awsAccountSharingService: AwsAccountSharingService
+    private val awsAccountSharingService: AwsAccountSharingService,
+    private val workgroupAwsAccountRepository: WorkgroupAwsAccountRepository
 ) {
 
     /**
@@ -155,8 +157,18 @@ open class AssetFilterService(
         // Get assets where user is the owner
         val ownerAssets = assetRepository.findByOwner(username)
 
+        // Access rule #9: assets whose cloudAccountId matches an AWS account
+        // assigned to a workgroup the user belongs to (direct membership only).
+        val workgroupAccountIds = workgroupAwsAccountRepository.findDistinctAwsAccountIdsByUserId(userId)
+        val workgroupAccountAssets = if (workgroupAccountIds.isNotEmpty()) {
+            assetRepository.findByCloudAccountIdIn(workgroupAccountIds)
+        } else {
+            emptyList()
+        }
+
         // Combine and deduplicate by asset ID, then sort by name
-        return (workgroupAssets + awsAccountAssets + domainAssets + sharedAwsAccountAssets + ownerAssets)
+        return (workgroupAssets + awsAccountAssets + domainAssets + sharedAwsAccountAssets +
+                workgroupAccountAssets + ownerAssets)
             .distinctBy { it.id }
             .sortedBy { it.name }
     }
