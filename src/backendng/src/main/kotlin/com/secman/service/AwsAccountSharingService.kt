@@ -11,8 +11,6 @@ import com.secman.repository.UserRepository
 import jakarta.inject.Singleton
 import jakarta.transaction.Transactional
 import org.slf4j.LoggerFactory
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
-import java.util.UUID
 
 /**
  * Service for managing AWS Account Sharing rules.
@@ -27,10 +25,9 @@ open class AwsAccountSharingService(
     private val awsAccountSharingRepository: AwsAccountSharingRepository,
     private val userRepository: UserRepository,
     private val userMappingRepository: UserMappingRepository,
-    private val userMappingService: UserMappingService
+    private val userResolutionService: UserResolutionService
 ) {
     private val log = LoggerFactory.getLogger(AwsAccountSharingService::class.java)
-    private val passwordEncoder = BCryptPasswordEncoder()
 
     /**
      * List all sharing rules with source/target user details and shared account counts.
@@ -126,78 +123,8 @@ open class AwsAccountSharingService(
         return saved.toResponse(sharedAwsAccountCount = sourceAwsAccounts.size)
     }
 
-    /**
-     * Resolve a User from either an id or an email.
-     *
-     * - If `userId` is provided, look it up directly.
-     * - If only `email` is provided, look up by email (case-insensitive). If no
-     *   matching User exists (the email belongs to a "pending" mapping for a
-     *   user who has never logged in), create a User record on the fly so that
-     *   the sharing rule's FK is satisfied. The new User follows the OAuth
-     *   auto-provisioning shape: no usable password, OAUTH auth source,
-     *   default roles. Any PENDING UserMappings for the email are applied
-     *   synchronously inside the current transaction — see the inline
-     *   comment below for why we don't publish UserCreatedEvent here.
-     *
-     * @param side "source" or "target" — used only in error messages.
-     */
-    private fun resolveUser(userId: Long?, email: String?, side: String): User {
-        if (userId != null && userId > 0) {
-            return userRepository.findById(userId)
-                .orElseThrow { NoSuchElementException("$side user not found: $userId") }
-        }
-        val normalizedEmail = email?.trim()?.takeIf { it.isNotEmpty() }
-            ?: throw IllegalArgumentException("$side user identifier required (id or email)")
-
-        val existing = userRepository.findByEmailIgnoreCase(normalizedEmail).orElse(null)
-        if (existing != null) return existing
-
-        log.info("Creating pending User record on demand for {} email: {}", side, normalizedEmail)
-        val username = resolveUniqueUsername(normalizedEmail.substringBefore("@"))
-        val newUser = User(
-            username = username,
-            email = normalizedEmail,
-            passwordHash = passwordEncoder.encode(UUID.randomUUID().toString())!!,
-            roles = mutableSetOf(User.Role.USER, User.Role.VULN, User.Role.REQ),
-            authSource = User.AuthSource.OAUTH
-        )
-        val saved = userRepository.save(newUser)
-
-        // Apply PENDING UserMappings synchronously in the current transaction.
-        //
-        // We deliberately do NOT publish UserCreatedEvent here: the default
-        // listener (UserMappingService.onUserCreated) is @Async @Transactional,
-        // which opens a SEPARATE Hibernate session while ours still owns the
-        // new User's `workgroups` PersistentSet. That cross-session collection
-        // ownership trips Hibernate's "Found shared references to a collection"
-        // check during auto-flush of the listener's first query. Performing the
-        // mapping application in this thread and session avoids the hazard —
-        // everything the async listener would have done, done synchronously.
-        try {
-            val applied = userMappingService.applyFutureUserMapping(saved)
-            if (applied > 0) {
-                log.info("Applied {} pending user mapping(s) to newly-created user: {}", applied, saved.email)
-            }
-        } catch (e: Exception) {
-            // Don't fail sharing-rule creation if mapping application fails.
-            log.warn("Failed to apply pending user mappings for {}: {}", saved.email, e.message)
-        }
-        return saved
-    }
-
-    /**
-     * Append a numeric suffix to keep usernames unique when the email prefix
-     * collides with an existing user (e.g. two "john" emails on different domains).
-     */
-    private fun resolveUniqueUsername(baseUsername: String): String {
-        val sanitized = baseUsername.ifBlank { "user" }
-        if (!userRepository.existsByUsername(sanitized)) return sanitized
-        for (suffix in 2..999) {
-            val candidate = "$sanitized$suffix"
-            if (!userRepository.existsByUsername(candidate)) return candidate
-        }
-        throw IllegalStateException("Unable to derive unique username from: $baseUsername")
-    }
+    private fun resolveUser(userId: Long?, email: String?, side: String): User =
+        userResolutionService.resolveByIdOrEmail(userId, email, side)
 
     /**
      * Delete a sharing rule by ID.
