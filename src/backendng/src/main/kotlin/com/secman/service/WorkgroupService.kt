@@ -6,6 +6,7 @@ import com.secman.domain.User
 import com.secman.domain.Workgroup
 import com.secman.repository.AssetRepository
 import com.secman.repository.UserRepository
+import com.secman.repository.WorkgroupAwsAccountRepository
 import com.secman.repository.WorkgroupRepository
 import jakarta.inject.Singleton
 import jakarta.transaction.Transactional
@@ -21,6 +22,7 @@ open class WorkgroupService(
     private val workgroupRepository: WorkgroupRepository,
     private val userRepository: UserRepository,
     private val assetRepository: AssetRepository,
+    private val workgroupAwsAccountRepository: WorkgroupAwsAccountRepository,
     private val validationService: WorkgroupValidationService
 ) {
 
@@ -137,6 +139,10 @@ open class WorkgroupService(
                 assetRepository.update(managed)
             }
         }
+        // Workgroup AWS accounts are owned-side ManyToOne pointing at workgroup,
+        // and the FK is ON DELETE CASCADE — but we still flush the orphans here
+        // for consistency with users/assets and to avoid stale JPA cache state.
+        workgroupAwsAccountRepository.deleteByWorkgroupId(workgroupId)
     }
 
     /**
