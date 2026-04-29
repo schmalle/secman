@@ -10,10 +10,27 @@ interface Asset {
 }
 
 interface User {
-  id: number;
+  id: number | null;
   username: string;
   email: string;
+  isPending?: boolean;
 }
+
+type UserRef = { id?: number; email?: string };
+
+const decodeRef = (raw: string): UserRef | undefined => {
+  if (raw.startsWith('id:')) {
+    const n = Number(raw.slice(3));
+    if (!Number.isFinite(n) || n <= 0) return undefined;
+    return { id: n };
+  }
+  if (raw.startsWith('email:')) {
+    const email = raw.slice(6).trim();
+    if (!email) return undefined;
+    return { email };
+  }
+  return undefined;
+};
 
 interface UseCase {
   id: number;
@@ -48,6 +65,8 @@ const RiskAssessmentManagement: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingAssessment, setEditingAssessment] = useState<RiskAssessment | null>(null);
+  const [assessorRefValue, setAssessorRefValue] = useState<string>('');
+  const [respondentRefValue, setRespondentRefValue] = useState<string>('');
   const [formData, setFormData] = useState<RiskAssessment>({
     assetId: 0,
     endDate: '',
@@ -96,7 +115,7 @@ const RiskAssessmentManagement: React.FC = () => {
 
   const fetchUsers = async () => {
     try {
-      const response = await authenticatedFetch('/api/users');
+      const response = await authenticatedFetch('/api/users?includePending=true');
       if (!response.ok) {
         throw new Error('Failed to fetch users');
       }
@@ -122,17 +141,33 @@ const RiskAssessmentManagement: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     try {
+      const assessorRef = decodeRef(assessorRefValue);
+      if (!assessorRef) {
+        setError('Please select an assessor');
+        return;
+      }
+      const respondentRef = respondentRefValue ? decodeRef(respondentRefValue) : undefined;
+
+      // Strip the two id fields we're now expressing as refs; keep everything else
+      // (including requestorId, which the backend ignores but the existing UI sets).
+      const { assessorId: _a, respondentId: _r, ...rest } = formData;
+      const payload: any = {
+        ...rest,
+        assessorRef,
+      };
+      if (respondentRef) {
+        payload.respondentRef = respondentRef;
+      }
+
       const url = editingAssessment ? `/api/risk-assessments/${editingAssessment.id}` : '/api/risk-assessments';
       const method = editingAssessment ? 'PUT' : 'POST';
-      
+
       const response = await authenticatedFetch(url, {
-        method: method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
@@ -153,12 +188,16 @@ const RiskAssessmentManagement: React.FC = () => {
       assetId: assessment.asset?.id || assessment.assetId,
       endDate: assessment.endDate,
       status: assessment.status,
-      assessorId: assessment.assessor?.id || assessment.assessorId,
-      requestorId: assessment.requestor?.id || assessment.requestorId,
-      respondentId: assessment.respondent?.id,
+      assessorId: assessment.assessor?.id != null ? assessment.assessor.id : assessment.assessorId,
+      requestorId: assessment.requestor?.id != null ? assessment.requestor.id : assessment.requestorId,
+      respondentId: assessment.respondent?.id ?? undefined,
       notes: assessment.notes || '',
       useCaseIds: assessment.useCases?.map(uc => uc.id) || []
     });
+    const assessorIdForEdit = assessment.assessor?.id ?? assessment.assessorId;
+    setAssessorRefValue(assessorIdForEdit ? `id:${assessorIdForEdit}` : '');
+    const respondentIdForEdit = assessment.respondent?.id ?? assessment.respondentId;
+    setRespondentRefValue(respondentIdForEdit ? `id:${respondentIdForEdit}` : '');
     setShowForm(true);
   };
 
@@ -194,6 +233,8 @@ const RiskAssessmentManagement: React.FC = () => {
       notes: '',
       useCaseIds: []
     });
+    setAssessorRefValue('');
+    setRespondentRefValue('');
     setEditingAssessment(null);
     setShowForm(false);
   };
@@ -285,19 +326,22 @@ const RiskAssessmentManagement: React.FC = () => {
                   </div>
 
                   <div className="mb-3">
-                    <label htmlFor="assessorId" className="form-label">Assessor *</label>
+                    <label htmlFor="assessorRef" className="form-label">Assessor *</label>
                     <select
                       className="form-control"
-                      id="assessorId"
-                      name="assessorId"
-                      value={formData.assessorId}
-                      onChange={handleInputChange}
+                      id="assessorRef"
+                      name="assessorRef"
+                      value={assessorRefValue}
+                      onChange={(e) => setAssessorRefValue(e.target.value)}
                       required
                     >
-                      <option value={0}>Select Assessor</option>
+                      <option value="">Select Assessor</option>
                       {users.map((user) => (
-                        <option key={user.id} value={user.id}>
-                          {user.username} ({user.email})
+                        <option
+                          key={user.id ?? `pending:${user.email}`}
+                          value={user.id != null ? `id:${user.id}` : `email:${user.email}`}
+                        >
+                          {user.username} ({user.email}){user.isPending ? ' [pending]' : ''}
                         </option>
                       ))}
                     </select>
@@ -315,7 +359,7 @@ const RiskAssessmentManagement: React.FC = () => {
                     >
                       <option value={0}>Select Requestor</option>
                       {users.map((user) => (
-                        <option key={user.id} value={user.id}>
+                        <option key={user.id ?? `pending:${user.email}`} value={user.id ?? ''}>
                           {user.username} ({user.email})
                         </option>
                       ))}
@@ -323,18 +367,21 @@ const RiskAssessmentManagement: React.FC = () => {
                   </div>
 
                   <div className="mb-3">
-                    <label htmlFor="respondentId" className="form-label">Respondent (Addressed Person)</label>
+                    <label htmlFor="respondentRef" className="form-label">Respondent (Addressed Person)</label>
                     <select
                       className="form-control"
-                      id="respondentId"
-                      name="respondentId"
-                      value={formData.respondentId || ''}
-                      onChange={handleInputChange}
+                      id="respondentRef"
+                      name="respondentRef"
+                      value={respondentRefValue}
+                      onChange={(e) => setRespondentRefValue(e.target.value)}
                     >
                       <option value="">Select Respondent (Optional)</option>
                       {users.map((user) => (
-                        <option key={user.id} value={user.id}>
-                          {user.username} ({user.email})
+                        <option
+                          key={user.id ?? `pending:${user.email}`}
+                          value={user.id != null ? `id:${user.id}` : `email:${user.email}`}
+                        >
+                          {user.username} ({user.email}){user.isPending ? ' [pending]' : ''}
                         </option>
                       ))}
                     </select>
