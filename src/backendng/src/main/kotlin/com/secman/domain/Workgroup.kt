@@ -110,6 +110,23 @@ data class Workgroup(
     @ManyToMany(mappedBy = "workgroups", fetch = FetchType.LAZY)
     var assets: MutableSet<Asset> = mutableSetOf(),
 
+    /**
+     * AWS accounts assigned to this workgroup (Spec: workgroup-aws-account-assignment).
+     * Direct membership grants asset visibility via access rule #9 — assets whose
+     * cloudAccountId matches any awsAccountId in this set become visible to all
+     * workgroup members.
+     *
+     * Deletion is handled at two layers:
+     *   1. WorkgroupService.clearWorkgroupMemberships explicitly deletes via repository
+     *   2. workgroup_aws_account.workgroup_id has ON DELETE CASCADE (V201)
+     * No JPA cascade is needed here, and CLAUDE.md warns that cascade=ALL +
+     * orphanRemoval=true on @OneToMany conflicts with delete-insert patterns
+     * (see Asset.vulnerabilities for the precedent).
+     */
+    @JsonIgnore
+    @OneToMany(mappedBy = "workgroup", fetch = FetchType.LAZY)
+    var awsAccounts: MutableSet<WorkgroupAwsAccount> = mutableSetOf(),
+
     @Column(name = "created_at", updatable = false)
     var createdAt: Instant? = null,
 

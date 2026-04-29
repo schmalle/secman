@@ -40,6 +40,7 @@ Users access assets if **ANY** is true:
 6. Asset's adDomain matches user's domain mappings (case-insensitive, UserMapping)
 7. Asset's cloudAccountId matches shared AWS accounts via AwsAccountSharing (directional, non-transitive)
 8. Asset's owner matches user's username
+9. Asset's `cloudAccountId` matches an AWS account assigned to a workgroup the user belongs to (via WorkgroupAwsAccount, direct membership only — no hierarchy propagation)
 
 ## API Endpoints
 
@@ -54,6 +55,9 @@ Users access assets if **ANY** is true:
 **Notifications**: GET/PUT /api/notification-preferences, GET /api/notification-logs, GET /api/notification-logs/export (ADMIN)
 
 **Workgroups**: POST/GET /api/workgroups (ADMIN), POST /api/workgroups/{id}/{users,assets} (ADMIN)
+
+- POST/GET/DELETE /api/workgroups/{id}/aws-accounts (ADMIN)
+- MCP tools: `list_workgroup_aws_accounts`, `add_workgroup_aws_account`, `remove_workgroup_aws_account` (ADMIN + User Delegation)
 
 **Releases**: POST /api/releases (ADMIN/REQADMIN), GET /api/releases, GET /api/releases/compare, DELETE /api/releases/{id} (ADMIN/REQADMIN)
 

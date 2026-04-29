@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete } from '../utils/auth';
+import WorkgroupAccountsModal from './WorkgroupAccountsModal';
 
 interface Workgroup {
   id: number;
@@ -8,6 +9,7 @@ interface Workgroup {
   criticality: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'NA';
   userCount: number;
   assetCount: number;
+  awsAccountsCount?: number;
   createdAt: string;
   updatedAt: string;
   parentId?: number;
@@ -47,6 +49,11 @@ const WorkgroupManagement: React.FC = () => {
   const [selectedUserIds, setSelectedUserIds] = useState<number[]>([]);
   const [selectedAssetIds, setSelectedAssetIds] = useState<number[]>([]);
   const [assetSearchTerm, setAssetSearchTerm] = useState<string>('');
+  const [accountsModalState, setAccountsModalState] = useState<{
+    isOpen: boolean;
+    workgroupId: number | null;
+    workgroupName: string;
+  }>({ isOpen: false, workgroupId: null, workgroupName: '' });
 
   useEffect(() => {
     fetchWorkgroups();
@@ -544,6 +551,21 @@ const WorkgroupManagement: React.FC = () => {
         </div>
       )}
 
+      {/* Accounts Modal */}
+      {accountsModalState.workgroupId !== null && (
+        <WorkgroupAccountsModal
+          workgroupId={accountsModalState.workgroupId}
+          workgroupName={accountsModalState.workgroupName}
+          isOpen={accountsModalState.isOpen}
+          onClose={() =>
+            setAccountsModalState({ isOpen: false, workgroupId: null, workgroupName: '' })
+          }
+          onChange={() => {
+            fetchWorkgroups();
+          }}
+        />
+      )}
+
       {/* Workgroups Table */}
       <div className="table-responsive">
         <table className="table table-striped table-hover">
@@ -554,6 +576,7 @@ const WorkgroupManagement: React.FC = () => {
               <th>Criticality</th>
               <th>Users</th>
               <th>Assets</th>
+              <th>Accounts</th>
               <th>Created</th>
               <th>Actions</th>
             </tr>
@@ -561,7 +584,7 @@ const WorkgroupManagement: React.FC = () => {
           <tbody>
             {workgroups.length === 0 ? (
               <tr>
-                <td colSpan={7} className="text-center text-muted">
+                <td colSpan={8} className="text-center text-muted">
                   No workgroups found. Create one to get started.
                 </td>
               </tr>
@@ -585,6 +608,9 @@ const WorkgroupManagement: React.FC = () => {
                     <td>
                       <span className="badge bg-success">{workgroup.assetCount}</span>
                     </td>
+                    <td>
+                      <span className="badge bg-secondary">{workgroup.awsAccountsCount ?? 0}</span>
+                    </td>
                     <td>{new Date(workgroup.createdAt).toLocaleDateString()}</td>
                   <td>
                     <div className="btn-group btn-group-sm">
@@ -601,6 +627,20 @@ const WorkgroupManagement: React.FC = () => {
                         title="Assign users"
                       >
                         Users
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-info ms-1"
+                        onClick={() =>
+                          setAccountsModalState({
+                            isOpen: true,
+                            workgroupId: workgroup.id,
+                            workgroupName: workgroup.name,
+                          })
+                        }
+                        title="Manage AWS accounts"
+                      >
+                        Accounts
                       </button>
                       <button
                         className="btn btn-outline-success"

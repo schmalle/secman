@@ -39,6 +39,7 @@ interface AssetRepository : JpaRepository<Asset, Long> {
      * 4. Assets with cloudAccountId matching user's AWS mappings
      * 5. Assets with adDomain matching user's domain mappings
      * 6. Assets where owner matches the user's username
+     * 7. Assets with cloudAccountId matching an AWS account assigned to a workgroup the user belongs to (WorkgroupAwsAccount)
      *
      * Feature: 073-memory-optimization
      * Task: T031
@@ -73,6 +74,11 @@ interface AssetRepository : JpaRepository<Asset, Long> {
                     JOIN users u_source ON u_source.id = acs.source_user_id
                     JOIN user_mapping um2 ON um2.email = u_source.email AND um2.aws_account_id IS NOT NULL
                     WHERE acs.target_user_id = :userId
+                )
+                OR a.cloud_account_id IN (
+                    SELECT waa.aws_account_id FROM workgroup_aws_account waa
+                    JOIN user_workgroups uw ON uw.workgroup_id = waa.workgroup_id
+                    WHERE uw.user_id = :userId
                 )
                 OR a.owner = :username
             ORDER BY a.name ASC

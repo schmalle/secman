@@ -43,7 +43,8 @@ import org.slf4j.LoggerFactory
 @Secured(SecurityRule.IS_AUTHENTICATED)
 open class WorkgroupController(
     private val workgroupService: WorkgroupService,
-    private val assetRepository: AssetRepository
+    private val assetRepository: AssetRepository,
+    private val workgroupAwsAccountRepository: com.secman.repository.WorkgroupAwsAccountRepository
 ) {
     private val logger = LoggerFactory.getLogger(WorkgroupController::class.java)
 
@@ -91,6 +92,7 @@ open class WorkgroupController(
                 criticality = wg.criticality,
                 userCount = wg.users.size,
                 assetCount = wg.assets.size,
+                awsAccountsCount = workgroupAwsAccountRepository.countByWorkgroupId(wg.id!!),
                 createdAt = wg.createdAt!!,
                 updatedAt = wg.updatedAt!!,
                 parentId = wg.parent?.id,
@@ -803,6 +805,7 @@ data class WorkgroupListResponse(
     val criticality: Criticality,
     val userCount: Int,
     val assetCount: Int,
+    val awsAccountsCount: Long,
     val createdAt: java.time.Instant,
     val updatedAt: java.time.Instant,
     val parentId: Long?,
