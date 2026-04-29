@@ -52,7 +52,7 @@ open class UserResolutionService(
         userRepository.findByEmailIgnoreCase(normalizedEmail).orElse(null)?.let { return it }
 
         log.info("Creating User row on demand for {} email: {}", context, normalizedEmail)
-        val username = resolveUniqueUsername(normalizedEmail.substringBefore("@").ifBlank { normalizedEmail })
+        val username = resolveUniqueUsername(normalizedEmail.substringBefore("@"))
         val newUser = User(
             username = username,
             email = normalizedEmail,
@@ -102,10 +102,13 @@ open class UserResolutionService(
      * Append a numeric suffix when the email-prefix username is already taken.
      * Mirrors the existing AwsAccountSharingService.resolveUniqueUsername helper.
      */
-    private fun resolveUniqueUsername(base: String): String {
-        if (userRepository.findByUsername(base).isEmpty) return base
-        var n = 2
-        while (userRepository.findByUsername("$base$n").isPresent) n++
-        return "$base$n"
+    private fun resolveUniqueUsername(baseUsername: String): String {
+        val sanitized = baseUsername.ifBlank { "user" }
+        if (!userRepository.existsByUsername(sanitized)) return sanitized
+        for (suffix in 2..999) {
+            val candidate = "$sanitized$suffix"
+            if (!userRepository.existsByUsername(candidate)) return candidate
+        }
+        throw IllegalStateException("Unable to derive unique username from: $baseUsername")
     }
 }
