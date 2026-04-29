@@ -7,16 +7,19 @@
 ## Problem
 
 Wherever secman lets a user be selected (workgroup membership, risk assessment
-assignees, demand assignees, AWS account sharing), only **active** users —
+assignees, AWS account sharing), only **active** users —
 those with a real `User` row — are listed. Admins commonly import AWS account
 mappings (`UserMapping`) for people *before* those people ever log in, which
 creates rows with `MappingStatus.PENDING` and `user_id = NULL`. These pending
 emails are invisible to every selector except the AWS account sharing form.
 
 The result: an admin who has just imported a mapping for `newhire@example.com`
-cannot add that person to a workgroup, risk assessment, or demand until the
-person logs in for the first time. This blocks legitimate access-control
+cannot add that person to a workgroup or risk assessment until the person
+logs in for the first time. This blocks legitimate access-control
 preparation work.
+
+(Demand requestors are derived server-side from the authenticated user as an
+anti-impersonation measure, so demands have no user-selection UI to update.)
 
 The AWS account sharing feature already solved this with a private endpoint
 (`/api/aws-account-sharing/users`) that merges active Users + PENDING
@@ -177,8 +180,7 @@ remaining backwards-compatible with id-only payloads.
 | Controller | Endpoint | Today | After |
 |---|---|---|---|
 | `WorkgroupController` | `POST /api/workgroups/{id}/users` | `{userIds: [Long]}` | accept either `{userIds: [Long]}` or `{userRefs: [{id?, email?}]}` |
-| `RiskAssessmentController` | assignee fields | id-only | accept id-or-email |
-| `DemandController` | assignee field | id-only | accept id-or-email |
+| `RiskAssessmentController` | `assessorId`, `respondentId` on create/update | id-only | accept `assessorRef`, `respondentRef` (id-or-email); legacy id fields preserved |
 | `AwsAccountSharingController` | unchanged | already accepts both | delegates to `UserResolutionService` |
 
 For each, the controller calls
@@ -203,7 +205,6 @@ Affected components (all in `src/frontend/src/components/`):
 - `WorkgroupManagement.tsx`
 - `RiskAssessmentManagement.tsx`
 - `RiskAssessmentManagement.new.tsx`
-- `DemandManagement.tsx`
 - `AwsAccountSharingManager.tsx` (migrate to unified endpoint)
 
 #### Selection model
@@ -218,9 +219,9 @@ On checkbox toggle:
 
 On submit:
 - Workgroup: `POST /api/workgroups/{id}/users` body =
-  `{ userRefs: selected }`.
-- Risk assessment: same shape for the relevant assignee fields.
-- Demand: same shape for the assignee field.
+  `{ userRefs: selected }` (legacy `userIds` shape still accepted).
+- Risk assessment create/update: body adds `assessorRef: {id?, email?}` and
+  optional `respondentRef`; legacy `assessorId` / `respondentId` preserved.
 
 #### Display
 
@@ -246,9 +247,11 @@ checkbox affordance — so the admin can act on them without friction.
 
 #### Fetch
 
-All four components switch to `authenticatedGet('/api/users?includePending=true')`.
-The response shape is back-compat (existing fields stay), with two new optional
-fields: `id?: number | null` and `isPending?: boolean`.
+The three selection components (`WorkgroupManagement`, the two
+`RiskAssessmentManagement` variants) plus `AwsAccountSharingManager` switch
+to `authenticatedGet('/api/users?includePending=true')`. The response shape
+is back-compat (existing fields stay), with two new optional fields:
+`id?: number | null` and `isPending?: boolean`.
 
 ### Authorization
 
@@ -328,7 +331,6 @@ Modified files (backend):
 - `src/backendng/src/main/kotlin/com/secman/controller/UserController.kt`
 - `src/backendng/src/main/kotlin/com/secman/controller/WorkgroupController.kt`
 - `src/backendng/src/main/kotlin/com/secman/controller/RiskAssessmentController.kt`
-- `src/backendng/src/main/kotlin/com/secman/controller/DemandController.kt`
 - `src/backendng/src/main/kotlin/com/secman/service/AwsAccountSharingService.kt`
   (delegate `resolveUser` to the new service; remove duplicated logic)
 - `src/backendng/src/main/kotlin/com/secman/controller/AwsAccountSharingController.kt`
@@ -339,6 +341,5 @@ Modified files (frontend):
 - `src/frontend/src/components/WorkgroupManagement.tsx`
 - `src/frontend/src/components/RiskAssessmentManagement.tsx`
 - `src/frontend/src/components/RiskAssessmentManagement.new.tsx`
-- `src/frontend/src/components/DemandManagement.tsx`
 - `src/frontend/src/components/AwsAccountSharingManager.tsx`
   (switch to unified endpoint)
