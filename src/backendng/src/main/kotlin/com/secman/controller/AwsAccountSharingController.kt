@@ -3,6 +3,7 @@ package com.secman.controller
 import com.secman.dto.CreateAwsAccountSharingRequest
 import com.secman.domain.MappingStatus
 import com.secman.service.AwsAccountSharingService
+import com.secman.service.DuplicateSharingException
 import com.secman.repository.UserMappingRepository
 import com.secman.repository.UserRepository
 import io.micronaut.http.HttpResponse
@@ -109,11 +110,17 @@ open class AwsAccountSharingController(
                 "error" to "Validation Error",
                 "message" to (e.message ?: "Invalid request")
             ))
-        } catch (e: IllegalStateException) {
-            logger.warn("AWS account sharing creation failed: ${e.message}")
-            HttpResponse.badRequest(mapOf(
+        } catch (e: DuplicateSharingException) {
+            logger.warn("AWS account sharing duplicate: ${e.message}")
+            HttpResponse.status<Map<String, String>>(HttpStatus.CONFLICT).body(mapOf(
                 "error" to "Conflict",
                 "message" to (e.message ?: "Sharing rule already exists")
+            ))
+        } catch (e: IllegalStateException) {
+            logger.error("AWS account sharing creation failed (server state): ${e.message}", e)
+            HttpResponse.serverError(mapOf(
+                "error" to "Internal Server Error",
+                "message" to (e.message ?: "Server-side state error")
             ))
         } catch (e: NoSuchElementException) {
             HttpResponse.notFound(mapOf(

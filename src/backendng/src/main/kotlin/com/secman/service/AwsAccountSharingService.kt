@@ -105,7 +105,7 @@ open class AwsAccountSharingService(
 
         if (awsAccountSharingRepository.existsBySourceUserIdAndTargetUserId(
                 sourceUser.id!!, targetUser.id!!)) {
-            throw IllegalStateException("Sharing rule already exists from ${sourceUser.email} to ${targetUser.email}")
+            throw DuplicateSharingException("Sharing rule already exists from ${sourceUser.email} to ${targetUser.email}")
         }
 
         val sourceAwsAccounts = userMappingRepository.findDistinctAwsAccountIdByEmail(sourceUser.email)
@@ -241,3 +241,11 @@ open class AwsAccountSharingService(
         return getSharedAwsAccountIds(user.id!!)
     }
 }
+
+/**
+ * Thrown when attempting to create an AwsAccountSharing rule that already exists
+ * for a (sourceUser, targetUser) pair. Mapped to HTTP 409 by the controller —
+ * the optimistic-path counterpart to HibernateConstraintViolationHandler's
+ * backstop on uk_aws_sharing_source_target.
+ */
+class DuplicateSharingException(message: String) : RuntimeException(message)
