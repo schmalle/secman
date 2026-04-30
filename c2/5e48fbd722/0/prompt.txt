@@ -1,0 +1,5 @@
+[Image #1] a user even without secchampion or admin roles shall be able to create work groups and edit and delete workgroups, where the user is member of
+
+---
+
+1=users+assets+accounts, 2=refuse if has children, 3=root allowed, 4=own only

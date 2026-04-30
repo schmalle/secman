@@ -1,0 +1,57 @@
+{
+  "cli_version": "0.5.5",
+  "checkpoint_id": "c25e48fbd722",
+  "session_id": "cac53c1c-9bad-4d4e-84c5-76e9504566e4",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-30T07:30:44.329282Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/backendng/src/main/kotlin/com/secman/controller/WorkgroupAwsAccountController.kt",
+    "src/backendng/src/main/kotlin/com/secman/controller/WorkgroupController.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/WorkgroupService.kt",
+    "src/frontend/src/components/Sidebar.tsx",
+    "src/frontend/src/components/WorkgroupManagementWithHierarchy.tsx"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-4-7",
+  "turn_id": "f397b7cbdeee",
+  "token_usage": {
+    "input_tokens": 77,
+    "cache_creation_tokens": 126212,
+    "cache_read_tokens": 6150454,
+    "output_tokens": 27567,
+    "api_call_count": 57
+  },
+  "session_metrics": {
+    "turn_count": 2
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-30T07:30:44.298035Z",
+    "agent_lines": 204,
+    "agent_removed": 33,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 204,
+    "total_lines_changed": 237,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 204,
+      "agent_lines_removed": 33
+    }
+  ]
+}
