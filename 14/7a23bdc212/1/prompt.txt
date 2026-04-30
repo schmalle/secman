@@ -1,0 +1,11 @@
+[Image #6] it looks like we run into errors for normal users without admin or secchamption rights, please fix this
+
+---
+
+<task-notification>
+<task-id>bwbpt0l0k</task-id>
+<tool-use-id>toolu_01ESHwA6b9Qgjce9ugcAKySm</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-flake-sources-misc-secman/fa3b4ef7-af09-41d5-a0b2-8f593cfac762/tasks/bwbpt0l0k.output</output-file>
+<status>killed</status>
+<summary>Background command "Wait for backend up" was stopped</summary>
+</task-notification>

@@ -1,0 +1,44 @@
+{
+  "cli_version": "0.5.5",
+  "checkpoint_id": "147a23bdc212",
+  "session_id": "6c66e3f5-fb6b-48ee-82c5-d43a0ef0cd9f",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-30T10:03:34.613163Z",
+  "branch": "main",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "src/backendng/src/main/kotlin/com/secman/domain/Asset.kt",
+    "src/backendng/src/main/kotlin/com/secman/domain/Vulnerability.kt"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "908b5a4caa52",
+  "token_usage": {
+    "input_tokens": 58,
+    "cache_creation_tokens": 166118,
+    "cache_read_tokens": 6577640,
+    "output_tokens": 25177,
+    "api_call_count": 53
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-30T10:03:34.558828Z",
+    "agent_lines": 7,
+    "agent_removed": 2,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 7,
+    "total_lines_changed": 9,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
