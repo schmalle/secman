@@ -1,0 +1,27 @@
+{
+  "cli_version": "0.5.5",
+  "checkpoint_id": "dc85f1d7653d",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/backendng/src/main/kotlin/com/secman/domain/Vulnerability.kt",
+    "src/backendng/src/main/kotlin/com/secman/repository/VulnerabilityRepository.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/VulnerabilityService.kt"
+  ],
+  "sessions": [
+    {
+      "metadata": "/dc/85f1d7653d/0/metadata.json",
+      "transcript": "/dc/85f1d7653d/0/full.jsonl",
+      "content_hash": "/dc/85f1d7653d/0/content_hash.txt",
+      "prompt": "/dc/85f1d7653d/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 69,
+    "cache_creation_tokens": 282314,
+    "cache_read_tokens": 6172257,
+    "output_tokens": 56460,
+    "api_call_count": 44
+  }
+}
