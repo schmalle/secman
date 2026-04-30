@@ -61,6 +61,33 @@ open class WorkgroupService(
     }
 
     /**
+     * Create a workgroup and atomically enroll the creator as a member.
+     * Used when a non-admin user creates their own workgroup so they retain
+     * edit/delete access to it under the member-driven authorization rules.
+     *
+     * @param name Workgroup name
+     * @param description Optional description
+     * @param criticality Criticality (defaults to MEDIUM)
+     * @param creatorUserId User to add as the first member
+     * @return Created workgroup
+     */
+    @Transactional
+    open fun createWorkgroupWithCreator(
+        name: String,
+        description: String? = null,
+        criticality: Criticality = Criticality.MEDIUM,
+        creatorUserId: Long
+    ): Workgroup {
+        val workgroup = createWorkgroup(name, description, criticality)
+        val creator = userRepository.findByIdWithWorkgroups(creatorUserId).orElseThrow {
+            IllegalArgumentException("Creator user not found: $creatorUserId")
+        }
+        creator.workgroups.add(workgroup)
+        userRepository.update(creator)
+        return workgroup
+    }
+
+    /**
      * Update workgroup name and/or description and/or criticality
      * FR-002: Allow administrators to edit workgroups
      * Feature 039: Accept criticality parameter

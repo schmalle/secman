@@ -353,6 +353,21 @@ const Sidebar = () => {
                     </li>
                 )}
 
+                {/* Self-service Workgroups link for non-admins. Admins reach it via the ADMIN
+                    section below; this entry lets a regular user create their own workgroup
+                    and edit/delete the workgroups they are a member of. */}
+                {!isAdmin && (
+                    <li>
+                        <a href="/workgroups" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary"
+                            title="Create a workgroup or manage workgroups you are a member of">
+                            <i className="bi bi-diagram-2 me-2"></i> Workgroups
+                            {workgroupCount > 0 && (
+                                <span className="badge bg-secondary ms-auto">{workgroupCount}</span>
+                            )}
+                        </a>
+                    </li>
+                )}
+
                 {/* I/O Section - ADMIN or SECCHAMPION only */}
                 {(userRoles.includes('ADMIN') || userRoles.includes('SECCHAMPION')) && (
                     <li>

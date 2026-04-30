@@ -22,7 +22,7 @@ import type { WorkgroupResponse } from '../services/workgroupApi';
  */
 
 const WorkgroupManagementWithHierarchy: React.FC = () => {
-  const [viewMode, setViewMode] = useState<'tree' | 'table'>('tree');
+  const [viewMode, setViewMode] = useState<'tree' | 'table'>('table');
   const [selectedWorkgroup, setSelectedWorkgroup] = useState<WorkgroupResponse | null>(null);
   const [showCreateChildModal, setShowCreateChildModal] = useState(false);
   const [parentForChild, setParentForChild] = useState<WorkgroupResponse | null>(null);

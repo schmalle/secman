@@ -2,6 +2,7 @@ package com.secman.controller
 
 import com.secman.dto.WorkgroupAwsAccountDto
 import com.secman.repository.UserRepository
+import com.secman.repository.WorkgroupRepository
 import com.secman.service.DuplicateAccountException
 import com.secman.service.WorkgroupAwsAccountService
 import io.micronaut.http.HttpResponse
@@ -28,9 +29,23 @@ import org.slf4j.LoggerFactory
 @Secured(SecurityRule.IS_AUTHENTICATED)
 open class WorkgroupAwsAccountController(
     private val service: WorkgroupAwsAccountService,
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val workgroupRepository: WorkgroupRepository
 ) {
     private val logger = LoggerFactory.getLogger(WorkgroupAwsAccountController::class.java)
+
+    /**
+     * Allow ADMINs and direct members to mutate AWS-account assignments on the
+     * workgroup. Mirrors WorkgroupController's member-driven authorization model
+     * so a non-admin owner of the workgroup can manage their own AWS bindings.
+     * Caller must be inside a transaction so the LAZY users collection is readable.
+     */
+    private fun isMemberOrAdmin(workgroupId: Long, authentication: Authentication): Boolean {
+        if (authentication.roles.contains("ADMIN")) return true
+        val workgroup = workgroupRepository.findById(workgroupId).orElse(null) ?: return false
+        val user = userRepository.findByUsername(authentication.name).orElse(null) ?: return false
+        return workgroup.users.any { it.id == user.id }
+    }
 
     @Get(produces = [MediaType.APPLICATION_JSON])
     open fun list(@PathVariable workgroupId: Long): HttpResponse<List<WorkgroupAwsAccountDto>> {
@@ -44,7 +59,8 @@ open class WorkgroupAwsAccountController(
     }
 
     @Post(consumes = [MediaType.APPLICATION_JSON], produces = [MediaType.APPLICATION_JSON])
-    @Secured("ADMIN")
+    @Secured(SecurityRule.IS_AUTHENTICATED)
+    @jakarta.transaction.Transactional
     open fun add(
         @PathVariable workgroupId: Long,
         @Body @Valid request: AddAwsAccountRequest,
@@ -52,6 +68,9 @@ open class WorkgroupAwsAccountController(
     ): HttpResponse<*> {
         val actor = userRepository.findByUsername(authentication.name).orElseThrow {
             IllegalStateException("Authenticated user not found: ${authentication.name}")
+        }
+        if (!isMemberOrAdmin(workgroupId, authentication)) {
+            return HttpResponse.status<Map<String, String>>(io.micronaut.http.HttpStatus.FORBIDDEN)
         }
         return try {
             val saved = service.add(workgroupId, request.awsAccountId, actor.id!!)
@@ -65,11 +84,16 @@ open class WorkgroupAwsAccountController(
     }
 
     @Delete("/{awsAccountId}")
-    @Secured("ADMIN")
+    @Secured(SecurityRule.IS_AUTHENTICATED)
+    @jakarta.transaction.Transactional
     open fun remove(
         @PathVariable workgroupId: Long,
-        @PathVariable awsAccountId: String
+        @PathVariable awsAccountId: String,
+        authentication: Authentication
     ): HttpResponse<Void> {
+        if (!isMemberOrAdmin(workgroupId, authentication)) {
+            return HttpResponse.status(io.micronaut.http.HttpStatus.FORBIDDEN)
+        }
         val deleted = service.remove(workgroupId, awsAccountId)
         return if (deleted) HttpResponse.noContent() else HttpResponse.notFound()
     }

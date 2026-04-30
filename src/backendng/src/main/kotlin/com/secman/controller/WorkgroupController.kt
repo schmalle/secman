@@ -1,11 +1,13 @@
 package com.secman.controller
 
 import com.secman.domain.Criticality
+import com.secman.domain.User
 import com.secman.domain.Workgroup
 import com.secman.dto.BreadcrumbItem
 import com.secman.dto.CreateChildWorkgroupRequest
 import com.secman.dto.WorkgroupResponse
 import com.secman.repository.AssetRepository
+import com.secman.repository.UserRepository
 import com.secman.repository.WorkgroupRepository
 import com.secman.service.ValidationException
 import com.secman.service.UserResolutionService
@@ -48,9 +50,33 @@ open class WorkgroupController(
     private val assetRepository: AssetRepository,
     private val workgroupAwsAccountRepository: com.secman.repository.WorkgroupAwsAccountRepository,
     private val userResolutionService: UserResolutionService,
-    private val workgroupRepository: WorkgroupRepository
+    private val workgroupRepository: WorkgroupRepository,
+    private val userRepository: UserRepository
 ) {
     private val logger = LoggerFactory.getLogger(WorkgroupController::class.java)
+
+    /** True when the caller has the ADMIN role. */
+    private fun isAdmin(authentication: Authentication): Boolean =
+        authentication.roles.contains("ADMIN")
+
+    /**
+     * Resolve the calling User from the Authentication principal.
+     * @throws IllegalStateException if no matching user row exists (should not happen for an authenticated request).
+     */
+    private fun currentUser(authentication: Authentication): User =
+        userRepository.findByUsername(authentication.name).orElseThrow {
+            IllegalStateException("Authenticated user not found: ${authentication.name}")
+        }
+
+    /**
+     * Member-or-admin authorization for workgroup-scoped actions.
+     * Caller must already be inside a transaction so the LAZY users collection can be read.
+     */
+    private fun isMemberOrAdmin(workgroup: Workgroup, authentication: Authentication): Boolean {
+        if (isAdmin(authentication)) return true
+        val user = currentUser(authentication)
+        return workgroup.users.any { it.id == user.id }
+    }
 
     /**
      * Create a new workgroup
@@ -61,14 +87,30 @@ open class WorkgroupController(
      * Returns: 201 Created with workgroup object
      */
     @Post
-    @Secured("ADMIN")
-    open fun createWorkgroup(@Body @Valid request: CreateWorkgroupRequest): HttpResponse<Workgroup> {
+    @Secured(SecurityRule.IS_AUTHENTICATED)
+    open fun createWorkgroup(
+        @Body @Valid request: CreateWorkgroupRequest,
+        authentication: Authentication
+    ): HttpResponse<Workgroup> {
         return try {
-            val workgroup = workgroupService.createWorkgroup(
-                name = request.name,
-                description = request.description,
-                criticality = request.criticality ?: Criticality.MEDIUM
-            )
+            val criticality = request.criticality ?: Criticality.MEDIUM
+            val workgroup = if (isAdmin(authentication)) {
+                workgroupService.createWorkgroup(
+                    name = request.name,
+                    description = request.description,
+                    criticality = criticality
+                )
+            } else {
+                // Non-admin creators are auto-enrolled so they can subsequently
+                // edit/delete the workgroup under member-driven authorization.
+                val creator = currentUser(authentication)
+                workgroupService.createWorkgroupWithCreator(
+                    name = request.name,
+                    description = request.description,
+                    criticality = criticality,
+                    creatorUserId = creator.id!!
+                )
+            }
             HttpResponse.created(workgroup)
         } catch (e: IllegalArgumentException) {
             HttpResponse.badRequest()
@@ -83,10 +125,17 @@ open class WorkgroupController(
      * Returns: 200 OK with array of workgroups
      */
     @Get
-    @Secured("ADMIN", "SECCHAMPION")
+    @Secured(SecurityRule.IS_AUTHENTICATED)
     @Transactional
-    open fun listWorkgroups(): HttpResponse<List<WorkgroupListResponse>> {
-        val workgroups = workgroupService.listAllWorkgroups()
+    open fun listWorkgroups(authentication: Authentication): HttpResponse<List<WorkgroupListResponse>> {
+        // ADMIN and SECCHAMPION see every workgroup; regular users see only the
+        // workgroups they are members of (privacy default — see /workgroups UX).
+        val workgroups = if (isAdmin(authentication) || authentication.roles.contains("SECCHAMPION")) {
+            workgroupService.listAllWorkgroups()
+        } else {
+            val user = currentUser(authentication)
+            workgroupRepository.findWorkgroupsByUserEmail(user.email)
+        }
         val response = workgroups.map { wg ->
             val ancestors = wg.getAncestors()
             WorkgroupListResponse(
@@ -118,11 +167,17 @@ open class WorkgroupController(
      * Returns: 200 OK with workgroup details, 404 if not found
      */
     @Get("/{id}")
-    @Secured("ADMIN")
+    @Secured(SecurityRule.IS_AUTHENTICATED)
     @Transactional
-    open fun getWorkgroup(@PathVariable id: Long): HttpResponse<WorkgroupDetailResponse> {
+    open fun getWorkgroup(
+        @PathVariable id: Long,
+        authentication: Authentication
+    ): HttpResponse<WorkgroupDetailResponse> {
         return try {
             val workgroup = workgroupService.getWorkgroupById(id)
+            if (!isMemberOrAdmin(workgroup, authentication)) {
+                return HttpResponse.status(io.micronaut.http.HttpStatus.FORBIDDEN)
+            }
             val response = WorkgroupDetailResponse(
                 id = workgroup.id!!,
                 name = workgroup.name,
@@ -148,12 +203,18 @@ open class WorkgroupController(
      * Returns: 200 OK with updated workgroup, 400 if name exists, 404 if not found
      */
     @Put("/{id}")
-    @Secured("ADMIN")
+    @Secured(SecurityRule.IS_AUTHENTICATED)
+    @Transactional
     open fun updateWorkgroup(
         @PathVariable id: Long,
-        @Body @Valid request: UpdateWorkgroupRequest
+        @Body @Valid request: UpdateWorkgroupRequest,
+        authentication: Authentication
     ): HttpResponse<Workgroup> {
         return try {
+            val existing = workgroupService.getWorkgroupById(id)
+            if (!isMemberOrAdmin(existing, authentication)) {
+                return HttpResponse.status(io.micronaut.http.HttpStatus.FORBIDDEN)
+            }
             val workgroup = workgroupService.updateWorkgroup(
                 id = id,
                 name = request.name,
@@ -179,10 +240,29 @@ open class WorkgroupController(
      * Returns: 204 No Content, 404 if not found
      */
     @Delete("/{id}")
-    @Secured("ADMIN")
-    open fun deleteWorkgroup(@PathVariable id: Long): HttpResponse<Void> {
+    @Secured(SecurityRule.IS_AUTHENTICATED)
+    @Transactional
+    open fun deleteWorkgroup(
+        @PathVariable id: Long,
+        authentication: Authentication
+    ): HttpResponse<Void> {
         return try {
-            workgroupService.deleteWorkgroupWithPromotion(id)
+            val workgroup = workgroupService.getWorkgroupById(id)
+            if (isAdmin(authentication)) {
+                // Admin retains the legacy "promote children to grandparent" semantics
+                // so hierarchy continuity is preserved across organizational re-shuffles.
+                workgroupService.deleteWorkgroupWithPromotion(id)
+                return HttpResponse.noContent()
+            }
+            if (!isMemberOrAdmin(workgroup, authentication)) {
+                return HttpResponse.status(io.micronaut.http.HttpStatus.FORBIDDEN)
+            }
+            // Non-admin members may not delete a parent workgroup — promoting children
+            // could re-parent them under a workgroup the deleter cannot see.
+            if (workgroup.children.isNotEmpty()) {
+                return HttpResponse.badRequest()
+            }
+            workgroupService.deleteWorkgroup(id)
             HttpResponse.noContent()
         } catch (e: IllegalArgumentException) {
             HttpResponse.notFound()
@@ -199,10 +279,12 @@ open class WorkgroupController(
      * Returns: 200 OK, 400 if request empty, 404 if workgroup or user-by-id not found
      */
     @Post("/{id}/users")
-    @Secured("ADMIN")
+    @Secured(SecurityRule.IS_AUTHENTICATED)
+    @Transactional
     open fun assignUsers(
         @PathVariable id: Long,
-        @Body @Valid request: AssignUsersRequest
+        @Body @Valid request: AssignUsersRequest,
+        authentication: Authentication
     ): HttpResponse<Void> {
         return try {
             if (request.isEmpty()) {
@@ -213,8 +295,10 @@ open class WorkgroupController(
             // is @Transactional and lazy-creates User rows on its own. If we resolved
             // first and the workgroup turned out to be missing, the new User rows
             // would already be committed and orphaned.
-            if (!workgroupRepository.existsById(id)) {
-                return HttpResponse.notFound()
+            val workgroup = workgroupRepository.findById(id).orElse(null)
+                ?: return HttpResponse.notFound()
+            if (!isMemberOrAdmin(workgroup, authentication)) {
+                return HttpResponse.status(io.micronaut.http.HttpStatus.FORBIDDEN)
             }
 
             // userRefs wins when both shapes are present.
@@ -247,12 +331,19 @@ open class WorkgroupController(
      * Returns: 204 No Content, 404 if not found, 400 if user not in workgroup
      */
     @Delete("/{workgroupId}/users/{userId}")
-    @Secured("ADMIN")
+    @Secured(SecurityRule.IS_AUTHENTICATED)
+    @Transactional
     open fun removeUser(
         @PathVariable workgroupId: Long,
-        @PathVariable userId: Long
+        @PathVariable userId: Long,
+        authentication: Authentication
     ): HttpResponse<Void> {
         return try {
+            val workgroup = workgroupRepository.findById(workgroupId).orElse(null)
+                ?: return HttpResponse.notFound()
+            if (!isMemberOrAdmin(workgroup, authentication)) {
+                return HttpResponse.status(io.micronaut.http.HttpStatus.FORBIDDEN)
+            }
             workgroupService.removeUserFromWorkgroup(workgroupId, userId)
             HttpResponse.noContent()
         } catch (e: IllegalArgumentException) {
@@ -273,12 +364,19 @@ open class WorkgroupController(
      * Returns: 200 OK, 400 if asset not found, 404 if workgroup not found
      */
     @Post("/{id}/assets")
-    @Secured("ADMIN")
+    @Secured(SecurityRule.IS_AUTHENTICATED)
+    @Transactional
     open fun assignAssets(
         @PathVariable id: Long,
-        @Body @Valid request: AssignAssetsRequest
+        @Body @Valid request: AssignAssetsRequest,
+        authentication: Authentication
     ): HttpResponse<Void> {
         return try {
+            val workgroup = workgroupRepository.findById(id).orElse(null)
+                ?: return HttpResponse.notFound()
+            if (!isMemberOrAdmin(workgroup, authentication)) {
+                return HttpResponse.status(io.micronaut.http.HttpStatus.FORBIDDEN)
+            }
             workgroupService.assignAssetsToWorkgroup(id, request.assetIds)
             HttpResponse.ok()
         } catch (e: IllegalArgumentException) {
@@ -298,12 +396,19 @@ open class WorkgroupController(
      * Returns: 204 No Content, 404 if not found, 400 if asset not in workgroup
      */
     @Delete("/{workgroupId}/assets/{assetId}")
-    @Secured("ADMIN")
+    @Secured(SecurityRule.IS_AUTHENTICATED)
+    @Transactional
     open fun removeAsset(
         @PathVariable workgroupId: Long,
-        @PathVariable assetId: Long
+        @PathVariable assetId: Long,
+        authentication: Authentication
     ): HttpResponse<Void> {
         return try {
+            val workgroup = workgroupRepository.findById(workgroupId).orElse(null)
+                ?: return HttpResponse.notFound()
+            if (!isMemberOrAdmin(workgroup, authentication)) {
+                return HttpResponse.status(io.micronaut.http.HttpStatus.FORBIDDEN)
+            }
             workgroupService.removeAssetFromWorkgroup(workgroupId, assetId)
             HttpResponse.noContent()
         } catch (e: IllegalArgumentException) {
