@@ -1,12 +1,14 @@
-# 1Password Credentials
+# Credential Management
 
-secman uses [1Password CLI](https://developer.1password.com/docs/cli/) (`op`) to inject secrets at runtime. All secret references use the `op://` URI format and are resolved by `op run` before reaching the application.
+secman uses **pass-cli** (Proton Pass CLI) to inject secrets at runtime. Secrets are sourced via `pass-cli` and exported as environment variables before reaching the application.
+
+> **Note:** This project previously used 1Password CLI (`op`). All scripts have been migrated to pass-cli. The vault/field references below document the logical secret names used by the application.
 
 ## Prerequisites
 
-1. Install the [1Password CLI](https://developer.1password.com/docs/cli/get-started/)
-2. Sign in: `op signin`
-3. Ensure access to the required vaults listed below
+1. Install pass-cli (Proton Pass CLI)
+2. Authenticate with your pass-cli account
+3. Ensure access to the required secrets listed below
 
 ## Vaults
 
@@ -73,8 +75,6 @@ DB_PASSWORD=op://test/secman/SECMAN_DB_PASSWORD
 ### Run backend (production-style)
 
 ```bash
-op run --env-file ./secman.env -- gradle :backendng:run
-# or use the convenience script:
 ./scriptpp/backend
 ```
 
@@ -84,7 +84,7 @@ op run --env-file ./secman.env -- gradle :backendng:run
 ./scriptpp/startbackenddev.sh
 ```
 
-This script sets `MICRONAUT_ENVIRONMENTS=dev`, `SECMAN_DEBUG=true`, generates a random `JWT_SECRET`, and wraps `gradle` with `op run` to resolve `op://` references for `DB_CONNECT` and `SECMAN_BACKEND_URL`.
+This script sets `MICRONAUT_ENVIRONMENTS=dev`, `SECMAN_DEBUG=true`, generates a random `JWT_SECRET`, and sources secrets via pass-cli for `DB_CONNECT` and `SECMAN_BACKEND_URL`.
 
 ### Run frontend (development)
 
@@ -92,7 +92,7 @@ This script sets `MICRONAUT_ENVIRONMENTS=dev`, `SECMAN_DEBUG=true`, generates a 
 ./scriptpp/startfrontenddev.sh
 ```
 
-This script sets `SECMAN_DOMAIN` and `SECMAN_HOST` as `op://` references and wraps `npm run dev` with `op run` for resolution.
+This script sources `SECMAN_DOMAIN` and `SECMAN_HOST` via pass-cli and starts `npm run dev`.
 
 ### Run CLI commands
 
@@ -100,7 +100,7 @@ This script sets `SECMAN_DOMAIN` and `SECMAN_HOST` as `op://` references and wra
 ./scriptpp/secmancli query servers --dry-run
 ```
 
-The `scripts/secmancli` script exports all `op://` references and wraps the command with `op run`.
+The `scriptpp/secmancli` script exports all required secrets via pass-cli and wraps the command.
 
 ### Run E2E tests (Playwright)
 
@@ -108,9 +108,9 @@ The `scripts/secmancli` script exports all `op://` references and wraps the comm
 ./tests/e2e/run-e2e.sh
 ```
 
-This script checks for `op` availability and injects `SECMAN_ADMIN_NAME`, `SECMAN_ADMIN_PASS`, `SECMAN_USER_USER`, and `SECMAN_USER_PASS` before running Playwright.
+This script sources `SECMAN_ADMIN_NAME`, `SECMAN_ADMIN_PASS`, `SECMAN_USER_USER`, and `SECMAN_USER_PASS` via pass-cli before running Playwright.
 
-### Run E2E tests manually (without 1Password)
+### Run E2E tests manually (without pass-cli)
 
 ```bash
 cd tests/e2e
@@ -122,23 +122,17 @@ SECMAN_USER_PASS=secret \
 npx playwright test
 ```
 
-### Read a single secret
-
-```bash
-op read "op://test/secman/SECMAN_ADMIN_NAME"
-```
-
-## Scripts Using 1Password
+## Scripts Using pass-cli
 
 | Script | Secrets Required |
 |---|---|
-| `scripts/backend` | All from `secman.env` |
-| `scripts/startbackenddev.sh` | `DB_CONNECT`, `SECMAN_BACKEND_BASE_URL` (via `op run`) |
-| `scripts/startfrontenddev.sh` | `SECMAN_BACKEND_BASE_URL`, `SECMAN_HOST` (via `op run`) |
-| `scripts/secmancli` | CrowdStrike, admin creds, AWS, API key, host |
-| `scripts/secmanng` | Admin creds, host, SSL setting |
-| `scripts/secmanserverca` | All from `secman.env` |
-| `scripts/import.sh` | All from `secman.env` |
+| `scriptpp/backend` | All from `secman.env` |
+| `scriptpp/startbackenddev.sh` | `DB_CONNECT`, `SECMAN_BACKEND_BASE_URL` |
+| `scriptpp/startfrontenddev.sh` | `SECMAN_BACKEND_BASE_URL`, `SECMAN_HOST` |
+| `scriptpp/secmancli` | CrowdStrike, admin creds, AWS, API key, host |
+| `scriptpp/secmanng` | Admin creds, host, SSL setting |
+| `scriptpp/secmanserverca` | All from `secman.env` |
+| `scriptpp/import.sh` | All from `secman.env` |
 | `tests/e2e/run-e2e.sh` | Admin + user creds |
 | `tests/js-error-scanner.sh` | Admin creds, host, SSL setting |
 | `tests/mcp-e2e-workgroup-test.sh` | Admin creds, API key, test domain |
@@ -146,16 +140,15 @@ op read "op://test/secman/SECMAN_ADMIN_NAME"
 | `tests/release-e2e-test.sh` | Admin creds, API key |
 | `tests/alignment-review-e2e-test.sh` | Admin creds, API key |
 | `tests/bulk-user-mapping-test.sh` | Admin creds |
-| `tests/s3-user-mapping-import-e2e-test.sh` | S3 config (secman-s3 vault), admin email |
-| `tests/s3-list-bucket-e2e-test.sh` | S3 config (secman-s3 vault) |
-| `scripts/release-e2e-test.sh` | Admin creds, API key |
+| `tests/s3-user-mapping-import-e2e-test.sh` | S3 config, admin email |
+| `tests/s3-list-bucket-e2e-test.sh` | S3 config |
 
 ## Troubleshooting
 
-**`op` not found** - Install the 1Password CLI and ensure it is on your `PATH`.
+**`pass-cli` not found** — Install pass-cli and ensure it is on your `PATH`.
 
-**"not signed in"** - Run `op signin` to authenticate.
+**Authentication error** — Re-authenticate with your pass-cli account.
 
-**"could not find item"** - Verify you have access to the `test` vault and the `secman` / `secman-s3` items exist.
+**Secret not found** — Verify that the required secrets exist in your pass-cli vault.
 
-**Fallback without 1Password** - Several scripts support setting environment variables directly as a fallback (using `${VAR:-op://...}` syntax). Export the required variables before running the script to bypass 1Password resolution.
+**Fallback without pass-cli** — Several scripts support setting environment variables directly as a fallback. Export the required variables before running the script to bypass pass-cli resolution.

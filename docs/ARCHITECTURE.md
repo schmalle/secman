@@ -347,6 +347,7 @@ Users can access an asset if **ANY** of the following is true:
 6. **AD Domain Mapping**: Asset's `adDomain` matches user's domain mappings (case-insensitive)
 7. **AWS Account Sharing**: Asset's `cloudAccountId` matches shared AWS accounts via `AwsAccountSharing` (directional, non-transitive)
 8. **Owner Match**: Asset's `owner` matches user's username
+9. **Workgroup AWS Account**: Asset's `cloudAccountId` matches an AWS account assigned to a workgroup the user belongs to (via `WorkgroupAwsAccount`, direct membership only — no hierarchy propagation)
 
 ```kotlin
 // Access check in service layer (AssetFilterService)
@@ -582,9 +583,9 @@ secman/
 │   ├── E2E_EXCEPTION_WORKFLOW_TEST.md # Exception E2E test
 │   ├── S3_USER_MAPPING_IMPORT.md     # S3 import guide
 │   ├── SKILLS_AND_AGENTS.md          # Skills & agents reference
-│   └── 1PASSWORD.md                  # Secret management with 1Password CLI
+│   └── 1PASSWORD.md                  # Credential management with pass-cli
 │
-├── scripts/                          # Utility scripts
+├── scriptpp/                         # Utility scripts
 ├── specs/                            # Feature specifications
 └── build.gradle.kts                  # Root build file
 ```

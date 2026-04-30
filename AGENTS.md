@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-Core code sits in `src/`: `backendng/` holds the Micronaut service (`src/main/kotlin`, `src/main/resources`), `shared/` exposes reusable clients, and `cli/` ships terminal tooling. The Astro + React UI lives in `src/frontend/` (pages in `src/pages/`, components in `src/components/`, specs in `tests/`). Root-level `tests/`, `docker/`, `docs/`, and `scripts/`cover integration flows, container manifests, and setup aids. Additional shared code can be found in`src/shared/`, which is needed for both cli and backend development.
+Core code sits in `src/`: `backendng/` holds the Micronaut service (`src/main/kotlin`, `src/main/resources`), `shared/` exposes reusable clients, and `cli/` ships terminal tooling. The Astro + React UI lives in `src/frontend/` (pages in `src/pages/`, components in `src/components/`, specs in `tests/`). Root-level `tests/`, `docker/`, `docs/`, and `scriptpp/` cover integration flows, container manifests, and setup aids. Additional shared code can be found in `src/shared/`, which is needed for both cli and backend development.
 
 ## Build, Test, and Development Commands
 
@@ -19,7 +19,7 @@ Do not create any testcase.
 
 ## Commit & Pull Request Guidelines
 
-Commits use the `Type: Summary` convention (`Add: Admin User Notification System`); keep subjects imperative and squash noisy WIP steps. Pull requests should include motivation, verification commands (`./gradlew build`, `npm run lint`), and screenshots for UI changes. Flag schema changes, feature toggles, and manual data steps, linking issues or specs before review.
+Commits use the `type(scope): description` convention (`feat(vulnerability): add CVE severity filtering`); keep subjects imperative and squash noisy WIP steps. Pull requests should include motivation, verification commands (`./gradlew build`, `npm run lint`), and screenshots for UI changes. Flag schema changes, feature toggles, and manual data steps, linking issues or specs before review.
 
 ## Security & Configuration Tips
 

@@ -103,11 +103,10 @@ cd secman
 # 2. Start and configure MariaDB
 sudo systemctl start mariadb
 sudo systemctl enable mariadb
-cd scripts/install/db && ./installdb.sh && cd ../../..
+cd scriptpp/install/db && ./installdb.sh && cd ../../..
 
 # 3. Start the backend (Terminal 1)
-cd src/backendng
-./gradlew run
+./scriptpp/startbackenddev.sh
 
 # 4. Start the frontend (Terminal 2)
 cd src/frontend
@@ -146,7 +145,7 @@ sudo mysql_secure_installation
 Run the database installation script:
 
 ```bash
-cd scripts/install/db
+cd scriptpp/install/db
 ./installdb.sh
 cd ../../..
 ```
@@ -180,8 +179,9 @@ EXIT;
 ```bash
 cd src/backendng
 
-# Option A: Run in development mode (with hot-reload)
-./gradlew run
+# Option A: Run in development mode
+cd ..
+./scriptpp/startbackenddev.sh
 
 # Option B: Build a production JAR
 ./gradlew shadowJar -x test
@@ -516,8 +516,7 @@ curl http://localhost:8080/memory
 If you missed the auto-generated admin password from the console output, reset the database:
 
 ```bash
-cd scripts
-./reset_database.sh
+./scriptpp/reset_database.sh
 ```
 
 Then restart the backend. A new admin password will be generated and displayed.

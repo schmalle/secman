@@ -76,8 +76,7 @@ Secman supports multiple connection methods:
 ### 1. Start Secman Backend
 
 ```bash
-cd src/backendng
-./gradlew run
+./scriptpp/startbackenddev.sh
 ```
 
 Verify it's running:
@@ -1090,7 +1089,7 @@ response = requests.post(base_url,
 print(response.json())
 ```
 
-See `scripts/mcp/` for a standalone Go MCP client example.
+See `scriptpp/mcp/` for a standalone Go MCP client example.
 
 #### Node.js
 

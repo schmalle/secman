@@ -22,7 +22,7 @@ Interactive wrapper script for executing install.sql with error checking.
 
 **Usage:**
 ```bash
-cd scripts/install/db
+cd scriptpp/install/db
 ./installdb.sh
 ```
 

@@ -21,7 +21,7 @@ Security requirement and risk assessment management tool.
 | [E2E Exception Workflow](./E2E_EXCEPTION_WORKFLOW_TEST.md) | End-to-end exception workflow test    |
 | [S3 User Mapping Import](./S3_USER_MAPPING_IMPORT.md) | S3-based user mapping imports            |
 | [Skills & Agents](./SKILLS_AND_AGENTS.md)             | Claude Code skills and agent reference   |
-| [1Password Credentials](./1PASSWORD.md)               | Secret management with 1Password CLI     |
+| [Credential Management](./1PASSWORD.md)               | Secret management with pass-cli          |
 | [CrowdStrike Checkin Monitor](../src/clinotify/README.md) | Telegram alert when CrowdStrike imports go stale |
 | [Docker Deployment](../docker/README.md)                  | Docker container deployment             |
 | [Database Installation](../scriptpp/install/db/README.md) | Database setup scripts and defaults    |
@@ -98,8 +98,7 @@ For detailed architecture, see [ARCHITECTURE.md](./ARCHITECTURE.md).
 ### Backend (port 8080)
 
 ```bash
-cd src/backendng
-./gradlew run
+./scriptpp/startbackenddev.sh
 ```
 
 ### Frontend (port 4321)
@@ -286,14 +285,14 @@ docs/
 ├── E2E_EXCEPTION_WORKFLOW_TEST.md  <- Exception E2E test
 ├── S3_USER_MAPPING_IMPORT.md      <- S3 import guide
 ├── SKILLS_AND_AGENTS.md           <- Skills & agents reference
-├── 1PASSWORD.md                   <- Secret management with 1Password CLI
+├── 1PASSWORD.md                   <- Credential management with pass-cli
 src/clinotify/
 └── README.md                      <- CrowdStrike checkin Telegram monitor
 docker/
 └── README.md                      <- Docker container deployment
-scripts/install/db/
+scriptpp/install/db/
 └── README.md                      <- Database setup scripts
-scripts/mcp/
+scriptpp/mcp/
 └── README.md                      <- Go MCP client example
 pictures/
 └── README.md                      <- UI screenshots

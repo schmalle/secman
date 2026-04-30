@@ -13,7 +13,7 @@ export SECMAN_USER_EMAIL=admin@example.com     # mandatory for data-accessing to
 ## Usage
 
 ```bash
-cd scripts/mcp
+cd scriptpp/mcp
 
 # List all available MCP tools
 go run main.go capabilities

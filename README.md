@@ -202,13 +202,12 @@ git clone https://github.com/schmalle/secman.git
 cd secman
 
 # Create database
-cd scripts/install/db
+cd scriptpp/install/db
 ./installdb.sh
 cd ../../..
 
 # Start backend (in one terminal)
-cd src/backendng
-./gradlew run
+./scriptpp/startbackenddev.sh
 
 # Start frontend (in another terminal)
 cd src/frontend
@@ -266,7 +265,7 @@ secman/
 │   ├── TROUBLESHOOTING.md  # Troubleshooting
 │   ├── S3_USER_MAPPING_IMPORT.md # S3 import guide
 │   └── SKILLS_AND_AGENTS.md # Skills & agents reference
-├── scripts/                # Utility scripts
+├── scriptpp/               # Utility scripts
 └── specs/                  # Feature specifications
 ```
 
@@ -274,9 +273,8 @@ secman/
 
 ```bash
 # Backend
-cd src/backendng
-./gradlew build              # Build (includes tests)
-./gradlew run                # Start server (port 8080)
+./gradlew build                                                    # Build (includes tests)
+./scriptpp/startbackenddev.sh                                      # Start server (port 8080)
 
 # Frontend
 cd src/frontend
@@ -326,7 +324,7 @@ POST /api/auth/login
 | `/api/auth/login`                                     | POST    | Authenticate user                | Public                 |
 | `/api/requirements`                                   | GET     | List requirements                | Authenticated          |
 | `/api/requirements/export/xlsx`                       | GET     | Export to Excel                  | Authenticated          |
-| `/api/releases`                                       | GET/POST| List/create releases             | ADMIN, RELEASE_MANAGER |
+| `/api/releases`                                       | GET/POST| List/create releases             | ADMIN, REQADMIN        |
 | `/api/releases/compare`                               | GET     | Compare releases                 | Authenticated          |
 | `/api/assets`                                         | GET/POST| List/create assets               | Authenticated          |
 | `/api/assets/bulk`                                    | DELETE  | Bulk delete assets               | ADMIN                  |
@@ -509,7 +507,7 @@ Comprehensive documentation is available in the `docs/` directory:
 | [Skills & Agents](docs/SKILLS_AND_AGENTS.md)          | Claude Code skills and agent reference         |
 | [S3 User Mapping Import](docs/S3_USER_MAPPING_IMPORT.md) | S3-based user mapping imports               |
 | [E2E Exception Workflow](docs/E2E_EXCEPTION_WORKFLOW_TEST.md) | End-to-end exception workflow test      |
-| [1Password Credentials](docs/1PASSWORD.md)            | Secret management with 1Password CLI           |
+| [Credential Management](docs/1PASSWORD.md)            | Secret management with pass-cli                |
 | [Docker Deployment](docker/README.md)                 | Docker container deployment                    |
 
 ## Contributing

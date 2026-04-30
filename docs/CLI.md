@@ -7,8 +7,8 @@ Command-line interface for CrowdStrike vulnerability queries, notifications, use
 
 > **Invocation Styles:** The examples below use `java -jar secman-cli.jar ...` to document the raw JAR invocation. During local development or scripted usage, you can substitute any of the following equivalent wrappers:
 >
-> - `./scriptpp/secman <command>` — symlink to `secmancli`, uses 1Password to inject secrets from `secman.env`
-> - `./scriptpp/secmanng <command>` — alternative 1Password-based wrapper with explicit env exports (e.g. `SECMAN_INSECURE` for self-signed SSL)
+> - `./scriptpp/secman <command>` — symlink to `secmancli`, uses pass-cli to inject secrets
+> - `./scriptpp/secmanng <command>` — alternative pass-cli-based wrapper with explicit env exports (e.g. `SECMAN_INSECURE` for self-signed SSL)
 >
 > See [1PASSWORD.md](./1PASSWORD.md) for details on which secrets each wrapper resolves.
 
@@ -161,8 +161,8 @@ java -jar secman-cli.jar query servers --hostname web-server-01 \
 java -jar secman-cli.jar query servers --hostname web-server-01 \
   --output-file results.json --format json
 
-# secmanng (1password based)
-/bin/secmanng query servers --severity CRITICAL,HIGH --verbose --min-days-open 1 --save --device-type SERVER  --last-seen-days 1 --insecure
+# secmanng (pass-cli based)
+./scriptpp/secmanng query servers --severity CRITICAL,HIGH --verbose --min-days-open 1 --save --device-type SERVER  --last-seen-days 1 --insecure
 
 # Full options
 java -jar secman-cli.jar query servers \

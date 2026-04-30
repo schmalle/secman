@@ -30,8 +30,7 @@ The Secman backend must be running and accessible.
 
 ```bash
 # Start the backend
-cd src/backendng
-./gradlew run
+./scriptpp/startbackenddev.sh
 
 # Verify it's running
 curl http://localhost:8080/health
