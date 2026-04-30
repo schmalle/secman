@@ -1,0 +1,38 @@
+{
+  "cli_version": "0.5.5",
+  "checkpoint_id": "0f1aacf1f45b",
+  "session_id": "590c0959-4ec9-413a-9948-40b543360bc0",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-30T09:51:02.069515Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/backendng/src/main/kotlin/com/secman/controller/VulnerabilityManagementController.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/AccessibleAssetIdsCache.kt"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "ae221085e6f3",
+  "token_usage": {
+    "input_tokens": 73,
+    "cache_creation_tokens": 284507,
+    "cache_read_tokens": 6954091,
+    "output_tokens": 57844,
+    "api_call_count": 48
+  },
+  "session_metrics": {
+    "turn_count": 2
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-30T09:51:02.052842Z",
+    "agent_lines": 63,
+    "agent_removed": 4,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 43,
+    "total_committed": 63,
+    "total_lines_changed": 110,
+    "agent_percentage": 60.909090909090914,
+    "metric_version": 2
+  }
+}
