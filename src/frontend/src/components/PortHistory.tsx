@@ -56,7 +56,13 @@ const PortHistory: React.FC<PortHistoryProps> = ({ assetId, assetName, onClose }
 
       if (response.ok) {
         const data: PortHistoryData = await response.json();
-        setPortHistory(data);
+        setPortHistory({
+          ...data,
+          scans: (data.scans ?? []).map(scan => ({
+            ...scan,
+            ports: scan.ports ?? [],
+          })),
+        });
       } else if (response.status === 404) {
         setError('Asset not found.');
       } else {
