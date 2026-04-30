@@ -12,6 +12,7 @@ interface WorkgroupAwsAccountRepository : JpaRepository<WorkgroupAwsAccount, Lon
     @Query("SELECT DISTINCT waa.awsAccountId FROM WorkgroupAwsAccount waa WHERE EXISTS (SELECT 1 FROM waa.workgroup w JOIN w.users u WHERE u.id = :userId)")
     fun findDistinctAwsAccountIdsByUserId(userId: Long): List<String>
 
+    @Query("SELECT waa FROM WorkgroupAwsAccount waa JOIN FETCH waa.createdBy JOIN FETCH waa.workgroup WHERE waa.workgroup.id = :workgroupId")
     fun findByWorkgroupId(workgroupId: Long): List<WorkgroupAwsAccount>
 
     fun findByWorkgroupIdAndAwsAccountId(
