@@ -1,0 +1,1 @@
+extend the claude.md to replace "A feature is only complete when ./gradlew build shows no errors AND the startbackenddev.sh script started without errors"
