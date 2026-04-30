@@ -2,6 +2,7 @@ package com.secman.domain
 
 import com.fasterxml.jackson.annotation.JsonIgnore
 import io.micronaut.serde.annotation.Serdeable
+import org.hibernate.annotations.BatchSize
 import org.hibernate.annotations.JdbcTypeCode
 import org.hibernate.type.SqlTypes
 import jakarta.persistence.*
@@ -27,6 +28,12 @@ import java.time.LocalDateTime
     ]
 )
 @Serdeable
+// PERFORMANCE: When Asset is loaded as a lazy ManyToOne target (e.g.
+// Vulnerability.asset), Hibernate batches up to N proxy initializations into a
+// single IN-list select instead of issuing one round-trip per row. Sized to
+// match the typical vulnerability page (50). Class-level placement is required:
+// Hibernate 6's AttributeBinderType rejects @BatchSize on @ManyToOne fields.
+@BatchSize(size = 50)
 data class Asset(
     @Id
     @GeneratedValue
