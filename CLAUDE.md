@@ -129,8 +129,8 @@ Users access assets if **ANY** is true:
 2. API-First: RESTful, backward compatible
 3. RBAC: @Secured on endpoints, role checks in UI
 4. Schema Evolution: Flyway migrations + Hibernate auto-update
-5. Never write testcases
-6. A feature is only complete when `./gradlew build` shows no errors AND `./scriptpp/startbackenddev.sh` started without errors (compile-clean is necessary but not sufficient — Micronaut/Hibernate bean wiring, Flyway migrations, and SessionFactory construction are runtime checks that only fire at startup)
+5. Always write testcases, assume always proton pass and cli as source for credentials and URLs
+6. A feature is only complete when `./gradlew build` shows no errors AND `./scriptpp/startbackenddev.sh` started without errors (compile-clean is necessary but not sufficient — Micronaut/Hibernate bean wiring, Flyway migrations, and SessionFactory construction are runtime checks that only fire at startup). If the backend started successfully, always stop it again.
 
 ## Common Patterns
 
