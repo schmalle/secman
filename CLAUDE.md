@@ -4,8 +4,6 @@
 
 **secman** - Security requirement and risk assessment management tool
 
-**Stack**: Kotlin 2.3.20 / Java 21, Micronaut 4.10, Hibernate JPA | Astro 6.1, React 19, Bootstrap 5.3 | MariaDB 11.4, Gradle 9.4.1
-
 **Architecture**:
 
 - Backend: `src/backendng/` - Domain (JPA) → Repository → Service → Controller (REST)
@@ -121,7 +119,8 @@ Users access assets if **ANY** is true:
 - Specific test class: `./gradlew :backendng:test --tests "VulnerabilityServiceTest"`
 - E2E tests (Playwright): Setup: `cd tests/e2e && npm install && npx playwright install chrome msedge`
 - E2E tests (run with pass-cli secrets): `./tests/e2e/run-e2e.sh`
-- E2E tests (run manually): `cd tests/e2e && SECMAN_BASE_URL=http://localhost:4321 SECMAN_ADMIN_NAME=... SECMAN_ADMIN_PASS=... SECMAN_USER_USER=... SECMAN_USER_PASS=... npx playwright test`
+- E2E tests (run manually): `cd tests/e2e && SECMAN_BASE_URL="$SECMAN_HOST" SECMAN_ADMIN_NAME=... SECMAN_ADMIN_PASS=... SECMAN_USER_USER=... SECMAN_USER_PASS=... npx playwright test`
+  - NEVER hardcode `http://localhost:4321` or `http://localhost:8080` — `SECMAN_HOST` must be sourced from `pass-cli`
 
 **Principles**:
 
@@ -131,6 +130,7 @@ Users access assets if **ANY** is true:
 4. Schema Evolution: Flyway migrations + Hibernate auto-update
 5. Always write testcases, assume always proton pass and cli as source for credentials and URLs
 6. A feature is only complete when `./gradlew build` shows no errors AND `./scriptpp/startbackenddev.sh` started without errors (compile-clean is necessary but not sufficient — Micronaut/Hibernate bean wiring, Flyway migrations, and SessionFactory construction are runtime checks that only fire at startup). If the backend started successfully, always stop it again.
+7. Test HTTP access: All test cases (unit, integration, E2E, CLI) MUST route HTTP traffic through the `SECMAN_HOST` environment variable, which is sourced via `pass-cli`. Never hardcode `http://localhost:8080` or `http://localhost:4321` in tests, fixtures, or test commands.
 
 ## Common Patterns
 
@@ -291,22 +291,25 @@ Run `/e2eexception`, `/admin-asset-e2e`, or `/e2ejs` to start the full E2E test 
 
 ### Service Health
 
-- Backend health: `http://localhost:8080` (120s timeout)
-- Frontend health: `http://localhost:4321` (60s timeout)
+Liveness is verified by checking that a process is bound to the expected port — not by HTTP probes against `localhost`:
+
+- Backend liveness: a process must be listening on TCP port `8080` (120s timeout). Check with `lsof -iTCP:8080 -sTCP:LISTEN -n -P` (or `ss -ltn 'sport = :8080'`).
+- Frontend liveness: a process must be listening on TCP port `4321` (60s timeout). Check with `lsof -iTCP:4321 -sTCP:LISTEN -n -P` (or `ss -ltn 'sport = :4321'`).
+
+Functional verification (HTTP calls from tests) must go through the `SECMAN_HOST` environment variable, sourced via `pass-cli`. Do NOT curl `http://localhost:8080` or `http://localhost:4321` from tests.
 
 ## Detailed Technologies
 
-- **Backend**: Kotlin 2.3.20 / Java 21, Micronaut 4.10, Hibernate JPA, PicoCLI 4.7.7, Jakarta Mail, Apache POI, AWS SDK v2
-- **Frontend**: Astro 6.1, React 19, TypeScript, Bootstrap 5.3, Axios
+- **Backend**: Kotlin 2.3.21 / Java 21, Micronaut 4.10, Hibernate JPA, PicoCLI 4.7.7, Jakarta Mail, Apache POI, AWS SDK v2
+- **Frontend**: Astro 6.2, React 19, TypeScript, Bootstrap 5.3, Axios
 - **Database**: MariaDB 11.4, HikariCP connection pool — schema via Flyway + Hibernate auto-migration (per Constitution VI)
-- **Build**: Gradle 9.4.1 (Kotlin DSL)
+- **Build**: Gradle 9.5.0 (Kotlin DSL)
 - **Testing**: JUnit 6, Mockk, Testcontainers, AssertJ, Playwright
 - **CLI**: PicoCLI, CrowdStrike Falcon API, AWS SDK v2 (S3)
 - **MCP**: Streamable HTTP transport, JSON-RPC 2.0
 
 ---
 
-
 ---
 
-*Last updated: 2026-04-27*
+*Last updated: 2026-05-01*

@@ -28,10 +28,10 @@ SecMan is a full-stack security management platform that helps organizations man
 
 ## Technology Stack
 
-- **Backend**: Micronaut 4.10 + Kotlin 2.3.20 (Java 21)
-- **Frontend**: Astro 6.1 + React 19 + Bootstrap 5.3
+- **Backend**: Micronaut 4.10 + Kotlin 2.3.21 (Java 21)
+- **Frontend**: Astro 6.2 + React 19 + Bootstrap 5.3
 - **Database**: MariaDB 11.4 with Hibernate JPA
-- **Build System**: Gradle 9.4.1 (Kotlin DSL)
+- **Build System**: Gradle 9.5.0 (Kotlin DSL)
 - **CLI Tools**: Kotlin/Picocli for CrowdStrike queries, notifications, and data management
 - **Authentication**: JWT with OAuth2/OIDC and Passkeys (WebAuthn)
 
@@ -190,7 +190,7 @@ SecMan is a full-stack security management platform that helps organizations man
 - Java 21 (JDK 21, Amazon Corretto recommended)
 - Node.js 20+
 - MariaDB 11.4+
-- Gradle 9.4+ (wrapper included)
+- Gradle 9.5+ (wrapper included)
 - Git
 - Docker (optional, for integration tests)
 

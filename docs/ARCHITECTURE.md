@@ -59,18 +59,18 @@ Secman is a security requirement and risk assessment management tool consisting 
 
 | Layer        | Technology    | Version              |
 | ------------ | ------------- | -------------------- |
-| **Backend**  | Kotlin        | 2.3.20               |
+| **Backend**  | Kotlin        | 2.3.21               |
 |              | Java          | 21                   |
 |              | Micronaut     | 4.10                 |
 |              | Hibernate JPA | (via Micronaut Data) |
-| **Frontend** | Astro         | 6.1                  |
+| **Frontend** | Astro         | 6.2                  |
 |              | React         | 19                   |
 |              | Bootstrap     | 5.3                  |
 |              | Axios         | (HTTP client)        |
 | **Database** | MariaDB       | 11.4                 |
 | **CLI**      | Picocli       | 4.7.7                |
 |              | AWS SDK       | v2                   |
-| **Build**    | Gradle        | 9.4.1                |
+| **Build**    | Gradle        | 9.5.0                |
 
 ---
 

@@ -48,8 +48,8 @@ Complete production deployment guide for the Secman security management applicat
 
 **Components:**
 
-- **Backend**: Kotlin 2.3.20, Java 21, Micronaut 4.10
-- **Frontend**: Astro 6.1, React 19, Node.js 20.x
+- **Backend**: Kotlin 2.3.21, Java 21, Micronaut 4.10
+- **Frontend**: Astro 6.2, React 19, Node.js 20.x
 - **Database**: MariaDB 11.4
 - **Reverse Proxy**: Nginx with SSL termination
 

@@ -22,12 +22,12 @@ dependencies {
     implementation(project(":shared"))
     
     // Micronaut Core
-    implementation("io.micronaut:micronaut-http-client:4.10.18")
-    implementation("io.micronaut:micronaut-http-server-netty:4.10.18")
-    implementation("io.micronaut:micronaut-jackson-databind:4.10.18")
+    implementation("io.micronaut:micronaut-http-client:4.10.22")
+    implementation("io.micronaut:micronaut-http-server-netty:4.10.22")
+    implementation("io.micronaut:micronaut-jackson-databind:4.10.22")
     implementation("io.micronaut.kotlin:micronaut-kotlin-runtime")
     implementation("io.micronaut.kotlin:micronaut-kotlin-extension-functions")
-    implementation("io.micronaut:micronaut-retry:4.10.18")
+    implementation("io.micronaut:micronaut-retry:4.10.22")
     implementation("io.micronaut.cache:micronaut-cache-caffeine")
     
     // Database
@@ -37,16 +37,16 @@ dependencies {
     runtimeOnly("org.mariadb.jdbc:mariadb-java-client:3.5.8")
 
 	implementation("io.micronaut.flyway:micronaut-flyway:7.9.2")
-	runtimeOnly("org.flywaydb:flyway-core:12.4.0")
-	runtimeOnly("org.flywaydb:flyway-mysql:12.4.0")
+	runtimeOnly("org.flywaydb:flyway-core:12.5.0")
+	runtimeOnly("org.flywaydb:flyway-mysql:12.5.0")
 	
     // Security
-    implementation("io.micronaut.security:micronaut-security-jwt:4.17.1")
-    implementation("io.micronaut.security:micronaut-security-oauth2:4.17.1")
+    implementation("io.micronaut.security:micronaut-security-jwt:4.18.0")
+    implementation("io.micronaut.security:micronaut-security-oauth2:4.18.0")
 
     // WebAuthn/Passkey support
-    implementation("com.webauthn4j:webauthn4j-core:0.31.3.RELEASE")
-    implementation("com.webauthn4j:webauthn4j-metadata:0.31.3.RELEASE")
+    implementation("com.webauthn4j:webauthn4j-core:0.31.5.RELEASE")
+    implementation("com.webauthn4j:webauthn4j-metadata:0.31.5.RELEASE")
 
     // Validation
     implementation("io.micronaut.validation:micronaut-validation")
@@ -61,7 +61,7 @@ dependencies {
 
     // Email templates (Thymeleaf) - Feature 035
     implementation("io.micronaut.views:micronaut-views-thymeleaf")
-    implementation("org.thymeleaf:thymeleaf:3.1.4.RELEASE")
+    implementation("org.thymeleaf:thymeleaf:3.1.5.RELEASE")
     
     // Serialization
     implementation("io.micronaut.serde:micronaut-serde-jackson:2.16.2")
@@ -82,7 +82,7 @@ dependencies {
     // Logging
     runtimeOnly("ch.qos.logback:logback-classic:1.5.32")
     // Bridge Log4j to Logback (required for Apache POI)
-    runtimeOnly("org.apache.logging.log4j:log4j-to-slf4j:2.25.3")
+    runtimeOnly("org.apache.logging.log4j:log4j-to-slf4j:2.25.4")
     // Logstash encoder for JSON logging (Feature 046)
     implementation("net.logstash.logback:logstash-logback-encoder:9.0")
     // Conditional logging support (Janino) - for SECMAN_LOGGING env var
@@ -92,7 +92,7 @@ dependencies {
     runtimeOnly("org.yaml:snakeyaml:2.6")
     
     // Password encoding
-    implementation("org.springframework.security:spring-security-crypto:7.0.4")
+    implementation("org.springframework.security:spring-security-crypto:7.0.5")
     implementation("commons-logging:commons-logging:1.3.6")
     
     // Document generation (Apache POI)
@@ -106,7 +106,7 @@ dependencies {
     implementation("commons-net:commons-net:3.13.0")
 
     // HTML processing for email
-    implementation("org.jsoup:jsoup:1.22.1")
+    implementation("org.jsoup:jsoup:1.22.2")
     
     // KSP
     ksp("io.micronaut:micronaut-http-validation")
@@ -121,7 +121,7 @@ dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:6.0.3")
     testImplementation("io.micronaut.test:micronaut-test-junit5:4.10.3")
     testImplementation("io.mockk:mockk:1.14.9")
-    testImplementation("org.testcontainers:testcontainers:2.0.4")
+    testImplementation("org.testcontainers:testcontainers:2.0.5")
     testImplementation("org.testcontainers:mariadb:1.21.4")
     testImplementation("org.testcontainers:junit-jupiter:1.21.4")
     testImplementation("org.assertj:assertj-core:3.27.7")
