@@ -18,7 +18,9 @@ data class ConfigBundleDto(
     val userMappings: List<UserMappingExportDto> = emptyList(),
     val identityProviders: List<IdentityProviderExportDto> = emptyList(),
     val falconConfigs: List<FalconConfigExportDto> = emptyList(),
-    val mcpApiKeys: List<McpApiKeyExportDto> = emptyList()
+    val mcpApiKeys: List<McpApiKeyExportDto> = emptyList(),
+    val awsAccountSharing: List<AwsAccountSharingExportDto> = emptyList(),
+    val workgroupAwsAccounts: List<WorkgroupAwsAccountExportDto> = emptyList()
 )
 
 /**
@@ -76,7 +78,7 @@ data class UserMappingExportDto(
 data class IdentityProviderExportDto(
     val name: String,
     val type: String, // OIDC or SAML
-    val clientId: String,
+    val clientId: String? = null, // Nullable: legacy rows or SAML-only providers may lack a client_id
     val clientSecretMasked: Boolean = true, // Indicates if secret needs re-entry
     val clientSecret: String? = null, // Will be null if masked
     val tenantId: String? = null,
@@ -126,6 +128,33 @@ data class McpApiKeyExportDto(
 )
 
 /**
+ * AWS Account Sharing export data — directional, non-transitive AWS account
+ * visibility sharing rules between users (CLAUDE.md access rule #7).
+ * Users are referenced by email for portability across environments.
+ */
+@Serdeable
+data class AwsAccountSharingExportDto(
+    val sourceUserEmail: String,
+    val targetUserEmail: String,
+    val createdByEmail: String? = null,
+    val createdAt: Instant? = null
+)
+
+/**
+ * Workgroup ↔ AWS Account assignment export data — assigns an AWS account ID
+ * to a workgroup so that all members of that workgroup gain visibility on
+ * assets whose `cloudAccountId` matches (CLAUDE.md access rule #9). Workgroups
+ * are referenced by name to remain portable across environments.
+ */
+@Serdeable
+data class WorkgroupAwsAccountExportDto(
+    val workgroupName: String,
+    val awsAccountId: String,
+    val createdByEmail: String? = null,
+    val createdAt: Instant? = null
+)
+
+/**
  * Import result for bundle import operations
  */
 @Serdeable
@@ -149,9 +178,12 @@ data class ImportCounts(
     val userMappings: Int = 0,
     val identityProviders: Int = 0,
     val falconConfigs: Int = 0,
-    val mcpApiKeys: Int = 0
+    val mcpApiKeys: Int = 0,
+    val awsAccountSharing: Int = 0,
+    val workgroupAwsAccounts: Int = 0
 ) {
-    fun total(): Int = users + workgroups + userMappings + identityProviders + falconConfigs + mcpApiKeys
+    fun total(): Int = users + workgroups + userMappings + identityProviders +
+        falconConfigs + mcpApiKeys + awsAccountSharing + workgroupAwsAccounts
 }
 
 /**

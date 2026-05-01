@@ -1,5 +1,6 @@
 package com.secman.service
 
+import com.secman.domain.AwsAccountSharing
 import com.secman.domain.Criticality
 import com.secman.domain.FalconConfig
 import com.secman.domain.IdentityProvider
@@ -7,12 +8,14 @@ import com.secman.domain.McpApiKey
 import com.secman.domain.User
 import com.secman.domain.UserMapping
 import com.secman.domain.Workgroup
+import com.secman.domain.WorkgroupAwsAccount
 import com.secman.dto.*
 import com.secman.repository.*
 import io.micronaut.security.authentication.Authentication
 import io.micronaut.transaction.annotation.Transactional
 import jakarta.inject.Singleton
 import org.slf4j.LoggerFactory
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
 import jakarta.persistence.EntityManager
 import java.time.Instant
 import java.time.LocalDateTime
@@ -29,11 +32,13 @@ open class ConfigBundleService(
     private val identityProviderRepository: IdentityProviderRepository,
     private val falconConfigRepository: FalconConfigRepository,
     private val mcpApiKeyRepository: McpApiKeyRepository,
+    private val awsAccountSharingRepository: AwsAccountSharingRepository,
+    private val workgroupAwsAccountRepository: WorkgroupAwsAccountRepository,
     private val entityManager: EntityManager,
-    private val passwordEncoder: org.springframework.security.crypto.password.PasswordEncoder,
     private val auditLogService: AuditLogService
 ) {
     private val logger = LoggerFactory.getLogger(ConfigBundleService::class.java)
+    private val passwordEncoder = BCryptPasswordEncoder()
 
     companion object {
         const val BUNDLE_VERSION = "1.0"
@@ -57,6 +62,8 @@ open class ConfigBundleService(
             val identityProviders = exportIdentityProviders()
             val falconConfigs = exportFalconConfigs()
             val mcpApiKeys = exportMcpApiKeys()
+            val awsAccountSharing = exportAwsAccountSharing()
+            val workgroupAwsAccounts = exportWorkgroupAwsAccounts()
 
             val bundle = ConfigBundleDto(
                 version = BUNDLE_VERSION,
@@ -71,7 +78,9 @@ open class ConfigBundleService(
                 userMappings = userMappings,
                 identityProviders = identityProviders,
                 falconConfigs = falconConfigs,
-                mcpApiKeys = mcpApiKeys
+                mcpApiKeys = mcpApiKeys,
+                awsAccountSharing = awsAccountSharing,
+                workgroupAwsAccounts = workgroupAwsAccounts
             )
 
             // Log the export action
@@ -81,7 +90,8 @@ open class ConfigBundleService(
                 entityType = "ConfigBundle",
                 details = "Exported ${users.size} users, ${workgroups.size} workgroups, " +
                          "${userMappings.size} mappings, ${identityProviders.size} identity providers, " +
-                         "${falconConfigs.size} falcon configs, ${mcpApiKeys.size} MCP keys"
+                         "${falconConfigs.size} falcon configs, ${mcpApiKeys.size} MCP keys, " +
+                         "${awsAccountSharing.size} AWS sharing rules, ${workgroupAwsAccounts.size} workgroup AWS account assignments"
             )
 
             logger.info("Configuration bundle export completed successfully")
@@ -176,6 +186,20 @@ open class ConfigBundleService(
             warnings.addAll(mcpResults.warnings)
             newMcpApiKeys.addAll(mcpResults.newKeys)
 
+            // 7. Import AWS account sharing rules (depends on users)
+            val sharingResults = importAwsAccountSharing(bundle.awsAccountSharing, authentication, options)
+            importedCounts = importedCounts.copy(awsAccountSharing = sharingResults.imported)
+            skippedCounts = skippedCounts.copy(awsAccountSharing = sharingResults.skipped)
+            errors.addAll(sharingResults.errors)
+            warnings.addAll(sharingResults.warnings)
+
+            // 8. Import workgroup ↔ AWS account assignments (depends on users + workgroups)
+            val wgAwsResults = importWorkgroupAwsAccounts(bundle.workgroupAwsAccounts, authentication, options)
+            importedCounts = importedCounts.copy(workgroupAwsAccounts = wgAwsResults.imported)
+            skippedCounts = skippedCounts.copy(workgroupAwsAccounts = wgAwsResults.skipped)
+            errors.addAll(wgAwsResults.errors)
+            warnings.addAll(wgAwsResults.warnings)
+
             // Log the import action
             auditLogService.logAction(
                 authentication = authentication,
@@ -245,6 +269,29 @@ open class ConfigBundleService(
             }
             if (falcon.clientSecretMasked) {
                 requiredSecrets.add(RequiredSecretInfo("FalconConfig", "default", "client_secret"))
+            }
+        }
+
+        // AWS sharing rules: warn if either side's user is missing.
+        bundle.awsAccountSharing.forEach { sharing ->
+            if (!userRepository.findByEmail(sharing.sourceUserEmail).isPresent) {
+                warnings.add("AWS sharing source user '${sharing.sourceUserEmail}' not present (will fail unless imported with this bundle)")
+            }
+            if (!userRepository.findByEmail(sharing.targetUserEmail).isPresent) {
+                warnings.add("AWS sharing target user '${sharing.targetUserEmail}' not present (will fail unless imported with this bundle)")
+            }
+        }
+
+        // Workgroup AWS assignments: warn on missing workgroup; conflict on duplicate.
+        bundle.workgroupAwsAccounts.forEach { wgaws ->
+            val workgroup = workgroupRepository.findByNameIgnoreCase(wgaws.workgroupName)
+            if (!workgroup.isPresent) {
+                warnings.add("WorkgroupAwsAccount references missing workgroup '${wgaws.workgroupName}' (will fail unless imported with this bundle)")
+            } else if (workgroupAwsAccountRepository
+                    .existsByWorkgroupIdAndAwsAccountId(workgroup.get().id!!, wgaws.awsAccountId)
+            ) {
+                conflicts.add(ConflictInfo("WorkgroupAwsAccount",
+                    "${wgaws.workgroupName}/${wgaws.awsAccountId}", "already_exists"))
             }
         }
 
@@ -367,6 +414,32 @@ open class ConfigBundleService(
                 createdAt = java.time.ZoneId.systemDefault().rules.getOffset(key.createdAt).let { offset ->
                     key.createdAt.toInstant(offset)
                 }
+            )
+        }
+    }
+
+    private fun exportAwsAccountSharing(): List<AwsAccountSharingExportDto> {
+        // Use eager-loaded variant so we can read user emails without triggering
+        // additional LAZY proxies after the @Transactional boundary closes.
+        return awsAccountSharingRepository.findAllWithUsers().map { sharing ->
+            AwsAccountSharingExportDto(
+                sourceUserEmail = sharing.sourceUser.email,
+                targetUserEmail = sharing.targetUser.email,
+                createdByEmail = sharing.createdBy.email,
+                createdAt = sharing.createdAt
+            )
+        }
+    }
+
+    private fun exportWorkgroupAwsAccounts(): List<WorkgroupAwsAccountExportDto> {
+        // findAll() returns LAZY associations; resolve workgroup name and
+        // creator email via the loaded Hibernate session before serialization.
+        return workgroupAwsAccountRepository.findAll().map { wgaws ->
+            WorkgroupAwsAccountExportDto(
+                workgroupName = wgaws.workgroup.name,
+                awsAccountId = wgaws.awsAccountId,
+                createdByEmail = wgaws.createdBy.email,
+                createdAt = wgaws.createdAt
             )
         }
     }
@@ -588,7 +661,7 @@ open class ConfigBundleService(
                     val provider = IdentityProvider(
                         name = dto.name,
                         type = IdentityProvider.ProviderType.valueOf(dto.type),
-                        clientId = dto.clientId,
+                        clientId = dto.clientId ?: "",
                         clientSecret = clientSecret ?: "",
                         tenantId = dto.tenantId,
                         discoveryUrl = dto.discoveryUrl,
@@ -772,6 +845,127 @@ open class ConfigBundleService(
         }
 
         return ImportMcpResult(imported, skipped, errors, warnings, newKeys)
+    }
+
+    private fun importAwsAccountSharing(
+        sharingRules: List<AwsAccountSharingExportDto>,
+        authentication: Authentication,
+        options: ImportOptions
+    ): ImportEntityResult {
+        var imported = 0
+        var skipped = 0
+        val errors = mutableListOf<String>()
+        val warnings = mutableListOf<String>()
+
+        // Resolve the importing admin once — used as fallback `createdBy` when
+        // the original creator's email isn't present in this target system.
+        val fallbackCreator: User? = userRepository.findByUsername(authentication.name).orElse(null)
+            ?: userRepository.findByEmail(authentication.name).orElse(null)
+
+        sharingRules.forEach { dto ->
+            try {
+                val source = userRepository.findByEmail(dto.sourceUserEmail).orElse(null)
+                val target = userRepository.findByEmail(dto.targetUserEmail).orElse(null)
+                if (source == null) {
+                    errors.add("AWS sharing: source user '${dto.sourceUserEmail}' not found")
+                    return@forEach
+                }
+                if (target == null) {
+                    errors.add("AWS sharing: target user '${dto.targetUserEmail}' not found")
+                    return@forEach
+                }
+                if (source.id == target.id) {
+                    errors.add("AWS sharing: source and target are the same user '${dto.sourceUserEmail}'")
+                    return@forEach
+                }
+
+                val existing = awsAccountSharingRepository
+                    .existsBySourceUserIdAndTargetUserId(source.id!!, target.id!!)
+                if (existing) {
+                    if (options.skipExisting) {
+                        skipped++
+                        warnings.add("AWS sharing '${dto.sourceUserEmail}' -> '${dto.targetUserEmail}' already exists, skipping")
+                    } else {
+                        errors.add("AWS sharing '${dto.sourceUserEmail}' -> '${dto.targetUserEmail}' already exists")
+                    }
+                    return@forEach
+                }
+
+                val createdBy = dto.createdByEmail?.let { userRepository.findByEmail(it).orElse(null) }
+                    ?: fallbackCreator
+                if (createdBy == null) {
+                    errors.add("AWS sharing: cannot resolve a creator user (importer not found in target system)")
+                    return@forEach
+                }
+
+                val rule = AwsAccountSharing(
+                    sourceUser = source,
+                    targetUser = target,
+                    createdBy = createdBy
+                )
+                awsAccountSharingRepository.save(rule)
+                imported++
+            } catch (e: Exception) {
+                errors.add("Failed to import AWS sharing rule '${dto.sourceUserEmail}' -> '${dto.targetUserEmail}': ${e.message}")
+            }
+        }
+
+        return ImportEntityResult(imported, skipped, errors, warnings)
+    }
+
+    private fun importWorkgroupAwsAccounts(
+        assignments: List<WorkgroupAwsAccountExportDto>,
+        authentication: Authentication,
+        options: ImportOptions
+    ): ImportEntityResult {
+        var imported = 0
+        var skipped = 0
+        val errors = mutableListOf<String>()
+        val warnings = mutableListOf<String>()
+
+        val fallbackCreator: User? = userRepository.findByUsername(authentication.name).orElse(null)
+            ?: userRepository.findByEmail(authentication.name).orElse(null)
+
+        assignments.forEach { dto ->
+            try {
+                val workgroup = workgroupRepository.findByNameIgnoreCase(dto.workgroupName).orElse(null)
+                if (workgroup == null) {
+                    errors.add("Workgroup AWS assignment: workgroup '${dto.workgroupName}' not found")
+                    return@forEach
+                }
+
+                if (workgroupAwsAccountRepository
+                        .existsByWorkgroupIdAndAwsAccountId(workgroup.id!!, dto.awsAccountId)
+                ) {
+                    if (options.skipExisting) {
+                        skipped++
+                        warnings.add("Workgroup '${dto.workgroupName}' -> AWS account '${dto.awsAccountId}' already exists, skipping")
+                    } else {
+                        errors.add("Workgroup '${dto.workgroupName}' -> AWS account '${dto.awsAccountId}' already exists")
+                    }
+                    return@forEach
+                }
+
+                val createdBy = dto.createdByEmail?.let { userRepository.findByEmail(it).orElse(null) }
+                    ?: fallbackCreator
+                if (createdBy == null) {
+                    errors.add("Workgroup AWS assignment: cannot resolve a creator user (importer not found in target system)")
+                    return@forEach
+                }
+
+                val assignment = WorkgroupAwsAccount(
+                    workgroup = workgroup,
+                    awsAccountId = dto.awsAccountId,
+                    createdBy = createdBy
+                )
+                workgroupAwsAccountRepository.save(assignment)
+                imported++
+            } catch (e: Exception) {
+                errors.add("Failed to import workgroup AWS assignment '${dto.workgroupName}/${dto.awsAccountId}': ${e.message}")
+            }
+        }
+
+        return ImportEntityResult(imported, skipped, errors, warnings)
     }
 
     private val secureRandom = java.security.SecureRandom()

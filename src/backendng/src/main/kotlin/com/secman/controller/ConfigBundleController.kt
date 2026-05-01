@@ -222,7 +222,9 @@ open class ConfigBundleController(
                 "userMappings",
                 "identityProviders",
                 "falconConfigs",
-                "mcpApiKeys"
+                "mcpApiKeys",
+                "awsAccountSharing",
+                "workgroupAwsAccounts"
             ),
             "requiredPermission" to "ADMIN"
         )

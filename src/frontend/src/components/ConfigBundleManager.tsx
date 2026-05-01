@@ -19,6 +19,8 @@ interface ImportCounts {
   identityProviders: number;
   falconConfigs: number;
   mcpApiKeys: number;
+  awsAccountSharing: number;
+  workgroupAwsAccounts: number;
 }
 
 interface NewMcpApiKey {
@@ -269,6 +271,8 @@ const ConfigBundleManager: React.FC = () => {
                 <li>Identity providers (OAuth/SAML configurations)</li>
                 <li>CrowdStrike Falcon configuration</li>
                 <li>MCP API key metadata (without secrets)</li>
+                <li>AWS account sharing rules (user-to-user)</li>
+                <li>Workgroup AWS account assignments</li>
               </ul>
             </div>
 
@@ -416,6 +420,8 @@ const ConfigBundleManager: React.FC = () => {
                         <li><i className="bi bi-check text-success me-2"></i>Identity Providers: {importResult.imported.identityProviders}</li>
                         <li><i className="bi bi-check text-success me-2"></i>Falcon Configs: {importResult.imported.falconConfigs}</li>
                         <li><i className="bi bi-check text-success me-2"></i>MCP API Keys: {importResult.imported.mcpApiKeys}</li>
+                        <li><i className="bi bi-check text-success me-2"></i>AWS Sharing Rules: {importResult.imported.awsAccountSharing}</li>
+                        <li><i className="bi bi-check text-success me-2"></i>Workgroup AWS Accounts: {importResult.imported.workgroupAwsAccounts}</li>
                       </ul>
                     </div>
                     <div className="col-md-6">
@@ -427,6 +433,8 @@ const ConfigBundleManager: React.FC = () => {
                         <li><i className="bi bi-dash text-warning me-2"></i>Identity Providers: {importResult.skipped.identityProviders}</li>
                         <li><i className="bi bi-dash text-warning me-2"></i>Falcon Configs: {importResult.skipped.falconConfigs}</li>
                         <li><i className="bi bi-dash text-warning me-2"></i>MCP API Keys: {importResult.skipped.mcpApiKeys}</li>
+                        <li><i className="bi bi-dash text-warning me-2"></i>AWS Sharing Rules: {importResult.skipped.awsAccountSharing}</li>
+                        <li><i className="bi bi-dash text-warning me-2"></i>Workgroup AWS Accounts: {importResult.skipped.workgroupAwsAccounts}</li>
                       </ul>
                     </div>
                   </div>
