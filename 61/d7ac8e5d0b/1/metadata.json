@@ -1,0 +1,61 @@
+{
+  "cli_version": "0.5.5",
+  "checkpoint_id": "61d7ac8e5d0b",
+  "session_id": "969a87c3-ab0c-471e-b5ab-0f04a429a517",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-01T08:53:48.038205Z",
+  "branch": "main",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/backendng/src/main/kotlin/com/secman/controller/ConfigBundleController.kt",
+    "src/backendng/src/main/kotlin/com/secman/dto/ConfigBundleDto.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/ConfigBundleService.kt",
+    "src/frontend/src/components/ConfigBundleManager.tsx"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "248de820d523",
+  "token_usage": {
+    "input_tokens": 16,
+    "cache_creation_tokens": 74675,
+    "cache_read_tokens": 683118,
+    "output_tokens": 7133,
+    "api_call_count": 11
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-05-01T08:53:47.978571Z",
+    "agent_lines": 0,
+    "agent_removed": 2,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 7,
+    "total_committed": 2,
+    "total_lines_changed": 9,
+    "agent_percentage": 22.22222222222222,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 244,
+      "user_lines_removed": 7,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/scheduled_tasks.lock": 1,
+        "src/backendng/src/main/kotlin/com/secman/controller/ConfigBundleController.kt": 3,
+        "src/backendng/src/main/kotlin/com/secman/dto/ConfigBundleDto.kt": 35,
+        "src/backendng/src/main/kotlin/com/secman/service/ConfigBundleService.kt": 197,
+        "src/frontend/src/components/ConfigBundleManager.tsx": 8
+      },
+      "user_removed_per_file": {
+        "src/backendng/src/main/kotlin/com/secman/controller/ConfigBundleController.kt": 1,
+        "src/backendng/src/main/kotlin/com/secman/dto/ConfigBundleDto.kt": 3,
+        "src/backendng/src/main/kotlin/com/secman/service/ConfigBundleService.kt": 3
+      }
+    }
+  ]
+}
