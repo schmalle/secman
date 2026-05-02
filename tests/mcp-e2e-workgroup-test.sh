@@ -11,9 +11,9 @@
 # 6. Clean up all test data
 #
 # Prerequisites:
-# - curl, jq, op (1Password CLI) installed
-# - Environment variables set with 1Password URIs:
-#   SECMAN_ADMIN_NAME, SECMAN_ADMIN_PASS, SECMAN_API_KEY
+# - curl, jq, pass-cli (Proton Pass CLI) installed
+# - Environment variables set with Proton Pass URIs:
+#   SECMAN_ADMIN_NAME, SECMAN_ADMIN_PASS, SECMAN_MCP_KEY
 #
 # Usage:
 #   ./tests/mcp-e2e-workgroup-test.sh
@@ -21,10 +21,10 @@
 
 set -euo pipefail
 
-export SECMAN_ADMIN_NAME="op://test/secman/SECMAN_ADMIN_NAME"
-export SECMAN_ADMIN_PASS="op://test/secman/SECMAN_ADMIN_PASS"
-export SECMAN_API_KEY="op://test/secman/SECMAN_API_KEY"
-export SECMAN_TEST_DOMAIN="op://test/secman/SECMAN_TEST_DOMAIN"
+export SECMAN_ADMIN_NAME="pass://test/secman/SECMAN_ADMIN_NAME"
+export SECMAN_ADMIN_PASS="pass://test/secman/SECMAN_ADMIN_PASS"
+export SECMAN_MCP_KEY="pass://test/secman/SECMAN_MCP_KEY"
+export SECMAN_TEST_DOMAIN="pass://test/secman/SECMAN_TEST_DOMAIN"
 
 # Configuration
 BASE_URL="${SECMAN_BASE_URL:-http://localhost:8080}"
@@ -86,14 +86,15 @@ check_prerequisites() {
         missing+=("jq")
     fi
 
-    if ! command -v op &> /dev/null; then
-        missing+=("op (1Password CLI)")
-    fi
-
     if [[ ${#missing[@]} -gt 0 ]]; then
         log_error "Missing required tools: ${missing[*]}"
         log_info "Install missing tools and try again."
         exit 1
+    fi
+
+    # pass-cli is optional — only needed if env vars use pass:// URIs
+    if [[ "${SECMAN_ADMIN_NAME}" == pass://* ]] || [[ "${SECMAN_ADMIN_PASS}" == pass://* ]] || [[ "${SECMAN_MCP_KEY}" == pass://* ]] || [[ "${SECMAN_TEST_DOMAIN}" == pass://* ]]; then
+        command -v pass-cli &> /dev/null || { log_error "Proton Pass CLI (pass-cli) required for pass:// URIs"; exit 1; }
     fi
 
     # Check environment variables
@@ -107,8 +108,8 @@ check_prerequisites() {
         exit 1
     fi
 
-    if [[ -z "${SECMAN_API_KEY:-}" ]]; then
-        log_error "SECMAN_API_KEY environment variable not set"
+    if [[ -z "${SECMAN_MCP_KEY:-}" ]]; then
+        log_error "SECMAN_MCP_KEY environment variable not set"
         log_info "Create an MCP API key via the UI with these settings:"
         log_info "  - Permissions: WORKGROUPS_WRITE, ASSETS_READ, VULNERABILITIES_READ"
         log_info "  - User Delegation: ENABLED"
@@ -124,23 +125,23 @@ check_prerequisites() {
     log_success "Prerequisites check passed"
 }
 
-# Resolve credentials from 1Password
+# Resolve credentials (supports Proton Pass pass:// URIs or plain text)
 resolve_credentials() {
-    log_info "Resolving credentials from 1Password..."
+    log_info "Resolving credentials..."
 
-    # Check if credentials are 1Password URIs or plain values
-    if [[ "${SECMAN_ADMIN_NAME}" == op://* ]]; then
-        RESOLVED_USERNAME=$(op read "${SECMAN_ADMIN_NAME}" 2>/dev/null) || {
-            log_error "Failed to resolve SECMAN_ADMIN_NAME from 1Password"
+    # Check if credentials are Proton Pass URIs or plain values
+    if [[ "${SECMAN_ADMIN_NAME}" == pass://* ]]; then
+        RESOLVED_USERNAME=$(pass-cli item view "${SECMAN_ADMIN_NAME}" 2>/dev/null) || {
+            log_error "Failed to resolve SECMAN_ADMIN_NAME"
             exit 1
         }
     else
         RESOLVED_USERNAME="${SECMAN_ADMIN_NAME}"
     fi
 
-    if [[ "${SECMAN_ADMIN_PASS}" == op://* ]]; then
-        RESOLVED_PASSWORD=$(op read "${SECMAN_ADMIN_PASS}" 2>/dev/null) || {
-            log_error "Failed to resolve SECMAN_ADMIN_PASS from 1Password"
+    if [[ "${SECMAN_ADMIN_PASS}" == pass://* ]]; then
+        RESOLVED_PASSWORD=$(pass-cli item view "${SECMAN_ADMIN_PASS}" 2>/dev/null) || {
+            log_error "Failed to resolve SECMAN_ADMIN_PASS"
             exit 1
         }
     else
@@ -148,19 +149,19 @@ resolve_credentials() {
     fi
 
     # API key is required for MCP calls
-    if [[ "${SECMAN_API_KEY}" == op://* ]]; then
-        API_KEY=$(op read "${SECMAN_API_KEY}" 2>/dev/null) || {
-            log_error "Failed to resolve SECMAN_API_KEY from 1Password"
+    if [[ "${SECMAN_MCP_KEY}" == pass://* ]]; then
+        API_KEY=$(pass-cli item view "${SECMAN_MCP_KEY}" 2>/dev/null) || {
+            log_error "Failed to resolve SECMAN_MCP_KEY"
             exit 1
         }
     else
-        API_KEY="${SECMAN_API_KEY}"
+        API_KEY="${SECMAN_MCP_KEY}"
     fi
 
     # Resolve test domain
-    if [[ "${SECMAN_TEST_DOMAIN}" == op://* ]]; then
-        RESOLVED_TEST_DOMAIN=$(op read "${SECMAN_TEST_DOMAIN}" 2>/dev/null) || {
-            log_error "Failed to resolve SECMAN_TEST_DOMAIN from 1Password"
+    if [[ "${SECMAN_TEST_DOMAIN}" == pass://* ]]; then
+        RESOLVED_TEST_DOMAIN=$(pass-cli item view "${SECMAN_TEST_DOMAIN}" 2>/dev/null) || {
+            log_error "Failed to resolve SECMAN_TEST_DOMAIN"
             exit 1
         }
     else

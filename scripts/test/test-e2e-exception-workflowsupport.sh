@@ -15,7 +15,7 @@
 #
 # Usage:
 #   ./scriptpp/test/test-e2e-exception-workflowsupport.sh
-#   BASE_URL=http://localhost:8080 API_KEY=sk-xxx ./scriptpp/test/test-e2e-exception-workflowsupport.sh
+#   BASE_URL=http://localhost:8080 SECMAN_MCP_KEY=sk-xxx ./scriptpp/test/test-e2e-exception-workflowsupport.sh
 #   ./scriptpp/test/test-e2e-exception-workflowsupport.sh --verbose
 #   ./scriptpp/test/test-e2e-exception-workflowsupport.sh --help
 #
@@ -27,7 +27,7 @@ set -euo pipefail
 # =============================================================================
 
 BASE_URL="${BASE_URL:-http://localhost:8080}"
-API_KEY="${API_KEY:-}"
+SECMAN_MCP_KEY="${SECMAN_MCP_KEY:-}"
 VERBOSE="${VERBOSE:-false}"
 
 # Test data constants
@@ -68,13 +68,13 @@ Options:
 
 Environment Variables:
     BASE_URL            Backend URL (default: http://localhost:8080)
-    API_KEY             Admin MCP API key (required)
+    SECMAN_MCP_KEY      Admin MCP API key (required)
     SECMAN_ADMIN_EMAIL  Admin user email for delegation (default: environment variable SECMAN_ADMIN_EMAIL)
     VERBOSE             Enable verbose output (default: false)
 
 Examples:
     $0
-    BASE_URL=http://localhost:8080 API_KEY=sk-xxx $0
+    BASE_URL=http://localhost:8080 SECMAN_MCP_KEY=sk-xxx $0
     $0 --verbose
 
 Test Workflow:
@@ -124,7 +124,7 @@ mcp_call() {
     local arguments="$2"
     local delegated_email="${3:-}"
 
-    local headers=(-H "Content-Type: application/json" -H "X-MCP-API-Key: $API_KEY")
+    local headers=(-H "Content-Type: application/json" -H "X-MCP-API-Key: $SECMAN_MCP_KEY")
 
     if [[ -n "$delegated_email" ]]; then
         headers+=(-H "X-MCP-User-Email: $delegated_email")
@@ -264,8 +264,8 @@ if ! command -v jq &> /dev/null; then
 fi
 
 # Check API key
-if [[ -z "$API_KEY" ]]; then
-    fail "API_KEY environment variable is required. Set it with: API_KEY=sk-xxx $0"
+if [[ -z "$SECMAN_MCP_KEY" ]]; then
+    fail "SECMAN_MCP_KEY environment variable is required. Set it with: SECMAN_MCP_KEY=sk-xxx $0"
 fi
 
 # Verify backend is reachable

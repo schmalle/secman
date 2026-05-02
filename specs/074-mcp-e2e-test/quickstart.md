@@ -24,7 +24,7 @@ Set these in your shell profile or before running the test:
 ```bash
 export SECMAN_ADMIN_NAME="op://test/secman/SECMAN_ADMIN_NAME"
 export SECMAN_ADMIN_PASS="op://test/secman/SECMAN_ADMIN_PASS"
-export SECMAN_API_KEY="op://test/secman/SECMAN_API_KEY"
+export SECMAN_MCP_KEY="pass://test/secman/SECMAN_MCP_KEY"
 ```
 
 ### Running Secman Backend
