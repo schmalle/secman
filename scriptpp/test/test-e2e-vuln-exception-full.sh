@@ -37,10 +37,13 @@ set -euo pipefail
 
 BASE_URL="${BASE_URL:-${SECMAN_BACKEND_URL:-http://localhost:8080}}"
 FRONTEND_URL="${FRONTEND_URL:-http://localhost:4321}"
-SECMAN_MCP_KEY="${SECMAN_MCP_KEY:-}"
-ADMIN_USER_EMAIL="${SECMAN_ADMIN_EMAIL:-}"
-ADMIN_USERNAME="${SECMAN_ADMIN_NAME:-}"
-ADMIN_PASSWORD="${SECMAN_ADMIN_PASS:-}"
+# Strip trailing whitespace/newlines from secrets — pass-cli can append a trailing
+# newline depending on how the source field is stored, which would corrupt headers
+# (e.g. "X-MCP-API-Key: <key>\n\n" terminates the header block early, producing 400).
+SECMAN_MCP_KEY="$(printf '%s' "${SECMAN_MCP_KEY:-}" | tr -d '\r\n')"
+ADMIN_USER_EMAIL="$(printf '%s' "${SECMAN_ADMIN_EMAIL:-}" | tr -d '\r\n')"
+ADMIN_USERNAME="$(printf '%s' "${SECMAN_ADMIN_NAME:-}" | tr -d '\r\n')"
+ADMIN_PASSWORD="$(printf '%s' "${SECMAN_ADMIN_PASS:-}" | tr -d '\r\n')"
 VERBOSE="${VERBOSE:-false}"
 SKIP_UI="${SKIP_UI:-false}"
 
@@ -214,14 +217,26 @@ mcp_call() {
     fi
 }
 
-# Get JWT for a username/password (used to trigger materialized view refresh)
+# Get JWT for a username/password (used to trigger materialized view refresh).
+# Backend returns the JWT either in the JSON body (.token) or as a Set-Cookie
+# (secman_auth=<jwt>), depending on configuration. Handle both.
 get_jwt() {
     local user="$1"
     local pass="$2"
-    curl -sS -X POST "${BASE_URL}/api/auth/login" \
+    local resp_dir
+    resp_dir=$(mktemp -d)
+    local body="$resp_dir/body" headers="$resp_dir/headers"
+    curl -sS -D "$headers" -o "$body" -X POST "${BASE_URL}/api/auth/login" \
         -H "Content-Type: application/json" \
-        -d "$(jq -nc --arg u "$user" --arg p "$pass" '{username:$u,password:$p}')" \
-        | jq -r '.token // empty'
+        -d "$(jq -nc --arg u "$user" --arg p "$pass" '{username:$u,password:$p}')" || true
+    local token
+    token=$(jq -r '.token // empty' "$body" 2>/dev/null || true)
+    if [[ -z "$token" ]]; then
+        token=$(grep -i '^Set-Cookie: *secman_auth=' "$headers" 2>/dev/null \
+            | sed -E 's/.*secman_auth=([^;]*).*/\1/' | head -1)
+    fi
+    rm -rf "$resp_dir"
+    printf '%s' "$token"
 }
 
 trigger_view_refresh() {
@@ -236,9 +251,36 @@ trigger_view_refresh() {
         warn "Could not get admin JWT; view refresh may be stale"
         return 0
     fi
-    curl -sS -X POST "${BASE_URL}/api/materialized-view-refresh/trigger" \
-        -H "Authorization: Bearer $token" >/dev/null 2>&1 || true
-    sleep 5
+    # Capture the job id from the trigger response so we can verify completion
+    # specifically — /status only reports a "currently running" job, so race-free
+    # detection requires polling history for our job id reaching a terminal state.
+    local trigger_resp job_id
+    trigger_resp=$(curl -sS -X POST "${BASE_URL}/api/materialized-view-refresh/trigger" \
+        -H "Authorization: Bearer $token" 2>/dev/null || true)
+    job_id=$(echo "$trigger_resp" | jq -r '.id // empty' 2>/dev/null || true)
+    log_dbg "View refresh job id=$job_id"
+
+    # Poll history until our job's status is COMPLETED (or any terminal state).
+    # Max wait: 60s.
+    local deadline=$(( $(date +%s) + 60 ))
+    while (( $(date +%s) < deadline )); do
+        local hist status
+        hist=$(curl -s -H "Authorization: Bearer $token" \
+            "${BASE_URL}/api/materialized-view-refresh/history" 2>/dev/null || echo "[]")
+        if [[ -n "$job_id" ]]; then
+            status=$(echo "$hist" | jq -r --arg id "$job_id" \
+                '. // [] | map(select((.id|tostring) == $id))[0].status // empty' 2>/dev/null || true)
+        else
+            # No job id captured — fall back to the most recent job's status
+            status=$(echo "$hist" | jq -r '. // [] | sort_by(.startedAt) | reverse | .[0].status // empty' 2>/dev/null || true)
+        fi
+        if [[ "$status" == "COMPLETED" || "$status" == "FAILED" || "$status" == "CANCELLED" ]]; then
+            log_dbg "Materialized view refresh terminal status: $status"
+            return 0
+        fi
+        sleep 1
+    done
+    warn "Materialized view refresh did not complete within 60s — proceeding anyway"
 }
 
 db_exec() {
@@ -292,8 +334,12 @@ cleanup() {
         db_exec "DELETE FROM users WHERE id IN ($user_ids_csv);"
     fi
 
-    # 4) Refresh materialized view so deleted assets disappear
-    db_exec "TRUNCATE TABLE outdated_asset_materialized_view;"
+    # 4) Remove only our test assets' rows from the materialized view.
+    # Truncating the entire view here would force a multi-minute refresh of
+    # thousands of unrelated assets before any subsequent assertion can pass.
+    if [[ -n "$asset_ids_csv" && "$asset_ids_csv" != "NULL" ]]; then
+        db_exec "DELETE FROM outdated_asset_materialized_view WHERE asset_id IN ($asset_ids_csv);"
+    fi
 
     log_dbg "Cleanup ($phase) done"
 }
@@ -349,7 +395,7 @@ ok "Created asset $ASSET2_NAME (id=$ASSET2_ID, owner=$USER2_USERNAME)"
 res=$(mcp_call "add_vulnerability" "$(jq -nc \
     --arg h "$ASSET1_NAME" --arg c "$CVE_VULN1" --arg o "$USER1_USERNAME" \
     '{hostname:$h,cve:$c,criticality:"CRITICAL",daysOpen:40,owner:$o}')" "$ADMIN_USER_EMAIL")
-VULN1_ID=$(echo "$res" | jq -r '.vulnerabilityId')
+VULN1_ID=$(echo "$res" | jq -r '.id')
 [[ -z "$VULN1_ID" || "$VULN1_ID" == "null" ]] && fail "Failed to add vuln1: $res"
 ok "Added vuln1 ($CVE_VULN1, 40d) on $ASSET1_NAME — id=$VULN1_ID"
 
@@ -357,7 +403,7 @@ ok "Added vuln1 ($CVE_VULN1, 40d) on $ASSET1_NAME — id=$VULN1_ID"
 res=$(mcp_call "add_vulnerability" "$(jq -nc \
     --arg h "$ASSET1_NAME" --arg c "$CVE_VULN2" --arg o "$USER1_USERNAME" \
     '{hostname:$h,cve:$c,criticality:"CRITICAL",daysOpen:5,owner:$o}')" "$ADMIN_USER_EMAIL")
-VULN2_A1_ID=$(echo "$res" | jq -r '.vulnerabilityId')
+VULN2_A1_ID=$(echo "$res" | jq -r '.id')
 [[ -z "$VULN2_A1_ID" || "$VULN2_A1_ID" == "null" ]] && fail "Failed to add vuln2 on $ASSET1_NAME: $res"
 ok "Added vuln2 ($CVE_VULN2, 5d) on $ASSET1_NAME — id=$VULN2_A1_ID"
 
@@ -365,11 +411,27 @@ ok "Added vuln2 ($CVE_VULN2, 5d) on $ASSET1_NAME — id=$VULN2_A1_ID"
 res=$(mcp_call "add_vulnerability" "$(jq -nc \
     --arg h "$ASSET2_NAME" --arg c "$CVE_VULN2" --arg o "$USER2_USERNAME" \
     '{hostname:$h,cve:$c,criticality:"CRITICAL",daysOpen:5,owner:$o}')" "$ADMIN_USER_EMAIL")
-VULN2_A2_ID=$(echo "$res" | jq -r '.vulnerabilityId')
+VULN2_A2_ID=$(echo "$res" | jq -r '.id')
 [[ -z "$VULN2_A2_ID" || "$VULN2_A2_ID" == "null" ]] && fail "Failed to add vuln2 on $ASSET2_NAME: $res"
 ok "Added vuln2 ($CVE_VULN2, 5d) on $ASSET2_NAME — id=$VULN2_A2_ID"
 
 trigger_view_refresh
+
+# Poll the materialized view via MCP until testasset1 appears as overdue.
+# The refresh processes all assets in batches; testasset1 may show up well
+# before the full refresh completes — but we need it visible before Phase 3.
+log_dbg "Waiting for testasset1 to appear in overdue list (max 5min)..."
+view_deadline=$(( $(date +%s) + 300 ))
+while (( $(date +%s) < view_deadline )); do
+    res=$(mcp_call "get_overdue_assets" '{"size":100,"searchTerm":"testasset1"}' "$ADMIN_USER_EMAIL")
+    found=$(echo "$res" | jq -r --arg id "$ASSET1_ID" \
+        'if .assets then (.assets | map(select((.assetId) == ($id|tonumber))) | length) else 0 end')
+    if [[ "$found" == "1" ]]; then
+        log_dbg "testasset1 visible in overdue view"
+        break
+    fi
+    sleep 3
+done
 
 # =============================================================================
 # Phase 2 (MCP): Visibility / RBAC
@@ -396,8 +458,9 @@ u2_has_v2a2=$(echo "$res" | jq -r --arg id "$VULN2_A2_ID"  '.vulnerabilities | m
     || fail "user2 visibility wrong (vuln1=$u2_has_vuln1 v2a1=$u2_has_v2a1 v2a2=$u2_has_v2a2)"
 ok "user2 sees only vuln2-on-asset2"
 
-# As admin — should see all three
-res=$(mcp_call "get_vulnerabilities" '{"pageSize":500,"includeExcepted":true}' "$ADMIN_USER_EMAIL")
+# As admin — should see all three. Filter by our test CVE prefix so the result is
+# deterministic regardless of how many other vulnerabilities exist in the DB.
+res=$(mcp_call "get_vulnerabilities" '{"pageSize":500,"includeExcepted":true,"cveId":"CVE-E2E-"}' "$ADMIN_USER_EMAIL")
 a_has_vuln1=$(echo "$res" | jq -r --arg id "$VULN1_ID"    '.vulnerabilities | map(select(.id == ($id|tonumber))) | length')
 a_has_v2a1=$(echo "$res" | jq -r --arg id "$VULN2_A1_ID"  '.vulnerabilities | map(select(.id == ($id|tonumber))) | length')
 a_has_v2a2=$(echo "$res" | jq -r --arg id "$VULN2_A2_ID"  '.vulnerabilities | map(select(.id == ($id|tonumber))) | length')
@@ -411,21 +474,23 @@ ok "admin sees all 3 vulnerability rows"
 
 log "=== Phase 3: MCP overdue detection ==="
 
-res=$(mcp_call "get_overdue_assets" '{}' "$ADMIN_USER_EMAIL")
+# Filter overdue queries by our test asset name prefix so the page is deterministic
+# regardless of how many other overdue assets exist in the DB.
+res=$(mcp_call "get_overdue_assets" '{"size":100,"searchTerm":"testasset"}' "$ADMIN_USER_EMAIL")
 admin_has_a1_overdue=$(echo "$res" | jq -r --arg id "$ASSET1_ID" \
-    'if .assets then (.assets | map(select((.id // .assetId) == ($id|tonumber))) | length) else 0 end')
+    'if .assets then (.assets | map(select((.assetId) == ($id|tonumber))) | length) else 0 end')
 admin_has_a2_overdue=$(echo "$res" | jq -r --arg id "$ASSET2_ID" \
-    'if .assets then (.assets | map(select((.id // .assetId) == ($id|tonumber))) | length) else 0 end')
+    'if .assets then (.assets | map(select((.assetId) == ($id|tonumber))) | length) else 0 end')
 [[ "$admin_has_a1_overdue" == "1" && "$admin_has_a2_overdue" == "0" ]] \
     || fail "admin overdue list mismatch (a1=$admin_has_a1_overdue a2=$admin_has_a2_overdue)"
 ok "admin overdue list includes testasset1, excludes testasset2"
 
-res=$(mcp_call "get_overdue_assets" '{}' "$USER1_EMAIL")
+res=$(mcp_call "get_overdue_assets" '{"size":100,"searchTerm":"testasset"}' "$USER1_EMAIL")
 u1_overdue_count=$(echo "$res" | jq -r 'if .assets then (.assets | length) else 0 end')
 [[ "$u1_overdue_count" -ge 1 ]] || fail "user1 should see >=1 overdue asset, got $u1_overdue_count"
 ok "user1 sees overdue asset (count=$u1_overdue_count)"
 
-res=$(mcp_call "get_overdue_assets" '{}' "$USER2_EMAIL")
+res=$(mcp_call "get_overdue_assets" '{"size":100,"searchTerm":"testasset"}' "$USER2_EMAIL")
 u2_overdue_count=$(echo "$res" | jq -r 'if .assets then (.assets | length) else 0 end')
 [[ "$u2_overdue_count" == "0" ]] || fail "user2 should see 0 overdue assets, got $u2_overdue_count"
 ok "user2 sees 0 overdue assets"

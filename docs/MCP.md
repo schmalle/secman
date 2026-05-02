@@ -510,7 +510,9 @@ Get assets with overdue vulnerabilities. **Requires ADMIN or VULN role and User 
 | `minSeverity` | enum | Minimum severity: `CRITICAL`, `HIGH`, `MEDIUM`, `LOW` |
 | `searchTerm` | string | Search by asset name (case-insensitive) |
 
-Returns paginated list of assets with overdue vulnerability counts by severity.
+Returns a paginated list of assets with overdue vulnerability counts by severity.
+
+**Access control:** results are filtered through the same unified asset access rules used by other MCP tools (workgroup membership, asset ownership, AWS account / domain mappings, sharing). Non-admin users see only the overdue assets they would otherwise be able to see via `get_assets`. ADMIN sees all overdue assets regardless of workgroup assignment.
 
 #### `create_exception_request`
 Create a vulnerability exception request. **Requires User Delegation.**
@@ -638,7 +640,9 @@ Add a vulnerability to an asset. Creates the asset if it doesn't exist. **Requir
 | `daysOpen` | integer | No | Days the vulnerability has been open (default: 0) |
 | `owner` | string | No | Owner to assign to newly created asset |
 
-Returns vulnerability ID, asset details, and whether the asset/vulnerability were created or updated.
+Returns asset details, whether the asset/vulnerability were created or updated, and:
+- `id` (number) — database primary key of the affected vulnerability row (use this when looking the row up via `get_vulnerabilities` `.id` or other tools)
+- `vulnerabilityId` (string) — the CVE identifier (same as the input `cve`)
 
 ### Workgroup Management
 

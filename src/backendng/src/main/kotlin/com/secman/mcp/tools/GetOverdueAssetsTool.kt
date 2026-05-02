@@ -90,8 +90,22 @@ class GetOverdueAssetsTool(
                 pageable = pageable
             )
 
+            // The OutdatedAssetMaterializedView only filters by workgroup membership.
+            // That filter is incomplete vs. the unified asset access-control rules
+            // (owner match, AWS account match, AD domain match, etc.) and treats
+            // assets with no workgroups as visible to everyone — which leaks
+            // unassigned assets across users. Apply the unified MCP access-control
+            // filter here so the tool's view matches what the user can actually see
+            // through the rest of the API.
+            val accessibleIds = context.getFilterableAssetIds()
+            val accessFiltered = if (accessibleIds == null) {
+                result.content
+            } else {
+                result.content.filter { accessibleIds.contains(it.assetId) }
+            }
+
             // Map results to response format
-            val assets = result.content.map { asset ->
+            val assets = accessFiltered.map { asset ->
                 // Determine max severity based on counts
                 val maxSeverity = when {
                     asset.criticalCount > 0 -> "CRITICAL"
@@ -118,8 +132,8 @@ class GetOverdueAssetsTool(
             return McpToolResult.success(
                 mapOf(
                     "assets" to assets,
-                    "totalElements" to result.totalSize,
-                    "totalPages" to result.totalPages,
+                    "totalElements" to assets.size.toLong(),
+                    "totalPages" to if (assets.isEmpty()) 0 else 1,
                     "page" to page,
                     "size" to size
                 )
