@@ -33,9 +33,29 @@ import java.io.ByteArrayOutputStream
 class OutdatedAssetService(
     private val outdatedAssetRepository: OutdatedAssetMaterializedViewRepository,
     private val vulnerabilityRepository: VulnerabilityRepository,
-    private val assetRepository: AssetRepository
+    private val assetRepository: AssetRepository,
+    private val assetFilterService: AssetFilterService
 ) {
     private val log = LoggerFactory.getLogger(OutdatedAssetService::class.java)
+
+    /**
+     * Compute the unified-access-control set of asset IDs visible to the user.
+     *
+     * Returns null for ADMIN (universal access — no filtering).
+     * Otherwise delegates to AssetFilterService which applies:
+     *   workgroup membership, ownership, AWS account / domain mappings,
+     *   AWS account sharing, manual creation, scan upload.
+     *
+     * The materialized-view SQL only filters by workgroup_ids and treats
+     * blank workgroup_ids as "visible to everyone", so this post-filter is
+     * mandatory to enforce real access control on top of the view query.
+     */
+    private fun accessibleAssetIds(authentication: Authentication): Set<Long>? {
+        if (authentication.roles.contains("ADMIN")) return null
+        return assetFilterService.getAccessibleAssets(authentication)
+            .mapNotNull { it.id }
+            .toSet()
+    }
 
     /**
      * Get outdated assets with workgroup-based access control
@@ -65,13 +85,12 @@ class OutdatedAssetService(
         // Check if user has ADMIN role - if so, they see everything
         val isAdmin = authentication.roles.contains("ADMIN")
 
-        // Build workgroup filter parameter
+        // Build workgroup filter parameter — kept as a coarse SQL pre-filter
+        // for performance; the authoritative access decision is the unified
+        // post-filter below.
         val workgroupFilter = if (isAdmin) {
-            // ADMIN sees all - pass null to disable workgroup filtering
             null
         } else {
-            // VULN user - filter by their assigned workgroups
-            // Convert list of IDs to comma-separated string for LIKE query
             workgroupIds?.joinToString(",")
         }
 
@@ -79,13 +98,24 @@ class OutdatedAssetService(
         // Create pageable without sorting to avoid JPQL query issues
         val unsortedPageable = Pageable.from(pageable.number, pageable.size)
 
-        return outdatedAssetRepository.findOutdatedAssets(
+        val rawPage = outdatedAssetRepository.findOutdatedAssets(
             workgroupId = workgroupFilter,
             searchTerm = searchTerm,
             minSeverity = minSeverity,
             adDomain = adDomain,
             pageable = unsortedPageable
         )
+
+        // Apply unified access control. The SQL filter alone is permissive
+        // (treats workgroup_ids="" / NULL as visible-to-all), which leaks
+        // unassigned assets across users. AssetFilterService implements
+        // owner / AWS-account / domain / sharing rules so the result here
+        // matches what the user can see via /api/assets and other endpoints.
+        val accessible = accessibleAssetIds(authentication) ?: return rawPage
+
+        val filteredContent = rawPage.content.filter { accessible.contains(it.assetId) }
+        if (filteredContent.size == rawPage.content.size) return rawPage
+        return io.micronaut.data.model.Page.of(filteredContent, unsortedPageable, filteredContent.size.toLong())
     }
 
     /**
@@ -137,16 +167,28 @@ class OutdatedAssetService(
     fun countOutdatedAssets(authentication: Authentication): Long {
         val isAdmin = authentication.roles.contains("ADMIN")
 
-        return if (isAdmin) {
-            outdatedAssetRepository.count()
-        } else {
-            val workgroupIds = extractWorkgroupIds(authentication)
-            val workgroupFilter = workgroupIds?.joinToString(",")
-
-            outdatedAssetRepository.countOutdatedAssets(
-                workgroupId = workgroupFilter
-            )
+        if (isAdmin) {
+            return outdatedAssetRepository.count()
         }
+
+        // Non-admin: count via the authoritative unified access set rather
+        // than the SQL workgroup filter (which incorrectly counts assets
+        // with no workgroups for users with no workgroups). Pull all view
+        // rows the user can see and count them — bounded by the size of
+        // the user's accessible asset set.
+        val accessible = accessibleAssetIds(authentication) ?: return outdatedAssetRepository.count()
+        if (accessible.isEmpty()) return 0L
+
+        val workgroupIds = extractWorkgroupIds(authentication)
+        val workgroupFilter = workgroupIds?.joinToString(",")
+        val candidatePage = outdatedAssetRepository.findOutdatedAssets(
+            workgroupId = workgroupFilter,
+            searchTerm = null,
+            minSeverity = null,
+            adDomain = null,
+            pageable = Pageable.from(0, 100_000)
+        )
+        return candidatePage.content.count { accessible.contains(it.assetId) }.toLong()
     }
 
     /**
@@ -165,29 +207,13 @@ class OutdatedAssetService(
     ): OutdatedAssetMaterializedView? {
         val asset = outdatedAssetRepository.findById(id).orElse(null) ?: return null
 
-        // Check access control
-        val isAdmin = authentication.roles.contains("ADMIN")
-        if (isAdmin) {
-            // ADMIN sees all
-            return asset
-        }
+        if (authentication.roles.contains("ADMIN")) return asset
 
-        // VULN user - check workgroup access
-        val userWorkgroupIds = extractWorkgroupIds(authentication) ?: emptyList()
-
-        // If asset has no workgroups, allow access (backward compatibility)
-        if (asset.workgroupIds.isNullOrBlank()) {
-            return asset
-        }
-
-        // Parse asset's workgroup IDs
-        val workgroupIdsStr = asset.workgroupIds ?: ""
-        val assetWorkgroupIds = workgroupIdsStr.split(",").mapNotNull { it.toLongOrNull() }
-
-        // Check if user has access to any of the asset's workgroups
-        val hasAccess = assetWorkgroupIds.any { it in userWorkgroupIds }
-
-        return if (hasAccess) asset else null
+        // Use unified access control. The previous workgroup-only check
+        // had an explicit "no workgroups → allow" backward-compat bypass
+        // that exposed every unassigned asset to every VULN user.
+        val accessible = accessibleAssetIds(authentication) ?: return asset
+        return if (accessible.contains(asset.assetId)) asset else null
     }
 
     /**
@@ -204,6 +230,25 @@ class OutdatedAssetService(
         assetId: Long,
         pageable: Pageable
     ): Page<Vulnerability> {
+        return vulnerabilityRepository.findByAssetId(assetId, pageable)
+    }
+
+    /**
+     * Defense-in-depth variant: verify the user can access the asset before
+     * returning its vulnerabilities. Prefer this over [getVulnerabilitiesForAsset]
+     * for any new caller — the unchecked variant is retained only for the
+     * existing controller path that already validates access via
+     * [getOutdatedAssetById] immediately before calling.
+     */
+    fun getVulnerabilitiesForAssetWithAuth(
+        assetId: Long,
+        authentication: Authentication,
+        pageable: Pageable
+    ): Page<Vulnerability>? {
+        if (!authentication.roles.contains("ADMIN")) {
+            val accessible = accessibleAssetIds(authentication)
+            if (accessible != null && !accessible.contains(assetId)) return null
+        }
         return vulnerabilityRepository.findByAssetId(assetId, pageable)
     }
 

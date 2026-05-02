@@ -150,12 +150,17 @@ class GetOverdueAssetsTool(
      */
     private fun createAuthenticationFromContext(context: McpExecutionContext): Authentication {
         return object : Authentication {
-            override fun getName(): String = context.delegatedUserEmail ?: "mcp-user"
+            // AssetFilterService treats authentication.name as the *username*
+            // (used for asset-owner matching). Email-as-name silently breaks
+            // owner-based access because no asset.owner ever equals an email.
+            override fun getName(): String =
+                context.delegatedUsername ?: context.delegatedUserEmail ?: "mcp-user"
 
             override fun getRoles(): Collection<String> = context.delegatedUserRoles ?: emptySet()
 
             override fun getAttributes(): Map<String, Any> = mapOf(
                 "userId" to (context.delegatedUserId ?: 0L),
+                "email" to (context.delegatedUserEmail ?: ""),
                 "workgroupIds" to (context.accessibleWorkgroupIds?.toList() ?: emptyList<Long>())
             )
         }

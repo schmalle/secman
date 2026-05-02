@@ -104,6 +104,7 @@ open class McpAccessControlService(
             apiKeyName = apiKey.name,
             delegatedUserId = delegation.delegatedUserId,
             delegatedUserEmail = delegation.delegatedUserEmail,
+            delegatedUsername = user.username,
             delegatedUserRoles = userRoles,
             effectivePermissions = delegation.effectivePermissions,
             isAdmin = isAdmin,

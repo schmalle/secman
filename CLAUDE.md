@@ -50,6 +50,8 @@ Users access assets if **ANY** is true:
 
 **Outdated Assets**: GET /api/outdated-assets[/{id}[/vulnerabilities]], GET /api/outdated-assets/{last-refresh,count}, POST /api/materialized-view-refresh/trigger (ADMIN), GET /api/materialized-view-refresh/{progress (SSE), status, history}
 
+- Access control: ADMIN sees all overdue assets. Non-admin VULN users see only assets they can access via the unified asset access-control rules (workgroup membership, ownership, AWS account / domain mapping, sharing). The materialized-view SQL pre-filter is a coarse performance hint; the authoritative filter is `OutdatedAssetService.accessibleAssetIds()` which delegates to `AssetFilterService.getAccessibleAssets()`. Same enforcement applies via the MCP `get_overdue_assets` tool.
+
 **Notifications**: GET/PUT /api/notification-preferences, GET /api/notification-logs, GET /api/notification-logs/export (ADMIN)
 
 **Workgroups**: POST/GET /api/workgroups (ADMIN), POST /api/workgroups/{id}/{users,assets} (ADMIN)
