@@ -10,9 +10,9 @@
 #
 # Prerequisites:
 # - curl, jq installed
-# - op (1Password CLI) optional — env vars can be plain text
+# - pass-cli (Proton Pass CLI) optional — env vars can be plain text
 # - Environment variables:
-#   SECMAN_ADMIN_NAME, SECMAN_ADMIN_PASS, SECMAN_API_KEY
+#   SECMAN_ADMIN_NAME, SECMAN_ADMIN_PASS, SECMAN_MCP_KEY
 #   Optionally: SECMAN_BASE_URL (default: http://localhost:8080)
 #
 # Usage:
@@ -21,9 +21,9 @@
 
 set -euo pipefail
 
-export SECMAN_ADMIN_NAME="${SECMAN_ADMIN_NAME:-op://test/secman/SECMAN_ADMIN_NAME}"
-export SECMAN_ADMIN_PASS="${SECMAN_ADMIN_PASS:-op://test/secman/SECMAN_ADMIN_PASS}"
-export SECMAN_API_KEY="${SECMAN_API_KEY:-op://test/secman/SECMAN_API_KEY}"
+export SECMAN_ADMIN_NAME="${SECMAN_ADMIN_NAME:-pass://test/secman/SECMAN_ADMIN_NAME}"
+export SECMAN_ADMIN_PASS="${SECMAN_ADMIN_PASS:-pass://test/secman/SECMAN_ADMIN_PASS}"
+export SECMAN_MCP_KEY="${SECMAN_MCP_KEY:-pass://test/secman/SECMAN_MCP_KEY}"
 
 # Configuration
 BASE_URL="${SECMAN_BASE_URL:-http://localhost:8080}"
@@ -158,38 +158,38 @@ check_prerequisites() {
         exit 1
     fi
 
-    # op is optional — only needed if env vars use op:// URIs
-    if [[ "${SECMAN_ADMIN_NAME}" == op://* ]] || [[ "${SECMAN_ADMIN_PASS}" == op://* ]] || [[ "${SECMAN_API_KEY}" == op://* ]]; then
-        command -v op &> /dev/null || { log_error "1Password CLI (op) required for op:// URIs"; exit 1; }
+    # pass-cli is optional — only needed if env vars use pass:// URIs
+    if [[ "${SECMAN_ADMIN_NAME}" == pass://* ]] || [[ "${SECMAN_ADMIN_PASS}" == pass://* ]] || [[ "${SECMAN_MCP_KEY}" == pass://* ]]; then
+        command -v pass-cli &> /dev/null || { log_error "Proton Pass CLI (pass-cli) required for pass:// URIs"; exit 1; }
     fi
 
     [[ -z "${SECMAN_ADMIN_NAME:-}" ]] && { log_error "SECMAN_ADMIN_NAME not set"; exit 1; }
     [[ -z "${SECMAN_ADMIN_PASS:-}" ]] && { log_error "SECMAN_ADMIN_PASS not set"; exit 1; }
-    [[ -z "${SECMAN_API_KEY:-}" ]] && { log_error "SECMAN_API_KEY not set"; exit 1; }
+    [[ -z "${SECMAN_MCP_KEY:-}" ]] && { log_error "SECMAN_MCP_KEY not set"; exit 1; }
 
     log_success "Prerequisites check passed"
 }
 
-# Resolve credentials (supports 1Password op:// URIs or plain text)
+# Resolve credentials (supports Proton Pass pass:// URIs or plain text)
 resolve_credentials() {
     log_info "Resolving credentials..."
 
-    if [[ "${SECMAN_ADMIN_NAME}" == op://* ]]; then
-        RESOLVED_USERNAME=$(op read "${SECMAN_ADMIN_NAME}" 2>/dev/null) || { log_error "Failed to resolve SECMAN_ADMIN_NAME"; exit 1; }
+    if [[ "${SECMAN_ADMIN_NAME}" == pass://* ]]; then
+        RESOLVED_USERNAME=$(pass-cli item view "${SECMAN_ADMIN_NAME}" 2>/dev/null) || { log_error "Failed to resolve SECMAN_ADMIN_NAME"; exit 1; }
     else
         RESOLVED_USERNAME="${SECMAN_ADMIN_NAME}"
     fi
 
-    if [[ "${SECMAN_ADMIN_PASS}" == op://* ]]; then
-        RESOLVED_PASSWORD=$(op read "${SECMAN_ADMIN_PASS}" 2>/dev/null) || { log_error "Failed to resolve SECMAN_ADMIN_PASS"; exit 1; }
+    if [[ "${SECMAN_ADMIN_PASS}" == pass://* ]]; then
+        RESOLVED_PASSWORD=$(pass-cli item view "${SECMAN_ADMIN_PASS}" 2>/dev/null) || { log_error "Failed to resolve SECMAN_ADMIN_PASS"; exit 1; }
     else
         RESOLVED_PASSWORD="${SECMAN_ADMIN_PASS}"
     fi
 
-    if [[ "${SECMAN_API_KEY}" == op://* ]]; then
-        API_KEY=$(op read "${SECMAN_API_KEY}" 2>/dev/null) || { log_error "Failed to resolve SECMAN_API_KEY"; exit 1; }
+    if [[ "${SECMAN_MCP_KEY}" == pass://* ]]; then
+        API_KEY=$(pass-cli item view "${SECMAN_MCP_KEY}" 2>/dev/null) || { log_error "Failed to resolve SECMAN_MCP_KEY"; exit 1; }
     else
-        API_KEY="${SECMAN_API_KEY}"
+        API_KEY="${SECMAN_MCP_KEY}"
     fi
 
     log_success "Credentials resolved"

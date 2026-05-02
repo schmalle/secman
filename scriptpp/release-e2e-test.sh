@@ -12,7 +12,7 @@
 # - curl, jq installed
 # - pass-cli (Proton Pass CLI) optional — env vars can be plain text
 # - Environment variables:
-#   SECMAN_ADMIN_NAME, SECMAN_ADMIN_PASS, SECMAN_API_KEY
+#   SECMAN_ADMIN_NAME, SECMAN_ADMIN_PASS, SECMAN_MCP_KEY
 #   Optionally: SECMAN_BASE_URL (default: http://localhost:8080)
 #
 # Usage:
@@ -23,7 +23,7 @@ set -euo pipefail
 
 export SECMAN_ADMIN_NAME="${SECMAN_ADMIN_NAME:-pass://test/secman/SECMAN_ADMIN_NAME}"
 export SECMAN_ADMIN_PASS="${SECMAN_ADMIN_PASS:-pass://test/secman/SECMAN_ADMIN_PASS}"
-export SECMAN_API_KEY="${SECMAN_API_KEY:-pass://test/secman/SECMAN_API_KEY}"
+export SECMAN_MCP_KEY="${SECMAN_MCP_KEY:-pass://test/secman/SECMAN_MCP_KEY}"
 
 # Configuration
 BASE_URL="${SECMAN_BASE_URL:-http://localhost:8080}"
@@ -159,13 +159,13 @@ check_prerequisites() {
     fi
 
     # pass-cli is optional — only needed if env vars use pass:// URIs
-    if [[ "${SECMAN_ADMIN_NAME}" == pass://* ]] || [[ "${SECMAN_ADMIN_PASS}" == pass://* ]] || [[ "${SECMAN_API_KEY}" == pass://* ]]; then
+    if [[ "${SECMAN_ADMIN_NAME}" == pass://* ]] || [[ "${SECMAN_ADMIN_PASS}" == pass://* ]] || [[ "${SECMAN_MCP_KEY}" == pass://* ]]; then
         command -v pass-cli &> /dev/null || { log_error "Proton Pass CLI (pass-cli) required for pass:// URIs"; exit 1; }
     fi
 
     [[ -z "${SECMAN_ADMIN_NAME:-}" ]] && { log_error "SECMAN_ADMIN_NAME not set"; exit 1; }
     [[ -z "${SECMAN_ADMIN_PASS:-}" ]] && { log_error "SECMAN_ADMIN_PASS not set"; exit 1; }
-    [[ -z "${SECMAN_API_KEY:-}" ]] && { log_error "SECMAN_API_KEY not set"; exit 1; }
+    [[ -z "${SECMAN_MCP_KEY:-}" ]] && { log_error "SECMAN_MCP_KEY not set"; exit 1; }
 
     log_success "Prerequisites check passed"
 }
@@ -186,10 +186,10 @@ resolve_credentials() {
         RESOLVED_PASSWORD="${SECMAN_ADMIN_PASS}"
     fi
 
-    if [[ "${SECMAN_API_KEY}" == pass://* ]]; then
-        API_KEY=$(pass-cli item view "${SECMAN_API_KEY}" 2>/dev/null) || { log_error "Failed to resolve SECMAN_API_KEY"; exit 1; }
+    if [[ "${SECMAN_MCP_KEY}" == pass://* ]]; then
+        API_KEY=$(pass-cli item view "${SECMAN_MCP_KEY}" 2>/dev/null) || { log_error "Failed to resolve SECMAN_MCP_KEY"; exit 1; }
     else
-        API_KEY="${SECMAN_API_KEY}"
+        API_KEY="${SECMAN_MCP_KEY}"
     fi
 
     log_success "Credentials resolved"

@@ -6,7 +6,7 @@ A standalone Go client that communicates with the Secman MCP server using JSON-R
 
 ```bash
 export SECMAN_BASE_URL=http://localhost:8080   # default
-export SECMAN_API_KEY=sk-your-api-key          # required
+export SECMAN_MCP_KEY=sk-your-api-key          # required
 export SECMAN_USER_EMAIL=admin@example.com     # mandatory for data-accessing tools
 ```
 

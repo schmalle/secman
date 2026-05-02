@@ -121,26 +121,26 @@ The test is designed to be **idempotent** - it cleans up before and after execut
 ### Basic Usage
 
 ```bash
-API_KEY=sk-your-api-key ./scriptpp/test/test-e2e-exception-workflowsupport.sh
+SECMAN_MCP_KEY=sk-your-api-key ./scriptpp/test/test-e2e-exception-workflowsupport.sh
 ```
 
 ### With Custom Backend URL
 
 ```bash
-BASE_URL=http://localhost:8080 API_KEY=sk-your-api-key ./scriptpp/test/test-e2e-exception-workflowsupport.sh
+BASE_URL=http://localhost:8080 SECMAN_MCP_KEY=sk-your-api-key ./scriptpp/test/test-e2e-exception-workflowsupport.sh
 ```
 
 ### With Verbose Output
 
 ```bash
-API_KEY=sk-your-api-key ./scriptpp/test/test-e2e-exception-workflowsupport.sh --verbose
+SECMAN_MCP_KEY=sk-your-api-key ./scriptpp/test/test-e2e-exception-workflowsupport.sh --verbose
 ```
 
 ### Environment Variables
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `API_KEY` | Yes | - | Admin MCP API key with delegation enabled |
+| `SECMAN_MCP_KEY` | Yes | - | Admin MCP API key with delegation enabled |
 | `BASE_URL` | No | `http://localhost:8080` | Backend URL |
 | `VERBOSE` | No | `false` | Enable debug output |
 
@@ -233,11 +233,11 @@ Workflow completed:
 
 ## Troubleshooting
 
-### "API_KEY environment variable is required"
+### "SECMAN_MCP_KEY environment variable is required"
 
 Set the API key:
 ```bash
-export API_KEY=sk-your-api-key
+export SECMAN_MCP_KEY=sk-your-api-key
 ./scriptpp/test/test-e2e-exception-workflowsupport.sh
 ```
 
@@ -250,7 +250,7 @@ export API_KEY=sk-your-api-key
 
 2. Check the BASE_URL is correct:
    ```bash
-   BASE_URL=http://localhost:8080 API_KEY=sk-xxx ./scriptpp/test/test-e2e-exception-workflowsupport.sh
+   BASE_URL=http://localhost:8080 SECMAN_MCP_KEY=sk-xxx ./scriptpp/test/test-e2e-exception-workflowsupport.sh
    ```
 
 ### "DELEGATION_REQUIRED" or "User Delegation must be enabled"
@@ -294,7 +294,7 @@ sudo apt-get install jq
 1. Check backend logs for errors
 2. Enable verbose mode:
    ```bash
-   API_KEY=sk-xxx ./scriptpp/test/test-e2e-exception-workflowsupport.sh --verbose
+   SECMAN_MCP_KEY=sk-xxx ./scriptpp/test/test-e2e-exception-workflowsupport.sh --verbose
    ```
 3. Check network connectivity to the backend
 
@@ -339,7 +339,7 @@ To run in CI/CD pipelines:
 # GitHub Actions example
 - name: Run E2E Exception Workflow Test
   env:
-    API_KEY: ${{ secrets.MCP_ADMIN_API_KEY }}
+    SECMAN_MCP_KEY: ${{ secrets.MCP_ADMIN_API_KEY }}
     BASE_URL: http://localhost:8080
   run: |
     ./scriptpp/test/test-e2e-exception-workflowsupport.sh

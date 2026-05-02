@@ -89,7 +89,7 @@ Execute the exception workflow test with Proton Pass secret injection:
 
 ```bash
 export BASE_URL="http://localhost:8080"
-export API_KEY="pass://Test/SECMAN/MCP_API_KEY"
+export SECMAN_MCP_KEY="pass://Test/SECMAN/SECMAN_MCP_KEY"
 export SECMAN_ADMIN_EMAIL="pass://Test/SECMAN/SECMAN_ADMIN_EMAIL"
 
 pass-cli run -- ./scriptpp/test/test-e2e-exception-workflowsupport.sh --verbose 2>&1 | tee .e2e-logs/e2e-exception-run-<N>.log
@@ -219,7 +219,7 @@ Go back to Phase 2 and re-run the test script. Increment the iteration counter.
 - **Never commit or push** — only edit files locally.
 - **Secrets are handled by Proton Pass** — `scriptpp/startbackenddev.sh` and
   `scriptpp/startfrontenddev.sh` use `pass-cli run` to inject secrets. The test script
-  must also be run with `pass-cli run` to resolve `API_KEY` and `SECMAN_ADMIN_EMAIL`.
+  must also be run with `pass-cli run` to resolve `SECMAN_MCP_KEY` and `SECMAN_ADMIN_EMAIL`.
 - **Always use the Proton Pass variants** (`scriptpp/*.sh` and `scriptpp/test/*.sh`).
   Do not fall back to the 1Password scripts in `scripts/` — this skill is pinned to Proton Pass.
 - **Port collisions**: Before starting, check if ports 8080 and 4321 are in use

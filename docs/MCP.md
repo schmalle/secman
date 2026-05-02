@@ -1107,7 +1107,7 @@ const response = await axios.post('http://localhost:8080/mcp', {
   }
 }, {
   headers: {
-    'X-MCP-API-Key': process.env.SECMAN_API_KEY,
+    'X-MCP-API-Key': process.env.SECMAN_MCP_KEY,
     'X-MCP-User-Email': process.env.SECMAN_USER_EMAIL,  // mandatory
     'Content-Type': 'application/json'
   }

@@ -57,11 +57,11 @@ The test script uses 1Password CLI to securely retrieve credentials rather than 
 
 **Why this priority**: Security best practice - credentials should never be hardcoded or stored in plain text in test scripts.
 
-**Independent Test**: Can be tested by configuring 1Password URIs and verifying the script retrieves credentials successfully before making API calls.
+**Independent Test**: Can be tested by configuring Proton Pass URIs and verifying the script retrieves credentials successfully before making API calls.
 
 **Acceptance Scenarios**:
 
-1. **Given** environment variables `SECMAN_ADMIN_NAME`, `SECMAN_ADMIN_PASS`, `SECMAN_API_KEY` set with 1Password URIs (e.g., `op://test/secman/SECMAN_ADMIN_NAME`), **When** the test script starts, **Then** credentials are resolved using `op run` or `op read`
+1. **Given** environment variables `SECMAN_ADMIN_NAME`, `SECMAN_ADMIN_PASS`, `SECMAN_MCP_KEY` set with Proton Pass URIs (e.g., `pass://test/secman/SECMAN_ADMIN_NAME`), **When** the test script starts, **Then** credentials are resolved using `op run` or `pass-cli item view`
 2. **Given** 1Password credentials are resolved, **When** authenticating to secman, **Then** authentication succeeds and a session token is obtained
 3. **Given** 1Password is not available or credentials are missing, **When** the test script starts, **Then** a clear error message is shown explaining the missing prerequisites
 
