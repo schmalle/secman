@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { Fragment, useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown'; // Import ReactMarkdown
 import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete } from '../utils/auth';
 import ReleaseIndicator from './ReleaseIndicator';
@@ -91,6 +91,7 @@ export default function RequirementManagement() {
     const [selectedReleaseId, setSelectedReleaseId] = useState<number | null>(null);
     const [selectedRelease, setSelectedRelease] = useState<Release | null>(null);
     const [isViewingHistorical, setIsViewingHistorical] = useState(false);
+    const [expandedRequirementIds, setExpandedRequirementIds] = useState<Set<number>>(new Set());
     // Feature 078: Track if editing should be blocked (ARCHIVED/ACTIVE releases)
     const isEditingBlocked = selectedRelease !== null &&
         (selectedRelease.status === 'ARCHIVED' || selectedRelease.status === 'ACTIVE');
@@ -164,6 +165,7 @@ export default function RequirementManagement() {
                     language: snapshot.language,
                     example: snapshot.example,
                     motivation: snapshot.motivation,
+                    chapter: snapshot.chapter,
                     usecases: snapshot.usecases || [],
                     norms: snapshot.norms || []
                 }));
@@ -206,6 +208,33 @@ export default function RequirementManagement() {
     // Feature 067: Clear release selection
     const handleClearRelease = () => {
         setSelectedReleaseId(null);
+    };
+
+    const toggleRequirementExpanded = (id?: number) => {
+        if (id === undefined) return;
+        setExpandedRequirementIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id); else next.add(id);
+            return next;
+        });
+    };
+
+    const expandAllRequirements = () => {
+        setExpandedRequirementIds(new Set(filteredRequirements.map(r => r.id).filter((id): id is number => id !== undefined)));
+    };
+
+    const collapseAllRequirements = () => {
+        setExpandedRequirementIds(new Set());
+    };
+
+    const requirementHasExtraContent = (req: Requirement): boolean => {
+        return Boolean(
+            (req.details && req.details.trim()) ||
+            (req.motivation && req.motivation.trim()) ||
+            (req.example && req.example.trim()) ||
+            (req.chapter && req.chapter.trim()) ||
+            (req.language && req.language.trim())
+        );
     };
 
     const fetchAllUseCases = async () => {
@@ -937,7 +966,7 @@ export default function RequirementManagement() {
                         ))}
                     </select>
                 </div>
-                <div className="col-md-6 d-flex align-items-end">
+                <div className="col-md-6 d-flex align-items-end justify-content-between">
                     <span className="text-muted">
                         Showing {filteredRequirements.length} of {requirements.length} requirements
                         {' | '}
@@ -945,6 +974,24 @@ export default function RequirementManagement() {
                             {requirements.filter(r => !r.norms || r.norms.length === 0).length} missing norm mappings
                         </span>
                     </span>
+                    <div className="btn-group btn-group-sm" role="group" aria-label="Expand controls">
+                        <button
+                            type="button"
+                            className="btn btn-outline-secondary"
+                            onClick={expandAllRequirements}
+                            disabled={filteredRequirements.length === 0}
+                        >
+                            Expand all
+                        </button>
+                        <button
+                            type="button"
+                            className="btn btn-outline-secondary"
+                            onClick={collapseAllRequirements}
+                            disabled={expandedRequirementIds.size === 0}
+                        >
+                            Collapse all
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -954,60 +1001,126 @@ export default function RequirementManagement() {
                         <table className="table table-striped">
                             <thead>
                                 <tr>
+                                    <th style={{ width: '40px' }} aria-label="Expand"></th>
                                     <th style={{ width: '100px' }}>ID.Rev</th>
                                     <th>Short Requirement</th>
                                     {!isEditingBlocked && <th style={{ width: '120px' }}>Actions</th>}
                                 </tr>
                             </thead>
                             <tbody>
-                                {filteredRequirements.map(req => (
-                                    <tr key={req.id}>
-                                        <td>
-                                            <span className="badge bg-light text-dark font-monospace">
-                                                {req.idRevision || `${req.internalId || '?'}.${req.revision || 1}`}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            {req.shortreq}
-                                            {req.usecases && req.usecases.length > 0 && (
-                                                <div className="mt-1">
-                                                    <small className="text-muted me-2">Use Cases:</small>
-                                                    {req.usecases.map(uc => (
-                                                        <span key={uc.id} className="badge bg-secondary me-1">{uc.name}</span>
-                                                    ))}
-                                                </div>
-                                            )}
-                                            {req.norms && req.norms.length > 0 && (
-                                                <div className="mt-1">
-                                                    <small className="text-muted me-2">Norms:</small>
-                                                    {req.norms.map(norm => (
-                                                        <span key={norm.id} className="badge bg-info me-1">
-                                                            {norm.name} {norm.version && `(${norm.version})`}
-                                                        </span>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </td>
-                                        {!isEditingBlocked && (
-                                            <td>
-                                                <div className="btn-group" role="group">
+                                {filteredRequirements.map(req => {
+                                    const hasExtra = requirementHasExtraContent(req);
+                                    const isExpanded = req.id !== undefined && expandedRequirementIds.has(req.id);
+                                    const detailColSpan = isEditingBlocked ? 3 : 4;
+                                    return (
+                                        <Fragment key={req.id ?? `${req.internalId}-${req.revision}`}>
+                                            <tr>
+                                                <td className="align-top">
                                                     <button
-                                                        className="btn btn-sm btn-outline-primary"
-                                                        onClick={() => handleEdit(req)}
+                                                        type="button"
+                                                        className="btn btn-sm btn-link p-0"
+                                                        onClick={() => toggleRequirementExpanded(req.id)}
+                                                        disabled={!hasExtra}
+                                                        aria-expanded={isExpanded}
+                                                        aria-label={isExpanded ? 'Collapse requirement details' : 'Expand requirement details'}
+                                                        title={hasExtra ? (isExpanded ? 'Hide full content' : 'Show full content') : 'No additional content'}
                                                     >
-                                                        Edit
+                                                        <i className={`bi ${isExpanded ? 'bi-chevron-down' : 'bi-chevron-right'}`}></i>
                                                     </button>
-                                                    <button
-                                                        className="btn btn-sm btn-outline-danger"
-                                                        onClick={() => req.id && handleDelete(req.id)}
-                                                    >
-                                                        Delete
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        )}
-                                    </tr>
-                                ))}
+                                                </td>
+                                                <td>
+                                                    <span className="badge bg-light text-dark font-monospace">
+                                                        {req.idRevision || `${req.internalId || '?'}.${req.revision || 1}`}
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    {req.shortreq}
+                                                    {req.usecases && req.usecases.length > 0 && (
+                                                        <div className="mt-1">
+                                                            <small className="text-muted me-2">Use Cases:</small>
+                                                            {req.usecases.map(uc => (
+                                                                <span key={uc.id} className="badge bg-secondary me-1">{uc.name}</span>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                    {req.norms && req.norms.length > 0 && (
+                                                        <div className="mt-1">
+                                                            <small className="text-muted me-2">Norms:</small>
+                                                            {req.norms.map(norm => (
+                                                                <span key={norm.id} className="badge bg-info me-1">
+                                                                    {norm.name} {norm.version && `(${norm.version})`}
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </td>
+                                                {!isEditingBlocked && (
+                                                    <td>
+                                                        <div className="btn-group" role="group">
+                                                            <button
+                                                                className="btn btn-sm btn-outline-primary"
+                                                                onClick={() => handleEdit(req)}
+                                                            >
+                                                                Edit
+                                                            </button>
+                                                            <button
+                                                                className="btn btn-sm btn-outline-danger"
+                                                                onClick={() => req.id && handleDelete(req.id)}
+                                                            >
+                                                                Delete
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                )}
+                                            </tr>
+                                            {isExpanded && hasExtra && (
+                                                <tr className="table-light">
+                                                    <td></td>
+                                                    <td colSpan={detailColSpan - 1}>
+                                                        <dl className="row mb-0 small">
+                                                            {req.chapter && req.chapter.trim() && (
+                                                                <>
+                                                                    <dt className="col-sm-2 text-muted">Chapter</dt>
+                                                                    <dd className="col-sm-10">{req.chapter}</dd>
+                                                                </>
+                                                            )}
+                                                            {req.language && req.language.trim() && (
+                                                                <>
+                                                                    <dt className="col-sm-2 text-muted">Language</dt>
+                                                                    <dd className="col-sm-10">{req.language}</dd>
+                                                                </>
+                                                            )}
+                                                            {req.details && req.details.trim() && (
+                                                                <>
+                                                                    <dt className="col-sm-2 text-muted">Details</dt>
+                                                                    <dd className="col-sm-10">
+                                                                        <ReactMarkdown>{req.details}</ReactMarkdown>
+                                                                    </dd>
+                                                                </>
+                                                            )}
+                                                            {req.motivation && req.motivation.trim() && (
+                                                                <>
+                                                                    <dt className="col-sm-2 text-muted">Motivation</dt>
+                                                                    <dd className="col-sm-10">
+                                                                        <ReactMarkdown>{req.motivation}</ReactMarkdown>
+                                                                    </dd>
+                                                                </>
+                                                            )}
+                                                            {req.example && req.example.trim() && (
+                                                                <>
+                                                                    <dt className="col-sm-2 text-muted">Example</dt>
+                                                                    <dd className="col-sm-10">
+                                                                        <ReactMarkdown>{req.example}</ReactMarkdown>
+                                                                    </dd>
+                                                                </>
+                                                            )}
+                                                        </dl>
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </Fragment>
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>
