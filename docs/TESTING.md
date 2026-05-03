@@ -1,612 +1,210 @@
-# SecMan Testing Guide
+# Testing
 
-**Last Updated:** 2026-04-22
-**Version:** 1.1
+Three tiers: unit (Mockk), integration (Testcontainers MariaDB 11.4), CLI (Picocli arg validation). Integration auto-skips when Docker is unavailable.
 
-Comprehensive guide for testing the SecMan security management platform.
-
----
-
-## Table of Contents
-
-1. [Overview](#overview)
-2. [Test Stack](#test-stack)
-3. [Running Tests](#running-tests)
-4. [Test Structure](#test-structure)
-5. [Writing Tests](#writing-tests)
-6. [Test Utilities](#test-utilities)
-7. [CI/CD Integration](#cicd-integration)
-8. [Troubleshooting](#troubleshooting)
-
----
-
-## Overview
-
-SecMan uses a comprehensive testing strategy with three test tiers:
-
-| Tier | Type | Purpose | Requirements |
-|------|------|---------|--------------|
-| 1 | Unit Tests | Test business logic in isolation | None |
-| 2 | Integration Tests | Test full stack with real database | Docker |
-| 3 | CLI Tests | Test command-line parameter validation | None |
-
-**Key principles:**
-- Tests are located in `src/{module}/src/test/kotlin/`
-- Integration tests auto-skip when Docker is unavailable
-- All tests run with `./gradlew build`
-
----
-
-## Test Stack
-
-### Core Dependencies
-
-```kotlin
-// build.gradle.kts (backend)
-testImplementation("org.junit.jupiter:junit-jupiter-api:6.0.3")
-testImplementation("org.junit.jupiter:junit-jupiter-engine:6.0.3")
-testImplementation("io.micronaut.test:micronaut-test-junit5")
-testImplementation("io.mockk:mockk:1.14.9")
-testImplementation("org.testcontainers:testcontainers:2.0.4")
-testImplementation("org.testcontainers:mariadb:1.21.4")
-testImplementation("org.testcontainers:junit-jupiter:1.21.4")
-testImplementation("org.assertj:assertj-core:3.27.7")
+Stack:
+```
+junit-jupiter 6.0.3, micronaut-test-junit5,
+mockk 1.14.9,
+testcontainers 2.0.4, testcontainers:mariadb 1.21.4, testcontainers:junit-jupiter 1.21.4,
+assertj 3.27.7
 ```
 
-### Framework Roles
-
-| Framework | Purpose |
-|-----------|---------|
-| **JUnit 6** | Test framework and lifecycle management |
-| **Mockk** | Kotlin-native mocking for unit tests |
-| **Testcontainers** | Containerized MariaDB for integration tests |
-| **AssertJ** | Fluent assertion library |
-| **Micronaut Test** | Dependency injection in tests |
-
----
-
-## Running Tests
-
-### All Tests
+## Run
 
 ```bash
-# Run all tests (unit + integration)
-./gradlew build
-
-# Or explicitly
-./gradlew test
-```
-
-### Backend Tests Only
-
-```bash
-# All backend tests
-./gradlew :backendng:test
-
-# Unit tests only (service layer)
-./gradlew :backendng:test --tests "*ServiceTest*"
-
-# Specific test class
-./gradlew :backendng:test --tests "VulnerabilityServiceTest"
-
-# Specific test method
+./gradlew build                                              # everything
+./gradlew :backendng:test                                    # backend
+./gradlew :backendng:test --tests "*ServiceTest*"            # unit only
+./gradlew :backendng:test --tests "*IntegrationTest*"        # integration (Docker)
+./gradlew :backendng:test --tests "VulnerabilityServiceTest" # one class
 ./gradlew :backendng:test --tests "VulnerabilityServiceTest.addVulnerabilityFromCli_createsNewAsset"
-```
-
-### Integration Tests Only
-
-```bash
-# All integration tests (requires Docker)
-./gradlew :backendng:test --tests "*IntegrationTest*"
-
-# Specific integration test
-./gradlew :backendng:test --tests "VulnerabilityIntegrationTest"
-```
-
-### CLI Tests Only
-
-```bash
-# All CLI tests
 ./gradlew :cli:test
-
-# Specific CLI test class
 ./gradlew :cli:test --tests "AddVulnerabilityCommandTest"
-```
 
-### Test Reports
-
-```bash
-# After running tests, open HTML report:
+# HTML reports
 open src/backendng/build/reports/tests/test/index.html
-
-# CLI test report:
 open src/cli/build/reports/tests/test/index.html
 ```
 
----
+> All HTTP traffic in tests goes through `SECMAN_HOST` (resolved via `pass-cli`). Never hardcode `http://localhost:8080` / `:4321`.
 
-## Test Structure
-
-### Directory Layout
+## Layout
 
 ```
-src/
-├── backendng/src/test/kotlin/com/secman/
-│   ├── controller/           # Controller unit tests
-│   │   └── AuthControllerTest.kt
-│   ├── integration/          # Full-stack integration tests
-│   │   ├── VulnerabilityIntegrationTest.kt
-│   │   └── EdgeCaseTest.kt
-│   ├── service/              # Service layer unit tests
-│   │   └── VulnerabilityServiceTest.kt
-│   └── testutil/             # Shared test utilities
-│       ├── BaseIntegrationTest.kt
-│       ├── TestDataFactory.kt
-│       └── TestAuthHelper.kt
-├── cli/src/test/kotlin/com/secman/cli/
-│   └── commands/             # CLI command tests
-│       └── AddVulnerabilityCommandTest.kt
+src/backendng/src/test/kotlin/com/secman/
+  controller/              # AuthControllerTest.kt, ...
+  service/                 # *ServiceTest.kt — unit
+  integration/             # *IntegrationTest.kt — full stack
+  testutil/
+    BaseIntegrationTest.kt # Testcontainers setup, skip-if-no-docker
+    TestDataFactory.kt     # createAdminUser, createAsset, createVulnerability, ...
+    TestAuthHelper.kt      # JWT login → bearer
+    DockerAvailable.kt     # @EnabledIf gate
+src/cli/src/test/kotlin/com/secman/cli/commands/  # *CommandTest.kt
 ```
 
-### Test Naming Conventions
+Naming: file `<Class>Test.kt`. Method either `addVulnerabilityFromCli_createsNewAsset` (descriptive) or `@DisplayName("VS-001: …")`. ID prefixes used in DisplayName tags: `VS-*` (VulnerabilityService), `VI-*` (Vuln Integration), `CLI-*` (CLI), `EC-*` (edge cases).
 
+## Patterns
+
+### Unit (Mockk)
 ```kotlin
-// Class naming: {ClassName}Test.kt
-VulnerabilityServiceTest.kt
-AddVulnerabilityCommandTest.kt
-
-// Method naming: describe what is tested
-@Test
-fun `addVulnerabilityFromCli_createsNewAsset`() { ... }
-
-// Or use DisplayName for readable output
-@Test
-@DisplayName("VS-001: Creates new asset when hostname doesn't exist")
-fun `addVulnerabilityFromCli_createsNewAsset`() { ... }
-```
-
-### Test ID Prefixes
-
-| Prefix | Module |
-|--------|--------|
-| `VS-*` | VulnerabilityService tests |
-| `VI-*` | Vulnerability Integration tests |
-| `CLI-*` | CLI command tests |
-| `EC-*` | Edge case tests |
-
----
-
-## Writing Tests
-
-### Unit Tests with Mockk
-
-```kotlin
-@DisplayName("VulnerabilityService.addVulnerabilityFromCli")
 class VulnerabilityServiceTest {
+    @MockK lateinit var assetRepository: AssetRepository
+    @MockK lateinit var vulnerabilityRepository: VulnerabilityRepository
+    private lateinit var service: VulnerabilityService
 
-    @MockK
-    private lateinit var assetRepository: AssetRepository
-
-    @MockK
-    private lateinit var vulnerabilityRepository: VulnerabilityRepository
-
-    private lateinit var vulnerabilityService: VulnerabilityService
-
-    @BeforeEach
-    fun setup() {
+    @BeforeEach fun setup() {
         MockKAnnotations.init(this, relaxed = true)
-
-        vulnerabilityService = spyk(
-            VulnerabilityService(
-                vulnerabilityRepository = vulnerabilityRepository,
-                assetRepository = assetRepository
-                // ... other dependencies
-            )
-        )
-
-        // Default mock behaviors
-        every { assetRepository.save(any()) } answers {
-            firstArg<Asset>().apply { id = 1L }
-        }
+        service = spyk(VulnerabilityService(vulnerabilityRepository, assetRepository, /* … */))
+        every { assetRepository.save(any()) } answers { firstArg<Asset>().apply { id = 1L } }
     }
 
-    @Test
-    @DisplayName("VS-001: Creates new asset when hostname doesn't exist")
-    fun `addVulnerabilityFromCli_createsNewAsset`() {
-        // Given: No existing asset
+    @Test @DisplayName("VS-001: Creates new asset when hostname doesn't exist")
+    fun createsNewAsset() {
         every { assetRepository.findByNameIgnoreCase("new-system") } returns null
+        val req = AddVulnerabilityRequestDto(hostname="new-system", cve="CVE-2024-001", criticality="HIGH", daysOpen=60)
 
-        val request = AddVulnerabilityRequestDto(
-            hostname = "new-system",
-            cve = "CVE-2024-001",
-            criticality = "HIGH",
-            daysOpen = 60
-        )
+        val result = service.addVulnerabilityFromCli(req)
 
-        // When
-        val result = vulnerabilityService.addVulnerabilityFromCli(request)
-
-        // Then
         assertThat(result.success).isTrue()
         assertThat(result.assetCreated).isTrue()
-
-        verify {
-            assetRepository.save(match { asset ->
-                asset.name == "new-system" &&
-                asset.type == "SERVER"
-            })
-        }
+        verify { assetRepository.save(match { it.name == "new-system" && it.type == "SERVER" }) }
     }
 }
 ```
 
-### Integration Tests with Testcontainers
-
+### Integration (Testcontainers via `BaseIntegrationTest`)
 ```kotlin
-@DisplayName("CLI Add Vulnerability Integration Tests")
 @EnabledIf("com.secman.testutil.DockerAvailable#isDockerAvailable")
 class VulnerabilityIntegrationTest : BaseIntegrationTest() {
+    @Inject @field:Client("/") lateinit var client: HttpClient
+    @Inject lateinit var userRepository: UserRepository
+    @Inject lateinit var assetRepository: AssetRepository
 
-    @Inject
-    @field:Client("/")
-    lateinit var client: HttpClient
-
-    @Inject
-    lateinit var userRepository: UserRepository
-
-    @Inject
-    lateinit var assetRepository: AssetRepository
-
-    private lateinit var adminUser: User
-
-    @BeforeEach
-    fun setupTestUsers() {
-        adminUser = userRepository.save(TestDataFactory.createAdminUser(
-            username = "integ-admin-${System.nanoTime()}"
-        ))
+    private lateinit var admin: User
+    @BeforeEach fun setup() {
+        admin = userRepository.save(TestDataFactory.createAdminUser(username = "integ-${System.nanoTime()}"))
     }
 
-    @Test
-    @DisplayName("VI-001: Add vulnerability creates asset and vulnerability")
-    fun `cliAddVulnerability_createsAssetAndVuln`() {
-        // Given: Admin user authenticated
-        val token = TestAuthHelper.getAuthToken(client, adminUser.username)
-        val hostname = "system-a-${System.nanoTime()}"
+    @Test @DisplayName("VI-001: Add vulnerability creates asset and vulnerability")
+    fun createsAssetAndVuln() {
+        val token = TestAuthHelper.getAuthToken(client, admin.username)
+        val hostname = "asset-${System.nanoTime()}"
+        val req = AddVulnerabilityRequestDto(hostname=hostname, cve="CVE-2024-TEST", criticality="HIGH", daysOpen=60)
 
-        val request = AddVulnerabilityRequestDto(
-            hostname = hostname,
-            cve = "CVE-2024-TEST001",
-            criticality = "HIGH",
-            daysOpen = 60
-        )
-
-        // When: POST to cli-add endpoint
-        val response = client.toBlocking().exchange(
-            HttpRequest.POST("/api/vulnerabilities/cli-add", request)
-                .bearerAuth(token),
+        val resp = client.toBlocking().exchange(
+            HttpRequest.POST("/api/vulnerabilities/cli-add", req).bearerAuth(token),
             AddVulnerabilityResponseDto::class.java
         )
 
-        // Then: HTTP 200 and asset in database
-        assertThat(response.status).isEqualTo(HttpStatus.OK)
-
+        assertThat(resp.status).isEqualTo(HttpStatus.OK)
         val asset = assetRepository.findByNameIgnoreCase(hostname)
-        assertThat(asset).isNotNull
-        assertThat(asset!!.type).isEqualTo("SERVER")
+        assertThat(asset?.type).isEqualTo("SERVER")
     }
 }
 ```
 
-### CLI Tests with Picocli
-
+### CLI (Picocli arg validation)
 ```kotlin
-@DisplayName("AddVulnerabilityCommand Parameter Validation")
 class AddVulnerabilityCommandTest {
-
-    @Test
-    @DisplayName("CLI-003: Requires hostname parameter")
-    fun `requiresHostname`() {
+    @Test @DisplayName("CLI-003: Requires --hostname")
+    fun requiresHostname() {
         val cmd = CommandLine(AddVulnerabilityCommand())
-
-        val optionSpec = cmd.commandSpec.findOption("--hostname")
-        assertThat(optionSpec).isNotNull
-        assertThat(optionSpec?.required()).isTrue()
+        val opt = cmd.commandSpec.findOption("--hostname")
+        assertThat(opt).isNotNull
+        assertThat(opt!!.required()).isTrue()
     }
 
-    @Test
-    @DisplayName("CLI-001: Accepts valid criticality values")
-    fun `acceptsValidCriticalityValues`() {
-        val validValues = listOf("CRITICAL", "HIGH", "MEDIUM", "LOW")
-
-        validValues.forEach { criticality ->
+    @Test @DisplayName("CLI-001: Accepts CRITICAL|HIGH|MEDIUM|LOW")
+    fun acceptsValidCriticality() {
+        listOf("CRITICAL","HIGH","MEDIUM","LOW").forEach { c ->
             val cmd = CommandLine(AddVulnerabilityCommand())
-            cmd.parseArgs(
-                "--hostname", "test-host",
-                "--cve", "CVE-2024-001",
-                "--criticality", criticality,
-                "--username", "admin",
-                "--password", "pass"
-            )
-
-            val command = cmd.getCommand<AddVulnerabilityCommand>()
-            assertThat(command.criticality).isEqualTo(criticality)
+            cmd.parseArgs("--hostname","h","--cve","CVE-X","--criticality",c,"--username","u","--password","p")
+            assertThat(cmd.getCommand<AddVulnerabilityCommand>().criticality).isEqualTo(c)
         }
     }
 }
 ```
 
----
+## Helpers
 
-## Test Utilities
-
-### BaseIntegrationTest
-
-Provides shared Testcontainers configuration for all integration tests.
-
+### `BaseIntegrationTest`
+Singleton MariaDB via `withReuse(true)`; auto-injects datasource into Micronaut.
 ```kotlin
 abstract class BaseIntegrationTest : TestPropertyProvider {
-
     companion object {
-        @JvmStatic
-        val mariadb: MariaDBContainer<*> by lazy {
+        @JvmStatic val mariadb: MariaDBContainer<*> by lazy {
             MariaDBContainer("mariadb:11.4")
-                .withDatabaseName("secman_test")
-                .withUsername("test")
-                .withPassword("test")
-                .withReuse(true)
-                .also { it.start() }
+                .withDatabaseName("secman_test").withUsername("test").withPassword("test")
+                .withReuse(true).also { it.start() }
         }
     }
-
-    override fun getProperties(): MutableMap<String, String> {
-        return mutableMapOf(
-            "datasources.default.url" to mariadb.jdbcUrl,
-            "datasources.default.username" to mariadb.username,
-            "datasources.default.password" to mariadb.password
-        )
-    }
+    override fun getProperties() = mutableMapOf(
+        "datasources.default.url"      to mariadb.jdbcUrl,
+        "datasources.default.username" to mariadb.username,
+        "datasources.default.password" to mariadb.password)
 }
 ```
 
-**Features:**
-- Singleton container pattern (one MariaDB for all tests)
-- Auto-configures datasource for Micronaut
-- Container reuse for faster subsequent runs
+### `TestDataFactory`
+`createAdminUser`, `createVulnUser`, `createRegularUser`, `createAsset(name, type="SERVER")`, `createVulnerability(asset, cve, severity)`. `DEFAULT_PASSWORD = "testpass123"`.
 
-### TestDataFactory
+### `TestAuthHelper`
+`getAuthToken(client, username)` POSTs to `/api/auth/login` and returns the JWT. `attemptLoginExpectingFailure(...)` for negative tests.
 
-Factory for creating test entities with sensible defaults.
+### `DockerAvailable.isDockerAvailable()`
+Used as `@EnabledIf("com.secman.testutil.DockerAvailable#isDockerAvailable")` to gate integration suites.
 
-```kotlin
-object TestDataFactory {
+## E2E
 
-    const val DEFAULT_PASSWORD = "testpass123"
+Two mandatory gates after **every** code change (per `CLAUDE.md` principle 7):
 
-    fun createAdminUser(
-        username: String = "testadmin",
-        email: String = "testadmin@secman.test"
-    ): User {
-        return User(
-            username = username,
-            email = email,
-            passwordHash = encodedPassword,
-            roles = mutableSetOf(Role.USER, Role.ADMIN)
-        )
-    }
+- `/e2ejs` — JS error scanner across all pages, twice (admin + normal user). Must report 0 `[UNCAUGHT EXCEPTION]` and 0 `[CONSOLE ERROR]`. RBAC 403 and documented empty-state 404 are not failures; a page that throws or logs `console.error` is.
+- `/e2evulnexception` — full vuln + exception lifecycle (MCP + UI), 0 failures.
 
-    fun createVulnUser(username: String, email: String): User { ... }
-    fun createRegularUser(username: String, email: String): User { ... }
-    fun createAsset(name: String, type: String = "SERVER"): Asset { ... }
-    fun createVulnerability(asset: Asset, cve: String, severity: String): Vulnerability { ... }
-}
+Plus Playwright suites under `tests/e2e/` (Chrome + msedge):
+```bash
+cd tests/e2e && npm install && npx playwright install chrome msedge
+./tests/e2e/run-e2e.sh                                        # canonical (pass-cli secrets)
+# manual:
+SECMAN_BASE_URL="$SECMAN_HOST" \
+  SECMAN_ADMIN_NAME=… SECMAN_ADMIN_PASS=… \
+  SECMAN_USER_USER=… SECMAN_USER_PASS=… \
+  npx playwright test
 ```
 
-**Usage:**
-```kotlin
-val admin = TestDataFactory.createAdminUser()
-val asset = TestDataFactory.createAsset(name = "test-server")
-val vuln = TestDataFactory.createVulnerability(asset, "CVE-2024-001", "High")
-```
+Liveness in the runner is **port-bind**, not HTTP probe: backend `:8080` (120s budget), frontend `:4321` (60s). Functional checks still flow through `SECMAN_HOST`.
 
-### TestAuthHelper
-
-Helper for authentication in integration tests.
-
-```kotlin
-object TestAuthHelper {
-
-    fun getAuthToken(client: HttpClient, username: String): String {
-        val request = HttpRequest.POST(
-            "/api/auth/login",
-            LoginRequest(username, TestDataFactory.DEFAULT_PASSWORD)
-        )
-        val response = client.toBlocking().exchange(request, LoginResponse::class.java)
-        return response.body()?.token ?: throw IllegalStateException("No token")
-    }
-
-    fun attemptLoginExpectingFailure(
-        client: HttpClient,
-        username: String,
-        password: String
-    ): HttpClientResponseException { ... }
-}
-```
-
-**Usage:**
-```kotlin
-val token = TestAuthHelper.getAuthToken(client, adminUser.username)
-
-val response = client.toBlocking().exchange(
-    HttpRequest.GET<Any>("/api/protected")
-        .bearerAuth(token),
-    String::class.java
-)
-```
-
-### DockerAvailable
-
-Helper for conditionally enabling integration tests based on Docker availability.
-
-```kotlin
-class DockerAvailable {
-    companion object {
-        @JvmStatic
-        fun isDockerAvailable(): Boolean {
-            return try {
-                DockerClientFactory.instance().isDockerAvailable
-            } catch (e: Exception) {
-                false
-            }
-        }
-    }
-}
-```
-
-**Usage:**
-```kotlin
-@EnabledIf("com.secman.testutil.DockerAvailable#isDockerAvailable")
-class MyIntegrationTest : BaseIntegrationTest() { ... }
-```
-
----
-
-## CI/CD Integration
-
-### GitHub Actions Example
+## CI
 
 ```yaml
-name: Test Suite
+unit-tests:
+  steps:
+    - uses: actions/setup-java@v4
+      with: { java-version: '21', distribution: 'corretto' }
+    - run: ./gradlew :backendng:test --tests "*ServiceTest*"
+    - if: failure()
+      uses: actions/upload-artifact@v4
+      with: { name: unit-test-report, path: src/backendng/build/reports/tests/ }
 
-on: [push, pull_request]
-
-jobs:
-  unit-tests:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: 'corretto'
-
-      - name: Run unit tests
-        run: ./gradlew :backendng:test --tests "*ServiceTest*"
-
-      - name: Upload test report
-        uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: unit-test-report
-          path: src/backendng/build/reports/tests/
-
-  integration-tests:
-    runs-on: ubuntu-latest
-    services:
-      docker:
-        image: docker:dind
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: 'corretto'
-
-      - name: Run integration tests
-        run: ./gradlew :backendng:test --tests "*IntegrationTest*"
+integration-tests:
+  services: { docker: { image: docker:dind } }
+  steps:
+    - uses: actions/setup-java@v4
+      with: { java-version: '21', distribution: 'corretto' }
+    - run: ./gradlew :backendng:test --tests "*IntegrationTest*"
 ```
 
-### Test Environment Variables
-
-```bash
-# For integration tests with external MariaDB (optional)
-TESTCONTAINERS_REUSE_ENABLE=true  # Reuse containers between runs
-
-# Skip integration tests in environments without Docker
-SKIP_INTEGRATION_TESTS=true
-```
-
----
+Useful env: `TESTCONTAINERS_REUSE_ENABLE=true` (faster reruns), `SKIP_INTEGRATION_TESTS=true` (CI without Docker).
 
 ## Troubleshooting
 
-### Docker Not Available
-
-**Symptom:** Integration tests are skipped
-
-**Solution:**
-```bash
-# Verify Docker is running
-docker info
-
-# On macOS, ensure Docker Desktop is running
-# On Linux, check Docker daemon
-systemctl status docker
-```
-
-### Testcontainers Slow Start
-
-**Symptom:** First test run is very slow
-
-**Solution:** Enable container reuse:
-```bash
-# Create ~/.testcontainers.properties
-testcontainers.reuse.enable=true
-```
-
-### Test Failures After Schema Changes
-
-**Symptom:** Integration tests fail with schema errors
-
-**Solution:**
-```bash
-# Remove cached containers
-docker container prune
-
-# Or remove specific container
-docker rm -f $(docker ps -aq --filter "label=org.testcontainers")
-```
-
-### Mock Verification Failures
-
-**Symptom:** `verify` calls fail in unit tests
-
-**Solution:** Check mock setup:
-```kotlin
-// Ensure mock is properly initialized
-@BeforeEach
-fun setup() {
-    MockKAnnotations.init(this, relaxed = true)
-}
-
-// Use relaxed = false for strict verification
-MockKAnnotations.init(this, relaxed = false)
-```
-
-### Test Isolation Issues
-
-**Symptom:** Tests pass individually but fail when run together
-
-**Solution:** Ensure unique test data:
-```kotlin
-// Use unique identifiers in tests
-val hostname = "test-host-${System.nanoTime()}"
-
-// Clean up in @AfterEach if needed
-@AfterEach
-fun cleanup() {
-    assetRepository.deleteAll()
-}
-```
-
----
-
-## See Also
-
-- [Architecture](./ARCHITECTURE.md) - System design and patterns
-- [Environment Variables](./ENVIRONMENT.md) - Configuration reference
-- [CLI Reference](./CLI.md) - CLI commands for testing
-- [Troubleshooting](./TROUBLESHOOTING.md) - Common issues and solutions
-
----
-
-*For questions about testing, see the project repository or contact the maintainers.*
+| Symptom | Fix |
+|---|---|
+| Integration tests skipped | `docker info` (start Docker Desktop / `systemctl status docker`) |
+| First run very slow | `~/.testcontainers.properties`: `testcontainers.reuse.enable=true` |
+| Schema-mismatch failures | `docker rm -f $(docker ps -aq --filter "label=org.testcontainers")` |
+| `verify` fails unexpectedly | check `MockKAnnotations.init(this, relaxed=true/false)` choice; missing `every {}` setup |
+| Tests pass alone, fail together | unique test data (`"host-${System.nanoTime()}"`); cleanup in `@AfterEach`; per-test transactions |

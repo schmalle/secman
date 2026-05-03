@@ -46,6 +46,12 @@ class McpToolRegistry(
     @Inject private val approveExceptionRequestTool: ApproveExceptionRequestTool,
     @Inject private val rejectExceptionRequestTool: RejectExceptionRequestTool,
     @Inject private val cancelExceptionRequestTool: CancelExceptionRequestTool,
+    @Inject private val getExceptionRequestTool: GetExceptionRequestTool,
+    @Inject private val getMyExceptionRequestSummaryTool: GetMyExceptionRequestSummaryTool,
+    @Inject private val getExceptionRequestStatisticsTool: GetExceptionRequestStatisticsTool,
+    @Inject private val deleteExceptionRequestTool: DeleteExceptionRequestTool,
+    @Inject private val reconcileExceptionRequestsTool: ReconcileExceptionRequestsTool,
+    @Inject private val listVulnerabilityExceptionsTool: ListVulnerabilityExceptionsTool,
     // Feature 063: MCP Tools for E2E Vulnerability Exception Workflow
     @Inject private val deleteAllAssetsTool: DeleteAllAssetsTool,
     @Inject private val addVulnerabilityTool: AddVulnerabilityTool,
@@ -129,6 +135,12 @@ class McpToolRegistry(
             approveExceptionRequestTool,
             rejectExceptionRequestTool,
             cancelExceptionRequestTool,
+            getExceptionRequestTool,
+            getMyExceptionRequestSummaryTool,
+            getExceptionRequestStatisticsTool,
+            deleteExceptionRequestTool,
+            reconcileExceptionRequestsTool,
+            listVulnerabilityExceptionsTool,
             // Feature 063: MCP Tools for E2E Vulnerability Exception Workflow
             deleteAllAssetsTool,
             addVulnerabilityTool,
@@ -349,6 +361,24 @@ class McpToolRegistry(
             }
             "cancel_exception_request" -> {
                 permissions.contains(McpPermission.VULNERABILITIES_READ) // Ownership check in tool
+            }
+            "get_exception_request" -> {
+                permissions.contains(McpPermission.VULNERABILITIES_READ) // Ownership/role check in tool
+            }
+            "get_my_exception_request_summary" -> {
+                permissions.contains(McpPermission.VULNERABILITIES_READ) // Any authenticated user (own data)
+            }
+            "get_exception_request_statistics" -> {
+                permissions.contains(McpPermission.VULNERABILITIES_READ) // ADMIN/SECCHAMPION role checked in tool
+            }
+            "delete_exception_request" -> {
+                permissions.contains(McpPermission.VULNERABILITIES_READ) // Ownership check in tool
+            }
+            "reconcile_exception_requests" -> {
+                permissions.contains(McpPermission.VULNERABILITIES_READ) // ADMIN role checked in tool
+            }
+            "list_vulnerability_exceptions" -> {
+                permissions.contains(McpPermission.VULNERABILITIES_READ) // ADMIN/SECCHAMPION/VULN role checked in tool
             }
 
             // Feature 063: MCP Tools for E2E Vulnerability Exception Workflow

@@ -90,8 +90,22 @@ class GetOverdueAssetsTool(
                 pageable = pageable
             )
 
+            // The OutdatedAssetMaterializedView only filters by workgroup membership.
+            // That filter is incomplete vs. the unified asset access-control rules
+            // (owner match, AWS account match, AD domain match, etc.) and treats
+            // assets with no workgroups as visible to everyone — which leaks
+            // unassigned assets across users. Apply the unified MCP access-control
+            // filter here so the tool's view matches what the user can actually see
+            // through the rest of the API.
+            val accessibleIds = context.getFilterableAssetIds()
+            val accessFiltered = if (accessibleIds == null) {
+                result.content
+            } else {
+                result.content.filter { accessibleIds.contains(it.assetId) }
+            }
+
             // Map results to response format
-            val assets = result.content.map { asset ->
+            val assets = accessFiltered.map { asset ->
                 // Determine max severity based on counts
                 val maxSeverity = when {
                     asset.criticalCount > 0 -> "CRITICAL"
@@ -118,8 +132,8 @@ class GetOverdueAssetsTool(
             return McpToolResult.success(
                 mapOf(
                     "assets" to assets,
-                    "totalElements" to result.totalSize,
-                    "totalPages" to result.totalPages,
+                    "totalElements" to assets.size.toLong(),
+                    "totalPages" to if (assets.isEmpty()) 0 else 1,
                     "page" to page,
                     "size" to size
                 )
@@ -136,12 +150,17 @@ class GetOverdueAssetsTool(
      */
     private fun createAuthenticationFromContext(context: McpExecutionContext): Authentication {
         return object : Authentication {
-            override fun getName(): String = context.delegatedUserEmail ?: "mcp-user"
+            // AssetFilterService treats authentication.name as the *username*
+            // (used for asset-owner matching). Email-as-name silently breaks
+            // owner-based access because no asset.owner ever equals an email.
+            override fun getName(): String =
+                context.delegatedUsername ?: context.delegatedUserEmail ?: "mcp-user"
 
             override fun getRoles(): Collection<String> = context.delegatedUserRoles ?: emptySet()
 
             override fun getAttributes(): Map<String, Any> = mapOf(
                 "userId" to (context.delegatedUserId ?: 0L),
+                "email" to (context.delegatedUserEmail ?: ""),
                 "workgroupIds" to (context.accessibleWorkgroupIds?.toList() ?: emptyList<Long>())
             )
         }

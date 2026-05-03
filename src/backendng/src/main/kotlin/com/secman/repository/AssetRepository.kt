@@ -89,6 +89,8 @@ interface AssetRepository : JpaRepository<Asset, Long> {
 
     fun findByNameContainingIgnoreCase(name: String): List<Asset>
 
+    fun findByIdIn(ids: Collection<Long>): List<Asset>
+
     fun findByType(type: String): List<Asset>
 
     fun findByOwner(owner: String): List<Asset>

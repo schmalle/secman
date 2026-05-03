@@ -1,1212 +1,264 @@
-# MCP (Model Context Protocol) Integration Guide
+# MCP Integration
 
-**Last Updated:** 2026-04-23
-**Version:** 5.1
+Streamable HTTP / JSON-RPC 2.0 endpoint at `POST /mcp`. 55+ tools spanning requirements, assets, vulnerabilities, scans, releases, workgroups, user mappings, AWS account sharing, and the vulnerability heatmap.
 
-This guide covers integrating Secman with AI assistants (Claude Desktop, Claude Code, ChatGPT, etc.) using the Model Context Protocol (MCP).
+## Required headers
 
----
+| Header | Required for |
+|---|---|
+| `X-MCP-API-Key: sk-...` | every request |
+| `X-MCP-User-Email: user@domain` | **every** `tools/list` and `tools/call` (mandatory). Exempt: `initialize`, `ping`. |
+| `Content-Type: application/json` | every request |
 
-## Table of Contents
+`Origin` is validated per spec — non-browser clients without `Origin` are allowed; localhost always allowed; configure others under `secman.mcp.transport.allowed-origins` in `application.yml`.
 
-1. [Overview](#overview)
-2. [Quick Start](#quick-start)
-3. [Connection Methods](#connection-methods)
-   - [Claude Code (Direct HTTP)](#claude-code-direct-http)
-   - [Claude Desktop (Direct HTTP)](#claude-desktop-direct-http)
-   - [Claude Desktop with mcp-remote (Fallback)](#claude-desktop-with-mcp-remote-fallback)
-4. [API Key Management](#api-key-management)
-5. [User Delegation](#user-delegation)
-6. [Available MCP Tools](#available-mcp-tools)
-7. [Authentication & Security](#authentication--security)
-8. [Usage Examples](#usage-examples)
-9. [Administration](#administration)
-10. [Troubleshooting](#troubleshooting)
-
----
-
-## Overview
-
-Secman supports the Model Context Protocol (MCP), allowing AI assistants to programmatically access security data including:
-
-- **Security Requirements** - Query, export, and manage security requirements
-- **Asset Inventory** - Browse assets, get detailed profiles with vulnerabilities
-- **Vulnerability Data** - Search vulnerabilities by severity, CVE, or affected asset
-- **Scan Results** - Review network scan history and discovered services
-
-The MCP server exposes **55 tools** for comprehensive security management workflows.
-
-### Prerequisites
-
-- Secman backend running (default: port 8080)
-- Valid Secman admin account (for API key creation)
-- AI assistant that supports MCP (Claude Desktop, Claude Code, etc.)
-
-### Architecture
-
-Secman supports multiple connection methods:
+## Effective permissions
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                         Connection Methods                               │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                          │
-│  [Claude Code]    ──────HTTP────────────►  [Secman /mcp]                │
-│                       (Direct)                                           │
-│                                                                          │
-│  [Claude Desktop] ──────HTTP────────────►  [Secman /mcp]                │
-│                       (Direct, url config)                               │
-│                                                                          │
-│  [Claude Desktop] ──stdio──► [mcp-remote] ──HTTP──► [Secman /mcp]       │
-│                                 (Fallback)                               │
-│                                                                          │
-└─────────────────────────────────────────────────────────────────────────┘
+effective = api_key.permissions  ∩  delegated_user.role_implied_permissions
 ```
 
-| Client | Method | Requires Node.js | Recommended |
-|--------|--------|------------------|-------------|
-| **Claude Code** | Direct HTTP | No | Yes |
-| **Claude Desktop** | Direct HTTP (`url` config) | No | Yes |
-| **Claude Desktop** | Via `mcp-remote` proxy | Yes (npx) | Fallback |
+Implied per role:
 
----
+| Role | Implied permissions |
+|---|---|
+| `USER` | `REQUIREMENTS_READ`, `ASSETS_READ`, `VULNERABILITIES_READ`, `TAGS_READ` |
+| `ADMIN` | all |
+| `VULN` | `VULNERABILITIES_READ`, `SCANS_READ`, `ASSETS_READ` |
+| `RELEASE_MANAGER` | `REQUIREMENTS_READ`, `ASSESSMENTS_READ` |
+| `REQ` | `REQUIREMENTS_READ/WRITE`, `FILES_READ`, `TAGS_READ` |
+| `REQADMIN` | `REQUIREMENTS_READ/WRITE` (also enables release create/delete + alignment) |
+| `RISK` | `ASSESSMENTS_READ/WRITE/EXECUTE` |
+| `SECCHAMPION` | `REQUIREMENTS_READ`, `ASSESSMENTS_READ`, `ASSETS_READ`, `VULNERABILITIES_READ`, `SCANS_READ` |
 
-## Quick Start
-
-### 1. Start Secman Backend
+## Quick start
 
 ```bash
-cd src/backendng
-./gradlew run
-```
+# 1. Get JWT
+TOKEN=$(curl -s -XPOST http://localhost:8080/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"adminuser","password":"…"}' | jq -r '.token')
 
-Verify it's running:
-
-```bash
-curl http://localhost:8080/health
-# Expected: {"status":"UP","service":"secman-backend-ng","version":"0.1"}
-```
-
-### 2. Create an MCP API Key
-
-Get a JWT token first:
-
-```bash
-curl -X POST "http://localhost:8080/api/auth/login" \
-  -H "Content-Type: application/json" \
-  -d '{"username": "adminuser", "password": "password"}'
-```
-
-Create the API key:
-
-```bash
-curl -X POST "http://localhost:8080/api/mcp/admin/api-keys" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+# 2. Create API key
+curl -X POST http://localhost:8080/api/mcp/admin/api-keys \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
   -d '{
-    "name": "claude-integration",
-    "permissions": ["REQUIREMENTS_READ", "ASSETS_READ", "VULNERABILITIES_READ"],
-    "notes": "API key for Claude integration"
+    "name":"claude",
+    "permissions":["REQUIREMENTS_READ","ASSETS_READ","VULNERABILITIES_READ"],
+    "delegationEnabled":true,
+    "allowedDelegationDomains":"@company.com",
+    "expiresAt":"2027-03-31T23:59:59"
   }'
+# → save the returned `apiKey` (only shown once)
 ```
 
-**Save the returned `apiKey` value** (starts with `sk-`) - you'll need it for configuration.
+## Client setup
 
-### 3. Configure Your Client
-
-See [Connection Methods](#connection-methods) for client-specific setup.
-
----
-
-## Connection Methods
-
-### Claude Code (Direct HTTP)
-
-Claude Code natively supports HTTP transport - the simplest setup with no middleware required.
+### Claude Code (recommended, native HTTP)
 
 ```bash
 claude mcp add --transport http secman http://localhost:8080/mcp \
-  --header "X-MCP-API-Key: sk-your-api-key-here" \
-  --header "X-MCP-User-Email: your.email@company.com"
+  --header "X-MCP-API-Key: sk-..." \
+  --header "X-MCP-User-Email: you@company.com"
 ```
 
-For a remote server:
+### Claude Desktop (native `url`)
 
-```bash
-claude mcp add --transport http secman https://secman.yourcompany.com/mcp \
-  --header "X-MCP-API-Key: sk-your-api-key-here" \
-  --header "X-MCP-User-Email: your.email@company.com"
-```
-
-### Claude Desktop (Direct HTTP)
-
-Claude Desktop supports Streamable HTTP transport via the `url` configuration key — no middleware required.
-
-**Config file locations:**
-- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
-- **Linux**: `~/.config/Claude/claude_desktop_config.json`
+`~/Library/Application Support/Claude/claude_desktop_config.json` (macOS), `%APPDATA%\Claude\…` (Win), `~/.config/Claude/…` (Linux):
 
 ```json
-{
-  "mcpServers": {
-    "secman": {
-      "url": "http://localhost:8080/mcp",
-      "headers": {
-        "X-MCP-API-Key": "sk-your-api-key-here",
-        "X-MCP-User-Email": "your.email@company.com"
-      }
-    }
+{ "mcpServers": { "secman": {
+  "url": "http://localhost:8080/mcp",
+  "headers": {
+    "X-MCP-API-Key": "sk-...",
+    "X-MCP-User-Email": "you@company.com"
   }
-}
+} } }
 ```
 
-Restart Claude Desktop after saving the config file.
+### Claude Desktop fallback (`mcp-remote` stdio→HTTP proxy)
 
-### Claude Desktop with mcp-remote (Fallback)
-
-If your Claude Desktop version doesn't support the `url` config, use `mcp-remote` as a stdio-to-HTTP proxy:
+Use only if your Desktop version lacks native `url`:
 
 ```json
-{
-  "mcpServers": {
-    "secman": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "mcp-remote",
-        "http://localhost:8080/mcp",
-        "--header",
-        "X-MCP-API-Key: sk-your-api-key-here",
-        "--header",
-        "X-MCP-User-Email: your.email@company.com"
-      ]
-    }
-  }
-}
+{ "mcpServers": { "secman": {
+  "command": "npx",
+  "args": ["-y","mcp-remote","http://localhost:8080/mcp",
+           "--header","X-MCP-API-Key: sk-...",
+           "--header","X-MCP-User-Email: you@company.com"]
+} } }
 ```
 
-### Testing the Connection
-
-Test the MCP endpoint directly:
+## Smoke test
 
 ```bash
-# Test initialize handshake (does not require X-MCP-User-Email)
-curl -X POST http://localhost:8080/mcp \
-  -H "Content-Type: application/json" \
-  -H "X-MCP-API-Key: sk-your-api-key-here" \
-  -d '{
-    "jsonrpc": "2.0",
-    "id": "1",
-    "method": "initialize",
-    "params": {
-      "protocolVersion": "2024-11-05",
-      "capabilities": {},
-      "clientInfo": {
-        "name": "test-client",
-        "version": "1.0.0"
-      }
-    }
-  }'
+# initialize (no email required)
+curl -XPOST http://localhost:8080/mcp \
+  -H 'Content-Type: application/json' -H 'X-MCP-API-Key: sk-...' \
+  -d '{"jsonrpc":"2.0","id":"1","method":"initialize",
+       "params":{"protocolVersion":"2024-11-05","capabilities":{},
+       "clientInfo":{"name":"test","version":"1"}}}'
 
-# List available tools (X-MCP-User-Email is mandatory)
-curl -X POST http://localhost:8080/mcp \
-  -H "Content-Type: application/json" \
-  -H "X-MCP-API-Key: sk-your-api-key-here" \
-  -H "X-MCP-User-Email: your.email@company.com" \
-  -d '{
-    "jsonrpc": "2.0",
-    "id": "2",
-    "method": "tools/list"
-  }'
+# tools/list (email required)
+curl -XPOST http://localhost:8080/mcp \
+  -H 'Content-Type: application/json' \
+  -H 'X-MCP-API-Key: sk-...' -H 'X-MCP-User-Email: you@company.com' \
+  -d '{"jsonrpc":"2.0","id":"2","method":"tools/list"}'
 ```
 
----
+## Permission groups → tools
 
-## API Key Management
+| Permission | Tools |
+|---|---|
+| `REQUIREMENTS_READ` | `get_requirements`, `export_requirements`, `list_releases`, `get_release`, `compare_releases`, `create_release`*, `delete_release`*, `set_release_status`* |
+| `REQUIREMENTS_WRITE` | `add_requirement` |
+| `REQUIREMENTS_DELETE` | `delete_all_requirements` (ADMIN) |
+| `ASSETS_READ` | `get_assets`, `get_all_assets_detail`, `get_asset_profile`, `get_asset_complete_profile`, `create_asset`, `update_asset` |
+| `VULNERABILITIES_READ` | `get_vulnerabilities`, `get_all_vulnerabilities_detail`, `get_asset_most_vulnerabilities`, `get_overdue_assets`, `*_exception_request*`, `get_vulnerability_heatmap`, `refresh_vulnerability_heatmap` |
+| `SCANS_READ` | `get_scans`, `get_asset_scan_results`, `search_products` |
+| `USER_ACTIVITY` | `list_users`, `add_user`, `delete_user`, `import_user_mappings`, `list_user_mappings`, `*_aws_account_sharing` |
+| `WORKGROUPS_WRITE` | `create_workgroup`, `delete_workgroup`, `assign_assets_to_workgroup`, `assign_users_to_workgroup`, `add_/remove_workgroup_aws_account` |
 
-### Creating Keys via Web UI
+\* `create_release`/`delete_release` need ADMIN or REQADMIN; `set_release_status` needs ADMIN or RELEASE_MANAGER.
 
-1. Navigate to: **Settings > MCP Integration > API Keys**
-2. Click **Create New API Key**
-3. Configure:
-   - **Name**: Descriptive identifier
-   - **Permissions**: Select required permissions
-   - **Expiration**: Optional (90 days recommended)
-   - **User Delegation**: Enable if needed for multi-user access
-4. Click **Generate Key**
-5. Copy and securely store the key (shown only once)
+## Tool reference (parameters)
 
-### Creating Keys via API
+### Requirements
+- **`get_requirements`** — `limit` (default 20, max 100), `offset`, `tags[]`, `status` (`DRAFT|ACTIVE|DEPRECATED|ARCHIVED`), `priority` (`LOW|MEDIUM|HIGH|CRITICAL`).
+- **`export_requirements`** — `format` (`xlsx|docx`).
+- **`add_requirement`** — `shortreq`* | `details`, `motivation`, `norm`, `chapter`.
+- **`delete_all_requirements`** — `confirm: true` (ADMIN).
 
-```bash
-curl -X POST http://localhost:8080/api/mcp/admin/api-keys \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "My Integration",
-    "permissions": ["REQUIREMENTS_READ", "ASSETS_READ"],
-    "expiresAt": "2027-03-31T23:59:59"
-  }'
+### Assets (delegation required for writes)
+- **`get_assets`** — `page`, `pageSize` (max 500), `name`, `type` (`SERVER|WORKSTATION|NETWORK|OTHER`), `ip`, `owner`.
+- **`get_all_assets_detail`**, **`get_asset_profile`** (`assetId`*, `includeVulnerabilities`, `includeScanHistory`), **`get_asset_complete_profile`**.
+- **`create_asset`** — `name`*, `type`*, `owner`*, `ip`, `description`, `criticality` (`CRITICAL|HIGH|MEDIUM|LOW|NA`), `adDomain`, `cloudAccountId`. Duplicate names rejected (case-insensitive); delegated user becomes `manualCreator`.
+- **`update_asset`** — `assetId`* + any of `name`, `type`, `owner`, `ip`, `description`, `criticality`, `adDomain`. Partial update; row-level access enforced. Workgroup reassignment is via `assign_assets_to_workgroup`.
+- **`delete_asset`** — `assetId`*, `forceTimeout` (ADMIN). Cascade-deletes vulnerabilities, scan results, exception requests; returns counts and audit-log id.
+- **`delete_all_assets`** — `confirm: true` (ADMIN).
+
+### Vulnerabilities
+- **`get_vulnerabilities`** — `page`, `pageSize`, `cveId`, `severity[]` (`Critical|High|Medium|Low|Info`), `assetId`.
+- **`get_all_vulnerabilities_detail`** — `severity` (`CRITICAL|HIGH|MEDIUM|LOW`), `assetId`, `minDaysOpen`.
+- **`get_asset_most_vulnerabilities`** — `topN` (default 1, max 10).
+- **`get_overdue_assets`** (ADMIN/VULN, delegation) — `page`, `size` (max 100), `minSeverity`, `searchTerm`. Non-admin filtered through unified asset access.
+- **`add_vulnerability`** (ADMIN/VULN, delegation) — `hostname`*, `cve`*, `criticality`*, `daysOpen`, `owner`. Auto-creates asset. Returns `id` (DB PK) and `vulnerabilityId` (CVE).
+
+### Exception requests (delegation)
+- **`create_exception_request`** — `vulnerabilityId`*, `reason`* (50–2048 chars), `expirationDate`* (ISO-8601 future), `scope` (`SINGLE_VULNERABILITY|CVE_PATTERN`). ADMIN/SECCHAMPION are auto-approved.
+- **`get_my_exception_requests`** — `status`, `page`, `size`.
+- **`get_pending_exception_requests`** (ADMIN/SECCHAMPION) — FIFO sorted.
+- **`approve_exception_request`** (ADMIN/SECCHAMPION) — `requestId`*, `comment` (≤1024).
+- **`reject_exception_request`** (ADMIN/SECCHAMPION) — `requestId`*, `comment`* (10–1024).
+- **`cancel_exception_request`** — `requestId`*. Only the requester, only PENDING.
+
+### Scans
+- **`get_scans`** — `scanType` (`nmap|masscan`), `uploadedBy`, `startDate`.
+- **`get_asset_scan_results`** — `portMin`, `portMax` (1–65535), `service`, `state` (`open|filtered|closed`).
+- **`search_products`**.
+
+### Workgroups (ADMIN, delegation)
+- **`create_workgroup`** — `name`* (1–100), `description` (≤512).
+- **`delete_workgroup`** — `workgroupId`*. Cascades user/asset associations.
+- **`assign_assets_to_workgroup`** / **`assign_users_to_workgroup`** — `workgroupId`*, `assetIds[]`/`userIds[]`*.
+- **`list_/add_/remove_workgroup_aws_account`** — `workgroupId`*, `cloudAccountId`*.
+
+### User mappings (ADMIN, delegation)
+- **`import_user_mappings`** — `mappings[]`* (≤1000), each `email`* + at least one of `awsAccountId` (12 digits) or `domain`. `dryRun`. Returns counts: `created`, `createdPending` (user not yet exists), `skipped`, `errors[]`.
+- **`list_user_mappings`** — `email`, `page`, `size` (max 100). Returns full `UserMappingDto` (id, email, awsAccountId, domain, userId, isFutureMapping, applied/created/updatedAt).
+
+### AWS account sharing (ADMIN, delegation)
+- **`list_aws_account_sharing`** — `page`, `size`. Returns directional sharing rules with source/target user info and shared-account count.
+- **`create_aws_account_sharing`** — `sourceUserId`*, `targetUserId`*. Validates: distinct users, both exist, source has ≥1 AWS mapping, no duplicate.
+- **`delete_aws_account_sharing`** — `id`*.
+
+### Releases (ADMIN/RELEASE_MANAGER for read; create/delete: ADMIN/REQADMIN)
+- **`list_releases`** — `status` (`PREPARATION|ALIGNMENT|ACTIVE|ARCHIVED`).
+- **`get_release`** — `releaseId`*, `includeRequirements` (default false).
+- **`create_release`** — `version`* (`MAJOR.MINOR.PATCH`), `name`*, `description`. Snapshots all current requirements, status PREPARATION.
+- **`delete_release`** — `releaseId`*. ACTIVE releases cannot be deleted.
+- **`set_release_status`** — `releaseId`*, `status: ACTIVE`. Only PREPARATION/ALIGNMENT can be set ACTIVE; previously-ACTIVE auto-archives. ARCHIVED is terminal. Use `start_alignment` for ALIGNMENT.
+- **`compare_releases`** — `fromReleaseId`*, `toReleaseId`*. Returns `summary{added,deleted,modified,unchanged}` plus per-requirement diffs.
+
+### Alignment
+- **`start_alignment`** (ADMIN/REQADMIN) — `releaseId`*. PREPARATION → ALIGNMENT.
+- **`get_alignment_status`** — `releaseId`*.
+- **`submit_review`** — `releaseId`*, `approved`*, `comment`.
+- **`finalize_alignment`** (ADMIN/REQADMIN) — `releaseId`*.
+
+### Heatmap (delegation)
+- **`get_vulnerability_heatmap`** — no params. Per-asset entries with severity counts and `heatLevel`:
+  - `RED`: any CRITICAL or `HIGH > 100`
+  - `YELLOW`: 1–100 HIGH
+  - `GREEN`: no CRITICAL or HIGH
+
+  ADMIN/SECCHAMPION see all assets; others scoped via unified access.
+- **`refresh_vulnerability_heatmap`** (ADMIN) — recalculates.
+
+### Admin / system
+- **`list_users`** (ADMIN), **`list_products`** (ADMIN/SECCHAMPION).
+- **`add_user`** (ADMIN) — `email`*, `password`*, `roles[]` (default `["USER"]`).
+- **`delete_user`** (ADMIN) — `email`*.
+- **`send_admin_summary`** (ADMIN) — same payload as CLI `send-admin-summary`.
+
+## Programmatic example (Python)
+
+```python
+import requests, os
+r = requests.post("http://localhost:8080/mcp", headers={
+    "X-MCP-API-Key": os.environ["SECMAN_MCP_KEY"],
+    "X-MCP-User-Email": os.environ["SECMAN_USER_EMAIL"],
+    "Content-Type": "application/json",
+}, json={"jsonrpc":"2.0","id":"1","method":"tools/call",
+         "params":{"name":"get_requirements","arguments":{"limit":10}}})
+print(r.json())
 ```
 
-### Permission Types
+A standalone Go MCP client lives in `scriptpp/mcp/`.
 
-| Permission | Description | Tools Enabled |
-|------------|-------------|---------------|
-| `REQUIREMENTS_READ` | Read security requirements and releases | `get_requirements`, `export_requirements`, `list_releases`, `get_release`, `compare_releases`, `create_release`, `delete_release`, `set_release_status` (create/delete require ADMIN/REQADMIN role; status management requires ADMIN/RELEASE_MANAGER role; all release tools require delegation) |
-| `REQUIREMENTS_WRITE` | Create/modify requirements | `add_requirement` |
-| `REQUIREMENTS_DELETE` | Delete requirements | `delete_all_requirements` |
-| `ASSETS_READ` | Read asset inventory | `get_assets`, `get_all_assets_detail`, `get_asset_profile`, `get_asset_complete_profile` |
-| `VULNERABILITIES_READ` | Read vulnerability data | `get_vulnerabilities`, `get_all_vulnerabilities_detail`, `get_asset_most_vulnerabilities`, `get_overdue_assets`, `get_my_exception_requests`, `get_pending_exception_requests`, `create_exception_request`, `approve_exception_request`, `reject_exception_request`, `cancel_exception_request`, `get_vulnerability_heatmap`, `refresh_vulnerability_heatmap` |
-| `SCANS_READ` | Read scan history | `get_scans`, `get_asset_scan_results`, `search_products` |
-| `USER_ACTIVITY` | User management and mappings | `list_users`, `add_user`, `delete_user`, `import_user_mappings`, `list_user_mappings`, `list_aws_account_sharing`, `create_aws_account_sharing`, `delete_aws_account_sharing` (all require delegation) |
-| `WORKGROUPS_WRITE` | Workgroup management | `create_workgroup`, `delete_workgroup`, `assign_assets_to_workgroup`, `assign_users_to_workgroup` (all require delegation) |
+## Errors
 
-### Managing Keys
+| Code (JSON-RPC) | Symbol | Cause |
+|---|---|---|
+| -32007 | `DELEGATION_HEADER_REQUIRED` | `X-MCP-User-Email` missing/empty |
+| -32003 | `DELEGATION_NOT_ENABLED` | API key has no delegation |
+| -32003 | `DELEGATION_DOMAIN_REJECTED` | email domain not in allowlist |
+| -32003 | `DELEGATION_USER_NOT_FOUND` / `_INACTIVE` / `_INVALID_EMAIL` | as named |
+| -32003 | `DELEGATION_FAILED` | catch-all |
 
-**List all keys:**
-```bash
-curl -H "Authorization: Bearer YOUR_JWT_TOKEN" \
-  http://localhost:8080/api/mcp/admin/api-keys
-```
-
-**Revoke a key:**
-```bash
-curl -X DELETE \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
-  http://localhost:8080/api/mcp/admin/api-keys/KEY_ID
-```
-
----
-
-## User Delegation
-
-User delegation is **mandatory** for all data-accessing MCP endpoints (`tools/list`, `tools/call`, `/capabilities`). Every MCP request that accesses data must include the `X-MCP-User-Email` header to identify the user on whose behalf the request is made.
-
-> **Note:** The `initialize` and `ping` methods do not require the `X-MCP-User-Email` header, as they only perform handshake and health check operations without accessing data.
-
-### How It Works
-
-The `X-MCP-User-Email` header is required on every data-accessing request. Secman will:
-
-1. Look up the user by email
-2. Validate the email domain against allowed domains
-3. Compute **effective permissions** as the intersection of:
-   - Permissions implied by the user's roles
-   - Permissions granted to the API key
-
-This ensures the delegated user can never have more access than either their roles OR the API key allows.
-
-### Creating a Delegation-Enabled Key
-
-```bash
-curl -X POST http://localhost:8080/api/mcp/admin/api-keys \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "External Tool Integration",
-    "permissions": ["REQUIREMENTS_READ", "ASSETS_READ", "VULNERABILITIES_READ"],
-    "delegationEnabled": true,
-    "allowedDelegationDomains": "@company.com,@subsidiary.com"
-  }'
-```
-
-### Permission Mapping
-
-User roles are mapped to MCP permissions:
-
-| User Role | Implied MCP Permissions |
-|-----------|-------------------------|
-| `USER` | `REQUIREMENTS_READ`, `ASSETS_READ`, `VULNERABILITIES_READ`, `TAGS_READ` |
-| `ADMIN` | All permissions |
-| `VULN` | `VULNERABILITIES_READ`, `SCANS_READ`, `ASSETS_READ` |
-| `RELEASE_MANAGER` | `REQUIREMENTS_READ`, `ASSESSMENTS_READ` |
-| `REQ` | `REQUIREMENTS_READ`, `REQUIREMENTS_WRITE`, `FILES_READ`, `TAGS_READ` |
-| `REQADMIN` | `REQUIREMENTS_READ`, `REQUIREMENTS_WRITE` (also enables release create/delete and alignment decisions) |
-| `RISK` | `ASSESSMENTS_READ`, `ASSESSMENTS_WRITE`, `ASSESSMENTS_EXECUTE` |
-| `SECCHAMPION` | `REQUIREMENTS_READ`, `ASSESSMENTS_READ`, `ASSETS_READ`, `VULNERABILITIES_READ`, `SCANS_READ` |
-
-**Example:** User has `VULN` role, API key has `[ASSETS_READ, VULNERABILITIES_READ, REQUIREMENTS_READ]`:
-- User's implied permissions: `[VULNERABILITIES_READ, SCANS_READ, ASSETS_READ]`
-- API key permissions: `[ASSETS_READ, VULNERABILITIES_READ, REQUIREMENTS_READ]`
-- **Effective permissions**: `[VULNERABILITIES_READ, ASSETS_READ]` (intersection)
-
-### Delegation Error Codes
-
-| Error Code | JSON-RPC Code | Description |
-|------------|---------------|-------------|
-| `DELEGATION_HEADER_REQUIRED` | -32007 | `X-MCP-User-Email` header is missing (mandatory) |
-| `DELEGATION_NOT_ENABLED` | -32003 | API key doesn't have delegation enabled |
-| `DELEGATION_DOMAIN_REJECTED` | -32003 | Email domain not in allowed list |
-| `DELEGATION_USER_NOT_FOUND` | -32003 | User with email doesn't exist |
-| `DELEGATION_USER_INACTIVE` | -32003 | User account is disabled |
-| `DELEGATION_INVALID_EMAIL` | -32003 | Email format is invalid |
-| `DELEGATION_FAILED` | -32003 | General delegation failure |
-
-### Mandatory Delegation
-
-- **No `X-MCP-User-Email` header**: Request is rejected with `DELEGATION_HEADER_REQUIRED` error
-- **Empty header**: Same as no header — rejected
-- **Non-delegation key with header**: Request is rejected with `DELEGATION_NOT_ENABLED` error
-- **`initialize` and `ping` methods**: These do not require the header (no data access)
-
-### Delegation Security Alerts
-
-Configure alert thresholds for failed delegation attempts in `application.yml`:
-
+Configure failure-rate alerts:
 ```yaml
 secman:
   mcp:
     delegation:
       alert:
-        threshold: 10        # failures to trigger alert
-        window-minutes: 5    # time window
+        threshold: 10        # failures
+        window-minutes: 5
 ```
 
----
+## Operations
 
-## Available MCP Tools
-
-### Requirements Management
-
-#### `get_requirements`
-Retrieve security requirements with filtering and pagination.
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `limit` | number | Max results (default: 20, max: 100) |
-| `offset` | number | Skip N results (default: 0) |
-| `tags` | string[] | Filter by tags |
-| `status` | enum | `DRAFT`, `ACTIVE`, `DEPRECATED`, `ARCHIVED` |
-| `priority` | enum | `LOW`, `MEDIUM`, `HIGH`, `CRITICAL` |
-
-#### `export_requirements`
-Export all requirements to Excel or Word format.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `format` | enum | Yes | `xlsx` (Excel) or `docx` (Word) |
-
-#### `add_requirement`
-Create a new security requirement.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `shortreq` | string | Yes | Short requirement text |
-| `details` | string | No | Detailed description |
-| `motivation` | string | No | Why this requirement exists |
-| `norm` | string | No | Regulatory norm reference |
-| `chapter` | string | No | Chapter/category |
-
-#### `delete_all_requirements`
-Delete ALL requirements. **ADMIN only.**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `confirm` | boolean | Yes | Must be `true` |
-
-### Asset Management
-
-#### `get_assets`
-Retrieve asset inventory with filtering.
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `page` | number | Page number (0-indexed) |
-| `pageSize` | number | Items per page (max: 500) |
-| `name` | string | Filter by name (partial match) |
-| `type` | string | `SERVER`, `WORKSTATION`, `NETWORK`, `OTHER` |
-| `ip` | string | Filter by IP (partial match) |
-| `owner` | string | Filter by owner |
-
-#### `get_all_assets_detail`
-Retrieve all assets with comprehensive details and workgroup info.
-
-#### `get_asset_profile`
-Retrieve profile for a single asset including vulnerabilities and scan history.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `assetId` | number | Yes | The asset ID |
-| `includeVulnerabilities` | boolean | No | Include vulnerabilities (default: true) |
-| `includeScanHistory` | boolean | No | Include scan history (default: true) |
-
-#### `get_asset_complete_profile`
-Retrieve complete asset profile with all vulnerabilities and scan results.
-
-#### `create_asset`
-Create a new asset in the inventory. **Requires User Delegation.**
-
-Duplicate detection: returns an error if an asset with the same name already exists (case-insensitive). The delegated user is recorded as `manualCreator` for access control.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `name` | string | Yes | Asset hostname or name (max 255 characters) |
-| `type` | string | Yes | Asset type (e.g., `SERVER`, `WORKSTATION`, `NETWORK_DEVICE`) |
-| `owner` | string | Yes | Owner username (max 255 characters) |
-| `ip` | string | No | IP address |
-| `description` | string | No | Asset description |
-| `criticality` | enum | No | `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, or `NA` |
-| `adDomain` | string | No | Active Directory domain |
-| `cloudAccountId` | string | No | AWS account ID |
-
-#### `update_asset`
-Update an existing asset's properties. **Requires User Delegation.**
-
-Supports partial updates — only provided fields are modified. Row-level access control applies: users can only update assets they have access to. Workgroup reassignment is handled via `assign_assets_to_workgroup` instead.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `assetId` | number | Yes | ID of the asset to update |
-| `name` | string | No | New asset name (max 255 characters) |
-| `type` | string | No | New asset type |
-| `owner` | string | No | New owner username |
-| `ip` | string | No | New IP address |
-| `description` | string | No | New asset description |
-| `criticality` | enum | No | `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, or `NA` |
-| `adDomain` | string | No | New Active Directory domain |
-
-### Vulnerability Management
-
-#### `get_vulnerabilities`
-Retrieve vulnerability data with filtering.
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `page` | number | Page number |
-| `pageSize` | number | Items per page (max: 500) |
-| `cveId` | string | Filter by CVE ID |
-| `severity` | string[] | `Critical`, `High`, `Medium`, `Low`, `Info` |
-| `assetId` | number | Filter by asset ID |
-
-#### `get_all_vulnerabilities_detail`
-Retrieve vulnerabilities with severity/asset/days-open filtering.
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `severity` | enum | `CRITICAL`, `HIGH`, `MEDIUM`, `LOW` |
-| `assetId` | integer | Filter by asset ID |
-| `minDaysOpen` | integer | Minimum days open |
-
-#### `get_asset_most_vulnerabilities`
-Get the asset(s) with the highest number of vulnerabilities, ranked by total count.
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `topN` | integer | Number of top assets to return (default: 1, max: 10) |
-
-Returns asset details with vulnerability counts by severity (critical, high, medium, low).
-
-### Overdue Assets & Exception Handling
-
-#### `get_overdue_assets`
-Get assets with overdue vulnerabilities. **Requires ADMIN or VULN role and User Delegation.**
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `page` | number | Page number (0-indexed, default: 0) |
-| `size` | number | Page size (default: 20, max: 100) |
-| `minSeverity` | enum | Minimum severity: `CRITICAL`, `HIGH`, `MEDIUM`, `LOW` |
-| `searchTerm` | string | Search by asset name (case-insensitive) |
-
-Returns paginated list of assets with overdue vulnerability counts by severity.
-
-#### `create_exception_request`
-Create a vulnerability exception request. **Requires User Delegation.**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `vulnerabilityId` | number | Yes | ID of the vulnerability |
-| `reason` | string | Yes | Business justification (50-2048 characters) |
-| `expirationDate` | string | Yes | ISO-8601 datetime (must be future) |
-| `scope` | enum | No | `SINGLE_VULNERABILITY` (default) or `CVE_PATTERN` |
-
-ADMIN and SECCHAMPION roles get auto-approved requests.
-
-#### `get_my_exception_requests`
-Get your own exception requests. **Requires User Delegation.**
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `status` | enum | Filter: `PENDING`, `APPROVED`, `REJECTED`, `EXPIRED`, `CANCELLED` |
-| `page` | number | Page number (0-indexed, default: 0) |
-| `size` | number | Page size (default: 20, max: 100) |
-
-#### `get_pending_exception_requests`
-Get all pending requests awaiting approval. **Requires ADMIN or SECCHAMPION role and User Delegation.**
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `page` | number | Page number (0-indexed, default: 0) |
-| `size` | number | Page size (default: 20, max: 100) |
-
-Returns requests sorted by oldest first (FIFO processing).
-
-#### `approve_exception_request`
-Approve a pending request. **Requires ADMIN or SECCHAMPION role and User Delegation.**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `requestId` | number | Yes | ID of the request to approve |
-| `comment` | string | No | Optional approval comment (max 1024 chars) |
-
-Creates a VulnerabilityException on successful approval.
-
-#### `reject_exception_request`
-Reject a pending request. **Requires ADMIN or SECCHAMPION role and User Delegation.**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `requestId` | number | Yes | ID of the request to reject |
-| `comment` | string | Yes | Rejection reason (10-1024 characters) |
-
-#### `cancel_exception_request`
-Cancel your own pending request. **Requires User Delegation.**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `requestId` | number | Yes | ID of your request to cancel |
-
-Only the original requester can cancel; only PENDING requests can be cancelled.
-
-### Scan Management
-
-#### `get_scans`
-Retrieve scan history.
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `scanType` | enum | `nmap`, `masscan` |
-| `uploadedBy` | string | Filter by uploader |
-| `startDate` | string | ISO-8601 date |
-
-#### `get_asset_scan_results`
-Retrieve scan results (open ports, services).
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `portMin` | integer | Minimum port (1-65535) |
-| `portMax` | integer | Maximum port |
-| `service` | string | Service name filter |
-| `state` | enum | `open`, `filtered`, `closed` |
-
-#### `search_products`
-Search products discovered in network scans.
-
-### Admin Tools
-
-#### `list_users`
-List all users. **Requires ADMIN role and User Delegation.**
-
-#### `list_products`
-List products. **Requires ADMIN or SECCHAMPION role.**
-
-#### `add_user`
-Create a new user. **Requires ADMIN role and User Delegation.**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `email` | string | Yes | User email address |
-| `password` | string | Yes | User password |
-| `roles` | string[] | No | User roles (default: `["USER"]`) |
-
-#### `delete_user`
-Delete a user by email. **Requires ADMIN role and User Delegation.**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `email` | string | Yes | Email of user to delete |
-
-#### `delete_all_assets`
-Delete ALL assets with cascade deletion of vulnerabilities, scan results, and exception requests. **Requires ADMIN role and User Delegation.**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `confirm` | boolean | Yes | Must be `true` to confirm deletion |
-
-Returns counts of deleted assets, vulnerabilities, and scan results.
-
-#### `add_vulnerability`
-Add a vulnerability to an asset. Creates the asset if it doesn't exist. **Requires ADMIN or VULN role and User Delegation.**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `hostname` | string | Yes | Asset hostname/name |
-| `cve` | string | Yes | CVE identifier (e.g., CVE-2024-1234) |
-| `criticality` | enum | Yes | `CRITICAL`, `HIGH`, `MEDIUM`, or `LOW` |
-| `daysOpen` | integer | No | Days the vulnerability has been open (default: 0) |
-| `owner` | string | No | Owner to assign to newly created asset |
-
-Returns vulnerability ID, asset details, and whether the asset/vulnerability were created or updated.
-
-### Workgroup Management
-
-#### `create_workgroup`
-Create a new workgroup. **Requires ADMIN role and User Delegation.**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `name` | string | Yes | Unique name for the workgroup (1-100 chars) |
-| `description` | string | No | Optional description (max 512 chars) |
-
-Returns workgroup ID, name, description, and success message.
-
-#### `delete_workgroup`
-Delete a workgroup by ID. Cascade removes user/asset associations. **Requires ADMIN role and User Delegation.**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workgroupId` | number | Yes | ID of the workgroup to delete |
-
-Returns deleted workgroup ID and name.
-
-#### `assign_assets_to_workgroup`
-Assign one or more assets to a workgroup. **Requires ADMIN role and User Delegation.**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workgroupId` | number | Yes | ID of the target workgroup |
-| `assetIds` | number[] | Yes | List of asset IDs to assign |
-
-Returns workgroup ID and count of assigned assets.
-
-#### `assign_users_to_workgroup`
-Assign one or more users to a workgroup. **Requires ADMIN role and User Delegation.**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `workgroupId` | number | Yes | ID of the target workgroup |
-| `userIds` | number[] | Yes | List of user IDs to assign |
-
-Returns workgroup ID and count of assigned users.
-
-#### `delete_asset`
-Delete a specific asset by ID with cascade deletion. **Requires ADMIN role and User Delegation.**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `assetId` | number | Yes | ID of the asset to delete |
-| `forceTimeout` | boolean | No | Force deletion even if it may exceed timeout (default: false) |
-
-Returns deleted asset ID, name, counts of deleted vulnerabilities/exceptions/requests, and audit log ID.
-
-### User Mapping Management
-
-#### `import_user_mappings`
-Bulk import user mappings (email to AWS account / domain). **Requires ADMIN role and User Delegation.**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `mappings` | array | Yes | List of mapping objects (max 1000) |
-| `mappings[].email` | string | Yes | User email address |
-| `mappings[].awsAccountId` | string | No | AWS account ID (12 digits) |
-| `mappings[].domain` | string | No | AD domain name |
-| `dryRun` | boolean | No | Validate without persisting (default: false) |
-
-**Note:** Each mapping must have at least one of `awsAccountId` or `domain`.
-
-**Returns:**
-- `totalProcessed`: Number of entries processed
-- `created`: Active mappings created (user exists)
-- `createdPending`: Pending mappings created (user doesn't exist yet)
-- `skipped`: Duplicate mappings skipped
-- `errors`: List of validation errors with index, email, and message
-- `dryRun`: Whether this was a dry-run
-
-#### `list_user_mappings`
-List user mappings with pagination and filtering. **Requires ADMIN role and User Delegation.**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `email` | string | No | Filter by email (partial match, case-insensitive) |
-| `page` | number | No | Page number (0-indexed, default: 0) |
-| `size` | number | No | Page size (default: 20, max: 100) |
-
-**Returns:**
-- `mappings`: List of user mapping DTOs containing:
-  - `id`: Mapping ID
-  - `email`: User email
-  - `awsAccountId`: AWS account ID (if set)
-  - `domain`: AD domain (if set)
-  - `userId`: Associated user ID (null for pending mappings)
-  - `isFutureMapping`: Boolean indicating if user doesn't exist yet
-  - `appliedAt`: Timestamp when mapping was applied
-  - `createdAt`: Creation timestamp
-  - `updatedAt`: Last update timestamp
-- `page`: Current page number
-- `size`: Page size
-- `totalElements`: Total number of mappings
-- `totalPages`: Total number of pages
-
-### AWS Account Sharing
-
-#### `list_aws_account_sharing`
-List AWS account sharing rules with pagination. **Requires ADMIN role and User Delegation.**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `page` | number | No | Page number (0-indexed, default: 0) |
-| `size` | number | No | Page size (default: 20, max: 100) |
-
-**Returns:**
-- `content`: List of sharing rule DTOs containing:
-  - `id`: Sharing rule ID
-  - `sourceUserId`: ID of the user whose AWS accounts are shared
-  - `sourceUserEmail`: Email of the source user
-  - `sourceUserUsername`: Username of the source user
-  - `targetUserId`: ID of the user who receives visibility
-  - `targetUserEmail`: Email of the target user
-  - `targetUserUsername`: Username of the target user
-  - `createdById`: ID of the admin who created the rule
-  - `createdByUsername`: Username of the admin
-  - `sharedAwsAccountCount`: Number of AWS accounts being shared
-  - `createdAt`: Creation timestamp
-  - `updatedAt`: Last update timestamp
-- `page`, `size`, `totalElements`, `totalPages`
-
-#### `create_aws_account_sharing`
-Create a new AWS account sharing rule. **Requires ADMIN role and User Delegation.**
-
-Sharing is directional (source -> target) and non-transitive.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `sourceUserId` | number | Yes | ID of the user whose AWS accounts will be shared |
-| `targetUserId` | number | Yes | ID of the user who will receive visibility |
-
-**Validations:**
-- Source and target users must be different
-- Both users must exist
-- Source user must have at least one AWS account mapping
-- No duplicate sharing rules allowed
-
-**Returns:** Created sharing rule DTO with message.
-
-#### `delete_aws_account_sharing`
-Delete an AWS account sharing rule. **Requires ADMIN role and User Delegation.**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `id` | number | Yes | ID of the sharing rule to delete |
-
-**Returns:** Success confirmation message.
-
-### Release Management
-
-#### `list_releases`
-List all releases with optional status filtering. **Requires ADMIN or RELEASE_MANAGER role and User Delegation.**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `status` | enum | No | Filter by status: `PREPARATION`, `ALIGNMENT`, `ACTIVE`, `ARCHIVED` |
-
-Returns list of releases with version, name, status, description, and metadata.
-
-#### `get_release`
-Get details of a specific release including requirement snapshots. **Requires ADMIN or RELEASE_MANAGER role and User Delegation.**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `releaseId` | number | Yes | ID of the release to retrieve |
-| `includeRequirements` | boolean | No | Include snapshotted requirements (default: false) |
-
-Returns release metadata and optionally the full list of requirement snapshots captured at release time.
-
-#### `create_release`
-Create a new release with requirement snapshots. **Requires ADMIN or REQADMIN role and User Delegation.**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `version` | string | Yes | Semantic version (MAJOR.MINOR.PATCH, e.g., "1.0.0") |
-| `name` | string | Yes | Human-readable release name |
-| `description` | string | No | Detailed description of the release |
-
-Creates a new release in PREPARATION status and snapshots all current requirements. Returns the created release with snapshot count.
-
-#### `delete_release`
-Delete a release and its requirement snapshots. **Requires ADMIN or REQADMIN role and User Delegation.**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `releaseId` | number | Yes | ID of the release to delete |
-
-**Note:** ACTIVE releases cannot be deleted. Set another release as active first, or wait until it becomes ARCHIVED.
-
-#### `set_release_status`
-Set a release to ACTIVE status. **Requires ADMIN or RELEASE_MANAGER role and User Delegation.**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `releaseId` | number | Yes | ID of the release to activate |
-| `status` | enum | Yes | Must be `ACTIVE` |
-
-**Status Workflow:**
-- Only PREPARATION or ALIGNMENT releases can be manually set to ACTIVE
-- When a release becomes ACTIVE, any previously ACTIVE release automatically becomes ARCHIVED
-- Only one release can be ACTIVE at a time
-- ARCHIVED releases cannot be transitioned to other states (terminal state)
-- To transition to ALIGNMENT status, use `start_alignment` instead of `set_release_status`
-
-#### `compare_releases`
-Compare two releases and show requirement differences. **Requires ADMIN or RELEASE_MANAGER role and User Delegation.**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `fromReleaseId` | number | Yes | Baseline release ID (older release) |
-| `toReleaseId` | number | Yes | Target release ID (newer release) |
-
-Returns a detailed diff including:
-- **summary**: Counts of added, deleted, modified, and unchanged requirements
-- **added**: Requirements present in the target release but not in the baseline
-- **deleted**: Requirements present in the baseline but removed in the target
-- **modified**: Requirements that changed between releases, with field-level diffs (shortreq, details, chapter, etc.)
-
-### Alignment Management
-
-#### `start_alignment`
-Start the alignment process for a release. **Requires ADMIN or REQADMIN role and User Delegation.**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `releaseId` | number | Yes | ID of the release to start alignment for |
-
-Transitions a PREPARATION release to ALIGNMENT status.
-
-#### `get_alignment_status`
-Get the current alignment status for a release. **Requires User Delegation.**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `releaseId` | number | Yes | ID of the release |
-
-Returns alignment reviews, completion status, and pending reviewers.
-
-#### `submit_review`
-Submit an alignment review for a release. **Requires User Delegation.**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `releaseId` | number | Yes | ID of the release |
-| `approved` | boolean | Yes | Whether the reviewer approves |
-| `comment` | string | No | Review comment |
-
-#### `finalize_alignment`
-Finalize the alignment process and activate a release. **Requires ADMIN or REQADMIN role and User Delegation.**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `releaseId` | number | Yes | ID of the release to finalize |
-
-### Vulnerability Heatmap
-
-#### `get_vulnerability_heatmap`
-Get the vulnerability heatmap showing per-asset severity counts and heat levels. **Requires User Delegation.**
-
-Returns a list of heatmap entries (one per asset) with severity breakdown and a summary. Results are scoped by the delegated user's access control: ADMIN/SECCHAMPION users see all assets; others see only their accessible assets.
-
-No parameters required.
-
-**Response fields:**
-| Field | Type | Description |
-|-------|------|-------------|
-| `entries` | array | Per-asset heatmap entries with severity counts |
-| `entries[].assetId` | number | Asset ID |
-| `entries[].assetName` | string | Asset hostname/name |
-| `entries[].assetType` | string | Asset type (e.g., SERVER) |
-| `entries[].criticalCount` | number | CRITICAL severity vulnerabilities |
-| `entries[].highCount` | number | HIGH severity vulnerabilities |
-| `entries[].mediumCount` | number | MEDIUM severity vulnerabilities |
-| `entries[].lowCount` | number | LOW severity vulnerabilities |
-| `entries[].totalCount` | number | Total vulnerabilities |
-| `entries[].heatLevel` | string | RED, YELLOW, or GREEN |
-| `summary.totalAssets` | number | Total assets in result |
-| `summary.redCount` | number | Assets with RED heat level |
-| `summary.yellowCount` | number | Assets with YELLOW heat level |
-| `summary.greenCount` | number | Assets with GREEN heat level |
-| `lastCalculatedAt` | string/null | ISO timestamp of last heatmap calculation |
-
-**Heat level rules:**
-- **RED**: Any CRITICAL vulnerability, or more than 100 HIGH vulnerabilities
-- **YELLOW**: 1-100 HIGH vulnerabilities
-- **GREEN**: No CRITICAL or HIGH vulnerabilities
-
-#### `refresh_vulnerability_heatmap`
-Recalculate the vulnerability heatmap from current vulnerability data. **Requires ADMIN role and User Delegation.**
-
-No parameters required. Triggers a full recalculation of severity counts for all assets.
-
-**Returns:** Success message with the number of heatmap entries created.
-
-### System Tools
-
-#### `send_admin_summary`
-Generate and send an admin summary email. **Requires ADMIN role and User Delegation.**
-
-Triggers the same admin summary email that the CLI `send-admin-summary` command sends, but via MCP.
-
----
-
-## Authentication & Security
-
-### API Key Security
-
-- Store keys in environment variables or encrypted configuration
-- Use HTTPS in production
-- Set reasonable expiration dates (30-90 days)
-- Rotate keys regularly
-- Monitor usage via audit logs
-
-### Rate Limiting
-
-| Limit Type | Default |
-|------------|---------|
-| Per API Key | 1000 requests/hour |
-| Burst Limit | 100 requests |
-| Concurrent Sessions | 10 per API key |
-
-### Origin Validation
-
-The `/mcp` endpoint validates the `Origin` header per MCP specification:
-- Requests without `Origin` header are allowed (non-browser clients)
-- Localhost origins are always allowed
-- Configure allowed origins in `application.yml`:
-
-```yaml
-secman:
+- Rate limits (per API key): 1000 req/h, burst 100, max 10 concurrent sessions. Tunable in `application.yml`:
+  ```yaml
   mcp:
-    transport:
-      allowed-origins:
-        - https://your-domain.com
-      validate-origin: true
-```
-
-### Session Management
-
-| Setting | Value |
-|---------|-------|
-| Timeout | 60 minutes inactivity |
-| Connection Types | HTTP, SSE, WebSocket |
-| Cleanup | Automatic for expired sessions |
-
-### Audit Logging
-
-All MCP operations are logged with:
-- Timestamp and duration
-- User and API key information
-- Tool called and parameters
-- Success/failure status
-- Client IP and User-Agent
-
----
-
-## Usage Examples
-
-### Claude Desktop/Code Prompts
-
-**Requirements:**
-- "Show me all critical security requirements" → `get_requirements` with `priority: "CRITICAL"`
-- "Export requirements to Excel" → `export_requirements` with `format: "xlsx"`
-
-**Assets:**
-- "Show me all servers" → `get_assets` with `type: "SERVER"`
-- "Get details for asset ID 42" → `get_asset_profile` with `assetId: 42`
-
-**Vulnerabilities:**
-- "Show me all critical vulnerabilities" → `get_vulnerabilities` with `severity: ["Critical"]`
-- "Find vulnerabilities open more than 30 days" → `get_all_vulnerabilities_detail` with `minDaysOpen: 30`
-- "What asset has the most vulnerabilities?" → `get_asset_most_vulnerabilities`
-- "Show me the top 5 most vulnerable assets" → `get_asset_most_vulnerabilities` with `topN: 5`
-
-**Overdue Assets & Exceptions:**
-- "Show assets with overdue vulnerabilities" → `get_overdue_assets`
-- "Find critical overdue assets" → `get_overdue_assets` with `minSeverity: "CRITICAL"`
-- "Create an exception request for vulnerability 123" → `create_exception_request` with ID, reason, and expiration
-- "Show my exception requests" → `get_my_exception_requests`
-- "Show pending exception requests" → `get_pending_exception_requests`
-- "Approve exception request 456" → `approve_exception_request` with `requestId: 456`
-- "Reject exception request 789 with reason" → `reject_exception_request` with requestId and comment
-
-**Scans:**
-- "Find all open SSH ports" → `get_asset_scan_results` with `service: "ssh"`, `state: "open"`
-- "Search for Apache servers" → `search_products` with `service: "Apache"`
-
-**User Mappings:**
-- "Import user mappings" → `import_user_mappings` with mappings array
-- "Validate mappings before import" → `import_user_mappings` with `dryRun: true`
-- "List all user mappings" → `list_user_mappings`
-- "Find mappings for user@company.com" → `list_user_mappings` with `email: "user@company.com"`
-
-**AWS Account Sharing:**
-- "List all sharing rules" → `list_aws_account_sharing`
-- "Share user 5's AWS accounts with user 12" → `create_aws_account_sharing` with `sourceUserId: 5, targetUserId: 12`
-- "Remove sharing rule 3" → `delete_aws_account_sharing` with `id: 3`
-
-**Releases:**
-- "List all releases" → `list_releases`
-- "Show only active releases" → `list_releases` with `status: "ACTIVE"`
-- "Show preparation releases" → `list_releases` with `status: "PREPARATION"`
-- "Get release details" → `get_release` with `releaseId: 1`
-- "Get release with requirements" → `get_release` with `releaseId: 1, includeRequirements: true`
-- "Create a new release version 2.0.0" → `create_release` with `version: "2.0.0", name: "Q1 2026 Release"`
-- "Make release 5 active" → `set_release_status` with `releaseId: 5, status: "ACTIVE"`
-- "Delete draft release 3" → `delete_release` with `releaseId: 3`
-- "Compare release 1.0.0 with 2.0.0" → `compare_releases` with `fromReleaseId: 1, toReleaseId: 5`
-- "What changed between the last two releases?" → `list_releases` then `compare_releases`
-
-**Vulnerability Heatmap:**
-- "Show me the vulnerability heatmap" → `get_vulnerability_heatmap`
-- "How many critical systems do we have?" → `get_vulnerability_heatmap` (check summary.redCount)
-- "Give me a security overview of all assets" → `get_vulnerability_heatmap`
-- "Refresh the heatmap data" → `refresh_vulnerability_heatmap` (ADMIN only)
-
-### Programmatic Access
-
-#### Python
-
-```python
-import requests
-
-api_key = "sk-your-api-key"
-user_email = "admin@company.com"  # mandatory
-base_url = "http://localhost:8080/mcp"
-
-response = requests.post(base_url,
-    headers={
-        "X-MCP-API-Key": api_key,
-        "X-MCP-User-Email": user_email,
-        "Content-Type": "application/json"
-    },
-    json={
-        "jsonrpc": "2.0",
-        "id": "req-1",
-        "method": "tools/call",
-        "params": {
-            "name": "get_requirements",
-            "arguments": {"limit": 10}
-        }
-    }
-)
-print(response.json())
-```
-
-See `scripts/mcp/` for a standalone Go MCP client example.
-
-#### Node.js
-
-```javascript
-const axios = require('axios');
-
-const response = await axios.post('http://localhost:8080/mcp', {
-  jsonrpc: '2.0',
-  id: 'req-1',
-  method: 'tools/call',
-  params: {
-    name: 'get_requirements',
-    arguments: { limit: 10 }
-  }
-}, {
-  headers: {
-    'X-MCP-API-Key': process.env.SECMAN_API_KEY,
-    'X-MCP-User-Email': process.env.SECMAN_USER_EMAIL,  // mandatory
-    'Content-Type': 'application/json'
-  }
-});
-console.log(response.data);
-```
-
----
-
-## Administration
-
-### Monitoring
-
-Navigate to **Admin > MCP Monitoring** for:
-- Active sessions
-- API key usage statistics
-- Tool usage analytics
-- Error logs
-
-### Performance Tuning
-
-In `application.yml`:
-
-```yaml
-mcp:
-  max-concurrent-sessions: 200
-  max-sessions-per-key: 10
-  session-timeout-minutes: 60
-  rate-limiting:
-    default-requests-per-hour: 1000
-    burst-limit: 100
-  caching:
-    enabled: true
-    ttl-minutes: 15
-```
-
-### Database Tables
-
-Ensure backup includes MCP-related tables:
-- `mcp_api_keys`
-- `mcp_sessions`
-- `mcp_audit_logs`
-- `mcp_tool_permissions`
-
----
+    max-concurrent-sessions: 200
+    max-sessions-per-key: 10
+    session-timeout-minutes: 60
+    rate-limiting: { default-requests-per-hour: 1000, burst-limit: 100 }
+    caching: { enabled: true, ttl-minutes: 15 }
+  ```
+- Sessions auto-expire after 60 min idle.
+- Audit: every call logged with timestamp, duration, user, key, tool, params, status, IP, UA. Backup tables: `mcp_api_keys`, `mcp_sessions`, `mcp_audit_logs`, `mcp_tool_permissions`.
+- Admin UI: **Admin > MCP Monitoring** (sessions, key usage, tool analytics, errors).
 
 ## Troubleshooting
 
-### "Authentication required" error
-- Ensure `X-MCP-API-Key` header is present
-- Verify the API key is valid and active
-- Check the API key hasn't expired
+| Symptom | Fix |
+|---|---|
+| `Authentication required` | header missing/expired/invalid; check `expiresAt` |
+| `DELEGATION_HEADER_REQUIRED` | add `X-MCP-User-Email`; ensure key has delegation enabled |
+| `Permission denied` | API key + delegated user role intersection lacks the required permission |
+| `Origin not allowed` | browser request without allowed origin; add to `transport.allowed-origins` |
+| Connection refused | backend down; firewall; wrong path (must end in `/mcp`) |
 
-### "Delegation required" / `DELEGATION_HEADER_REQUIRED` error
-- The `X-MCP-User-Email` header is mandatory for all data-accessing endpoints (`tools/list`, `tools/call`)
-- Add the header with a valid Secman user email
-- Ensure the API key has delegation enabled
-- Note: `initialize` and `ping` do not require this header
-
-### "Permission denied" error
-- Verify your API key has the required permissions
-- Ensure `X-MCP-User-Email` is set to a valid user email
-- The delegated user must have the required role
-
-### "Origin not allowed" error
-- This occurs when making requests from a browser
-- Direct HTTP transport is designed for non-browser clients
-- Localhost origins are always allowed for development
-
-### Connection refused
-- Ensure the secman backend is running
-- Check firewall settings
-- Verify the `/mcp` endpoint is accessible
-
-### Debug Commands
-
-**Test MCP endpoint with delegation:**
-```bash
-curl -X POST http://localhost:8080/mcp \
-  -H "Content-Type: application/json" \
-  -H "X-MCP-API-Key: your-key" \
-  -H "X-MCP-User-Email: your.email@company.com" \
-  -d '{"jsonrpc":"2.0","id":"1","method":"tools/list"}'
-```
-
-**Enable debug logging:**
-```bash
-export SECMAN_LOG_LEVEL=DEBUG
-```
-
----
-
-## See Also
-
-- [Environment Variables](./ENVIRONMENT.md) - Configuration reference
-- [Deployment Guide](./DEPLOYMENT.md) - Production setup
-- [CLI Reference](./CLI.md) - Command-line tools
-- [MCP Specification](https://modelcontextprotocol.io/specification/2024-11-05/basic/transports) - Protocol details
-
----
-
-*For questions or issues, check the Secman backend logs and Claude Desktop/Code application logs.*
+Enable debug headers (logs all `/mcp/**` and `/api/**` headers + decoded JWT claims): `SECMAN_DEBUG=true`. Do not use in production.

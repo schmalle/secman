@@ -76,10 +76,10 @@ interface McpApiKeyRepository : JpaRepository<McpApiKey, Long> {
     fun countActiveByUserId(userId: Long): Long
 
     /**
-     * Check if a user has an API key with the given name.
-     * Used to enforce unique key names per user.
+     * Check if a user has an active API key with the given name.
+     * Revoked (isActive=false) keys are ignored so their names can be reused.
      */
-    @Query("SELECT COUNT(ak) > 0 FROM McpApiKey ak WHERE ak.userId = :userId AND ak.name = :name")
+    @Query("SELECT COUNT(ak) > 0 FROM McpApiKey ak WHERE ak.userId = :userId AND ak.name = :name AND ak.isActive = true")
     fun existsByUserIdAndName(userId: Long, name: String): Boolean
 
     // ===== EXPIRATION AND CLEANUP QUERIES =====

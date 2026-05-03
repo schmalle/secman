@@ -17,7 +17,8 @@ export default defineConfig({
   ],
 
   use: {
-    baseURL: process.env.SECMAN_BACKEND_UR || 'http://localhost:4321',
+    baseURL: process.env.SECMAN_BASE_URL || process.env.SECMAN_BACKEND_URL || 'http://localhost:4321',
+    ignoreHTTPSErrors: true,
     navigationTimeout: 30_000,
     actionTimeout: 10_000,
     screenshot: 'only-on-failure',

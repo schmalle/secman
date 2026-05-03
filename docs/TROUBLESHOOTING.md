@@ -1,326 +1,108 @@
-# Troubleshooting Guide
+# Troubleshooting
 
-**Last Updated:** 2026-04-22
+Symptom → diagnosis → fix. For full env reference see `docs/ENVIRONMENT.md`.
 
-This guide consolidates common issues and solutions for all Secman components.
+## Backend
 
----
-
-## Table of Contents
-
-1. [Backend Issues](#backend-issues)
-2. [Frontend Issues](#frontend-issues)
-3. [Database Issues](#database-issues)
-4. [CLI Issues](#cli-issues)
-5. [MCP Integration Issues](#mcp-integration-issues)
-6. [Nginx/Proxy Issues](#nginxproxy-issues)
-7. [Authentication Issues](#authentication-issues)
-8. [Performance Issues](#performance-issues)
-9. [Debug Commands](#debug-commands)
-10. [Log Locations](#log-locations)
-
----
-
-## Backend Issues
-
-### Backend Won't Start
-
-**Symptoms:** Service fails to start, immediate crash after launch
-
-**Diagnostics:**
+**Won't start**
 ```bash
-# Check service status
 sudo systemctl status secman-backend
-
-# View recent logs
 sudo journalctl -u secman-backend -n 100
-
-# Check JAR exists
-ls -la /opt/secman/app/src/backendng/build/libs/backendng-*-all.jar
+ls /opt/secman/app/src/backendng/build/libs/backendng-*-all.jar
 ```
+Causes: wrong Java (`java -version` must be 21); DB unreachable (`mysql -u secman -p secman`; check `DB_*` env); port in use (`lsof -i :8080`, set `MICRONAUT_SERVER_PORT`); missing required env (`JWT_SECRET`, `SECMAN_ENCRYPTION_PASSWORD`).
 
-**Common causes:**
-
-1. **Wrong Java version**
-   ```bash
-   java -version  # Must show 21.x
-   ```
-   Fix: Install Java 21 (Amazon Corretto, OpenJDK, etc.)
-
-2. **Database connection failed**
-   ```bash
-   # Test connection
-   mysql -u secman -p -h localhost secman
-   ```
-   Fix: Verify `DB_USERNAME`, `DB_PASSWORD`, `DB_CONNECT` environment variables
-
-3. **Port already in use**
-   ```bash
-   lsof -i :8080
-   ```
-   Fix: Stop conflicting service or change `micronaut.server.port`
-
-4. **Missing environment variables**
-   Check required variables are set: `JWT_SECRET`, `SECMAN_ENCRYPTION_PASSWORD`
-
-### Backend Health Check Failing
-
+**Health check fails**
 ```bash
-# Check health endpoint
 curl -v http://localhost:8080/health
+# expected: {"status":"UP","service":"secman-backend-ng","version":"0.1"}
 ```
 
-**Expected response:**
-```json
-{"status":"UP","service":"secman-backend-ng","version":"0.1"}
-```
+**500 on API**: check stack trace in journal. Verify DB up. Check required request fields. Bump verbosity: `SECMAN_LOGGING=ALL` then restart.
 
-### API Returns 500 Error
+## Frontend
 
-1. Check backend logs for stack trace
-2. Verify database connectivity
-3. Check for missing required fields in request
-4. Enable debug logging:
-   ```bash
-   export SECMAN_LOGGING=ALL
-   sudo systemctl restart secman-backend
-   ```
-
----
-
-## Frontend Issues
-
-### Frontend Won't Start
-
-**Diagnostics:**
+**Won't start**
 ```bash
 sudo journalctl -u secman-frontend -n 100
-node -v  # Must be 20.x
-ls -la /opt/secman/app/src/frontend/dist/server/
+node -v                                                # must be 20.x
+ls /opt/secman/app/src/frontend/dist/server/
 ```
+Causes: backend down (`curl http://localhost:8080/health`); missing build (`npm ci && npm run build`); wrong Node.
 
-**Common causes:**
+**Blank after login**: clear `localStorage`/cache; check browser console; verify `PUBLIC_API_URL` reachable from browser; verify CORS `allowed-origins` matches frontend URL.
 
-1. **Backend unreachable**
-   ```bash
-   curl http://localhost:8080/health
-   ```
-   Fix: Start backend first, verify `PUBLIC_API_URL`
+**Session expires immediately**: `JWT_SECRET` rotated between restarts; check token expiration in `application.yml`; verify NTP/clock sync.
 
-2. **Build artifacts missing**
-   ```bash
-   cd /opt/secman/app/src/frontend
-   npm ci && npm run build
-   ```
-
-3. **Wrong Node.js version**
-   ```bash
-   nvm use 20
-   # or install Node 20
-   ```
-
-### Blank Page After Login
-
-- Clear browser cache and localStorage
-- Check browser console for JavaScript errors
-- Verify CORS configuration matches frontend URL
-- Check `PUBLIC_API_URL` is accessible from browser
-
-### Session Expires Immediately
-
-- Verify `JWT_SECRET` is consistent across restarts
-- Check token expiration settings in `application.yml`
-- Ensure server time is synchronized (NTP)
-
----
-
-## Database Issues
-
-### Connection Refused
+## Database
 
 ```bash
-# Check MariaDB status
 sudo systemctl status mariadb
-
-# Test connection
 mysql -u secman -p secman
+sudo systemctl start mariadb                           # if down
 ```
 
-**Fixes:**
-- Start MariaDB: `sudo systemctl start mariadb`
-- Verify user has remote access if needed
-- Check `bind-address` in MariaDB config
+**Migration errors**: check journal for SQL error. Backup. Inspect schema. Repair Flyway: `./gradlew flywayInfo && ./gradlew flywayRepair`.
 
-### Migration Errors
-
-Hibernate auto-migration failures:
-
-1. Check for conflicting schema changes
-2. Review backend logs for SQL errors
-3. Manual fix (backup first!):
-   ```bash
-   mysql -u secman -p secman
-   > ALTER TABLE ... ;
-   ```
-
-### Performance Issues
-
+**Slow**:
 ```sql
--- Check slow queries
 SHOW FULL PROCESSLIST;
-
--- Check table sizes
-SELECT table_name, round(data_length/1024/1024,2) as 'Size (MB)'
-FROM information_schema.tables
-WHERE table_schema = 'secman'
-ORDER BY data_length DESC;
+SELECT table_name, ROUND(data_length/1024/1024,2) AS mb
+  FROM information_schema.tables WHERE table_schema='secman'
+  ORDER BY data_length DESC;
 ```
 
----
+## CLI
 
-## CLI Issues
+| Symptom | Fix |
+|---|---|
+| `Command not found` in cron | add `PATH` and `JAVA_HOME` to crontab (point at `/usr/lib/jvm/java-21-amazon-corretto/bin`) |
+| `Credentials not found` | check format — no spaces around `=` (`FALCON_CLIENT_ID=abc` not `FALCON_CLIENT_ID = abc`); `chmod 600` |
+| CrowdStrike `401 Unauthorized` | verify client/secret + region in `FALCON_BASE_URL` (US-1/US-2/EU-1/GOV); required scopes |
+| Out of memory | `java -Xmx1g -jar secman-cli.jar …` (or in cron wrapper) |
+| Want to test safely | `--dry-run` available on `query servers`, `send-notifications`, `manage-user-mappings list --send-email`, `manage-user-mappings import`, `import-s3` |
 
-### "Command not found" in Cron
+## MCP
 
-Add Java to PATH in crontab:
-```cron
-PATH=/usr/bin:/bin:/usr/local/bin:/usr/lib/jvm/java-21-amazon-corretto/bin
-JAVA_HOME=/usr/lib/jvm/java-21-amazon-corretto
+| Symptom | Fix |
+|---|---|
+| `Authentication required` | header missing/wrong/expired; check key isn't revoked |
+| `DELEGATION_HEADER_REQUIRED` | add `X-MCP-User-Email`; ensure key has `delegationEnabled: true`; `initialize`/`ping` are exempt |
+| `Permission denied` | effective = `api_key.permissions ∩ user.role_implied`; both sides must include the needed permission |
+| `Origin not allowed` | browser request without allowed origin; localhost is always allowed; configure `secman.mcp.transport.allowed-origins` |
+| Claude Desktop won't connect | config in `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) / `%APPDATA%\Claude\…` (Win); use absolute paths; restart app; check Claude Desktop logs |
 
-0 2 * * * /opt/secman/bin/cron-query-servers.sh
-```
-
-### "Credentials not found"
-
-Verify credentials file format (no spaces around `=`):
+Smoke test:
 ```bash
-# Correct
-FALCON_CLIENT_ID=abc123
-
-# Wrong
-FALCON_CLIENT_ID = abc123
-```
-
-### "Authentication failed" (CrowdStrike)
-
-- Verify client ID and secret are correct
-- Check base URL matches your CrowdStrike region:
-  - US-1: `https://api.crowdstrike.com`
-  - US-2: `https://api.us-2.crowdstrike.com`
-  - EU-1: `https://api.eu-1.crowdstrike.com`
-- Ensure API credentials have required scopes
-
-### Out of Memory
-
-Add JVM options:
-```bash
-java -Xmx512m -Xms256m -jar secman-cli.jar ...
-```
-
-Or in wrapper script:
-```bash
-#!/bin/bash
-java -Xmx1g -jar /opt/secman/bin/secman-cli.jar "$@"
-```
-
-### Dry Run Mode
-
-Test commands without making changes:
-```bash
-./scriptpp/secman query servers --dry-run
-./scriptpp/secman send-notifications --dry-run
-```
-
----
-
-## MCP Integration Issues
-
-### "Authentication required"
-
-- Ensure `X-MCP-API-Key` header is present
-- Verify API key is valid and not expired
-- Check API key has required permissions
-
-### "Permission denied"
-
-- Verify API key permissions include the required tool
-- For admin tools (`list_users`), ensure:
-  - User Delegation is enabled on the key
-  - `X-MCP-User-Email` header is set
-  - Delegated user has ADMIN role
-
-### "Origin not allowed"
-
-- Occurs when making requests from a browser
-- Localhost origins are always allowed
-- Configure allowed origins in `application.yml`
-
-### Claude Desktop Not Connecting
-
-1. Verify config file location:
-   - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
-   - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
-
-2. Use absolute paths in config
-
-3. Restart Claude Desktop after config changes
-
-4. Check Claude Desktop logs for errors
-
-### Test MCP Endpoint
-
-```bash
-# Test initialize (does not require X-MCP-User-Email)
 curl -X POST http://localhost:8080/mcp \
-  -H "Content-Type: application/json" \
-  -H "X-MCP-API-Key: sk-your-key" \
-  -d '{"jsonrpc":"2.0","id":"1","method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
+  -H 'Content-Type: application/json' -H 'X-MCP-API-Key: sk-…' \
+  -d '{"jsonrpc":"2.0","id":"1","method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"t","version":"1"}}}'
 
-# List tools (X-MCP-User-Email is mandatory)
 curl -X POST http://localhost:8080/mcp \
-  -H "Content-Type: application/json" \
-  -H "X-MCP-API-Key: sk-your-key" \
-  -H "X-MCP-User-Email: your.email@company.com" \
+  -H 'Content-Type: application/json' \
+  -H 'X-MCP-API-Key: sk-…' -H 'X-MCP-User-Email: you@company.com' \
   -d '{"jsonrpc":"2.0","id":"2","method":"tools/list"}'
 ```
 
----
+## nginx / proxy
 
-## Nginx/Proxy Issues
-
-### 502 Bad Gateway
-
+**502 Bad Gateway**:
 ```bash
-# Check services running
 systemctl status secman-backend secman-frontend
-
-# Check nginx error logs
 sudo tail -f /var/log/nginx/secman-api-error.log
-
-# Test upstream directly
 curl http://localhost:8080/health
 curl http://localhost:4321/
 ```
 
-### SSL Certificate Issues
-
+**SSL**:
 ```bash
-# Verify certificate files exist
-sudo ls -la /etc/letsencrypt/live/yourdomain.com/
-
-# Check expiry
-openssl x509 -in /path/to/cert.pem -noout -dates
-
-# Force renewal
+ls /etc/letsencrypt/live/<domain>/
+openssl x509 -in <cert>.pem -noout -dates
 sudo certbot renew --force-renewal
-
-# Test SSL
-openssl s_client -connect yourdomain.com:443
+openssl s_client -connect <domain>:443
 ```
 
-### CORS Errors
-
-Check `application.yml` CORS configuration:
+**CORS errors** in browser:
 ```yaml
 micronaut:
   server:
@@ -328,190 +110,89 @@ micronaut:
       enabled: true
       configurations:
         web:
-          allowed-origins:
-            - "https://yourdomain.com"
+          allowed-origins: [ "https://secman.example.com" ]
 ```
 
----
+## Auth
 
-## Authentication Issues
-
-### OAuth Login Fails
-
-**"Invalid state" error:**
-- State token expired (>10 minutes)
-- Browser went back/forward during OAuth flow
-- Database transaction timing issue (fast SSO)
-
-Configure retry settings in `application.yml`:
+**OAuth `Invalid state`**: token >10 min old, browser back/forward mid-flow, or DB-commit timing race.
 ```yaml
 secman:
   oauth:
-    state-retry:
-      max-attempts: 5
-      initial-delay-ms: 100
+    state-retry: { max-attempts: 5, initial-delay-ms: 100 }
+```
+Also tunable via `OAUTH_STATE_RETRY_*` env.
+
+**OAuth `Token exchange failed`**: provider config in DB; redirect URLs match exactly; provider credentials valid.
+
+**JWT expired**: default 8h. Adjust:
+```yaml
+micronaut.security.token.jwt.generator.access-token.expiration: 28800
 ```
 
-**"Token exchange failed":**
-- Check OAuth provider configuration in database
-- Verify redirect URLs match exactly
-- Check provider credentials
-
-### JWT Token Expired
-
-- Default expiration: 8 hours
-- Adjust in `application.yml`:
-  ```yaml
-  micronaut:
-    security:
-      token:
-        jwt:
-          generator:
-            access-token:
-              expiration: 28800  # seconds
-  ```
-
-### Password Reset Not Working
-
-- Verify SMTP configuration
-- Check email logs in database
-- Test SMTP connectivity:
-  ```bash
-  curl -v --url "smtp://smtp.gmail.com:587" --user "user:password" --mail-from "from@example.com"
-  ```
-
----
-
-## Performance Issues
-
-### Slow API Responses
-
-1. **Check database queries:**
-   ```bash
-   # Enable query logging temporarily
-   mysql -e "SET GLOBAL slow_query_log = 'ON';"
-   mysql -e "SET GLOBAL long_query_time = 1;"
-   ```
-
-2. **Review connection pool:**
-   ```yaml
-   datasources:
-     default:
-       maximum-pool-size: 20
-       minimum-idle: 5
-   ```
-
-3. **Check for N+1 queries** in service layer
-
-### High Memory Usage
-
+**Password reset email not delivered**: check SMTP config; `notification_logs` table; SMTP connectivity:
 ```bash
-# Check Java heap
-jcmd $(pgrep -f backendng) GC.heap_info
+curl -v --url smtp://smtp.gmail.com:587 --user user:pass --mail-from from@example.com
+```
 
-# Increase heap if needed
+## Performance
+
+**Slow API**:
+```sql
+SET GLOBAL slow_query_log='ON'; SET GLOBAL long_query_time=1;
+```
+```yaml
+datasources.default: { maximum-pool-size: 20, minimum-idle: 5 }
+```
+Look for N+1 in service layer.
+
+**High memory**:
+```bash
+jcmd $(pgrep -f backendng) GC.heap_info
 java -Xmx2g -jar backendng.jar
 ```
 
-### Vulnerability Import Slow
+**Vuln import slow**: batch-size limits in import requests; verify indexes on `vulnerabilities` (`asset_id`, `(asset_id, vulnerability_id)`); enable cache for repeated queries.
 
-- Use batch size limits in import requests
-- Check database indexes on `vulnerabilities` table
-- Enable caching for repeated queries
-
----
-
-## Debug Commands
-
-### Backend
-
-```bash
-# Health check
-curl http://localhost:8080/health
-
-# Test authentication
-curl -X POST http://localhost:8080/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"password"}'
-
-# Test with JWT
-curl -H "Authorization: Bearer <token>" \
-  http://localhost:8080/api/assets
-```
-
-### Database
-
-```bash
-# Connection test
-mysql -u secman -p secman -e "SELECT 1"
-
-# Table counts
-mysql -u secman -p secman -e "SELECT 'assets' as t, COUNT(*) FROM assets UNION SELECT 'vulnerabilities', COUNT(*) FROM vulnerabilities"
-
-# Recent users
-mysql -u secman -p secman -e "SELECT email, last_login FROM users ORDER BY last_login DESC LIMIT 5"
-```
-
-### CLI
-
-```bash
-# Show help
-./scriptpp/secman help
-
-# Test with dry run
-./scriptpp/secman query servers --dry-run --limit 10
-
-# Verbose output
-./scriptpp/secman query servers --verbose
-```
-
----
-
-## Log Locations
-
-| Component | Location |
-|-----------|----------|
-| Backend (systemd) | `sudo journalctl -u secman-backend` |
-| Frontend (systemd) | `sudo journalctl -u secman-frontend` |
-| Nginx access | `/var/log/nginx/secman-api-access.log` |
-| Nginx error | `/var/log/nginx/secman-api-error.log` |
-| CLI (if configured) | `/opt/secman/logs/cronjob.log` |
-| MariaDB | `/var/log/mariadb/` or `/var/log/mysql/` |
-
-### Enable Debug Logging
+## Debug commands
 
 ```bash
 # Backend
-export SECMAN_LOGGING=ALL
-sudo systemctl restart secman-backend
+curl http://localhost:8080/health
+curl -X POST http://localhost:8080/api/auth/login -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"…"}'
+curl -H 'Authorization: Bearer <jwt>' http://localhost:8080/api/assets
 
-# Or in application.yml
-logger:
-  levels:
-    com.secman: DEBUG
+# DB
+mysql -u secman -p secman -e "SELECT 1"
+mysql -u secman -p secman -e \
+  "SELECT 'assets' AS t, COUNT(*) FROM assets UNION SELECT 'vulnerabilities', COUNT(*) FROM vulnerabilities"
+mysql -u secman -p secman -e "SELECT email,last_login FROM users ORDER BY last_login DESC LIMIT 5"
+
+# CLI
+./scriptpp/secman help
+./scriptpp/secman query servers --dry-run --limit 10 --verbose
 ```
 
----
+## Log locations
 
-## Getting Help
+| Component | Where |
+|---|---|
+| Backend (systemd) | `journalctl -u secman-backend` |
+| Frontend (systemd) | `journalctl -u secman-frontend` |
+| nginx access | `/var/log/nginx/secman-api-access.log` |
+| nginx error | `/var/log/nginx/secman-api-error.log` |
+| CLI cron | `/opt/secman/logs/cronjob.log` |
+| MariaDB | `/var/log/mariadb/` or `/var/log/mysql/` |
+| Security audit | `logs/security-audit.log` (always written; not silenced by `SECMAN_LOGGING=NO`) |
 
-If these solutions don't resolve your issue:
+Enable backend debug:
+```bash
+export SECMAN_LOGGING=ALL && sudo systemctl restart secman-backend
+# or in application.yml: logger.levels.com.secman: DEBUG
+```
 
-1. Collect relevant logs
-2. Note the exact error message
-3. Document steps to reproduce
-4. Check [GitHub Issues](https://github.com/schmalle/secman/issues)
-5. Open a new issue with collected information
-
----
-
-## See Also
-
-- [Deployment Guide](./DEPLOYMENT.md) - Production setup
-- [Environment Variables](./ENVIRONMENT.md) - Configuration reference
-- [CLI Reference](./CLI.md) - Command-line tools
-- [MCP Integration](./MCP.md) - AI assistant integration
-
----
-
-*For backend debug logging: `export SECMAN_LOGGING=ALL && systemctl restart secman-backend`*
+Header dump (for proxy-stripped headers, JWT claim mismatches, CORS):
+```bash
+export SECMAN_DEBUG=true     # NOT in production — logs API keys
+```

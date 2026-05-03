@@ -1,304 +1,136 @@
-# Secman Documentation
+# Documentation Index
 
-Security requirement and risk assessment management tool.
-
-**Last Updated:** 2026-04-23
-
----
-
-## Table of Contents
-
-| Document                                      | Description                                    |
-| --------------------------------------------- | ---------------------------------------------- |
-| [Architecture](./ARCHITECTURE.md)             | System design, data model, and design patterns |
-| [Deployment Guide](./DEPLOYMENT.md)           | Production deployment on Linux                 |
-| [Environment Variables](./ENVIRONMENT.md)     | Complete configuration reference               |
-| [CLI Reference](./CLI.md)                     | Command-line interface and cron jobs           |
-| [MCP Integration](./MCP.md)                   | AI assistant integration (Claude, etc.)        |
-| [CrowdStrike Import](./CROWDSTRIKE_IMPORT.md) | Vulnerability import technical details         |
-| [Testing Guide](./TESTING.md)                 | Test infrastructure and patterns               |
-| [Troubleshooting](./TROUBLESHOOTING.md)       | Common issues and solutions                    |
-| [E2E Exception Workflow](./E2E_EXCEPTION_WORKFLOW_TEST.md) | End-to-end exception workflow test    |
-| [S3 User Mapping Import](./S3_USER_MAPPING_IMPORT.md) | S3-based user mapping imports            |
-| [Skills & Agents](./SKILLS_AND_AGENTS.md)             | Claude Code skills and agent reference   |
-| [1Password Credentials](./1PASSWORD.md)               | Secret management with 1Password CLI     |
-| [CrowdStrike Checkin Monitor](../src/clinotify/README.md) | Telegram alert when CrowdStrike imports go stale |
-| [Docker Deployment](../docker/README.md)                  | Docker container deployment             |
-| [Database Installation](../scriptpp/install/db/README.md) | Database setup scripts and defaults    |
-| [MCP Go Client](../scriptpp/mcp/README.md)             | Standalone Go MCP client example         |
-| [UI Screenshots](../pictures/README.md)               | Latest UI screenshots                    |
-
----
-
-## Quick Start by Role
-
-### Administrators
-
-Setting up and maintaining Secman in production:
-
-1. **[Environment Variables](./ENVIRONMENT.md)** - Configure all components
-2. **[Deployment Guide](./DEPLOYMENT.md)** - Install on Linux servers
-3. **[CLI Reference](./CLI.md)** - Set up automated cron jobs
-4. **[Troubleshooting](./TROUBLESHOOTING.md)** - Diagnose and fix issues
-
-### Developers
-
-Understanding and extending the codebase:
-
-1. **[Architecture](./ARCHITECTURE.md)** - System design and patterns
-2. **[Testing Guide](./TESTING.md)** - Test infrastructure
-3. **[Environment Variables](./ENVIRONMENT.md)** - Local development setup
-4. **[CrowdStrike Import](./CROWDSTRIKE_IMPORT.md)** - Import patterns
-
-### Security Teams
-
-Using Secman for security management:
-
-1. **[MCP Integration](./MCP.md)** - AI assistant workflows
-2. **[CrowdStrike Import](./CROWDSTRIKE_IMPORT.md)** - Vulnerability data
-3. **[CLI Reference](./CLI.md)** - Automated queries and notifications
-
----
-
-## Architecture Overview
+Security requirement, vulnerability and risk assessment management tool.
 
 ```
-                                   Internet
-                                      |
-                              [Nginx :80/:443]
-                                 Reverse Proxy
-                                      |
-            +-------------------------+-------------------------+
-            |                         |                         |
-       /api/*                    /oauth/*                      /*
-            |                         |                         |
-            v                         v                         v
-    [Backend :8080]           [Backend :8080]          [Frontend :4321]
-    Kotlin/Micronaut          OAuth callbacks          Astro/React SSR
-            |                                                   |
-            +---------------------------------------------------+
-                                      |
-                              [MariaDB :3306]
+                Internet
+                   │
+            [nginx :80/:443]
+                   │
+   /api/*  ───►  Backend :8080  ◄───  /oauth/*
+                   │
+                   ▼
+            MariaDB :3306
+                   ▲
+                   │
+   /*      ───►  Frontend :4321 (Astro/React SSR)
 ```
 
-**Technology Stack:**
+Stack: Kotlin 2.3.21 / Java 21 · Micronaut 4.10 · Hibernate JPA · Astro 6.2 / React 19 · Bootstrap 5.3 · MariaDB 11.4 · Gradle 9.5.0 · Picocli 4.7.7.
 
-- **Backend**: Kotlin 2.3.20, Java 21, Micronaut 4.10, Hibernate JPA
-- **Frontend**: Astro 6.1, React 19, Bootstrap 5.3, Axios
-- **Database**: MariaDB 11.4 with Flyway migrations + Hibernate auto-update
-- **CLI**: Picocli 4.7.7, CrowdStrike API, AWS SDK v2
-- **Build**: Gradle 9.4.1 (Kotlin DSL)
+## Index
 
-For detailed architecture, see [ARCHITECTURE.md](./ARCHITECTURE.md).
+| Doc | What's inside |
+|---|---|
+| [ARCHITECTURE.md](./ARCHITECTURE.md) | Layered architecture, data model, design patterns |
+| [DEPLOYMENT.md](./DEPLOYMENT.md) | Linux production: nginx, systemd, SSL, hardening, monitoring |
+| [ENVIRONMENT.md](./ENVIRONMENT.md) | All env vars (backend / frontend / CLI) |
+| [CLI.md](./CLI.md) | CLI commands, cron, S3, AWS Secrets Manager |
+| [MCP.md](./MCP.md) | MCP tools, API keys, delegation, troubleshooting |
+| [CROWDSTRIKE_IMPORT.md](./CROWDSTRIKE_IMPORT.md) | Transactional-replace pattern + JPA cascade trap |
+| [TESTING.md](./TESTING.md) | JUnit/Mockk/Testcontainers stack and patterns |
+| [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) | Symptom → fix |
+| [E2E_EXCEPTION_WORKFLOW_TEST.md](./E2E_EXCEPTION_WORKFLOW_TEST.md) | Vuln-exception MCP E2E |
+| [S3_USER_MAPPING_IMPORT.md](./S3_USER_MAPPING_IMPORT.md) | `import-s3` / `download-s3` / `print-s3` / `list-bucket` |
+| [SKILLS_AND_AGENTS.md](./SKILLS_AND_AGENTS.md) | Claude Code skills + sub-agents |
+| [PASS_CLI.md](./PASS_CLI.md) | `pass-cli` (Proton Pass) secret resolution |
+| [../src/clinotify/README.md](../src/clinotify/README.md) | CrowdStrike checkin Telegram monitor |
+| [../docker/README.md](../docker/README.md) | Docker container deployment |
+| [../scriptpp/install/db/README.md](../scriptpp/install/db/README.md) | DB setup scripts and defaults |
+| [../scriptpp/mcp/README.md](../scriptpp/mcp/README.md) | Standalone Go MCP client |
+| [../pictures/README.md](../pictures/README.md) | UI screenshots |
 
----
+## By role
 
-## Development Setup
+- **Admins** — `DEPLOYMENT.md` → `ENVIRONMENT.md` → `CLI.md` (cron) → `TROUBLESHOOTING.md`.
+- **Developers** — `ARCHITECTURE.md` → `TESTING.md` → `ENVIRONMENT.md` → `CROWDSTRIKE_IMPORT.md` → `CLAUDE.md` (root).
+- **Security teams** — `MCP.md` → `CROWDSTRIKE_IMPORT.md` → `CLI.md`.
 
-### Backend (port 8080)
+## Local dev (TL;DR)
 
 ```bash
-cd src/backendng
-./gradlew run
-```
+# DB
+cd scriptpp/install/db && ./installdb.sh && cd -
 
-### Frontend (port 4321)
+# Backend (port 8080)
+./scriptpp/startbackenddev.sh
 
-```bash
-cd src/frontend
-npm install
-npm run dev
-```
+# Frontend (port 4321)
+cd src/frontend && npm install && npm run dev
 
-### CLI
-
-```bash
-# Build once
+# CLI (build once, then wrapper)
 ./gradlew :cli:shadowJar
-
-# Use via wrapper
 ./scriptpp/secman help
-./scriptpp/secman query servers --dry-run
-./scriptpp/secman send-admin-summary --dry-run
 ```
 
----
+First-run admin password is logged to backend stdout — copy it from the `DEFAULT ADMIN USER CREATED` block.
 
-## Production Deployment
-
-### 1. Prerequisites
-
-- Linux server (Amazon Linux 2023, Ubuntu 20.04+, RHEL 8+)
-- Java 21 (Amazon Corretto recommended)
-- Node.js 20.x
-- MariaDB 11.4+
-- Nginx
-
-### 2. Essential Configuration
+## Production minimum
 
 ```bash
-# Database
-DB_USERNAME=secman
-DB_PASSWORD=CHANGEME
-
-# Security (generate unique values!)
+DB_CONNECT=jdbc:mariadb://localhost:3306/secman
+DB_PASSWORD=...
 JWT_SECRET=$(openssl rand -base64 32)
 SECMAN_ENCRYPTION_PASSWORD=$(openssl rand -hex 32)
 SECMAN_ENCRYPTION_SALT=$(openssl rand -hex 8)
-
-# URLs
-SECMAN_BACKEND_URL=https://api.yourdomain.com
-FRONTEND_URL=https://secman.yourdomain.com
-
-# Email (optional)
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USERNAME=noreply@yourdomain.com
-SMTP_PASSWORD=app_password
+SECMAN_BACKEND_URL=https://api.example.com
+FRONTEND_URL=https://secman.example.com
 ```
 
-See [ENVIRONMENT.md](./ENVIRONMENT.md) for complete variable reference.
+Full reference: [`ENVIRONMENT.md`](./ENVIRONMENT.md). Step-by-step deploy: [`DEPLOYMENT.md`](./DEPLOYMENT.md).
 
-### 3. Installation
-
-Follow [DEPLOYMENT.md](./DEPLOYMENT.md) for step-by-step instructions:
-
-- MariaDB database setup
-- Backend deployment
-- Frontend deployment
-- Nginx reverse proxy
-- SSL/TLS configuration
-- Systemd services
-- Security hardening
-
----
-
-## MCP Integration (AI Assistants)
-
-Connect Claude Desktop, Claude Code, or other MCP clients:
-
-### Claude Code (Recommended)
+## MCP
 
 ```bash
+# Claude Code
 claude mcp add --transport http secman http://localhost:8080/mcp \
-  --header "X-MCP-API-Key: sk-your-api-key" \
-  --header "X-MCP-User-Email: your.email@company.com"
+  --header "X-MCP-API-Key: sk-..." \
+  --header "X-MCP-User-Email: you@company.com"
 ```
 
-### Claude Desktop
-
+Or in `claude_desktop_config.json`:
 ```json
-{
-  "mcpServers": {
-    "secman": {
-      "url": "http://localhost:8080/mcp",
-      "headers": {
-        "X-MCP-API-Key": "sk-your-api-key",
-        "X-MCP-User-Email": "your.email@company.com"
-      }
-    }
-  }
-}
+{ "mcpServers": { "secman": {
+    "url": "http://localhost:8080/mcp",
+    "headers": { "X-MCP-API-Key": "sk-...", "X-MCP-User-Email": "you@company.com" }
+} } }
+```
+`X-MCP-User-Email` is mandatory for `tools/list` and `tools/call`. Full setup: [`MCP.md`](./MCP.md).
+
+## Cron-friendly automation
+
+```cron
+# vuln sync: nightly
+0 2 * * *      /opt/secman/bin/secman query servers
+# notification email: weekly Mon 08:00
+0 8 * * 1      /opt/secman/bin/secman send-notifications
+# admin summary: weekly Mon 09:00
+0 9 * * 1      /opt/secman/bin/secman send-admin-summary
+# CrowdStrike freshness: every 10 min
+*/10 * * * *   TELEGRAM_BOT_TOKEN=… TELEGRAM_CHAT_ID=… \
+               /opt/secman/src/clinotify/check_crowdstrike_checkin.py \
+               --url https://secman.example.com --max-age-minutes 120
 ```
 
-See [MCP.md](./MCP.md) for complete setup, fallback options, and available tools.
-
----
-
-## Automated Operations
-
-### Vulnerability Import (CrowdStrike)
+## Health & quick triage
 
 ```bash
-# Daily vulnerability sync
-0 2 * * * /opt/secman/bin/secman query servers
-```
-
-### Email Notifications
-
-```bash
-# Weekly vulnerability reports
-0 8 * * 1 /opt/secman/bin/secman send-notifications
-```
-
-### Admin Summary
-
-```bash
-# Weekly admin summary email
-0 9 * * 1 /opt/secman/bin/secman send-admin-summary
-```
-
-See [CLI.md](./CLI.md) for all commands and cron setup.
-
----
-
-## Health Checks
-
-```bash
-# Backend
-curl http://localhost:8080/health
-# Expected: {"status":"UP","service":"secman-backend-ng","version":"0.1"}
-
-# Frontend
+curl http://localhost:8080/health    # {"status":"UP",...}
 curl http://localhost:4321/
-
-# External (via nginx)
-curl https://secman.yourdomain.com/
+curl https://secman.example.com/
 ```
 
----
-
-## Troubleshooting Quick Reference
-
-| Issue               | Check                                |
-| ------------------- | ------------------------------------ |
+| Symptom | Check first |
+|---|---|
 | Backend won't start | `journalctl -u secman-backend -n 50` |
-| Frontend blank page | Browser console, `PUBLIC_API_URL`     |
-| Database connection | `mysql -u secman -p secman`          |
-| 502 Bad Gateway     | `systemctl status secman-backend`    |
-| MCP auth fails      | API key valid? Headers correct?      |
-| OAuth callback fail | Check identity provider config       |
+| Blank frontend | browser console; `PUBLIC_API_URL` |
+| DB | `mysql -u secman -p secman` |
+| 502 | `systemctl status secman-backend secman-frontend` |
+| MCP auth fails | API key valid? `X-MCP-User-Email` set? |
+| OAuth callback fails | identity-provider config |
 
-See [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) for detailed solutions.
-
----
+Deeper: [`TROUBLESHOOTING.md`](./TROUBLESHOOTING.md).
 
 ## Support
 
-- **GitHub Issues**: [github.com/schmalle/secman/issues](https://github.com/schmalle/secman/issues)
-- **Documentation**: This `/docs` directory
-
----
-
-## Documentation Map
-
-```
-docs/
-├── README.md              <- You are here (index)
-├── ARCHITECTURE.md        <- System design & data model
-├── DEPLOYMENT.md          <- Production deployment
-├── ENVIRONMENT.md         <- Configuration reference
-├── CLI.md                 <- Command-line interface
-├── MCP.md                 <- AI assistant integration
-├── CROWDSTRIKE_IMPORT.md  <- Vulnerability import
-├── TESTING.md             <- Test infrastructure
-├── TROUBLESHOOTING.md     <- Common issues & solutions
-├── E2E_EXCEPTION_WORKFLOW_TEST.md  <- Exception E2E test
-├── S3_USER_MAPPING_IMPORT.md      <- S3 import guide
-├── SKILLS_AND_AGENTS.md           <- Skills & agents reference
-├── 1PASSWORD.md                   <- Secret management with 1Password CLI
-src/clinotify/
-└── README.md                      <- CrowdStrike checkin Telegram monitor
-docker/
-└── README.md                      <- Docker container deployment
-scripts/install/db/
-└── README.md                      <- Database setup scripts
-scripts/mcp/
-└── README.md                      <- Go MCP client example
-pictures/
-└── README.md                      <- UI screenshots
-```
-
----
-
-*For CLI help: `./scriptpp/secman help`*
+[GitHub issues](https://github.com/schmalle/secman/issues).

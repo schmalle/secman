@@ -9,6 +9,7 @@ import com.secman.service.VulnerabilityExceptionRequestService
 import com.secman.service.VulnerabilityExceptionService
 import jakarta.inject.Inject
 import jakarta.inject.Singleton
+import jakarta.transaction.Transactional
 import java.time.LocalDateTime
 import java.time.format.DateTimeParseException
 
@@ -25,7 +26,7 @@ import java.time.format.DateTimeParseException
  * User Story: US2 - Create Exception Request (P1)
  */
 @Singleton
-class CreateExceptionRequestTool(
+open class CreateExceptionRequestTool(
     @Inject private val exceptionRequestService: VulnerabilityExceptionRequestService,
     @Inject private val vulnerabilityRepository: VulnerabilityRepository,
     @Inject private val vulnerabilityExceptionService: VulnerabilityExceptionService
@@ -84,6 +85,7 @@ class CreateExceptionRequestTool(
         )
     )
 
+    @Transactional
     override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
         // FR-006: Require User Delegation
         if (!context.hasDelegation()) {

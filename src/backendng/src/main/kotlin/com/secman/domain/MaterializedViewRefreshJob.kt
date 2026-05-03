@@ -1,5 +1,6 @@
 package com.secman.domain
 
+import io.micronaut.serde.annotation.Serdeable
 import org.hibernate.annotations.JdbcTypeCode
 import org.hibernate.type.SqlTypes
 import jakarta.persistence.*
@@ -8,6 +9,7 @@ import java.time.LocalDateTime
 /**
  * Status enum for refresh jobs
  */
+@Serdeable
 enum class RefreshJobStatus {
     RUNNING,
     COMPLETED,
@@ -25,6 +27,7 @@ enum class RefreshJobStatus {
  * Spec reference: data-model.md
  */
 @Entity
+@Serdeable
 @Table(
     name = "materialized_view_refresh_job",
     indexes = [

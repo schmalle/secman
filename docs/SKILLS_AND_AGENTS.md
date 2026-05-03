@@ -1,474 +1,174 @@
-# Skills and Agents Reference
+# Skills and Agents
 
-This document describes all Claude Code skills (slash commands) and autonomous agents configured for the secman project. These are defined in the `.claude/` directory and provide AI-assisted development workflows.
+Project-local Claude Code automation defined under `.claude/`.
 
----
+| Type | Count | Purpose |
+|---|---|---|
+| Skills | user-invoked `/<name>` slash commands | structured workflows (E2E loops, SpecKit pipeline) |
+| Agents | autonomous sub-agents | spawned by skills to fix specific error categories — never invoked directly |
 
-## Table of Contents
+Skills run in `fork` mode (dedicated context) or inline; agents are spawned as subprocesses with `Read, Grep, Glob, Bash, Edit, Write` tools.
 
-- [Overview](#overview)
-- [Skills (Slash Commands)](#skills-slash-commands)
-  - [E2E Skills](#e2e-skills)
-    - [`/e2eexception`](#e2eexception)
-    - [`/admin-asset-e2e`](#admin-asset-e2e)
-    - [`/e2ejs`](#e2ejs)
-  - [SpecKit Commands](#speckit-commands)
-    - [`/speckit.constitution`](#speckitconstitution)
-    - [`/speckit.specify`](#speckitspecify)
-    - [`/speckit.clarify`](#speckitclarify)
-    - [`/speckit.plan`](#speckitplan)
-    - [`/speckit.checklist`](#speckitchecklist)
-    - [`/speckit.tasks`](#speckittasks)
-    - [`/speckit.analyze`](#speckitanalyze)
-    - [`/speckit.implement`](#speckitimplement)
-    - [`/speckit.taskstoissues`](#speckittaskstoissues)
-- [Agents (Autonomous Specialists)](#agents-autonomous-specialists)
-  - [`e2e-backend-fixer`](#e2e-backend-fixer)
-  - [`e2e-frontend-fixer`](#e2e-frontend-fixer)
-- [Architecture](#architecture)
-  - [E2E Fix Loop](#e2e-fix-loop)
-  - [SpecKit Workflow](#speckit-workflow)
-- [Configuration](#configuration)
-  - [E2E Runner Config](#e2e-runner-config)
-  - [Hooks](#hooks)
+## E2E skills
 
----
+### `/e2eexception` — vuln exception workflow
 
-## Overview
+`.claude/skills/e2eexception/SKILL.md`
 
-The project has two categories of Claude Code automation:
+Triggers: "run exception e2e", "test exception workflow", "e2eexception".
 
-| Category | Count | Purpose |
-|----------|-------|---------|
-| **Skills** | 12 | User-invoked slash commands (`/skill-name`) that perform structured workflows |
-| **Agents** | 2 | Autonomous sub-agents spawned by skills to fix specific error categories |
+Loop: start backend (`./scriptpp/startbackenddev.sh`) → start frontend (`./scriptpp/startfrontenddev.sh`) → wait for ports `8080`/`4321` → run `scriptpp/test/test-e2e-exception-workflowsupport.sh` → on failure classify, fix, restart if needed, re-run. Up to `maxRetries` (default 5).
 
-Skills run in `fork` mode (dedicated context) or inline, and may spawn agents as sub-processes.
+Test = 11-step MCP-based exception lifecycle (see `docs/E2E_EXCEPTION_WORKFLOW_TEST.md`).
 
----
-
-## Skills (Slash Commands)
-
-### E2E Skills
-
-#### `/e2eexception`
-
-**File:** `.claude/skills/e2eexception/SKILL.md`
-
-End-to-end vulnerability exception workflow test orchestrator. Starts the full stack (backend + frontend), runs the MCP-based exception workflow test script, and iteratively fixes failures until the test passes or the retry budget is exhausted.
-
-**Trigger phrases:** "run exception e2e", "test exception workflow", "e2eexception"
-
-**Workflow:**
-1. Start backend (`./scriptpp/startbackenddev.sh`)
-2. Start frontend (`./scriptpp/startfrontenddev.sh`)
-3. Wait for health checks (backend: `localhost:8080`, frontend: `localhost:4321`)
-4. Run E2E test script (`scripts/test/test-e2e-exception-workflowsupport.sh`)
-5. If failures: classify error, apply fix, restart services if needed, re-run
-6. Repeat up to `maxRetries` (default: 5) or until green
-
-**Test steps:** 11-step MCP-based workflow covering user creation, vulnerability management, exception request lifecycle, and cleanup.
-
-**Error classification:**
+Classification:
 
 | Pattern | Category | Action |
-|---------|----------|--------|
-| HTTP 5xx | backend | Fix controller/service code |
-| HTTP 403 | backend | Check `@Secured` annotations and roles |
-| HTTP 404 on `/api/*` | backend | Missing or misrouted endpoint |
-| React/JS stack trace | frontend | Fix component code |
-| Hydration error | frontend | SSR/client mismatch |
-| "Failed to fetch" | backend | Endpoint unreachable or CORS |
-| Timeout | infra | Investigate hangs or infinite loops |
+|---|---|---|
+| HTTP 5xx | backend | controller/service code |
+| HTTP 403 | backend | check `@Secured` annotations |
+| HTTP 404 on `/api/*` | backend | missing/misrouted endpoint |
+| React/JS stack trace | frontend | component fix |
+| Hydration mismatch | frontend | SSR/client divergence |
+| `Failed to fetch` | backend | unreachable / CORS |
+| Timeout | infra | hangs/loops |
 
-**Restart rules:**
-- Backend change -> kill process, rebuild, wait for health
-- Frontend change -> Vite hot-reloads automatically (3s wait)
-- Test-only change -> no restart needed
+Restart rules: backend change → kill, rebuild, wait for health; frontend change → Vite hot-reloads (3s wait); test-only change → no restart.
 
----
+### `/admin-asset-e2e` — admin asset + vuln (Playwright)
 
-#### `/admin-asset-e2e`
+Triggers: "run admin asset e2e", "test add system", "admin asset test".
 
-**File:** `.claude/skills/admin-asset-e2e/SKILL.md`
+Flow:
+1. login normal user → assert no `DUMMY` asset
+2. login admin → create asset `DUMMY` at `/admin/add-system` with normal user as owner
+3. admin adds HIGH-criticality 60-day vuln to DUMMY
+4. login normal user → asset visible (owner-based access)
 
-Runs the admin asset and vulnerability Playwright E2E test that verifies the full asset creation workflow across user roles.
+Test: `tests/e2e/admin-asset-vuln.spec.ts`. Files exercised: `frontend/src/pages/admin/add-system.astro`, `components/admin/AdminAddSystem.tsx`, backend `AssetController`, `VulnerabilityManagementController`, `AssetFilterService`.
 
-**Trigger phrases:** "run admin asset e2e", "test add system", "admin asset test"
+Env: `SECMAN_ADMIN_NAME/PASS`, `SECMAN_USER_USER/PASS`.
 
-**Test flow:**
-1. Login as normal user -> verify DUMMY asset does NOT exist
-2. Login as admin -> create asset "DUMMY" at `/admin/add-system` with normal user as owner
-3. Admin adds a HIGH criticality vulnerability (60 days old) to DUMMY
-4. Login as normal user -> verify DUMMY asset IS now visible (owner-based access)
+### `/e2ejs` — JS error scanner
 
-**Test file:** `tests/e2e/admin-asset-vuln.spec.ts`
+Triggers: "run js error scanner", "scan pages for errors", "e2ejs", "check all pages", "fix js errors".
 
-**Key application files exercised:**
-- `src/frontend/src/pages/admin/add-system.astro` - Admin UI page
-- `src/frontend/src/components/admin/AdminAddSystem.tsx` - React component
-- `src/backendng/.../controller/AssetController.kt` - Asset REST API
-- `src/backendng/.../controller/VulnerabilityManagementController.kt` - Vulnerability API
-- `src/backendng/.../service/AssetFilterService.kt` - Access control filtering
+Loop: start backend + frontend → wait healthy → run `tests/js-error-scanner.sh` → classify (backend first, then frontend) → fix → restart backend if needed → re-run. Exit `2` = fatal (host unreachable / login failed) → stop.
 
-**Required environment variables:**
-- `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS`
-- `SECMAN_USER_USER` / `SECMAN_USER_PASS`
+Both runs (admin + normal user) must report **0 JS errors** per `CLAUDE.md` principle 7. Documented empty-state `[HTTP 404]` and RBAC `[HTTP 403]` are not failures.
 
----
+### `/e2evulnexception` — full lifecycle (MCP + UI)
 
-#### `/e2ejs`
+Combines the MCP workflow above with Playwright-side UI verification: clean testbed → exception lifecycle (approve/reject/cancel) + auth negatives via MCP → same state through Astro/React UI. Cleanup before and after. Required to exit clean per `CLAUDE.md` principle 7.
 
-**File:** `.claude/skills/e2ejs/SKILL.md`
+## SpecKit commands (`/speckit.*`)
 
-JavaScript error scanner that visits all application pages and fixes errors. Starts backend and frontend using dev scripts, runs the JS error scanner, and iteratively fixes every page error — restarting the backend after each fix.
-
-**Trigger phrases:** "run js error scanner", "scan pages for errors", "e2ejs", "check all pages", "fix js errors"
-
-**Workflow:**
-1. Start backend (`./scriptpp/startbackenddev.sh`)
-2. Start frontend (`./scriptpp/startfrontenddev.sh`)
-3. Wait for both to be healthy
-4. Run JS error scanner (`./tests/js-error-scanner.sh`)
-5. If all clean -> done, report success
-6. If exit code 2 -> fatal error (host unreachable / login failed), stop
-7. If exit code 1 (page errors) -> parse errors, classify (backend vs frontend), fix, restart backend, re-run
-8. Repeat until all pages are clean or retry budget exhausted
-
-**Error classification:**
-- Backend errors are fixed first, then frontend errors
-- Backend changes always require a backend restart
-- Frontend changes typically hot-reload via Vite
-
----
-
-### SpecKit Commands
-
-SpecKit is a specification-driven development workflow. Commands form a pipeline from feature ideation through to implementation and issue tracking.
-
-#### `/speckit.constitution`
-
-**File:** `.claude/commands/speckit.constitution.md`
-
-Create or update the project constitution — the governing document that defines project principles, constraints, and quality standards.
-
-**What it does:**
-- Loads the existing constitution from `.specify/memory/constitution.md`
-- Collects or derives values for principle tokens interactively
-- Drafts updated content and checks consistency with all templates
-- Produces a Sync Impact Report
-- Applies semantic versioning (MAJOR/MINOR/PATCH) to constitution changes
-
-**Handoffs to:** `/speckit.specify`
-
----
-
-#### `/speckit.specify`
-
-**File:** `.claude/commands/speckit.specify.md`
-
-Create or update a feature specification from a natural language description. This is typically the entry point for new features.
-
-**What it does:**
-- Generates a short feature branch name (2-4 words)
-- Creates a feature branch via `.specify/scriptpp/bash/create-new-feature.sh`
-- Fills the spec template with feature details
-- Generates a Specification Quality Checklist
-- Validates against quality criteria (completeness, clarity, consistency, measurability)
-- Flags up to 3 `[NEEDS CLARIFICATION]` markers if areas are underspecified
-
-**Handoffs to:** `/speckit.plan`, `/speckit.clarify`
-
----
-
-#### `/speckit.clarify`
-
-**File:** `.claude/commands/speckit.clarify.md`
-
-Identify underspecified areas in the current feature spec by asking up to 5 targeted clarification questions and encoding the answers back into the spec.
-
-**Coverage taxonomy scanned:**
-- Functional Scope & Behavior
-- Domain & Data Model
-- Interaction & UX Flow
-- Non-Functional Quality Attributes
-- Integration & External Dependencies
-- Edge Cases & Failure Handling
-- Constraints & Tradeoffs
-- Terminology & Consistency
-
-**Handoffs to:** `/speckit.plan`
-
----
-
-#### `/speckit.plan`
-
-**File:** `.claude/commands/speckit.plan.md`
-
-Execute the implementation planning workflow to generate design artifacts from the feature spec.
-
-**Phases:**
-- **Phase 0 — Outline & Research:** Identify unknowns, resolve via research tasks
-- **Phase 1 — Design & Contracts:** Data model, interface contracts, agent context update
-
-**Artifacts generated:**
-- `research.md` - Resolved unknowns and clarifications
-- `data-model.md` - Entity and relationship definitions
-- `contracts/` - Interface contracts (API shapes, component props)
-- `quickstart.md` - Getting-started guide for implementers
-
-**Handoffs to:** `/speckit.tasks`, `/speckit.checklist`
-
----
-
-#### `/speckit.checklist`
-
-**File:** `.claude/commands/speckit.checklist.md`
-
-Generate a custom quality checklist for the current feature. Checklists validate **requirement quality** (completeness, clarity, consistency), NOT implementation behavior.
-
-**Key concept:** These are "unit tests for requirements writing."
-
-**Allowed patterns:**
-- "Are [requirement type] defined/specified/documented for [scenario]?"
-
-**Prohibited patterns (implementation testing):**
-- "Verify the button clicks correctly"
-- "Test error handling works"
-- "Confirm the API returns 200"
-
-**Checklist categories:**
-- Requirement Completeness
-- Requirement Clarity
-- Requirement Consistency
-- Acceptance Criteria Quality
-- Scenario Coverage
-- Edge Case Coverage
-- Non-Functional Requirements
-- Dependencies & Assumptions
-- Ambiguities & Conflicts
-
----
-
-#### `/speckit.tasks`
-
-**File:** `.claude/commands/speckit.tasks.md`
-
-Generate an actionable, dependency-ordered `tasks.md` from the design artifacts (plan, spec, data model, contracts).
-
-**What it produces:**
-- Tasks organized by user story, in priority order
-- Dependency graph with parallel execution opportunities
-- Phase structure: Setup -> Foundational -> Per-story phases -> Polish
-
-**Handoffs to:** `/speckit.analyze`, `/speckit.implement`
-
----
-
-#### `/speckit.analyze`
-
-**File:** `.claude/commands/speckit.analyze.md`
-
-Perform a **read-only** cross-artifact consistency and quality analysis across `spec.md`, `plan.md`, and `tasks.md`.
-
-**Prerequisite:** Must run after `/speckit.tasks` has produced a complete `tasks.md`.
-
-**Detection passes:**
-| Pass | What it finds |
-|------|---------------|
-| Duplication | Near-duplicate requirements |
-| Ambiguity | Vague adjectives without measurable criteria |
-| Underspecification | Missing object or measurable outcome |
-| Constitution Alignment | Violations of MUST principles (auto-CRITICAL) |
-| Coverage Gaps | Requirements with zero tasks, orphaned tasks |
-| Inconsistency | Terminology drift, conflicting requirements |
-
-**Severity levels:** CRITICAL > HIGH > MEDIUM > LOW (max 50 findings)
-
----
-
-#### `/speckit.implement`
-
-**File:** `.claude/commands/speckit.implement.md`
-
-Execute the implementation plan by processing all tasks in `tasks.md` phase-by-phase.
-
-**What it does:**
-- Validates all checklists are complete (fails if incomplete)
-- Loads full implementation context (tasks, plan, data model, contracts, research)
-- Verifies project setup (ignore files, directory structure)
-- Executes tasks in dependency order, marking each `[X]` on completion
-- Handles errors and tracks progress
-
-**Pre/post hooks:** Checks `.specify/extensions.yml` for `hooks.before_implement` and `hooks.after_implement`.
-
----
-
-#### `/speckit.taskstoissues`
-
-**File:** `.claude/commands/speckit.taskstoissues.md`
-
-Convert tasks from `tasks.md` into dependency-ordered GitHub issues.
-
-**What it does:**
-- Reads the task list from `tasks.md`
-- Resolves the Git remote URL to identify the target GitHub repository
-- Creates one GitHub issue per task via the GitHub MCP server
-- Preserves task dependencies and ordering
-
-**Safety:** Only creates issues in the repository matching the current Git remote. Refuses to proceed if the remote is not a GitHub URL.
-
-**Required tool:** `github/github-mcp-server/issue_write`
-
----
-
-## Agents (Autonomous Specialists)
-
-Agents are spawned automatically by the E2E skills when errors are detected. They cannot be invoked directly via slash commands.
-
-### `e2e-backend-fixer`
-
-**File:** `.claude/agents/e2e-backend-fixer.md`
-**Tools:** Read, Grep, Glob, Bash, Edit, Write
-
-Kotlin/Micronaut backend specialist. Spawned when E2E failures are classified as backend issues (HTTP 5xx, 403, 404, Kotlin/Java exceptions).
-
-**Diagnosis workflow:**
-1. Extract HTTP method/URL from error output
-2. Find the controller with the matching `@Controller` path
-3. Trace into the service layer
-4. Check `.e2e-logs/backend.log` for stack traces
-5. Apply minimal fix to application code
-
-**Common fix patterns:**
-
-| Exception | Typical Root Cause | Fix |
-|-----------|-------------------|-----|
-| `ClassCastException` | Hibernate native query type mismatch | Use explicit casts or JPQL |
-| `NullPointerException` | Null entity field/relationship | Add null-safety (`?.`, `?: default`) |
-| `LazyInitializationException` | Accessing lazy collection outside transaction | Add `@Transactional` or `JOIN FETCH` |
-| `HttpStatusException(403)` | Too-restrictive `@Secured` | Add missing role to annotation |
-| `HttpStatusException(404)` | Endpoint not registered | Check `@Controller` path and method |
-| `DataAccessException` | SQL error (missing column, constraint) | Fix entity mapping |
-| `JsonProcessingException` | Circular reference in serialization | Add `@JsonIgnore` or use DTO |
-
-**Constraint:** Never modifies test files. Almost always requires backend restart.
-
----
-
-### `e2e-frontend-fixer`
-
-**File:** `.claude/agents/e2e-frontend-fixer.md`
-**Tools:** Read, Grep, Glob, Bash, Edit, Write
-
-Astro + React frontend specialist. Spawned when E2E failures are classified as frontend issues (JS errors, component render failures, missing elements).
-
-**Diagnosis workflow:**
-1. Map the URL path from the failing test to an Astro page in `src/pages/`
-2. Trace into React components in `src/components/`
-3. Identify root cause: render error, API response shape mismatch, selector issue, or routing issue
-4. Apply minimal fix to application code
-
-**Constraint:** Never modifies test files. If a DOM selector changed, reports that the test needs updating rather than altering application code to match an outdated test. Vite typically hot-reloads frontend changes automatically.
-
----
-
-## Architecture
-
-### E2E Fix Loop
-
-```
-User: "/e2eexception", "/admin-asset-e2e", or "/e2ejs"
-         |
-         v
-    Skill (fork context)
-    |-- Phase 1: Start backend & frontend
-    |-- Phase 2: Run E2E test script
-    |-- Phase 3: Classify failure
-    |   |-- backend error --> spawn e2e-backend-fixer agent
-    |   |-- frontend error --> spawn e2e-frontend-fixer agent
-    |   |-- infra error --> investigate directly
-    |   '-- apply fix, restart if needed
-    |-- Phase 4: Re-run tests (loop back to Phase 2)
-    '-- Phase 5: Teardown & Report
-         |
-         '-- Max 5 iterations, then stop with summary
-```
-
-**Logs:** Written to `.e2e-logs/` (backend.log, frontend.log)
-
-### SpecKit Workflow
-
-The SpecKit commands form a directed pipeline. Each command produces artifacts consumed by the next:
+Specification-driven development pipeline, defined under `.claude/commands/`.
 
 ```
 /speckit.constitution
-         |
-         v
-/speckit.specify  <-->  /speckit.clarify
-         |
-         v
+        │
+        ▼
+/speckit.specify  ↔  /speckit.clarify
+        │
+        ▼
 /speckit.plan
-         |
-    +---------+
-    |         |
-    v         v
-/speckit.   /speckit.
-checklist    tasks
-              |
-              v
-         /speckit.analyze
-              |
-              v
-         /speckit.implement
-              |
-              v
-         /speckit.taskstoissues
+        │
+   ┌────┴─────┐
+   ▼          ▼
+/speckit.    /speckit.
+checklist     tasks
+              │
+              ▼
+        /speckit.analyze        (read-only: duplication, ambiguity, gaps)
+              │
+              ▼
+        /speckit.implement
+              │
+              ▼
+        /speckit.taskstoissues  (creates GitHub issues; safe-checks remote)
 ```
 
-**Artifact flow:**
-1. `constitution.md` - Project principles (governs all downstream artifacts)
-2. `spec.md` - Feature specification (what to build)
-3. `plan.md` - Technical plan (how to build it)
-4. `data-model.md`, `contracts/` - Design artifacts (structures and interfaces)
-5. `tasks.md` - Implementation tasks (ordered work items)
-6. `checklists/` - Quality gates (requirement validation)
-7. GitHub Issues - External tracking
+Artifacts:
+1. `constitution.md` — principles (governs all downstream)
+2. `spec.md` — what (≤3 `[NEEDS CLARIFICATION]` markers allowed)
+3. `plan.md` — how (Phase 0 research / Phase 1 design + contracts)
+4. `data-model.md`, `contracts/` — entities + interface shapes
+5. `tasks.md` — ordered work items, parallel-execution graph
+6. `checklists/` — requirement-quality unit tests (allowed: "Are X defined?"; forbidden: "Verify the button works")
+7. GitHub issues — one per task, dependency-preserved (only created if remote is GitHub; uses `github/github-mcp-server/issue_write`)
 
----
+`speckit.analyze` severities: `CRITICAL > HIGH > MEDIUM > LOW`, max 50 findings. Constitution-MUST violations are auto-CRITICAL.
+
+## Agents
+
+### `e2e-backend-fixer`
+
+`.claude/agents/e2e-backend-fixer.md`. Spawned for HTTP 5xx/403/404 or Kotlin/Java stack traces.
+
+Workflow: extract method+URL → find matching `@Controller` → trace into service → check `.e2e-logs/backend.log` → minimal fix to application code (never tests).
+
+Common patterns:
+| Exception | Root cause | Fix |
+|---|---|---|
+| `ClassCastException` | Hibernate native query type mismatch | explicit casts or JPQL |
+| `NullPointerException` | nullable entity field/relation | `?.`, `?: default` |
+| `LazyInitializationException` | lazy collection outside transaction | `@Transactional` or `JOIN FETCH` |
+| `HttpStatusException(403)` | over-restrictive `@Secured` | add role |
+| `HttpStatusException(404)` | endpoint not registered | check `@Controller` path/method |
+| `DataAccessException` | SQL error (column/constraint) | fix entity mapping |
+| `JsonProcessingException` | circular ref | `@JsonIgnore` or DTO |
+
+Backend changes always need a restart.
+
+### `e2e-frontend-fixer`
+
+`.claude/agents/e2e-frontend-fixer.md`. Spawned for JS/render/selector failures.
+
+Workflow: map URL → Astro page in `src/pages/` → React components in `src/components/` → identify root cause (render error, API shape mismatch, selector drift, routing) → minimal fix to application code (never tests). When a selector changed, reports the test needs updating instead of patching app code to an outdated test. Vite typically hot-reloads.
+
+## Architecture
+
+```
+User → /e2eexception | /admin-asset-e2e | /e2ejs | /e2evulnexception
+        │
+        ▼
+   Skill (fork context)
+   ├── start backend + frontend
+   ├── run E2E test
+   ├── classify failure
+   │     ├── backend  → spawn e2e-backend-fixer
+   │     ├── frontend → spawn e2e-frontend-fixer
+   │     └── infra    → investigate directly
+   ├── apply fix → restart if needed
+   ├── re-run (max 5 iterations)
+   └── teardown + report
+```
+
+Logs: `.e2e-logs/{backend,frontend}.log` (gitignored).
 
 ## Configuration
 
-### E2E Runner Config
+`e2e-runner.config.json` (optional, repo root):
 
-Optional file at project root: `e2e-runner.config.json`
+| Key | Default |
+|---|---|
+| `backend.start` | `gradle :backendng:clean :backendng:run` |
+| `backend.healthUrl` | `http://localhost:8080` |
+| `backend.healthTimeout` | `120` s |
+| `frontend.start` | `npm run dev` |
+| `frontend.healthUrl` | `http://localhost:4321` |
+| `frontend.healthTimeout` | `60` s |
+| `e2e.script` | `./scriptpp/e2e-test.sh` |
+| `e2e.maxRetries` | `5` |
+| `e2e.retryDelay` | `5` s |
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `backend.start` | `gradle :backendng:clean :backendng:run` | Backend start command |
-| `backend.healthUrl` | `http://localhost:8080` | Health check endpoint |
-| `backend.healthTimeout` | `120` (seconds) | Max wait for backend health |
-| `frontend.start` | `npm run dev` | Frontend start command |
-| `frontend.healthUrl` | `http://localhost:4321` | Health check endpoint |
-| `frontend.healthTimeout` | `60` (seconds) | Max wait for frontend health |
-| `e2e.script` | `./scriptpp/e2e-test.sh` | E2E test script path |
-| `e2e.maxRetries` | `5` | Max fix-and-retry iterations |
-| `e2e.retryDelay` | `5` (seconds) | Delay between retries |
+Liveness in the runner is **port-bind** (`lsof -iTCP:8080 -sTCP:LISTEN -n -P`), not HTTP. Functional checks still use `SECMAN_HOST` from `pass-cli`.
 
-### Hooks
-
-Configured in `.claude/settings.json`. Key hooks relevant to skills:
-
+Hooks (`.claude/settings.json`):
 | Hook | Trigger | Purpose |
-|------|---------|---------|
-| `PostToolUse` (Edit/Write) | Any file edit | Runs `on-file-changed.sh` to alert the E2E runner about hot-reload needs |
-| `PreToolUse` (Task) | Task tool usage | Runs pre-task hooks |
-| `PostToolUse` (Task) | Task tool completion | Runs post-task hooks |
+|---|---|---|
+| `PostToolUse` Edit/Write | any file edit | `on-file-changed.sh` — alerts runner about hot-reload |
+| `PreToolUse` / `PostToolUse` Task | task tool boundaries | pre/post-task housekeeping |
 
-### Helper Scripts
-
-The E2E runner uses the following scripts:
-
-| Script | Purpose |
-|--------|---------|
-| `scripts/e2e-test.sh` | Main E2E test execution script |
+E2E helper script: `scriptpp/e2e-test.sh`.

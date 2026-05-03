@@ -36,6 +36,7 @@ data class McpExecutionContext(
     // Delegation information (null if no delegation)
     val delegatedUserId: Long?,
     val delegatedUserEmail: String?,
+    val delegatedUsername: String?,
     val delegatedUserRoles: Set<String>?,
 
     // Effective permissions (intersection of API key + user roles if delegated)
@@ -105,6 +106,7 @@ data class McpExecutionContext(
             apiKeyName: String,
             delegatedUserId: Long,
             delegatedUserEmail: String,
+            delegatedUsername: String,
             delegatedUserRoles: Set<String>,
             effectivePermissions: Set<McpPermission>,
             isAdmin: Boolean,
@@ -116,6 +118,7 @@ data class McpExecutionContext(
                 apiKeyName = apiKeyName,
                 delegatedUserId = delegatedUserId,
                 delegatedUserEmail = delegatedUserEmail,
+                delegatedUsername = delegatedUsername,
                 delegatedUserRoles = delegatedUserRoles,
                 effectivePermissions = effectivePermissions,
                 isAdmin = isAdmin,

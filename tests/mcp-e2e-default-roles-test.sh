@@ -11,9 +11,9 @@
 # 3. Clean up by deleting the test user
 #
 # Prerequisites:
-# - curl, jq, op (1Password CLI) installed
-# - Environment variables set with 1Password URIs:
-#   SECMAN_ADMIN_NAME, SECMAN_ADMIN_PASS, SECMAN_API_KEY, SECMAN_TEST_DOMAIN
+# - curl, jq, pass-cli (Proton Pass CLI) installed
+# - Environment variables set with Proton Pass URIs:
+#   SECMAN_ADMIN_NAME, SECMAN_ADMIN_PASS, SECMAN_MCP_KEY, SECMAN_TEST_DOMAIN
 #
 # Usage:
 #   ./tests/mcp-e2e-default-roles-test.sh
@@ -21,10 +21,10 @@
 
 set -euo pipefail
 
-export SECMAN_ADMIN_NAME="op://test/secman/SECMAN_ADMIN_NAME"
-export SECMAN_ADMIN_PASS="op://test/secman/SECMAN_ADMIN_PASS"
-export SECMAN_API_KEY="op://test/secman/SECMAN_API_KEY"
-export SECMAN_TEST_DOMAIN="op://test/secman/SECMAN_TEST_DOMAIN"
+export SECMAN_ADMIN_NAME="pass://test/secman/SECMAN_ADMIN_NAME"
+export SECMAN_ADMIN_PASS="pass://test/secman/SECMAN_ADMIN_PASS"
+export SECMAN_MCP_KEY="pass://test/secman/SECMAN_MCP_KEY"
+export SECMAN_TEST_DOMAIN="pass://test/secman/SECMAN_TEST_DOMAIN"
 
 # Configuration
 BASE_URL="${SECMAN_BASE_URL:-http://localhost:8080}"
@@ -59,14 +59,18 @@ check_prerequisites() {
     local missing=()
     command -v curl &>/dev/null || missing+=("curl")
     command -v jq   &>/dev/null || missing+=("jq")
-    command -v op   &>/dev/null || missing+=("op (1Password CLI)")
 
     if [[ ${#missing[@]} -gt 0 ]]; then
         log_error "Missing required tools: ${missing[*]}"
         exit 1
     fi
 
-    for var in SECMAN_ADMIN_NAME SECMAN_ADMIN_PASS SECMAN_API_KEY SECMAN_TEST_DOMAIN; do
+    # pass-cli is optional — only needed if env vars use pass:// URIs
+    if [[ "${SECMAN_ADMIN_NAME}" == pass://* ]] || [[ "${SECMAN_ADMIN_PASS}" == pass://* ]] || [[ "${SECMAN_MCP_KEY}" == pass://* ]] || [[ "${SECMAN_TEST_DOMAIN}" == pass://* ]]; then
+        command -v pass-cli &>/dev/null || { log_error "Proton Pass CLI (pass-cli) required for pass:// URIs"; exit 1; }
+    fi
+
+    for var in SECMAN_ADMIN_NAME SECMAN_ADMIN_PASS SECMAN_MCP_KEY SECMAN_TEST_DOMAIN; do
         if [[ -z "${!var:-}" ]]; then
             log_error "$var environment variable not set"
             exit 1
@@ -76,23 +80,23 @@ check_prerequisites() {
     log_success "Prerequisites check passed"
 }
 
-# Resolve credentials from 1Password
+# Resolve credentials (supports Proton Pass pass:// URIs or plain text)
 resolve_credentials() {
-    log_info "Resolving credentials from 1Password..."
+    log_info "Resolving credentials..."
 
-    resolve_op_var() {
+    resolve_pass_var() {
         local val="$1"
-        if [[ "$val" == op://* ]]; then
-            op read "$val" 2>/dev/null || { log_error "Failed to resolve $val from 1Password"; exit 1; }
+        if [[ "$val" == pass://* ]]; then
+            pass-cli item view "$val" 2>/dev/null || { log_error "Failed to resolve $val"; exit 1; }
         else
             echo "$val"
         fi
     }
 
-    RESOLVED_USERNAME=$(resolve_op_var "$SECMAN_ADMIN_NAME")
-    RESOLVED_PASSWORD=$(resolve_op_var "$SECMAN_ADMIN_PASS")
-    API_KEY=$(resolve_op_var "$SECMAN_API_KEY")
-    RESOLVED_TEST_DOMAIN=$(resolve_op_var "$SECMAN_TEST_DOMAIN")
+    RESOLVED_USERNAME=$(resolve_pass_var "$SECMAN_ADMIN_NAME")
+    RESOLVED_PASSWORD=$(resolve_pass_var "$SECMAN_ADMIN_PASS")
+    API_KEY=$(resolve_pass_var "$SECMAN_MCP_KEY")
+    RESOLVED_TEST_DOMAIN=$(resolve_pass_var "$SECMAN_TEST_DOMAIN")
 
     TEST_USER_EMAIL="e2e-default-roles-$(date +%s)@${RESOLVED_TEST_DOMAIN}"
 

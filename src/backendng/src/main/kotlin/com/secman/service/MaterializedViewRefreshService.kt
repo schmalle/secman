@@ -76,9 +76,22 @@ open class MaterializedViewRefreshService(
         // Concurrency control: Check if a refresh is already running
         val runningJob = getCurrentRunningJob()
         if (runningJob != null) {
-            log.info("Skipping refresh trigger - job already running: jobId={}, triggeredBy={}, progress={}%",
-                runningJob.id, runningJob.triggeredBy, runningJob.progressPercentage)
-            return runningJob
+            // Recover from stale RUNNING jobs: if the job is older than the
+            // longest plausible refresh window (1 hour), the worker thread is
+            // gone (process restart, OOM, etc.). Mark it failed and let a new
+            // trigger proceed — otherwise the system is wedged forever.
+            val ageMinutes = ChronoUnit.MINUTES.between(runningJob.startedAt, LocalDateTime.now())
+            if (ageMinutes > 60) {
+                log.warn("Recovering stale RUNNING job: jobId={}, ageMinutes={}, triggeredBy={}",
+                    runningJob.id, ageMinutes, runningJob.triggeredBy)
+                runningJob.markFailed("Job marked failed during recovery — exceeded 60-minute runtime threshold (likely orphaned by process restart)")
+                refreshJobRepository.update(runningJob)
+                // Fall through to start a fresh job
+            } else {
+                log.info("Skipping refresh trigger - job already running: jobId={}, triggeredBy={}, progress={}%",
+                    runningJob.id, runningJob.triggeredBy, runningJob.progressPercentage)
+                return runningJob
+            }
         }
 
         // Create job entity
@@ -280,11 +293,14 @@ open class MaterializedViewRefreshService(
         asset: com.secman.domain.Asset,
         overdueVulns: List<com.secman.domain.Vulnerability>
     ): OutdatedAssetMaterializedView {
-        // Calculate severity counts
-        val criticalCount = overdueVulns.count { it.cvssSeverity == "CRITICAL" }
-        val highCount = overdueVulns.count { it.cvssSeverity == "HIGH" }
-        val mediumCount = overdueVulns.count { it.cvssSeverity == "MEDIUM" }
-        val lowCount = overdueVulns.count { it.cvssSeverity == "LOW" }
+        // Calculate severity counts. cvssSeverity is stored title-case
+        // ("Critical", "High", "Medium", "Low") by VulnerabilityService.addVulnerabilityFromCli
+        // and by importers, so compare case-insensitively to avoid silently
+        // collapsing every count to zero.
+        val criticalCount = overdueVulns.count { it.cvssSeverity?.equals("CRITICAL", ignoreCase = true) == true }
+        val highCount = overdueVulns.count { it.cvssSeverity?.equals("HIGH", ignoreCase = true) == true }
+        val mediumCount = overdueVulns.count { it.cvssSeverity?.equals("MEDIUM", ignoreCase = true) == true }
+        val lowCount = overdueVulns.count { it.cvssSeverity?.equals("LOW", ignoreCase = true) == true }
 
         // Find oldest vulnerability
         val now = LocalDateTime.now()

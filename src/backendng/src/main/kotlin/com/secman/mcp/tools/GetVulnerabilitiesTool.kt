@@ -1,7 +1,10 @@
 package com.secman.mcp.tools
 
+import com.secman.domain.Asset
 import com.secman.domain.McpOperation
+import com.secman.domain.Vulnerability
 import com.secman.dto.mcp.McpExecutionContext
+import com.secman.repository.AssetRepository
 import com.secman.repository.VulnerabilityRepository
 import com.secman.service.VulnerabilityExceptionService
 import io.micronaut.data.model.Pageable
@@ -16,9 +19,10 @@ import java.time.format.DateTimeFormatter
  * Feature 052: MCP Access Control - Filters results based on delegated user's accessible assets
  */
 @Singleton
-class GetVulnerabilitiesTool(
+open class GetVulnerabilitiesTool(
     @Inject private val vulnerabilityRepository: VulnerabilityRepository,
-    @Inject private val vulnerabilityExceptionService: VulnerabilityExceptionService
+    @Inject private val vulnerabilityExceptionService: VulnerabilityExceptionService,
+    @Inject private val assetRepository: AssetRepository
 ) : McpTool {
 
     override val name = "get_vulnerabilities"
@@ -182,23 +186,35 @@ class GetVulnerabilitiesTool(
                 }
             }
 
+            // Eagerly hydrate the assets referenced by this page so we never touch
+            // a Hibernate proxy outside of an active session. Proxy.id is safe to read
+            // (stored on the proxy itself), but any other field would trigger lazy
+            // initialization and fail with "no session".
+            val assetIds = resultPage.content.mapNotNull { it.asset.id }.toSet()
+            val assetsById: Map<Long, Asset> = if (assetIds.isEmpty()) {
+                emptyMap()
+            } else {
+                assetRepository.findByIdIn(assetIds).associateBy { it.id!! }
+            }
+
             // Filter out excepted vulnerabilities unless explicitly included
-            val filteredContent = if (!includeExcepted) {
+            val filteredContent: List<Vulnerability> = if (!includeExcepted) {
                 val activeExceptions = vulnerabilityExceptionService.getActiveExceptions()
                 resultPage.content.filter { vuln ->
-                    val asset = vuln.asset
+                    val asset = assetsById[vuln.asset.id] ?: return@filter false
                     activeExceptions.none { ex -> ex.matches(vuln, asset) }
                 }
             } else {
                 resultPage.content
             }
 
-            // Map vulnerabilities to response format
+            // Map vulnerabilities to response format using hydrated assets
             val vulnerabilities = filteredContent.map { vuln ->
+                val asset = assetsById[vuln.asset.id]
                 mapOf(
                     "id" to vuln.id,
                     "assetId" to vuln.asset.id,
-                    "assetName" to vuln.asset.name,
+                    "assetName" to asset?.name,
                     "vulnerabilityId" to vuln.vulnerabilityId,
                     "cvssSeverity" to vuln.cvssSeverity,
                     "vulnerableProductVersions" to vuln.vulnerableProductVersions,

@@ -44,12 +44,21 @@ if [ "$USER_PROVIDED_HTTP" = false ]; then
 fi
 
 # --- Environment variables with Proton Pass URIs ---
-export SECMAN_ADMIN_NAME="${SECMAN_ADMIN_NAME:-pass://Test/SECMAN/SECMAN_ADMIN_NAME}"
-export SECMAN_ADMIN_PASS="${SECMAN_ADMIN_PASS:-pass://Test/SECMAN/SECMAN_ADMIN_PASS}"
+# Host + TLS flag (shared by both runs).
 export SECMAN_BACKEND_URL="${SECMAN_BACKEND_URL:-pass://Test/SECMAN/SECMAN_HOST}"
 export SECMAN_INSECURE="${SECMAN_INSECURE:-pass://Test/SECMAN/SECMAN_SSL_ACCEPT_ALL}"
 
-echo "=== Secman JavaScript Error Scanner (Proton Pass) ==="
+# Admin credentials.
+export SECMAN_ADMIN_NAME="${SECMAN_ADMIN_NAME:-pass://Test/SECMAN/SECMAN_ADMIN_NAME}"
+export SECMAN_ADMIN_PASS="${SECMAN_ADMIN_PASS:-pass://Test/SECMAN/SECMAN_ADMIN_PASS}"
+
+# Normal-user credentials. The vault field name for the username is
+# SECMAN_USER_NAME (not SECMAN_USER_USER); the env var the scanner consumes
+# is SECMAN_USER_USER for parity with tests/e2e/run-e2e.sh.
+export SECMAN_USER_USER="${SECMAN_USER_USER:-pass://Test/SECMAN/SECMAN_USER_NAME}"
+export SECMAN_USER_PASS="${SECMAN_USER_PASS:-pass://Test/SECMAN/SECMAN_USER_PASS}"
+
+echo "=== Secman JavaScript Error Scanner (Proton Pass, dual-role) ==="
 if [ "$DETECTED_LOCAL" = true ]; then
   echo "Detected local frontend at $LOCAL_FRONTEND_URL — targeting it instead of production."
 else
@@ -61,27 +70,61 @@ else
 fi
 
 # --- Determine if Proton Pass resolution is needed ---
-# If any env var still contains a pass:// URI, we need pass-cli run to resolve it.
-# If all values are already plain text, skip pass-cli run entirely.
 NEEDS_PASS=false
-for VAR in "$SECMAN_ADMIN_NAME" "$SECMAN_ADMIN_PASS" "$SECMAN_BACKEND_URL" "$SECMAN_INSECURE"; do
+for VAR in \
+  "$SECMAN_ADMIN_NAME" "$SECMAN_ADMIN_PASS" \
+  "$SECMAN_USER_USER"  "$SECMAN_USER_PASS" \
+  "$SECMAN_BACKEND_URL" "$SECMAN_INSECURE"; do
   case "$VAR" in
     pass://*) NEEDS_PASS=true; break ;;
   esac
 done
 
-run_scanner() {
-  INSECURE_LOWER="$(printf "%s" "$SECMAN_INSECURE" | tr "[:upper:]" "[:lower:]")"
-  case "$INSECURE_LOWER" in
-      true|1|yes)
-          export NODE_TLS_REJECT_UNAUTHORIZED=0
-          ;;
-  esac
-  node "$SCRIPT_DIR/js-error-scanner.mjs"
+# Inner script run inside `pass-cli run` (or directly when creds are pre-resolved).
+# Executes the scanner twice — once as admin, once as the normal user — and
+# aggregates exit codes (any failure -> overall failure).
+INNER_SCRIPT='
+set -u
+SCRIPT_DIR='"'"$SCRIPT_DIR"'"'
+
+INSECURE_LOWER="$(printf "%s" "$SECMAN_INSECURE" | tr "[:upper:]" "[:lower:]")"
+case "$INSECURE_LOWER" in
+    true|1|yes) export NODE_TLS_REJECT_UNAUTHORIZED=0 ;;
+esac
+
+OVERALL=0
+
+run_role() {
+    local role="$1" user="$2" pass="$3"
+    echo ""
+    echo "----------------------------------------------------------------"
+    echo " Run as ${role} (user=${user})"
+    echo "----------------------------------------------------------------"
+    SECMAN_LOGIN_USER="$user" \
+    SECMAN_LOGIN_PASS="$pass" \
+    SECMAN_RUN_LABEL="$role" \
+        node "$SCRIPT_DIR/js-error-scanner.mjs"
+    local rc=$?
+    echo "[$role] scanner exit code: $rc"
+    if [ $rc -ne 0 ] && [ $OVERALL -eq 0 ]; then
+        OVERALL=$rc
+    elif [ $rc -eq 2 ]; then
+        # Fatal trumps page-error.
+        OVERALL=2
+    fi
 }
 
+run_role "admin" "$SECMAN_ADMIN_NAME" "$SECMAN_ADMIN_PASS"
+run_role "user"  "$SECMAN_USER_USER"  "$SECMAN_USER_PASS"
+
+echo ""
+echo "================================================================"
+echo " Combined exit code: $OVERALL"
+echo "================================================================"
+exit $OVERALL
+'
+
 if [ "$NEEDS_PASS" = true ]; then
-  # Check Proton Pass CLI availability
   if ! command -v pass-cli &>/dev/null; then
     echo "ERROR: Proton Pass CLI (pass-cli) is not installed or not in PATH."
     echo "Install it with: brew install pass-cli"
@@ -91,18 +134,12 @@ if [ "$NEEDS_PASS" = true ]; then
   echo "Resolving credentials from Proton Pass..."
   echo ""
 
-  # Uses pass-cli run to resolve pass:// references, then invokes the scanner.
-  pass-cli run -- bash -c '
-INSECURE_LOWER="$(printf "%s" "$SECMAN_INSECURE" | tr "[:upper:]" "[:lower:]")"
-case "$INSECURE_LOWER" in
-    true|1|yes)
-        export NODE_TLS_REJECT_UNAUTHORIZED=0
-        ;;
-esac
-node "'"$SCRIPT_DIR"'/js-error-scanner.mjs"
-'
+  # Single pass-cli run resolves all four credentials + host + TLS flag at once,
+  # so the user is prompted at most once. The inner script then loops over both
+  # roles using the already-resolved values.
+  pass-cli run -- bash -c "$INNER_SCRIPT"
 else
   echo "Using pre-resolved credentials from environment."
   echo ""
-  run_scanner
+  bash -c "$INNER_SCRIPT"
 fi

@@ -3,28 +3,27 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# --- Check 1Password CLI availability ---
-if ! command -v op &>/dev/null; then
-  echo "ERROR: 1Password CLI (op) is not installed or not in PATH."
-  echo "Install it with: brew install 1password-cli"
+# --- Check Proton Pass CLI availability ---
+if ! command -v pass-cli &>/dev/null; then
+  echo "ERROR: Proton Pass CLI (pass-cli) is not installed or not in PATH."
+  echo "Install it with: brew install pass-cli"
   exit 1
 fi
 
-# --- Environment variables with 1Password URIs ---
-#export SECMAN_BASE_URL="${SECMAN_BASE_URL:-http://localhost:4321}"
-
-
-export SECMAN_BACKEND_URL="op://test/secman/SECMAN_HOST"
-export SECMAN_ADMIN_NAME="op://test/secman/SECMAN_ADMIN_NAME"
-export SECMAN_ADMIN_PASS="op://test/secman/SECMAN_ADMIN_PASS"
-export SECMAN_USER_USER="op://test/secman/SECMAN_USER_USER"
-export SECMAN_USER_PASS="op://test/secman/SECMAN_USER_PASS"
+# --- Environment variables resolved via pass-cli (Proton Pass) ---
+# Pass-CLI URIs follow: pass://<vault>/<item>/<field>
+# Field name in vault differs from env var name in some cases (notably SECMAN_USER_USER -> SECMAN_USER_NAME).
+export SECMAN_BACKEND_URL="pass://Test/SECMAN/SECMAN_BACKEND_BASE_URL"
+export SECMAN_BASE_URL="pass://Test/SECMAN/SECMAN_BACKEND_BASE_URL"
+export SECMAN_ADMIN_NAME="pass://Test/SECMAN/SECMAN_ADMIN_NAME"
+export SECMAN_ADMIN_PASS="pass://Test/SECMAN/SECMAN_ADMIN_PASS"
+export SECMAN_USER_USER="pass://Test/SECMAN/SECMAN_USER_NAME"
+export SECMAN_USER_PASS="pass://Test/SECMAN/SECMAN_USER_PASS"
 
 echo "=== Secman Playwright E2E Tests ==="
-echo "Base URL: ${SECMAN_BASE_URL}"
-echo "Resolving credentials from 1Password..."
+echo "Resolving credentials from Proton Pass (vault: Test, item: SECMAN)..."
 echo ""
 
-# --- Run Playwright with op resolving 1Password URIs ---
+# --- Run Playwright with pass-cli resolving Proton Pass URIs ---
 cd "$SCRIPT_DIR"
-op run -- npx playwright test "$@"
+pass-cli run -- npx playwright test "$@"
