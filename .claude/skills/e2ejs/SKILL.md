@@ -4,18 +4,50 @@ description: >
   JavaScript error scanner that visits all application pages and fixes errors.
   Starts local backend and frontend dev servers, then scans them via the shared
   URL https://secman.covestro.net (port 443), which resolves to 127.0.0.1 on
-  this host. Iteratively fixes every page error — restarting the backend after
-  each fix. Use this skill when the user says "run js error scanner",
-  "scan pages for errors", "e2ejs", "check all pages", "fix js errors", or
-  similar.
+  this host. Runs the scanner twice per iteration — once as admin
+  (SECMAN_ADMIN_NAME / SECMAN_ADMIN_PASS) and once as a normal user
+  (SECMAN_USER_NAME / SECMAN_USER_PASS) — and iteratively fixes every page
+  error in either role, restarting the backend after each fix. All
+  credentials and the host URL come from Proton Pass. Use this skill when the
+  user says "run js error scanner", "scan pages for errors", "e2ejs", "check
+  all pages", "fix js errors", or similar.
 context: fork
 ---
-# E2E JavaScript Error Scanner — Iterative Fix Loop
+# E2E JavaScript Error Scanner — Iterative Fix Loop (Dual-Role)
 
 You are an orchestration agent that brings up the full-stack development
 environment on loopback, scans every application page **via the shared URL
-`https://secman.covestro.net` (port 443)**, and **iteratively fixes every
-failure** until all pages are clean or you've exhausted the retry budget.
+`https://secman.covestro.net` (port 443)** as **two different users in
+sequence — admin first, then a normal user**, and **iteratively fixes every
+failure** until all pages are clean for both roles or you've exhausted the
+retry budget.
+
+## Dual-Role Run
+
+Each call to `tests/js-error-scanner-pp.sh` performs two scanner passes back-to-back:
+
+1. **Admin pass** — logs in with `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS`
+   (vault: `pass://Test/SECMAN/SECMAN_ADMIN_NAME` and `…/SECMAN_ADMIN_PASS`).
+2. **Normal-user pass** — logs in with `SECMAN_USER_USER` / `SECMAN_USER_PASS`
+   (vault field name for the username is `SECMAN_USER_NAME`:
+   `pass://Test/SECMAN/SECMAN_USER_NAME` and `…/SECMAN_USER_PASS`).
+
+Both passes hit the **same** host URL pulled from
+`pass://Test/SECMAN/SECMAN_HOST` (must be HTTPS — `https://secman.covestro.net`).
+
+The wrapper resolves all four credentials + host + TLS flag in a **single**
+`pass-cli run` so the user is prompted at most once per scanner invocation.
+
+The wrapper aggregates exit codes:
+- `0` if **both** passes are clean.
+- `1` if either pass had page-level errors.
+- `2` if either pass had a fatal error (host unreachable / login failed).
+
+Per-run output is labelled `[admin]` and `[user]` so you can attribute errors
+to the role that hit them. **Many errors will only show up under one role**
+(e.g. RBAC 403s on admin pages when scanned as the normal user, or
+ADMIN-only endpoints failing for the user) — that is the *point* of running
+both: each role exercises a different code path.
 
 ## Target Host — Fixed
 
@@ -120,9 +152,12 @@ script's `USER_PROVIDED_HTTP=true` branch in effect and suppresses the
 `localhost:4321` auto-substitution that would otherwise trigger the moment
 the Astro dev server opens its port.
 
-**Important environment variables** — `SECMAN_ADMIN_NAME` and
-`SECMAN_ADMIN_PASS` are resolved by `js-error-scanner-pp.sh` itself via
-Proton Pass. Do NOT set them manually.
+**Important environment variables** — `SECMAN_ADMIN_NAME`,
+`SECMAN_ADMIN_PASS`, `SECMAN_USER_USER` (vault field `SECMAN_USER_NAME`),
+`SECMAN_USER_PASS`, `SECMAN_BACKEND_URL` (= `SECMAN_HOST`), and
+`SECMAN_INSECURE` are all resolved by `js-error-scanner-pp.sh` itself via
+Proton Pass in a single `pass-cli run`. Do NOT set them manually unless you
+are deliberately bypassing Proton Pass for a one-off debug run.
 
 **Exit code interpretation:**
 - `0` — All pages clean, no errors found. Done!
@@ -146,7 +181,8 @@ Classify each error:
 | Output pattern                                             | Category     | Action                                                                               |
 | ---------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------ |
 | `[HTTP 5xx]` (500, 502, 503)                               | **backend**  | Fix the backend controller/service that serves this endpoint                         |
-| `[HTTP 403]`                                               | **backend**  | Check RBAC — missing `@Secured` annotation or role mismatch                         |
+| `[HTTP 403]` (admin run only)                              | **backend**  | Check RBAC — missing `@Secured` annotation or role mismatch                         |
+| `[HTTP 403]` on `/admin/*` page (user run only)            | **expected** | Normal user is correctly denied access to ADMIN-only pages — verify the page itself renders a sensible "forbidden" UI rather than crashing, but the 403 is **not** a bug. If the page crashes (`[UNCAUGHT EXCEPTION]` or blank shell), THAT is the bug to fix |
 | `[HTTP 404]` on `/api/*`                                   | **backend**  | Missing endpoint — add controller method or fix route                               |
 | `[UNCAUGHT EXCEPTION]` with React/JS stack                 | **frontend** | Fix the component (hydration, props, data shape)                                     |
 | `[CONSOLE ERROR]` with "hydration"                         | **frontend** | SSR/client mismatch in Astro/React component                                         |
@@ -233,14 +269,17 @@ error count decreased.
 - Stop backend and frontend via `./scriptpp/stopbackenddev.sh` and
   `./scriptpp/stopfrontenddev.sh` (never raw `kill`).
 - Leave any user-managed local reverse proxy alone.
-- Print a summary table:
+- Print a summary table with **per-role** columns (each iteration runs both roles):
 
 ```
-| Iteration | Pages Scanned | Clean | Errors | Timeout | Fix Applied                    |
-|-----------|---------------|-------|--------|---------|--------------------------------|
-| 1         | 48            | 44    | 4      | 0       | backend: AssetController.kt    |
-| 2         | 48            | 47    | 1      | 0       | frontend: VulnTable.tsx         |
-| 3         | 48            | 48    | 0      | 0       | — (all clean)                  |
+| Iter | Role  | Pages | Clean | Errors | Timeout | Fix Applied                  |
+|------|-------|-------|-------|--------|---------|------------------------------|
+| 1    | admin | 58    | 54    | 4      | 0       | backend: AssetController.kt  |
+| 1    | user  | 58    | 53    | 5      | 0       | (errors carried into iter 2) |
+| 2    | admin | 58    | 58    | 0      | 0       | —                            |
+| 2    | user  | 58    | 56    | 2      | 0       | frontend: VulnTable.tsx      |
+| 3    | admin | 58    | 58    | 0      | 0       | —                            |
+| 3    | user  | 58    | 58    | 0      | 0       | — (all clean)                |
 ```
 
 - If there are still failures, list each one with the file and line where you

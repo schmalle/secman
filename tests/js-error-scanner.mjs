@@ -8,15 +8,19 @@ const require = createRequire(join(__dirname, 'e2e', 'package.json'));
 const { chromium } = require('playwright');
 
 // --- Environment variables ---
-const USERNAME = process.env.SECMAN_ADMIN_NAME;
-const PASSWORD = process.env.SECMAN_ADMIN_PASS;
+// SECMAN_LOGIN_USER/SECMAN_LOGIN_PASS are role-agnostic and the canonical
+// inputs. SECMAN_ADMIN_NAME/SECMAN_ADMIN_PASS remain as a backward-compat
+// fallback so existing single-role callers keep working unchanged.
+const USERNAME = process.env.SECMAN_LOGIN_USER || process.env.SECMAN_ADMIN_NAME;
+const PASSWORD = process.env.SECMAN_LOGIN_PASS || process.env.SECMAN_ADMIN_PASS;
 const BASE_URL = process.env.SECMAN_BACKEND_URL;
 const INSECURE = process.env.SECMAN_INSECURE;
+const RUN_LABEL = process.env.SECMAN_RUN_LABEL || '';
 
 if (!USERNAME || !PASSWORD || !BASE_URL) {
   console.error('ERROR: Missing required environment variables.');
-  console.error('  SECMAN_ADMIN_NAME  = login username');
-  console.error('  SECMAN_ADMIN_PASS  = login password');
+  console.error('  SECMAN_LOGIN_USER  = login username (or SECMAN_ADMIN_NAME)');
+  console.error('  SECMAN_LOGIN_PASS  = login password (or SECMAN_ADMIN_PASS)');
   console.error('  SECMAN_BACKEND_URL = secman instance URL (e.g. https://secman.example.com)');
   process.exit(2);
 }
@@ -144,6 +148,9 @@ async function main() {
   const totalPages = PAGES.length;
 
   console.log(`Host: ${host}`);
+  if (RUN_LABEL) {
+    console.log(`Run:  ${RUN_LABEL} (user=${USERNAME})`);
+  }
   if (ignoreHTTPS) {
     console.log('SSL: Accepting self-signed certificates');
   }
@@ -335,8 +342,9 @@ async function main() {
   }
 
   console.log('');
+  const runPrefix = RUN_LABEL ? `[${RUN_LABEL}] ` : '';
   console.log(
-    `Summary: ${results.length} pages scanned | ${cleanPages.length} clean | ${errorPages.length} errors | ${timeoutPages.length} timeout` +
+    `${runPrefix}Summary: ${results.length} pages scanned | ${cleanPages.length} clean | ${errorPages.length} errors | ${timeoutPages.length} timeout` +
     (expiredPages.length > 0 ? ` | ${expiredPages.length} session expired` : '')
   );
 

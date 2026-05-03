@@ -172,12 +172,18 @@ export default function RequirementManagement() {
             } else {
                 // Fetch current requirements
                 const response = await authenticatedGet('/api/requirements');
+                if (!response.ok) {
+                    setRequirements([]);
+                    setIsViewingHistorical(false);
+                    return;
+                }
                 const data = await response.json();
-                setRequirements(data);
+                setRequirements(Array.isArray(data) ? data : []);
                 setIsViewingHistorical(false);
             }
         } catch (error) {
             console.error('Error fetching requirements:', error);
+            setRequirements([]);
         }
     };
 
@@ -204,21 +210,31 @@ export default function RequirementManagement() {
 
     const fetchAllUseCases = async () => {
         try {
-            const response = await authenticatedGet('/api/usecases'); // Assuming this endpoint exists
+            const response = await authenticatedGet('/api/usecases');
+            if (!response.ok) {
+                setAllUseCases([]);
+                return;
+            }
             const data = await response.json();
-            setAllUseCases(data);
+            setAllUseCases(Array.isArray(data) ? data : []);
         } catch (error) {
             console.error('Error fetching all use cases:', error);
+            setAllUseCases([]);
         }
     };
 
     const fetchAllNorms = async () => {
         try {
             const response = await authenticatedGet('/api/norms');
+            if (!response.ok) {
+                setAllNorms([]);
+                return;
+            }
             const data = await response.json();
-            setAllNorms(data);
+            setAllNorms(Array.isArray(data) ? data : []);
         } catch (error) {
             console.error('Error fetching all norms:', error);
+            setAllNorms([]);
         }
     };
 
