@@ -1,572 +1,171 @@
-# SecMan - Security Management Platform
+# SecMan
 
-![Landing Page](docs/landing.png)
-
-**A comprehensive security requirement, vulnerability, and risk assessment management platform**
+Security requirement, vulnerability and risk-assessment platform.
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![Status: Alpha](https://img.shields.io/badge/Status-Alpha-yellow.svg)]()
 
----
+![Landing Page](docs/landing.png)
 
-## Overview
+## What it does
 
-SecMan is a full-stack security management platform that helps organizations manage security requirements, track vulnerabilities, assess risks, and maintain compliance. It provides vulnerability management, asset tracking, workgroup-based access control, AI assistant integration via MCP, and enterprise authentication with OAuth2/OIDC and passkeys.
+- Security requirement lifecycle (versioned releases: PREPARATION → ALIGNMENT → ACTIVE → ARCHIVED), Excel/Word/CSV export, automated translation (OpenRouter, 20+ languages).
+- Vulnerability management: CrowdStrike Falcon import, exception-request workflow, statistics, heatmap, materialized view for fast outdated-asset queries (<2s @ 10k assets).
+- Asset inventory: Nmap/Masscan import, AD/cloud metadata, criticality, workgroup-scoped access.
+- Risk register, demand classification, compliance-framework mapping (SOC2, ISO 27001, NIST).
+- AuthN: local (BCrypt) + OAuth2/OIDC + Passkey/WebAuthn + optional MFA.
+- AuthZ: 9-role RBAC with row-level filtering on assets (workgroup, ownership, AWS account, AD domain, sharing rules).
+- AI integration: 55-tool MCP server (Streamable HTTP) for Claude Desktop/Code and other MCP clients, with mandatory user delegation.
+- Email: SMTP/SES with retry + audit, Thymeleaf HTML templates, escalation tiers.
 
-**Key Capabilities:**
+## Stack
 
-- Security requirements management with version control and release tracking
-- Vulnerability management with CrowdStrike Falcon integration
-- Asset inventory with network scan import (Nmap, Masscan)
-- Risk assessment and demand classification
-- Multi-tenant workgroup-based access control
-- AI assistant integration via Model Context Protocol (MCP)
-- Multi-format export (Excel, Word, CSV) with automated translation
-- Enterprise authentication (JWT, OAuth2/OIDC, Passkeys/WebAuthn)
-- Email notifications with configurable SMTP providers
-- Admin summary reports and vulnerability statistics
+Kotlin 2.3.21 / Java 21 · Micronaut 4.10 · Hibernate JPA · Astro 6.2 + React 19 · Bootstrap 5.3 · MariaDB 11.4 · Gradle 9.5.0 (Kotlin DSL) · Picocli 4.7.7 · AWS SDK v2.
 
-## Technology Stack
+## Quick Start (development)
 
-- **Backend**: Micronaut 4.10 + Kotlin 2.3.21 (Java 21)
-- **Frontend**: Astro 6.2 + React 19 + Bootstrap 5.3
-- **Database**: MariaDB 11.4 with Hibernate JPA
-- **Build System**: Gradle 9.5.0 (Kotlin DSL)
-- **CLI Tools**: Kotlin/Picocli for CrowdStrike queries, notifications, and data management
-- **Authentication**: JWT with OAuth2/OIDC and Passkeys (WebAuthn)
-
-## Features
-
-### Requirements Management
-
-- Create, edit, and organize security requirements
-- Version control with release management (PREPARATION, ALIGNMENT, ACTIVE, ARCHIVED)
-- Release comparison and diff visualization
-- Point-in-time requirement snapshots
-- Excel and Word export with customizable templates
-- Automated translation (20+ languages via OpenRouter API)
-- Relationship tracking (requirements, norms, use cases, standards)
-
-### Vulnerability Management
-
-- Import vulnerabilities from Excel/CSV or CrowdStrike Falcon API
-- CVE tracking with CVSS severity scoring
-- Vulnerability exception requests with approval workflow
-- Auto-approval logic for exception requests
-- Workgroup-scoped, account-scoped, and domain-scoped vulnerability views
-- Vulnerability statistics dashboard
-- Days-open tracking and trending
-- Vulnerability lifecycle management
-- Real-time SSE updates for exception request badge counts
-- Outdated assets materialized view for fast performance (<2s for 10K+ assets)
-- Configurable vulnerability settings
-
-### Asset Management
-
-- Import assets from Nmap and Masscan XML scans
-- Network service discovery and port tracking
-- Asset metadata (cloud account ID, cloud instance ID, AD domain, OS version)
-- Workgroup-based asset assignment with nested hierarchy support
-- Criticality levels (LOW, MEDIUM, HIGH, CRITICAL) for assets and workgroups
-- Vulnerability correlation per asset
-- Asset profile views with comprehensive details
-- Outdated asset tracking with automated email notifications
-- Bulk asset operations (delete, export)
-
-### Risk Assessment
-
-- Risk register with assessment tracking
-- Demand classification for security reviews
-- Standards and norms management
-- Alignment reviews with external stakeholders (token-based access)
-
-### Access Control & Multi-Tenancy
-
-- **Workgroups**: Organize users and assets into isolated groups with nested hierarchy
-- **User Mapping**: CSV/Excel upload for AWS account and AD domain associations
-- **Role-Based Access Control (RBAC)**:
-  - `USER` - Basic access to assigned workgroups
-  - `ADMIN` - Full system administration
-  - `VULN` - Vulnerability management permissions
-  - `RELEASE_MANAGER` - Release creation and management
-  - `SECCHAMPION` - Security champion access
-  - `REQ` - Requirements editor
-  - `REQADMIN` - Requirements admin (create/delete releases, alignment decisions)
-  - `RISK` - Risk assessment access (read/write/execute risk assessments)
-  - `REPORT` - Report generation and viewing
-- **Row-Level Security**: Users see only their workgroup resources + owned items
-- **Last Admin Protection**: System prevents deletion/demotion of the last ADMIN user
-- **Unified Access Control**: AWS account ID and AD domain-based asset filtering
-
-### Authentication
-
-- Local username/password with BCrypt hashing
-- OAuth2/OIDC with configurable identity providers (Azure AD, Google, etc.)
-- Passkeys/WebAuthn for passwordless authentication
-- MFA toggle support
-- Session management with JWT tokens
-
-### AI Assistant Integration (MCP)
-
-- **Model Context Protocol** support for AI assistants (Claude, etc.)
-- Streamable HTTP transport (direct connection, no middleware required)
-- 55 MCP tools for requirements, assets, vulnerabilities, scans, releases, user mappings, workgroups, AWS account sharing, vulnerability heatmap, and more
-- User delegation (act on behalf of users)
-- API key management with granular permissions
-- Rate limiting and session management
-- Audit logging for all MCP operations
-
-### CLI Tools
-
-- **CrowdStrike Vulnerability Query** (`query servers`):
-  Query Falcon API with flexible filters (device type, severity, days open)
-- **Email Notifications** (`send-notifications`):
-  Outdated asset and new vulnerability notifications with escalation
-- **Admin Summary** (`send-admin-summary`):
-  Generate and send admin summary reports
-- **User Mapping Management** (`manage-user-mappings`):
-  Manage AWS account and AD domain mappings. The `list` subcommand supports
-  `--send-email` to distribute the statistics report to all ADMIN and REPORT
-  users in a single invocation.
-- **Workgroup Management** (`manage-workgroups`):
-  Pattern-based asset assignment to workgroups
-- **Manual Vulnerability Entry** (`add-vulnerability`):
-  Add or update vulnerabilities via CLI
-- **AWS/Domain Commands** (`add-aws`, `add-domain`):
-  Add AWS accounts and AD domains to assets
-- **Requirement Management** (`add-requirement`, `export-requirements`, `delete-all-requirements`):
-  CLI-based requirement operations
-- **S3 Import** (`import-s3`):
-  Import data from S3 buckets
-- **Configuration** (`config`):
-  Manage CLI configuration
-- **Monitor** (`monitor`):
-  System monitoring utilities
-
-### Email Notifications
-
-- Configurable email providers (SMTP, AWS SES)
-- Automated outdated asset notifications (2-level escalation: professional, then urgent)
-- New vulnerability notifications (opt-in via user preferences)
-- Admin summary emails with system statistics
-- Email aggregation (one email per owner with all their assets)
-- Thymeleaf HTML templates with plain-text fallback
-- SMTP with retry logic and audit logging
-- Test email account management
-- User preference management UI
-
-### Import/Export
-
-- Excel import for requirements, vulnerabilities, user mappings, assets
-- CSV import for user mappings (auto-detect delimiter/encoding)
-- Nmap/Masscan XML import for network scans
-- S3-based imports for automated pipelines
-- Export to Excel/Word with release selection
-- Multi-language export (automated translation)
-- Release comparison export with diff highlighting
-- Notification log export to CSV (admin only)
-- Vulnerability exception export
-
-### Admin Features
-
-- Application settings management
-- Identity provider configuration (OAuth2/OIDC)
-- Email provider configuration
-- CrowdStrike Falcon configuration
-- Maintenance banner management
-- MCP API key management
-- Translation configuration
-- Notification settings
-- Vulnerability configuration
-- User management with role assignment
-- User mapping management
-- Config bundle import/export
-- Materialized view refresh control
-
-## Quick Start
-
-### Prerequisites
-
-- Java 21 (JDK 21, Amazon Corretto recommended)
-- Node.js 20+
-- MariaDB 11.4+
-- Gradle 9.5+ (wrapper included)
-- Git
-- Docker (optional, for integration tests)
-
-### Installation
+Prereqs: Java 21, Node 20+, MariaDB 11.4+, Git.
 
 ```bash
-# Clone repository
-git clone https://github.com/schmalle/secman.git
-cd secman
-
-# Create database
-cd scripts/install/db
-./installdb.sh
-cd ../../..
-
-# Start backend (in one terminal)
-cd src/backendng
-./gradlew run
-
-# Start frontend (in another terminal)
-cd src/frontend
-npm install
-npm run dev
+git clone https://github.com/schmalle/secman.git && cd secman
+cd scriptpp/install/db && ./installdb.sh && cd -    # creates DB 'secman' / user 'secman'/'CHANGEME'
+./scriptpp/startbackenddev.sh                       # canonical dev start (pass-cli wraps gradle)
+cd src/frontend && npm install && npm run dev       # http://localhost:4321
 ```
 
-### Default Credentials
+On first startup the backend auto-creates `admin` with a 20-char random password printed once to stdout (look for `DEFAULT ADMIN USER CREATED`). Copy it immediately. Change it after first login.
 
-On first startup (when no users exist), a default admin user is auto-created:
+> **Production deploys** must replace the default DB password and generate `JWT_SECRET`, `SECMAN_ENCRYPTION_PASSWORD`, `SECMAN_ENCRYPTION_SALT`. See `docs/DEPLOYMENT.md`.
 
-| Username | Password                       | Roles       |
-| -------- | ------------------------------ | ----------- |
-| `admin`  | *randomly generated (20 chars)* | ADMIN, USER |
-
-The auto-generated password is printed to the **backend console output** on first startup. Look for the `DEFAULT ADMIN USER CREATED` log message and copy the password immediately.
-
-**IMPORTANT:** Change the default password immediately after first login in production!
-
-## Development
-
-### Project Structure
+## Layout
 
 ```
-secman/
-├── src/
-│   ├── backendng/          # Kotlin/Micronaut backend
-│   │   ├── src/main/kotlin/com/secman/
-│   │   │   ├── controller/ # REST controllers (62 controllers)
-│   │   │   ├── domain/     # JPA entities
-│   │   │   ├── repository/ # Data repositories
-│   │   │   ├── service/    # Business logic (97 services)
-│   │   │   ├── config/     # Configuration classes
-│   │   │   ├── dto/        # Data transfer objects
-│   │   │   ├── filter/     # HTTP filters
-│   │   │   └── mcp/        # MCP tools and registry
-│   │   └── src/test/       # Backend tests (unit + integration)
-│   ├── cli/                # Kotlin CLI tools
-│   │   └── src/main/kotlin/com/secman/cli/
-│   │       ├── commands/   # CLI commands (25 commands)
-│   │       └── service/    # Business logic
-│   ├── frontend/           # Astro + React frontend
-│   │   ├── src/
-│   │   │   ├── components/ # React components
-│   │   │   ├── pages/      # Astro pages (69 pages)
-│   │   │   └── services/   # API clients
-├── docs/                   # Documentation
-│   ├── ARCHITECTURE.md     # System architecture
-│   ├── CLI.md              # CLI reference
-│   ├── DEPLOYMENT.md       # Production deployment
-│   ├── ENVIRONMENT.md      # Environment variables
-│   ├── MCP.md              # MCP integration guide
-│   ├── TESTING.md          # Test guide
-│   ├── CROWDSTRIKE_IMPORT.md # CrowdStrike import details
-│   ├── TROUBLESHOOTING.md  # Troubleshooting
-│   ├── S3_USER_MAPPING_IMPORT.md # S3 import guide
-│   └── SKILLS_AND_AGENTS.md # Skills & agents reference
-├── scripts/                # Utility scripts
-└── specs/                  # Feature specifications
+src/
+  backendng/   Kotlin/Micronaut: domain → repository → service → controller, mcp/, dto/, filter/
+  frontend/   Astro pages + React islands, services/ (Axios)
+  cli/        Picocli commands + service/
+docs/         see below
+scriptpp/     ALL scripts live here (./scripts is deprecated)
+specs/        historical implementation plans (frozen)
 ```
 
-### Common Commands
+## Common commands
 
 ```bash
-# Backend
-cd src/backendng
-./gradlew build              # Build (includes tests)
-./gradlew run                # Start server (port 8080)
+# Build & run
+./gradlew build                          # full build incl. unit + integration tests
+./scriptpp/startbackenddev.sh            # backend dev (port 8080)
+cd src/frontend && npm run dev           # frontend dev (port 4321)
 
-# Frontend
-cd src/frontend
-npm run dev                  # Dev server (port 4321)
-npm run build                # Production build
-
-# CLI Tools (from repository root)
-./gradlew :cli:shadowJar                                           # Build standalone JAR
-./scriptpp/secman help                                                   # Show all commands
-./scriptpp/secman query servers --dry-run                                # Query CrowdStrike
-./scriptpp/secman send-notifications --dry-run --verbose                 # Email notifications
-./scriptpp/secman send-admin-summary --dry-run                           # Admin summary
-./scriptpp/secman manage-workgroups list                                 # List workgroups
-./scriptpp/secman manage-user-mappings --help                            # User mappings
-./scriptpp/secman manage-user-mappings list --send-email --dry-run       # Preview stats email
-./scriptpp/secman manage-user-mappings list --send-email                 # Email stats to admins
-./scriptpp/secman add-vulnerability --help                               # Add vulnerability
-./scriptpp/secman export-requirements --format xlsx                      # Export requirements
+# CLI (build once, then use wrapper)
+./gradlew :cli:shadowJar
+./scriptpp/secman help
+./scriptpp/secman query servers --dry-run
+./scriptpp/secman send-notifications --dry-run --verbose
+./scriptpp/secman manage-user-mappings list --send-email
+./scriptpp/secman add-vulnerability --hostname host --cve CVE-2024-1234 --criticality HIGH
+./scriptpp/secman export-requirements --format xlsx
 
 # Tests
-./gradlew build                                         # All tests
-./gradlew :backendng:test --tests "*ServiceTest*"      # Unit tests only
-./gradlew :backendng:test --tests "*IntegrationTest*"  # Integration tests (Docker required)
-./gradlew :cli:test                                    # CLI tests
+./gradlew :backendng:test --tests "*ServiceTest*"      # unit
+./gradlew :backendng:test --tests "*IntegrationTest*"  # integration (Docker)
+./gradlew :cli:test
+./tests/e2e/run-e2e.sh                                 # Playwright (pass-cli secrets)
 ```
 
-## API Documentation
+## API reference
 
-### Authentication
+All endpoints under `/api/*` require `Authorization: Bearer <jwt>` unless noted. SSE endpoints take JWT as `?token=` (EventSource limitation).
 
-All endpoints require JWT authentication via `Authorization: Bearer <token>` header unless noted otherwise.
+| Endpoint | Method | Roles |
+|---|---|---|
+| `/api/auth/login` | POST | public |
+| `/api/requirements`, `.../export/xlsx` | GET | auth |
+| `/api/releases`, `.../compare`, `.../{id}` | GET/POST/DELETE | auth (write: ADMIN/REQADMIN; status: ADMIN/RELEASE_MANAGER) |
+| `/api/assets`, `.../bulk`, `.../export` | GET/POST/DELETE | auth (bulk: ADMIN) |
+| `/api/vulnerabilities/current`, `.../cli-add` | GET/POST | ADMIN, VULN |
+| `/api/vulnerability-exception-requests[/pending/count]`, `/api/vulnerability-exceptions` | various | auth |
+| `/api/outdated-assets`, `/api/materialized-view-refresh/trigger` | GET/POST | auth (refresh: ADMIN) |
+| `/api/notification-preferences`, `/api/notification-logs` | GET/PUT | auth (logs: ADMIN) |
+| `/api/account-vulns`, `/api/wg-vulns`, `/api/domain-vulns` | GET | auth |
+| `/api/workgroups[/{id}/{users,assets,aws-accounts}]` | GET/POST/DELETE | ADMIN |
+| `/api/aws-account-sharing[/{id}]` | GET/POST/DELETE | ADMIN |
+| `/api/vulnerability-heatmap[/refresh]`, `/api/external/vulnerability-heatmap` | GET/POST | auth/API key |
+| `/api/import/upload-{xlsx,nmap-xml,vulnerability-xlsx,user-mappings[-csv],assets-xlsx}` | POST | ADMIN |
+| `/api/user-mappings[/...]` | GET/POST/PUT/DELETE | ADMIN |
+| `/api/identity-providers[/{id}[/test]]` | GET/POST/PUT/DELETE | ADMIN |
+| `/api/maintenance-banners[/active|/{id}]` | GET/POST/PUT/DELETE | ADMIN (active: public) |
+| `/api/users/profile[/change-password,mfa-{status,toggle}]` | GET/PUT | auth |
+| `/oauth/{authorize,callback}` | GET | public |
+| `/mcp` | POST | MCP API key + delegation |
+| `/health`, `/memory` | GET | public |
 
-**Login:**
+Full reference: `CLAUDE.md`.
 
+## MCP integration (AI assistants)
+
+Claude Code:
 ```bash
-POST /api/auth/login
-{
-  "username": "adminuser",
-  "password": "password"
-}
+claude mcp add --transport http secman http://localhost:8080/mcp \
+  --header "X-MCP-API-Key: sk-..." \
+  --header "X-MCP-User-Email: you@company.com"
 ```
 
-### Key Endpoints
-
-| Endpoint                                              | Method  | Description                      | Access                 |
-| ----------------------------------------------------- | ------- | -------------------------------- | ---------------------- |
-| `/api/auth/login`                                     | POST    | Authenticate user                | Public                 |
-| `/api/requirements`                                   | GET     | List requirements                | Authenticated          |
-| `/api/requirements/export/xlsx`                       | GET     | Export to Excel                  | Authenticated          |
-| `/api/releases`                                       | GET/POST| List/create releases             | ADMIN, RELEASE_MANAGER |
-| `/api/releases/compare`                               | GET     | Compare releases                 | Authenticated          |
-| `/api/assets`                                         | GET/POST| List/create assets               | Authenticated          |
-| `/api/assets/bulk`                                    | DELETE  | Bulk delete assets               | ADMIN                  |
-| `/api/assets/export`                                  | GET     | Export assets                    | Authenticated          |
-| `/api/vulnerabilities/current`                        | GET     | Current vulnerabilities          | ADMIN, VULN            |
-| `/api/vulnerabilities/cli-add`                        | POST    | Add vulnerability via CLI        | ADMIN, VULN            |
-| `/api/vulnerability-exception-requests`               | POST    | Create exception request         | Authenticated          |
-| `/api/vulnerability-exception-requests/pending/count` | GET     | Badge count for pending requests | ADMIN, VULN            |
-| `/api/vulnerability-exceptions`                       | GET     | List active exceptions           | Authenticated          |
-| `/api/outdated-assets`                                | GET     | List outdated assets (paginated) | Authenticated          |
-| `/api/materialized-view-refresh/trigger`              | POST    | Trigger view refresh             | ADMIN                  |
-| `/api/notification-preferences`                       | GET/PUT | Manage notification preferences  | Authenticated          |
-| `/api/notification-logs`                              | GET     | Notification audit logs          | ADMIN                  |
-| `/api/account-vulns`                                  | GET     | Account-scoped vulnerabilities   | USER                   |
-| `/api/workgroups`                                     | GET/POST| List/create workgroups           | ADMIN                  |
-| `/api/aws-account-sharing`                            | GET/POST| List/create AWS account sharing  | ADMIN                  |
-| `/api/aws-account-sharing/{id}`                       | DELETE  | Remove AWS account sharing rule  | ADMIN                  |
-| `/api/vulnerability-heatmap`                          | GET     | Vulnerability heatmap            | Authenticated          |
-| `/api/vulnerability-heatmap/refresh`                  | POST    | Recalculate heatmap              | ADMIN                  |
-| `/api/external/vulnerability-heatmap`                 | GET     | External heatmap (API key)       | API Key                |
-| `/api/import/upload-nmap-xml`                         | POST    | Import Nmap scan                 | ADMIN                  |
-| `/api/import/upload-vulnerability-xlsx`               | POST    | Import vulnerabilities           | ADMIN                  |
-| `/api/import/upload-user-mappings-csv`                | POST    | Import user mappings             | ADMIN                  |
-| `/api/import/upload-assets-xlsx`                      | POST    | Import assets                    | ADMIN                  |
-| `/api/user-mappings`                                  | GET/POST| Manage user mappings             | ADMIN                  |
-| `/api/identity-providers`                             | GET/POST| Manage OAuth/OIDC providers      | ADMIN                  |
-| `/api/maintenance-banners`                            | GET/POST| Manage maintenance banners       | ADMIN                  |
-| `/api/maintenance-banners/active`                     | GET     | Active banners                   | Public                 |
-| `/api/users/profile`                                  | GET     | User profile                     | Authenticated          |
-| `/api/users/profile/mfa-toggle`                       | PUT     | Toggle MFA                       | Authenticated          |
-| `/oauth/authorize`                                    | GET     | OAuth2 authorization             | Public                 |
-| `/oauth/callback`                                     | GET     | OAuth2 callback                  | Public                 |
-| `/mcp`                                                | POST    | MCP Streamable HTTP endpoint     | MCP API Key            |
-| `/health`                                             | GET     | Health check                     | Public                 |
-
-See [CLAUDE.md](CLAUDE.md) for the complete API reference.
-
-## Database
-
-- **Engine:** MariaDB 11.4
-- **Database:** `secman`
-- **User:** `secman` / `CHANGEME`
-- **Port:** 3306
-- **Schema:** Auto-migrated via Hibernate
-
-**Access:**
-
-```bash
-# Local
-mysql -u secman -pCHANGEME secman
-
-# Reset database (development only)
-./scriptpp/reset_database.sh
+Claude Desktop (`claude_desktop_config.json`):
+```json
+{ "mcpServers": { "secman": {
+    "url": "http://localhost:8080/mcp",
+    "headers": { "X-MCP-API-Key": "sk-...", "X-MCP-User-Email": "you@company.com" }
+} } }
 ```
+
+`X-MCP-User-Email` is **required** for all `tools/list` and `tools/call`. Effective permissions = intersection of API-key permissions ∩ delegated user's role-implied permissions. See `docs/MCP.md`.
 
 ## Configuration
 
-**Backend:** `src/backendng/src/main/resources/application.yml`
-**Frontend:** `src/frontend/astro.config.mjs`
-**CLI:** Environment variables and `./scriptpp/secman config`
-
-### Key Environment Variables
+Backend reads `src/backendng/src/main/resources/application.yml` and env vars. Minimum required for production:
 
 ```bash
-# Database
 DB_CONNECT=jdbc:mariadb://localhost:3306/secman
-DB_PASSWORD=CHANGEME
-
-# JWT
-JWT_SECRET=your-secret-key-here
-
-# Encryption (for sensitive config storage)
-SECMAN_ENCRYPTION_PASSWORD=your-encryption-password
-SECMAN_ENCRYPTION_SALT=your-encryption-salt
-
-# OAuth (optional)
-GITHUB_CLIENT_ID=your-github-client-id
-GITHUB_CLIENT_SECRET=your-github-secret
-
-# Translation (optional)
-OPENROUTER_API_KEY=your-openrouter-key
-
-# CrowdStrike API (for CLI)
-FALCON_CLIENT_ID=your-client-id
-FALCON_CLIENT_SECRET=your-client-secret
-FALCON_BASE_URL=https://api.crowdstrike.com
-
-# Email (SMTP)
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USERNAME=noreply@yourdomain.com
-SMTP_PASSWORD=app_password
-
-# CLI Authentication
-SECMAN_ADMIN_NAME=adminuser
-SECMAN_ADMIN_PASS=your-password
+DB_PASSWORD=...
+JWT_SECRET=$(openssl rand -base64 32)
+SECMAN_ENCRYPTION_PASSWORD=$(openssl rand -hex 32)
+SECMAN_ENCRYPTION_SALT=$(openssl rand -hex 8)
+SECMAN_BACKEND_URL=https://api.example.com
+FRONTEND_URL=https://secman.example.com
 ```
 
-See [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md) for the complete environment variable reference.
-
-## MCP Integration (AI Assistants)
-
-Connect Claude Desktop, Claude Code, or other MCP clients:
-
-### Claude Code (Recommended)
-
-```bash
-claude mcp add --transport http secman http://localhost:8080/mcp \
-  --header "X-MCP-API-Key: sk-your-api-key" \
-  --header "X-MCP-User-Email: your.email@company.com"
-```
-
-### Claude Desktop
-
-```json
-{
-  "mcpServers": {
-    "secman": {
-      "url": "http://localhost:8080/mcp",
-      "headers": {
-        "X-MCP-API-Key": "sk-your-api-key",
-        "X-MCP-User-Email": "your.email@company.com"
-      }
-    }
-  }
-}
-```
-
-See [docs/MCP.md](docs/MCP.md) for the complete MCP setup guide, fallback options, and user delegation.
-
-## Development Workflow
-
-1. **Implement features** following security-first principles
-2. **Follow RBAC patterns** for access control
-3. **Ensure API backward compatibility**
-4. **Run `./gradlew build`** to verify no errors
-5. **Commit** with conventional commit messages
-6. **Review security implications** before completion
-
-### Conventional Commits
-
-```bash
-feat(vulnerability): add CVE severity filtering
-fix(asset): correct workgroup permission check
-docs(readme): update installation instructions
-test(release): add comparison endpoint tests
-```
-
-### Git Workflow
-
-```bash
-# Create feature branch
-git checkout -b 024-feature-name
-
-# Implement feature
-# ... implement, test, review security ...
-
-# Commit with conventional commits
-git add .
-git commit -m "feat(scope): description"
-
-# Push and create PR
-git push origin 024-feature-name
-```
+Full reference (SMTP, OAuth retry, memory tuning, debug logging, vuln settings): `docs/ENVIRONMENT.md`.
 
 ## Documentation
 
-Comprehensive documentation is available in the `docs/` directory:
+| Document | What's in it |
+|---|---|
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Layered architecture, data model, design patterns |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Linux production: nginx, systemd, SSL, hardening |
+| [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md) | All env vars (backend, frontend, CLI) |
+| [docs/CLI.md](docs/CLI.md) | CLI commands, cron, S3 ops |
+| [docs/MCP.md](docs/MCP.md) | MCP tools, API keys, delegation, troubleshooting |
+| [docs/CROWDSTRIKE_IMPORT.md](docs/CROWDSTRIKE_IMPORT.md) | Transactional-replace pattern, JPA cascade trap |
+| [docs/TESTING.md](docs/TESTING.md) | JUnit/Mockk/Testcontainers stack and patterns |
+| [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Symptom → diagnosis → fix |
+| [docs/S3_USER_MAPPING_IMPORT.md](docs/S3_USER_MAPPING_IMPORT.md) | `import-s3` / `download-s3` / `print-s3` / `list-bucket` |
+| [docs/E2E_EXCEPTION_WORKFLOW_TEST.md](docs/E2E_EXCEPTION_WORKFLOW_TEST.md) | Vuln-exception MCP E2E |
+| [docs/SKILLS_AND_AGENTS.md](docs/SKILLS_AND_AGENTS.md) | Claude Code skills + sub-agents wired to this repo |
+| [docs/PASS_CLI.md](docs/PASS_CLI.md) | `pass-cli` (Proton Pass) secret resolution |
+| [docker/README.md](docker/README.md) | Docker container deployment |
+| [INSTALL.md](INSTALL.md) | Step-by-step install |
 
-| Document                                              | Description                                    |
-| ----------------------------------------------------- | ---------------------------------------------- |
-| [Architecture](docs/ARCHITECTURE.md)                  | System design, data model, and design patterns |
-| [Deployment Guide](docs/DEPLOYMENT.md)                | Production deployment on Linux                 |
-| [Environment Variables](docs/ENVIRONMENT.md)          | Complete configuration reference               |
-| [CLI Reference](docs/CLI.md)                          | Command-line interface and cron jobs           |
-| [MCP Integration](docs/MCP.md)                        | AI assistant integration (Claude, etc.)        |
-| [CrowdStrike Import](docs/CROWDSTRIKE_IMPORT.md)      | Vulnerability import technical details         |
-| [Testing Guide](docs/TESTING.md)                      | Test infrastructure and patterns               |
-| [Troubleshooting](docs/TROUBLESHOOTING.md)            | Common issues and solutions                    |
-| [Skills & Agents](docs/SKILLS_AND_AGENTS.md)          | Claude Code skills and agent reference         |
-| [S3 User Mapping Import](docs/S3_USER_MAPPING_IMPORT.md) | S3-based user mapping imports               |
-| [E2E Exception Workflow](docs/E2E_EXCEPTION_WORKFLOW_TEST.md) | End-to-end exception workflow test      |
-| [1Password Credentials](docs/1PASSWORD.md)            | Secret management with 1Password CLI           |
-| [Docker Deployment](docker/README.md)                 | Docker container deployment                    |
+## Workflow
 
-## Contributing
+Branches: `###-feature-name`. Commits: `type(scope): description` (Conventional Commits). PRs need security review for AuthN/AuthZ/crypto/storage changes.
 
-We welcome contributions! Please follow these guidelines:
+## Roadmap (open)
 
-1. **Fork** the repository
-2. **Create a feature branch** (`024-feature-name`)
-3. **Implement features** following security-first principles
-4. **Follow code style** (Kotlin conventions, ESLint)
-5. **Verify build passes** (`./gradlew build`)
-6. **Review for security vulnerabilities** (XSS, SQL injection, etc.)
-7. **Submit a pull request** with clear description
+Vulnerability correlation/trending · automated remediation workflows · Tenable/Qualys integrations · advanced reporting dashboards · SAML/LDAP · ML risk scoring.
 
-For major changes, please open an issue first to discuss what you would like to change.
+## License & contact
 
-## Roadmap
+[AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0). Maintainer: Markus "flake" Schmall — markus@schmall.io · [@flakedev@infosec.exchange](https://infosec.exchange/@flakedev). Built with assistance from Anthropic Claude.
 
-- [X] Automated email notifications for outdated assets
-- [X] Vulnerability exception request workflow
-- [X] Materialized views for performance optimization
-- [X] Last admin protection
-- [X] Asset and workgroup criticality levels
-- [X] Nested workgroup hierarchies
-- [X] Compliance frameworks mapping (SOC2, ISO 27001, NIST)
-- [X] OAuth2/OIDC identity provider management
-- [X] Passkey/WebAuthn authentication
-- [X] MCP AI assistant integration
-- [X] Admin summary emails
-- [X] S3 import pipeline
-- [X] Risk assessment module
-- [X] Vulnerability statistics dashboard
-- [ ] Advanced vulnerability correlation and trending analytics
-- [ ] Automated remediation workflows with approval gates
-- [ ] Integration with additional vulnerability scanners (Tenable, Qualys)
-- [ ] Advanced reporting dashboards
-- [ ] SAML/LDAP authentication
-- [ ] Risk scoring engine with machine learning
-
-## License
-
-[GNU Affero General Public License v3.0 (AGPL-3.0)](https://www.gnu.org/licenses/agpl-3.0)
-
-This program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
-
-## Contact
-
-**Maintainer:** Markus "flake" Schmall
-
-- **Email:** markus@schmall.io
-- **Mastodon:** [@flakedev@infosec.exchange](https://infosec.exchange/@flakedev)
-- **Telegram:** @flakedev
-
-## Acknowledgments
-
-Built with assistance from AI-powered development tools (Anthropic Claude).
-
----
-
-**Alpha Software:** This project is under active development. Features may change, and breaking changes may occur. Not recommended for production use without thorough testing.
+> **Alpha software.** Test before production use.

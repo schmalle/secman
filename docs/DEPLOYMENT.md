@@ -1,441 +1,104 @@
-# Secman Deployment Guide
+# Deployment
 
-**Last Updated:** 2026-04-22
-**Version:** 2.0
-**Platforms:** Amazon Linux 2023, Ubuntu 20.04+, RHEL 8+
+Linux production. Backend (`:8080`) + Frontend (`:4321`) behind nginx with SSL termination, MariaDB on `:3306`. Stack: Kotlin 2.3.21/Java 21/Micronaut 4.10 + Astro 6.2/React 19/Node 20 + MariaDB 11.4. Tested on Amazon Linux 2023, Ubuntu 20.04+, RHEL 8+.
 
-Complete production deployment guide for the Secman security management application.
+System: 2c/4G/20G minimum, 4c+/8G+/50G+ SSD recommended. Outbound 443 needed for SMTP/CrowdStrike. Inbound 80/443.
 
----
-
-## Table of Contents
-
-1. [Architecture Overview](#architecture-overview)
-2. [Prerequisites](#prerequisites)
-3. [System Preparation](#system-preparation)
-4. [Database Setup](#database-setup)
-5. [Backend Deployment](#backend-deployment)
-6. [Frontend Deployment](#frontend-deployment)
-7. [Nginx Reverse Proxy](#nginx-reverse-proxy)
-8. [SSL/TLS Setup](#ssltls-setup)
-9. [Systemd Services](#systemd-services)
-10. [Security Hardening](#security-hardening)
-11. [Monitoring](#monitoring)
-12. [Maintenance](#maintenance)
-13. [Troubleshooting](#troubleshooting)
-
----
-
-## Architecture Overview
-
-```
-                              Internet
-                                  |
-                          [Nginx :80/:443]
-                                  |
-          +-------------------+---+-------------------+
-          |                   |                       |
-     /api/*              /oauth/*                    /*
-          |                   |                       |
-          v                   v                       v
-  [Backend :8080]     [Backend :8080]       [Frontend :4321]
-  Kotlin/Micronaut    OAuth callbacks       Astro/React SSR
-          |                                         |
-          +-----------------------------------------+
-                              |
-                      [MariaDB :3306]
-```
-
-**Components:**
-
-- **Backend**: Kotlin 2.3.21, Java 21, Micronaut 4.10
-- **Frontend**: Astro 6.2, React 19, Node.js 20.x
-- **Database**: MariaDB 11.4
-- **Reverse Proxy**: Nginx with SSL termination
-
----
-
-## Prerequisites
-
-### System Requirements
-
-
-| Resource | Minimum                                     | Recommended |
-| -------- | ------------------------------------------- | ----------- |
-| CPU      | 2 cores                                     | 4+ cores    |
-| RAM      | 4 GB                                        | 8+ GB       |
-| Disk     | 20 GB                                       | 50+ GB SSD  |
-| OS       | Amazon Linux 2023 / Ubuntu 20.04+ / RHEL 8+ | Latest LTS  |
-
-### Network Requirements
-
-- Ports 80 and 443 accessible from internet
-- Firewall rules allowing nginx traffic
-- Domain name with DNS configured
-- Outbound HTTPS (443) for email/CrowdStrike API
-
----
-
-## System Preparation
-
-### Install Dependencies
-
-**Amazon Linux 2023:**
+## Install dependencies
 
 ```bash
-sudo dnf update -y
-sudo dnf groupinstall "Development Tools" -y
-sudo dnf install -y java-21-amazon-corretto-devel git
-
-# Node.js 20.x
+# Amazon Linux / RHEL
+sudo dnf install -y java-21-amazon-corretto-devel git nginx
 curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
 sudo dnf install -y nodejs
 
-# Nginx
-sudo dnf install -y nginx
-```
-
-**Ubuntu/Debian:**
-
-```bash
-sudo apt update
-sudo apt install -y openjdk-21-jdk git build-essential
-
-# Node.js 20.x
+# Ubuntu / Debian
+sudo apt install -y openjdk-21-jdk git build-essential nginx
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt install -y nodejs
 
-# Nginx
-sudo apt install -y nginx
-```
+# MariaDB 11.4 (both)
+curl -LsS https://r.mariadb.com/downloads/mariadb_repo_setup | sudo bash -s -- --mariadb-server-version=11.4
+# then dnf/apt install MariaDB-server MariaDB-client (or mariadb-server mariadb-client)
 
-### Verify Installations
-
-```bash
-java -version      # Should show Java 21
-node -v            # Should show v20.x
-npm -v             # Should show v10.x
-nginx -v           # Should show nginx/1.18+
-```
-
-### Create Application User
-
-```bash
+# user
 sudo useradd -r -m -d /opt/secman -s /bin/bash secman
-sudo passwd secman  # Set strong password
 ```
 
----
+Verify: `java -version` → 21, `node -v` → 20, `nginx -v` → ≥ 1.18.
 
-## Database Setup
-
-### Install MariaDB
-
-**Amazon Linux / RHEL:**
+## Database
 
 ```bash
-curl -LsS https://r.mariadb.com/downloads/mariadb_repo_setup | sudo bash -s -- --mariadb-server-version=11.4
-sudo dnf install -y MariaDB-server MariaDB-client
-```
-
-**Ubuntu/Debian:**
-
-```bash
-curl -LsS https://r.mariadb.com/downloads/mariadb_repo_setup | sudo bash -s -- --mariadb-server-version=11.4
-sudo apt update && sudo apt install -y mariadb-server mariadb-client
-```
-
-### Configure MariaDB
-
-```bash
-sudo systemctl start mariadb
-sudo systemctl enable mariadb
+sudo systemctl enable --now mariadb
 sudo mysql_secure_installation
-```
-
-### Create Database
-
-```bash
 sudo mysql -u root -p
 ```
 
 ```sql
 CREATE DATABASE secman CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE USER 'secman'@'localhost' IDENTIFIED BY 'YOUR_SECURE_PASSWORD';
-GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP, INDEX, REFERENCES
-    ON secman.* TO 'secman'@'localhost';
+GRANT SELECT,INSERT,UPDATE,DELETE,CREATE,ALTER,DROP,INDEX,REFERENCES ON secman.* TO 'secman'@'localhost';
 FLUSH PRIVILEGES;
-EXIT;
 ```
 
----
+Tables auto-migrate via Flyway + Hibernate on first start.
 
-## Backend Deployment
-
-### Clone Repository
+## Build
 
 ```bash
 sudo su - secman
-git clone https://github.com/schmalle/secman.git /opt/secman/app
-cd /opt/secman/app
-git checkout main
+git clone https://github.com/schmalle/secman.git /opt/secman/app && cd /opt/secman/app
+
+./gradlew :backendng:shadowJar -x test           # → src/backendng/build/libs/backendng-0.1-all.jar
+cd src/frontend && npm ci --production && npm run build  # → dist/server/entry.mjs
 ```
 
-### Configure Environment
-
-Create `/etc/secman/backend.env`:
+## Configure
 
 ```bash
-sudo mkdir -p /etc/secman
+sudo install -d -o root -g secman -m 750 /etc/secman
 sudo nano /etc/secman/backend.env
+sudo chown root:secman /etc/secman/backend.env && sudo chmod 640 /etc/secman/backend.env
 ```
 
+`/etc/secman/backend.env` (minimum production):
 ```bash
-# Database
+DB_CONNECT=jdbc:mariadb://localhost:3306/secman
 DB_USERNAME=secman
 DB_PASSWORD=YOUR_SECURE_PASSWORD
 
-# Security - GENERATE THESE!
-JWT_SECRET=REPLACE_WITH_GENERATED_SECRET
-SECMAN_ENCRYPTION_PASSWORD=REPLACE_WITH_GENERATED_PASSWORD
-SECMAN_ENCRYPTION_SALT=REPLACE_WITH_GENERATED_SALT
+# generate: openssl rand -base64 32 / -hex 32 / -hex 8
+JWT_SECRET=...
+SECMAN_ENCRYPTION_PASSWORD=...
+SECMAN_ENCRYPTION_SALT=...
 
-# Email
-SMTP_HOST=smtp.gmail.com
+SMTP_HOST=smtp.example.com
 SMTP_PORT=587
-SMTP_USERNAME=noreply@yourdomain.com
-SMTP_PASSWORD=YOUR_SMTP_PASSWORD
-SMTP_FROM_ADDRESS=noreply@yourdomain.com
+SMTP_USERNAME=noreply@example.com
+SMTP_PASSWORD=...
+SMTP_FROM_ADDRESS=noreply@example.com
 SMTP_FROM_NAME=Security Management System
 SMTP_ENABLE_TLS=true
 
-# URLs
-SECMAN_BACKEND_URL=https://api.yourdomain.com
-FRONTEND_URL=https://secman.yourdomain.com
-DB_CONNECT=jdbc:mariadb://localhost:3306/secman
+SECMAN_BACKEND_URL=https://api.example.com
+FRONTEND_URL=https://secman.example.com
+SECMAN_AUTH_COOKIE_SECURE=true
 ```
 
-Generate secrets:
-
+`/etc/secman/frontend.env`:
 ```bash
-# JWT Secret (32 bytes)
-openssl rand -base64 32
-
-# Encryption Password
-openssl rand -hex 32
-
-# Encryption Salt (8 bytes = 16 hex chars)
-openssl rand -hex 8
-```
-
-Secure the file:
-
-```bash
-sudo chown root:secman /etc/secman/backend.env
-sudo chmod 640 /etc/secman/backend.env
-```
-
-### Build Backend
-
-```bash
-cd /opt/secman/app
-./gradlew :backendng:shadowJar -x test
-# Output: src/backendng/build/libs/backendng-0.1-all.jar
-```
-
----
-
-## Frontend Deployment
-
-### Configure Environment
-
-Create `/etc/secman/frontend.env`:
-
-```bash
-PUBLIC_API_URL=
+PUBLIC_API_URL=          # empty = same-domain via nginx
 NODE_ENV=production
 HOST=127.0.0.1
 PORT=4321
 ```
 
-### Build Frontend
+Full env reference: `docs/ENVIRONMENT.md`.
 
-```bash
-cd /opt/secman/app/src/frontend
-npm ci --production
-npm run build
-# Output: dist/server/entry.mjs
-```
+## systemd
 
----
-
-## Nginx Reverse Proxy
-
-### Configuration
-
-Create `/etc/nginx/conf.d/secman.conf`:
-
-```nginx
-upstream secman_backend {
-    server 127.0.0.1:8080 fail_timeout=0;
-}
-
-upstream secman_frontend {
-    server 127.0.0.1:4321 fail_timeout=0;
-}
-
-# HTTP redirect
-server {
-    listen 80;
-    listen [::]:80;
-    server_name api.yourdomain.com secman.yourdomain.com;
-
-    location /.well-known/acme-challenge/ {
-        root /var/www/certbot;
-    }
-
-    location / {
-        return 301 https://$host$request_uri;
-    }
-}
-
-# API Server (HTTPS)
-server {
-    listen 443 ssl http2;
-    listen [::]:443 ssl http2;
-    server_name api.yourdomain.com;
-
-    ssl_certificate /etc/letsencrypt/live/api.yourdomain.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/api.yourdomain.com/privkey.pem;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384';
-    ssl_prefer_server_ciphers on;
-
-    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-    add_header X-Frame-Options "SAMEORIGIN" always;
-    add_header X-Content-Type-Options "nosniff" always;
-
-    access_log /var/log/nginx/secman-api-access.log;
-    error_log /var/log/nginx/secman-api-error.log;
-
-    client_max_body_size 20M;
-
-    location / {
-        proxy_pass http://secman_backend;
-        proxy_http_version 1.1;
-
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-Host $host;
-        proxy_set_header X-Forwarded-Port $server_port;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-
-        proxy_connect_timeout 60s;
-        proxy_send_timeout 60s;
-        proxy_read_timeout 60s;
-        proxy_buffering off;
-    }
-}
-
-# Frontend Server (HTTPS)
-server {
-    listen 443 ssl http2;
-    listen [::]:443 ssl http2;
-    server_name secman.yourdomain.com;
-
-    ssl_certificate /etc/letsencrypt/live/secman.yourdomain.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/secman.yourdomain.com/privkey.pem;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384';
-    ssl_prefer_server_ciphers on;
-
-    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-    add_header X-Frame-Options "SAMEORIGIN" always;
-    add_header X-Content-Type-Options "nosniff" always;
-
-    access_log /var/log/nginx/secman-frontend-access.log;
-    error_log /var/log/nginx/secman-frontend-error.log;
-
-    location / {
-        proxy_pass http://secman_frontend;
-        proxy_http_version 1.1;
-
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-    }
-
-    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2)$ {
-        proxy_pass http://secman_frontend;
-        expires 1y;
-        add_header Cache-Control "public, immutable";
-        access_log off;
-    }
-}
-```
-
-### Enable and Test
-
-```bash
-# Test configuration
-sudo nginx -t
-
-# If using sites-available (Ubuntu default):
-# Save config to /etc/nginx/sites-available/secman instead of conf.d/
-sudo ln -s /etc/nginx/sites-available/secman /etc/nginx/sites-enabled/
-
-# If using conf.d (Amazon Linux/RHEL default):
-# Config at /etc/nginx/conf.d/secman.conf is auto-loaded
-
-# Reload
-sudo systemctl reload nginx
-```
-
----
-
-## SSL/TLS Setup
-
-### Let's Encrypt (Recommended)
-
-```bash
-# Install certbot
-sudo dnf install -y certbot python3-certbot-nginx  # Amazon Linux/RHEL
-sudo apt install -y certbot python3-certbot-nginx  # Ubuntu
-
-# Obtain certificates
-sudo certbot --nginx -d api.yourdomain.com -d secman.yourdomain.com
-
-# Test renewal
-sudo certbot renew --dry-run
-```
-
-### Self-Signed (Development)
-
-```bash
-sudo mkdir -p /etc/nginx/ssl
-
-sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-    -keyout /etc/nginx/ssl/secman.key \
-    -out /etc/nginx/ssl/secman.crt \
-    -subj "/CN=secman.yourdomain.com"
-
-sudo chmod 600 /etc/nginx/ssl/secman.key
-```
-
----
-
-## Systemd Services
-
-### Backend Service
-
-Create `/etc/systemd/system/secman-backend.service`:
-
+`/etc/systemd/system/secman-backend.service`:
 ```ini
 [Unit]
 Description=Secman Backend API
@@ -446,21 +109,17 @@ Requires=mariadb.service
 Type=simple
 User=secman
 Group=secman
-WorkingDirectory=/opt/secman/app/src/backendng
+WorkingDirectory=/opt/secman/app
 EnvironmentFile=/etc/secman/backend.env
-
 Environment="JAVA_OPTS=-Xmx2g -Xms512m -XX:+UseG1GC"
 ExecStart=/usr/bin/java $JAVA_OPTS -jar /opt/secman/app/src/backendng/build/libs/backendng-0.1-all.jar
-
 Restart=on-failure
-RestartSec=10s
-
+RestartSec=10
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
 ReadWritePaths=/opt/secman/app/logs
-
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=secman-backend
@@ -469,10 +128,7 @@ SyslogIdentifier=secman-backend
 WantedBy=multi-user.target
 ```
 
-### Frontend Service
-
-Create `/etc/systemd/system/secman-frontend.service`:
-
+`/etc/systemd/system/secman-frontend.service`:
 ```ini
 [Unit]
 Description=Secman Frontend
@@ -485,264 +141,187 @@ User=secman
 Group=secman
 WorkingDirectory=/opt/secman/app/src/frontend
 EnvironmentFile=/etc/secman/frontend.env
-
 Environment="NODE_OPTIONS=--max-old-space-size=1024"
 ExecStart=/usr/bin/node /opt/secman/app/src/frontend/dist/server/entry.mjs
-
 Restart=on-failure
-RestartSec=10s
-
+RestartSec=10
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
 
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=secman-frontend
-
 [Install]
 WantedBy=multi-user.target
 ```
 
-### Enable and Start
-
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable secman-backend secman-frontend
-sudo systemctl start secman-backend secman-frontend
-sudo systemctl status secman-backend secman-frontend
+sudo systemctl enable --now secman-backend secman-frontend
 ```
 
----
+## nginx
 
-## Security Hardening
+`/etc/nginx/conf.d/secman.conf`:
+```nginx
+upstream secman_backend  { server 127.0.0.1:8080 fail_timeout=0; }
+upstream secman_frontend { server 127.0.0.1:4321 fail_timeout=0; }
 
-### Firewall
+server {                                     # HTTP → HTTPS
+    listen 80; listen [::]:80;
+    server_name api.example.com secman.example.com;
+    location /.well-known/acme-challenge/ { root /var/www/certbot; }
+    location / { return 301 https://$host$request_uri; }
+}
 
-**Amazon Linux / RHEL:**
+server {                                     # API
+    listen 443 ssl http2; listen [::]:443 ssl http2;
+    server_name api.example.com;
+    ssl_certificate     /etc/letsencrypt/live/api.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/api.example.com/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384';
+    ssl_prefer_server_ciphers on;
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    client_max_body_size 20M;
+    location / {
+        proxy_pass http://secman_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host  $host;
+        proxy_set_header X-Forwarded-Port  $server_port;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_buffering off;
+    }
+}
 
-```bash
-sudo systemctl enable firewalld
-sudo systemctl start firewalld
-sudo firewall-cmd --permanent --add-service=http
-sudo firewall-cmd --permanent --add-service=https
-sudo firewall-cmd --permanent --add-service=ssh
-sudo firewall-cmd --reload
+server {                                     # Frontend
+    listen 443 ssl http2; listen [::]:443 ssl http2;
+    server_name secman.example.com;
+    ssl_certificate     /etc/letsencrypt/live/secman.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/secman.example.com/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    location / {
+        proxy_pass http://secman_frontend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+    location ~* \.(js|css|png|jpe?g|gif|ico|svg|woff2?)$ {
+        proxy_pass http://secman_frontend;
+        expires 1y; add_header Cache-Control "public, immutable"; access_log off;
+    }
+}
 ```
 
-**Ubuntu:**
+`sudo nginx -t && sudo systemctl reload nginx`.
+
+## SSL
 
 ```bash
-sudo ufw allow 22/tcp
-sudo ufw allow 80/tcp
-sudo ufw allow 443/tcp
-sudo ufw enable
+sudo dnf install -y certbot python3-certbot-nginx        # or apt
+sudo certbot --nginx -d api.example.com -d secman.example.com
+sudo certbot renew --dry-run
 ```
 
-### File Permissions
-
+Self-signed for dev:
 ```bash
-sudo chown -R secman:secman /opt/secman/app
-sudo chmod -R 750 /opt/secman/app
-sudo chmod 600 /etc/secman/*.env
-sudo chmod 600 /etc/nginx/ssl/*.key
+sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+  -keyout /etc/nginx/ssl/secman.key -out /etc/nginx/ssl/secman.crt -subj "/CN=secman.local"
 ```
 
-### Fail2ban
+## Hardening
 
 ```bash
-# Install
-sudo dnf install -y fail2ban  # Amazon Linux
-sudo apt install -y fail2ban  # Ubuntu
+# firewall
+sudo firewall-cmd --permanent --add-service={http,https,ssh} && sudo firewall-cmd --reload    # RHEL
+sudo ufw allow 22,80,443/tcp && sudo ufw enable                                                # Ubuntu
 
-# Create jail
-sudo tee /etc/fail2ban/jail.d/secman.conf << 'EOF'
-[secman]
-enabled = true
-port = http,https
-filter = secman
-logpath = /var/log/nginx/secman-api-access.log
-maxretry = 5
-bantime = 3600
-findtime = 600
-EOF
+# perms
+sudo chown -R secman:secman /opt/secman/app && sudo chmod -R 750 /opt/secman/app
+sudo chmod 600 /etc/secman/*.env /etc/nginx/ssl/*.key
 
-# Create filter
-sudo tee /etc/fail2ban/filter.d/secman.conf << 'EOF'
+# fail2ban (basic)
+sudo dnf install -y fail2ban   # or apt
+sudo tee /etc/fail2ban/filter.d/secman.conf >/dev/null <<'EOF'
 [Definition]
 failregex = ^<HOST> .* "POST /api/auth/login HTTP.*" 401
-ignoreregex =
 EOF
-
-sudo systemctl enable fail2ban
-sudo systemctl start fail2ban
+sudo tee /etc/fail2ban/jail.d/secman.conf >/dev/null <<'EOF'
+[secman]
+enabled  = true
+port     = http,https
+filter   = secman
+logpath  = /var/log/nginx/secman-api-access.log
+maxretry = 5
+bantime  = 3600
+findtime = 600
+EOF
+sudo systemctl enable --now fail2ban
 ```
 
----
+Required: change default admin password; unique `JWT_SECRET`/`SECMAN_ENCRYPTION_*`; `SECMAN_AUTH_COOKIE_SECURE=true`; DB user limited to `localhost`; DB backup; SMTP configured.
 
-## Monitoring
-
-### Health Checks
+## Monitor
 
 ```bash
-# Backend
-curl http://localhost:8080/health
-
-# Frontend
+curl http://localhost:8080/health      # {"status":"UP",...}
 curl http://localhost:4321/
-
-# External
-curl https://secman.yourdomain.com/
-curl https://api.yourdomain.com/health
-```
-
-### Logs
-
-```bash
-# Backend
-sudo journalctl -u secman-backend -f
-
-# Frontend
+sudo journalctl -u secman-backend  -f
 sudo journalctl -u secman-frontend -f
-
-# Nginx
-sudo tail -f /var/log/nginx/secman-api-access.log
-sudo tail -f /var/log/nginx/secman-api-error.log
+sudo tail -f /var/log/nginx/secman-api-{access,error}.log
 ```
 
-### Health Monitor Script
-
-Create `/opt/secman/bin/monitor.sh`:
-
+Watchdog `/opt/secman/bin/monitor.sh`:
 ```bash
-#!/bin/bash
-
-BACKEND_URL="http://localhost:8080/health"
-FRONTEND_URL="http://localhost:4321/"
-
-if ! curl -sf "$BACKEND_URL" > /dev/null; then
-    echo "Backend down!" | logger -t secman-monitor
-    systemctl restart secman-backend
-fi
-
-if ! curl -sf "$FRONTEND_URL" > /dev/null; then
-    echo "Frontend down!" | logger -t secman-monitor
-    systemctl restart secman-frontend
-fi
+#!/usr/bin/env bash
+curl -sf http://localhost:8080/health >/dev/null || { logger -t secman-monitor "backend down";  systemctl restart secman-backend;  }
+curl -sf http://localhost:4321/        >/dev/null || { logger -t secman-monitor "frontend down"; systemctl restart secman-frontend; }
 ```
+`*/5 * * * * /opt/secman/bin/monitor.sh`
 
-Add to cron:
-
-```bash
-*/5 * * * * /opt/secman/bin/monitor.sh
-```
-
-### CrowdStrike Checkin Freshness (Telegram alert)
-
-The backend exposes an unauthenticated freshness endpoint
-(`GET /api/crowdstrike/last-checkin`) returning the ISO-8601 timestamp of the
-most recent CrowdStrike import, or the literal string `never`.
-
-A stdlib-only Python script at
-[`src/clinotify/check_crowdstrike_checkin.py`](../src/clinotify/README.md)
-polls this endpoint and sends a Telegram alert when the last import is older
-than a configurable threshold (or `never`). No build step, no JVM, no secman
-credentials required.
-
+CrowdStrike checkin freshness alert (Telegram, stdlib-only Python):
 ```cron
-*/10 * * * * TELEGRAM_BOT_TOKEN=... TELEGRAM_CHAT_ID=... \
+*/10 * * * * TELEGRAM_BOT_TOKEN=… TELEGRAM_CHAT_ID=… \
   /opt/secman/src/clinotify/check_crowdstrike_checkin.py \
-  --url https://secman.yourdomain.com --max-age-minutes 120 \
+  --url https://secman.example.com --max-age-minutes 120 \
   >> /var/log/secman-checkin.log 2>&1
 ```
+Public endpoint: `GET /api/crowdstrike/last-checkin` (text/plain, ISO-8601 or `never`).
 
-Exit codes: `0` fresh, `1` transport/parse error, `2` bad args, `3` alert
-fired. See [`src/clinotify/README.md`](../src/clinotify/README.md) for Telegram
-bot setup, flag reference, and a systemd timer example.
-
----
-
-## Maintenance
-
-### Updates
+## Updates & backups
 
 ```bash
+# update
 sudo systemctl stop secman-frontend secman-backend
-
-sudo su - secman
-cd /opt/secman/app
-git pull origin main
-
-# Rebuild backend
-./gradlew :backendng:shadowJar -x test
-
-# Rebuild frontend
-cd src/frontend
-npm ci --production && npm run build
-exit
-
+sudo -u secman bash -lc 'cd /opt/secman/app && git pull origin main \
+  && ./gradlew :backendng:shadowJar -x test \
+  && cd src/frontend && npm ci --production && npm run build'
 sudo systemctl start secman-backend secman-frontend
+
+# backup (daily)
+mkdir -p /opt/secman/backups
+mysqldump -u secman -p secman | gzip > "/opt/secman/backups/secman_$(date +%Y%m%d_%H%M%S).sql.gz"
+find /opt/secman/backups -name '*.sql.gz' -mtime +7 -delete
 ```
 
-### Database Backup
+## Quick troubleshoot
 
-```bash
-#!/bin/bash
-BACKUP_DIR="/opt/secman/backups"
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+| Symptom | Action |
+|---|---|
+| Backend won't start | `journalctl -u secman-backend -n 100`; `java -version`; `mysql -u secman -p secman`; check JAR present |
+| Frontend won't start | `journalctl -u secman-frontend -n 100`; `node -v`; check `dist/server/entry.mjs`; backend reachable |
+| 502 Bad Gateway | services running? `curl http://localhost:8080/health` and `:4321/`; check nginx error log |
+| SSL issues | `ls /etc/letsencrypt/live/`; `openssl x509 -in <cert> -noout -dates`; `certbot renew --force-renewal` |
 
-mkdir -p "$BACKUP_DIR"
-mysqldump -u secman -p secman | gzip > "$BACKUP_DIR/secman_${TIMESTAMP}.sql.gz"
-find "$BACKUP_DIR" -name "*.sql.gz" -mtime +7 -delete
-```
-
-Schedule daily:
-
-```bash
-0 2 * * * /opt/secman/bin/backup-db.sh
-```
-
----
-
-## Troubleshooting
-
-### Backend Won't Start
-
-1. Check logs: `sudo journalctl -u secman-backend -n 100`
-2. Verify Java: `java -version` (must be 21)
-3. Check database: `mysql -u secman -p secman`
-4. Verify JAR: `ls -la /opt/secman/app/src/backendng/build/libs/`
-
-### Frontend Won't Start
-
-1. Check logs: `sudo journalctl -u secman-frontend -n 100`
-2. Verify Node: `node -v` (must be 20.x)
-3. Check build: `ls -la /opt/secman/app/src/frontend/dist/server/`
-4. Verify backend: `curl http://localhost:8080/health`
-
-### Nginx 502
-
-1. Check services running: `systemctl status secman-backend secman-frontend`
-2. Check nginx logs: `sudo tail -f /var/log/nginx/secman-api-error.log`
-3. Test upstream: `curl http://localhost:8080/health`
-
-### SSL Certificate Issues
-
-1. Verify files: `sudo ls -la /etc/letsencrypt/live/`
-2. Check expiry: `openssl x509 -in /path/to/cert.pem -noout -dates`
-3. Renew: `sudo certbot renew --force-renewal`
-
----
-
-## See Also
-
-- [Environment Variables](./ENVIRONMENT.md) - Configuration reference
-- [Architecture](./ARCHITECTURE.md) - System design overview
-- [CLI Reference](./CLI.md) - Command-line tools and cron jobs
-- [MCP Integration](./MCP.md) - AI assistant setup
-- [Troubleshooting](./TROUBLESHOOTING.md) - Common issues and solutions
-
----
-
-*For additional support, check GitHub Issues: https://github.com/schmalle/secman/issues*
+Deeper guide: `docs/TROUBLESHOOTING.md`.

@@ -1,451 +1,144 @@
-# Secman Environment Variables Reference
-
-**Last Updated:** 2026-04-22
-**Version:** 1.2
-
-This document provides a comprehensive reference for all environment variables used by Secman components.
-
----
-
-## Table of Contents
-
-1. [Backend Environment Variables](#backend-environment-variables)
-2. [Frontend Environment Variables](#frontend-environment-variables)
-3. [CLI Environment Variables](#cli-environment-variables)
-4. [Quick Reference Tables](#quick-reference-tables)
-5. [Environment File Templates](#environment-file-templates)
-
----
-
-## Backend Environment Variables
-
-The backend (Kotlin/Micronaut) is configured via environment variables, system properties, or `application.yml`.
-
-### Database Configuration
-
-
-| Variable      | Description                      | Default                                    | Required |
-| ------------- | -------------------------------- | ------------------------------------------ | -------- |
-| `DB_CONNECT`  | Full JDBC connection URL         | `jdbc:mariadb://localhost:3306/secman`      | Yes      |
-| `DB_USERNAME` | MariaDB database username        | `secman`                                   | Yes      |
-| `DB_PASSWORD` | MariaDB database password        | `CHANGEME`                                 | Yes      |
-
-**Example:**
-
-```bash
-export DB_CONNECT=jdbc:mariadb://localhost:3306/secman
-export DB_USERNAME=secman
-export DB_PASSWORD=your_secure_password
-```
-
-### Authentication & Security
-
-
-| Variable                     | Description                                       | Default             | Required             |
-| ---------------------------- | ------------------------------------------------- | ------------------- | -------------------- |
-| `JWT_SECRET`                 | JWT signing secret (must be 256 bits / 32 bytes)  | Development default | **Yes (Production)** |
-| `SECMAN_ENCRYPTION_PASSWORD` | Encryption password for sensitive database fields | Development default | **Yes (Production)** |
-| `SECMAN_ENCRYPTION_SALT`     | Encryption salt (16 hex characters)               | Development default | **Yes (Production)** |
-| `SECMAN_AUTH_COOKIE_SECURE`  | Set `Secure` flag on auth cookies (HTTPS-only)    | `true`              | No                   |
-
-**Security Notes:**
-
-- `JWT_SECRET` must be at least 256 bits for HMAC-SHA256 signing
-- Generate with: `openssl rand -base64 32`
-- `SECMAN_ENCRYPTION_PASSWORD` is used for encrypting sensitive fields (OAuth secrets, API keys)
-- Generate with: `openssl rand -hex 32`
-- `SECMAN_ENCRYPTION_SALT` must be exactly 16 hex characters
-- Generate with: `openssl rand -hex 8`
-- `SECMAN_AUTH_COOKIE_SECURE` defaults to `true` (requires HTTPS). Set to `false` only for local HTTP development.
-
-**Example:**
-
-```bash
-export JWT_SECRET=$(openssl rand -base64 32)
-export SECMAN_ENCRYPTION_PASSWORD=$(openssl rand -hex 32)
-export SECMAN_ENCRYPTION_SALT=$(openssl rand -hex 8)
-```
-
-### Email / SMTP Configuration
-
-
-| Variable            | Description                  | Default                      | Required |
-| ------------------- | ---------------------------- | ---------------------------- | -------- |
-| `SMTP_HOST`         | SMTP server hostname         | `smtp.example.com`           | Yes      |
-| `SMTP_PORT`         | SMTP server port             | `587`                        | Yes      |
-| `SMTP_USERNAME`     | SMTP authentication username | `noreply@secman.example.com` | Yes      |
-| `SMTP_PASSWORD`     | SMTP authentication password | `changeme`                   | Yes      |
-| `SMTP_FROM_ADDRESS` | Email "From" address         | `noreply@secman.example.com` | Yes      |
-| `SMTP_FROM_NAME`    | Email "From" display name    | `Security Management System` | No       |
-| `SMTP_ENABLE_TLS`   | Enable STARTTLS              | `true`                       | No       |
-
-**Example for Gmail:**
-
-```bash
-export SMTP_HOST=smtp.gmail.com
-export SMTP_PORT=587
-export SMTP_USERNAME=your-email@gmail.com
-export SMTP_PASSWORD=your-app-specific-password
-export SMTP_FROM_ADDRESS=your-email@gmail.com
-export SMTP_FROM_NAME="Security Management System"
-export SMTP_ENABLE_TLS=true
-```
-
-**Note:** For Gmail, you must use an [App Password](https://support.google.com/accounts/answer/185833), not your regular password.
-
-### URL Configuration
-
-
-| Variable           | Description                            | Default                       | Required |
-| ------------------ | -------------------------------------- | ----------------------------- | -------- |
-| `SECMAN_BACKEND_URL` | Public URL of the backend API          | `http://localhost:8080`       | Yes      |
-| `FRONTEND_URL`     | Public URL of the frontend application | `http://localhost:4321`       | Yes      |
-
-These URLs are used for:
-
-- CORS configuration
-- Email notification links
-- OAuth callback URLs
-
-**Example:**
-
-```bash
-export SECMAN_BACKEND_URL=https://api.yourdomain.com
-export FRONTEND_URL=https://secman.yourdomain.com
-```
-
-### OAuth Configuration
-
-These variables control OAuth robustness settings for handling race conditions and transient failures during authentication.
-
-
-| Variable                               | Description                                   | Default | Required |
-| -------------------------------------- | --------------------------------------------- | ------- | -------- |
-| `OAUTH_STATE_RETRY_MAX_ATTEMPTS`       | Maximum retry attempts for OAuth state lookup | `5`     | No       |
-| `OAUTH_STATE_RETRY_INITIAL_DELAY`      | Initial delay between retries (ms)            | `100`   | No       |
-| `OAUTH_STATE_RETRY_MAX_DELAY`          | Maximum delay between retries (ms)            | `500`   | No       |
-| `OAUTH_STATE_RETRY_BACKOFF_MULTIPLIER` | Exponential backoff multiplier                | `1.5`   | No       |
-| `OAUTH_TOKEN_EXCHANGE_MAX_RETRIES`     | Maximum retries for token exchange            | `2`     | No       |
-| `OAUTH_TOKEN_EXCHANGE_RETRY_DELAY`     | Delay between token exchange retries (ms)     | `500`   | No       |
-
-**Behavior:**
-
-- **State Retry**: Handles race conditions where Microsoft Azure callbacks arrive before the state-save transaction commits (100-500ms with cached SSO). Uses exponential backoff: 100ms → 150ms → 225ms → 337ms → 500ms.
-- **Token Exchange Retry**: Handles transient 5xx server errors and timeouts during OAuth token exchange. Does NOT retry 4xx errors (permanent failures).
-
-**When to Adjust:**
-
-- Increase `OAUTH_STATE_RETRY_MAX_ATTEMPTS` if users frequently see "login session not found" errors
-- Increase delays if database replication lag is suspected
-- Increase `OAUTH_TOKEN_EXCHANGE_MAX_RETRIES` if the OAuth provider (Microsoft, GitHub) has intermittent availability issues
-
-**Example:**
-
-```bash
-# Increase retry tolerance for slow database environments
-export OAUTH_STATE_RETRY_MAX_ATTEMPTS=7
-export OAUTH_STATE_RETRY_MAX_DELAY=1000
-
-# Increase token exchange retries for unreliable OAuth providers
-export OAUTH_TOKEN_EXCHANGE_MAX_RETRIES=3
-export OAUTH_TOKEN_EXCHANGE_RETRY_DELAY=1000
-```
-
-### Memory Optimization (Feature 073)
-
-
-| Variable                  | Description                                | Default | Required |
-| ------------------------- | ------------------------------------------ | ------- | -------- |
-| `MEMORY_LAZY_LOADING`     | Enable LAZY loading for entity relationships | `true`  | No       |
-| `MEMORY_BATCH_SIZE`       | Batch size for duplicate cleanup and streaming operations (100-10000) | `1000`  | No       |
-| `MEMORY_STREAMING_EXPORTS`| Enable streaming exports to reduce memory footprint | `true`  | No       |
-
-**Behavior:**
-
-- When `MEMORY_LAZY_LOADING=true`: Entity relationships use LAZY fetch, reducing initial query overhead
-- When `MEMORY_STREAMING_EXPORTS=true`: Large exports stream data to avoid loading entire result sets into memory
-- `MEMORY_BATCH_SIZE` controls batch processing for operations like duplicate cleanup and vulnerability streaming
-
-**Rollback:** Set any variable to `false` (or a lower batch size) to revert to original behavior.
-
-**Monitoring:** `GET /memory` endpoint returns JVM heap metrics (used, max, free, total in MB).
-
-**Example:**
-
-```bash
-export MEMORY_LAZY_LOADING=true
-export MEMORY_BATCH_SIZE=2000
-export MEMORY_STREAMING_EXPORTS=true
-```
-
-### Debug Mode
-
-
-| Variable       | Description                                           | Default | Required |
-| -------------- | ----------------------------------------------------- | ------- | -------- |
-| `SECMAN_DEBUG` | Enable debug header logging for MCP and API requests  | `false` | No       |
-
-**Behavior:**
-
-When `SECMAN_DEBUG=true`, all HTTP headers on every MCP (`/mcp/**`) and API (`/api/**`) request are logged at DEBUG level. If an `Authorization: Bearer <token>` header is present, the JWT payload claims (subject, roles, expiration, etc.) are decoded and logged alongside the headers. The JWT signature is never logged.
-
-This is useful for diagnosing:
-- Missing or proxy-stripped headers (e.g., `X-MCP-User-Email` dropped by a reverse proxy)
-- JWT claim mismatches (wrong roles, expired tokens)
-- CORS or Origin header issues in specific environments
-
-**Security Note:** Do not enable in production — header logs may contain API keys and session tokens.
-
-**Example:**
-
-```bash
-export SECMAN_DEBUG=true
-```
-
-**Sample log output:**
-
+# Environment Variables
+
+Resolution order (Micronaut): system properties → env vars → `application.yml` → defaults. CLI: same plus `~/.secman/{credentials.conf,crowdstrike.yaml}`.
+
+## Backend
+
+### Database (required)
+| Var | Default | Notes |
+|---|---|---|
+| `DB_CONNECT` | `jdbc:mariadb://localhost:3306/secman` | full JDBC URL |
+| `DB_USERNAME` | `secman` | |
+| `DB_PASSWORD` | `CHANGEME` | replace in production |
+
+### Auth & crypto (required in production)
+| Var | Default | Notes |
+|---|---|---|
+| `JWT_SECRET` | dev default | ≥256 bits. `openssl rand -base64 32` |
+| `SECMAN_ENCRYPTION_PASSWORD` | dev default | for sensitive fields (OAuth secrets, API keys). `openssl rand -hex 32`. **Never rotate**: orphans encrypted data. |
+| `SECMAN_ENCRYPTION_SALT` | dev default | exactly 16 hex chars. `openssl rand -hex 8`. Same warning. |
+| `SECMAN_AUTH_COOKIE_SECURE` | `true` | set `false` only for local HTTP dev |
+
+### URLs
+| Var | Default | Notes |
+|---|---|---|
+| `SECMAN_BACKEND_URL` | `http://localhost:8080` | used for CORS + email links + OAuth callbacks |
+| `FRONTEND_URL` | `http://localhost:4321` | same |
+
+### SMTP
+| Var | Default |
+|---|---|
+| `SMTP_HOST` | `smtp.example.com` |
+| `SMTP_PORT` | `587` |
+| `SMTP_USERNAME`, `SMTP_PASSWORD` | placeholders |
+| `SMTP_FROM_ADDRESS` | `noreply@secman.example.com` |
+| `SMTP_FROM_NAME` | `Security Management System` |
+| `SMTP_ENABLE_TLS` | `true` |
+
+Gmail requires an [App Password](https://support.google.com/accounts/answer/185833), not the account password.
+
+### OAuth retry (race tolerance for fast Microsoft SSO)
+| Var | Default |
+|---|---|
+| `OAUTH_STATE_RETRY_MAX_ATTEMPTS` | `5` |
+| `OAUTH_STATE_RETRY_INITIAL_DELAY` | `100` (ms) |
+| `OAUTH_STATE_RETRY_MAX_DELAY` | `500` (ms) |
+| `OAUTH_STATE_RETRY_BACKOFF_MULTIPLIER` | `1.5` |
+| `OAUTH_TOKEN_EXCHANGE_MAX_RETRIES` | `2` (retries on 5xx + timeouts; never on 4xx) |
+| `OAUTH_TOKEN_EXCHANGE_RETRY_DELAY` | `500` (ms) |
+
+State retry default sequence: 100 → 150 → 225 → 337 → 500 ms. Increase max-attempts/delay if "login session not found" appears under DB replication lag.
+
+### Memory optimization (Feature 073)
+| Var | Default | Notes |
+|---|---|---|
+| `MEMORY_LAZY_LOADING` | `true` | LAZY fetch on entity relationships |
+| `MEMORY_BATCH_SIZE` | `1000` | range 100–10000 (cleanup + streaming) |
+| `MEMORY_STREAMING_EXPORTS` | `true` | streams large exports |
+
+Monitor: `GET /memory` (used/max/free/total MB). Set to `false` to roll back.
+
+### Vulnerability dating
+| Var | Default | Effect |
+|---|---|---|
+| `VULN_USE_PATCH_PUBLICATION_DATE` | `false` | `false`: `daysOpen = now − detection`. `true`: `now − patchPublicationDate`. |
+| `VULN_REQUIRE_PATCH_PUBLICATION_DATE` | `false` | only import vulns with patch-publication date |
+
+### Debug & logging
+| Var | Default | Effect |
+|---|---|---|
+| `SECMAN_DEBUG` | `false` | logs all `/mcp/**` and `/api/**` headers + decoded JWT claims (signature never logged). **Production OFF** — header logs may contain secrets. |
+| `SECMAN_LOGGING` | unset | `NO` (silent except security audit), `ALL` (TRACE/DEBUG), `ERROR`, or unset (INFO app / WARN frameworks). Security audit log (`logs/security-audit.log`) is always active per NFR-002. |
+
+Sample debug output:
 ```
 DEBUG c.s.filter.McpDebugHeaderFilter - Debug headers [POST /mcp]:
-  Accept: application/json
   Content-Type: application/json
-  Mcp-Session-Id: abc123
   X-MCP-API-Key: sk-...
   X-MCP-User-Email: user@example.com
-
-DEBUG c.s.filter.McpDebugHeaderFilter - Debug headers [GET /api/assets]:
-  Accept: application/json
-  Authorization: [PRESENT - 1 value(s)]
-  Content-Type: application/json
-
 DEBUG c.s.filter.McpDebugHeaderFilter - JWT claims [GET /api/assets]:
   {"sub":"admin","roles":["ADMIN"],"iss":"secman-backend-ng","exp":1711756800}
 ```
 
-### Logging Configuration
+## Frontend
 
+| Var | Default | Notes |
+|---|---|---|
+| `PUBLIC_API_URL` | auto | dev (`localhost`): `http://localhost:8080`; prod: empty (relative URLs through nginx) |
 
-| Variable         | Description                                    | Default | Required |
-| ---------------- | ---------------------------------------------- | ------- | -------- |
-| `SECMAN_LOGGING` | Control logging verbosity across all components | (unset) | No       |
+## CLI
 
-**Values:**
+CrowdStrike credentials:
+| Var | Notes |
+|---|---|
+| `FALCON_CLIENT_ID` | alias for `CROWDSTRIKE_CLIENT_ID` |
+| `FALCON_CLIENT_SECRET` | alias for `CROWDSTRIKE_CLIENT_SECRET` |
+| `FALCON_BASE_URL` | per region (see below) |
+| `FALCON_CLOUD_REGION` | `us-1`, `us-2`, `eu-1`, `us-gov-1`, `us-gov-2` |
 
-| Value   | Behavior                                          |
-| ------- | ------------------------------------------------- |
-| `NO`    | Disable all logging (except security audit)       |
-| `ALL`   | Enable all logging at TRACE/DEBUG level           |
-| `ERROR` | Only show ERROR level logs                        |
-| (unset) | Default behavior (INFO level for app, WARN for frameworks) |
+| Region | Base URL |
+|---|---|
+| US-1 (default) | `https://api.crowdstrike.com` |
+| US-2 | `https://api.us-2.crowdstrike.com` |
+| EU-1 | `https://api.eu-1.crowdstrike.com` |
+| US-GOV-1 / US-GOV-2 | `https://api.laggar.gcw.crowdstrike.com` |
 
-**Note:** Security audit logging (`logs/security-audit.log`) always remains active regardless of this setting, per compliance requirements (NFR-002).
+Backend auth (for `--save`):
+| Var | Notes |
+|---|---|
+| `SECMAN_ADMIN_NAME`, `SECMAN_ADMIN_PASS` | required for `--save` and `manage-user-mappings list --send-email` |
+| `SECMAN_BACKEND_URL` | default `http://localhost:8080` |
+| `SECMAN_INSECURE` | accept self-signed TLS (CLI/JS scanner) |
+| `SECMAN_HOST` | shared host URL used by tests; resolved via `pass-cli` |
 
-**Example:**
+## Templates
 
+`/etc/secman/backend.env`:
 ```bash
-export SECMAN_LOGGING=ERROR  # Production: only errors
-export SECMAN_LOGGING=ALL    # Debugging: verbose output
-```
-
-### Vulnerability Configuration
-
-
-| Variable                              | Description                                             | Default | Required |
-| ------------------------------------- | ------------------------------------------------------- | ------- | -------- |
-| `VULN_USE_PATCH_PUBLICATION_DATE`     | Use patch publication date for calculating days open    | `false` | No       |
-| `VULN_REQUIRE_PATCH_PUBLICATION_DATE` | Only import vulnerabilities with patch publication date | `false` | No       |
-
-**Behavior:**
-
-- When `VULN_USE_PATCH_PUBLICATION_DATE=false`: days_open = current_time - detection_time
-- When `VULN_USE_PATCH_PUBLICATION_DATE=true`: days_open = scan_timestamp - patch_publication_date
-
----
-
-## Frontend Environment Variables
-
-The frontend (Astro/React) uses environment variables prefixed with `PUBLIC_` to expose them to the client.
-
-
-| Variable         | Description     | Default       | Required |
-| ---------------- | --------------- | ------------- | -------- |
-| `PUBLIC_API_URL` | Backend API URL | Auto-detected | No       |
-
-**Behavior:**
-
-- In development (`localhost`): defaults to `http://localhost:8080`
-- In production (non-localhost): uses relative URLs (empty string)
-
-**Example `.env` file:**
-
-```bash
-PUBLIC_API_URL=https://api.yourdomain.com
-```
-
----
-
-## CLI Environment Variables
-
-The CLI tool supports multiple sources for configuration with the following priority:
-
-1. System properties (highest priority)
-2. Environment variables
-3. Config files (`~/.secman/`)
-4. Defaults
-
-### CrowdStrike API Credentials
-
-
-
-| Variable               | Description                          |
-| ---------------------- | ------------------------------------ |
-| `FALCON_CLIENT_ID`     | Alias for `CROWDSTRIKE_CLIENT_ID`    |
-| `FALCON_CLIENT_SECRET` | Alias for `CROWDSTRIKE_CLIENT_SECRET`|
-| `FALCON_CLOUD_REGION`  | CrowdStrike cloud region             |
-
-**Base URL by Region:**
-
-
-| Region         | Base URL                                 |
-| -------------- | ---------------------------------------- |
-| US-1 (default) | `https://api.crowdstrike.com`            |
-| US-2           | `https://api.us-2.crowdstrike.com`       |
-| EU-1           | `https://api.eu-1.crowdstrike.com`       |
-| US-GOV-1       | `https://api.laggar.gcw.crowdstrike.com` |
-| US-GOV-2       | `https://api.laggar.gcw.crowdstrike.com` |
-
-**Example:**
-
-```bash
-export FALCON_CLIENT_ID=your-client-id
-export FALCON_CLIENT_SECRET=your-client-secret
-export FALCON_BASE_URL=https://api.eu-1.crowdstrike.com
-```
-
-### Backend Authentication (for --save flag)
-
-
-| Variable             | Description                         | Default                 | Required   |
-| -------------------- | ----------------------------------- | ----------------------- | ---------- |
-| `SECMAN_ADMIN_NAME`    | Backend username for authentication | -                       | For --save |
-| `SECMAN_ADMIN_PASS`    | Backend password for authentication | -                       | For --save |
-| `SECMAN_BACKEND_URL` | Backend API URL                     | `http://localhost:8080` | No         |
-
-**Example:**
-
-```bash
-export SECMAN_ADMIN_NAME=adminuser
-export SECMAN_ADMIN_PASS=your-password
-export SECMAN_BACKEND_URL=https://api.yourdomain.com
-```
-
-
-## Quick Reference Tables
-
-### Production Checklist
-
-
-| Variable                     | Component | Must Change |
-| ---------------------------- | --------- | ----------- |
-| `DB_CONNECT`                 | Backend   | Yes         |
-| `DB_PASSWORD`                | Backend   | Yes         |
-| `JWT_SECRET`                 | Backend   | Yes         |
-| `SECMAN_ENCRYPTION_PASSWORD` | Backend   | Yes         |
-| `SECMAN_ENCRYPTION_SALT`     | Backend   | Yes         |
-| `SMTP_PASSWORD`              | Backend   | Yes         |
-| `SECMAN_BACKEND_URL`           | Backend   | Yes         |
-| `FRONTEND_URL`               | Backend   | Yes         |
-| `FALCON_CLIENT_SECRET`       | CLI       | Yes         |
-
-### All Variables by Component
-
-#### Backend (29 variables)
-
-```
-DB_CONNECT, DB_USERNAME, DB_PASSWORD
-JWT_SECRET
-SECMAN_ENCRYPTION_PASSWORD, SECMAN_ENCRYPTION_SALT, SECMAN_AUTH_COOKIE_SECURE
-SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD
-SMTP_FROM_ADDRESS, SMTP_FROM_NAME, SMTP_ENABLE_TLS
-SECMAN_BACKEND_URL, FRONTEND_URL
-OAUTH_STATE_RETRY_MAX_ATTEMPTS, OAUTH_STATE_RETRY_INITIAL_DELAY
-OAUTH_STATE_RETRY_MAX_DELAY, OAUTH_STATE_RETRY_BACKOFF_MULTIPLIER
-OAUTH_TOKEN_EXCHANGE_MAX_RETRIES, OAUTH_TOKEN_EXCHANGE_RETRY_DELAY
-MEMORY_LAZY_LOADING, MEMORY_BATCH_SIZE, MEMORY_STREAMING_EXPORTS
-SECMAN_DEBUG
-SECMAN_LOGGING
-VULN_USE_PATCH_PUBLICATION_DATE, VULN_REQUIRE_PATCH_PUBLICATION_DATE
-```
-
-#### Frontend (1 variable)
-
-```
-PUBLIC_API_URL
-```
-
-#### CLI (7 variables)
-
-```
-FALCON_CLIENT_ID, FALCON_CLIENT_SECRET, FALCON_BASE_URL, FALCON_CLOUD_REGION
-SECMAN_ADMIN_NAME, SECMAN_ADMIN_PASS, SECMAN_BACKEND_URL
-```
-
----
-
-## Environment File Templates
-
-### Backend Production Template (`/etc/secman/backend.env`)
-
-```bash
-# =============================================================================
-# Secman Backend Production Configuration
-# =============================================================================
-
-# --- Database Configuration ---
 DB_CONNECT=jdbc:mariadb://localhost:3306/secman
 DB_USERNAME=secman
-DB_PASSWORD=REPLACE_WITH_SECURE_PASSWORD
-
-# --- JWT Authentication ---
-# Generate with: openssl rand -base64 32
-JWT_SECRET=REPLACE_WITH_256_BIT_SECRET
-
-# --- Encryption Configuration ---
-# Generate password with: openssl rand -hex 32
-SECMAN_ENCRYPTION_PASSWORD=REPLACE_WITH_GENERATED_PASSWORD
-# Generate salt with: openssl rand -hex 8
-SECMAN_ENCRYPTION_SALT=REPLACE_WITH_16_HEX_CHARS
-
-# --- SMTP Email Configuration ---
+DB_PASSWORD=REPLACE
+JWT_SECRET=REPLACE                               # openssl rand -base64 32
+SECMAN_ENCRYPTION_PASSWORD=REPLACE               # openssl rand -hex 32
+SECMAN_ENCRYPTION_SALT=REPLACE                   # openssl rand -hex 8
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
-SMTP_USERNAME=noreply@yourdomain.com
-SMTP_PASSWORD=REPLACE_WITH_APP_PASSWORD
-SMTP_FROM_ADDRESS=noreply@yourdomain.com
+SMTP_USERNAME=noreply@example.com
+SMTP_PASSWORD=REPLACE
+SMTP_FROM_ADDRESS=noreply@example.com
 SMTP_FROM_NAME=Security Management System
 SMTP_ENABLE_TLS=true
-
-# --- URL Configuration ---
-SECMAN_BACKEND_URL=https://api.yourdomain.com
-FRONTEND_URL=https://secman.yourdomain.com
-
-# --- Cookie Security (set to false only for local HTTP development) ---
+SECMAN_BACKEND_URL=https://api.example.com
+FRONTEND_URL=https://secman.example.com
 SECMAN_AUTH_COOKIE_SECURE=true
-
-# --- Optional: Vulnerability Settings ---
-VULN_USE_PATCH_PUBLICATION_DATE=false
-VULN_REQUIRE_PATCH_PUBLICATION_DATE=false
-
-# --- Optional: Debug & Logging ---
-# SECMAN_DEBUG=false           # true to log all MCP/API request headers and JWT claims
-# SECMAN_LOGGING=             # NO, ALL, ERROR, or unset for default (INFO)
-
-# --- Optional: Memory Optimization (Feature 073) ---
+# optional
+# VULN_USE_PATCH_PUBLICATION_DATE=false
+# VULN_REQUIRE_PATCH_PUBLICATION_DATE=false
+# SECMAN_DEBUG=false
+# SECMAN_LOGGING=
 # MEMORY_LAZY_LOADING=true
 # MEMORY_BATCH_SIZE=1000
 # MEMORY_STREAMING_EXPORTS=true
-
-# --- Optional: OAuth Robustness Settings ---
-# Increase these if users experience intermittent OAuth login failures
 # OAUTH_STATE_RETRY_MAX_ATTEMPTS=5
 # OAUTH_STATE_RETRY_INITIAL_DELAY=100
 # OAUTH_STATE_RETRY_MAX_DELAY=500
@@ -454,117 +147,46 @@ VULN_REQUIRE_PATCH_PUBLICATION_DATE=false
 # OAUTH_TOKEN_EXCHANGE_RETRY_DELAY=500
 ```
 
-### Frontend Production Template (`/etc/secman/frontend.env`)
-
+`/etc/secman/frontend.env`:
 ```bash
-# =============================================================================
-# Secman Frontend Production Configuration
-# =============================================================================
-
-# Backend API URL (use relative URL for same-domain deployment)
 PUBLIC_API_URL=
-
-# Node.js Production Settings
 NODE_ENV=production
 HOST=127.0.0.1
 PORT=4321
 ```
 
-### CLI Credentials Template (`~/.secman/credentials.conf`)
-
+`~/.secman/credentials.conf`:
 ```bash
-# =============================================================================
-# Secman CLI Credentials
-# =============================================================================
-
-# --- CrowdStrike API Credentials ---
-FALCON_CLIENT_ID=your-client-id-here
-FALCON_CLIENT_SECRET=your-client-secret-here
+FALCON_CLIENT_ID=...
+FALCON_CLIENT_SECRET=...
 FALCON_BASE_URL=https://api.crowdstrike.com
-
-# --- Backend Authentication (for --save) ---
-SECMAN_ADMIN_NAME=adminuser
-SECMAN_ADMIN_PASS=your-secure-password
-SECMAN_BACKEND_URL=https://api.yourdomain.com
+SECMAN_ADMIN_NAME=...
+SECMAN_ADMIN_PASS=...
+SECMAN_BACKEND_URL=https://api.example.com
 ```
 
-### CLI YAML Config Template (`~/.secman/crowdstrike.yaml`)
-
+`~/.secman/crowdstrike.yaml`:
 ```yaml
-# CrowdStrike API Configuration
-clientId: your-client-id-here
-clientSecret: your-client-secret-here
+clientId: ...
+clientSecret: ...
 baseUrl: https://api.crowdstrike.com
 ```
 
----
+## Hygiene
 
-## Security Best Practices
+- Never commit credentials. Use `pass-cli` (Proton Pass) for shared secrets — see `docs/PASS_CLI.md`.
+- `chmod 600 /etc/secman/*.env ~/.secman/credentials.conf`.
+- Rotate ≤90 days. Keep `SECMAN_ENCRYPTION_*` constant for the lifetime of encrypted data.
+- Per-environment credentials (dev/staging/prod).
 
-1. **Never commit credentials** to version control
-2. **Use strong, unique passwords** generated with cryptographic tools
-3. **Restrict file permissions** on environment files:
-   ```bash
-   sudo chmod 600 /etc/secman/*.env
-   sudo chmod 600 ~/.secman/credentials.conf
-   ```
-4. **Rotate credentials regularly** (every 90 days recommended)
-5. **Use AWS Secrets Manager** or similar for production deployments
-6. **Audit access** to credential files and environment variables
-7. **Use different credentials** for development, staging, and production
+## Common errors
 
----
-
-## Troubleshooting
-
-### Common Issues
-
-**"JWT signature verification failed"**
-
-- Ensure `JWT_SECRET` is at least 32 characters (256 bits)
-- Verify the same secret is used across all backend instances
-
-**"Failed to decrypt sensitive data"**
-
-- `SECMAN_ENCRYPTION_PASSWORD` or `SECMAN_ENCRYPTION_SALT` changed after data was encrypted
-- These values must remain constant for the lifetime of encrypted data
-
-**"SMTP authentication failed"**
-
-- For Gmail: Use an App Password, not your regular password
-- Verify `SMTP_HOST` and `SMTP_PORT` are correct for your provider
-
-**"CrowdStrike API: 401 Unauthorized"**
-
-- Verify `FALCON_CLIENT_ID` and `FALCON_CLIENT_SECRET` are correct
-- Ensure the API credentials have the required scopes
-- Check `FALCON_BASE_URL` matches your CrowdStrike cloud region
-
-**"Your login session was not found" (OAuth)**
-
-- This indicates the OAuth state was not found in the database when the callback arrived
-- Increase `OAUTH_STATE_RETRY_MAX_ATTEMPTS` and `OAUTH_STATE_RETRY_MAX_DELAY` to handle database replication lag
-- Check if the `oauth_states` table cleanup job is running too aggressively
-
-**"Could not complete authentication" (OAuth)**
-
-- This indicates token exchange with the OAuth provider failed
-- Check network connectivity to the OAuth provider (Microsoft, GitHub)
-- Increase `OAUTH_TOKEN_EXCHANGE_MAX_RETRIES` for unreliable network conditions
-- Review backend logs for specific HTTP error codes from the provider
-
-**"Your login session expired" (OAuth)**
-
-- The OAuth state existed but was older than 10 minutes
-- This can happen if users take too long at the OAuth provider login page
-- Ensure users complete the OAuth flow within 10 minutes
-
----
-
-## See Also
-
-- [Architecture](./ARCHITECTURE.md) - System design and data model
-- [Deployment Guide](./DEPLOYMENT.md) - Production setup
-- [CLI Reference](./CLI.md) - Command-line tools
-- [Troubleshooting](./TROUBLESHOOTING.md) - Common issues and solutions
-- [CrowdStrike Import](./CROWDSTRIKE_IMPORT.md) - Import technical details
+| Symptom | Likely cause |
+|---|---|
+| `JWT signature verification failed` | `JWT_SECRET` < 32 bytes or differs across instances |
+| `Failed to decrypt sensitive data` | `SECMAN_ENCRYPTION_PASSWORD`/`SALT` changed since data was written — revert |
+| `SMTP authentication failed` | wrong `SMTP_HOST`/`SMTP_PORT`; for Gmail use App Password |
+| CrowdStrike `401 Unauthorized` | wrong `FALCON_CLIENT_*` or wrong region in `FALCON_BASE_URL`; missing scopes |
+| OAuth `Your login session was not found` | state expired/lost — increase `OAUTH_STATE_RETRY_MAX_ATTEMPTS`/`MAX_DELAY`; check `oauth_states` cleanup job |
+| OAuth `Could not complete authentication` | token exchange failed (network/IdP) — bump `OAUTH_TOKEN_EXCHANGE_MAX_RETRIES`; check provider logs |
+| OAuth `Your login session expired` | user took >10 min at IdP login — UX issue, not a config bug |

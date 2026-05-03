@@ -1,47 +1,33 @@
 # Security Policy
 
-## Supported Versions
+## Supported versions
 
+All releases are alpha. Patches land on `main` only.
 
-| Version | Status |
-| ------- | ------ |
-| Current | Alpha  |
+## Reporting
 
-All versions are currently in alpha. Security patches are applied to the latest version only.
+- **Email**: markus@schmall.io
+- **GitHub**: [private security advisory](https://github.com/schmalle/secman/security/advisories)
 
-## Reporting a Vulnerability
+Include: description, repro steps, impact assessment, suggested fix (optional). Do **not** open public issues for vulnerabilities.
 
-If you discover a security vulnerability, please report it responsibly:
+## Response SLO
 
-1. **Email**: Contact the maintainer at markus@schmall.io
-2. **GitHub**: Create a private security advisory at [github.com/schmalle/secman/security/advisories](https://github.com/schmalle/secman/security/advisories)
+| | Target |
+|---|---|
+| Acknowledgement | 48 h |
+| Initial assessment | 7 d |
+| Critical fix | 72 h |
+| High fix | 14 d |
+| Medium fix | 30 d |
 
-Please include:
+## In-tree controls
 
-- Description of the vulnerability
-- Steps to reproduce
-- Potential impact assessment
-- Suggested fix (if available)
+- AuthN: BCrypt, JWT, OAuth2/OIDC, Passkeys/WebAuthn, optional MFA.
+- AuthZ: 9-role RBAC + row-level filtering on assets (workgroup, ownership, AWS account, AD domain, sharing).
+- Storage: parameterized queries (no string-built SQL); sensitive config encrypted at rest (`SECMAN_ENCRYPTION_PASSWORD`/`SALT`).
+- Web: HttpOnly + Secure cookies, CSP, SameSite for CSRF.
+- Imports: file-size cap, MIME and header validation.
+- Audit: MCP operations and notifications logged; OAuth state retried with exponential backoff to mitigate fast-SSO races.
 
-**Do not** open public GitHub issues for security vulnerabilities.
-
-## Response Timeline
-
-- **Acknowledgment**: Within 48 hours
-- **Initial assessment**: Within 7 days
-- **Fix timeline**: Depends on severity (critical: within 72 hours, high: 14 days, medium: 30 days)
-
-## Security Measures
-
-SecMan implements the following security measures:
-
-- **Authentication**: BCrypt password hashing, JWT tokens, OAuth2/OIDC, Passkeys/WebAuthn
-- **Authorization**: Role-based access control (RBAC) with row-level security
-- **Data Protection**: Parameterized queries (100% SQL injection prevention), encrypted sensitive configuration storage
-- **Web Security**: HttpOnly cookies, Content Security Policy headers, SameSite CSRF protection
-- **Input Validation**: File size limits, content-type validation, header validation on imports
-- **Audit**: MCP operation audit logging, notification logging
-
-## Contact
-
-**Maintainer:** Markus Schmall - markus@schmall.io
+Maintainer: Markus Schmall — markus@schmall.io.

@@ -1,987 +1,264 @@
-# Secman CLI Reference
+# CLI Reference
 
-**Last Updated:** 2026-04-23
-**Version:** 1.1
+Wrappers (canonical):
 
-Command-line interface for CrowdStrike vulnerability queries, notifications, user mapping management, and manual vulnerability entry.
+- `./scriptpp/secman <cmd>` — symlink to `secmancli`, resolves secrets via `pass-cli`.
+- `./scriptpp/secmanng <cmd>` — alternative wrapper with explicit env exports (e.g. `SECMAN_INSECURE=1` for self-signed TLS).
 
-> **Invocation Styles:** The examples below use `java -jar secman-cli.jar ...` to document the raw JAR invocation. During local development or scripted usage, you can substitute any of the following equivalent wrappers:
->
-> - `./scriptpp/secman <command>` — symlink to `secmancli`, uses 1Password to inject secrets from `secman.env`
-> - `./scriptpp/secmanng <command>` — alternative 1Password-based wrapper with explicit env exports (e.g. `SECMAN_INSECURE` for self-signed SSL)
->
-> See [1PASSWORD.md](./1PASSWORD.md) for details on which secrets each wrapper resolves.
+Legacy `java -jar secman-cli.jar` invocation is shown in some examples for clarity. Prefer the wrappers in real use. See `docs/PASS_CLI.md` for the secret resolution map.
 
----
-
-## Table of Contents
-
-1. [Overview](#overview)
-2. [Installation](#installation)
-3. [Configuration](#configuration)
-4. [Commands](#commands)
-5. [Cron Job Setup](#cron-job-setup)
-6. [AWS Integration](#aws-integration)
-7. [Troubleshooting](#troubleshooting)
-
----
-
-## Overview
-
-The Secman CLI provides command-line access to:
-
-- Query CrowdStrike Falcon API for vulnerabilities
-- Send automated notification emails for outdated assets
-- Manage user-to-asset mappings (AWS accounts, AD domains)
-- Manually add vulnerabilities for assets (with auto-asset creation)
-- Export vulnerability data to JSON/CSV
-
-### Requirements
-
-- Java 21 (Amazon Corretto recommended)
-- Network access to CrowdStrike API
-- Network access to Secman backend (for `--save` operations)
-
----
-
-## Installation
-
-### Build the CLI JAR
-
-From the repository root:
+## Build
 
 ```bash
-# Build standalone JAR with all dependencies
 ./gradlew :cli:shadowJar
-
-# Verify output
-ls -lh src/cli/build/libs/cli-0.1.0-all.jar
-```
-
-### Deploy to Server
-
-```bash
-# Copy to server
+ls src/cli/build/libs/cli-0.1.0-all.jar
+# Deploy:
 scp src/cli/build/libs/cli-0.1.0-all.jar user@server:/opt/secman/bin/secman-cli.jar
-
-# Verify
-java -jar /opt/secman/bin/secman-cli.jar --help
 ```
-
-### Directory Structure
-
-```
-/opt/secman/
-├── bin/
-│   └── secman-cli.jar          # CLI JAR file
-├── config/
-│   ├── credentials.conf        # CrowdStrike credentials
-│   └── application.yml         # Optional overrides
-└── logs/
-    └── cronjob.log            # Cron execution logs
-```
-
----
 
 ## Configuration
 
-### Configuration Priority
+Resolution order: system properties → env vars → `~/.secman/*.{conf,yaml}` → defaults.
 
-1. **System properties** (highest priority)
-2. **Environment variables**
-3. **Config files** (`~/.secman/`)
-4. **Defaults**
-
-### Environment Variables
-
-See [ENVIRONMENT.md](./ENVIRONMENT.md#cli-environment-variables) for complete reference.
-
-**CrowdStrike credentials:**
-
+CrowdStrike API:
 ```bash
-export FALCON_CLIENT_ID=your-client-id
-export FALCON_CLIENT_SECRET=your-client-secret
-export FALCON_BASE_URL=https://api.crowdstrike.com
+export FALCON_CLIENT_ID=…       # alias of CROWDSTRIKE_CLIENT_ID
+export FALCON_CLIENT_SECRET=…
+export FALCON_BASE_URL=https://api.crowdstrike.com   # or api.us-2/eu-1/laggar.gcw...
+export FALCON_CLOUD_REGION=us-1
 ```
 
-**Backend authentication (for --save):**
-
+Backend (for `--save` operations):
 ```bash
-export SECMAN_ADMIN_NAME=adminuser
-export SECMAN_ADMIN_PASS=your-password
-export SECMAN_BACKEND_URL=https://api.yourdomain.com
+export SECMAN_ADMIN_NAME=…
+export SECMAN_ADMIN_PASS=…
+export SECMAN_BACKEND_URL=https://api.example.com   # default http://localhost:8080
 ```
 
-### Config File Format
+`~/.secman/credentials.conf` mirrors the env vars (no spaces around `=`); `~/.secman/crowdstrike.yaml` carries `clientId/clientSecret/baseUrl`. `chmod 600` both.
 
-**`~/.secman/crowdstrike.yaml`:**
-
-```yaml
-clientId: your-client-id-here
-clientSecret: your-client-secret-here
-baseUrl: https://api.crowdstrike.com
-```
-
-**`~/.secman/credentials.conf`:**
-
-```bash
-FALCON_CLIENT_ID=your-client-id
-FALCON_CLIENT_SECRET=your-client-secret
-SECMAN_ADMIN_NAME=adminuser
-SECMAN_ADMIN_PASS=your-password
-```
-
-Secure credentials file:
-
-```bash
-chmod 600 ~/.secman/credentials.conf
-chmod 600 ~/.secman/crowdstrike.yaml
-```
-
----
+Full env reference: `docs/ENVIRONMENT.md`.
 
 ## Commands
 
-### Query Vulnerabilities
-
-Query CrowdStrike for server vulnerabilities.
+### `query servers` — CrowdStrike vulnerability query
 
 ```bash
-# Basic query
-java -jar secman-cli.jar query servers --hostname web-server-01
-
-# Filter by severity
-java -jar secman-cli.jar query servers --hostname web-server-01 --severity HIGH,CRITICAL
-
-# Save to database
-java -jar secman-cli.jar query servers --hostname web-server-01 \
-  --save --username admin --password secret
-
-# Export to file
-java -jar secman-cli.jar query servers --hostname web-server-01 \
-  --output-file results.json --format json
-
-# secmanng (1password based)
-/bin/secmanng query servers --severity CRITICAL,HIGH --verbose --min-days-open 1 --save --device-type SERVER  --last-seen-days 1 --insecure
-
-# Full options
-java -jar secman-cli.jar query servers \
-  --hostname web-server-01 \
-  --severity HIGH,CRITICAL \
-  --min-days-open 30 \
-  --limit 500 \
-  --save \
-  --username admin \
-  --password secret \
-  --backend-url https://api.yourdomain.com \
-  --verbose
+./scriptpp/secman query servers --hostname web-01 --severity HIGH,CRITICAL --min-days-open 30 --save
+./scriptpp/secmanng query servers --severity CRITICAL,HIGH --save --device-type SERVER \
+  --last-seen-days 1 --min-days-open 1 --insecure --verbose
 ```
 
-**Options:**
+| Option | Default | Notes |
+|---|---|---|
+| `--hostname` | required (unless filtering by other criteria) | exact host |
+| `--severity` | all | `CRITICAL,HIGH,MEDIUM,LOW` |
+| `--device-type` | all | `SERVER`, `WORKSTATION`, … |
+| `--min-days-open` | 0 | |
+| `--last-seen-days` | — | recent-checkin window |
+| `--limit` | 100 | |
+| `--save` | false | POST to backend |
+| `--username` / `--password` | — | required with `--save` |
+| `--backend-url` | `http://localhost:8080` | |
+| `--output-file` / `--format` | — / `json` | `json|csv` |
+| `--verbose` / `--insecure` | false | `--insecure` allows self-signed TLS |
 
-
-| Option            | Description                              | Default               |
-| ----------------- | ---------------------------------------- | --------------------- |
-| `--hostname`      | Target hostname (required)               | -                     |
-| `--severity`      | Filter by severity (comma-separated)     | All                   |
-| `--min-days-open` | Minimum days vulnerability has been open | 0                     |
-| `--limit`         | Maximum results                          | 100                   |
-| `--save`          | Save results to backend database         | false                 |
-| `--username`      | Backend authentication username          | -                     |
-| `--password`      | Backend authentication password          | -                     |
-| `--backend-url`   | Backend API URL                          | http://localhost:8080 |
-| `--output-file`   | Export to file                           | -                     |
-| `--format`        | Export format (json, csv)                | json                  |
-| `--verbose`       | Show detailed output                     | false                 |
-
-### Send Notifications
-
-Send email notifications for outdated assets.
+### `send-notifications` — outdated-asset & new-vuln emails
 
 ```bash
-# Dry run (no emails sent)
-java -jar secman-cli.jar send-notifications --dry-run --verbose
-
-# Send actual notifications
-java -jar secman-cli.jar send-notifications --verbose
-
-# Only process outdated assets
-java -jar secman-cli.jar send-notifications --outdated-only
+./scriptpp/secman send-notifications --dry-run --verbose
+./scriptpp/secman send-notifications --outdated-only
 ```
 
-**Options:**
+| Option | Default | Notes |
+|---|---|---|
+| `--dry-run` | false | print plan only |
+| `--verbose` | false | per-asset detail |
+| `--outdated-only` | false | skip new-vuln notifications |
 
+### `manage-user-mappings`
 
-| Option            | Description                           | Default |
-| ----------------- | ------------------------------------- | ------- |
-| `--dry-run`       | Report planned emails without sending | false   |
-| `--verbose`       | Show detailed per-asset information   | false   |
-| `--outdated-only` | Only process outdated assets          | false   |
-
-### Manage User Mappings
-
-Manage user-to-asset mappings for access control. User mappings associate email addresses with AWS accounts or AD domains, enabling automatic asset visibility based on these attributes.
+Subcommands: `list`, `add-aws`, `add-domain`, `import`, `import-s3`, `download-s3`, `print-s3`, `remove`.
 
 ```bash
+# list (default table; supports --format json|csv, --output FILE, --type AWS|DOMAIN|ALL)
+./scriptpp/secman manage-user-mappings list --type AWS --format csv --output aws-mappings.csv
+./scriptpp/secman manage-user-mappings list --send-email --dry-run     # preview ADMIN/REPORT recipients
+./scriptpp/secman manage-user-mappings list --send-email --verbose     # dispatch with per-recipient status
 
+# add
+./scriptpp/secman manage-user-mappings add-aws    --email u@x --aws-account-id 123456789012
+./scriptpp/secman manage-user-mappings add-domain --email u@x --domain CORP.X.COM
 
+# import (CSV/JSON, --dry-run validates without persisting)
+./scriptpp/secman manage-user-mappings import --file mappings.csv  --format csv  --dry-run
+./scriptpp/secman manage-user-mappings import --file mappings.json --format json
 
-
-# List all mappings (table format - default)
-java -jar secman-cli.jar manage-user-mappings list
-
-# List all mappings (JSON format for scripting)
-java -jar secman-cli.jar manage-user-mappings list --format json
-
-# List AND email statistics to all ADMIN/REPORT users (Feature 085)
-java -jar secman-cli.jar manage-user-mappings list --send-email
-
-# Preview intended recipients without dispatching (dry-run)
-java -jar secman-cli.jar manage-user-mappings list --send-email --dry-run
-
-# Per-recipient delivery status
-java -jar secman-cli.jar manage-user-mappings list --send-email --verbose
-
-# Filter and email the filtered view only
-java -jar secman-cli.jar manage-user-mappings list --email user@example.com --send-email
-
-# Download AWS account mappings only to a file (CSV, round-trips through `import`)
-java -jar secman-cli.jar manage-user-mappings list \
-  --type AWS \
-  --format csv \
-  --output aws-mappings.csv
-
-# Download all mappings as JSON
-java -jar secman-cli.jar manage-user-mappings list \
-  --format json \
-  --output mappings.json
-
-# Add AWS account mapping
-java -jar secman-cli.jar manage-user-mappings add-aws \
-  --email user@example.com \
-  --aws-account-id 123456789012
-
-# Add AD domain mapping
-java -jar secman-cli.jar manage-user-mappings add-domain \
-  --email user@example.com \
-  --domain CORP.EXAMPLE.COM
-
-# Import from CSV (validates and persists)
-java -jar secman-cli.jar manage-user-mappings import \
-  --file mappings.csv \
-  --format csv
-
-# Import with dry-run (validates without persisting)
-java -jar secman-cli.jar manage-user-mappings import \
-  --file mappings.csv \
-  --format csv \
-  --dry-run
-
-# Import from JSON
-java -jar secman-cli.jar manage-user-mappings import \
-  --file mappings.json \
-  --format json
-
-# Import via S3
-./scriptpp/secmanng manage-user-mappings import-s3 --bucket BUCKETNAME --key FILE
-
-# Download the AWS account mapping file directly from S3 to a local path
-# (no backend involved — only AWS credentials needed)
-./scriptpp/secmanng manage-user-mappings download-s3 \
-  --bucket BUCKETNAME --key mappings.csv --output ./aws-mappings.csv
-
-# Download with a named AWS profile, overwriting any existing local file
-./scriptpp/secmanng manage-user-mappings download-s3 \
-  --bucket BUCKETNAME --key mappings.csv \
-  --aws-profile prod \
-  --output ./aws-mappings.csv \
-  --force
-
-# Print the parsed AWS account mappings from an S3 file straight to the console
-# (no disk write, no backend involvement)
-./scriptpp/secmanng manage-user-mappings print-s3 \
-  --bucket BUCKETNAME --key mappings.csv
-
-# Print everything (AWS + domains) as JSON
-./scriptpp/secmanng manage-user-mappings print-s3 \
-  --bucket BUCKETNAME --key mappings.csv \
-  --type ALL --format JSON
-
-# Import via S3, then email statistics to ADMIN/REPORT users
-./scriptpp/secmanng manage-user-mappings import-s3 --bucket BUCKETNAME --key FILE && \
-  ./scriptpp/secmanng manage-user-mappings list --send-email
-
-# Remove mapping
-java -jar secman-cli.jar manage-user-mappings remove --id 42
+# remove
+./scriptpp/secman manage-user-mappings remove --id 42
 ```
 
-**Subcommands:**
+#### `list --send-email` (Feature 085)
 
+Recipients: every `ADMIN`+`REPORT` user with a non-empty email (matches `send-admin-summary`). Always writes a row to `user_mapping_statistics_log`. Exit codes:
 
-| Command      | Description                                                                  |
-| ------------ | ---------------------------------------------------------------------------- |
-| `list`       | List all user mappings (supports`--send-email` to notify ADMIN/REPORT users) |
-| `add-aws`    | Add AWS account mapping                                                      |
-| `add-domain` | Add AD domain mapping                                                        |
-| `import`     | Bulk import from CSV/JSON                                                    |
-| `import-s3`  | Import from AWS S3 bucket (follow with`list --send-email` to notify admins)  |
-| `download-s3`| Download an AWS account mapping file directly from S3 to a local path (no backend involvement) |
-| `print-s3`   | Download a mapping file from S3 and print the parsed AWS account mappings to the console (no disk write, no backend) |
-| `remove`     | Remove mapping by ID                                                         |
+| Code | Meaning |
+|---|---|
+| 0 | OK / dry-run / `list` without `--send-email` |
+| 1 | generic error, or `--dry-run` used without `--send-email` |
+| 2 | not authorized (invoker not ADMIN) |
+| 3 | no eligible recipients |
+| 4 | partial failure (≥1 sent, ≥1 failed) |
+| 5 | full failure (0 sent, ≥1 attempted) |
 
-**List Command Options:**
+#### Import file formats
 
-
-| Option            | Description                                                                                           | Default |
-| ----------------- | ----------------------------------------------------------------------------------------------------- | ------- |
-| `--format`        | Output format:`table`, `json`, or `csv`                                                               | `table` |
-| `--email`         | Filter to a specific user email                                                                       | -       |
-| `--status`        | Filter by`ACTIVE`, `PENDING`, or `ALL`                                                                | `ALL`   |
-| `--type`          | Restrict by mapping kind:`AWS` (AWS account mappings only), `DOMAIN` (domain mappings only), or `ALL` | `ALL`   |
-| `--output`, `-o`  | Write mappings to FILE instead of stdout. With`--format CSV` the file round-trips through `import`. Forces CSV when used with `--format TABLE`. | -       |
-| `--send-email`    | Email the statistics report to all ADMIN/REPORT users after printing the console output (Feature 085) | `false` |
-| `--dry-run`       | Used with`--send-email`: preview intended recipients without dispatching                              | `false` |
-| `--verbose`, `-v` | Used with`--send-email`: show per-recipient delivery status                                           | `false` |
-
-**Exit codes (when `--send-email` is set):**
-
-
-| Code | Meaning                                                                              |
-| ---- | ------------------------------------------------------------------------------------ |
-| 0    | Success, dry-run, or default`list` without `--send-email`                            |
-| 1    | Generic error (network, parse, unexpected) or`--dry-run` used without `--send-email` |
-| 2    | Authorization denied (invoker does not hold ADMIN role)                              |
-| 3    | No eligible recipients (no ADMIN/REPORT users with valid email)                      |
-| 4    | Partial failure (at least one sent, at least one failed)                             |
-| 5    | Full failure (zero sent, at least one attempted)                                     |
-
-Recipients are every user holding the `ADMIN` or `REPORT` role with a non-empty
-email address. This matches the recipient set used by `send-admin-summary`. The
-command writes an audit row to `user_mapping_statistics_log` on every
-invocation, including dry-runs and zero-recipient failures.
-
-**Import Command Options:**
-
-
-| Option      | Description                    | Default |
-| ----------- | ------------------------------ | ------- |
-| `--file`    | Path to import file (required) | -       |
-| `--format`  | File format:`csv` or `json`    | `csv`   |
-| `--dry-run` | Validate without persisting    | `false` |
-
-**Download-S3 Command Options:**
-
-`download-s3` fetches an AWS account mapping file straight from an S3 bucket to a local path. **It does not contact the secman backend** — only AWS credentials with `s3:GetObject` (and ideally `s3:HeadObject` for a pre-download size check) on the target object are required. Use this when you want to inspect the source-of-truth file, diff against backend state, or pipe the contents into other tooling without touching the secman API.
-
-| Option                    | Description                                                                                       | Default |
-| ------------------------- | ------------------------------------------------------------------------------------------------- | ------- |
-| `--bucket`, `-b`          | S3 bucket name (plain name — not a URL or ARN). **Required.**                                     | -       |
-| `--key`, `-k`             | S3 object key (path inside the bucket). **Required.**                                             | -       |
-| `--output`, `-o`          | Local destination file path. **Required.** Parent directory must already exist.                   | -       |
-| `--force`, `-f`           | Overwrite the destination file if it already exists.                                              | `false` |
-| `--aws-region`            | AWS region. Defaults to SDK resolution from env/config.                                           | -       |
-| `--aws-profile`           | AWS credential profile name (reads`~/.aws/credentials`).                                          | -       |
-| `--aws-access-key-id`     | Explicit AWS access key ID (or set`AWS_ACCESS_KEY_ID`).                                           | -       |
-| `--aws-secret-access-key` | Explicit AWS secret access key (or set`AWS_SECRET_ACCESS_KEY`).                                   | -       |
-| `--aws-session-token`     | AWS session token for temporary credentials (or set`AWS_SESSION_TOKEN`).                          | -       |
-| `--endpoint-url`          | Custom S3 endpoint URL for local testing (e.g.`http://localhost:9090`). Also reads `AWS_ENDPOINT_URL`. | -       |
-| `--quiet`, `-q`           | Suppress progress output. Errors still print to stderr; success line still prints to stderr.      | `false` |
-
-**Exit codes:**
-
-
-| Code | Meaning                                                            |
-| ---- | ------------------------------------------------------------------ |
-| 0    | Success — file written to`--output`                                |
-| 1    | Generic / I/O error                                                |
-| 2    | S3, credentials, or argument error (fatal — won't succeed on retry) |
-| 3    | Unexpected error                                                   |
-
-**Constraints:**
-
-- 10 MB hard size limit (matches`import-s3`).
-- The destination's parent directory must already exist; the command does not auto-create it.
-- Existing destination files are not overwritten unless`--force` is set.
-- File contents are written verbatim — there is no parsing, validation, or normalization. Use`import-s3 --dry-run` if you want validation.
-
-**Examples:**
-
-```bash
-# Default credential chain
-./scriptpp/secman manage-user-mappings download-s3 \
-  --bucket my-bucket --key mappings.csv \
-  --output ./aws-mappings.csv
-
-# Named profile, force overwrite
-./scriptpp/secman manage-user-mappings download-s3 \
-  --bucket my-bucket --key data/users.json \
-  --aws-profile prod \
-  --output ./users.json \
-  --force
-
-# Explicit credentials + custom region (e.g. for cron jobs)
-./scriptpp/secman manage-user-mappings download-s3 \
-  --bucket my-bucket --key mappings.csv \
-  --aws-access-key-id "$AWS_KEY" \
-  --aws-secret-access-key "$AWS_SECRET" \
-  --aws-region eu-west-1 \
-  --output /var/lib/secman/aws-mappings.csv \
-  --quiet
-```
-
-**Print-S3 Command Options:**
-
-`print-s3` downloads a mapping file from S3, parses it, and prints the **identified mappings** to the console. **It does not write to disk** (the temp file used during download is deleted on exit) and **does not contact the secman backend**. Default scope is AWS account mappings — broaden with `--type DOMAIN` or `--type ALL`.
-
-| Option                    | Description                                                                                                | Default |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------- | ------- |
-| `--bucket`, `-b`          | S3 bucket name (plain name — not a URL or ARN). **Required.**                                              | -       |
-| `--key`, `-k`             | S3 object key (path inside the bucket). **Required.**                                                      | -       |
-| `--type`                  | Restrict by mapping kind:`AWS` (AWS account mappings only), `DOMAIN` (domain mappings only), or `ALL`. | `AWS`   |
-| `--format`                | Output format:`TABLE`, `JSON`, or `CSV`.                                                                   | `TABLE` |
-| `--file-format`           | Format of the source file in S3:`CSV`, `JSON`, or `AUTO` (auto-detects from extension or content).        | `AUTO`  |
-| `--show-errors`           | Print parse errors (malformed rows) to stderr after the mapping output. Without this flag, errors are silently dropped and only valid rows are printed. | `false` |
-| `--aws-region`            | AWS region. Defaults to SDK resolution from env/config.                                                    | -       |
-| `--aws-profile`           | AWS credential profile name (reads`~/.aws/credentials`).                                                   | -       |
-| `--aws-access-key-id`     | Explicit AWS access key ID (or set`AWS_ACCESS_KEY_ID`).                                                    | -       |
-| `--aws-secret-access-key` | Explicit AWS secret access key (or set`AWS_SECRET_ACCESS_KEY`).                                            | -       |
-| `--aws-session-token`     | AWS session token for temporary credentials (or set`AWS_SESSION_TOKEN`).                                   | -       |
-| `--endpoint-url`          | Custom S3 endpoint URL for local testing. Also reads`AWS_ENDPOINT_URL`.                                    | -       |
-| `--quiet`, `-q`           | Suppress the header banner. The mapping output is still printed to stdout so the command remains pipeable. | `false` |
-
-**Stdout / stderr split:**
-
-- **stdout**: only the parsed mapping output (TABLE/JSON/CSV) — safe to pipe into `diff`, `jq`, `awk`, or `> file`.
-- **stderr**: the header banner ("Source: ...", "Scope: ...") and the trailing summary line ("Parsed N mapping(s) ..."). Suppressed by `--quiet`. Parse errors only appear here when `--show-errors` is set.
-
-**Exit codes:**
-
-
-| Code | Meaning                                                          |
-| ---- | ---------------------------------------------------------------- |
-| 0    | Success — file parsed and printed without errors                 |
-| 1    | Parse errors found in the file (valid rows still printed)        |
-| 2    | S3, credentials, or argument error (fatal — won't succeed on retry) |
-| 3    | Unexpected error                                                 |
-
-**Examples:**
-
-```bash
-# Default: print AWS account mappings as a table
-./scriptpp/secman manage-user-mappings print-s3 \
-  --bucket my-bucket --key mappings.csv
-
-# Print everything as JSON for downstream tooling
-./scriptpp/secman manage-user-mappings print-s3 \
-  --bucket my-bucket --key mappings.csv \
-  --type ALL --format JSON
-
-# Print as CSV and pipe through jq-style filtering
-./scriptpp/secman manage-user-mappings print-s3 \
-  --bucket my-bucket --key mappings.csv \
-  --format CSV --quiet | grep '^alice@'
-
-# Diff S3 source-of-truth against the secman DB
-./scriptpp/secman manage-user-mappings print-s3 \
-  --bucket my-bucket --key mappings.csv \
-  --format CSV --quiet > /tmp/s3.csv
-./scriptpp/secman manage-user-mappings list \
-  --type AWS --format CSV --output /tmp/db.csv
-diff /tmp/s3.csv /tmp/db.csv
-
-# Show parse errors when troubleshooting a malformed file
-./scriptpp/secman manage-user-mappings print-s3 \
-  --bucket my-bucket --key mappings.csv \
-  --show-errors
-```
-
-#### CSV Import Format
-
-CSV files must have a header row with the following columns:
-
+CSV (header required, case-insensitive):
 ```csv
 email,awsAccountId,domain
 user1@example.com,123456789012,
 user2@example.com,,corp.example.com
-user3@example.com,987654321098,prod.example.com
 ```
 
-**Column requirements:**
-
-- `email` (required): Valid email address
-- `awsAccountId` (optional): 12-digit AWS account ID
-- `domain` (optional): AD domain name
-
-**Note:** At least one of `awsAccountId` or `domain` must be provided per row.
-
-#### JSON Import Format
-
-JSON files should contain an array of mapping objects:
-
+JSON:
 ```json
-[
-  {
-    "email": "user1@example.com",
-    "awsAccountId": "123456789012"
-  },
-  {
-    "email": "user2@example.com",
-    "domain": "corp.example.com"
-  },
-  {
-    "email": "user3@example.com",
-    "awsAccountId": "987654321098",
-    "domain": "prod.example.com"
-  }
-]
+[ {"email":"user1@example.com","awsAccountId":"123456789012"},
+  {"email":"user2@example.com","domain":"corp.example.com"} ]
 ```
 
-#### Validation Rules
+Validation: email `user@domain.tld` 3–255 chars; AWS account exactly 12 digits; domain alphanumeric `.`/`-`. At least one of `awsAccountId`/`domain` per entry. Output summarizes `Created (active|pending)`, `Skipped`, `Errors`.
 
-- **Email**: Must be valid format (`user@domain.tld`), 3-255 characters
-- **AWS Account ID**: Exactly 12 digits (e.g., `123456789012`)
-- **Domain**: Alphanumeric with dots/hyphens, no leading/trailing special characters
+#### S3 subcommands
 
-#### Import Results
+All three `*-s3` commands share AWS options: `--aws-region`, `--aws-profile`, `--aws-access-key-id`, `--aws-secret-access-key`, `--aws-session-token`, `--endpoint-url` (also `AWS_ENDPOINT_URL`, used for S3Mock/MinIO/LocalStack). 10 MB hard size limit. Default credential chain: env → `~/.aws/credentials` → IAM role → SSO.
 
-The import command outputs a summary:
+- **`import-s3`** — download AND POST to backend. Needs `s3:GetObject` (+ `s3:HeadObject` for pre-download size check). Exit codes: `0` ok / `1` partial / `2` fatal S3/config / `3` unexpected. Detailed flags: `docs/S3_USER_MAPPING_IMPORT.md`.
+- **`download-s3`** — download only, no backend contact. `--bucket -b`, `--key -k`, `--output -o` required; `--force -f` to overwrite; `--quiet -q` (success/error stays on stderr). Parent dir must exist; verbatim copy.
+- **`print-s3`** — download + parse + print to stdout (temp file deleted). `--type AWS|DOMAIN|ALL` (default `AWS`); `--format TABLE|JSON|CSV`; `--file-format CSV|JSON|AUTO`; `--show-errors` to print parse errors to stderr; `--quiet` suppresses banner+summary (still on stderr). **stdout = mappings only**, safe to pipe through `diff`/`jq`/`awk`.
 
-```
-Import complete:
-  Total processed: 100
-  Created (active): 75    # User exists, mapping applied immediately
-  Created (pending): 20   # User doesn't exist yet, mapping saved for future
-  Skipped: 5              # Duplicate mappings
-  Errors: 0
-```
+### `add-vulnerability`
 
-When using `--dry-run`, the same summary shows what *would* happen without making changes.
-
-### Add Vulnerability
-
-Manually add or update vulnerability records for assets.
+Manual upsert. Auto-creates asset if hostname missing (`type=SERVER`, `owner=CLI-IMPORT`). Same `(asset, cve)` updates instead of duplicating.
 
 ```bash
-# Basic usage - add vulnerability to existing asset
-java -jar secman-cli.jar add-vulnerability \
-  --hostname webserver01 \
-  --cve CVE-2024-1234 \
-  --criticality HIGH \
-  --username admin \
-  --password secret
-
-# With days open (how long vulnerability has been present)
-java -jar secman-cli.jar add-vulnerability \
-  --hostname webserver01 \
-  --cve CVE-2024-1234 \
-  --criticality CRITICAL \
-  --days-open 30 \
-  --username admin \
-  --password secret
-
-# Auto-creates asset if hostname not found
-java -jar secman-cli.jar add-vulnerability \
-  --hostname newserver99 \
-  --cve CVE-2024-5678 \
-  --criticality MEDIUM \
-  --username admin \
-  --password secret
-
-# Update existing vulnerability (upsert pattern)
-java -jar secman-cli.jar add-vulnerability \
-  --hostname webserver01 \
-  --cve CVE-2024-1234 \
-  --criticality HIGH \
-  --days-open 45 \
-  --username admin \
-  --password secret
-
-# With custom backend URL and verbose output
-java -jar secman-cli.jar add-vulnerability \
-  --hostname webserver01 \
-  --cve CVE-2024-1234 \
-  --criticality HIGH \
-  --backend-url https://api.yourdomain.com \
-  --username admin \
-  --password secret \
-  --verbose
+./scriptpp/secman add-vulnerability --hostname web-01 --cve CVE-2024-1234 \
+  --criticality HIGH --days-open 30 --username admin --password ***
 ```
 
-**Options:**
+| Option | Default | Notes |
+|---|---|---|
+| `--hostname`, `--cve`, `--criticality` (`CRITICAL|HIGH|MEDIUM|LOW`), `--username`, `--password` | required | |
+| `--days-open` | 0 | |
+| `--backend-url` | `http://localhost:8080` | |
+| `--verbose` | false | |
 
+Exit codes: `0` ok, `1` validation/auth error, `2` connection error.
 
-| Option          | Description                                | Default               |
-| --------------- | ------------------------------------------ | --------------------- |
-| `--hostname`    | Target asset hostname (required)           | -                     |
-| `--cve`         | CVE identifier or custom ID (required)     | -                     |
-| `--criticality` | CRITICAL, HIGH, MEDIUM, or LOW (required)  | -                     |
-| `--days-open`   | Days the vulnerability has been open       | 0                     |
-| `--username`    | Backend authentication username (required) | -                     |
-| `--password`    | Backend authentication password (required) | -                     |
-| `--backend-url` | Backend API URL                            | http://localhost:8080 |
-| `--verbose`     | Show detailed output                       | false                 |
+### `manage-workgroups`
 
-**Behavior:**
-
-- **Upsert pattern**: If same CVE exists for asset, updates instead of creating duplicate
-- **Auto-create**: If hostname not found, creates asset with type=SERVER, owner=CLI-IMPORT
-- **Exit codes**: 0=success, 1=validation/auth error, 2=connection error
-
-### Manage Workgroups
-
-Manage workgroup asset assignments with pattern-based selection.
+Subcommands: `list`, `assign-assets`, `remove-assets`.
 
 ```bash
-# List all workgroups
-java -jar secman-cli.jar manage-workgroups list
+./scriptpp/secman manage-workgroups list                          # list workgroups
+./scriptpp/secman manage-workgroups list --workgroup Production   # assets in WG
+./scriptpp/secman manage-workgroups list --search-assets "ip-10-*"
 
-# List assets in a specific workgroup
-java -jar secman-cli.jar manage-workgroups list --workgroup Production
+./scriptpp/secman manage-workgroups assign-assets --workgroup Production \
+  --pattern "*prod*" --type SERVER --admin-user admin@x
 
-# Search assets by pattern (preview before assigning)
-java -jar secman-cli.jar manage-workgroups list --search-assets "ip-10-*"
+./scriptpp/secman manage-workgroups assign-assets --workgroup Production --ids 1,2,3 \
+  --admin-user admin@x
 
-# Assign assets by pattern (wildcards supported)
-java -jar secman-cli.jar manage-workgroups assign-assets \
-  --workgroup Production \
-  --pattern "ip-10-*" \
-  --admin-user admin@example.com
-
-# Assign assets by pattern with type filter
-java -jar secman-cli.jar manage-workgroups assign-assets \
-  --workgroup Production \
-  --pattern "*prod*" \
-  --type SERVER \
-  --admin-user admin@example.com
-
-# Assign specific assets by ID
-java -jar secman-cli.jar manage-workgroups assign-assets \
-  --workgroup Production \
-  --ids 1,2,3 \
-  --admin-user admin@example.com
-
-# Preview assignment without changes (dry-run)
-java -jar secman-cli.jar manage-workgroups assign-assets \
-  --workgroup Production \
-  --pattern "*" \
-  --dry-run
-
-# Remove assets by pattern
-java -jar secman-cli.jar manage-workgroups remove-assets \
-  --workgroup Test \
-  --pattern "*test*" \
-  --admin-user admin@example.com
-
-# Remove all assets from workgroup
-java -jar secman-cli.jar manage-workgroups remove-assets \
-  --workgroup Test \
-  --all \
-  --admin-user admin@example.com
-
-# Output in different formats
-java -jar secman-cli.jar manage-workgroups list --format JSON
-java -jar secman-cli.jar manage-workgroups list --format CSV
+./scriptpp/secman manage-workgroups assign-assets --workgroup Production --pattern "*" --dry-run
+./scriptpp/secman manage-workgroups remove-assets --workgroup Test --pattern "*test*" --admin-user admin@x
+./scriptpp/secman manage-workgroups remove-assets --workgroup Test --all              --admin-user admin@x
+./scriptpp/secman manage-workgroups list --format JSON
 ```
 
-**Subcommands:**
+Wildcards: `*` (any), `?` (single char), `*foo*` (contains).
 
+### Other commands
 
-| Command         | Description                                    |
-| --------------- | ---------------------------------------------- |
-| `list`          | List workgroups or assets in a workgroup       |
-| `assign-assets` | Assign assets to a workgroup by pattern or IDs |
-| `remove-assets` | Remove assets from a workgroup                 |
+`send-admin-summary`, `import` (local file), `import-s3`, `config`, `monitor`, `list`, `list-workgroups`, `remove`, `delete-all-requirements`, `deduplicate-vulnerabilities`, `port-scan`, `send-notification-users`, `add-aws`, `add-domain`, `add-requirement`, `export-requirements`. `./scriptpp/secman help <cmd>` for details.
 
-**Wildcard Patterns:**
+## Cron
 
-
-| Pattern  | Description              | Example                                |
-| -------- | ------------------------ | -------------------------------------- |
-| `*`      | Matches any characters   | `ip-10-*` matches `ip-10-255-75-85`    |
-| `?`      | Matches single character | `server?` matches `server1`, `serverA` |
-| `*text*` | Contains text            | `*prod*` matches `web-prod-01`         |
-
----
-
-## Cron Job Setup
-
-### Wrapper Script
-
-Create `/opt/secman/bin/cron-query-servers.sh`:
+Wrapper template at `/opt/secman/bin/cron-query-servers.sh`:
 
 ```bash
-#!/bin/bash
-#############################################
-# Secman CLI Cron Execution Script
-#############################################
+#!/usr/bin/env bash
+set -Eeuo pipefail
+JAR=/opt/secman/bin/secman-cli.jar
+LOG=/opt/secman/logs/cronjob.log
+LOCK=/var/lock/secman-cli.lock
 
-JAR_PATH="/opt/secman/bin/secman-cli.jar"
-CONFIG_DIR="/opt/secman/config"
-LOG_DIR="/opt/secman/logs"
-LOG_FILE="${LOG_DIR}/cronjob.log"
-CREDENTIALS_FILE="${CONFIG_DIR}/credentials.conf"
+[ -e "$LOCK" ] && { echo "[$(date -Is)] another run in progress"; exit 0; }
+trap "rm -f $LOCK" EXIT
+touch "$LOCK"
 
-SEVERITY="HIGH,CRITICAL"
-MIN_DAYS_OPEN="1"
-
-set -e
-set -u
-set -o pipefail
-
-timestamp() {
-    date '+%Y-%m-%d %H:%M:%S'
-}
-
-log() {
-    echo "[$(timestamp)] $1" | tee -a "${LOG_FILE}"
-}
-
-main() {
-    log "===== Secman CLI Cron Job Starting ====="
-
-    # Load credentials
-    if [ -f "${CREDENTIALS_FILE}" ]; then
-        source "${CREDENTIALS_FILE}"
-    else
-        log "ERROR: Credentials file not found"
-        exit 1
-    fi
-
-    # Execute CLI
-    java -jar "${JAR_PATH}" \
-        query servers \
-        --severity "${SEVERITY}" \
-        --min-days-open "${MIN_DAYS_OPEN}" \
-        --save \
-        --username "${SECMAN_ADMIN_NAME}" \
-        --password "${SECMAN_ADMIN_PASS}" \
-        2>&1 | tee -a "${LOG_FILE}"
-
-    log "===== Secman CLI Cron Job Completed ====="
-}
-
-main
+source /opt/secman/config/credentials.conf
+java -jar "$JAR" query servers --severity HIGH,CRITICAL --min-days-open 1 --save \
+  --username "$SECMAN_ADMIN_NAME" --password "$SECMAN_ADMIN_PASS" 2>&1 | tee -a "$LOG"
 ```
 
-Make executable:
-
-```bash
-chmod +x /opt/secman/bin/cron-query-servers.sh
-```
-
-### Cron Schedule Examples
-
-```bash
-crontab -e
-```
-
-**Daily at 2:00 AM:**
-
-```cron
-0 2 * * * /opt/secman/bin/cron-query-servers.sh >> /opt/secman/logs/cronjob.log 2>&1
-```
-
-**Every hour:**
-
-```cron
-0 * * * * /opt/secman/bin/cron-query-servers.sh >> /opt/secman/logs/cronjob.log 2>&1
-```
-
-**Business hours (Mon-Fri, 9 AM - 5 PM):**
-
-```cron
-0 9-17 * * 1-5 /opt/secman/bin/cron-query-servers.sh >> /opt/secman/logs/cronjob.log 2>&1
-```
-
-### Log Rotation
-
-Create `/etc/logrotate.d/secman-cli`:
-
-```
-/opt/secman/logs/*.log {
-    daily
-    rotate 30
-    compress
-    delaycompress
-    missingok
-    notifempty
-    create 0644 secman secman
-}
-```
-
-### Parallel Execution Prevention
-
-Add lock file mechanism to wrapper script:
-
-```bash
-LOCK_FILE="/var/lock/secman-cli.lock"
-
-if [ -f "${LOCK_FILE}" ]; then
-    log "ERROR: Another instance is running"
-    exit 1
-fi
-
-touch "${LOCK_FILE}"
-trap "rm -f ${LOCK_FILE}" EXIT
-
-# ... rest of script
-```
-
----
-
-## AWS Integration
-
-### Using AWS Secrets Manager
-
-Create wrapper script `/opt/secman/bin/run-with-secrets.sh`:
-
-```bash
-#!/bin/bash
-
-SECRETS=$(aws secretsmanager get-secret-value \
-    --secret-id secman/crowdstrike \
-    --region us-east-1 \
-    --query SecretString \
-    --output text)
-
-export FALCON_CLIENT_ID=$(echo $SECRETS | jq -r .client_id)
-export FALCON_CLIENT_SECRET=$(echo $SECRETS | jq -r .client_secret)
-export SECMAN_ADMIN_NAME=$(echo $SECRETS | jq -r .username)
-export SECMAN_ADMIN_PASS=$(echo $SECRETS | jq -r .password)
-
-java -jar /opt/secman/bin/secman-cli.jar "$@"
-```
-
-**Required IAM permissions:**
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [{
-    "Effect": "Allow",
-    "Action": "secretsmanager:GetSecretValue",
-    "Resource": "arn:aws:secretsmanager:us-east-1:*:secret:secman/*"
-  }]
-}
-```
-
-### CloudWatch Logs Integration
-
-Create `/opt/aws/amazon-cloudwatch-agent/etc/config.json`:
-
-```json
-{
-  "logs": {
-    "logs_collected": {
-      "files": {
-        "collect_list": [{
-          "file_path": "/opt/secman/logs/cronjob.log",
-          "log_group_name": "/secman/cli/cronjob",
-          "log_stream_name": "{instance_id}",
-          "retention_in_days": 30
-        }]
-      }
-    }
-  }
-}
-```
-
-Start agent:
-
-```bash
-sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
-    -a fetch-config -m ec2 -s \
-    -c file:/opt/aws/amazon-cloudwatch-agent/etc/config.json
-```
-
----
-
-## Troubleshooting
-
-### Common Issues
-
-#### "Command not found" in cron
-
-Add Java to PATH in crontab:
-
+`crontab -e` examples:
 ```cron
 PATH=/usr/bin:/bin:/usr/local/bin:/usr/lib/jvm/java-21-amazon-corretto/bin
 JAVA_HOME=/usr/lib/jvm/java-21-amazon-corretto
 
-0 2 * * * /opt/secman/bin/cron-query-servers.sh
+0 2 * * *          /opt/secman/bin/cron-query-servers.sh >> /opt/secman/logs/cronjob.log 2>&1
+0 9-17 * * 1-5     /opt/secman/bin/cron-query-servers.sh
+*/10 * * * *       TELEGRAM_BOT_TOKEN=… TELEGRAM_CHAT_ID=… \
+                   /opt/secman/src/clinotify/check_crowdstrike_checkin.py \
+                   --url https://secman.example.com --max-age-minutes 120
 ```
 
-#### "Credentials not found"
+Log rotation `/etc/logrotate.d/secman-cli`:
+```
+/opt/secman/logs/*.log { daily rotate 30 compress delaycompress missingok notifempty create 0644 secman secman }
+```
 
-Verify format (no spaces around `=`):
+## AWS integration
+
+### Secrets Manager
 
 ```bash
-# Correct
-FALCON_CLIENT_ID=abc123
-
-# Wrong
-FALCON_CLIENT_ID = abc123
+SECRETS=$(aws secretsmanager get-secret-value --secret-id secman/crowdstrike --query SecretString --output text)
+export FALCON_CLIENT_ID=$(jq -r .client_id     <<<"$SECRETS")
+export FALCON_CLIENT_SECRET=$(jq -r .client_secret <<<"$SECRETS")
+export SECMAN_ADMIN_NAME=$(jq -r .username        <<<"$SECRETS")
+export SECMAN_ADMIN_PASS=$(jq -r .password        <<<"$SECRETS")
+java -jar /opt/secman/bin/secman-cli.jar "$@"
 ```
+IAM: `secretsmanager:GetSecretValue` on `arn:aws:secretsmanager:…:secret:secman/*`.
 
-#### "Authentication failed"
+### CloudWatch Logs
 
-- Verify CrowdStrike client ID and secret are correct
-- Check base URL matches your CrowdStrike region
-- Ensure API credentials have required scopes
+`/opt/aws/amazon-cloudwatch-agent/etc/config.json`:
+```json
+{ "logs": { "logs_collected": { "files": { "collect_list": [
+  { "file_path":"/opt/secman/logs/cronjob.log",
+    "log_group_name":"/secman/cli/cronjob",
+    "log_stream_name":"{instance_id}",
+    "retention_in_days":30 }
+]}}}}
+```
+Activate: `amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/config.json`.
 
-#### "Out of Memory"
+## Troubleshooting
 
-Add JVM options:
+| Symptom | Fix |
+|---|---|
+| `Command not found` in cron | add `PATH`, `JAVA_HOME` to crontab |
+| `Credentials not found` | check format (no spaces around `=`); `chmod 600` the file |
+| CrowdStrike `401 Unauthorized` | verify client/secret + region (`api.us-2.crowdstrike.com`, `api.eu-1…`, `api.laggar.gcw…`) and required scopes |
+| Out of memory | `java -Xmx1g -jar secman-cli.jar …` |
 
+Health-monitor sketch:
 ```bash
-java -Xmx512m -Xms256m -jar secman-cli.jar ...
+LAST=$(grep "Completed Successfully" /opt/secman/logs/cronjob.log | tail -1 | awk '{print $1, $2}')
+EPOCH=$(date -d "$LAST" +%s 2>/dev/null || echo 0)
+[ $(( ($(date +%s) - EPOCH) / 3600 )) -gt 24 ] && exit 1 || exit 0
 ```
 
-### Health Check Script
-
-Create `/opt/secman/bin/check-health.sh`:
-
-```bash
-#!/bin/bash
-
-LOG_FILE="/opt/secman/logs/cronjob.log"
-MAX_AGE_HOURS=24
-
-LAST_SUCCESS=$(grep "Completed Successfully" "${LOG_FILE}" | tail -1 | awk '{print $1, $2}')
-
-if [ -z "${LAST_SUCCESS}" ]; then
-    echo "WARNING: No successful executions found"
-    exit 1
-fi
-
-LAST_EPOCH=$(date -d "${LAST_SUCCESS}" +%s 2>/dev/null || echo 0)
-CURRENT_EPOCH=$(date +%s)
-AGE_HOURS=$(( (CURRENT_EPOCH - LAST_EPOCH) / 3600 ))
-
-if [ ${AGE_HOURS} -gt ${MAX_AGE_HOURS} ]; then
-    echo "WARNING: Last success ${AGE_HOURS} hours ago"
-    exit 1
-fi
-
-echo "OK: Last success ${AGE_HOURS} hours ago"
-exit 0
-```
-
----
-
-## See Also
-
-- [Environment Variables](./ENVIRONMENT.md) - Configuration reference
-- [Deployment Guide](./DEPLOYMENT.md) - Production setup
-- [CrowdStrike Import](./CROWDSTRIKE_IMPORT.md) - Import technical details
-- [Troubleshooting](./TROUBLESHOOTING.md) - Common issues and solutions
-
-**CLI-specific docs:**
-
-- [User Mapping Commands](../src/cli/src/main/resources/cli-docs/USER_MAPPING_COMMANDS.md)
-- [Workgroup Commands](../src/cli/src/main/resources/cli-docs/WORKGROUP_COMMANDS.md)
-- [Add Vulnerability Command](../src/cli/src/main/resources/cli-docs/ADD_VULNERABILITY_COMMANDS.md)
-
----
-
-*For CLI help: `./scriptpp/secman help`*
+CLI command-specific reference docs: `src/cli/src/main/resources/cli-docs/{USER_MAPPING,WORKGROUP,ADD_VULNERABILITY}_COMMANDS.md`.
