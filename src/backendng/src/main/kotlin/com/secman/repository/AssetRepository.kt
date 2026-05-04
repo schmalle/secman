@@ -498,4 +498,25 @@ interface AssetRepository : JpaRepository<Asset, Long> {
         nativeQuery = true
     )
     fun findInternetFacingWithIp(): List<Asset>
+
+    /**
+     * Nullify the manualCreator reference when a user is deleted.
+     * Preserves the asset record (and its access via other dimensions like
+     * workgroup/owner) without blocking user deletion via the
+     * assets.manual_creator_id → users.id FK.
+     */
+    @io.micronaut.data.annotation.Query(
+        "UPDATE Asset a SET a.manualCreator = NULL WHERE a.manualCreator.id = :userId"
+    )
+    fun nullifyManualCreatorForUser(userId: Long): Int
+
+    /**
+     * Nullify the scanUploader reference when a user is deleted.
+     * Preserves the asset record without blocking user deletion via the
+     * assets.scan_uploader_id → users.id FK.
+     */
+    @io.micronaut.data.annotation.Query(
+        "UPDATE Asset a SET a.scanUploader = NULL WHERE a.scanUploader.id = :userId"
+    )
+    fun nullifyScanUploaderForUser(userId: Long): Int
 }

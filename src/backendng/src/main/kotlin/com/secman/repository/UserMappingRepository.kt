@@ -343,4 +343,14 @@ interface UserMappingRepository : JpaRepository<UserMapping, Long> {
      * @return List of mappings with the specified status
      */
     fun findByStatus(status: com.secman.domain.MappingStatus): List<UserMapping>
+
+    /**
+     * Delete all mappings linked to a given user.
+     *
+     * Called from UserService.deleteUser to release the user_mapping → users
+     * foreign key (FKhmx5yo60mly74d31vvi96egr4) before the parent user row is
+     * deleted. Without this, MariaDB rejects the user delete with
+     * "1451-23000: Cannot delete or update a parent row".
+     */
+    fun deleteByUser_Id(userId: Long): Long
 }

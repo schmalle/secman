@@ -2,6 +2,7 @@ package com.secman.repository
 
 import com.secman.domain.AuditEventType
 import com.secman.domain.ExceptionRequestAuditLog
+import io.micronaut.data.annotation.Query
 import io.micronaut.data.annotation.Repository
 import io.micronaut.data.jpa.repository.JpaRepository
 import java.time.LocalDateTime
@@ -71,6 +72,20 @@ interface ExceptionRequestAuditLogRepository : JpaRepository<ExceptionRequestAud
      * @return Count of audit log entries
      */
     fun countByRequestId(requestId: Long): Long
+
+    /**
+     * Nullify the actorUser reference when a user is deleted.
+     *
+     * Audit logs are immutable as a rule, but the entity FK to users.id has no
+     * ON DELETE behavior, so MariaDB blocks user deletion unless this column is
+     * cleared. The denormalized actorUsername column preserves the historical
+     * actor identity, matching the design intent on ExceptionRequestAuditLog
+     * ("Preserved even if user account deleted").
+     *
+     * Called from UserService.deleteUser. The audit row itself remains intact.
+     */
+    @Query("UPDATE ExceptionRequestAuditLog a SET a.actorUser = NULL WHERE a.actorUser.id = :userId")
+    fun nullifyActorUserForUser(userId: Long): Int
 
     // Note: No update() or delete() methods - audit logs are immutable
     // Only save() inherited from JpaRepository is allowed for INSERT operations

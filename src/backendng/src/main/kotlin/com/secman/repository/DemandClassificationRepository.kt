@@ -19,6 +19,14 @@ interface DemandClassificationRuleRepository : JpaRepository<DemandClassificatio
     fun findActiveByName(name: String): Optional<DemandClassificationRule>
 
     fun findByCreatedBy_Id(createdById: Long): List<DemandClassificationRule>
+
+    /**
+     * Nullify the createdBy reference when a user is deleted.
+     * Preserves the rule record without blocking user deletion via the
+     * demand_classification_rule.created_by → users.id FK.
+     */
+    @Query("UPDATE DemandClassificationRule r SET r.createdBy = NULL WHERE r.createdBy.id = :userId")
+    fun nullifyCreatedByForUser(userId: Long): Int
 }
 
 @Repository
@@ -41,4 +49,12 @@ interface DemandClassificationResultRepository : JpaRepository<DemandClassificat
     fun findByAppliedRuleId(ruleId: Long): List<DemandClassificationResult>
 
     fun findByOverriddenBy_Id(overriddenById: Long): List<DemandClassificationResult>
+
+    /**
+     * Nullify the overriddenBy reference when a user is deleted.
+     * Preserves the classification result without blocking user deletion via
+     * the demand_classification_result.overridden_by → users.id FK.
+     */
+    @Query("UPDATE DemandClassificationResult r SET r.overriddenBy = NULL WHERE r.overriddenBy.id = :userId")
+    fun nullifyOverriddenByForUser(userId: Long): Int
 }

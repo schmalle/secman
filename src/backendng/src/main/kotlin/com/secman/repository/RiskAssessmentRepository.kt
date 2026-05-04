@@ -71,4 +71,16 @@ interface RiskAssessmentRepository : JpaRepository<RiskAssessment, Long> {
     fun findByUsecaseId(usecaseId: Long): List<RiskAssessment>
     
     fun findByIsReleaseLocked(isLocked: Boolean): List<RiskAssessment>
+
+    /**
+     * Nullify the respondent reference when a user is deleted.
+     * Preserves the assessment record without blocking user deletion via the
+     * risk_assessment.respondent_id → users.id FK.
+     *
+     * NOTE: assessor_id and requestor_id are NOT NULL on this table, so a user
+     * referenced as either will still block deletion. That's a schema-level
+     * follow-up (make those columns nullable) outside the scope of this fix.
+     */
+    @Query("UPDATE RiskAssessment ra SET ra.respondent = NULL WHERE ra.respondent.id = :userId")
+    fun nullifyRespondentForUser(userId: Long): Int
 }

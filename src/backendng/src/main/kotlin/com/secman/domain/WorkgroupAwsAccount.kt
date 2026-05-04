@@ -19,6 +19,8 @@ import java.time.Instant
  * Business rules:
  * - awsAccountId must be exactly 12 numeric digits (matches UserMapping pattern).
  * - createdBy records the admin who granted access, for audit traceability.
+ *   Nullable: NULLed by ON DELETE SET NULL when the creator user is deleted,
+ *   so user deletion does not break audit history (V206 migration).
  * - Unique constraint on (workgroup_id, aws_account_id) prevents duplicates.
  */
 @Entity
@@ -49,9 +51,9 @@ data class WorkgroupAwsAccount(
     @Pattern(regexp = "^\\d{12}$", message = "AWS Account ID must be exactly 12 numeric digits")
     var awsAccountId: String,
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "created_by_id", nullable = false)
-    var createdBy: User,
+    @ManyToOne(fetch = FetchType.LAZY, optional = true)
+    @JoinColumn(name = "created_by_id", nullable = true)
+    var createdBy: User?,
 
     @Column(name = "created_at", updatable = false)
     var createdAt: Instant? = null,

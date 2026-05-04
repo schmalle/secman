@@ -4,11 +4,23 @@ import com.secman.domain.User
 import com.secman.event.UserCreatedEvent
 import com.secman.repository.AlignmentReviewerRepository
 import com.secman.repository.AlignmentSessionRepository
+import com.secman.repository.AssetRepository
 import com.secman.repository.AwsAccountSharingRepository
+import com.secman.repository.DemandClassificationResultRepository
+import com.secman.repository.DemandClassificationRuleRepository
+import com.secman.repository.DemandRepository
+import com.secman.repository.ExceptionRequestAuditLogRepository
+import com.secman.repository.MaintenanceBannerRepository
 import com.secman.repository.PasskeyCredentialRepository
+import com.secman.repository.ReleaseRepository
 import com.secman.repository.RequirementReviewRepository
 import com.secman.repository.ReviewDecisionRepository
+import com.secman.repository.RiskAssessmentRepository
+import com.secman.repository.RiskRepository
+import com.secman.repository.UserMappingRepository
 import com.secman.repository.UserRepository
+import com.secman.repository.VulnerabilityExceptionRequestRepository
+import com.secman.repository.WorkgroupAwsAccountRepository
 import io.micronaut.context.event.ApplicationEventPublisher
 import jakarta.inject.Inject
 import jakarta.inject.Singleton
@@ -24,7 +36,19 @@ open class UserService(
     @Inject private val awsAccountSharingRepository: AwsAccountSharingRepository,
     @Inject private val passkeyCredentialRepository: PasskeyCredentialRepository,
     @Inject private val requirementReviewRepository: RequirementReviewRepository,
-    @Inject private val reviewDecisionRepository: ReviewDecisionRepository
+    @Inject private val reviewDecisionRepository: ReviewDecisionRepository,
+    @Inject private val userMappingRepository: UserMappingRepository,
+    @Inject private val assetRepository: AssetRepository,
+    @Inject private val riskRepository: RiskRepository,
+    @Inject private val riskAssessmentRepository: RiskAssessmentRepository,
+    @Inject private val vulnerabilityExceptionRequestRepository: VulnerabilityExceptionRequestRepository,
+    @Inject private val exceptionRequestAuditLogRepository: ExceptionRequestAuditLogRepository,
+    @Inject private val releaseRepository: ReleaseRepository,
+    @Inject private val demandRepository: DemandRepository,
+    @Inject private val demandClassificationRuleRepository: DemandClassificationRuleRepository,
+    @Inject private val demandClassificationResultRepository: DemandClassificationResultRepository,
+    @Inject private val maintenanceBannerRepository: MaintenanceBannerRepository,
+    @Inject private val workgroupAwsAccountRepository: WorkgroupAwsAccountRepository
 ) {
 
     fun getAllUsers(): List<User> {
@@ -92,7 +116,45 @@ open class UserService(
         // 5. Nullify alignment sessions initiated by this user
         alignmentSessionRepository.nullifyInitiatedByForUser(id)
 
-        // 6. Delete user
+        // 6. User mappings (FK user_mapping.user_id → users.id has no cascade;
+        //    leaving rows behind triggers MariaDB error 1451 on user delete).
+        //    We hard-delete here rather than demoting to PENDING future mappings
+        //    to avoid composite-unique-key collisions with pre-existing
+        //    future-user mappings for the same (email, aws_account_id, domain,
+        //    ip_address) tuple. Mapping data can be reimported via CSV.
+        userMappingRepository.deleteByUser_Id(id)
+
+        // 7. Nullify all nullable User FKs across audit/history-style records.
+        //    None of these FKs cascade, so each one will trigger MariaDB error
+        //    1451 ("Cannot delete or update a parent row") on user delete if
+        //    rows reference the user. We NULL them out instead of deleting the
+        //    parent row because the entity-level intent is "preserve history,
+        //    detach the actor" (e.g., ExceptionRequestAuditLog explicitly
+        //    documents "Preserved even if user account deleted" and
+        //    MaintenanceBanner.createdBy is annotated "Nullable to preserve
+        //    history on user deletion").
+        exceptionRequestAuditLogRepository.nullifyActorUserForUser(id)
+        assetRepository.nullifyManualCreatorForUser(id)
+        assetRepository.nullifyScanUploaderForUser(id)
+        riskRepository.nullifyOwnerForUser(id)
+        riskAssessmentRepository.nullifyRespondentForUser(id)
+        vulnerabilityExceptionRequestRepository.nullifyRequestedByUserForUser(id)
+        vulnerabilityExceptionRequestRepository.nullifyReviewedByUserForUser(id)
+        releaseRepository.nullifyCreatedByForUser(id)
+        demandRepository.nullifyApproverForUser(id)
+        demandClassificationRuleRepository.nullifyCreatedByForUser(id)
+        demandClassificationResultRepository.nullifyOverriddenByForUser(id)
+        maintenanceBannerRepository.nullifyCreatedByForUser(id)
+        workgroupAwsAccountRepository.nullifyCreatedByForUser(id)
+
+        // 8. Delete user.
+        //    NOTE: NOT-NULL User FKs that are NOT cleaned up here will still
+        //    block deletion if the user owns rows there:
+        //      - risk_assessment.assessor_id, requestor_id
+        //      - demand.requestor_id
+        //      - requirement_file.uploaded_by
+        //    These need a schema migration to make them nullable before they
+        //    can be nullified the same way. Tracked as a follow-up.
         userRepository.deleteById(id)
         return true
     }
