@@ -21,4 +21,12 @@ interface ReleaseRepository : JpaRepository<Release, Long> {
     
     @Query("SELECT r FROM Release r ORDER BY r.createdAt DESC")
     fun findAllOrderByCreatedAtDesc(): List<Release>
+
+    /**
+     * Nullify the createdBy reference when a user is deleted.
+     * Preserves the release record without blocking user deletion via the
+     * release.created_by → users.id FK.
+     */
+    @Query("UPDATE Release r SET r.createdBy = NULL WHERE r.createdBy.id = :userId")
+    fun nullifyCreatedByForUser(userId: Long): Int
 }

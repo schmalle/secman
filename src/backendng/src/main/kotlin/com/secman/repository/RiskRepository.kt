@@ -30,4 +30,12 @@ interface RiskRepository : JpaRepository<Risk, Long> {
     fun findHighPriorityRisks(minLevel: Int): List<Risk>
     
     fun findByNameContainingIgnoreCase(name: String): List<Risk>
+
+    /**
+     * Nullify the owner reference when a user is deleted.
+     * Preserves the risk record without blocking user deletion via the
+     * risk.owner_id → users.id FK.
+     */
+    @Query("UPDATE Risk r SET r.owner = NULL WHERE r.owner.id = :userId")
+    fun nullifyOwnerForUser(userId: Long): Int
 }

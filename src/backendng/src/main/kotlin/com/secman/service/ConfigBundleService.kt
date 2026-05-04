@@ -438,7 +438,7 @@ open class ConfigBundleService(
             WorkgroupAwsAccountExportDto(
                 workgroupName = wgaws.workgroup.name,
                 awsAccountId = wgaws.awsAccountId,
-                createdByEmail = wgaws.createdBy.email,
+                createdByEmail = wgaws.createdBy?.email,
                 createdAt = wgaws.createdAt
             )
         }

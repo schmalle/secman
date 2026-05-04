@@ -5,7 +5,7 @@ interface WorkgroupAwsAccountDto {
   id: number;
   workgroupId: number;
   awsAccountId: string;
-  createdByUsername: string;
+  createdByUsername: string | null;
   createdAt: string | null;
   updatedAt: string | null;
 }
@@ -151,7 +151,7 @@ export default function WorkgroupAccountsModal({
                   {accounts.map((a) => (
                     <tr key={a.id}>
                       <td><code>{a.awsAccountId}</code></td>
-                      <td>{a.createdByUsername}</td>
+                      <td>{a.createdByUsername ?? '—'}</td>
                       <td>{a.createdAt ?? '—'}</td>
                       <td className="text-end">
                         <button

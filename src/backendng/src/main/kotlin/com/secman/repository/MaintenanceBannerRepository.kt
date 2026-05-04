@@ -49,4 +49,14 @@ interface MaintenanceBannerRepository : JpaRepository<MaintenanceBanner, Long> {
         ORDER BY b.createdAt DESC
     """)
     fun findAllOrderByCreatedAtDesc(): List<MaintenanceBanner>
+
+    /**
+     * Nullify the createdBy reference when a user is deleted.
+     * Preserves banner history (matches the existing comment on
+     * MaintenanceBanner.createdBy: "Nullable to preserve history on user
+     * deletion") without blocking user deletion via the
+     * maintenance_banner.created_by → users.id FK.
+     */
+    @Query("UPDATE MaintenanceBanner b SET b.createdBy = NULL WHERE b.createdBy.id = :userId")
+    fun nullifyCreatedByForUser(userId: Long): Int
 }

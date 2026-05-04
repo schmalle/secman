@@ -62,4 +62,15 @@ interface DemandRepository : JpaRepository<Demand, Long> {
     fun countByDemandType(demandType: DemandType): Long
     
     fun countByRequestorId(requestorId: Long): Long
+
+    /**
+     * Nullify the approver reference when a user is deleted.
+     * Preserves the demand record without blocking user deletion via the
+     * demand.approver_id → users.id FK.
+     *
+     * NOTE: requestor_id is NOT NULL on this table; a user referenced as a
+     * requestor will still block deletion. Schema-level follow-up.
+     */
+    @Query("UPDATE Demand d SET d.approver = NULL WHERE d.approver.id = :userId")
+    fun nullifyApproverForUser(userId: Long): Int
 }
