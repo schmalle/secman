@@ -81,8 +81,13 @@ const WorkgroupManagement: React.FC = () => {
   };
 
   const fetchUsers = async () => {
+    // Self-service workgroup management is open to non-ADMIN members; the canonical
+    // /api/users list is ADMIN-only. The aws-account-sharing endpoint is the established
+    // non-admin-safe user list (same {id, username, email, isPending} shape).
+    // See AwsAccountSharingController.listUsersForSharing — deprecated pending a generic
+    // public-safe replacement on /api/users.
     try {
-      const response = await authenticatedGet('/api/users?includePending=true');
+      const response = await authenticatedGet('/api/aws-account-sharing/users');
       if (response.ok) {
         const data = await response.json();
         setUsers(data);
@@ -371,7 +376,7 @@ const WorkgroupManagement: React.FC = () => {
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       required
-                      pattern="[a-zA-Z0-9 -]+"
+                      pattern="[-a-zA-Z0-9 ]+"
                       maxLength={100}
                       title="Name must contain only letters, numbers, spaces, and hyphens"
                     />
