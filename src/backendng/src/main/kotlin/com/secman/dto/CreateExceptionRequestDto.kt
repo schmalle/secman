@@ -15,8 +15,18 @@ import java.time.LocalDateTime
  *
  * Two-axis model (Feature 196): subject × scope.
  *
+ * Two request flavors share this DTO:
+ *  - Finding-anchored: vulnerabilityId is set; the request is tied to a specific overdue
+ *    finding the user is looking at. cveId/assetId are derived from the vulnerability.
+ *  - Rule (sweeping): vulnerabilityId is null; the request is for a standalone exception
+ *    rule (e.g. CVE × AWS_ACCOUNT, PRODUCT × IP). cveId is derived from subjectValue when
+ *    subject=CVE; assetId comes directly from the DTO when scope=ASSET.
+ *
+ * Both flavors go through identical approval gates: ADMIN/SECCHAMPION auto-approve,
+ * everyone else lands in PENDING.
+ *
  * Validation rules:
- * - vulnerabilityId: Required, must reference existing vulnerability
+ * - vulnerabilityId: Optional. When supplied, must reference an existing vulnerability.
  * - subject: Required (ALL_VULNS, PRODUCT, CVE)
  * - scope: Required (GLOBAL, IP, ASSET, AWS_ACCOUNT)
  * - subjectValue: Required for PRODUCT/CVE; must be null for ALL_VULNS
@@ -31,10 +41,10 @@ import java.time.LocalDateTime
 @Serdeable
 data class CreateExceptionRequestDto(
     /**
-     * ID of the vulnerability to create exception for.
+     * Optional ID of the vulnerability anchoring this request. If null, this is a
+     * sweeping rule request (cveId/assetId derived from subjectValue/assetId fields).
      */
-    @field:NotNull(message = "Vulnerability ID is required")
-    val vulnerabilityId: Long,
+    val vulnerabilityId: Long? = null,
 
     /**
      * WHAT is excepted: ALL_VULNS, PRODUCT, or CVE.
