@@ -117,9 +117,17 @@ const AwsAccountSharingManager: React.FC = () => {
     }, [fetchSharingRules, fetchUsers]);
 
     // If the active target search filters out the currently selected target,
-    // drop the selection so the visible <select> and form state stay aligned.
+    // or the chosen source equals the chosen target, drop the target so the
+    // visible <select> and form state stay aligned.
     useEffect(() => {
         if (!targetSelection) return;
+        const effectiveSource = canManageAnyRule
+            ? sourceSelection
+            : (currentUser ? `id:${currentUser.id}` : '');
+        if (effectiveSource && effectiveSource === targetSelection) {
+            setTargetSelection('');
+            return;
+        }
         const search = targetSearch.trim().toLowerCase();
         if (!search) return;
         const stillVisible = users.some(u => {
@@ -128,7 +136,7 @@ const AwsAccountSharingManager: React.FC = () => {
                 u.email.toLowerCase().includes(search);
         });
         if (!stillVisible) setTargetSelection('');
-    }, [targetSearch, targetSelection, users]);
+    }, [targetSearch, targetSelection, users, sourceSelection, canManageAnyRule, currentUser]);
 
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -322,9 +330,16 @@ const AwsAccountSharingManager: React.FC = () => {
                                     </label>
                                     {(() => {
                                         const search = targetSearch.trim().toLowerCase();
+                                        // Exclude whichever user is currently chosen as the source —
+                                        // for non-ADMIN users that's themselves (sourceSelection is
+                                        // forced to "id:<currentUser.id>" at submit time, but is
+                                        // empty in state); for ADMIN/SECCHAMPION it's whatever they
+                                        // picked in the source dropdown.
+                                        const effectiveSource = canManageAnyRule
+                                            ? sourceSelection
+                                            : (currentUser ? `id:${currentUser.id}` : '');
                                         const eligible = users.filter(u =>
-                                            u.id !== currentUser?.id &&
-                                            u.email.toLowerCase() !== currentUser?.email.toLowerCase()
+                                            encodeUserOption(u) !== effectiveSource
                                         );
                                         const filtered = search
                                             ? eligible.filter(u =>
@@ -347,7 +362,6 @@ const AwsAccountSharingManager: React.FC = () => {
                                                     value={targetSelection}
                                                     onChange={(e) => setTargetSelection(e.target.value)}
                                                     required
-                                                    size={search && filtered.length > 1 ? Math.min(filtered.length + 1, 8) : undefined}
                                                 >
                                                     <option value="">
                                                         {filtered.length === 0
