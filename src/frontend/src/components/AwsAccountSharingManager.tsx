@@ -55,7 +55,11 @@ const AwsAccountSharingManager: React.FC = () => {
     // Encoded "id:<n>" or "email:<addr>" — see encodeUserOption.
     const [sourceSelection, setSourceSelection] = useState<string>('');
     const [targetSelection, setTargetSelection] = useState<string>('');
+    const [targetSearch, setTargetSearch] = useState<string>('');
     const [isCreating, setIsCreating] = useState(false);
+    // Inline form-submission error. Sticky (no auto-dismiss) so it survives
+    // an open <select> overlay covering the page-top alert region.
+    const [formError, setFormError] = useState<string | null>(null);
 
     // Delete confirmation
     const [deletingId, setDeletingId] = useState<number | null>(null);
@@ -112,8 +116,23 @@ const AwsAccountSharingManager: React.FC = () => {
         fetchUsers();
     }, [fetchSharingRules, fetchUsers]);
 
+    // If the active target search filters out the currently selected target,
+    // drop the selection so the visible <select> and form state stay aligned.
+    useEffect(() => {
+        if (!targetSelection) return;
+        const search = targetSearch.trim().toLowerCase();
+        if (!search) return;
+        const stillVisible = users.some(u => {
+            if (encodeUserOption(u) !== targetSelection) return false;
+            return u.username.toLowerCase().includes(search) ||
+                u.email.toLowerCase().includes(search);
+        });
+        if (!stillVisible) setTargetSelection('');
+    }, [targetSearch, targetSelection, users]);
+
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
+        setFormError(null);
 
         // Non-privileged users never pick a source — it's forced to self.
         const effectiveSourceSelection = canManageAnyRule
@@ -121,11 +140,11 @@ const AwsAccountSharingManager: React.FC = () => {
             : (currentUser ? `id:${currentUser.id}` : '');
 
         if (!effectiveSourceSelection || !targetSelection) {
-            showError(canManageAnyRule ? 'Please select both source and target users' : 'Please select a target user');
+            setFormError(canManageAnyRule ? 'Please select both source and target users' : 'Please select a target user');
             return;
         }
         if (effectiveSourceSelection === targetSelection) {
-            showError('Source and target user cannot be the same');
+            setFormError('Source and target user cannot be the same');
             return;
         }
 
@@ -152,10 +171,12 @@ const AwsAccountSharingManager: React.FC = () => {
             setShowCreateForm(false);
             setSourceSelection('');
             setTargetSelection('');
+            setTargetSearch('');
+            setFormError(null);
             fetchSharingRules();
             fetchUsers(); // A pending user may have just been materialized — refresh dropdowns.
         } catch (err: any) {
-            showError(err.message || 'Failed to create sharing rule');
+            setFormError(err.message || 'Failed to create sharing rule');
         } finally {
             setIsCreating(false);
         }
@@ -189,7 +210,14 @@ const AwsAccountSharingManager: React.FC = () => {
                 </h2>
                 <button
                     className="btn btn-primary"
-                    onClick={() => setShowCreateForm(!showCreateForm)}
+                    onClick={() => {
+                        if (showCreateForm) {
+                            // Closing the form: drop any stale submission error
+                            // so it doesn't reappear next time we open it.
+                            setFormError(null);
+                        }
+                        setShowCreateForm(!showCreateForm);
+                    }}
                 >
                     <i className={`bi ${showCreateForm ? 'bi-x-lg' : 'bi-plus-lg'} me-1`}></i>
                     {showCreateForm ? 'Cancel' : 'Create Sharing Rule'}
@@ -225,6 +253,29 @@ const AwsAccountSharingManager: React.FC = () => {
                 <div className="card mb-4">
                     <div className="card-body">
                         <h5 className="card-title">Create Sharing Rule</h5>
+                        {formError && (
+                            <div className="alert alert-danger d-flex align-items-start mb-3" role="alert">
+                                <i className="bi bi-exclamation-triangle-fill me-2 mt-1"></i>
+                                <div className="flex-grow-1">
+                                    <strong>Cannot create sharing rule.</strong>
+                                    <div>{formError}</div>
+                                    {/* Hint when the source side has nothing to share — common
+                                        for non-ADMIN users who lack any AWS UserMapping. */}
+                                    {/no AWS account mappings/i.test(formError) && (
+                                        <small className="text-muted d-block mt-1">
+                                            Ask an administrator to create an AWS user mapping for the
+                                            source user before sharing.
+                                        </small>
+                                    )}
+                                </div>
+                                <button
+                                    type="button"
+                                    className="btn-close ms-2"
+                                    aria-label="Dismiss"
+                                    onClick={() => setFormError(null)}
+                                ></button>
+                            </div>
+                        )}
                         <form onSubmit={handleCreate}>
                             <div className="row g-3">
                                 {canManageAnyRule ? (
@@ -269,23 +320,49 @@ const AwsAccountSharingManager: React.FC = () => {
                                     <label htmlFor="targetUser" className="form-label">
                                         Target User (receives visibility)
                                     </label>
-                                    <select
-                                        id="targetUser"
-                                        className="form-select"
-                                        value={targetSelection}
-                                        onChange={(e) => setTargetSelection(e.target.value)}
-                                        required
-                                    >
-                                        <option value="">-- Select target user --</option>
-                                        {users
-                                            .filter(u => u.id !== currentUser?.id &&
-                                                u.email.toLowerCase() !== currentUser?.email.toLowerCase())
-                                            .map((user) => (
-                                                <option key={encodeUserOption(user)} value={encodeUserOption(user)}>
-                                                    {user.username} ({user.email}){user.isPending ? ' — pending' : ''}
-                                                </option>
-                                            ))}
-                                    </select>
+                                    {(() => {
+                                        const search = targetSearch.trim().toLowerCase();
+                                        const eligible = users.filter(u =>
+                                            u.id !== currentUser?.id &&
+                                            u.email.toLowerCase() !== currentUser?.email.toLowerCase()
+                                        );
+                                        const filtered = search
+                                            ? eligible.filter(u =>
+                                                u.username.toLowerCase().includes(search) ||
+                                                u.email.toLowerCase().includes(search))
+                                            : eligible;
+                                        return (
+                                            <>
+                                                <input
+                                                    type="search"
+                                                    className="form-control form-control-sm mb-2"
+                                                    placeholder="Search by username or email…"
+                                                    value={targetSearch}
+                                                    onChange={(e) => setTargetSearch(e.target.value)}
+                                                    aria-label="Search target user"
+                                                />
+                                                <select
+                                                    id="targetUser"
+                                                    className="form-select"
+                                                    value={targetSelection}
+                                                    onChange={(e) => setTargetSelection(e.target.value)}
+                                                    required
+                                                    size={search && filtered.length > 1 ? Math.min(filtered.length + 1, 8) : undefined}
+                                                >
+                                                    <option value="">
+                                                        {filtered.length === 0
+                                                            ? '-- No matching users --'
+                                                            : `-- Select target user${search ? ` (${filtered.length} match${filtered.length === 1 ? '' : 'es'})` : ''} --`}
+                                                    </option>
+                                                    {filtered.map((user) => (
+                                                        <option key={encodeUserOption(user)} value={encodeUserOption(user)}>
+                                                            {user.username} ({user.email}){user.isPending ? ' — pending' : ''}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </>
+                                        );
+                                    })()}
                                 </div>
                                 <div className="col-md-1 d-flex align-items-end">
                                     <button
