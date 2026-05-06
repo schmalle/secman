@@ -1,0 +1,19 @@
+AWS account access shared with you in SecMan
+=============================================
+
+Hello {targetUsername},
+
+{sourceUserEmail} has shared their AWS account access with you in SecMan.
+
+You can now see assets and vulnerabilities tied to {sourceUserEmail}'s
+AWS accounts. This share is one-way (only from {sourceUserEmail} to you)
+and is not transitive (no third party gains access through this rule).
+
+This share covers {sharedAwsAccountCount} AWS account(s).
+
+Created by {createdByEmail} on {createdAtIso} (UTC).
+
+View assets in SecMan: {assetsUrl}
+
+---
+If you believe this share is incorrect, contact your SecMan administrator.
