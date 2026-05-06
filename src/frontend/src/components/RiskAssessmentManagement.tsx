@@ -172,7 +172,8 @@ const RiskAssessmentManagement: React.FC = () => {
       if (response.ok) {
         const data = await response.json();
         setApprovedDemands(data);
-      } else {
+      } else if (response.status !== 401 && response.status !== 403) {
+        // 401/403 = user lacks permission (RBAC); ignore silently.
         console.error('Failed to fetch approved demands:', response.status);
       }
     } catch (err) {
@@ -186,7 +187,8 @@ const RiskAssessmentManagement: React.FC = () => {
       if (response.ok) {
         const data = await response.json();
         setUsers(data);
-      } else {
+      } else if (response.status !== 401 && response.status !== 403) {
+        // 401/403 = user lacks permission to list users (RBAC); ignore silently.
         console.error('Failed to fetch users:', response.status);
       }
     } catch (err) {
@@ -200,7 +202,7 @@ const RiskAssessmentManagement: React.FC = () => {
       if (response.ok) {
         const data = await response.json();
         setAssets(data);
-      } else {
+      } else if (response.status !== 401 && response.status !== 403) {
         console.error('Failed to fetch assets:', response.status);
       }
     } catch (err) {
@@ -214,7 +216,8 @@ const RiskAssessmentManagement: React.FC = () => {
       if (response.ok) {
         const data = await response.json();
         setUseCases(data);
-      } else {
+      } else if (response.status !== 401 && response.status !== 403) {
+        // 401/403 = user lacks permission to manage use cases (RBAC); ignore silently.
         console.error('Failed to fetch use cases:', response.status);
       }
     } catch (err) {

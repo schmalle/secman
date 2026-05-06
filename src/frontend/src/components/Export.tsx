@@ -37,7 +37,8 @@ const Export = () => {
                 if (response.ok) {
                     const data = await response.json();
                     setUseCases(data);
-                } else {
+                } else if (response.status !== 401 && response.status !== 403) {
+                    // 401/403 = user lacks permission to manage use cases (RBAC); ignore silently.
                     console.error('Failed to fetch use cases');
                 }
             } catch (error) {

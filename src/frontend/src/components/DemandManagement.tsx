@@ -171,7 +171,8 @@ const DemandManagement: React.FC = () => {
       if (response.ok) {
         const data = await response.json();
         setUsers(data);
-      } else {
+      } else if (response.status !== 401 && response.status !== 403) {
+        // 401/403 = user lacks permission to list users (RBAC); ignore silently.
         console.error('Failed to fetch users:', response.status);
       }
     } catch (err) {
@@ -185,7 +186,8 @@ const DemandManagement: React.FC = () => {
       if (response.ok) {
         const data = await response.json();
         setSummary(data);
-      } else {
+      } else if (response.status !== 401 && response.status !== 403) {
+        // 401/403 = user lacks permission to view demand summary (RBAC); ignore silently.
         console.error('Failed to fetch summary:', response.status);
       }
     } catch (err) {
