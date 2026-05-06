@@ -3,7 +3,9 @@ import { authenticatedGet, getUser, hasRole } from '../utils/auth';
 import {
     listSharingRules,
     createSharingRule,
+    updateSharingRule,
     deleteSharingRule,
+    listSourceAccounts,
     type AwsAccountSharing,
     type SharingUser,
 } from '../services/awsAccountSharingService';
@@ -14,6 +16,12 @@ import {
 // preserving which side of the API contract to use at submit time.
 const encodeUserOption = (u: SharingUser): string =>
     u.id != null ? `id:${u.id}` : `email:${u.email}`;
+
+const decodeUserOption = (value: string): { id?: number; email?: string } => {
+    if (value.startsWith('id:')) return { id: Number(value.slice(3)) };
+    if (value.startsWith('email:')) return { email: value.slice(6) };
+    return {};
+};
 
 // View-all users (ADMIN, SECCHAMPION) see every sharing rule in the system.
 // Everyone else (including VULN) is scoped on the backend to rules where they
@@ -60,6 +68,21 @@ const AwsAccountSharingManager: React.FC = () => {
     // Inline form-submission error. Sticky (no auto-dismiss) so it survives
     // an open <select> overlay covering the page-top alert region.
     const [formError, setFormError] = useState<string | null>(null);
+    // Per-account picker state. shareAll === true means submit no
+    // awsAccountIds; otherwise submit the selectedAccountIds set.
+    const [sourceAccounts, setSourceAccounts] = useState<string[]>([]);
+    const [sourceAccountsLoading, setSourceAccountsLoading] = useState(false);
+    const [shareAll, setShareAll] = useState(true);
+    const [selectedAccountIds, setSelectedAccountIds] = useState<Set<string>>(new Set());
+
+    // Edit modal state. Keyed by sharing id; null = closed.
+    const [editingRule, setEditingRule] = useState<AwsAccountSharing | null>(null);
+    const [editShareAll, setEditShareAll] = useState(true);
+    const [editSelected, setEditSelected] = useState<Set<string>>(new Set());
+    const [editAccounts, setEditAccounts] = useState<string[]>([]);
+    const [editAccountsLoading, setEditAccountsLoading] = useState(false);
+    const [isSavingEdit, setIsSavingEdit] = useState(false);
+    const [editError, setEditError] = useState<string | null>(null);
 
     // Delete confirmation
     const [deletingId, setDeletingId] = useState<number | null>(null);
@@ -138,6 +161,51 @@ const AwsAccountSharingManager: React.FC = () => {
         if (!stillVisible) setTargetSelection('');
     }, [targetSearch, targetSelection, users, sourceSelection, canManageAnyRule, currentUser]);
 
+    // When the effective source user changes, re-fetch its account list and
+    // reset the picker. Until accounts arrive, lock to share-all.
+    useEffect(() => {
+        if (!showCreateForm) return;
+        const effectiveSource = canManageAnyRule
+            ? sourceSelection
+            : (currentUser ? `id:${currentUser.id}` : '');
+        if (!effectiveSource) {
+            setSourceAccounts([]);
+            setSelectedAccountIds(new Set());
+            setShareAll(true);
+            return;
+        }
+        const decoded = decodeUserOption(effectiveSource);
+        setSourceAccountsLoading(true);
+        listSourceAccounts({ userId: decoded.id ?? null, email: decoded.email ?? null })
+            .then(rows => {
+                setSourceAccounts(rows.map(r => r.awsAccountId));
+                setSelectedAccountIds(new Set());
+                setShareAll(true);
+            })
+            .catch(() => {
+                setSourceAccounts([]);
+                setSelectedAccountIds(new Set());
+                setShareAll(true);
+            })
+            .finally(() => setSourceAccountsLoading(false));
+    }, [showCreateForm, sourceSelection, canManageAnyRule, currentUser]);
+
+    const toggleSelectedAccount = (id: string) => {
+        setSelectedAccountIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id); else next.add(id);
+            return next;
+        });
+    };
+
+    const toggleEditSelectedAccount = (id: string) => {
+        setEditSelected(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id); else next.add(id);
+            return next;
+        });
+    };
+
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
         setFormError(null);
@@ -155,15 +223,13 @@ const AwsAccountSharingManager: React.FC = () => {
             setFormError('Source and target user cannot be the same');
             return;
         }
+        if (!shareAll && selectedAccountIds.size === 0) {
+            setFormError('Select at least one AWS account, or switch back to "Share all".');
+            return;
+        }
 
-        // Decode "id:<n>" or "email:<addr>" into the matching request fields.
-        const decode = (value: string): { id?: number; email?: string } => {
-            if (value.startsWith('id:')) return { id: Number(value.slice(3)) };
-            if (value.startsWith('email:')) return { email: value.slice(6) };
-            return {};
-        };
-        const src = decode(effectiveSourceSelection);
-        const tgt = decode(targetSelection);
+        const src = decodeUserOption(effectiveSourceSelection);
+        const tgt = decodeUserOption(targetSelection);
 
         setIsCreating(true);
         try {
@@ -172,14 +238,21 @@ const AwsAccountSharingManager: React.FC = () => {
                 sourceUserEmail: src.email ?? null,
                 targetUserId: tgt.id ?? null,
                 targetUserEmail: tgt.email ?? null,
+                awsAccountIds: shareAll ? null : Array.from(selectedAccountIds),
             });
+            const scopeMsg = result.shareAllAccounts
+                ? `${result.sharedAwsAccountCount} accounts (all)`
+                : `${result.sharedAwsAccountCount} of ${sourceAccounts.length} accounts`;
             showSuccess(
-                `Sharing rule created: ${result.sourceUserEmail} → ${result.targetUserEmail} (${result.sharedAwsAccountCount} accounts)`
+                `Sharing rule created: ${result.sourceUserEmail} → ${result.targetUserEmail} (${scopeMsg})`
             );
             setShowCreateForm(false);
             setSourceSelection('');
             setTargetSelection('');
             setTargetSearch('');
+            setShareAll(true);
+            setSelectedAccountIds(new Set());
+            setSourceAccounts([]);
             setFormError(null);
             fetchSharingRules();
             fetchUsers(); // A pending user may have just been materialized — refresh dropdowns.
@@ -198,6 +271,53 @@ const AwsAccountSharingManager: React.FC = () => {
             fetchSharingRules();
         } catch (err: any) {
             showError(err.message || 'Failed to delete sharing rule');
+        }
+    };
+
+    // Open the edit modal for a rule, prefilling its current selection and
+    // loading the source user's full account list to render the picker.
+    const openEditModal = (rule: AwsAccountSharing) => {
+        setEditingRule(rule);
+        setEditError(null);
+        setEditShareAll(rule.shareAllAccounts);
+        setEditSelected(new Set(rule.selectedAwsAccountIds));
+        setEditAccounts([]);
+        setEditAccountsLoading(true);
+        listSourceAccounts({ userId: rule.sourceUserId })
+            .then(rows => setEditAccounts(rows.map(r => r.awsAccountId)))
+            .catch(err => setEditError(err.message || 'Failed to load source accounts'))
+            .finally(() => setEditAccountsLoading(false));
+    };
+
+    const closeEditModal = () => {
+        setEditingRule(null);
+        setEditAccounts([]);
+        setEditSelected(new Set());
+        setEditError(null);
+    };
+
+    const handleSaveEdit = async () => {
+        if (!editingRule) return;
+        setEditError(null);
+        if (!editShareAll && editSelected.size === 0) {
+            setEditError('Select at least one account, or switch back to "Share all".');
+            return;
+        }
+        setIsSavingEdit(true);
+        try {
+            const result = await updateSharingRule(editingRule.id, {
+                awsAccountIds: editShareAll ? null : Array.from(editSelected),
+            });
+            const scopeMsg = result.shareAllAccounts
+                ? `${result.sharedAwsAccountCount} accounts (all)`
+                : `${result.sharedAwsAccountCount} of ${editAccounts.length} accounts`;
+            showSuccess(`Sharing rule updated: ${result.sourceUserEmail} → ${result.targetUserEmail} (${scopeMsg})`);
+            closeEditModal();
+            fetchSharingRules();
+        } catch (err: any) {
+            setEditError(err.message || 'Failed to update sharing rule');
+        } finally {
+            setIsSavingEdit(false);
         }
     };
 
@@ -234,8 +354,8 @@ const AwsAccountSharingManager: React.FC = () => {
 
             <p className="text-muted mb-3">
                 {hasFullViewAccess ? (
-                    <>Share AWS account visibility between users. When User A's accounts are shared with User B,
-                    User B can see all assets belonging to User A's AWS accounts. Sharing is directional and non-transitive.</>
+                    <>Share AWS account visibility between users. By default a rule covers ALL of the source user's
+                    AWS accounts; you can also share a specific subset of accounts. Sharing is directional and non-transitive.</>
                 ) : (
                     <>View the AWS account sharing rules you are involved in — either sharing your AWS accounts
                     out, or receiving visibility into another user's accounts. Sharing is directional and non-transitive.</>
@@ -393,6 +513,97 @@ const AwsAccountSharingManager: React.FC = () => {
                                     </button>
                                 </div>
                             </div>
+
+                            {/* Per-account picker. Hidden until source has been resolved
+                                and its accounts loaded — there's nothing useful to show
+                                otherwise. The default ("share all") matches legacy behavior. */}
+                            <div className="row mt-3">
+                                <div className="col-12">
+                                    <label className="form-label">AWS Accounts to share</label>
+                                    <div className="border rounded p-3 bg-light-subtle">
+                                        <div className="form-check form-check-inline mb-2">
+                                            <input
+                                                className="form-check-input"
+                                                type="radio"
+                                                id="scopeAll"
+                                                checked={shareAll}
+                                                onChange={() => setShareAll(true)}
+                                            />
+                                            <label className="form-check-label" htmlFor="scopeAll">
+                                                Share <strong>all</strong> of the source user's accounts
+                                                <small className="text-muted ms-2">(also auto-includes future accounts)</small>
+                                            </label>
+                                        </div>
+                                        <div className="form-check form-check-inline mb-2">
+                                            <input
+                                                className="form-check-input"
+                                                type="radio"
+                                                id="scopeSelected"
+                                                checked={!shareAll}
+                                                onChange={() => setShareAll(false)}
+                                                disabled={sourceAccounts.length === 0}
+                                            />
+                                            <label className="form-check-label" htmlFor="scopeSelected">
+                                                Share <strong>selected</strong> accounts only
+                                            </label>
+                                        </div>
+
+                                        {sourceAccountsLoading && (
+                                            <div className="text-muted small">
+                                                <span className="spinner-border spinner-border-sm me-1"></span>
+                                                Loading source's AWS accounts…
+                                            </div>
+                                        )}
+                                        {!sourceAccountsLoading && sourceAccounts.length === 0 && (
+                                            <div className="text-muted small">
+                                                Pick a source user above to see available accounts.
+                                            </div>
+                                        )}
+                                        {!sourceAccountsLoading && sourceAccounts.length > 0 && !shareAll && (
+                                            <div className="d-flex flex-wrap gap-1 mb-2">
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-sm btn-outline-secondary"
+                                                    onClick={() => setSelectedAccountIds(new Set(sourceAccounts))}
+                                                >
+                                                    Select all
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-sm btn-outline-secondary"
+                                                    onClick={() => setSelectedAccountIds(new Set())}
+                                                >
+                                                    Clear
+                                                </button>
+                                                <span className="ms-2 align-self-center text-muted small">
+                                                    {selectedAccountIds.size} of {sourceAccounts.length} selected
+                                                </span>
+                                            </div>
+                                        )}
+                                        {!sourceAccountsLoading && sourceAccounts.length > 0 && (
+                                            <div className="row g-1" style={{ maxHeight: 220, overflowY: 'auto' }}>
+                                                {sourceAccounts.map(acc => (
+                                                    <div className="col-md-4 col-sm-6" key={acc}>
+                                                        <div className="form-check">
+                                                            <input
+                                                                className="form-check-input"
+                                                                type="checkbox"
+                                                                id={`acc-${acc}`}
+                                                                checked={shareAll || selectedAccountIds.has(acc)}
+                                                                disabled={shareAll}
+                                                                onChange={() => toggleSelectedAccount(acc)}
+                                                            />
+                                                            <label className="form-check-label font-monospace small" htmlFor={`acc-${acc}`}>
+                                                                {acc}
+                                                            </label>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
                         </form>
                     </div>
                 </div>
@@ -429,7 +640,12 @@ const AwsAccountSharingManager: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {sharingRules.map((rule) => (
+                                {sharingRules.map((rule) => {
+                                    // A user may edit/delete a rule if they can manage any rule,
+                                    // or they are the source user on this specific rule.
+                                    const canManageThisRule = canManageAnyRule ||
+                                        rule.sourceUserId === currentUser?.id;
+                                    return (
                                     <tr key={rule.id}>
                                         <td>
                                             <strong>{rule.sourceUserUsername}</strong>
@@ -442,33 +658,40 @@ const AwsAccountSharingManager: React.FC = () => {
                                             <small className="text-muted">{rule.targetUserEmail}</small>
                                         </td>
                                         <td>
-                                            <span className="badge bg-info">{rule.sharedAwsAccountCount}</span>
+                                            <span className={`badge ${rule.shareAllAccounts ? 'bg-info' : 'bg-warning text-dark'}`}>
+                                                {rule.sharedAwsAccountCount}
+                                            </span>
+                                            <small className="text-muted ms-2">
+                                                {rule.shareAllAccounts ? 'all' : 'selected'}
+                                            </small>
                                         </td>
                                         <td>{rule.createdByUsername}</td>
                                         <td>{formatDate(rule.createdAt)}</td>
                                         <td>
-                                            {(() => {
-                                                // A user may delete a rule if they can manage any rule,
-                                                // or they are the source user on this specific rule.
-                                                const canDeleteThisRule = canManageAnyRule ||
-                                                    rule.sourceUserId === currentUser?.id;
-                                                if (!canDeleteThisRule) return null;
-                                                return deletingId === rule.id ? (
-                                                    <div className="btn-group btn-group-sm">
-                                                        <button
-                                                            className="btn btn-danger"
-                                                            onClick={() => handleDelete(rule.id)}
-                                                        >
-                                                            Confirm
-                                                        </button>
-                                                        <button
-                                                            className="btn btn-secondary"
-                                                            onClick={() => setDeletingId(null)}
-                                                        >
-                                                            Cancel
-                                                        </button>
-                                                    </div>
-                                                ) : (
+                                            {!canManageThisRule ? null : deletingId === rule.id ? (
+                                                <div className="btn-group btn-group-sm">
+                                                    <button
+                                                        className="btn btn-danger"
+                                                        onClick={() => handleDelete(rule.id)}
+                                                    >
+                                                        Confirm
+                                                    </button>
+                                                    <button
+                                                        className="btn btn-secondary"
+                                                        onClick={() => setDeletingId(null)}
+                                                    >
+                                                        Cancel
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <div className="btn-group btn-group-sm">
+                                                    <button
+                                                        className="btn btn-outline-primary btn-sm"
+                                                        onClick={() => openEditModal(rule)}
+                                                        title="Edit shared accounts"
+                                                    >
+                                                        <i className="bi bi-pencil"></i>
+                                                    </button>
                                                     <button
                                                         className="btn btn-outline-danger btn-sm"
                                                         onClick={() => setDeletingId(rule.id)}
@@ -476,11 +699,11 @@ const AwsAccountSharingManager: React.FC = () => {
                                                     >
                                                         <i className="bi bi-trash"></i>
                                                     </button>
-                                                );
-                                            })()}
+                                                </div>
+                                            )}
                                         </td>
                                     </tr>
-                                ))}
+                                );})}
                             </tbody>
                         </table>
                     </div>
@@ -515,6 +738,111 @@ const AwsAccountSharingManager: React.FC = () => {
                         </nav>
                     )}
                 </>
+            )}
+
+            {/* Edit Modal */}
+            {editingRule && (
+                <div className="modal show d-block" tabIndex={-1} role="dialog" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+                    <div className="modal-dialog modal-lg" role="document">
+                        <div className="modal-content">
+                            <div className="modal-header">
+                                <h5 className="modal-title">
+                                    Edit shared accounts: <code>{editingRule.sourceUserEmail}</code> → <code>{editingRule.targetUserEmail}</code>
+                                </h5>
+                                <button type="button" className="btn-close" onClick={closeEditModal} aria-label="Close"></button>
+                            </div>
+                            <div className="modal-body">
+                                {editError && (
+                                    <div className="alert alert-danger" role="alert">{editError}</div>
+                                )}
+                                <div className="form-check mb-2">
+                                    <input
+                                        className="form-check-input"
+                                        type="radio"
+                                        id="editScopeAll"
+                                        checked={editShareAll}
+                                        onChange={() => setEditShareAll(true)}
+                                    />
+                                    <label className="form-check-label" htmlFor="editScopeAll">
+                                        Share <strong>all</strong> of the source user's accounts
+                                        <small className="text-muted ms-2">(auto-includes future accounts)</small>
+                                    </label>
+                                </div>
+                                <div className="form-check mb-2">
+                                    <input
+                                        className="form-check-input"
+                                        type="radio"
+                                        id="editScopeSelected"
+                                        checked={!editShareAll}
+                                        onChange={() => setEditShareAll(false)}
+                                        disabled={editAccounts.length === 0}
+                                    />
+                                    <label className="form-check-label" htmlFor="editScopeSelected">
+                                        Share <strong>selected</strong> accounts only
+                                    </label>
+                                </div>
+
+                                {editAccountsLoading && (
+                                    <div className="text-muted small">
+                                        <span className="spinner-border spinner-border-sm me-1"></span>
+                                        Loading source's AWS accounts…
+                                    </div>
+                                )}
+                                {!editAccountsLoading && editAccounts.length > 0 && !editShareAll && (
+                                    <div className="d-flex flex-wrap gap-1 mb-2">
+                                        <button
+                                            type="button"
+                                            className="btn btn-sm btn-outline-secondary"
+                                            onClick={() => setEditSelected(new Set(editAccounts))}
+                                        >
+                                            Select all
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="btn btn-sm btn-outline-secondary"
+                                            onClick={() => setEditSelected(new Set())}
+                                        >
+                                            Clear
+                                        </button>
+                                        <span className="ms-2 align-self-center text-muted small">
+                                            {editSelected.size} of {editAccounts.length} selected
+                                        </span>
+                                    </div>
+                                )}
+                                {!editAccountsLoading && editAccounts.length > 0 && (
+                                    <div className="row g-1" style={{ maxHeight: 320, overflowY: 'auto' }}>
+                                        {editAccounts.map(acc => (
+                                            <div className="col-md-4 col-sm-6" key={acc}>
+                                                <div className="form-check">
+                                                    <input
+                                                        className="form-check-input"
+                                                        type="checkbox"
+                                                        id={`edit-acc-${acc}`}
+                                                        checked={editShareAll || editSelected.has(acc)}
+                                                        disabled={editShareAll}
+                                                        onChange={() => toggleEditSelectedAccount(acc)}
+                                                    />
+                                                    <label className="form-check-label font-monospace small" htmlFor={`edit-acc-${acc}`}>
+                                                        {acc}
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                            <div className="modal-footer">
+                                <button type="button" className="btn btn-secondary" onClick={closeEditModal} disabled={isSavingEdit}>
+                                    Cancel
+                                </button>
+                                <button type="button" className="btn btn-primary" onClick={handleSaveEdit} disabled={isSavingEdit}>
+                                    {isSavingEdit && <span className="spinner-border spinner-border-sm me-1"></span>}
+                                    Save changes
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

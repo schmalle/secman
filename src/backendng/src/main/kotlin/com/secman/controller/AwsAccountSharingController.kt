@@ -1,6 +1,8 @@
 package com.secman.controller
 
 import com.secman.dto.CreateAwsAccountSharingRequest
+import com.secman.dto.SourceAwsAccountResponse
+import com.secman.dto.UpdateAwsAccountSharingRequest
 import com.secman.domain.MappingStatus
 import com.secman.service.AwsAccountSharingService
 import com.secman.service.DuplicateSharingException
@@ -128,6 +130,101 @@ open class AwsAccountSharingController(
                 "message" to (e.message ?: "User not found")
             ))
         }
+    }
+
+    /**
+     * PUT /api/aws-account-sharing/{id} - Edit the per-account selection
+     * on an existing sharing rule. Source and target are immutable on the
+     * row — to change them, delete and recreate.
+     *
+     * Authorization mirrors create/delete: ADMIN/SECCHAMPION can edit any
+     * rule; other users can only edit rules where they are the source.
+     */
+    @Put("/{id}")
+    open fun updateSharingRule(
+        @PathVariable id: Long,
+        @Valid @Body request: UpdateAwsAccountSharingRequest,
+        authentication: Authentication
+    ): HttpResponse<*> {
+        logger.info(
+            "Updating AWS account sharing rule: id={}, accountIds={}",
+            id, request.awsAccountIds?.size ?: 0
+        )
+
+        return try {
+            if (!hasFullManagementAccess(authentication)) {
+                val currentUserId = getUserIdFromAuthentication(authentication)
+                if (!awsAccountSharingService.isOwnedByUser(id, currentUserId)) {
+                    return HttpResponse.status<Any>(HttpStatus.FORBIDDEN).body(mapOf(
+                        "error" to "Forbidden",
+                        "message" to "You can only edit your own sharing rules"
+                    ))
+                }
+            }
+
+            val result = awsAccountSharingService.updateSharingRule(id, request)
+            HttpResponse.ok(result)
+        } catch (e: IllegalArgumentException) {
+            logger.warn("AWS account sharing update failed: ${e.message}")
+            HttpResponse.badRequest(mapOf(
+                "error" to "Validation Error",
+                "message" to (e.message ?: "Invalid request")
+            ))
+        } catch (e: NoSuchElementException) {
+            HttpResponse.notFound(mapOf(
+                "error" to "Not Found",
+                "message" to (e.message ?: "Sharing rule not found")
+            ))
+        }
+    }
+
+    /**
+     * GET /api/aws-account-sharing/source-accounts - List the AWS account
+     * IDs available for sharing on behalf of a given source user. Used to
+     * populate the per-account picker on the create/edit form.
+     *
+     * One of `userId` or `email` must be provided. Non-privileged users
+     * may only query their own accounts (matched by id-equality or by
+     * case-insensitive email).
+     */
+    @Get("/source-accounts")
+    fun listSourceAccounts(
+        @QueryValue("userId") userId: Long?,
+        @QueryValue("email") email: String?,
+        authentication: Authentication
+    ): HttpResponse<*> {
+        if (userId == null && email.isNullOrBlank()) {
+            return HttpResponse.badRequest(mapOf(
+                "error" to "Validation Error",
+                "message" to "Either userId or email must be provided"
+            ))
+        }
+
+        if (!hasFullViewAccess(authentication)) {
+            // Non-privileged users can only enumerate THEIR OWN accounts —
+            // the picker only matters for them when they're sharing-out.
+            val currentUserId = getUserIdFromAuthentication(authentication)
+            val currentUser = userRepository.findById(currentUserId).orElse(null)
+                ?: return HttpResponse.status<Any>(HttpStatus.FORBIDDEN).body(mapOf(
+                    "error" to "Forbidden",
+                    "message" to "Current user not found"
+                ))
+            val mismatchById = userId != null && userId != currentUserId
+            val mismatchByEmail = !email.isNullOrBlank() && !email.equals(currentUser.email, ignoreCase = true)
+            if (mismatchById || mismatchByEmail) {
+                return HttpResponse.status<Any>(HttpStatus.FORBIDDEN).body(mapOf(
+                    "error" to "Forbidden",
+                    "message" to "You can only list your own AWS accounts"
+                ))
+            }
+        }
+
+        val accountIds = if (userId != null) {
+            awsAccountSharingService.listSourceAccountIds(userId)
+        } else {
+            awsAccountSharingService.listSourceAccountIdsByEmail(email!!)
+        }
+        return HttpResponse.ok(accountIds.map { SourceAwsAccountResponse(it) })
     }
 
     /**

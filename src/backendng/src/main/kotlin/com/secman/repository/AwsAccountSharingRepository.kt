@@ -37,13 +37,17 @@ interface AwsAccountSharingRepository : JpaRepository<AwsAccountSharing, Long> {
     override fun findAll(pageable: Pageable): Page<AwsAccountSharing>
 
     /**
-     * Find all sharing rules with eager-loaded user associations for admin listing.
+     * Find all sharing rules with eager-loaded user associations and
+     * per-rule account selection (Set<String> @ElementCollection) for
+     * admin listing. Eager-fetching the selection avoids LazyInitException
+     * when the service maps to DTOs outside the persistence context.
      */
     @Query("""
-        SELECT s FROM AwsAccountSharing s
+        SELECT DISTINCT s FROM AwsAccountSharing s
         LEFT JOIN FETCH s.sourceUser
         LEFT JOIN FETCH s.targetUser
         LEFT JOIN FETCH s.createdBy
+        LEFT JOIN FETCH s.selectedAwsAccountIds
         ORDER BY s.createdAt DESC
     """)
     fun findAllWithUsers(): List<AwsAccountSharing>
@@ -53,10 +57,11 @@ interface AwsAccountSharingRepository : JpaRepository<AwsAccountSharing, Long> {
      * Used for non-admin users who can only see their own outgoing sharing rules.
      */
     @Query("""
-        SELECT s FROM AwsAccountSharing s
+        SELECT DISTINCT s FROM AwsAccountSharing s
         LEFT JOIN FETCH s.sourceUser
         LEFT JOIN FETCH s.targetUser
         LEFT JOIN FETCH s.createdBy
+        LEFT JOIN FETCH s.selectedAwsAccountIds
         WHERE s.sourceUser.id = :sourceUserId
         ORDER BY s.createdAt DESC
     """)
@@ -69,10 +74,11 @@ interface AwsAccountSharingRepository : JpaRepository<AwsAccountSharing, Long> {
      * owner sharing out, or as the recipient receiving visibility.
      */
     @Query("""
-        SELECT s FROM AwsAccountSharing s
+        SELECT DISTINCT s FROM AwsAccountSharing s
         LEFT JOIN FETCH s.sourceUser
         LEFT JOIN FETCH s.targetUser
         LEFT JOIN FETCH s.createdBy
+        LEFT JOIN FETCH s.selectedAwsAccountIds
         WHERE s.sourceUser.id = :userId OR s.targetUser.id = :userId
         ORDER BY s.createdAt DESC
     """)
@@ -85,6 +91,10 @@ interface AwsAccountSharingRepository : JpaRepository<AwsAccountSharing, Long> {
      * This is the critical query for access control integration.
      * Non-transitive by design: only joins user_mapping (direct mappings),
      * not recursively computed visibility.
+     *
+     * Per-account scoping (V207): a sharing row with NO entries in
+     * aws_account_sharing_account shares ALL of the source's accounts
+     * (legacy behavior). A row WITH entries shares only the listed ones.
      */
     @Query(
         value = """
@@ -93,6 +103,17 @@ interface AwsAccountSharingRepository : JpaRepository<AwsAccountSharing, Long> {
             JOIN users u_source ON u_source.id = acs.source_user_id
             JOIN user_mapping um ON um.email = u_source.email AND um.aws_account_id IS NOT NULL
             WHERE acs.target_user_id = :targetUserId
+              AND (
+                NOT EXISTS (
+                    SELECT 1 FROM aws_account_sharing_account a
+                    WHERE a.sharing_id = acs.id
+                )
+                OR EXISTS (
+                    SELECT 1 FROM aws_account_sharing_account a
+                    WHERE a.sharing_id = acs.id
+                      AND a.aws_account_id = um.aws_account_id
+                )
+              )
         """,
         nativeQuery = true
     )

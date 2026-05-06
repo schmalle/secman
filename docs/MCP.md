@@ -169,7 +169,7 @@ curl -XPOST http://localhost:8080/mcp \
 
 ### AWS account sharing (ADMIN, delegation)
 - **`list_aws_account_sharing`** — `page`, `size`. Returns directional sharing rules with source/target user info and shared-account count.
-- **`create_aws_account_sharing`** — `sourceUserId`*, `targetUserId`*. Validates: distinct users, both exist, source has ≥1 AWS mapping, no duplicate.
+- **`create_aws_account_sharing`** — `sourceUserId`*, `targetUserId`*, `awsAccountIds` (optional array of strings). Validates: distinct users, both exist, source has ≥1 AWS mapping, no duplicate. Empty/omitted `awsAccountIds` → share ALL of source's accounts (legacy default); non-empty → share only the listed accounts (must match source's actual mappings).
 - **`delete_aws_account_sharing`** — `id`*.
 
 ### Releases (ADMIN/RELEASE_MANAGER for read; create/delete: ADMIN/REQADMIN)

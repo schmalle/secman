@@ -18,6 +18,10 @@ import org.slf4j.LoggerFactory
  * Input parameters:
  * - sourceUserId (required): ID of the user whose AWS accounts will be shared
  * - targetUserId (required): ID of the user who will receive visibility
+ * - awsAccountIds (optional): array of AWS account IDs to scope the share to.
+ *   Omit or empty → share ALL of the source's accounts (legacy default).
+ *   Non-empty → share only the listed accounts (must match the source's
+ *   actual AWS user mappings).
  *
  * Returns:
  * - Created sharing rule details
@@ -43,6 +47,11 @@ class CreateAwsAccountSharingTool(
             "targetUserId" to mapOf(
                 "type" to "number",
                 "description" to "ID of the user who will receive AWS account visibility (the recipient)"
+            ),
+            "awsAccountIds" to mapOf(
+                "type" to "array",
+                "items" to mapOf("type" to "string"),
+                "description" to "Optional. List of AWS account IDs to scope the share to. Empty or omitted shares ALL of the source's accounts; non-empty shares only the listed ones."
             )
         ),
         "required" to listOf("sourceUserId", "targetUserId")
@@ -65,6 +74,15 @@ class CreateAwsAccountSharingTool(
 
         val sourceUserId = (arguments["sourceUserId"] as? Number)?.toLong()
         val targetUserId = (arguments["targetUserId"] as? Number)?.toLong()
+        val awsAccountIdsRaw = arguments["awsAccountIds"]
+        val awsAccountIds: List<String>? = when (awsAccountIdsRaw) {
+            null -> null
+            is List<*> -> awsAccountIdsRaw.mapNotNull { it?.toString()?.takeIf { s -> s.isNotBlank() } }
+            else -> return McpToolResult.error(
+                "VALIDATION_ERROR",
+                "awsAccountIds must be an array of strings"
+            )
+        }
 
         if (sourceUserId == null) {
             return McpToolResult.error("VALIDATION_ERROR", "sourceUserId is required and must be a valid number")
@@ -79,7 +97,8 @@ class CreateAwsAccountSharingTool(
 
             val request = CreateAwsAccountSharingRequest(
                 sourceUserId = sourceUserId,
-                targetUserId = targetUserId
+                targetUserId = targetUserId,
+                awsAccountIds = awsAccountIds,
             )
 
             val result = awsAccountSharingService.createSharingRule(request, adminUserId)

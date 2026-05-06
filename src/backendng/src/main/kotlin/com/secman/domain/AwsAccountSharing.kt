@@ -57,6 +57,23 @@ data class AwsAccountSharing(
     @JoinColumn(name = "created_by_id", nullable = false)
     var createdBy: User,
 
+    /**
+     * Optional per-account scoping. When empty, the rule shares ALL of the
+     * source user's AWS accounts (legacy behavior — preserved so existing
+     * rules and any new mappings on the source auto-propagate). When
+     * non-empty, only the listed account IDs are visible to the target.
+     *
+     * Backed by aws_account_sharing_account (see V207). Cascade DELETE on
+     * the FK means removing a sharing row drops its scoping rows too.
+     */
+    @ElementCollection(fetch = FetchType.LAZY)
+    @CollectionTable(
+        name = "aws_account_sharing_account",
+        joinColumns = [JoinColumn(name = "sharing_id", nullable = false)]
+    )
+    @Column(name = "aws_account_id", nullable = false, length = 64)
+    var selectedAwsAccountIds: MutableSet<String> = mutableSetOf(),
+
     @Column(name = "created_at", updatable = false)
     var createdAt: Instant? = null,
 

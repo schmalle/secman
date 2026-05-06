@@ -1,9 +1,9 @@
-import { authenticatedGet, authenticatedPost, authenticatedDelete } from '../utils/auth';
+import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete } from '../utils/auth';
 
 /**
  * Service for AWS Account Sharing API operations.
  *
- * Feature: AWS Account Sharing
+ * Feature: AWS Account Sharing (per-account scoping in V207)
  */
 
 export interface AwsAccountSharing {
@@ -16,7 +16,12 @@ export interface AwsAccountSharing {
     targetUserUsername: string;
     createdById: number;
     createdByUsername: string;
+    /** Effective number of accounts shared (full source set when shareAllAccounts, otherwise the selected count). */
     sharedAwsAccountCount: number;
+    /** Explicit selection on this rule. Empty when shareAllAccounts is true. */
+    selectedAwsAccountIds: string[];
+    /** True when no per-account scoping is configured — rule shares ALL of source's accounts. */
+    shareAllAccounts: boolean;
     createdAt: string;
     updatedAt: string;
 }
@@ -30,6 +35,21 @@ export interface CreateAwsAccountSharingRequest {
     sourceUserEmail?: string | null;
     targetUserId?: number | null;
     targetUserEmail?: string | null;
+    /**
+     * Optional. Empty/omitted → share ALL of the source's accounts.
+     * Non-empty → restrict the share to the listed account IDs.
+     */
+    awsAccountIds?: string[] | null;
+}
+
+/**
+ * Update payload for editing the per-account selection on an existing
+ * sharing row. Source/target are immutable — to change them, delete and
+ * recreate.
+ */
+export interface UpdateAwsAccountSharingRequest {
+    /** Empty/null → reset to "share all"; non-empty → restrict to listed IDs. */
+    awsAccountIds?: string[] | null;
 }
 
 /**
@@ -42,6 +62,11 @@ export interface SharingUser {
     username: string;
     email: string;
     isPending: boolean;
+}
+
+/** AWS account belonging to a source user — populates the per-account picker. */
+export interface SourceAwsAccount {
+    awsAccountId: string;
 }
 
 export interface AwsAccountSharingListResponse {
@@ -96,6 +121,27 @@ export async function createSharingRule(
 }
 
 /**
+ * Update the per-account selection of an existing sharing rule.
+ */
+export async function updateSharingRule(
+    id: number,
+    request: UpdateAwsAccountSharingRequest
+): Promise<AwsAccountSharing> {
+    const response = await authenticatedPut(`/api/aws-account-sharing/${id}`, request);
+
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Failed to update sharing rule' }));
+        if (response.status === 400) throw new Error(errorData.message || 'Invalid request');
+        if (response.status === 401) throw new Error('Authentication required');
+        if (response.status === 403) throw new Error('Insufficient permissions');
+        if (response.status === 404) throw new Error('Sharing rule not found');
+        throw new Error(errorData.message || `Failed to update sharing rule: ${response.status}`);
+    }
+
+    return await response.json();
+}
+
+/**
  * Delete an AWS account sharing rule.
  */
 export async function deleteSharingRule(id: number): Promise<void> {
@@ -107,4 +153,26 @@ export async function deleteSharingRule(id: number): Promise<void> {
         if (response.status === 404) throw new Error('Sharing rule not found');
         throw new Error(`Failed to delete sharing rule: ${response.status}`);
     }
+}
+
+/**
+ * List the AWS account IDs available for sharing on behalf of a given
+ * source user (by id, or by email for pending users with no User row yet).
+ */
+export async function listSourceAccounts(opts: { userId?: number | null; email?: string | null }):
+    Promise<SourceAwsAccount[]> {
+    const params = new URLSearchParams();
+    if (opts.userId != null) params.set('userId', String(opts.userId));
+    if (opts.email) params.set('email', opts.email);
+    if ([...params.keys()].length === 0) {
+        throw new Error('listSourceAccounts requires either userId or email');
+    }
+
+    const response = await authenticatedGet(`/api/aws-account-sharing/source-accounts?${params.toString()}`);
+    if (!response.ok) {
+        if (response.status === 401) throw new Error('Authentication required');
+        if (response.status === 403) throw new Error('Insufficient permissions');
+        throw new Error(`Failed to list source accounts: ${response.status}`);
+    }
+    return await response.json();
 }

@@ -108,7 +108,7 @@ Asset access (any of):
 4. `scanUploader == user`
 5. `cloudAccountId` ∈ user's AWS UserMapping
 6. `adDomain` ∈ user's domain UserMapping (case-insensitive)
-7. `cloudAccountId` ∈ AwsAccountSharing rule (directional)
+7. `cloudAccountId` ∈ AwsAccountSharing rule (directional; per-rule account selection — empty selection = share all of source's accounts)
 8. `owner == username`
 9. `cloudAccountId` ∈ workgroup's `WorkgroupAwsAccount` (direct membership only)
 

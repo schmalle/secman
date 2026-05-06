@@ -5,6 +5,7 @@ import com.secman.domain.AwsAccountSharingCreatedEvent
 import com.secman.domain.User
 import com.secman.dto.AwsAccountSharingResponse
 import com.secman.dto.CreateAwsAccountSharingRequest
+import com.secman.dto.UpdateAwsAccountSharingRequest
 import com.secman.dto.toResponse
 import com.secman.repository.AwsAccountSharingRepository
 import com.secman.repository.UserMappingRepository
@@ -17,10 +18,17 @@ import org.slf4j.LoggerFactory
 /**
  * Service for managing AWS Account Sharing rules.
  *
- * Feature: AWS Account Sharing
+ * Feature: AWS Account Sharing (per-account scoping in V207)
  *
- * Provides business logic for creating, listing, and deleting sharing rules,
- * as well as resolving shared AWS account IDs for access control.
+ * Provides business logic for creating, listing, updating, and deleting
+ * sharing rules, as well as resolving shared AWS account IDs for access
+ * control.
+ *
+ * Selection semantics:
+ * - selectedAwsAccountIds empty  → share ALL of the source user's accounts
+ *   (legacy default; future mappings auto-propagate)
+ * - selectedAwsAccountIds set    → share ONLY the listed account IDs
+ *   (mapping changes do not auto-extend the rule)
  */
 @Singleton
 open class AwsAccountSharingService(
@@ -68,13 +76,26 @@ open class AwsAccountSharingService(
         val pagedRules = allRules
             .drop(page * size)
             .take(size)
-            .map { sharing ->
-                val count = userMappingRepository.findDistinctAwsAccountIdByEmail(sharing.sourceUser.email).size
-                sharing.toResponse(sharedAwsAccountCount = count)
+
+        val responses = pagedRules.map { sharing ->
+            // selectedAwsAccountIds is JOIN FETCHed by the repository queries
+            // (see findAllWithUsers* in AwsAccountSharingRepository), so reading
+            // it here does not trigger a lazy load even though we're outside
+            // the original transaction.
+            val selected = sharing.selectedAwsAccountIds.toList().sorted()
+            val effectiveCount = if (selected.isNotEmpty()) {
+                selected.size
+            } else {
+                userMappingRepository.findDistinctAwsAccountIdByEmail(sharing.sourceUser.email).size
             }
+            sharing.toResponse(
+                sharedAwsAccountCount = effectiveCount,
+                selectedAwsAccountIds = selected,
+            )
+        }
 
         return mapOf(
-            "content" to pagedRules,
+            "content" to responses,
             "totalElements" to totalElements,
             "totalPages" to totalPages,
             "page" to page,
@@ -90,6 +111,9 @@ open class AwsAccountSharingService(
      * - Both users exist
      * - No duplicate rule
      * - Source user has at least one AWS account mapping
+     * - If awsAccountIds is provided and non-empty, at least one must match
+     *   one of the source user's actual mappings (unknown IDs are silently
+     *   dropped — defensive against stale UI state)
      */
     @Transactional
     open fun createSharingRule(request: CreateAwsAccountSharingRequest, adminUserId: Long): AwsAccountSharingResponse {
@@ -113,15 +137,45 @@ open class AwsAccountSharingService(
             throw IllegalArgumentException("Source user ${sourceUser.email} has no AWS account mappings to share")
         }
 
+        // Resolve effective scope: empty/null → share-all (legacy); otherwise
+        // intersect requested IDs with source's actual mappings.
+        val sourceSet = sourceAwsAccounts.toSet()
+        val resolvedScope: Set<String> = when {
+            request.awsAccountIds.isNullOrEmpty() -> emptySet() // share-all
+            else -> {
+                val requested = request.awsAccountIds.toSet()
+                val matched = requested.intersect(sourceSet)
+                val unknown = requested - sourceSet
+                if (unknown.isNotEmpty()) {
+                    log.warn(
+                        "AWS account sharing create: dropping {} unknown account ids for source {}: {}",
+                        unknown.size, sourceUser.email, unknown
+                    )
+                }
+                if (matched.isEmpty()) {
+                    throw IllegalArgumentException(
+                        "None of the requested account IDs match the source user's AWS account mappings"
+                    )
+                }
+                matched
+            }
+        }
+
         val sharing = AwsAccountSharing(
             sourceUser = sourceUser,
             targetUser = targetUser,
-            createdBy = adminUser
+            createdBy = adminUser,
+            selectedAwsAccountIds = resolvedScope.toMutableSet(),
         )
 
         val saved = awsAccountSharingRepository.save(sharing)
-        log.info("AUDIT: AWS account sharing created: source={}, target={}, admin={}, sharedAccounts={}",
-            sourceUser.email, targetUser.email, adminUser.email, sourceAwsAccounts.size)
+        val effectiveCount = if (resolvedScope.isNotEmpty()) resolvedScope.size else sourceAwsAccounts.size
+        log.info(
+            "AUDIT: AWS account sharing created: source={}, target={}, admin={}, scope={}, sharedAccounts={}",
+            sourceUser.email, targetUser.email, adminUser.email,
+            if (resolvedScope.isEmpty()) "ALL" else "SELECTED(${resolvedScope.size})",
+            effectiveCount,
+        )
 
         sharingCreatedEventPublisher.publishEvent(
             AwsAccountSharingCreatedEvent(
@@ -132,18 +186,78 @@ open class AwsAccountSharingService(
                 targetUsername = targetUser.username,
                 createdByEmail = adminUser.email,
                 createdAtIso = saved.createdAt!!.toString(),
-                sharedAwsAccountCount = sourceAwsAccounts.size,
+                sharedAwsAccountCount = effectiveCount,
             )
         )
 
-        return saved.toResponse(sharedAwsAccountCount = sourceAwsAccounts.size)
+        return saved.toResponse(
+            sharedAwsAccountCount = effectiveCount,
+            selectedAwsAccountIds = resolvedScope.sorted(),
+        )
+    }
+
+    /**
+     * Update the per-account selection on an existing sharing rule.
+     *
+     * Source and target are immutable on a sharing row — to change them,
+     * delete and recreate. A null/empty `awsAccountIds` resets the rule
+     * back to share-all.
+     */
+    @Transactional
+    open fun updateSharingRule(sharingId: Long, request: UpdateAwsAccountSharingRequest): AwsAccountSharingResponse {
+        val sharing = awsAccountSharingRepository.findById(sharingId)
+            .orElseThrow { NoSuchElementException("Sharing rule not found: $sharingId") }
+
+        val sourceAwsAccounts = userMappingRepository.findDistinctAwsAccountIdByEmail(sharing.sourceUser.email)
+        val sourceSet = sourceAwsAccounts.toSet()
+
+        val resolvedScope: Set<String> = when {
+            request.awsAccountIds.isNullOrEmpty() -> emptySet()
+            else -> {
+                val requested = request.awsAccountIds.toSet()
+                val matched = requested.intersect(sourceSet)
+                val unknown = requested - sourceSet
+                if (unknown.isNotEmpty()) {
+                    log.warn(
+                        "AWS account sharing update: dropping {} unknown account ids for source {}: {}",
+                        unknown.size, sharing.sourceUser.email, unknown
+                    )
+                }
+                if (matched.isEmpty()) {
+                    throw IllegalArgumentException(
+                        "None of the requested account IDs match the source user's AWS account mappings"
+                    )
+                }
+                matched
+            }
+        }
+
+        // Replace the collection contents in place so JPA cascades the diff
+        // (delete-then-insert) on the join table within this transaction.
+        sharing.selectedAwsAccountIds.clear()
+        sharing.selectedAwsAccountIds.addAll(resolvedScope)
+        val saved = awsAccountSharingRepository.update(sharing)
+
+        val effectiveCount = if (resolvedScope.isNotEmpty()) resolvedScope.size else sourceAwsAccounts.size
+        log.info(
+            "AUDIT: AWS account sharing updated: id={}, source={}, target={}, scope={}, sharedAccounts={}",
+            sharingId, sharing.sourceUser.email, sharing.targetUser.email,
+            if (resolvedScope.isEmpty()) "ALL" else "SELECTED(${resolvedScope.size})",
+            effectiveCount,
+        )
+
+        return saved.toResponse(
+            sharedAwsAccountCount = effectiveCount,
+            selectedAwsAccountIds = resolvedScope.sorted(),
+        )
     }
 
     private fun resolveUser(userId: Long?, email: String?, side: String): User =
         userResolutionService.resolveByIdOrEmail(userId, email, side)
 
     /**
-     * Delete a sharing rule by ID.
+     * Delete a sharing rule by ID. The aws_account_sharing_account child
+     * rows are removed via the FK's ON DELETE CASCADE.
      */
     @Transactional
     open fun deleteSharingRule(sharingId: Long): Boolean {
@@ -158,7 +272,7 @@ open class AwsAccountSharingService(
 
     /**
      * Check if a sharing rule is owned by (source user of) the given user.
-     * Used for authorization: non-admin users can only delete their own rules.
+     * Used for authorization: non-admin users can only delete/update their own rules.
      */
     fun isOwnedByUser(sharingId: Long, userId: Long): Boolean {
         val sharing = awsAccountSharingRepository.findById(sharingId).orElse(null) ?: return false
@@ -166,10 +280,32 @@ open class AwsAccountSharingService(
     }
 
     /**
+     * List the AWS account IDs available for sharing on behalf of a given
+     * source user — used to populate the per-account picker in the UI.
+     *
+     * Returned in lexical order so the UI display is stable across calls.
+     */
+    fun listSourceAccountIds(sourceUserId: Long): List<String> {
+        val user = userRepository.findById(sourceUserId).orElse(null) ?: return emptyList()
+        return userMappingRepository.findDistinctAwsAccountIdByEmail(user.email).sorted()
+    }
+
+    /**
+     * Same as listSourceAccountIds but addressed by email. Convenience for
+     * pending users (no User row yet — UserMapping hits by email).
+     */
+    fun listSourceAccountIdsByEmail(sourceUserEmail: String): List<String> {
+        return userMappingRepository.findDistinctAwsAccountIdByEmail(sourceUserEmail).sorted()
+    }
+
+    /**
      * Get all shared AWS account IDs for a target user.
      * Used by access control services to determine asset visibility.
      *
-     * Returns distinct AWS account IDs from all source users sharing with this target user.
+     * Returns distinct AWS account IDs from all source users sharing with this target user,
+     * honoring per-rule account selection. The native query treats an empty
+     * selection as "all of the source user's accounts" so legacy rules still
+     * resolve to the full set.
      */
     fun getSharedAwsAccountIds(targetUserId: Long): List<String> {
         return awsAccountSharingRepository.findSharedAwsAccountIdsByTargetUserId(targetUserId)
