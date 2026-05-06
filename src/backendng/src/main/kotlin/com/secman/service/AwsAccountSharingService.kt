@@ -13,7 +13,6 @@ import io.micronaut.context.event.ApplicationEventPublisher
 import jakarta.inject.Singleton
 import jakarta.transaction.Transactional
 import org.slf4j.LoggerFactory
-import java.time.Instant
 
 /**
  * Service for managing AWS Account Sharing rules.
@@ -132,7 +131,7 @@ open class AwsAccountSharingService(
                 targetUserEmail = targetUser.email,
                 targetUsername = targetUser.username,
                 createdByEmail = adminUser.email,
-                createdAtIso = (saved.createdAt ?: Instant.now()).toString(),
+                createdAtIso = saved.createdAt!!.toString(),
                 sharedAwsAccountCount = sourceAwsAccounts.size,
             )
         )

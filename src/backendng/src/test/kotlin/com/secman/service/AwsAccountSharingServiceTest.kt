@@ -9,6 +9,7 @@ import com.secman.repository.UserMappingRepository
 import com.secman.repository.UserRepository
 import io.micronaut.context.event.ApplicationEventPublisher
 import io.mockk.*
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -68,14 +69,14 @@ class AwsAccountSharingServiceTest {
         verify(exactly = 1) { publisher.publishEvent(capture(eventSlot)) }
 
         val ev = eventSlot.captured
-        assert(ev.sharingId == 99L)
-        assert(ev.sourceUserEmail == "alice@example.com")
-        assert(ev.targetUserId == 2L)
-        assert(ev.targetUserEmail == "bob@example.com")
-        assert(ev.targetUsername == "bob")
-        assert(ev.createdByEmail == "admin@example.com")
-        assert(ev.sharedAwsAccountCount == 2)
-        assert(ev.createdAtIso == "2026-05-06T10:15:00Z")
+        assertEquals(99L, ev.sharingId)
+        assertEquals("alice@example.com", ev.sourceUserEmail)
+        assertEquals(2L, ev.targetUserId)
+        assertEquals("bob@example.com", ev.targetUserEmail)
+        assertEquals("bob", ev.targetUsername)
+        assertEquals("admin@example.com", ev.createdByEmail)
+        assertEquals(2, ev.sharedAwsAccountCount)
+        assertEquals("2026-05-06T10:15:00Z", ev.createdAtIso)
     }
 
     @Test
