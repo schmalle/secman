@@ -179,11 +179,21 @@ async function main() {
       await page.goto(`${host}/login`, { waitUntil: 'domcontentloaded', timeout: PAGE_TIMEOUT });
       // Wait for the login form to be rendered by React hydration
       await page.locator('#username').waitFor({ state: 'visible', timeout: 15_000 });
+      // The form is server-rendered visible BEFORE React hydrates. Clicking
+      // submit before hydration submits the form as plain HTML (GET /login
+      // with no API call), which then hangs waitForURL because the URL
+      // never leaves /login. Wait for astro-island hydration to complete:
+      // <astro-island ssr> is added on SSR and the attribute is removed
+      // by astro-island.connectedCallback() after hydrate() finishes.
+      await page
+        .locator('astro-island:not([ssr])')
+        .first()
+        .waitFor({ state: 'attached', timeout: 30_000 });
       await page.locator('#username').fill(USERNAME);
       await page.locator('#password').fill(PASSWORD);
       await page.locator('button[type="submit"]').click();
       await page.waitForURL((url) => !url.pathname.includes('/login'), {
-        timeout: 15_000,
+        timeout: 30_000,
       });
     } catch (err) {
       console.error('ERROR: Login failed.');

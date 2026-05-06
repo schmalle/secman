@@ -261,8 +261,11 @@ trigger_view_refresh() {
     log_dbg "View refresh job id=$job_id"
 
     # Poll history until our job's status is COMPLETED (or any terminal state).
-    # Max wait: 60s.
-    local deadline=$(( $(date +%s) + 60 ))
+    # Max wait: 600s — full refresh of ~2-3k assets can take 6-7 minutes on
+    # the canonical dev DB. The previous 60s budget made Phase 3 fail on
+    # second runs because batches that processed our newly-created test asset
+    # late never landed in the materialized view before assertions ran.
+    local deadline=$(( $(date +%s) + 600 ))
     while (( $(date +%s) < deadline )); do
         local hist status
         hist=$(curl -s -H "Authorization: Bearer $token" \
@@ -278,9 +281,9 @@ trigger_view_refresh() {
             log_dbg "Materialized view refresh terminal status: $status"
             return 0
         fi
-        sleep 1
+        sleep 2
     done
-    warn "Materialized view refresh did not complete within 60s — proceeding anyway"
+    warn "Materialized view refresh did not complete within 600s — proceeding anyway"
 }
 
 db_exec() {
