@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>AWS account access shared with you</title>
+</head>
+<body style="font-family: Arial, sans-serif; color: #222; max-width: 640px; margin: 0 auto; padding: 24px;">
+  <p style="text-align: center;">
+    <img src="cid:secman-logo" alt="SecMan" style="max-height: 64px;">
+  </p>
+
+  <h2 style="color: #1f4e79;">AWS account access shared with you</h2>
+
+  <p>Hello {targetUsername},</p>
+
+  <p><strong>{sourceUserEmail}</strong> has shared their AWS account access with you in SecMan.</p>
+
+  <p>You can now see assets and vulnerabilities tied to {sourceUserEmail}'s AWS accounts.
+     This share is one-way (only from {sourceUserEmail} to you) and is not transitive
+     (no third party gains access through this rule).</p>
+
+  <p>This share covers <strong>{sharedAwsAccountCount}</strong> AWS account(s).</p>
+
+  <p style="color: #555; font-size: 0.9em;">
+    Created by {createdByEmail} on {createdAtIso} (UTC).
+  </p>
+
+  <p>
+    <a href="{assetsUrl}"
+       style="background: #1f4e79; color: #fff; padding: 10px 18px; text-decoration: none; border-radius: 4px;">
+      View assets in SecMan
+    </a>
+  </p>
+
+  <hr style="border: none; border-top: 1px solid #ddd; margin: 32px 0 16px;">
+
+  <p style="color: #777; font-size: 0.85em;">
+    If you believe this share is incorrect, contact your SecMan administrator.
+  </p>
+</body>
+</html>

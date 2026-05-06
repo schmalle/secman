@@ -1,0 +1,102 @@
+package com.secman.service
+
+import com.secman.config.AppConfig
+import com.secman.domain.AwsAccountSharingCreatedEvent
+import jakarta.inject.Singleton
+import org.slf4j.LoggerFactory
+import java.util.concurrent.CompletableFuture
+
+/**
+ * Builds and dispatches the email sent to a sharing rule's target user
+ * when an AwsAccountSharing has just been created.
+ *
+ * Pattern matches ExceptionRequestNotificationService:
+ *  - never throws upward
+ *  - returns CompletableFuture<Boolean>
+ *  - email I/O wrapped via EmailService.sendEmailWithInlineImages
+ *
+ * The input event carries primitives only — there are no Hibernate
+ * lazy associations to worry about.
+ */
+@Singleton
+open class AwsAccountSharingNotificationService(
+    private val emailService: EmailService,
+    private val appConfig: AppConfig,
+) {
+    private val log = LoggerFactory.getLogger(AwsAccountSharingNotificationService::class.java)
+
+    companion object {
+        private const val SUBJECT = "AWS account access shared with you in SecMan"
+        private const val HTML_TEMPLATE = "/email-templates/aws-sharing-granted.html"
+        private const val TEXT_TEMPLATE = "/email-templates/aws-sharing-granted.txt"
+        private const val LOGO_PATH = "/email-templates/SecManLogo.png"
+        private const val ASSETS_PATH = "/assets"
+    }
+
+    open fun notifyTargetOfNewShare(event: AwsAccountSharingCreatedEvent): CompletableFuture<Boolean> {
+        return try {
+            val htmlTemplate = readResource(HTML_TEMPLATE)
+            val textTemplate = readResource(TEXT_TEMPLATE)
+            val assetsUrl = appConfig.backend.baseUrl.trimEnd('/') + ASSETS_PATH
+
+            val htmlBody = substitute(htmlTemplate, event, assetsUrl)
+            val textBody = substitute(textTemplate, event, assetsUrl)
+            val inlineImages = loadLogoInlineImage()
+
+            val future = emailService.sendEmailWithInlineImages(
+                to = event.targetUserEmail,
+                subject = SUBJECT,
+                textContent = textBody,
+                htmlContent = htmlBody,
+                inlineImages = inlineImages,
+            )
+
+            future.handle { sent, ex ->
+                if (ex != null) {
+                    log.error("Failed to send AWS sharing notification (sharingId={}): {}",
+                        event.sharingId, ex.message)
+                    false
+                } else {
+                    if (sent == true) {
+                        log.info("Sent AWS sharing notification to {} (sharingId={})",
+                            event.targetUserEmail, event.sharingId)
+                    } else {
+                        log.warn("AWS sharing notification not delivered to {} (sharingId={})",
+                            event.targetUserEmail, event.sharingId)
+                    }
+                    sent == true
+                }
+            }
+        } catch (e: Exception) {
+            log.error("Unable to build AWS sharing notification (sharingId={}): {}",
+                event.sharingId, e.message, e)
+            CompletableFuture.completedFuture(false)
+        }
+    }
+
+    private fun substitute(template: String, e: AwsAccountSharingCreatedEvent, assetsUrl: String): String {
+        return template
+            .replace("{targetUsername}", e.targetUsername)
+            .replace("{sourceUserEmail}", e.sourceUserEmail)
+            .replace("{sharedAwsAccountCount}", e.sharedAwsAccountCount.toString())
+            .replace("{createdByEmail}", e.createdByEmail)
+            .replace("{createdAtIso}", e.createdAtIso)
+            .replace("{assetsUrl}", assetsUrl)
+    }
+
+    private fun readResource(path: String): String {
+        val stream = javaClass.getResourceAsStream(path)
+            ?: throw IllegalStateException("Email template not found on classpath: $path")
+        return stream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+    }
+
+    private fun loadLogoInlineImage(): Map<String, Pair<ByteArray, String>> {
+        return try {
+            val bytes = javaClass.getResourceAsStream(LOGO_PATH)?.readAllBytes()
+            if (bytes != null) mapOf("secman-logo" to (bytes to "image/png")) else emptyMap()
+        } catch (e: Exception) {
+            log.warn("Failed to load SecManLogo.png: {}", e.message)
+            emptyMap()
+        }
+    }
+}

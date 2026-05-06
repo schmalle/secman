@@ -1,6 +1,7 @@
 package com.secman.service
 
 import com.secman.domain.AwsAccountSharing
+import com.secman.domain.AwsAccountSharingCreatedEvent
 import com.secman.domain.User
 import com.secman.dto.AwsAccountSharingResponse
 import com.secman.dto.CreateAwsAccountSharingRequest
@@ -8,6 +9,7 @@ import com.secman.dto.toResponse
 import com.secman.repository.AwsAccountSharingRepository
 import com.secman.repository.UserMappingRepository
 import com.secman.repository.UserRepository
+import io.micronaut.context.event.ApplicationEventPublisher
 import jakarta.inject.Singleton
 import jakarta.transaction.Transactional
 import org.slf4j.LoggerFactory
@@ -25,7 +27,8 @@ open class AwsAccountSharingService(
     private val awsAccountSharingRepository: AwsAccountSharingRepository,
     private val userRepository: UserRepository,
     private val userMappingRepository: UserMappingRepository,
-    private val userResolutionService: UserResolutionService
+    private val userResolutionService: UserResolutionService,
+    private val sharingCreatedEventPublisher: ApplicationEventPublisher<AwsAccountSharingCreatedEvent>,
 ) {
     private val log = LoggerFactory.getLogger(AwsAccountSharingService::class.java)
 
@@ -119,6 +122,19 @@ open class AwsAccountSharingService(
         val saved = awsAccountSharingRepository.save(sharing)
         log.info("AUDIT: AWS account sharing created: source={}, target={}, admin={}, sharedAccounts={}",
             sourceUser.email, targetUser.email, adminUser.email, sourceAwsAccounts.size)
+
+        sharingCreatedEventPublisher.publishEvent(
+            AwsAccountSharingCreatedEvent(
+                sharingId = saved.id!!,
+                sourceUserEmail = sourceUser.email,
+                targetUserId = targetUser.id!!,
+                targetUserEmail = targetUser.email,
+                targetUsername = targetUser.username,
+                createdByEmail = adminUser.email,
+                createdAtIso = saved.createdAt!!.toString(),
+                sharedAwsAccountCount = sourceAwsAccounts.size,
+            )
+        )
 
         return saved.toResponse(sharedAwsAccountCount = sourceAwsAccounts.size)
     }
