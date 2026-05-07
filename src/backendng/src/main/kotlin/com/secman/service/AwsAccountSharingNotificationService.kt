@@ -38,7 +38,13 @@ open class AwsAccountSharingNotificationService(
             val htmlTemplate = readResource(HTML_TEMPLATE)
             val textTemplate = readResource(TEXT_TEMPLATE)
             val assetsUrl = appConfig.backend.baseUrl.trimEnd('/') + ASSETS_PATH
-            val loginUrl = appConfig.frontend.baseUrl.trimEnd('/')
+            // Use the same env-driven base as assetsUrl. The frontend.baseUrl
+            // default is localhost:4321 and isn't backed by an env override —
+            // in real deployments nginx fronts both API and UI under the same
+            // host (SECMAN_BACKEND_URL → e.g. https://secman.covestro.net), so
+            // sourcing the login URL from backend.baseUrl keeps both links on
+            // the public host without adding a second config knob.
+            val loginUrl = appConfig.backend.baseUrl.trimEnd('/')
 
             val htmlBody = substitute(htmlTemplate, event, assetsUrl, loginUrl)
             val textBody = substitute(textTemplate, event, assetsUrl, loginUrl)
