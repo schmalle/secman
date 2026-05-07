@@ -59,6 +59,17 @@ data class CreateAwsAccountSharingRequest(
     val targetUserId: Long? = null,
     val targetUserEmail: String? = null,
     val awsAccountIds: List<String>? = null,
+    /**
+     * When true, the controller treats `targetUserEmail` as a brand-new
+     * invite: it must be well-formed, share the caller's domain, and not
+     * already correspond to an existing User or PENDING UserMapping.
+     * The lazily-created User receives roles [USER, VULN] (not the
+     * default [USER, VULN, REQ]) and the notification email contains a
+     * "your account was just created" block.
+     *
+     * When false (default), the legacy create-or-find behavior applies.
+     */
+    val inviteByEmail: Boolean = false,
 )
 
 /**
