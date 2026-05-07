@@ -17,6 +17,7 @@ import io.micronaut.data.model.Pageable
 import jakarta.inject.Singleton
 import org.slf4j.LoggerFactory
 import java.time.LocalDateTime
+import java.time.temporal.ChronoUnit
 
 /**
  * Query type enum for cache key discrimination
@@ -293,12 +294,19 @@ open class CrowdStrikeQueryService(
         val activeExceptions = vulnerabilityExceptionRepository
             .findByExpirationDateIsNullOrExpirationDateGreaterThan(LocalDateTime.now())
 
+        val now = LocalDateTime.now()
         return CrowdStrikeQueryResponse(
             hostname = asset.name,
             instanceId = asset.cloudInstanceId,
             cloudAccountId = asset.cloudAccountId,
             vulnerabilities = vulns.content.map { v ->
                 val matchingException = activeExceptions.find { it.matches(v, asset) }
+                // Recompute days from the SLA anchor instead of returning v.daysOpen,
+                // which is the frozen string captured at last import. Without this the
+                // "live" lookup view drifts away from /api/vulnerabilities/current.
+                val anchor = v.firstSeenAt ?: v.scanTimestamp
+                val days = ChronoUnit.DAYS.between(anchor, now)
+                val daysOpenText = if (days == 1L) "1 day" else "$days days"
                 CrowdStrikeVulnerabilityDto(
                     id = "db-${v.id}",
                     hostname = asset.name,
@@ -307,8 +315,8 @@ open class CrowdStrikeQueryService(
                     severity = v.cvssSeverity ?: "UNKNOWN",
                     cvssScore = null,
                     affectedProduct = v.vulnerableProductVersions,
-                    daysOpen = v.daysOpen,
-                    detectedAt = v.scanTimestamp,
+                    daysOpen = daysOpenText,
+                    detectedAt = anchor,
                     patchPublicationDate = v.patchPublicationDate,
                     status = "open",
                     hasException = matchingException != null,
@@ -334,6 +342,7 @@ open class CrowdStrikeQueryService(
         val activeExceptions = vulnerabilityExceptionRepository
             .findByExpirationDateIsNullOrExpirationDateGreaterThan(LocalDateTime.now())
 
+        val now = LocalDateTime.now()
         return CrowdStrikeQueryResponse(
             hostname = asset.name,
             instanceId = asset.cloudInstanceId,
@@ -341,6 +350,11 @@ open class CrowdStrikeQueryService(
             cloudAccountId = asset.cloudAccountId,
             vulnerabilities = vulns.content.map { v ->
                 val matchingException = activeExceptions.find { it.matches(v, asset) }
+                // See queryFromDatabaseByHostname — same recompute to keep the
+                // hostname and instance-id paths consistent.
+                val anchor = v.firstSeenAt ?: v.scanTimestamp
+                val days = ChronoUnit.DAYS.between(anchor, now)
+                val daysOpenText = if (days == 1L) "1 day" else "$days days"
                 CrowdStrikeVulnerabilityDto(
                     id = "db-${v.id}",
                     hostname = asset.name,
@@ -349,8 +363,8 @@ open class CrowdStrikeQueryService(
                     severity = v.cvssSeverity ?: "UNKNOWN",
                     cvssScore = null,
                     affectedProduct = v.vulnerableProductVersions,
-                    daysOpen = v.daysOpen,
-                    detectedAt = v.scanTimestamp,
+                    daysOpen = daysOpenText,
+                    detectedAt = anchor,
                     patchPublicationDate = v.patchPublicationDate,
                     status = "open",
                     hasException = matchingException != null,
