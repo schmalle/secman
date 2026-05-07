@@ -22,4 +22,15 @@ data class AwsAccountSharingCreatedEvent(
     val createdByEmail: String,
     val createdAtIso: String,
     val sharedAwsAccountCount: Int,
+    /**
+     * True when this share's target user did not exist as a SecMan User
+     * before this rule was created (i.e. the sharing flow lazy-created
+     * the row). The notification email uses this to decide whether to
+     * include the "your account was just created" onboarding block.
+     *
+     * Note: under a tight race between two concurrent invites for the
+     * same email, both events may carry true. That's accepted as a
+     * benign inaccuracy — see design doc, "User-create races".
+     */
+    val targetUserWasJustCreated: Boolean = false,
 )
