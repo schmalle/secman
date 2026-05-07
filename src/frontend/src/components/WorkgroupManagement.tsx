@@ -2,6 +2,27 @@ import React, { useState, useEffect } from 'react';
 import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete } from '../utils/auth';
 import WorkgroupAccountsModal from './WorkgroupAccountsModal';
 
+// Extract a useful error message from a non-OK Response. Handles the three
+// shapes we see in this app: our own `{error: "..."}`, Micronaut's default
+// `{message: "..."}`, and Bean-Validation `{_embedded:{errors:[{message:...}]}}`.
+// Falls back to status text so we never show the literal string "Unknown error".
+async function extractErrorMessage(response: Response, fallback: string): Promise<string> {
+  try {
+    const body = await response.json();
+    if (body && typeof body === 'object') {
+      if (typeof body.error === 'string' && body.error) return body.error;
+      if (typeof body.message === 'string' && body.message) return body.message;
+      const violations = body?._embedded?.errors;
+      if (Array.isArray(violations) && violations.length > 0) {
+        return violations.map((v: any) => v?.message).filter(Boolean).join('; ') || fallback;
+      }
+    }
+  } catch {
+    // body wasn't JSON — fall through
+  }
+  return `${fallback} (HTTP ${response.status})`;
+}
+
 interface Workgroup {
   id: number;
   name: string;
@@ -119,14 +140,12 @@ const WorkgroupManagement: React.FC = () => {
       if (editingWorkgroup) {
         const response = await authenticatedPut(`/api/workgroups/${editingWorkgroup.id}`, formData);
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-          throw new Error(errorData.error || `Failed to update workgroup: ${response.status}`);
+          throw new Error(await extractErrorMessage(response, 'Failed to update workgroup'));
         }
       } else {
         const response = await authenticatedPost('/api/workgroups', formData);
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-          throw new Error(errorData.error || `Failed to create workgroup: ${response.status}`);
+          throw new Error(await extractErrorMessage(response, 'Failed to create workgroup'));
         }
       }
 
@@ -157,8 +176,7 @@ const WorkgroupManagement: React.FC = () => {
       const response = await authenticatedDelete(`/api/workgroups/${id}`);
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(errorData.error || `Failed to delete workgroup: ${response.status}`);
+        throw new Error(await extractErrorMessage(response, 'Failed to delete workgroup'));
       }
 
       await fetchWorkgroups();
@@ -247,8 +265,7 @@ const WorkgroupManagement: React.FC = () => {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(errorData.error || `Failed to assign users: ${response.status}`);
+        throw new Error(await extractErrorMessage(response, 'Failed to assign users'));
       }
 
       await fetchWorkgroups();
@@ -276,8 +293,7 @@ const WorkgroupManagement: React.FC = () => {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(errorData.error || `Failed to assign assets: ${response.status}`);
+        throw new Error(await extractErrorMessage(response, 'Failed to assign assets'));
       }
 
       await fetchWorkgroups();
@@ -723,9 +739,8 @@ const WorkgroupManagement: React.FC = () => {
         <table className="table table-striped table-hover">
           <thead>
             <tr>
+              <th>Parent</th>
               <th>Name</th>
-              <th>Description</th>
-              <th>Criticality</th>
               <th>Users</th>
               <th>Assets</th>
               <th>Accounts</th>
@@ -736,24 +751,20 @@ const WorkgroupManagement: React.FC = () => {
           <tbody>
             {workgroups.length === 0 ? (
               <tr>
-                <td colSpan={8} className="text-center text-muted">
+                <td colSpan={7} className="text-center text-muted">
                   No workgroups found. Create one to get started.
                 </td>
               </tr>
             ) : (
               workgroups.map(workgroup => {
-                const criticalityColor = workgroup.criticality === 'CRITICAL' ? 'danger' :
-                                        workgroup.criticality === 'HIGH' ? 'warning' :
-                                        workgroup.criticality === 'MEDIUM' ? 'info' :
-                                        workgroup.criticality === 'LOW' ? 'secondary' : 'light';
-                const criticalityText = workgroup.criticality === 'NA' ? 'N/A' : workgroup.criticality;
                 return (
                   <tr key={workgroup.id}>
-                    <td><strong>{workgroup.name}</strong></td>
-                    <td>{workgroup.description || <span className="text-muted">-</span>}</td>
                     <td>
-                      <span className={`badge bg-${criticalityColor} ${criticalityColor === 'light' ? 'text-dark' : ''}`}>{criticalityText}</span>
+                      {workgroup.parentName
+                        ? workgroup.parentName
+                        : <span className="text-muted fst-italic">root</span>}
                     </td>
+                    <td><strong>{workgroup.name}</strong></td>
                     <td>
                       <span className="badge bg-info">{workgroup.userCount}</span>
                     </td>

@@ -20,6 +20,7 @@ import io.micronaut.security.authentication.Authentication
 import io.micronaut.security.rules.SecurityRule
 import io.micronaut.serde.annotation.Serdeable
 import jakarta.transaction.Transactional
+import jakarta.validation.ConstraintViolationException
 import jakarta.validation.Valid
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
@@ -91,7 +92,7 @@ open class WorkgroupController(
     open fun createWorkgroup(
         @Body @Valid request: CreateWorkgroupRequest,
         authentication: Authentication
-    ): HttpResponse<Workgroup> {
+    ): HttpResponse<*> {
         return try {
             val criticality = request.criticality ?: Criticality.MEDIUM
             val workgroup = if (isAdmin(authentication)) {
@@ -113,7 +114,9 @@ open class WorkgroupController(
             }
             HttpResponse.created(workgroup)
         } catch (e: IllegalArgumentException) {
-            HttpResponse.badRequest()
+            HttpResponse.badRequest(mapOf("error" to (e.message ?: "Invalid workgroup data")))
+        } catch (e: ConstraintViolationException) {
+            HttpResponse.badRequest(mapOf("error" to formatViolations(e)))
         }
     }
 
@@ -209,11 +212,11 @@ open class WorkgroupController(
         @PathVariable id: Long,
         @Body @Valid request: UpdateWorkgroupRequest,
         authentication: Authentication
-    ): HttpResponse<Workgroup> {
+    ): HttpResponse<*> {
         return try {
             val existing = workgroupService.getWorkgroupById(id)
             if (!isMemberOrAdmin(existing, authentication)) {
-                return HttpResponse.status(io.micronaut.http.HttpStatus.FORBIDDEN)
+                return HttpResponse.status<Any>(io.micronaut.http.HttpStatus.FORBIDDEN)
             }
             val workgroup = workgroupService.updateWorkgroup(
                 id = id,
@@ -226,8 +229,10 @@ open class WorkgroupController(
             if (e.message?.contains("not found") == true) {
                 HttpResponse.notFound()
             } else {
-                HttpResponse.badRequest()
+                HttpResponse.badRequest(mapOf("error" to (e.message ?: "Invalid workgroup data")))
             }
+        } catch (e: ConstraintViolationException) {
+            HttpResponse.badRequest(mapOf("error" to formatViolations(e)))
         }
     }
 
@@ -916,6 +921,23 @@ open class WorkgroupController(
             updatedAt = workgroup.updatedAt!!,
             version = workgroup.version
         )
+    }
+
+    /**
+     * Convert a Bean Validation ConstraintViolationException to a single human-readable
+     * message. JPA-level @Pattern / @Size violations on the entity bypass the controller
+     * @Valid binding, so we surface them here instead of letting Micronaut emit its
+     * default `_embedded.errors[]` shape (which the frontend can't read).
+     */
+    private fun formatViolations(e: ConstraintViolationException): String {
+        val violations = e.constraintViolations
+        if (violations.isNullOrEmpty()) {
+            return e.message ?: "Validation failed"
+        }
+        return violations.joinToString("; ") { v ->
+            val field = v.propertyPath?.toString()?.substringAfterLast('.')
+            if (field.isNullOrBlank()) v.message else "$field: ${v.message}"
+        }
     }
 }
 
