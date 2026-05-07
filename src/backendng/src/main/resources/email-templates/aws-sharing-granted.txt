@@ -3,6 +3,12 @@ AWS account access shared with you in SecMan
 
 Hello {targetUsername},
 
+{ifNewAccount}
+A SecMan account has just been created for you.
+Log in via your organization SSO at: {loginUrl}
+Use the same email address as this message ({targetUserEmail}).
+
+{/ifNewAccount}
 {sourceUserEmail} has shared their AWS account access with you in SecMan.
 
 You can now see assets and vulnerabilities tied to {sourceUserEmail}'s
