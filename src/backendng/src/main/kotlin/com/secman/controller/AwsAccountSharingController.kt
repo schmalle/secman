@@ -104,6 +104,58 @@ open class AwsAccountSharingController(
                 request
             }
 
+            // Invite-mode validation. The service trusts these checks have
+            // already run; do NOT move them into the service unless you also
+            // remove them from here and update the design doc.
+            if (effectiveRequest.inviteByEmail) {
+                val email = effectiveRequest.targetUserEmail?.trim().orEmpty()
+                if (!com.secman.util.EmailDomain.isWellFormed(email)) {
+                    return HttpResponse.badRequest(mapOf(
+                        "error" to "Validation Error",
+                        "message" to "A valid email address is required to invite a new user"
+                    ))
+                }
+
+                val callerEmail = userRepository.findById(currentUserId)
+                    .map { it.email }.orElse(null)
+                val callerDomain = com.secman.util.EmailDomain.extractDomain(callerEmail)
+                if (callerDomain.isNullOrBlank()) {
+                    return HttpResponse.serverError(mapOf(
+                        "error" to "Internal Server Error",
+                        "message" to "Cannot determine your email domain — contact an administrator"
+                    ))
+                }
+
+                if (!com.secman.util.EmailDomain.sameDomain(callerEmail, email)) {
+                    return HttpResponse.badRequest(mapOf(
+                        "error" to "Validation Error",
+                        "message" to "You can only invite users whose email matches your own domain (@$callerDomain)"
+                    ))
+                }
+
+                if (email.equals(callerEmail, ignoreCase = true)) {
+                    return HttpResponse.badRequest(mapOf(
+                        "error" to "Validation Error",
+                        "message" to "You cannot share with yourself"
+                    ))
+                }
+
+                if (userRepository.findByEmailIgnoreCase(email).isPresent) {
+                    return HttpResponse.status<Any>(HttpStatus.CONFLICT).body(mapOf(
+                        "error" to "Conflict",
+                        "message" to "This email is already a SecMan user — use 'Pick existing user' instead"
+                    ))
+                }
+
+                val pendingHits = userMappingRepository.findByEmailAndStatus(email, MappingStatus.PENDING)
+                if (pendingHits.isNotEmpty()) {
+                    return HttpResponse.status<Any>(HttpStatus.CONFLICT).body(mapOf(
+                        "error" to "Conflict",
+                        "message" to "This email is already known via mapping import — use 'Pick existing user' instead"
+                    ))
+                }
+            }
+
             val result = awsAccountSharingService.createSharingRule(effectiveRequest, currentUserId)
             HttpResponse.status<Any>(HttpStatus.CREATED).body(result)
         } catch (e: IllegalArgumentException) {
