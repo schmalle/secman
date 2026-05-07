@@ -15,7 +15,7 @@ import { getWorkgroupChildren, getRootWorkgroups } from '../services/workgroupAp
 
 interface WorkgroupTreeProps {
   onSelectWorkgroup?: (workgroup: WorkgroupResponse) => void;
-  onCreateChild?: (parentId: number) => void;
+  onCreateChild?: (parent: WorkgroupResponse) => void;
   selectedWorkgroupId?: number | null;
 }
 
@@ -23,7 +23,7 @@ interface TreeNodeProps {
   workgroup: WorkgroupResponse;
   level: number;
   onSelectWorkgroup?: (workgroup: WorkgroupResponse) => void;
-  onCreateChild?: (parentId: number) => void;
+  onCreateChild?: (parent: WorkgroupResponse) => void;
   selectedWorkgroupId?: number | null;
 }
 
@@ -73,7 +73,7 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   const handleCreateChild = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (onCreateChild) {
-      onCreateChild(workgroup.id);
+      onCreateChild(workgroup);
     }
   };
 

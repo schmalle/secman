@@ -239,9 +239,9 @@ body {
   color: var(--scand-text-light) !important;
 }
 
-/* Secondary badge */
+/* Secondary badge — rgba() so Bootstrap's bg-opacity-* utilities still work */
 .badge.bg-secondary {
-  background-color: var(--scand-muted) !important;
+  background-color: rgba(123, 139, 139, var(--bs-bg-opacity, 1)) !important;
 }
 
 /* Light badge (used for counts) */

@@ -6,6 +6,7 @@ import DeleteWorkgroupConfirmation from './DeleteWorkgroupConfirmation';
 import WorkgroupBreadcrumb from './WorkgroupBreadcrumb';
 import WorkgroupManagement from './WorkgroupManagement';
 import type { WorkgroupResponse } from '../services/workgroupApi';
+import { isAdmin } from '../utils/auth';
 
 /**
  * Enhanced Workgroup Management Component with Hierarchy Support
@@ -32,30 +33,17 @@ const WorkgroupManagementWithHierarchy: React.FC = () => {
   const [workgroupToDelete, setWorkgroupToDelete] = useState<WorkgroupResponse | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
+  // Backend POST /api/workgroups/{id}/children is @Secured("ADMIN") (deliberate per
+  // commit 265a6c9: "child-create/move remain admin-only"). Mirror that gate in the UI
+  // so non-admins don't see a "+" button that 403s on submit.
+  const canCreateChild = isAdmin();
+
   const handleSelectWorkgroup = (workgroup: WorkgroupResponse) => {
     setSelectedWorkgroup(workgroup);
   };
 
-  const handleCreateChild = (parentId: number) => {
-    // Find the parent workgroup to pass to modal
-    // Note: In a real implementation, you might want to fetch this from the API
-    // For now, we'll use the selected workgroup if it matches
-    if (selectedWorkgroup && selectedWorkgroup.id === parentId) {
-      setParentForChild(selectedWorkgroup);
-    } else {
-      // Create a minimal parent object
-      setParentForChild({
-        id: parentId,
-        name: 'Parent',
-        depth: 1,
-        childCount: 0,
-        hasChildren: false,
-        ancestors: [],
-        createdAt: '',
-        updatedAt: '',
-        version: 0
-      } as WorkgroupResponse);
-    }
+  const handleCreateChild = (parent: WorkgroupResponse) => {
+    setParentForChild(parent);
     setShowCreateChildModal(true);
   };
 
@@ -120,7 +108,7 @@ const WorkgroupManagementWithHierarchy: React.FC = () => {
                 <WorkgroupTree
                   key={refreshTrigger} // Force refresh when trigger changes
                   onSelectWorkgroup={handleSelectWorkgroup}
-                  onCreateChild={handleCreateChild}
+                  onCreateChild={canCreateChild ? handleCreateChild : undefined}
                   selectedWorkgroupId={selectedWorkgroup?.id}
                 />
               </div>
@@ -176,10 +164,10 @@ const WorkgroupManagementWithHierarchy: React.FC = () => {
                   <div className="mb-3">
                     <h6 className="text-muted">Hierarchy Actions</h6>
                     <div className="btn-group btn-group-sm">
-                      {selectedWorkgroup.depth < 5 && (
+                      {canCreateChild && selectedWorkgroup.depth < 5 && (
                         <button
                           className="btn btn-outline-primary"
-                          onClick={() => handleCreateChild(selectedWorkgroup.id)}
+                          onClick={() => handleCreateChild(selectedWorkgroup)}
                         >
                           <i className="bi bi-plus-circle me-1"></i>
                           Add Child
