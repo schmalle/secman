@@ -38,9 +38,10 @@ open class AwsAccountSharingNotificationService(
             val htmlTemplate = readResource(HTML_TEMPLATE)
             val textTemplate = readResource(TEXT_TEMPLATE)
             val assetsUrl = appConfig.backend.baseUrl.trimEnd('/') + ASSETS_PATH
+            val loginUrl = appConfig.frontend.baseUrl.trimEnd('/')
 
-            val htmlBody = substitute(htmlTemplate, event, assetsUrl)
-            val textBody = substitute(textTemplate, event, assetsUrl)
+            val htmlBody = substitute(htmlTemplate, event, assetsUrl, loginUrl)
+            val textBody = substitute(textTemplate, event, assetsUrl, loginUrl)
             val inlineImages = loadLogoInlineImage()
 
             val future = emailService.sendEmailWithInlineImages(
@@ -74,15 +75,55 @@ open class AwsAccountSharingNotificationService(
         }
     }
 
-    private fun substitute(template: String, e: AwsAccountSharingCreatedEvent, assetsUrl: String): String {
-        return template
+    private fun substitute(template: String, e: AwsAccountSharingCreatedEvent, assetsUrl: String, loginUrl: String): String {
+        // Render-or-strip the conditional onboarding block before doing
+        // simple field substitutions, so {loginUrl} inside the block is
+        // resolved in the same pass.
+        val withBlockRendered = renderConditionalBlock(template, "ifNewAccount", e.targetUserWasJustCreated)
+
+        return withBlockRendered
             .replace("{targetUsername}", e.targetUsername)
+            .replace("{targetUserEmail}", e.targetUserEmail)
             .replace("{sourceUserEmail}", e.sourceUserEmail)
             .replace("{sharedAwsAccountCount}", e.sharedAwsAccountCount.toString())
             .replace("{createdByEmail}", e.createdByEmail)
             .replace("{createdAtIso}", e.createdAtIso)
             .replace("{assetsUrl}", assetsUrl)
+            .replace("{loginUrl}", loginUrl)
     }
+
+    /**
+     * Hand-rolled conditional block: replaces every
+     *   {name}…{/name}
+     * pair with either its inner content (when [include] is true) or
+     * an empty string. The regex captures one trailing newline after
+     * the close marker (when present) so stripping the block doesn't
+     * leave an extra blank line in the rendered output. The block is
+     * non-greedy so multiple blocks on the same template each render
+     * independently.
+     */
+    private fun renderConditionalBlock(template: String, name: String, include: Boolean): String {
+        val open = "{$name}"
+        val close = "{/$name}"
+        val pattern = Regex(
+            Regex.escape(open) + "(.*?)" + Regex.escape(close) + "\\n?",
+            setOf(RegexOption.DOT_MATCHES_ALL)
+        )
+        return pattern.replace(template) { match ->
+            if (include) match.groupValues[1] else ""
+        }
+    }
+
+    /**
+     * Test seam — production calls the private `substitute` directly.
+     * Exposed `internal` so unit tests exercise the rendering without I/O.
+     */
+    internal fun substituteForTest(
+        template: String,
+        event: AwsAccountSharingCreatedEvent,
+        assetsUrl: String,
+        loginUrl: String,
+    ): String = substitute(template, event, assetsUrl, loginUrl)
 
     private fun readResource(path: String): String {
         val stream = javaClass.getResourceAsStream(path)

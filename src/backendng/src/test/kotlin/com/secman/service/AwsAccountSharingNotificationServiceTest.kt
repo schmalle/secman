@@ -2,9 +2,11 @@ package com.secman.service
 
 import com.secman.config.AppConfig
 import com.secman.config.BackendConfig
+import com.secman.config.FrontendConfig
 import com.secman.domain.AwsAccountSharingCreatedEvent
 import io.mockk.*
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.util.concurrent.CompletableFuture
@@ -33,6 +35,9 @@ class AwsAccountSharingNotificationServiceTest {
         val backendCfg = mockk<BackendConfig>()
         every { backendCfg.baseUrl } returns "https://secman.example.com/"
         every { appConfig.backend } returns backendCfg
+        val frontendCfg = mockk<FrontendConfig>()
+        every { frontendCfg.baseUrl } returns "https://app.secman.example.com/"
+        every { appConfig.frontend } returns frontendCfg
         service = AwsAccountSharingNotificationService(emailService, appConfig)
     }
 
@@ -87,5 +92,62 @@ class AwsAccountSharingNotificationServiceTest {
         // Must not propagate; CompletableFuture should resolve to false
         val result = service.notifyTargetOfNewShare(sampleEvent()).get()
         assertFalse(result)
+    }
+
+    @Test
+    fun `substitute renders new-account block when targetUserWasJustCreated is true`() {
+        val event = AwsAccountSharingCreatedEvent(
+            sharingId = 1L,
+            sourceUserEmail = "alice@example.com",
+            targetUserId = 2L,
+            targetUserEmail = "newbie@example.com",
+            targetUsername = "newbie",
+            createdByEmail = "alice@example.com",
+            createdAtIso = "2026-05-07T09:00:00Z",
+            sharedAwsAccountCount = 3,
+            targetUserWasJustCreated = true,
+        )
+        val template = """
+            Hello {targetUsername},
+            {ifNewAccount}
+            Account created. Log in at {loginUrl} using {targetUserEmail}.
+            {/ifNewAccount}
+            {sourceUserEmail} shared {sharedAwsAccountCount} accounts.
+        """.trimIndent()
+
+        val rendered = service.substituteForTest(template, event, assetsUrl = "https://app/assets", loginUrl = "https://app")
+
+        assertTrue(rendered.contains("Account created. Log in at https://app using newbie@example.com."))
+        assertFalse(rendered.contains("{ifNewAccount}"))
+        assertFalse(rendered.contains("{/ifNewAccount}"))
+    }
+
+    @Test
+    fun `substitute strips new-account block when flag is false`() {
+        val event = AwsAccountSharingCreatedEvent(
+            sharingId = 1L,
+            sourceUserEmail = "alice@example.com",
+            targetUserId = 2L,
+            targetUserEmail = "bob@example.com",
+            targetUsername = "bob",
+            createdByEmail = "alice@example.com",
+            createdAtIso = "2026-05-07T09:00:00Z",
+            sharedAwsAccountCount = 3,
+            targetUserWasJustCreated = false,
+        )
+        val template = """
+            Hello {targetUsername},
+            {ifNewAccount}
+            Should be stripped.
+            {/ifNewAccount}
+            {sourceUserEmail} shared {sharedAwsAccountCount} accounts.
+        """.trimIndent()
+
+        val rendered = service.substituteForTest(template, event, assetsUrl = "https://app/assets", loginUrl = "https://app")
+
+        assertFalse(rendered.contains("Should be stripped"))
+        assertFalse(rendered.contains("{ifNewAccount}"))
+        assertFalse(rendered.contains("{/ifNewAccount}"))
+        assertTrue(rendered.contains("alice@example.com shared 3 accounts."))
     }
 }
