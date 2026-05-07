@@ -60,6 +60,11 @@ const AwsAccountSharingManager: React.FC = () => {
 
     // Create form
     const [showCreateForm, setShowCreateForm] = useState(false);
+    // Radio mode for the target column. 'existing' uses the dropdown
+    // (legacy behavior); 'invite' uses a free-text email box scoped to
+    // the inviter's own email domain.
+    const [targetMode, setTargetMode] = useState<'existing' | 'invite'>('existing');
+    const [inviteEmail, setInviteEmail] = useState<string>('');
     // Encoded "id:<n>" or "email:<addr>" — see encodeUserOption.
     const [sourceSelection, setSourceSelection] = useState<string>('');
     const [targetSelection, setTargetSelection] = useState<string>('');
@@ -93,6 +98,11 @@ const AwsAccountSharingManager: React.FC = () => {
         const user = getUser();
         setCurrentUser(user);
     }, []);
+
+    // Domain extracted from the logged-in user's email — drives the
+    // helper text and the client-side domain match. Backend remains
+    // authoritative on this check.
+    const callerDomain = (currentUser?.email ?? '').split('@')[1]?.toLowerCase() ?? '';
 
     const showSuccess = (msg: string) => {
         setSuccessMessage(msg);
@@ -215,11 +225,33 @@ const AwsAccountSharingManager: React.FC = () => {
             ? sourceSelection
             : (currentUser ? `id:${currentUser.id}` : '');
 
-        if (!effectiveSourceSelection || !targetSelection) {
-            setFormError(canManageAnyRule ? 'Please select both source and target users' : 'Please select a target user');
+        if (!effectiveSourceSelection) {
+            setFormError(canManageAnyRule ? 'Please select a source user' : 'Cannot determine your user record');
             return;
         }
-        if (effectiveSourceSelection === targetSelection) {
+
+        if (targetMode === 'existing' && !targetSelection) {
+            setFormError('Please select a target user');
+            return;
+        }
+        if (targetMode === 'invite') {
+            const e = inviteEmail.trim();
+            const atCount = (e.match(/@/g) ?? []).length;
+            if (atCount !== 1 || e.startsWith('@') || e.endsWith('@')) {
+                setFormError('Please enter a valid email address');
+                return;
+            }
+            const domain = e.split('@')[1].toLowerCase();
+            if (!callerDomain || domain !== callerDomain) {
+                setFormError(`Email must end in @${callerDomain || 'your domain'}`);
+                return;
+            }
+            if (currentUser && e.toLowerCase() === currentUser.email.toLowerCase()) {
+                setFormError('You cannot share with yourself');
+                return;
+            }
+        }
+        if (targetMode === 'existing' && effectiveSourceSelection === targetSelection) {
             setFormError('Source and target user cannot be the same');
             return;
         }
@@ -229,33 +261,38 @@ const AwsAccountSharingManager: React.FC = () => {
         }
 
         const src = decodeUserOption(effectiveSourceSelection);
-        const tgt = decodeUserOption(targetSelection);
 
         setIsCreating(true);
         try {
             const result = await createSharingRule({
                 sourceUserId: src.id ?? null,
                 sourceUserEmail: src.email ?? null,
-                targetUserId: tgt.id ?? null,
-                targetUserEmail: tgt.email ?? null,
+                targetUserId: targetMode === 'existing' ? (decodeUserOption(targetSelection).id ?? null) : null,
+                targetUserEmail: targetMode === 'existing'
+                    ? (decodeUserOption(targetSelection).email ?? null)
+                    : inviteEmail.trim(),
+                inviteByEmail: targetMode === 'invite',
                 awsAccountIds: shareAll ? null : Array.from(selectedAccountIds),
             });
             const scopeMsg = result.shareAllAccounts
                 ? `${result.sharedAwsAccountCount} accounts (all)`
                 : `${result.sharedAwsAccountCount} of ${sourceAccounts.length} accounts`;
+            const inviteSuffix = targetMode === 'invite' ? ' (account created, login link emailed)' : '';
             showSuccess(
-                `Sharing rule created: ${result.sourceUserEmail} → ${result.targetUserEmail} (${scopeMsg})`
+                `Sharing rule created: ${result.sourceUserEmail} → ${result.targetUserEmail} (${scopeMsg})${inviteSuffix}`
             );
             setShowCreateForm(false);
             setSourceSelection('');
             setTargetSelection('');
             setTargetSearch('');
+            setTargetMode('existing');
+            setInviteEmail('');
             setShareAll(true);
             setSelectedAccountIds(new Set());
             setSourceAccounts([]);
             setFormError(null);
             fetchSharingRules();
-            fetchUsers(); // A pending user may have just been materialized — refresh dropdowns.
+            fetchUsers(); // Pending users / new invitees may have just materialized — refresh dropdowns.
         } catch (err: any) {
             setFormError(err.message || 'Failed to create sharing rule');
         } finally {
@@ -341,8 +378,11 @@ const AwsAccountSharingManager: React.FC = () => {
                     onClick={() => {
                         if (showCreateForm) {
                             // Closing the form: drop any stale submission error
-                            // so it doesn't reappear next time we open it.
+                            // and reset all create-form local state so a fresh
+                            // re-open starts clean.
                             setFormError(null);
+                            setTargetMode('existing');
+                            setInviteEmail('');
                         }
                         setShowCreateForm(!showCreateForm);
                     }}
@@ -445,58 +485,111 @@ const AwsAccountSharingManager: React.FC = () => {
                                     <i className="bi bi-arrow-right fs-4"></i>
                                 </div>
                                 <div className="col-md-5">
-                                    <label htmlFor="targetUser" className="form-label">
-                                        Target User (receives visibility)
-                                    </label>
-                                    {(() => {
-                                        const search = targetSearch.trim().toLowerCase();
-                                        // Exclude whichever user is currently chosen as the source —
-                                        // for non-ADMIN users that's themselves (sourceSelection is
-                                        // forced to "id:<currentUser.id>" at submit time, but is
-                                        // empty in state); for ADMIN/SECCHAMPION it's whatever they
-                                        // picked in the source dropdown.
-                                        const effectiveSource = canManageAnyRule
-                                            ? sourceSelection
-                                            : (currentUser ? `id:${currentUser.id}` : '');
-                                        const eligible = users.filter(u =>
-                                            encodeUserOption(u) !== effectiveSource
-                                        );
-                                        const filtered = search
-                                            ? eligible.filter(u =>
-                                                u.username.toLowerCase().includes(search) ||
-                                                u.email.toLowerCase().includes(search))
-                                            : eligible;
-                                        return (
-                                            <>
-                                                <input
-                                                    type="search"
-                                                    className="form-control form-control-sm mb-2"
-                                                    placeholder="Search by username or email…"
-                                                    value={targetSearch}
-                                                    onChange={(e) => setTargetSearch(e.target.value)}
-                                                    aria-label="Search target user"
-                                                />
-                                                <select
-                                                    id="targetUser"
-                                                    className="form-select"
-                                                    value={targetSelection}
-                                                    onChange={(e) => setTargetSelection(e.target.value)}
-                                                    required
-                                                >
-                                                    <option value="">
-                                                        {filtered.length === 0
-                                                            ? '-- No matching users --'
-                                                            : `-- Select target user${search ? ` (${filtered.length} match${filtered.length === 1 ? '' : 'es'})` : ''} --`}
-                                                    </option>
-                                                    {filtered.map((user) => (
-                                                        <option key={encodeUserOption(user)} value={encodeUserOption(user)}>
-                                                            {user.username} ({user.email}){user.isPending ? ' — pending' : ''}
+                                    <label className="form-label">Target User (receives visibility)</label>
+                                    <div className="btn-group btn-group-sm mb-2" role="group" aria-label="Target user mode">
+                                        <input
+                                            type="radio"
+                                            className="btn-check"
+                                            name="targetMode"
+                                            id="targetMode-existing"
+                                            checked={targetMode === 'existing'}
+                                            onChange={() => {
+                                                setTargetMode('existing');
+                                                setInviteEmail('');
+                                                setFormError(null);
+                                            }}
+                                        />
+                                        <label className="btn btn-outline-secondary" htmlFor="targetMode-existing">
+                                            Pick existing user
+                                        </label>
+                                        <input
+                                            type="radio"
+                                            className="btn-check"
+                                            name="targetMode"
+                                            id="targetMode-invite"
+                                            checked={targetMode === 'invite'}
+                                            onChange={() => {
+                                                setTargetMode('invite');
+                                                setTargetSelection('');
+                                                setTargetSearch('');
+                                                setFormError(null);
+                                            }}
+                                            disabled={!callerDomain}
+                                        />
+                                        <label className="btn btn-outline-secondary" htmlFor="targetMode-invite">
+                                            Invite by email
+                                        </label>
+                                    </div>
+
+                                    {targetMode === 'existing' ? (
+                                        (() => {
+                                            const search = targetSearch.trim().toLowerCase();
+                                            // Exclude whichever user is currently chosen as the source —
+                                            // for non-ADMIN users that's themselves (sourceSelection is
+                                            // forced to "id:<currentUser.id>" at submit time, but is
+                                            // empty in state); for ADMIN/SECCHAMPION it's whatever they
+                                            // picked in the source dropdown.
+                                            const effectiveSource = canManageAnyRule
+                                                ? sourceSelection
+                                                : (currentUser ? `id:${currentUser.id}` : '');
+                                            const eligible = users.filter(u =>
+                                                encodeUserOption(u) !== effectiveSource
+                                            );
+                                            const filtered = search
+                                                ? eligible.filter(u =>
+                                                    u.username.toLowerCase().includes(search) ||
+                                                    u.email.toLowerCase().includes(search))
+                                                : eligible;
+                                            return (
+                                                <>
+                                                    <input
+                                                        type="search"
+                                                        className="form-control form-control-sm mb-2"
+                                                        placeholder="Search by username or email…"
+                                                        value={targetSearch}
+                                                        onChange={(e) => setTargetSearch(e.target.value)}
+                                                        aria-label="Search target user"
+                                                    />
+                                                    <select
+                                                        id="targetUser"
+                                                        className="form-select"
+                                                        value={targetSelection}
+                                                        onChange={(e) => setTargetSelection(e.target.value)}
+                                                        required={targetMode === 'existing'}
+                                                    >
+                                                        <option value="">
+                                                            {filtered.length === 0
+                                                                ? '-- No matching users --'
+                                                                : `-- Select target user${search ? ` (${filtered.length} match${filtered.length === 1 ? '' : 'es'})` : ''} --`}
                                                         </option>
-                                                    ))}
-                                                </select>
-                                            </>
-                                        );
-                                    })()}
+                                                        {filtered.map((user) => (
+                                                            <option key={encodeUserOption(user)} value={encodeUserOption(user)}>
+                                                                {user.username} ({user.email}){user.isPending ? ' — pending' : ''}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                </>
+                                            );
+                                        })()
+                                    ) : (
+                                        <>
+                                            <input
+                                                type="email"
+                                                id="inviteEmail"
+                                                className="form-control"
+                                                placeholder={`name@${callerDomain || 'yourdomain'}`}
+                                                value={inviteEmail}
+                                                onChange={(e) => setInviteEmail(e.target.value)}
+                                                required={targetMode === 'invite'}
+                                                aria-describedby="inviteEmailHelp"
+                                            />
+                                            <small id="inviteEmailHelp" className="form-text text-muted d-block mt-1">
+                                                Email must end in <code>@{callerDomain || '…'}</code>.
+                                                A SecMan account will be created with <code>USER + VULN</code> roles
+                                                and the invitee will be emailed a login link.
+                                            </small>
+                                        </>
+                                    )}
                                 </div>
                                 <div className="col-md-1 d-flex align-items-end">
                                     <button
