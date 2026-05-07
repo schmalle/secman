@@ -37,6 +37,15 @@ export SECMAN_BACKEND_URL=https://api.example.com   # default http://localhost:8
 
 `~/.secman/credentials.conf` mirrors the env vars (no spaces around `=`); `~/.secman/crowdstrike.yaml` carries `clientId/clientSecret/baseUrl`. `chmod 600` both.
 
+### TLS / self-signed certificates
+
+If the backend uses a self-signed or otherwise untrusted certificate, the CLI will fail with `PKIX path building failed: unable to find valid certification path to requested target`. Two ways to bypass certificate verification (use only on trusted networks):
+
+- Add `--insecure` to the command (e.g. `secman delete-asset-not-seen 30 --dry-run --insecure`).
+- Export `SECMAN_INSECURE=true` (also accepts `1`, `yes`, `on`) before invoking. The wrapper scripts in `scriptpp/` already honour this — `deleteoutdated.sh` resolves the value via `pass-cli`.
+
+Both routes set the Micronaut HTTP client property `micronaut.http.client.ssl.insecure-trust-all-certificates=true` for the entire CLI process. The flag is parsed before the application context starts, so it applies to every subcommand (including ones that use the injected `CliHttpClient`).
+
 Full env reference: `docs/ENVIRONMENT.md`.
 
 ## Commands
@@ -62,6 +71,28 @@ Full env reference: `docs/ENVIRONMENT.md`.
 | `--backend-url` | `http://localhost:8080` | |
 | `--output-file` / `--format` | — / `json` | `json|csv` |
 | `--verbose` / `--insecure` | false | `--insecure` allows self-signed TLS |
+
+### `delete-asset-not-seen` — CrowdStrike stale asset cleanup
+
+Deletes assets that have not appeared in a CrowdStrike import for more than N days. Always run `--dry-run` first.
+
+```bash
+./scriptpp/secman delete-asset-not-seen 30 --dry-run --verbose
+./scriptpp/secman delete-asset-not-seen 90
+```
+
+| Option | Default | Notes |
+|---|---|---|
+| `<days>` | required | positive integer; assets older than this cutoff are candidates |
+| `--dry-run` | false | print candidates without deleting |
+| `--backend-url` | `SECMAN_HOST`, `SECMAN_BACKEND_URL`, then `http://localhost:8080` | backend API URL |
+| `--username` / `--password` | `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS` | ADMIN role required |
+| `--insecure` | false | accept self-signed TLS; equivalent to `SECMAN_INSECURE=true` |
+| `--verbose` | false | print candidate asset details |
+
+Eligibility is based on `asset.crowdstrike_last_imported_at`, which is updated whenever an asset appears in `query servers --save` / CrowdStrike vulnerability imports. Generic `lastSeen` is not used because it is also touched by other scan/import paths.
+
+Existing assets start with `crowdstrike_last_imported_at = NULL` after the schema migration. Those assets are ignored by this command until a future CrowdStrike import sees them, or an admin performs an explicit one-time backfill. A conservative backfill is to set `crowdstrike_last_imported_at = last_seen` only for assets that are known to be CrowdStrike-managed, for example `owner = 'CrowdStrike Import'` or assets with CrowdStrike-imported vulnerability rows. Do not blanket-fill every asset unless the environment only contains CrowdStrike-managed inventory.
 
 ### `send-notifications` — outdated-asset & new-vuln emails
 
@@ -179,7 +210,7 @@ Wildcards: `*` (any), `?` (single char), `*foo*` (contains).
 
 ### Other commands
 
-`send-admin-summary`, `import` (local file), `import-s3`, `config`, `monitor`, `list`, `list-workgroups`, `remove`, `delete-all-requirements`, `deduplicate-vulnerabilities`, `port-scan`, `send-notification-users`, `add-aws`, `add-domain`, `add-requirement`, `export-requirements`. `./scriptpp/secman help <cmd>` for details.
+`send-admin-summary`, `import` (local file), `import-s3`, `config`, `monitor`, `list`, `list-workgroups`, `remove`, `delete-all-requirements`, `deduplicate-vulnerabilities`, `delete-asset-not-seen`, `port-scan`, `send-notification-users`, `add-aws`, `add-domain`, `add-requirement`, `export-requirements`. `./scriptpp/secman help <cmd>` for details.
 
 ## Cron
 
@@ -208,6 +239,7 @@ JAVA_HOME=/usr/lib/jvm/java-21-amazon-corretto
 
 0 2 * * *          /opt/secman/bin/cron-query-servers.sh >> /opt/secman/logs/cronjob.log 2>&1
 0 9-17 * * 1-5     /opt/secman/bin/cron-query-servers.sh
+0 4 * * 0          /opt/secman/bin/secman delete-asset-not-seen 90 --dry-run >> /opt/secman/logs/stale-assets.log 2>&1
 */10 * * * *       TELEGRAM_BOT_TOKEN=… TELEGRAM_CHAT_ID=… \
                    /opt/secman/src/clinotify/check_crowdstrike_checkin.py \
                    --url https://secman.example.com --max-age-minutes 120

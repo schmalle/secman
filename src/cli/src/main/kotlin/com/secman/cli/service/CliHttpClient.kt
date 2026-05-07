@@ -68,7 +68,30 @@ class CliHttpClient(
             return null
         } catch (e: io.micronaut.http.client.exceptions.HttpClientResponseException) {
             when (e.status.code) {
-                401, 403 -> log.error("Authentication failed: invalid credentials (HTTP {})", e.status.code)
+                401, 403 -> {
+                    log.error("Authentication failed: invalid credentials (HTTP {})", e.status.code)
+                    // Surface the backend's response body when present — it often distinguishes
+                    // "user not found", "wrong password", "MFA required", "account disabled", etc.
+                    val body = try {
+                        e.response.getBody(String::class.java).orElse(null)
+                    } catch (_: Exception) {
+                        null
+                    }
+                    if (!body.isNullOrBlank()) {
+                        log.error("Backend response body: {}", body.take(500))
+                    }
+                    log.error("Backend URL used: '{}'  Username length: {}  Password length: {}",
+                        backendUrl, username.length, password.length)
+                    if (username != username.trim() || password != password.trim()) {
+                        log.error("Detected leading/trailing whitespace in credentials — likely the cause")
+                    }
+                    if (username.startsWith("pass://") || password.startsWith("pass://")) {
+                        log.error("Credential still contains an unresolved 'pass://' reference. " +
+                            "Check the wrapper script: shell expansion of \$VAR happens before " +
+                            "'pass-cli run --' resolves env vars. Drop the redundant --username/--password " +
+                            "CLI flags and let the binary read SECMAN_ADMIN_NAME / SECMAN_ADMIN_PASS itself.")
+                    }
+                }
                 else -> log.error("Authentication HTTP error: {} - {}", e.status.code, e.message)
             }
             return null

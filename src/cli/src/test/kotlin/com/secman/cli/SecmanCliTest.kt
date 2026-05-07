@@ -3,6 +3,8 @@ package com.secman.cli
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import java.io.ByteArrayOutputStream
+import java.io.PrintStream
 
 /**
  * Simple unit tests for SecmanCli
@@ -59,6 +61,31 @@ class SecmanCliTest {
     }
 
     @Test
+    fun `test help lists delete asset not seen command`() {
+        val cli = SecmanCli()
+
+        val (result, output) = captureStdout {
+            cli.execute(arrayOf("help"))
+        }
+
+        assertEquals(0, result)
+        assertTrue(output.contains("delete-asset-not-seen"))
+    }
+
+    @Test
+    fun `test delete asset not seen help command returns 0`() {
+        val cli = SecmanCli()
+
+        val (result, output) = captureStdout {
+            cli.execute(arrayOf("help", "delete-asset-not-seen"))
+        }
+
+        assertEquals(0, result)
+        assertTrue(output.contains("secman delete-asset-not-seen"))
+        assertTrue(output.contains("--dry-run"))
+    }
+
+    @Test
     fun `test SecmanCli routes to query command`() {
         // Arrange
         val cli = SecmanCli()
@@ -85,5 +112,16 @@ class SecmanCliTest {
         // Assert
         // May return 0 or 1 depending on options
         assertTrue(result == 0 || result == 1)
+    }
+
+    private fun captureStdout(block: () -> Int): Pair<Int, String> {
+        val originalOut = System.out
+        val output = ByteArrayOutputStream()
+        System.setOut(PrintStream(output))
+        return try {
+            block() to output.toString()
+        } finally {
+            System.setOut(originalOut)
+        }
     }
 }

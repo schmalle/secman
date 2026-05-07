@@ -83,6 +83,14 @@ data class Asset(
     var lastSeen: LocalDateTime? = null,
 
     /**
+     * Timestamp when this asset last appeared in a CrowdStrike import.
+     * Separate from lastSeen, which is also updated by scan imports and other
+     * asset ingestion paths.
+     */
+    @Column(name = "crowdstrike_last_imported_at")
+    var crowdStrikeLastImportedAt: LocalDateTime? = null,
+
+    /**
      * Comma-separated group names this asset belongs to
      * Example: "SVR-MS-DMZ,Production"
      * Related to: Feature 003-i-want-to (Vulnerability Management System)
