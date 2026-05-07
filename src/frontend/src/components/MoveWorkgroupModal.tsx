@@ -127,8 +127,28 @@ const MoveWorkgroupModal: React.FC<MoveWorkgroupModalProps> = ({
     return false;
   };
 
+  // Real subtree height of `root` measured in levels (a leaf has height 1).
+  const calculateSubtreeHeight = (root: WorkgroupResponse): number => {
+    const baseDepth = root.depth;
+    let maxDepth = baseDepth;
+    const stack: WorkgroupResponse[] = [root];
+    const visited = new Set<number>([root.id]);
+    while (stack.length > 0) {
+      const node = stack.pop()!;
+      if (node.depth > maxDepth) maxDepth = node.depth;
+      for (const wg of allWorkgroups) {
+        if (wg.parentId === node.id && !visited.has(wg.id)) {
+          visited.add(wg.id);
+          stack.push(wg);
+        }
+      }
+    }
+    return maxDepth - baseDepth + 1;
+  };
+
   const getValidParentOptions = (): WorkgroupResponse[] => {
     if (!workgroup) return [];
+    const subtreeHeight = calculateSubtreeHeight(workgroup);
 
     return allWorkgroups.filter(wg => {
       // Cannot be self
@@ -137,10 +157,8 @@ const MoveWorkgroupModal: React.FC<MoveWorkgroupModalProps> = ({
       // Cannot be a descendant
       if (isDescendant(wg)) return false;
 
-      // Check depth limit (workgroup subtree depth + new parent depth must be <= 5)
-      // For simplicity, we'll calculate max depth as current depth
-      const maxSubtreeDepth = workgroup.depth; // Simplified: assume workgroup retains its current depth structure
-      if (wg.depth + maxSubtreeDepth > 5) return false;
+      // Resulting depth: parent depth + subtree height must fit within 5 levels
+      if (wg.depth + subtreeHeight > 5) return false;
 
       return true;
     });

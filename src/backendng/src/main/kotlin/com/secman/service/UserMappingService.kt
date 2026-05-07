@@ -20,7 +20,8 @@ open class UserMappingService(
     private val userRepository: UserRepository,
     private val userMappingRepository: UserMappingRepository,
     private val assetRepository: AssetRepository,
-    private val ipAddressParser: IpAddressParser
+    private val ipAddressParser: IpAddressParser,
+    private val mcpAccessCacheInvalidator: McpAccessibleAssetsCacheInvalidator
 ) {
     private val log = LoggerFactory.getLogger(UserMappingService::class.java)
     
@@ -98,9 +99,13 @@ open class UserMappingService(
         }
 
         val savedMapping = userMappingRepository.save(mapping)
+        // A new mapping changes which assets the user can reach via cloudAccountId /
+        // adDomain / ipAddress paths. Drop the per-user MCP access cache so the
+        // change is visible immediately instead of after the 5-minute TTL.
+        mcpAccessCacheInvalidator.invalidate()
         return savedMapping.toResponse()
     }
-    
+
     @Transactional
     open fun updateMapping(userId: Long, mappingId: Long, request: UpdateUserMappingRequest): UserMappingResponse {
         // Validate at least one field (Feature 020: extended to include ipAddress)
@@ -171,9 +176,12 @@ open class UserMappingService(
         }
 
         val updated = userMappingRepository.update(mapping)
+        // Same reasoning as createMapping — domain / aws-account / ip changes can
+        // shift which assets the user can reach.
+        mcpAccessCacheInvalidator.invalidate()
         return updated.toResponse()
     }
-    
+
     @Transactional
     open fun deleteMapping(userId: Long, mappingId: Long): Boolean {
         val user = userRepository.findById(userId)
@@ -187,6 +195,10 @@ open class UserMappingService(
         }
 
         userMappingRepository.delete(mapping)
+        // Revoking a mapping must take effect immediately — leaving stale entries
+        // in the per-user MCP access cache would let removed accounts/domains
+        // still drive asset visibility for up to 5 minutes.
+        mcpAccessCacheInvalidator.invalidate()
         return true
     }
 
@@ -317,6 +329,12 @@ open class UserMappingService(
             userMappingRepository.save(mapping)
 
             if (status == MappingStatus.ACTIVE) created++ else createdPending++
+        }
+
+        // Bulk import can flip access for many users at once — clear once at the
+        // end of the batch rather than per-row to keep the hot path cheap.
+        if (created + createdPending > 0) {
+            mcpAccessCacheInvalidator.invalidate()
         }
 
         return BulkUserMappingResponse(

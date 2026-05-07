@@ -108,10 +108,9 @@ export async function importAssets(file: File): Promise<ImportResult> {
   const formData = new FormData();
   formData.append('xlsxFile', file);
 
-  const response = await authenticatedPost('/api/import/upload-assets-xlsx', formData, {
-    // Don't set Content-Type header - browser will set it with boundary for multipart/form-data
-    headers: {}
-  });
+  // authenticatedPost detects FormData and skips the JSON Content-Type header automatically,
+  // letting the browser set the multipart boundary.
+  const response = await authenticatedPost('/api/import/upload-assets-xlsx', formData);
 
   if (response.ok) {
     return await response.json();

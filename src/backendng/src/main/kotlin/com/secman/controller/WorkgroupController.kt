@@ -324,6 +324,35 @@ open class WorkgroupController(
     }
 
     /**
+     * List the users currently assigned to a workgroup. Member-or-admin only.
+     *
+     * GET /api/workgroups/{id}/users
+     * Returns: 200 OK with [{id, username, email}], 403 if caller not a member, 404 if missing.
+     */
+    @Get("/{id}/users")
+    @Secured(SecurityRule.IS_AUTHENTICATED)
+    @Transactional
+    open fun listAssignedUsers(
+        @PathVariable id: Long,
+        authentication: Authentication
+    ): HttpResponse<*> {
+        return try {
+            val workgroup = workgroupService.getWorkgroupById(id)
+            if (!isMemberOrAdmin(workgroup, authentication)) {
+                return HttpResponse.status<Map<String, String>>(io.micronaut.http.HttpStatus.FORBIDDEN)
+                    .body(mapOf("error" to "You must be a member of '${workgroup.name}' to view its members"))
+            }
+            val members = workgroup.users
+                .map { AssignedUserDto(id = it.id!!, username = it.username, email = it.email) }
+                .sortedBy { it.username.lowercase() }
+            HttpResponse.ok(members)
+        } catch (e: IllegalArgumentException) {
+            HttpResponse.status<Map<String, String>>(io.micronaut.http.HttpStatus.NOT_FOUND)
+                .body(mapOf("error" to (e.message ?: "Workgroup not found")))
+        }
+    }
+
+    /**
      * Remove user from workgroup
      * FR-008: ADMIN only, single user removal
      *
@@ -436,21 +465,19 @@ open class WorkgroupController(
     open fun createChildWorkgroup(
         @PathVariable id: Long,
         @Body @Valid request: CreateChildWorkgroupRequest
-    ): HttpResponse<WorkgroupResponse> {
+    ): HttpResponse<*> {
         return try {
             val child = workgroupService.createChildWorkgroup(
                 parentId = id,
                 name = request.name,
                 description = request.description
             )
-            val response = toWorkgroupResponse(child)
-            HttpResponse.created(response)
+            HttpResponse.created(toWorkgroupResponse(child))
         } catch (e: IllegalArgumentException) {
-            // Parent not found
-            HttpResponse.notFound()
+            HttpResponse.status<Map<String, String>>(io.micronaut.http.HttpStatus.NOT_FOUND)
+                .body(mapOf("error" to (e.message ?: "Parent workgroup not found")))
         } catch (e: ValidationException) {
-            // Depth limit, sibling conflict, etc.
-            HttpResponse.badRequest()
+            HttpResponse.badRequest(mapOf("error" to (e.message ?: "Validation failed")))
         }
     }
 
@@ -527,28 +554,48 @@ open class WorkgroupController(
     }
 
     /**
-     * Move a workgroup to a new parent
-     * Feature 040: Nested Workgroups (User Story 3)
+     * Move a workgroup to a new parent.
+     *
+     * Authorization: caller must be a member of (or ADMIN for) the workgroup being moved,
+     * AND — if a non-null newParentId is given — also a member of (or ADMIN for) the new
+     * parent. Moving a workgroup under a parent the caller cannot see would let a member
+     * silently re-organize someone else's tree, so the new-parent check is non-negotiable.
+     * Moves to root level (newParentId == null) require only source membership.
      *
      * PUT /api/workgroups/{id}/parent
      * Body: { "newParentId": 123 } or { "newParentId": null } for root level
-     * Returns: 200 OK with updated workgroup, 400 if validation fails, 404 if not found
+     * Returns: 200 OK with updated workgroup, 400 if validation fails, 403 if not authorized,
+     *          404 if workgroup or parent not found.
      */
     @Put("/{id}/parent")
-    @Secured("ADMIN")
+    @Secured(SecurityRule.IS_AUTHENTICATED)
     @Transactional
     open fun moveWorkgroup(
         @PathVariable id: Long,
-        @Body @Valid request: com.secman.dto.MoveWorkgroupRequest
-    ): HttpResponse<WorkgroupResponse> {
+        @Body @Valid request: com.secman.dto.MoveWorkgroupRequest,
+        authentication: Authentication
+    ): HttpResponse<*> {
         return try {
-            val workgroup = workgroupService.moveWorkgroup(id, request.newParentId)
-            val response = toWorkgroupResponse(workgroup)
-            HttpResponse.ok(response)
+            val workgroup = workgroupService.getWorkgroupById(id)
+            if (!isMemberOrAdmin(workgroup, authentication)) {
+                return HttpResponse.status<Map<String, String>>(io.micronaut.http.HttpStatus.FORBIDDEN)
+                    .body(mapOf("error" to "You must be a member of '${workgroup.name}' to move it"))
+            }
+            val newParentId = request.newParentId
+            if (newParentId != null) {
+                val newParent = workgroupService.getWorkgroupById(newParentId)
+                if (!isMemberOrAdmin(newParent, authentication)) {
+                    return HttpResponse.status<Map<String, String>>(io.micronaut.http.HttpStatus.FORBIDDEN)
+                        .body(mapOf("error" to "You must be a member of the target parent '${newParent.name}' to move a workgroup under it"))
+                }
+            }
+            val moved = workgroupService.moveWorkgroup(id, newParentId)
+            HttpResponse.ok(toWorkgroupResponse(moved))
         } catch (e: IllegalArgumentException) {
-            HttpResponse.notFound()
+            HttpResponse.status<Map<String, String>>(io.micronaut.http.HttpStatus.NOT_FOUND)
+                .body(mapOf("error" to (e.message ?: "Workgroup not found")))
         } catch (e: ValidationException) {
-            HttpResponse.badRequest()
+            HttpResponse.badRequest(mapOf("error" to (e.message ?: "Move not allowed")))
         }
     }
 
@@ -927,6 +974,16 @@ data class AssignUsersRequest(
 data class AssignAssetsRequest(
     @field:NotNull(message = "Asset IDs are required")
     val assetIds: List<Long>
+)
+
+/**
+ * Member listing payload for the Assign Users dialog and other workgroup-membership UIs.
+ */
+@Serdeable
+data class AssignedUserDto(
+    val id: Long,
+    val username: String,
+    val email: String
 )
 
 /**

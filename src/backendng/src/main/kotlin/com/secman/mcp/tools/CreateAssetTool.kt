@@ -6,6 +6,7 @@ import com.secman.domain.McpOperation
 import com.secman.dto.mcp.McpExecutionContext
 import com.secman.repository.AssetRepository
 import com.secman.repository.UserRepository
+import com.secman.service.McpAccessibleAssetsCacheInvalidator
 import jakarta.inject.Inject
 import jakarta.inject.Singleton
 
@@ -38,7 +39,8 @@ import jakarta.inject.Singleton
 @Singleton
 class CreateAssetTool(
     @Inject private val assetRepository: AssetRepository,
-    @Inject private val userRepository: UserRepository
+    @Inject private val userRepository: UserRepository,
+    @Inject private val mcpAccessCacheInvalidator: McpAccessibleAssetsCacheInvalidator
 ) : McpTool {
 
     override val name = "create_asset"
@@ -166,6 +168,12 @@ class CreateAssetTool(
             asset.cloudAccountId = cloudAccountId
 
             val savedAsset = assetRepository.save(asset)
+
+            // A new asset can be reached by anyone whose access criteria match
+            // (cloudAccountId mapping, AD domain, owner string, etc.). Drop the
+            // per-user MCP access cache so the new asset shows up immediately
+            // for every user it qualifies for, not after the 5-minute TTL.
+            mcpAccessCacheInvalidator.invalidate()
 
             val result = mapOf(
                 "id" to savedAsset.id,

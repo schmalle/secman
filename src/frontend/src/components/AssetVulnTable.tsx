@@ -22,7 +22,8 @@ import SeverityBadge from './SeverityBadge';
 
 interface AssetVulnTableProps {
     assets: AssetVulnCount[];
-    awsAccountId: string;
+    // Optional: only set when grouping by AWS account; absent for workgroup grouping etc.
+    awsAccountId?: string;
 }
 
 const AssetVulnTable: React.FC<AssetVulnTableProps> = ({ assets, awsAccountId }) => {
@@ -115,7 +116,7 @@ const AssetVulnTable: React.FC<AssetVulnTableProps> = ({ assets, awsAccountId })
             <div className="text-muted mt-2">
                 <small>
                     <i className="bi bi-info-circle me-1"></i>
-                    Showing {assets.length} asset{assets.length !== 1 ? 's' : ''} in AWS account {awsAccountId}
+                    Showing {assets.length} asset{assets.length !== 1 ? 's' : ''}{awsAccountId ? ` in AWS account ${awsAccountId}` : ''}
                 </small>
             </div>
         </div>

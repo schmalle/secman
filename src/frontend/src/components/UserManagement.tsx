@@ -27,14 +27,8 @@ interface Workgroup {
     description?: string;
 }
 
-// Define a type for the global variable
-declare global {
-    interface Window {
-        currentUser?: User | null;
-    }
-}
-
 // Available roles - Feature: 025-role-based-access-control
+// Window.currentUser is declared globally in src/utils/auth-init.ts (canonical shape).
 // All roles implemented: USER (baseline), ADMIN (full access),
 // VULN (vulnerabilities), RISK (risk management), REQ (requirements),
 // SECCHAMPION (broad access: risk+req+vuln), RELEASE_MANAGER (release management)
@@ -89,12 +83,14 @@ const UserManagement = () => {
     const [isAddingMapping, setIsAddingMapping] = useState(false);
     const [availableDomains, setAvailableDomains] = useState<string[]>([]);
     const [newMapping, setNewMapping] = useState<CreateMappingRequest>({
+        email: '',
         awsAccountId: '',
         domain: '',
         ipAddress: ''
     });
     const [editingMappingId, setEditingMappingId] = useState<number | null>(null);
     const [editMappingData, setEditMappingData] = useState<UpdateMappingRequest>({
+        email: '',
         awsAccountId: '',
         domain: '',
         ipAddress: ''
@@ -276,8 +272,8 @@ const UserManagement = () => {
         setEditUser({ username: '', email: '', password: '', roles: [], workgroupIds: [] });
 
         // Reset mapping form states to prevent data leaking between users
-        setNewMapping({ awsAccountId: '', domain: '', ipAddress: '' });
-        setEditMappingData({ awsAccountId: '', domain: '', ipAddress: '' });
+        setNewMapping({ email: '', awsAccountId: '', domain: '', ipAddress: '' });
+        setEditMappingData({ email: '', awsAccountId: '', domain: '', ipAddress: '' });
         setIsAddingMapping(false);
         setEditingMappingId(null);
         setMappingsError(null);
@@ -363,8 +359,8 @@ const UserManagement = () => {
         setEditUserError(null);
 
         // Reset mapping form states to prevent data leaking between users
-        setNewMapping({ awsAccountId: '', domain: '', ipAddress: '' });
-        setEditMappingData({ awsAccountId: '', domain: '', ipAddress: '' });
+        setNewMapping({ email: '', awsAccountId: '', domain: '', ipAddress: '' });
+        setEditMappingData({ email: '', awsAccountId: '', domain: '', ipAddress: '' });
         setIsAddingMapping(false);
         setEditingMappingId(null);
         setMappingsError(null);
@@ -515,7 +511,7 @@ const UserManagement = () => {
             };
 
             await createMapping(editingUser.id, mappingData);
-            setNewMapping({ awsAccountId: '', domain: '', ipAddress: '' });
+            setNewMapping({ email: '', awsAccountId: '', domain: '', ipAddress: '' });
             setIsAddingMapping(false);
             setMappingsError(null);
             setMappingsSuccess('Mapping added successfully');
@@ -553,6 +549,7 @@ const UserManagement = () => {
     const handleEditMapping = (mapping: UserMapping) => {
         setEditingMappingId(mapping.id);
         setEditMappingData({
+            email: mapping.email,
             awsAccountId: mapping.awsAccountId || '',
             domain: mapping.domain || '',
             ipAddress: mapping.ipAddress || ''
@@ -584,7 +581,7 @@ const UserManagement = () => {
 
             await updateMapping(editingUser.id, editingMappingId, updateData);
             setEditingMappingId(null);
-            setEditMappingData({ awsAccountId: '', domain: '', ipAddress: '' });
+            setEditMappingData({ email: '', awsAccountId: '', domain: '', ipAddress: '' });
             setMappingsError(null);
             setMappingsSuccess('Mapping updated successfully');
             setTimeout(() => setMappingsSuccess(null), 5000);
@@ -599,7 +596,7 @@ const UserManagement = () => {
 
     const handleCancelEdit = () => {
         setEditingMappingId(null);
-        setEditMappingData({ awsAccountId: '', domain: '', ipAddress: '' });
+        setEditMappingData({ email: '', awsAccountId: '', domain: '', ipAddress: '' });
         setMappingsError(null);
     };
 
@@ -914,7 +911,7 @@ const UserManagement = () => {
                                                 {mappings.length > 0 ? (
                                                     mappings.map(mapping => {
                                                         // Helper function to get badge for IP range type
-                                                        const getRangeTypeBadge = (type?: string) => {
+                                                        const getRangeTypeBadge = (type?: string | null) => {
                                                             if (!type) return '-';
                                                             switch (type) {
                                                                 case 'SINGLE':
@@ -929,7 +926,7 @@ const UserManagement = () => {
                                                         };
 
                                                         // Helper function to format IP count
-                                                        const formatIpCount = (count?: number) => {
+                                                        const formatIpCount = (count?: number | null) => {
                                                             if (!count) return '-';
                                                             if (count === 1) return '1 IP';
                                                             if (count < 1000) return `${count} IPs`;
@@ -946,7 +943,7 @@ const UserManagement = () => {
                                                                             <input
                                                                                 type="text"
                                                                                 className="form-control form-control-sm"
-                                                                                value={editMappingData.awsAccountId}
+                                                                                value={editMappingData.awsAccountId ?? ''}
                                                                                 onChange={e => setEditMappingData({...editMappingData, awsAccountId: e.target.value})}
                                                                                 onKeyDown={e => {
                                                                                     if (e.key === 'Enter') handleSaveMapping();
@@ -964,7 +961,7 @@ const UserManagement = () => {
                                                                         <td>
                                                                             <select
                                                                                 className="form-select form-select-sm"
-                                                                                value={editMappingData.domain}
+                                                                                value={editMappingData.domain ?? ''}
                                                                                 onChange={e => setEditMappingData({...editMappingData, domain: e.target.value})}
                                                                                 disabled={isLoadingMappings}
                                                                                 aria-label="Domain"
@@ -975,7 +972,7 @@ const UserManagement = () => {
                                                                                     <option key={d} value={d}>{d}</option>
                                                                                 ))}
                                                                                 {editMappingData.domain && !availableDomains.includes(editMappingData.domain) && (
-                                                                                    <option value={editMappingData.domain}>{editMappingData.domain}</option>
+                                                                                    <option value={editMappingData.domain ?? ''}>{editMappingData.domain}</option>
                                                                                 )}
                                                                             </select>
                                                                         </td>
@@ -1070,13 +1067,13 @@ const UserManagement = () => {
                                                             id="new-aws-id"
                                                             type="text"
                                                             className="form-control"
-                                                            value={newMapping.awsAccountId}
+                                                            value={newMapping.awsAccountId ?? ''}
                                                             onChange={e => setNewMapping({...newMapping, awsAccountId: e.target.value})}
                                                             onKeyDown={e => {
                                                                 if (e.key === 'Enter') handleAddMapping();
                                                                 if (e.key === 'Escape') {
                                                                     setIsAddingMapping(false);
-                                                                    setNewMapping({ awsAccountId: '', domain: '', ipAddress: '' });
+                                                                    setNewMapping({ email: '', awsAccountId: '', domain: '', ipAddress: '' });
                                                                     setMappingsError(null);
                                                                 }
                                                             }}
@@ -1094,13 +1091,13 @@ const UserManagement = () => {
                                                             id="new-ip-address"
                                                             type="text"
                                                             className="form-control"
-                                                            value={newMapping.ipAddress}
+                                                            value={newMapping.ipAddress ?? ''}
                                                             onChange={e => setNewMapping({...newMapping, ipAddress: e.target.value})}
                                                             onKeyDown={e => {
                                                                 if (e.key === 'Enter') handleAddMapping();
                                                                 if (e.key === 'Escape') {
                                                                     setIsAddingMapping(false);
-                                                                    setNewMapping({ awsAccountId: '', domain: '', ipAddress: '' });
+                                                                    setNewMapping({ email: '', awsAccountId: '', domain: '', ipAddress: '' });
                                                                     setMappingsError(null);
                                                                 }
                                                             }}
@@ -1115,7 +1112,7 @@ const UserManagement = () => {
                                                         <select
                                                             id="new-domain"
                                                             className="form-select"
-                                                            value={newMapping.domain}
+                                                            value={newMapping.domain ?? ''}
                                                             onChange={e => setNewMapping({...newMapping, domain: e.target.value})}
                                                             disabled={isLoadingMappings}
                                                             aria-describedby="domain-help"
@@ -1150,7 +1147,7 @@ const UserManagement = () => {
                                                         className="btn btn-secondary btn-sm"
                                                         onClick={() => {
                                                             setIsAddingMapping(false);
-                                                            setNewMapping({ awsAccountId: '', domain: '', ipAddress: '' });
+                                                            setNewMapping({ email: '', awsAccountId: '', domain: '', ipAddress: '' });
                                                             setMappingsError(null);
                                                         }}
                                                         disabled={isLoadingMappings}

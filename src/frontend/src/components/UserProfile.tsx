@@ -238,7 +238,7 @@ export default function UserProfile() {
             <p className="text-muted small">
               Manage your registered passkeys for passwordless authentication
             </p>
-            <PasskeyManagement client:load />
+            <PasskeyManagement />
           </div>
 
           {/* Password Change - Feature 051 */}

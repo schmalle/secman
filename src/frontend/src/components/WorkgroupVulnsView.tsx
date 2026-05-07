@@ -337,10 +337,7 @@ const WorkgroupVulnsView: React.FC = () => {
                             </div>
                         </div>
                         <div className="card-body">
-                            <AssetVulnTable
-                                assets={group.assets || []}
-                                awsAccountId={undefined}
-                            />
+                            <AssetVulnTable assets={group.assets || []} />
                         </div>
                     </div>
                 );

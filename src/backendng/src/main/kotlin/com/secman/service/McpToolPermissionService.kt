@@ -224,6 +224,14 @@ class McpToolPermissionService(
             "create_asset", "update_asset" -> {
                 permissions.contains(McpPermission.ASSETS_WRITE)
             }
+            // Feature: AWS Account Sharing — gated to USER_ACTIVITY here AND
+            // ADMIN role inside each tool's execute(). The McpToolRegistry
+            // already lists these, but checkPermissionSetForTool is the path
+            // taken by the streamable HTTP controller; without an entry here
+            // the fallback else->false denied admin-delegated calls.
+            "list_aws_account_sharing", "create_aws_account_sharing", "delete_aws_account_sharing" -> {
+                permissions.contains(McpPermission.USER_ACTIVITY)
+            }
             else -> false
         }
     }

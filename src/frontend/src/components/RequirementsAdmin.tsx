@@ -9,12 +9,7 @@ interface User {
     roles: string[];
 }
 
-// Define a type for the global variable
-declare global {
-    interface Window {
-        currentUser?: User | null;
-    }
-}
+// Window.currentUser is declared globally in src/utils/auth-init.ts.
 
 const RequirementsAdmin = () => {
     const [isAdmin, setIsAdmin] = useState(false);

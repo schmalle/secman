@@ -66,6 +66,26 @@ ASSET2_IP="10.99.0.2"
 CVE_VULN1="CVE-E2E-0001"
 CVE_VULN2="CVE-E2E-0002"
 
+# AWS Account Sharing testbed
+# - Account A is mapped to user1 (owner of testaws-a). Shared to user2 (selected scope).
+# - Account B is mapped to user2 (owner of testaws-b). Not shared.
+# - Account C is mapped to user1 LATE in the run (owner of testaws-c). MUST NOT
+#   propagate to user2 because the sharing rule was scoped to account A only.
+# All IDs are 12-digit strings to satisfy the UserMapping pattern (^\d{12}$).
+AWS_ACCOUNT_A="123456789012"
+AWS_ACCOUNT_B="876543210987"
+AWS_ACCOUNT_C="555555555555"
+AWS_ASSET_A_NAME="testaws-a"
+AWS_ASSET_B_NAME="testaws-b"
+AWS_ASSET_C_NAME="testaws-c"
+AWS_ASSET_A_IP="10.99.1.10"
+AWS_ASSET_B_IP="10.99.1.20"
+AWS_ASSET_C_IP="10.99.1.30"
+# Owner is a literal string distinct from both test users so the asset cannot be
+# accessed via the owner-based path (rule #8 in AssetFilterService). The only
+# way user2 sees testaws-a is via the sharing rule.
+AWS_ASSET_OWNER_LABEL="awssharing-owner"
+
 # Reason text — must be ≥50 chars per CreateExceptionRequestTool
 EXCEPTION_REASON_APPROVE="E2E test scenario: approving an exception while remediation is scheduled in the next maintenance window — automated test"
 EXCEPTION_REASON_REJECT="E2E test scenario: this request is expected to be rejected by the admin to verify the rejection lifecycle path end to end"
@@ -97,6 +117,12 @@ VULN2_A2_ID=""
 REQ_APPROVE_ID=""
 REQ_REJECT_ID=""
 REQ_CANCEL_ID=""
+
+# AWS sharing-test captured ids
+AWS_ASSET_A_ID=""
+AWS_ASSET_B_ID=""
+AWS_ASSET_C_ID=""
+AWS_SHARING_RULE_ID=""
 
 # =============================================================================
 # Logging
@@ -290,13 +316,73 @@ db_exec() {
     mariadb -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" -N -e "$1" 2>/dev/null || true
 }
 
+# Cached admin JWT — multiple REST calls share this so we don't round-trip
+# /api/auth/login per call. Cleared by cleanup() to avoid bleeding across runs.
+ADMIN_JWT_CACHE=""
+
+ensure_admin_jwt() {
+    if [[ -n "$ADMIN_JWT_CACHE" ]]; then
+        printf '%s' "$ADMIN_JWT_CACHE"
+        return 0
+    fi
+    if [[ -z "$ADMIN_USERNAME" || -z "$ADMIN_PASSWORD" ]]; then
+        fail "SECMAN_ADMIN_NAME / SECMAN_ADMIN_PASS required for REST calls"
+    fi
+    ADMIN_JWT_CACHE=$(get_jwt "$ADMIN_USERNAME" "$ADMIN_PASSWORD")
+    if [[ -z "$ADMIN_JWT_CACHE" ]]; then
+        fail "Could not obtain admin JWT (login failed?)"
+    fi
+    printf '%s' "$ADMIN_JWT_CACHE"
+}
+
+# create_user_mapping <email> <awsAccountId> <userId>
+# Inserts directly via SQL because the single-mapping REST endpoint
+# (POST /api/user-mappings) ignores `request.email` and always uses the
+# caller's email — so an admin POST creates an admin mapping. The CSV
+# import path supports arbitrary emails but is heavyweight for one row.
+# Direct SQL matches the cleanup path (which also speaks SQL) and lets us
+# attach `user_id` so the mapping is ACTIVE and linked.
+#
+# Echoes the inserted row id. Email is lowercased to mirror the
+# UserMapping.onCreate normalization. Status=ACTIVE because user_id is set.
+create_user_mapping() {
+    local email_lc; email_lc=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
+    local aws_account="$2"
+    local user_id="$3"
+    [[ -z "$user_id" || "$user_id" == "null" ]] && fail "create_user_mapping: user_id is required"
+    db_exec "
+        INSERT INTO user_mapping
+            (email, aws_account_id, domain, ip_address,
+             user_id, status, created_at, updated_at)
+        VALUES
+            ('${email_lc}', '${aws_account}', NULL, NULL,
+             ${user_id}, 'ACTIVE', NOW(6), NOW(6));
+    "
+    local id
+    id=$(db_exec "
+        SELECT id FROM user_mapping
+         WHERE email='${email_lc}'
+           AND aws_account_id='${aws_account}'
+           AND user_id=${user_id}
+         ORDER BY id DESC LIMIT 1;
+    ")
+    if [[ -z "$id" || "$id" == "NULL" ]]; then
+        fail "Failed to create user mapping for ${email_lc} -> ${aws_account} (user_id=${user_id})"
+    fi
+    printf '%s' "$id"
+}
+
 # =============================================================================
 # Cleanup (idempotent — safe to run multiple times)
 # =============================================================================
 
 cleanup() {
     local phase="${1:-post-run}"
-    log "Cleanup ($phase): removing test users, assets, exception requests..."
+    log "Cleanup ($phase): removing test users, assets, exception requests, AWS sharing artefacts..."
+
+    # 0) Drop cached admin JWT — a fresh run logs in again so token rotation
+    # / password changes do not bite us silently.
+    ADMIN_JWT_CACHE=""
 
     # 1) Delete exception requests + audit rows for our test users (by username)
     local user_ids_csv
@@ -311,9 +397,37 @@ cleanup() {
         "
     fi
 
-    # 2) Delete test assets via direct SQL (cascades vulnerabilities through FKs)
+    # 2) Delete AWS account sharing rules involving our test users (source OR
+    # target). The aws_account_sharing_account FK is ON DELETE CASCADE (V207),
+    # so the per-account scope rows go with the parent. Must run BEFORE user
+    # delete because source_user_id / target_user_id are NOT NULL FKs to users.
+    if [[ -n "$user_ids_csv" && "$user_ids_csv" != "NULL" ]]; then
+        db_exec "
+            DELETE FROM aws_account_sharing
+              WHERE source_user_id IN ($user_ids_csv)
+                 OR target_user_id IN ($user_ids_csv);
+        "
+    fi
+
+    # 3) Delete user mappings tied to our test users — both by user_id (active
+    # mappings) and by email (also catches PENDING rows where user_id is null).
+    if [[ -n "$user_ids_csv" && "$user_ids_csv" != "NULL" ]]; then
+        db_exec "DELETE FROM user_mapping WHERE user_id IN ($user_ids_csv);"
+    fi
+    db_exec "
+        DELETE FROM user_mapping
+         WHERE email IN ('${USER1_EMAIL}','${USER2_EMAIL}');
+    "
+
+    # 4) Delete test assets via direct SQL (cascades vulnerabilities through FKs).
+    # Includes both the original vuln-test assets AND the AWS-sharing test assets
+    # so a failed mid-run leaves no orphans behind.
     local asset_ids_csv
-    asset_ids_csv=$(db_exec "SELECT GROUP_CONCAT(id) FROM asset WHERE name IN ('${ASSET1_NAME}','${ASSET2_NAME}');")
+    asset_ids_csv=$(db_exec "
+        SELECT GROUP_CONCAT(id) FROM asset
+         WHERE name IN ('${ASSET1_NAME}','${ASSET2_NAME}',
+                        '${AWS_ASSET_A_NAME}','${AWS_ASSET_B_NAME}','${AWS_ASSET_C_NAME}');
+    ")
     if [[ -n "$asset_ids_csv" && "$asset_ids_csv" != "NULL" ]]; then
         # Also wipe any exception requests still tied to these assets (safety)
         db_exec "
@@ -331,13 +445,13 @@ cleanup() {
         "
     fi
 
-    # 3) Delete test users
+    # 5) Delete test users
     if [[ -n "$user_ids_csv" && "$user_ids_csv" != "NULL" ]]; then
         db_exec "DELETE FROM user_roles WHERE user_id IN ($user_ids_csv);"
         db_exec "DELETE FROM users WHERE id IN ($user_ids_csv);"
     fi
 
-    # 4) Remove only our test assets' rows from the materialized view.
+    # 6) Remove only our test assets' rows from the materialized view.
     # Truncating the entire view here would force a multi-minute refresh of
     # thousands of unrelated assets before any subsequent assertion can pass.
     if [[ -n "$asset_ids_csv" && "$asset_ids_csv" != "NULL" ]]; then
@@ -621,13 +735,146 @@ no_deleg_code=$(echo "$resp" | jq -r '.error.code // empty')
 ok "Call without X-MCP-User-Email surfaced (code='$no_deleg_code')"
 
 # =============================================================================
-# Phase 8 (UI): Playwright
+# Phase 8 (MCP): AWS Account Sharing — directional + per-account scope
+#
+# Goal: prove that selectedAwsAccountIds on a sharing rule is *honored* — adding
+# more mappings to the source user later must NOT leak into the target user
+# through the same rule.
+#
+# Walks through:
+#   8.1 user1 gets mapping to account A; user2 gets mapping to account B
+#   8.2 Create assets testaws-a (account A) and testaws-b (account B), with an
+#       owner string distinct from both users so the only path is via mappings.
+#   8.3 Baseline visibility (no sharing yet): user1 sees A, user2 sees B
+#   8.4 Create sharing rule user1 -> user2 with selectedAwsAccountIds=[A]
+#   8.5 Verify user2 now sees testaws-a (and still testaws-b)
+#   8.6 Add SECOND mapping to user1 (account C) plus asset testaws-c
+#   8.7 Re-verify: user1 sees A+C; user2 still sees A+B but NOT C
+#   8.8 list_aws_account_sharing as admin shows the rule
+# =============================================================================
+
+log "=== Phase 8: MCP AWS account sharing (directional + scoped) ==="
+
+# 8.1 Mappings ---------------------------------------------------------------
+log "[Phase 8.1] Adding initial AWS user mappings (user1 -> A, user2 -> B)"
+mid_u1_a=$(create_user_mapping "$USER1_EMAIL" "$AWS_ACCOUNT_A" "$USER1_ID")
+ok "Created mapping ${USER1_EMAIL} -> ${AWS_ACCOUNT_A} (id=${mid_u1_a})"
+
+mid_u2_b=$(create_user_mapping "$USER2_EMAIL" "$AWS_ACCOUNT_B" "$USER2_ID")
+ok "Created mapping ${USER2_EMAIL} -> ${AWS_ACCOUNT_B} (id=${mid_u2_b})"
+
+# 8.2 AWS-tagged assets ------------------------------------------------------
+log "[Phase 8.2] Creating AWS-tagged assets (cloudAccountId set, owner=${AWS_ASSET_OWNER_LABEL})"
+res=$(mcp_call "create_asset" "$(jq -nc \
+    --arg n "$AWS_ASSET_A_NAME" --arg t "SERVER" --arg o "$AWS_ASSET_OWNER_LABEL" \
+    --arg ip "$AWS_ASSET_A_IP" --arg ca "$AWS_ACCOUNT_A" \
+    '{name:$n,type:$t,owner:$o,ip:$ip,cloudAccountId:$ca,description:"E2E AWS sharing test asset (account A)"}')" \
+    "$ADMIN_USER_EMAIL")
+AWS_ASSET_A_ID=$(echo "$res" | jq -r '.id')
+[[ -z "$AWS_ASSET_A_ID" || "$AWS_ASSET_A_ID" == "null" ]] && fail "Failed to create $AWS_ASSET_A_NAME: $res"
+ok "Created asset $AWS_ASSET_A_NAME (id=$AWS_ASSET_A_ID, cloudAccountId=$AWS_ACCOUNT_A)"
+
+res=$(mcp_call "create_asset" "$(jq -nc \
+    --arg n "$AWS_ASSET_B_NAME" --arg t "SERVER" --arg o "$AWS_ASSET_OWNER_LABEL" \
+    --arg ip "$AWS_ASSET_B_IP" --arg ca "$AWS_ACCOUNT_B" \
+    '{name:$n,type:$t,owner:$o,ip:$ip,cloudAccountId:$ca,description:"E2E AWS sharing test asset (account B)"}')" \
+    "$ADMIN_USER_EMAIL")
+AWS_ASSET_B_ID=$(echo "$res" | jq -r '.id')
+[[ -z "$AWS_ASSET_B_ID" || "$AWS_ASSET_B_ID" == "null" ]] && fail "Failed to create $AWS_ASSET_B_NAME: $res"
+ok "Created asset $AWS_ASSET_B_NAME (id=$AWS_ASSET_B_ID, cloudAccountId=$AWS_ACCOUNT_B)"
+
+# 8.3 Baseline visibility — no sharing rule yet ------------------------------
+log "[Phase 8.3] Baseline visibility (no sharing): user1 sees only A, user2 sees only B"
+res=$(mcp_call "get_assets" "$(jq -nc --arg n "$AWS_ASSET_A_NAME" '{name:$n,pageSize:50}')" "$USER1_EMAIL")
+u1_sees_a=$(echo "$res" | jq -r --arg id "$AWS_ASSET_A_ID" '(.assets // []) | map(select(.id == ($id|tonumber))) | length')
+[[ "$u1_sees_a" == "1" ]] || fail "Baseline: user1 should see $AWS_ASSET_A_NAME via own mapping, got $u1_sees_a"
+
+res=$(mcp_call "get_assets" "$(jq -nc --arg n "$AWS_ASSET_B_NAME" '{name:$n,pageSize:50}')" "$USER1_EMAIL")
+u1_sees_b=$(echo "$res" | jq -r --arg id "$AWS_ASSET_B_ID" '(.assets // []) | map(select(.id == ($id|tonumber))) | length')
+[[ "$u1_sees_b" == "0" ]] || fail "Baseline: user1 should NOT see $AWS_ASSET_B_NAME (no sharing yet), got $u1_sees_b"
+
+res=$(mcp_call "get_assets" "$(jq -nc --arg n "$AWS_ASSET_B_NAME" '{name:$n,pageSize:50}')" "$USER2_EMAIL")
+u2_sees_b=$(echo "$res" | jq -r --arg id "$AWS_ASSET_B_ID" '(.assets // []) | map(select(.id == ($id|tonumber))) | length')
+[[ "$u2_sees_b" == "1" ]] || fail "Baseline: user2 should see $AWS_ASSET_B_NAME via own mapping, got $u2_sees_b"
+
+res=$(mcp_call "get_assets" "$(jq -nc --arg n "$AWS_ASSET_A_NAME" '{name:$n,pageSize:50}')" "$USER2_EMAIL")
+u2_sees_a=$(echo "$res" | jq -r --arg id "$AWS_ASSET_A_ID" '(.assets // []) | map(select(.id == ($id|tonumber))) | length')
+[[ "$u2_sees_a" == "0" ]] || fail "Baseline: user2 should NOT see $AWS_ASSET_A_NAME before sharing, got $u2_sees_a"
+ok "Baseline visibility correct: user1=A only, user2=B only"
+
+# 8.4 Create scoped sharing rule (only account A) ----------------------------
+log "[Phase 8.4] Creating scoped sharing user1 -> user2 (selectedAwsAccountIds=[A])"
+res=$(mcp_call "create_aws_account_sharing" "$(jq -nc \
+    --arg s "$USER1_ID" --arg t "$USER2_ID" --arg a "$AWS_ACCOUNT_A" \
+    '{sourceUserId:($s|tonumber), targetUserId:($t|tonumber), awsAccountIds:[$a]}')" \
+    "$ADMIN_USER_EMAIL")
+AWS_SHARING_RULE_ID=$(echo "$res" | jq -r '.sharingRule.id')
+shared_count=$(echo "$res" | jq -r '.sharingRule.sharedAwsAccountCount // 0')
+share_all=$(echo "$res" | jq -r '.sharingRule.shareAllAccounts // false')
+[[ -z "$AWS_SHARING_RULE_ID" || "$AWS_SHARING_RULE_ID" == "null" ]] && fail "Sharing rule create failed: $res"
+[[ "$shared_count" == "1" ]] || fail "Expected sharedAwsAccountCount=1, got $shared_count"
+[[ "$share_all" == "false" ]] || fail "Expected shareAllAccounts=false (scoped), got $share_all"
+ok "Created sharing rule id=$AWS_SHARING_RULE_ID (1 account, scoped)"
+
+# 8.5 Verify share visibility ------------------------------------------------
+log "[Phase 8.5] Verifying user2 now sees testaws-a via sharing"
+res=$(mcp_call "get_assets" "$(jq -nc --arg n "$AWS_ASSET_A_NAME" '{name:$n,pageSize:50}')" "$USER2_EMAIL")
+u2_sees_a=$(echo "$res" | jq -r --arg id "$AWS_ASSET_A_ID" '(.assets // []) | map(select(.id == ($id|tonumber))) | length')
+[[ "$u2_sees_a" == "1" ]] || fail "user2 should see $AWS_ASSET_A_NAME via sharing, got $u2_sees_a"
+# user2 still sees their own
+res=$(mcp_call "get_assets" "$(jq -nc --arg n "$AWS_ASSET_B_NAME" '{name:$n,pageSize:50}')" "$USER2_EMAIL")
+u2_sees_b=$(echo "$res" | jq -r --arg id "$AWS_ASSET_B_ID" '(.assets // []) | map(select(.id == ($id|tonumber))) | length')
+[[ "$u2_sees_b" == "1" ]] || fail "user2 should still see $AWS_ASSET_B_NAME (own mapping), got $u2_sees_b"
+ok "user2 sees testaws-a (shared) AND testaws-b (own)"
+
+# Sharing is directional — user1 must NOT see user2's testaws-b
+res=$(mcp_call "get_assets" "$(jq -nc --arg n "$AWS_ASSET_B_NAME" '{name:$n,pageSize:50}')" "$USER1_EMAIL")
+u1_sees_b=$(echo "$res" | jq -r --arg id "$AWS_ASSET_B_ID" '(.assets // []) | map(select(.id == ($id|tonumber))) | length')
+[[ "$u1_sees_b" == "0" ]] || fail "Sharing must be directional: user1 should NOT see $AWS_ASSET_B_NAME, got $u1_sees_b"
+ok "Sharing is directional — user1 still cannot see testaws-b"
+
+# 8.6 Add second mapping + asset to user1 (account C) ------------------------
+log "[Phase 8.6] Adding SECOND mapping to user1 (account C) — this MUST NOT leak to user2"
+mid_u1_c=$(create_user_mapping "$USER1_EMAIL" "$AWS_ACCOUNT_C" "$USER1_ID")
+ok "Created mapping ${USER1_EMAIL} -> ${AWS_ACCOUNT_C} (id=${mid_u1_c})"
+
+res=$(mcp_call "create_asset" "$(jq -nc \
+    --arg n "$AWS_ASSET_C_NAME" --arg t "SERVER" --arg o "$AWS_ASSET_OWNER_LABEL" \
+    --arg ip "$AWS_ASSET_C_IP" --arg ca "$AWS_ACCOUNT_C" \
+    '{name:$n,type:$t,owner:$o,ip:$ip,cloudAccountId:$ca,description:"E2E AWS sharing test asset (account C — must NOT propagate to user2)"}')" \
+    "$ADMIN_USER_EMAIL")
+AWS_ASSET_C_ID=$(echo "$res" | jq -r '.id')
+[[ -z "$AWS_ASSET_C_ID" || "$AWS_ASSET_C_ID" == "null" ]] && fail "Failed to create $AWS_ASSET_C_NAME: $res"
+ok "Created asset $AWS_ASSET_C_NAME (id=$AWS_ASSET_C_ID, cloudAccountId=$AWS_ACCOUNT_C)"
+
+# 8.7 Re-verify scoped sharing -----------------------------------------------
+log "[Phase 8.7] Re-verifying: user1 sees A+C; user2 still sees A+B; user2 must NOT see C"
+res=$(mcp_call "get_assets" "$(jq -nc --arg n "$AWS_ASSET_C_NAME" '{name:$n,pageSize:50}')" "$USER1_EMAIL")
+u1_sees_c=$(echo "$res" | jq -r --arg id "$AWS_ASSET_C_ID" '(.assets // []) | map(select(.id == ($id|tonumber))) | length')
+[[ "$u1_sees_c" == "1" ]] || fail "user1 should see $AWS_ASSET_C_NAME via own mapping, got $u1_sees_c"
+
+res=$(mcp_call "get_assets" "$(jq -nc --arg n "$AWS_ASSET_C_NAME" '{name:$n,pageSize:50}')" "$USER2_EMAIL")
+u2_sees_c=$(echo "$res" | jq -r --arg id "$AWS_ASSET_C_ID" '(.assets // []) | map(select(.id == ($id|tonumber))) | length')
+[[ "$u2_sees_c" == "0" ]] \
+    || fail "SCOPE LEAK: user2 saw $AWS_ASSET_C_NAME ($AWS_ACCOUNT_C) — sharing was scoped to A only (got $u2_sees_c)"
+ok "Sharing scope honored: user1 sees A+C, user2 sees A+B but NOT C"
+
+# 8.8 admin lists sharing rules ----------------------------------------------
+log "[Phase 8.8] Admin lists sharing rules — must include the scoped rule"
+res=$(mcp_call "list_aws_account_sharing" '{"page":0,"size":100}' "$ADMIN_USER_EMAIL")
+admin_sees_rule=$(echo "$res" | jq -r --arg id "$AWS_SHARING_RULE_ID" \
+    '(.content // []) | map(select(.id == ($id|tonumber))) | length')
+[[ "$admin_sees_rule" == "1" ]] || fail "Admin list_aws_account_sharing missing rule $AWS_SHARING_RULE_ID"
+ok "Admin sees sharing rule $AWS_SHARING_RULE_ID via list_aws_account_sharing"
+
+# =============================================================================
+# Phase 9 (UI): Playwright
 # =============================================================================
 
 if [[ "$SKIP_UI" == "true" ]]; then
     warn "Skipping UI phase (SKIP_UI=true)"
 else
-    log "=== Phase 8: Web UI (Playwright) ==="
+    log "=== Phase 9: Web UI (Playwright) ==="
 
     if ! curl -sf -o /dev/null --connect-timeout 5 "$FRONTEND_URL" 2>/dev/null; then
         fail "Frontend not reachable at $FRONTEND_URL — start it with ./scriptpp/startfrontenddev.sh"
@@ -646,12 +893,21 @@ else
     E2E_USER1_PASS="$USER1_PASSWORD" \
     E2E_USER2_NAME="$USER2_USERNAME" \
     E2E_USER2_PASS="$USER2_PASSWORD" \
+    E2E_USER1_EMAIL="$USER1_EMAIL" \
+    E2E_USER2_EMAIL="$USER2_EMAIL" \
     E2E_ASSET1_NAME="$ASSET1_NAME" \
     E2E_ASSET2_NAME="$ASSET2_NAME" \
     E2E_CVE_VULN1="$CVE_VULN1" \
     E2E_CVE_VULN2="$CVE_VULN2" \
     E2E_REQ_APPROVE_ID="$REQ_APPROVE_ID" \
     E2E_REQ_REJECT_ID="$REQ_REJECT_ID" \
+    E2E_AWS_ACCOUNT_A="$AWS_ACCOUNT_A" \
+    E2E_AWS_ACCOUNT_B="$AWS_ACCOUNT_B" \
+    E2E_AWS_ACCOUNT_C="$AWS_ACCOUNT_C" \
+    E2E_AWS_ASSET_A_NAME="$AWS_ASSET_A_NAME" \
+    E2E_AWS_ASSET_B_NAME="$AWS_ASSET_B_NAME" \
+    E2E_AWS_ASSET_C_NAME="$AWS_ASSET_C_NAME" \
+    E2E_AWS_SHARING_RULE_ID="$AWS_SHARING_RULE_ID" \
         npx playwright test vuln-exception-full.spec.ts --project=chrome --reporter=list
 
     popd >/dev/null
@@ -672,4 +928,8 @@ echo "Users:        $USER1_USERNAME(id=$USER1_ID), $USER2_USERNAME(id=$USER2_ID)
 echo "Assets:       $ASSET1_NAME(id=$ASSET1_ID), $ASSET2_NAME(id=$ASSET2_ID)"
 echo "Vulns:        vuln1=$VULN1_ID  vuln2_a1=$VULN2_A1_ID  vuln2_a2=$VULN2_A2_ID"
 echo "Exceptions:   approved=$REQ_APPROVE_ID  rejected=$REQ_REJECT_ID  cancelled=$REQ_CANCEL_ID"
+echo "AWS sharing:  rule=$AWS_SHARING_RULE_ID  scope=[${AWS_ACCOUNT_A}]"
+echo "AWS assets:   ${AWS_ASSET_A_NAME}(id=$AWS_ASSET_A_ID,acct=$AWS_ACCOUNT_A)"
+echo "              ${AWS_ASSET_B_NAME}(id=$AWS_ASSET_B_ID,acct=$AWS_ACCOUNT_B)"
+echo "              ${AWS_ASSET_C_NAME}(id=$AWS_ASSET_C_ID,acct=$AWS_ACCOUNT_C  must NOT leak via sharing)"
 echo

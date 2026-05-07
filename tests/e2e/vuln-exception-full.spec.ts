@@ -21,9 +21,13 @@ const required = [
     'SECMAN_ADMIN_NAME', 'SECMAN_ADMIN_PASS',
     'E2E_USER1_NAME', 'E2E_USER1_PASS',
     'E2E_USER2_NAME', 'E2E_USER2_PASS',
+    'E2E_USER1_EMAIL', 'E2E_USER2_EMAIL',
     'E2E_ASSET1_NAME', 'E2E_ASSET2_NAME',
     'E2E_CVE_VULN1', 'E2E_CVE_VULN2',
     'E2E_REQ_APPROVE_ID', 'E2E_REQ_REJECT_ID',
+    'E2E_AWS_ACCOUNT_A', 'E2E_AWS_ACCOUNT_B', 'E2E_AWS_ACCOUNT_C',
+    'E2E_AWS_ASSET_A_NAME', 'E2E_AWS_ASSET_B_NAME', 'E2E_AWS_ASSET_C_NAME',
+    'E2E_AWS_SHARING_RULE_ID',
 ] as const;
 
 const missing = required.filter((k) => !process.env[k]);
@@ -38,12 +42,24 @@ const ADMIN = { user: process.env.SECMAN_ADMIN_NAME!, pass: process.env.SECMAN_A
 const USER1 = { user: process.env.E2E_USER1_NAME!,    pass: process.env.E2E_USER1_PASS! };
 const USER2 = { user: process.env.E2E_USER2_NAME!,    pass: process.env.E2E_USER2_PASS! };
 
+const USER1_EMAIL = process.env.E2E_USER1_EMAIL!;
+const USER2_EMAIL = process.env.E2E_USER2_EMAIL!;
+
 const ASSET1 = process.env.E2E_ASSET1_NAME!;
 const ASSET2 = process.env.E2E_ASSET2_NAME!;
 const CVE_V1 = process.env.E2E_CVE_VULN1!;
 const CVE_V2 = process.env.E2E_CVE_VULN2!;
 const REQ_APPROVE_ID = process.env.E2E_REQ_APPROVE_ID!;
 const REQ_REJECT_ID  = process.env.E2E_REQ_REJECT_ID!;
+
+// AWS account sharing testbed (set up by Phase 8 of the shell driver)
+const AWS_ACCOUNT_A = process.env.E2E_AWS_ACCOUNT_A!;
+const AWS_ACCOUNT_B = process.env.E2E_AWS_ACCOUNT_B!;
+const AWS_ACCOUNT_C = process.env.E2E_AWS_ACCOUNT_C!;
+const AWS_ASSET_A   = process.env.E2E_AWS_ASSET_A_NAME!;
+const AWS_ASSET_B   = process.env.E2E_AWS_ASSET_B_NAME!;
+const AWS_ASSET_C   = process.env.E2E_AWS_ASSET_C_NAME!;
+const AWS_SHARING_RULE_ID = process.env.E2E_AWS_SHARING_RULE_ID!;
 
 async function login(page: Page, username: string, password: string) {
     await page.goto('/login');
@@ -209,6 +225,81 @@ test.describe.serial('Vulnerability + exception lifecycle (UI)', () => {
         // Only CVE_V1's request was APPROVED, so an active exception exists for it.
         // CVE_V2's requests were REJECTED and CANCELLED — no exception should be created.
         expect(body).toContain(CVE_V1);
+
+        await logout(page);
+    });
+
+    // ========================================================================
+    // AWS Account Sharing UI verification
+    //
+    // Pre-state from Phase 8 of the shell driver:
+    //   user1 mappings: AWS_ACCOUNT_A, AWS_ACCOUNT_C
+    //   user2 mappings: AWS_ACCOUNT_B
+    //   sharing rule:   user1 -> user2, scoped to [AWS_ACCOUNT_A] only
+    //
+    // Therefore the UI must show:
+    //   user1 in /account-vulns -> A and C (own), NOT B
+    //   user2 in /account-vulns -> A (shared) and B (own), NOT C (scope-leak guard)
+    //   admin in /aws-account-sharing -> the rule with both users' emails
+    // ========================================================================
+
+    test('admin AWS account sharing dashboard lists the scoped rule', async ({ page }) => {
+        await login(page, ADMIN.user, ADMIN.pass);
+
+        await page.goto('/aws-account-sharing');
+        await page.waitForLoadState('domcontentloaded');
+        await page.waitForTimeout(2500);
+
+        const body = (await page.textContent('body')) ?? '';
+        // Both endpoints of the sharing rule are visible in the row text.
+        expect(body).toContain(USER1_EMAIL);
+        expect(body).toContain(USER2_EMAIL);
+        // Per-account scoping renders a "selected" badge with the count (1).
+        expect(body.toLowerCase()).toContain('selected');
+
+        await logout(page);
+    });
+
+    test('user1 sees their own AWS accounts (A and C) on /account-vulns', async ({ page }) => {
+        await login(page, USER1.user, USER1.pass);
+
+        await page.goto('/account-vulns');
+        await page.waitForLoadState('domcontentloaded');
+        // Account-vulns paints account groups + assets after a fetch round-trip.
+        await page.waitForTimeout(3500);
+
+        const body = (await page.textContent('body')) ?? '';
+        // user1 has direct mappings to A and C; both account ids and both asset
+        // names (testaws-a, testaws-c) must be visible.
+        expect(body).toContain(AWS_ACCOUNT_A);
+        expect(body).toContain(AWS_ACCOUNT_C);
+        expect(body).toContain(AWS_ASSET_A);
+        expect(body).toContain(AWS_ASSET_C);
+        // user1 has no mapping or sharing for account B — must NOT appear.
+        expect(body).not.toContain(AWS_ACCOUNT_B);
+        expect(body).not.toContain(AWS_ASSET_B);
+
+        await logout(page);
+    });
+
+    test('user2 sees account A (shared) and B (own) but NOT C on /account-vulns', async ({ page }) => {
+        await login(page, USER2.user, USER2.pass);
+
+        await page.goto('/account-vulns');
+        await page.waitForLoadState('domcontentloaded');
+        await page.waitForTimeout(3500);
+
+        const body = (await page.textContent('body')) ?? '';
+        // user2 owns account B and has been granted account A via the scoped rule.
+        expect(body).toContain(AWS_ACCOUNT_A);
+        expect(body).toContain(AWS_ACCOUNT_B);
+        expect(body).toContain(AWS_ASSET_A);
+        expect(body).toContain(AWS_ASSET_B);
+        // CRITICAL scope guard: account C was added to user1's mappings AFTER the
+        // sharing rule was created. The rule was scoped to A only, so C must
+        // NOT propagate to user2 — neither the account id nor the asset name.
+        expect(body).not.toContain(AWS_ACCOUNT_C);
+        expect(body).not.toContain(AWS_ASSET_C);
 
         await logout(page);
     });

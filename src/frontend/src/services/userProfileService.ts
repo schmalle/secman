@@ -115,6 +115,3 @@ class UserProfileService {
 
 const userProfileServiceInstance = new UserProfileService();
 export default userProfileServiceInstance;
-
-// Re-export types explicitly for Vite/esbuild compatibility
-export type { UserProfileData, MfaStatusResponse, MfaToggleResponse, ChangePasswordRequest, ChangePasswordResponse };

@@ -7,13 +7,8 @@ interface User {
     roles: string[];
 }
 
-// Define a type for the global variable
-declare global {
-    interface Window {
-        currentUser?: User | null;
-        dispatchEvent(event: Event): boolean;
-    }
-}
+// Window.currentUser is declared globally in src/utils/auth-init.ts.
+// dispatchEvent is built into lib.dom.d.ts and doesn't need re-declaring.
 
 const Header = () => {
     const [user, setUser] = useState<User | null | undefined>(undefined); // undefined initially, null if not logged in, User if logged in

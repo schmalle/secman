@@ -75,6 +75,9 @@ export async function createChildWorkgroup(
     `/api/workgroups/${parentId}/children`,
     request
   );
+  if (!response.ok) {
+    throw new Error(await extractErrorMessage(response, 'Failed to create child workgroup'));
+  }
   return await response.json();
 }
 
@@ -155,7 +158,27 @@ export async function moveWorkgroup(
     `/api/workgroups/${workgroupId}/parent`,
     request
   );
+  if (!response.ok) {
+    throw new Error(await extractErrorMessage(response, 'Failed to move workgroup'));
+  }
   return await response.json();
+}
+
+async function extractErrorMessage(response: Response, fallback: string): Promise<string> {
+  try {
+    const text = await response.text();
+    if (!text) return `${fallback} (HTTP ${response.status})`;
+    try {
+      const body = JSON.parse(text);
+      if (body && typeof body.error === 'string') return body.error;
+      if (body && typeof body.message === 'string') return body.message;
+    } catch {
+      return text;
+    }
+  } catch {
+    // ignore
+  }
+  return `${fallback} (HTTP ${response.status})`;
 }
 
 /**

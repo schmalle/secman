@@ -26,7 +26,7 @@ The driver script is
 - `e2etestuser1` (`e2etestuser1@e2e.test`)
 - `e2etestuser2` (`e2etestuser2@e2e.test`)
 
-**Assets** (owner is a plain string username):
+**Vulnerability-test assets** (owner is a plain string username):
 - `testasset1` — owner `e2etestuser1`, ip `10.99.0.1`
 - `testasset2` — owner `e2etestuser2`, ip `10.99.0.2`
 
@@ -34,11 +34,21 @@ The driver script is
 - `vuln1` — `CVE-E2E-0001` CRITICAL, `daysOpen=40` on `testasset1` (overdue, threshold = 30d)
 - `vuln2` — `CVE-E2E-0002` CRITICAL, `daysOpen=5` on **both** `testasset1` and `testasset2`
 
+**AWS account sharing testbed** (Phase 8):
+- AWS account `123456789012` (A) — mapped to `e2etestuser1`; later **shared (scoped) → user2**
+- AWS account `876543210987` (B) — mapped to `e2etestuser2` (their own; never shared)
+- AWS account `555555555555` (C) — mapped to `e2etestuser1` **after** the sharing rule
+  is created. Tests prove the rule's per-account scope (`selectedAwsAccountIds=[A]`)
+  prevents the new account from leaking to user2.
+- Assets `testaws-a` / `testaws-b` / `testaws-c` carry those `cloudAccountId` values and
+  use a non-user owner string (`awssharing-owner`) so the only access path is via
+  `UserMapping` or `AwsAccountSharing` — not the owner rule.
+
 **Phases inside the driver**:
 
 | Phase | What it covers |
 |------:|----------------|
-| 0 | Pre-run cleanup (idempotent — direct SQL on `users`, `asset`, `vulnerability`, `vulnerability_exception_request`, `exception_request_audit`, `outdated_asset_materialized_view`) |
+| 0 | Pre-run cleanup (idempotent — direct SQL on `users`, `asset`, `vulnerability`, `vulnerability_exception_request`, `exception_request_audit`, `outdated_asset_materialized_view`, **`aws_account_sharing`**, **`user_mapping`**) |
 | 1 | MCP setup: `add_user` × 2, `create_asset` × 2, `add_vulnerability` × 3, materialized-view refresh |
 | 2 | MCP visibility/RBAC: `get_vulnerabilities` as user1, user2, admin |
 | 3 | MCP overdue: `get_overdue_assets` as user1, user2, admin |
@@ -46,7 +56,8 @@ The driver script is
 | 5 | MCP exception lifecycle — REJECT path (user2 creates → admin rejects with comment) |
 | 6 | MCP exception lifecycle — CANCEL path (user1 creates → user1 cancels) |
 | 7 | MCP authorization negatives: user2 cannot approve, user1 cannot create on user2's asset, missing `X-MCP-User-Email` |
-| 8 | Web UI (Playwright `tests/e2e/vuln-exception-full.spec.ts`): scoped visibility, my-requests states, approval dashboard |
+| 8 | **MCP AWS account sharing** — create `UserMapping`s + AWS-tagged assets, `create_aws_account_sharing` (scoped to one account), verify directional + scoped visibility, add a second mapping/asset to the source user and prove it does **not** leak to the target, `list_aws_account_sharing` as admin |
+| 9 | Web UI (Playwright `tests/e2e/vuln-exception-full.spec.ts`): scoped visibility, my-requests states, approval dashboard, **admin AWS sharing dashboard, `/account-vulns` for user1 and user2 to verify scoped sharing in the UI** |
 | (trap) | Post-run cleanup — runs even on failure |
 
 The shell driver calls MCP via `curl`/`jq` and shells out to `npx playwright`
@@ -150,6 +161,11 @@ Classify the most recent failure:
 | `[FAIL] Expected APPROVED, got ...`                       | **backend**  | `VulnerabilityExceptionRequestService` state machine             |
 | `[FAIL] Expected user2 approve to fail`                   | **backend**  | Role check missing in `ApproveExceptionRequestTool`              |
 | `Failed to create test user`                              | **backend**  | `AddUserTool` / unique constraint / event listener crash         |
+| `[FAIL] Baseline: user1 should see testaws-a`             | **backend**  | `AssetFilterService` not honoring `UserMapping` AWS account path |
+| `[FAIL] user2 should see testaws-a via sharing`           | **backend**  | `AwsAccountSharingService.getSharedAwsAccountIdsByEmail` / `findSharedAwsAccountIdsByTargetUserId` query — empty selection should resolve to source's full mapping set, non-empty to listed IDs only |
+| `[FAIL] SCOPE LEAK: user2 saw testaws-c`                  | **backend**  | Per-account scoping is broken — `aws_account_sharing_account` join not applied or repository SQL treats non-empty selection as "all". See V207 + `AwsAccountSharingRepository.findSharedAwsAccountIdsByTargetUserId` |
+| `Failed to create user mapping`                           | **backend**  | `UserMappingController.createMapping` — admin role check, validation, or DB constraint |
+| `Sharing rule create failed`                              | **backend**  | `CreateAwsAccountSharingTool` / `AwsAccountSharingService.createSharingRule` — typically delegation/admin-role enforcement or duplicate-rule conflict |
 | `Cannot reach backend`                                    | **infra**    | Backend didn't start — read `.e2e-logs/backend.log`              |
 | `Frontend not reachable`                                  | **infra**    | Frontend didn't start — read `.e2e-logs/frontend.log`            |
 | Playwright `expect(body).toContain(CVE_*)` fails          | **frontend** | UI page didn't render — check page route, hydration, API call    |
@@ -181,6 +197,16 @@ Fix priority: **backend first**, then frontend.
 | Add vulnerability tool                   | `src/backendng/src/main/kotlin/com/secman/mcp/tools/AddVulnerabilityTool.kt`                     |
 | Get vulnerabilities (RBAC filtering)     | `src/backendng/src/main/kotlin/com/secman/mcp/tools/GetVulnerabilitiesTool.kt`                   |
 | Get overdue assets                       | `src/backendng/src/main/kotlin/com/secman/mcp/tools/GetOverdueAssetsTool.kt`                     |
+| Get assets (RBAC + AWS sharing path)     | `src/backendng/src/main/kotlin/com/secman/mcp/tools/GetAssetsTool.kt`                            |
+| AWS sharing MCP tools                    | `src/backendng/src/main/kotlin/com/secman/mcp/tools/{Create,List,Delete}AwsAccountSharingTool.kt` |
+| AWS sharing service (scope resolution)   | `src/backendng/src/main/kotlin/com/secman/service/AwsAccountSharingService.kt`                   |
+| AWS sharing repository (scope SQL)       | `src/backendng/src/main/kotlin/com/secman/repository/AwsAccountSharingRepository.kt`             |
+| AWS sharing controller (UI REST)         | `src/backendng/src/main/kotlin/com/secman/controller/AwsAccountSharingController.kt`             |
+| AWS sharing scope migration              | `src/backendng/src/main/resources/db/migration/V207__aws_account_sharing_selected_accounts.sql`  |
+| User mapping controller (REST)           | `src/backendng/src/main/kotlin/com/secman/controller/UserMappingController.kt`                   |
+| Account-vulns service (own + shared)     | `src/backendng/src/main/kotlin/com/secman/service/AccountVulnsService.kt`                        |
+| AWS sharing UI                           | `src/frontend/src/components/AwsAccountSharingManager.tsx`, `src/frontend/src/pages/aws-account-sharing.astro` |
+| Account-vulns UI                         | `src/frontend/src/components/AccountVulnsView.tsx`, `src/frontend/src/pages/account-vulns.astro` |
 | Create / approve / reject / cancel       | `src/backendng/src/main/kotlin/com/secman/mcp/tools/{Create,Approve,Reject,Cancel}ExceptionRequestTool.kt` |
 | Exception request service                | `src/backendng/src/main/kotlin/com/secman/service/VulnerabilityExceptionRequestService.kt`       |
 | Vulnerability service (cli-add)          | `src/backendng/src/main/kotlin/com/secman/service/VulnerabilityService.kt`                       |
@@ -289,3 +315,19 @@ in the cleanup logic and fix `cleanup()` in
 - **Overdue threshold** is `VulnerabilityConfig.reminderOneDays` (default 30).
   `vuln1` is 40d (overdue) and `vuln2` is 5d (not). If the threshold changes,
   update both this skill and the driver constants.
+- **AWS sharing scope** — Phase 8 is the scope-leak guard. The sharing rule is
+  created with `selectedAwsAccountIds=[A]` *while* user1 still only owns
+  account A. After rule creation, account C is added to user1; the test
+  asserts user2 still only sees A and B, never C. If that assertion ever
+  flips, the scoping codepath in `AwsAccountSharingRepository`
+  (`findSharedAwsAccountIdsByTargetUserId`) is broken and ALL existing scoped
+  rules in production are silently leaking.
+- **AWS sharing cleanup** — `cleanup()` deletes from `aws_account_sharing`
+  (cascades to `aws_account_sharing_account` via V207's FK) and `user_mapping`
+  by both `user_id` and `email` so future-user/PENDING mapping rows are also
+  swept. Both run **before** the user delete because source/target user FKs
+  are NOT NULL with no cascade.
+- **Account IDs are 12 digits** — `UserMapping.awsAccountId` is validated by
+  `@Pattern(regexp = "^\\d{12}$")`. The hard-coded test IDs
+  (`123456789012` / `876543210987` / `555555555555`) satisfy that regex.
+  If the constants change, keep them 12-digit numeric.

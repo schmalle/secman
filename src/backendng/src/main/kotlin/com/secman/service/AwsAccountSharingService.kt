@@ -37,6 +37,7 @@ open class AwsAccountSharingService(
     private val userMappingRepository: UserMappingRepository,
     private val userResolutionService: UserResolutionService,
     private val sharingCreatedEventPublisher: ApplicationEventPublisher<AwsAccountSharingCreatedEvent>,
+    private val mcpAccessCacheInvalidator: McpAccessibleAssetsCacheInvalidator,
 ) {
     private val log = LoggerFactory.getLogger(AwsAccountSharingService::class.java)
 
@@ -190,6 +191,11 @@ open class AwsAccountSharingService(
             )
         )
 
+        // The target user just gained visibility into the source's AWS accounts —
+        // clear the per-user MCP access cache so the change is reflected before
+        // the 5-minute TTL would expire it.
+        mcpAccessCacheInvalidator.invalidate()
+
         return saved.toResponse(
             sharedAwsAccountCount = effectiveCount,
             selectedAwsAccountIds = resolvedScope.sorted(),
@@ -246,6 +252,11 @@ open class AwsAccountSharingService(
             effectiveCount,
         )
 
+        // Updating the per-account scope changes which assets the target can see
+        // (either narrowing or widening). Invalidate so the change takes effect
+        // immediately rather than after the cache TTL.
+        mcpAccessCacheInvalidator.invalidate()
+
         return saved.toResponse(
             sharedAwsAccountCount = effectiveCount,
             selectedAwsAccountIds = resolvedScope.sorted(),
@@ -267,6 +278,9 @@ open class AwsAccountSharingService(
         awsAccountSharingRepository.delete(sharing)
         log.info("AUDIT: AWS account sharing deleted: id={}, source={}, target={}",
             sharingId, sharing.sourceUser.email, sharing.targetUser.email)
+        // Revoking a sharing rule must take effect immediately — the target user
+        // should lose visibility into the source's accounts on the next request.
+        mcpAccessCacheInvalidator.invalidate()
         return true
     }
 

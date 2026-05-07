@@ -52,6 +52,9 @@ const WorkgroupManagement: React.FC = () => {
   const [selectedUserRefs, setSelectedUserRefs] = useState<UserRef[]>([]);
   const [selectedAssetIds, setSelectedAssetIds] = useState<number[]>([]);
   const [assetSearchTerm, setAssetSearchTerm] = useState<string>('');
+  const [userSearchTerm, setUserSearchTerm] = useState<string>('');
+  const [assignedUsers, setAssignedUsers] = useState<Array<{ id: number; username: string; email: string }>>([]);
+  const [assignedUsersError, setAssignedUsersError] = useState<string | null>(null);
   const [accountsModalState, setAccountsModalState] = useState<{
     isOpen: boolean;
     workgroupId: number | null;
@@ -168,7 +171,26 @@ const WorkgroupManagement: React.FC = () => {
   const handleAssignUsers = (workgroup: Workgroup) => {
     setSelectedWorkgroup(workgroup);
     setSelectedUserRefs([]);
+    setUserSearchTerm('');
+    setAssignedUsers([]);
+    setAssignedUsersError(null);
     setShowAssignUsers(true);
+    fetchAssignedUsers(workgroup.id);
+  };
+
+  const fetchAssignedUsers = async (workgroupId: number) => {
+    try {
+      const response = await authenticatedGet(`/api/workgroups/${workgroupId}/users`);
+      if (response.ok) {
+        const data = await response.json();
+        setAssignedUsers(Array.isArray(data) ? data : []);
+      } else {
+        const body = await response.json().catch(() => ({}));
+        setAssignedUsersError(body.error || `Failed to load current members (HTTP ${response.status})`);
+      }
+    } catch (err) {
+      setAssignedUsersError(err instanceof Error ? err.message : 'Failed to load current members');
+    }
   };
 
   const handleAssignAssets = (workgroup: Workgroup) => {
@@ -233,6 +255,9 @@ const WorkgroupManagement: React.FC = () => {
       setShowAssignUsers(false);
       setSelectedWorkgroup(null);
       setSelectedUserRefs([]);
+      setUserSearchTerm('');
+      setAssignedUsers([]);
+      setAssignedUsersError(null);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -434,35 +459,132 @@ const WorkgroupManagement: React.FC = () => {
                 <button type="button" className="btn-close" onClick={() => setShowAssignUsers(false)}></button>
               </div>
               <div className="modal-body">
-                <p className="text-muted">Select users to assign to this workgroup:</p>
-                <div className="list-group" style={{ maxHeight: '400px', overflowY: 'auto' }}>
-                  {users.map(user => {
-                    const checked = selectedUserRefs.some(r =>
-                      (user.id != null && r.id === user.id) ||
-                      (user.id == null && r.email.toLowerCase() === user.email.toLowerCase())
-                    );
-                    return (
-                      <label key={user.id ?? `pending:${user.email}`} className="list-group-item list-group-item-action">
-                        <input
-                          type="checkbox"
-                          className="form-check-input me-2"
-                          checked={checked}
-                          onChange={() => toggleUserSelection(user)}
-                        />
-                        <strong>{user.username}</strong> ({user.email})
-                        {user.isPending && (
-                          <span
-                            className="badge bg-warning text-dark ms-2"
-                            title="This email is known via AWS / domain mapping but has never logged in. Selecting it will create an account placeholder."
-                          >
-                            pending
-                          </span>
-                        )}
-                      </label>
-                    );
-                  })}
+                {/* Currently assigned members — visible at the top so the admin sees who is already in the group. */}
+                <div className="mb-3">
+                  <div className="d-flex align-items-center mb-2">
+                    <strong>Currently assigned ({assignedUsers.length})</strong>
+                  </div>
+                  {assignedUsersError && (
+                    <div className="alert alert-warning py-2 mb-2">
+                      <i className="bi bi-exclamation-triangle me-1"></i>
+                      {assignedUsersError}
+                    </div>
+                  )}
+                  {assignedUsers.length === 0 && !assignedUsersError && (
+                    <div className="text-muted small fst-italic">No users assigned yet.</div>
+                  )}
+                  {assignedUsers.length > 0 && (
+                    <div className="d-flex flex-wrap gap-1">
+                      {assignedUsers.map(u => (
+                        <span key={u.id} className="badge bg-success bg-opacity-25 text-success border border-success">
+                          <i className="bi bi-person-check me-1"></i>
+                          {u.username} <span className="text-muted">({u.email})</span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <p className="mt-3 text-muted">{selectedUserRefs.length} user(s) selected</p>
+
+                <p className="text-muted mb-2">Select users to add to this workgroup:</p>
+
+                {/* Search input — mirrors the asset-assign modal, debounced via React's controlled-input render cycle. */}
+                <div className="mb-3">
+                  <div className="input-group">
+                    <span className="input-group-text">
+                      <i className="bi bi-search"></i>
+                    </span>
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="Search by username or email..."
+                      value={userSearchTerm}
+                      onChange={(e) => setUserSearchTerm(e.target.value)}
+                      autoFocus
+                    />
+                    {userSearchTerm && (
+                      <button
+                        type="button"
+                        className="btn btn-outline-secondary"
+                        onClick={() => setUserSearchTerm('')}
+                        title="Clear search"
+                      >
+                        <i className="bi bi-x-lg"></i>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {(() => {
+                  const assignedIds = new Set(assignedUsers.map(u => u.id));
+                  const assignedEmails = new Set(assignedUsers.map(u => u.email.toLowerCase()));
+                  const term = userSearchTerm.trim().toLowerCase();
+                  const filtered = users.filter(u => {
+                    if (!term) return true;
+                    return (u.username || '').toLowerCase().includes(term)
+                        || (u.email || '').toLowerCase().includes(term);
+                  });
+                  // Sort: already-assigned first (so the admin sees who is in the group at a glance), then alpha by username.
+                  const sorted = [...filtered].sort((a, b) => {
+                    const aAssigned = (a.id != null && assignedIds.has(a.id)) || assignedEmails.has(a.email.toLowerCase());
+                    const bAssigned = (b.id != null && assignedIds.has(b.id)) || assignedEmails.has(b.email.toLowerCase());
+                    if (aAssigned !== bAssigned) return aAssigned ? -1 : 1;
+                    return (a.username || a.email).localeCompare(b.username || b.email);
+                  });
+
+                  if (sorted.length === 0) {
+                    return (
+                      <div className="text-center text-muted py-3">
+                        No users match "{userSearchTerm}"
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="list-group" style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                      {sorted.map(user => {
+                        const isAssigned = (user.id != null && assignedIds.has(user.id))
+                          || assignedEmails.has(user.email.toLowerCase());
+                        const checked = selectedUserRefs.some(r =>
+                          (user.id != null && r.id === user.id) ||
+                          (user.id == null && r.email.toLowerCase() === user.email.toLowerCase())
+                        );
+                        return (
+                          <label
+                            key={user.id ?? `pending:${user.email}`}
+                            className={`list-group-item list-group-item-action ${isAssigned ? 'list-group-item-light' : ''}`}
+                            title={isAssigned ? 'Already a member of this workgroup' : undefined}
+                          >
+                            <input
+                              type="checkbox"
+                              className="form-check-input me-2"
+                              checked={isAssigned || checked}
+                              disabled={isAssigned}
+                              onChange={() => toggleUserSelection(user)}
+                            />
+                            <strong>{user.username}</strong> ({user.email})
+                            {isAssigned && (
+                              <span className="badge bg-success ms-2">
+                                <i className="bi bi-check-circle me-1"></i>assigned
+                              </span>
+                            )}
+                            {user.isPending && (
+                              <span
+                                className="badge bg-warning text-dark ms-2"
+                                title="This email is known via AWS / domain mapping but has never logged in. Selecting it will create an account placeholder."
+                              >
+                                pending
+                              </span>
+                            )}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+
+                <p className="mt-3 text-muted small">
+                  {selectedUserRefs.length} new user(s) selected · showing {users.length} total
+                </p>
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setShowAssignUsers(false)}>

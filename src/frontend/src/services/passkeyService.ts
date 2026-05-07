@@ -74,14 +74,16 @@ class PasskeyService {
       const userId = this.base64urlToUint8Array(options.user.id);
 
       // Prepare WebAuthn credential creation options
+      // Cast Uint8Array to BufferSource: TS 5.7+ narrowed Uint8Array to Uint8Array<ArrayBufferLike>,
+      // which the DOM types still accept structurally but no longer recognize by name.
       const publicKeyOptions: PublicKeyCredentialCreationOptions = {
-        challenge,
+        challenge: challenge as BufferSource,
         rp: {
           name: options.rp.name,
           id: options.rp.id
         },
         user: {
-          id: userId,
+          id: userId as BufferSource,
           name: options.user.name,
           displayName: options.user.displayName
         },
@@ -169,6 +171,3 @@ class PasskeyService {
 
 const passkeyServiceInstance = new PasskeyService();
 export default passkeyServiceInstance;
-
-// Re-export types explicitly for Vite/esbuild compatibility
-export type { PasskeyCredentialInfo, PasskeyListResponse };

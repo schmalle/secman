@@ -1116,6 +1116,8 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
           isOpen={showRequestModal}
           vulnerabilityId={selectedVulnerability.id}
           vulnerabilityCveId={selectedVulnerability.vulnerabilityId}
+          assetId={selectedVulnerability.assetId}
+          assetIp={selectedVulnerability.assetIp}
           assetName={selectedVulnerability.assetName}
           onClose={handleModalClose}
           onSuccess={handleRequestSuccess}

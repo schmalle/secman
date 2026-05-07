@@ -120,12 +120,13 @@ const NormManagement: React.FC = () => {
     }
 
     try {
-      const result = await authenticatedDelete('/api/norms/all');
+      const response = await authenticatedDelete('/api/norms/all');
+      if (!response.ok) {
+        throw new Error(`Failed to delete norms (HTTP ${response.status})`);
+      }
+      const result: { message?: string; deletedCount?: number } = await response.json().catch(() => ({}));
       setError(null);
-      
-      // Show success message briefly
-      alert(`${result.message} (${result.deletedCount} norms deleted)`);
-      
+      alert(`${result.message ?? 'Norms deleted'} (${result.deletedCount ?? 0} norms deleted)`);
       await fetchNorms();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete all norms');
