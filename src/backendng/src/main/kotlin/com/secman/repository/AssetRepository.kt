@@ -6,6 +6,7 @@ import io.micronaut.data.annotation.Repository
 import io.micronaut.data.jpa.repository.JpaRepository
 import io.micronaut.data.model.Page
 import io.micronaut.data.model.Pageable
+import java.time.LocalDateTime
 import java.util.Optional
 
 @Repository
@@ -138,6 +139,8 @@ interface AssetRepository : JpaRepository<Asset, Long> {
      * @return The asset if found, null otherwise
      */
     fun findByCloudInstanceIdIgnoreCase(cloudInstanceId: String): Asset?
+
+    fun findByCrowdStrikeLastImportedAtBefore(cutoff: LocalDateTime): List<Asset>
 
     // MCP Tool Support - Feature 006: Asset inventory queries with pagination
 

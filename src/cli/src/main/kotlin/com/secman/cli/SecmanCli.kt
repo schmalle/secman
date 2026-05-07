@@ -4,6 +4,7 @@ import com.secman.cli.commands.AddRequirementCommand
 import com.secman.cli.commands.AddVulnerabilityCommand
 import com.secman.cli.commands.ConfigCommand
 import com.secman.cli.commands.DeduplicateVulnerabilitiesCommand
+import com.secman.cli.commands.DeleteAssetNotSeenCommand
 import com.secman.cli.commands.DeleteAllRequirementsCommand
 import com.secman.cli.commands.ExportRequirementsCommand
 import com.secman.cli.commands.ManageUserMappingsCommand
@@ -290,6 +291,13 @@ class SecmanCli {
                 }
                 0
             }
+            args[0] == "delete-asset-not-seen" -> {
+                val subArgs = args.drop(1).toTypedArray()
+                createCliContext().use { ctx ->
+                    PicocliRunner.run(DeleteAssetNotSeenCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
             args[0] == "port-scan" -> {
                 // Port-scan internet-facing assets using nmap
                 val subArgs = args.drop(1).toTypedArray()
@@ -353,6 +361,7 @@ class SecmanCli {
               Vulnerabilities:
                 add-vulnerability      Add or update a vulnerability for an asset
                 deduplicate-vulnerabilities  Remove duplicate vulnerability records (ADMIN)
+                delete-asset-not-seen  Delete CrowdStrike assets not imported for N days (ADMIN)
 
               Requirements:
                 export-requirements    Export all requirements to Excel or Word
@@ -710,6 +719,32 @@ class SecmanCli {
                   secman deduplicate-vulnerabilities --backend-url http://prod:8080
             """.trimIndent(),
 
+            "delete-asset-not-seen" to """
+                secman delete-asset-not-seen - Delete CrowdStrike assets not imported for N days
+
+                Usage: secman delete-asset-not-seen <days> [options]
+
+                Requires: ADMIN role
+
+                Options:
+                  --dry-run                Preview matching assets without deleting them
+                  --backend-url <url>      Backend API URL (default: SECMAN_HOST, SECMAN_BACKEND_URL, or http://localhost:8080)
+                  --username <user>        Backend username with ADMIN role (or SECMAN_ADMIN_NAME env var)
+                  --password <pass>        Backend password (or SECMAN_ADMIN_PASS env var)
+                  --insecure               Accept self-signed TLS certificates (or SECMAN_INSECURE=true env var)
+                  --verbose, -v            Show matching asset details
+
+                Notes:
+                  Only assets with a CrowdStrike import timestamp are eligible.
+                  Assets with no CrowdStrike import timestamp are ignored until they are
+                  seen by a future CrowdStrike import or an explicit admin backfill.
+
+                Examples:
+                  secman delete-asset-not-seen 30 --dry-run
+                  secman delete-asset-not-seen 90 --verbose
+                  secman delete-asset-not-seen 60 --backend-url https://secman.example.com
+            """.trimIndent(),
+
             "export-requirements" to """
                 secman export-requirements - Export all requirements to Excel or Word
 
@@ -847,7 +882,26 @@ class SecmanCli {
  * Main entry point function
  */
 fun main(args: Array<String>) {
+    applyInsecureSslIfRequested(args)
     val cli = SecmanCli()
     val exitCode = cli.execute(args)
     System.exit(exitCode)
+}
+
+/**
+ * Detect `--insecure` CLI flag or `SECMAN_INSECURE` env var BEFORE the
+ * Micronaut context starts. The injected `@Client` bean reads
+ * `micronaut.http.client.ssl.insecure-trust-all-certificates` at context
+ * startup (via `secman.ssl.insecure` in application.yml) — setting it later
+ * from a Picocli `@Option` is too late.
+ *
+ * Truthy env values: "true", "1", "yes", "on" (case-insensitive).
+ */
+private fun applyInsecureSslIfRequested(args: Array<String>) {
+    val flagPresent = args.any { it == "--insecure" }
+    val envValue = System.getenv("SECMAN_INSECURE")?.lowercase()?.trim()
+    val envTruthy = envValue in setOf("true", "1", "yes", "on")
+    if (flagPresent || envTruthy) {
+        System.setProperty("secman.ssl.insecure", "true")
+    }
 }

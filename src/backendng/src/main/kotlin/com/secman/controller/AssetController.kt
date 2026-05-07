@@ -51,7 +51,8 @@ open class AssetController(
     private val assetBulkDeleteService: com.secman.service.AssetBulkDeleteService,
     private val assetExportService: com.secman.service.AssetExportService,
     private val assetCascadeDeleteService: com.secman.service.AssetCascadeDeleteService,
-    private val assetMergeService: com.secman.service.AssetMergeService
+    private val assetMergeService: com.secman.service.AssetMergeService,
+    private val crowdStrikeAssetCleanupService: com.secman.service.CrowdStrikeAssetCleanupService
 ) {
     
     private val log = LoggerFactory.getLogger(AssetController::class.java)
@@ -837,6 +838,28 @@ open class AssetController(
             log.error("Asset export failed for user: {}", authentication.name, e)
             HttpResponse.serverError<ErrorResponse>()
                 .body(ErrorResponse("An internal error occurred"))
+        }
+    }
+
+    @Post("/delete-not-seen-by-crowdstrike")
+    @Secured("ADMIN")
+    open fun deleteNotSeenByCrowdStrike(
+        @Body request: CrowdStrikeAssetCleanupRequest,
+        authentication: Authentication
+    ): HttpResponse<*> {
+        return try {
+            val result = crowdStrikeAssetCleanupService.cleanup(
+                days = request.days,
+                dryRun = request.dryRun,
+                username = authentication.name
+            )
+            HttpResponse.ok(result)
+        } catch (e: IllegalArgumentException) {
+            HttpResponse.badRequest(ErrorResponse(e.message ?: "Invalid cleanup request"))
+        } catch (e: Exception) {
+            log.error("CrowdStrike stale asset cleanup failed", e)
+            HttpResponse.serverError<ErrorResponse>()
+                .body(ErrorResponse("CrowdStrike stale asset cleanup failed"))
         }
     }
 
