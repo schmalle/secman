@@ -41,7 +41,12 @@ open class UserResolutionService(
      * @param context short label used only in error messages
      */
     @Transactional
-    open fun resolveByIdOrEmail(userId: Long?, email: String?, context: String): User {
+    open fun resolveByIdOrEmail(
+        userId: Long?,
+        email: String?,
+        context: String,
+        roles: Set<User.Role>? = null,
+    ): User {
         if (userId != null && userId > 0) {
             return userRepository.findById(userId)
                 .orElseThrow { NoSuchElementException("$context user not found: id=$userId") }
@@ -57,7 +62,7 @@ open class UserResolutionService(
             username = username,
             email = normalizedEmail,
             passwordHash = passwordEncoder.encode(UUID.randomUUID().toString())!!,
-            roles = mutableSetOf(User.Role.USER, User.Role.VULN, User.Role.REQ),
+            roles = (roles ?: setOf(User.Role.USER, User.Role.VULN, User.Role.REQ)).toMutableSet(),
             authSource = User.AuthSource.OAUTH
         )
         val saved = try {
