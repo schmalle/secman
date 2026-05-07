@@ -40,6 +40,15 @@ export interface CreateAwsAccountSharingRequest {
      * Non-empty → restrict the share to the listed account IDs.
      */
     awsAccountIds?: string[] | null;
+    /**
+     * When true, the backend treats `targetUserEmail` as a brand-new
+     * invite: must be well-formed, share the caller's domain, and not
+     * already be an existing User or PENDING UserMapping. The created
+     * user gets roles [USER, VULN] and an onboarding email.
+     *
+     * Default false; legacy callers are unaffected.
+     */
+    inviteByEmail?: boolean;
 }
 
 /**
