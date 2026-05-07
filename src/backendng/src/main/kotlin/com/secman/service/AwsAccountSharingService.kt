@@ -119,7 +119,33 @@ open class AwsAccountSharingService(
     @Transactional
     open fun createSharingRule(request: CreateAwsAccountSharingRequest, adminUserId: Long): AwsAccountSharingResponse {
         val sourceUser = resolveUser(request.sourceUserId, request.sourceUserEmail, "source")
-        val targetUser = resolveUser(request.targetUserId, request.targetUserEmail, "target")
+
+        // Capture before resolution: was the target email a new account
+        // at the moment the request entered the service? Used to gate the
+        // "your account was just created" block in the notification email.
+        val targetWasNewBeforeResolve = request.inviteByEmail &&
+            !request.targetUserEmail.isNullOrBlank() &&
+            userRepository.findByEmailIgnoreCase(request.targetUserEmail).isEmpty
+
+        val targetUser = if (request.inviteByEmail) {
+            // Invite path: explicit USER+VULN role set; controller has
+            // already validated domain + non-collision.
+            userResolutionService.resolveByIdOrEmail(
+                userId = null,
+                email = request.targetUserEmail,
+                context = "target",
+                roles = setOf(User.Role.USER, User.Role.VULN),
+            )
+        } else {
+            resolveUser(request.targetUserId, request.targetUserEmail, "target")
+        }
+
+        if (request.inviteByEmail && targetWasNewBeforeResolve) {
+            log.info(
+                "AUDIT: AWS sharing invited user created: email={}, inviter={}, roles={}",
+                targetUser.email, sourceUser.email, "USER,VULN",
+            )
+        }
 
         if (sourceUser.id == targetUser.id) {
             throw IllegalArgumentException("Source and target user cannot be the same")
@@ -172,10 +198,11 @@ open class AwsAccountSharingService(
         val saved = awsAccountSharingRepository.save(sharing)
         val effectiveCount = if (resolvedScope.isNotEmpty()) resolvedScope.size else sourceAwsAccounts.size
         log.info(
-            "AUDIT: AWS account sharing created: source={}, target={}, admin={}, scope={}, sharedAccounts={}",
+            "AUDIT: AWS account sharing created: source={}, target={}, admin={}, scope={}, sharedAccounts={}, inviteCreatedUser={}",
             sourceUser.email, targetUser.email, adminUser.email,
             if (resolvedScope.isEmpty()) "ALL" else "SELECTED(${resolvedScope.size})",
             effectiveCount,
+            targetWasNewBeforeResolve,
         )
 
         sharingCreatedEventPublisher.publishEvent(
@@ -188,6 +215,7 @@ open class AwsAccountSharingService(
                 createdByEmail = adminUser.email,
                 createdAtIso = saved.createdAt!!.toString(),
                 sharedAwsAccountCount = effectiveCount,
+                targetUserWasJustCreated = targetWasNewBeforeResolve,
             )
         )
 

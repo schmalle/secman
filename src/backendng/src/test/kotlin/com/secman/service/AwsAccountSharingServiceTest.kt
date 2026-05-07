@@ -23,6 +23,7 @@ class AwsAccountSharingServiceTest {
     private lateinit var mappingRepo: UserMappingRepository
     private lateinit var resolver: UserResolutionService
     private lateinit var publisher: ApplicationEventPublisher<AwsAccountSharingCreatedEvent>
+    private lateinit var mcpAccessCacheInvalidator: McpAccessibleAssetsCacheInvalidator
     private lateinit var service: AwsAccountSharingService
 
     private fun user(id: Long, email: String, username: String = email.substringBefore('@')) =
@@ -35,7 +36,8 @@ class AwsAccountSharingServiceTest {
         mappingRepo = mockk()
         resolver = mockk()
         publisher = mockk(relaxed = true)
-        service = AwsAccountSharingService(repo, userRepo, mappingRepo, resolver, publisher)
+        mcpAccessCacheInvalidator = mockk(relaxed = true)
+        service = AwsAccountSharingService(repo, userRepo, mappingRepo, resolver, publisher, mcpAccessCacheInvalidator)
     }
 
     @Test
@@ -292,5 +294,95 @@ class AwsAccountSharingServiceTest {
         assertTrue(result.shareAllAccounts)
         // share-all → effective count is the source's full mapping set size (3).
         assertEquals(3, result.sharedAwsAccountCount)
+    }
+
+    @Test
+    fun `invite branch sets targetUserWasJustCreated true when email is new`() {
+        val source = user(1L, "alice@example.com")
+        val newTarget = user(2L, "newbie@example.com", "newbie")
+        val admin = user(1L, "alice@example.com")  // self-as-admin for simple repo lookup
+
+        every { userRepo.findByEmailIgnoreCase("newbie@example.com") } returns Optional.empty()
+        every { resolver.resolveByIdOrEmail(any(), any(), "source") } returns source
+        every {
+            resolver.resolveByIdOrEmail(
+                userId = null,
+                email = "newbie@example.com",
+                context = "target",
+                roles = setOf(User.Role.USER, User.Role.VULN),
+            )
+        } returns newTarget
+        every { userRepo.findById(1L) } returns Optional.of(admin)
+        every { repo.existsBySourceUserIdAndTargetUserId(1L, 2L) } returns false
+        every { mappingRepo.findDistinctAwsAccountIdByEmail("alice@example.com") } returns
+            listOf("111111111111")
+
+        val saved = AwsAccountSharing(
+            id = 7L, sourceUser = source, targetUser = newTarget, createdBy = admin,
+            createdAt = Instant.parse("2026-05-07T09:00:00Z"),
+            updatedAt = Instant.parse("2026-05-07T09:00:00Z"),
+        )
+        every { repo.save(any()) } returns saved
+        val captured = slot<AwsAccountSharingCreatedEvent>()
+        every { publisher.publishEvent(capture(captured)) } just Runs
+
+        val request = CreateAwsAccountSharingRequest(
+            sourceUserId = 1L,
+            targetUserEmail = "newbie@example.com",
+            inviteByEmail = true,
+        )
+        service.createSharingRule(request, adminUserId = 1L)
+
+        assertTrue(captured.captured.targetUserWasJustCreated)
+        verify {
+            resolver.resolveByIdOrEmail(
+                userId = null,
+                email = "newbie@example.com",
+                context = "target",
+                roles = setOf(User.Role.USER, User.Role.VULN),
+            )
+        }
+    }
+
+    @Test
+    fun `invite branch sets targetUserWasJustCreated false when email already exists`() {
+        val source = user(1L, "alice@example.com")
+        val existingTarget = user(2L, "bob@example.com", "bob")
+        val admin = user(1L, "alice@example.com")
+
+        every { userRepo.findByEmailIgnoreCase("bob@example.com") } returns Optional.of(existingTarget)
+        every { resolver.resolveByIdOrEmail(any(), any(), "source") } returns source
+        every {
+            resolver.resolveByIdOrEmail(
+                userId = null,
+                email = "bob@example.com",
+                context = "target",
+                roles = setOf(User.Role.USER, User.Role.VULN),
+            )
+        } returns existingTarget
+        every { userRepo.findById(1L) } returns Optional.of(admin)
+        every { repo.existsBySourceUserIdAndTargetUserId(1L, 2L) } returns false
+        every { mappingRepo.findDistinctAwsAccountIdByEmail("alice@example.com") } returns
+            listOf("111111111111")
+
+        val saved = AwsAccountSharing(
+            id = 8L, sourceUser = source, targetUser = existingTarget, createdBy = admin,
+            createdAt = Instant.parse("2026-05-07T09:00:00Z"),
+            updatedAt = Instant.parse("2026-05-07T09:00:00Z"),
+        )
+        every { repo.save(any()) } returns saved
+        val captured = slot<AwsAccountSharingCreatedEvent>()
+        every { publisher.publishEvent(capture(captured)) } just Runs
+
+        service.createSharingRule(
+            CreateAwsAccountSharingRequest(
+                sourceUserId = 1L,
+                targetUserEmail = "bob@example.com",
+                inviteByEmail = true,
+            ),
+            adminUserId = 1L,
+        )
+
+        assertFalse(captured.captured.targetUserWasJustCreated)
     }
 }
