@@ -476,9 +476,9 @@ const WorkgroupManagement: React.FC = () => {
                   {assignedUsers.length > 0 && (
                     <div className="d-flex flex-wrap gap-1">
                       {assignedUsers.map(u => (
-                        <span key={u.id} className="badge bg-success bg-opacity-25 text-success border border-success">
+                        <span key={u.id} className="badge bg-success-subtle text-success-emphasis border border-success-subtle">
                           <i className="bi bi-person-check me-1"></i>
-                          {u.username} <span className="text-muted">({u.email})</span>
+                          {u.username} <span className="opacity-75">({u.email})</span>
                         </span>
                       ))}
                     </div>
