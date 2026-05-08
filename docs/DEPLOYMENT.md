@@ -1,6 +1,6 @@
 # Deployment
 
-Linux production. Backend (`:8080`) + Frontend (`:4321`) behind nginx with SSL termination, MariaDB on `:3306`. Stack: Kotlin 2.3.21/Java 21/Micronaut 4.10 + Astro 6.2/React 19/Node 20 + MariaDB 11.4. Tested on Amazon Linux 2023, Ubuntu 20.04+, RHEL 8+.
+Linux production. Backend (`:8080`) + Frontend (`:4321`) behind nginx with SSL termination, MariaDB on `:3306`. Stack: Kotlin 2.3.21/Java 21/Micronaut 4.10 + Astro 6.3/React 19/Node 20 + MariaDB 11.4. Tested on Amazon Linux 2023, Ubuntu 20.04+, RHEL 8+.
 
 System: 2c/4G/20G minimum, 4c+/8G+/50G+ SSD recommended. Outbound 443 needed for SMTP/CrowdStrike. Inbound 80/443.
 
