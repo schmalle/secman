@@ -3,6 +3,7 @@ package com.secman.cli
 import com.secman.cli.commands.AddRequirementCommand
 import com.secman.cli.commands.AddVulnerabilityCommand
 import com.secman.cli.commands.ConfigCommand
+import com.secman.cli.commands.CrowdStrikeLastImportCommand
 import com.secman.cli.commands.DeduplicateVulnerabilitiesCommand
 import com.secman.cli.commands.DeleteAssetNotSeenCommand
 import com.secman.cli.commands.DeleteAllRequirementsCommand
@@ -306,6 +307,14 @@ class SecmanCli {
                 }
                 0
             }
+            args[0] == "crowdstrike-last-import" -> {
+                // Show timestamp and metadata of the most recent CrowdStrike import
+                val subArgs = args.drop(1).toTypedArray()
+                createCliContext().use { ctx ->
+                    PicocliRunner.run(CrowdStrikeLastImportCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
             else -> {
                 System.err.println("ERROR: Unknown command: '${args[0]}'")
 
@@ -345,6 +354,7 @@ class SecmanCli {
                 query servers          Batch query and import server vulnerabilities
                 monitor                Continuously monitor for HIGH/CRITICAL vulnerabilities
                 config                 Configure CrowdStrike API credentials
+                crowdstrike-last-import  Show timestamp of the most recent CrowdStrike import
 
               Notifications:
                 send-notifications     Send email notifications for outdated assets
@@ -810,6 +820,27 @@ class SecmanCli {
                   secman delete-all-requirements --confirm
                   secman delete-all-requirements --confirm --verbose
                   secman delete-all-requirements --confirm --backend-url http://test-server:8080
+            """.trimIndent(),
+
+            "crowdstrike-last-import" to """
+                secman crowdstrike-last-import - Show the timestamp of the most recent CrowdStrike import
+
+                Usage: secman crowdstrike-last-import [options]
+
+                Requires: ADMIN or VULN role
+
+                Options:
+                  --backend-url <url>      Backend API URL (default: SECMAN_HOST, SECMAN_BACKEND_URL, or http://localhost:8080)
+                  --username <user>        Backend username (or SECMAN_ADMIN_NAME env var)
+                  --password <pass>        Backend password (or SECMAN_ADMIN_PASS env var)
+                  --format <text|json>     Output format (default: text)
+                  --insecure               Accept self-signed TLS certificates (or SECMAN_INSECURE=true env var)
+                  --verbose, -v            Enable verbose output
+
+                Examples:
+                  secman crowdstrike-last-import
+                  secman crowdstrike-last-import --format json
+                  secman crowdstrike-last-import --verbose
             """.trimIndent(),
 
             "port-scan" to """

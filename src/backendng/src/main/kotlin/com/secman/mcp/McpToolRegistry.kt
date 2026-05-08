@@ -92,7 +92,9 @@ class McpToolRegistry(
     // Feature: Workgroup AWS Account Assignment
     @Inject private val listWorkgroupAwsAccountsTool: ListWorkgroupAwsAccountsTool,
     @Inject private val addWorkgroupAwsAccountTool: AddWorkgroupAwsAccountTool,
-    @Inject private val removeWorkgroupAwsAccountTool: RemoveWorkgroupAwsAccountTool
+    @Inject private val removeWorkgroupAwsAccountTool: RemoveWorkgroupAwsAccountTool,
+    // CrowdStrike import status
+    @Inject private val getCrowdStrikeLastImportTool: GetCrowdStrikeLastImportTool
 ) {
     private val logger = LoggerFactory.getLogger(McpToolRegistry::class.java)
 
@@ -181,7 +183,9 @@ class McpToolRegistry(
             // Feature: Workgroup AWS Account Assignment
             listWorkgroupAwsAccountsTool,
             addWorkgroupAwsAccountTool,
-            removeWorkgroupAwsAccountTool
+            removeWorkgroupAwsAccountTool,
+            // CrowdStrike import status
+            getCrowdStrikeLastImportTool
         ).forEach { tool ->
             toolMap[tool.name] = tool
             logger.debug("Registered MCP tool: {}", tool.name)
@@ -450,6 +454,11 @@ class McpToolRegistry(
             // Feature: Workgroup AWS Account Assignment (ADMIN only via User Delegation)
             "list_workgroup_aws_accounts", "add_workgroup_aws_account", "remove_workgroup_aws_account" -> {
                 permissions.contains(McpPermission.WORKGROUPS_WRITE) // ADMIN role checked in tool execute()
+            }
+
+            // CrowdStrike import status (ADMIN/VULN role checked in tool execute())
+            "get_crowdstrike_last_import" -> {
+                permissions.contains(McpPermission.VULNERABILITIES_READ)
             }
 
             else -> false
