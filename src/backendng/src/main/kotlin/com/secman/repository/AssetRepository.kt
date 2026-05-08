@@ -151,6 +151,40 @@ interface AssetRepository : JpaRepository<Asset, Long> {
     )
     fun countCrowdStrikeTracked(): Long
 
+    /**
+     * Feature 087 — rule B: legacy CrowdStrike-imported assets that pre-date
+     * the `crowdstrike_last_imported_at` column. Four-part fence:
+     *   - `owner = :ownerLiteral` (canonical "CrowdStrike Import" string)
+     *   - `crowdStrikeLastImportedAt IS NULL`
+     *   - no `manualCreator` (manually-created rows are protected)
+     *   - no `scanUploader` (scan-uploaded rows are protected)
+     *   - `COALESCE(lastSeen, updatedAt, createdAt) < cutoff` (any of the
+     *     three timestamps; falls through in that order)
+     */
+    @io.micronaut.data.annotation.Query("""
+        SELECT a FROM Asset a
+        WHERE a.owner = :ownerLiteral
+          AND a.crowdStrikeLastImportedAt IS NULL
+          AND a.manualCreator IS NULL
+          AND a.scanUploader IS NULL
+          AND COALESCE(a.lastSeen, a.updatedAt, a.createdAt) < :cutoff
+    """)
+    fun findLegacyCrowdStrikeStale(ownerLiteral: String, cutoff: LocalDateTime): List<Asset>
+
+    /**
+     * Feature 087 — count of legacy CrowdStrike-origin assets (rule-B fence
+     * minus the cutoff filter). Widens the safety-brake denominator in
+     * CrowdStrikeCleanupAuditService when `include-legacy=true`.
+     */
+    @io.micronaut.data.annotation.Query("""
+        SELECT COUNT(a) FROM Asset a
+        WHERE a.owner = :ownerLiteral
+          AND a.crowdStrikeLastImportedAt IS NULL
+          AND a.manualCreator IS NULL
+          AND a.scanUploader IS NULL
+    """)
+    fun countLegacyCrowdStrikeTotal(ownerLiteral: String): Long
+
     // MCP Tool Support - Feature 006: Asset inventory queries with pagination
 
     /**

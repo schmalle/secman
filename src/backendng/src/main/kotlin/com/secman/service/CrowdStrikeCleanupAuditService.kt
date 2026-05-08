@@ -6,6 +6,7 @@ import com.secman.dto.CrowdStrikeAssetCleanupErrorDto
 import com.secman.dto.CrowdStrikeAssetCleanupResponse
 import com.secman.repository.AssetRepository
 import com.secman.repository.CrowdStrikeCleanupRunRepository
+import io.micronaut.context.annotation.Value
 import jakarta.inject.Inject
 import jakarta.inject.Singleton
 import org.slf4j.LoggerFactory
@@ -27,7 +28,11 @@ open class CrowdStrikeCleanupAuditService(
     @Inject private val cleanupService: CrowdStrikeAssetCleanupService,
     @Inject private val runRepository: CrowdStrikeCleanupRunRepository,
     @Inject private val assetRepository: AssetRepository,
-    @Inject private val notificationService: CrowdStrikeCleanupNotificationService
+    @Inject private val notificationService: CrowdStrikeCleanupNotificationService,
+    // Feature 087: configured default for the legacy rule (rule B). Manual API
+    // runs may override per-call via run(includeLegacy = ...); the scheduler
+    // never overrides and always reads this value.
+    @Value("\${secman.crowdstrike.cleanup.include-legacy:false}") private val includeLegacyDefault: Boolean = false
 ) {
     private val logger = LoggerFactory.getLogger(CrowdStrikeCleanupAuditService::class.java)
     private var clock: Clock = Clock.systemDefaultZone()
@@ -37,8 +42,9 @@ open class CrowdStrikeCleanupAuditService(
         runRepository: CrowdStrikeCleanupRunRepository,
         assetRepository: AssetRepository,
         notificationService: CrowdStrikeCleanupNotificationService,
-        clock: Clock
-    ) : this(cleanupService, runRepository, assetRepository, notificationService) {
+        clock: Clock,
+        includeLegacyDefault: Boolean = false
+    ) : this(cleanupService, runRepository, assetRepository, notificationService, includeLegacyDefault) {
         this.clock = clock
     }
 
@@ -51,17 +57,23 @@ open class CrowdStrikeCleanupAuditService(
      * @param maxDeletePercent if set (0..100), aborts the run when the candidate
      *                         set exceeds this percentage of CrowdStrike-tracked
      *                         assets. Manual runs typically pass null.
+     * @param includeLegacy Feature 087 — override for the legacy rule. `true`/`false`
+     *                      forces rule B on/off for this run; `null` (default)
+     *                      falls back to `secman.crowdstrike.cleanup.include-legacy`.
      */
     fun run(
         days: Int,
         dryRun: Boolean,
         triggeredBy: String,
-        maxDeletePercent: Int? = null
+        maxDeletePercent: Int? = null,
+        includeLegacy: Boolean? = null
     ): CrowdStrikeAssetCleanupResponse {
         require(days > 0) { "Days must be greater than zero" }
 
+        val effectiveIncludeLegacy = includeLegacy ?: includeLegacyDefault
+
         if (dryRun) {
-            return cleanupService.cleanup(days, dryRun = true, username = triggeredBy)
+            return cleanupService.cleanup(days, dryRun = true, username = triggeredBy, includeLegacy = effectiveIncludeLegacy)
         }
 
         val startedAt = LocalDateTime.now(clock)
@@ -72,7 +84,7 @@ open class CrowdStrikeCleanupAuditService(
         }
 
         val response = try {
-            cleanupService.cleanup(days, dryRun = false, username = triggeredBy)
+            cleanupService.cleanup(days, dryRun = false, username = triggeredBy, includeLegacy = effectiveIncludeLegacy)
         } catch (e: Exception) {
             logger.error("CrowdStrike cleanup run failed (triggeredBy={})", triggeredBy, e)
             val failed = persistRun(

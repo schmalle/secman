@@ -6,6 +6,8 @@ interface CleanupConfig {
     staleDays: number;
     maxDeletePercent: number;
     cron: string;
+    // Feature 087.
+    includeLegacy: boolean;
 }
 
 interface CleanupRun {
@@ -22,6 +24,9 @@ interface CleanupRun {
     completedAt: string | null;
     durationMs: number | null;
     errorMessage: string | null;
+    // Feature 087: legacy-rule contribution. Default 0 on rows persisted before V210.
+    legacyCandidateCount: number;
+    legacyDeletedCount: number;
 }
 
 const STATUS_BADGE: Record<CleanupRun['status'], string> = {
@@ -40,6 +45,9 @@ const CrowdStrikeStaleAssetCleanup: React.FC = () => {
     const [info, setInfo] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
     const [days, setDays] = useState<number>(30);
+    // Feature 087: legacy toggle. Initial state must come from the backend's
+    // configured default (spec SC-006) — never hardcoded false.
+    const [includeLegacy, setIncludeLegacy] = useState<boolean>(false);
 
     useEffect(() => {
         const user = (window as any).currentUser;
@@ -62,6 +70,7 @@ const CrowdStrikeStaleAssetCleanup: React.FC = () => {
             ]);
             setConfig(cfgRes.data);
             setDays(cfgRes.data.staleDays);
+            setIncludeLegacy(Boolean(cfgRes.data.includeLegacy));
             setRuns(runsRes.data);
         } catch (e: any) {
             setError(e.response?.data?.error || 'Failed to load cleanup data');
@@ -73,10 +82,14 @@ const CrowdStrikeStaleAssetCleanup: React.FC = () => {
     const trigger = async (dryRun: boolean) => {
         if (!isAdmin) return;
         if (!dryRun) {
+            const legacyNote = includeLegacy
+                ? '\n\nLegacy CrowdStrike rows (no import timestamp, owner = "CrowdStrike Import", no manual creator/scan uploader) are also included.'
+                : '';
             const ok = window.confirm(
                 `Delete all CrowdStrike-tracked assets not re-imported in the last ${days} days?\n\n` +
                 `This cascades to vulnerabilities, scan results, and workgroup links. ` +
-                `It cannot be undone. Run a dry-run first if you have not.`
+                `It cannot be undone. Run a dry-run first if you have not.` +
+                legacyNote
             );
             if (!ok) return;
         }
@@ -86,13 +99,22 @@ const CrowdStrikeStaleAssetCleanup: React.FC = () => {
             setInfo(null);
             const res = await axios.post('/api/assets/delete-not-seen-by-crowdstrike', {
                 days,
-                dryRun
+                dryRun,
+                includeLegacy
             });
             const r = res.data || {};
             const verb = dryRun ? 'Dry-run' : 'Cleanup';
+            const total = r.candidateCount ?? 0;
+            const legacyN = r.legacyCandidateCount ?? 0;
+            const timestampN = Math.max(0, total - legacyN);
+            const deletedN = r.deletedCount ?? 0;
+            const splitText = includeLegacy
+                ? `candidates: ${total} (timestamp: ${timestampN}, legacy: ${legacyN}, deleted: ${deletedN})`
+                : `candidates: ${total}, deleted: ${deletedN}`;
+            const errCount = (r.errors?.length) ?? 0;
             setInfo(
-                `${verb} complete — candidates: ${r.candidateCount ?? 0}, ` +
-                `deleted: ${r.deletedCount ?? 0}, errors: ${(r.errors?.length) ?? 0}` +
+                `${verb} complete — ${splitText}` +
+                (errCount > 0 ? `, errors: ${errCount}` : '') +
                 (r.status ? ` (status: ${r.status})` : '')
             );
             await load();
@@ -184,6 +206,23 @@ const CrowdStrikeStaleAssetCleanup: React.FC = () => {
                                 />
                             </div>
                             <div className="col-auto">
+                                {/* Feature 087: legacy toggle. Default comes from
+                                    config.includeLegacy on load (spec SC-006). */}
+                                <div className="form-check mt-4">
+                                    <input
+                                        id="csIncludeLegacyToggle"
+                                        type="checkbox"
+                                        className="form-check-input"
+                                        checked={includeLegacy}
+                                        onChange={e => setIncludeLegacy(e.target.checked)}
+                                        disabled={busy}
+                                    />
+                                    <label className="form-check-label" htmlFor="csIncludeLegacyToggle">
+                                        Include legacy CrowdStrike rows
+                                    </label>
+                                </div>
+                            </div>
+                            <div className="col-auto">
                                 <button
                                     type="button"
                                     className="btn btn-outline-primary"
@@ -224,33 +263,43 @@ const CrowdStrikeStaleAssetCleanup: React.FC = () => {
                                             <th className="text-end">Stale days</th>
                                             <th className="text-end">Candidates</th>
                                             <th className="text-end">Deleted</th>
+                                            <th className="text-end">Legacy (cand/del)</th>
                                             <th className="text-end">Errors</th>
                                             <th className="text-end">Duration</th>
                                             <th>Note</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {runs.map(r => (
-                                            <tr key={r.id}>
-                                                <td><code>{r.startedAt}</code></td>
-                                                <td>
-                                                    <span className={`badge ${STATUS_BADGE[r.status]}`}>
-                                                        {r.status}
-                                                    </span>
-                                                </td>
-                                                <td>{r.triggeredBy}</td>
-                                                <td className="text-end">{r.staleDays}</td>
-                                                <td className="text-end">{r.candidateCount}</td>
-                                                <td className="text-end">{r.deletedCount}</td>
-                                                <td className="text-end">{r.errorCount}</td>
-                                                <td className="text-end">
-                                                    {r.durationMs != null ? `${r.durationMs} ms` : '—'}
-                                                </td>
-                                                <td className="text-muted small" style={{ maxWidth: 320 }}>
-                                                    {r.errorMessage ?? ''}
-                                                </td>
-                                            </tr>
-                                        ))}
+                                        {runs.map(r => {
+                                            // Feature 087: render legacy contribution. Rows persisted
+                                            // before V210 read 0/0 — display them dim so 0/0 doesn't
+                                            // imply "definitely no legacy candidates existed".
+                                            const lc = r.legacyCandidateCount ?? 0;
+                                            const ld = r.legacyDeletedCount ?? 0;
+                                            const legacyClass = (lc === 0 && ld === 0) ? 'text-muted' : '';
+                                            return (
+                                                <tr key={r.id}>
+                                                    <td><code>{r.startedAt}</code></td>
+                                                    <td>
+                                                        <span className={`badge ${STATUS_BADGE[r.status]}`}>
+                                                            {r.status}
+                                                        </span>
+                                                    </td>
+                                                    <td>{r.triggeredBy}</td>
+                                                    <td className="text-end">{r.staleDays}</td>
+                                                    <td className="text-end">{r.candidateCount}</td>
+                                                    <td className="text-end">{r.deletedCount}</td>
+                                                    <td className={`text-end ${legacyClass}`}>{lc}/{ld}</td>
+                                                    <td className="text-end">{r.errorCount}</td>
+                                                    <td className="text-end">
+                                                        {r.durationMs != null ? `${r.durationMs} ms` : '—'}
+                                                    </td>
+                                                    <td className="text-muted small" style={{ maxWidth: 320 }}>
+                                                        {r.errorMessage ?? ''}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
                                     </tbody>
                                 </table>
                             </div>

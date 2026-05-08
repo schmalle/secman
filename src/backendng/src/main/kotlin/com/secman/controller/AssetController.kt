@@ -858,7 +858,8 @@ open class AssetController(
                 days = request.days,
                 dryRun = request.dryRun,
                 triggeredBy = authentication.name,
-                maxDeletePercent = null
+                maxDeletePercent = null,
+                includeLegacy = request.includeLegacy  // Feature 087 — null = use configured default
             )
             HttpResponse.ok(result)
         } catch (e: IllegalArgumentException) {

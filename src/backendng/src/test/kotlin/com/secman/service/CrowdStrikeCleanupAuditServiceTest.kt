@@ -46,7 +46,7 @@ class CrowdStrikeCleanupAuditServiceTest {
 
     @Test
     fun `dry run delegates to cleanup service and never persists or notifies`() {
-        every { cleanupService.cleanup(7, true, "admin") } returns CrowdStrikeAssetCleanupResponse(
+        every { cleanupService.cleanup(7, true, "admin", false) } returns CrowdStrikeAssetCleanupResponse(
             days = 7,
             cutoff = nowLdt.minusDays(7),
             dryRun = true,
@@ -67,7 +67,7 @@ class CrowdStrikeCleanupAuditServiceTest {
     @Test
     fun `successful run with deletions persists SUCCESS audit and notifies admins`() {
         val cutoff = nowLdt.minusDays(30)
-        every { cleanupService.cleanup(30, false, "scheduler") } returns CrowdStrikeAssetCleanupResponse(
+        every { cleanupService.cleanup(30, false, "scheduler", false) } returns CrowdStrikeAssetCleanupResponse(
             days = 30,
             cutoff = cutoff,
             dryRun = false,
@@ -94,7 +94,7 @@ class CrowdStrikeCleanupAuditServiceTest {
     @Test
     fun `run with errors records PARTIAL status and notifies`() {
         val cutoff = nowLdt.minusDays(30)
-        every { cleanupService.cleanup(30, false, "admin") } returns CrowdStrikeAssetCleanupResponse(
+        every { cleanupService.cleanup(30, false, "admin", false) } returns CrowdStrikeAssetCleanupResponse(
             days = 30,
             cutoff = cutoff,
             dryRun = false,
@@ -138,7 +138,7 @@ class CrowdStrikeCleanupAuditServiceTest {
         assertThat(result.deletedCount).isEqualTo(0)
         assertThat(result.candidateCount).isEqualTo(6)
         assertThat(result.errors).hasSize(1)
-        verify(exactly = 0) { cleanupService.cleanup(any(), any(), any()) }
+        verify(exactly = 0) { cleanupService.cleanup(any(), any(), any(), any()) }
         verify(exactly = 1) { notificationService.notifyAdmins(any()) }
     }
 
@@ -156,7 +156,7 @@ class CrowdStrikeCleanupAuditServiceTest {
                 )
             )
         every { assetRepository.countCrowdStrikeTracked() } returns 100L
-        every { cleanupService.cleanup(30, false, "scheduler") } returns CrowdStrikeAssetCleanupResponse(
+        every { cleanupService.cleanup(30, false, "scheduler", false) } returns CrowdStrikeAssetCleanupResponse(
             days = 30,
             cutoff = cutoff,
             dryRun = false,
@@ -173,14 +173,14 @@ class CrowdStrikeCleanupAuditServiceTest {
         )
 
         assertThat(result.status).isEqualTo("SUCCESS")
-        verify(exactly = 1) { cleanupService.cleanup(30, false, "scheduler") }
+        verify(exactly = 1) { cleanupService.cleanup(30, false, "scheduler", false) }
     }
 
     @Test
     fun `safety brake skipped when total tracked is zero`() {
         every { assetRepository.findByCrowdStrikeLastImportedAtBefore(any()) } returns emptyList()
         every { assetRepository.countCrowdStrikeTracked() } returns 0L
-        every { cleanupService.cleanup(any(), any(), any()) } returns CrowdStrikeAssetCleanupResponse(
+        every { cleanupService.cleanup(any(), any(), any(), any()) } returns CrowdStrikeAssetCleanupResponse(
             days = 30,
             cutoff = nowLdt.minusDays(30),
             dryRun = false,
@@ -205,7 +205,7 @@ class CrowdStrikeCleanupAuditServiceTest {
     fun `cleanup service exception is captured as FAILED audit row and notified`() {
         every { assetRepository.findByCrowdStrikeLastImportedAtBefore(any()) } returns emptyList()
         every { assetRepository.countCrowdStrikeTracked() } returns 100L
-        every { cleanupService.cleanup(any(), any(), any()) } throws RuntimeException("DB down")
+        every { cleanupService.cleanup(any(), any(), any(), any()) } throws RuntimeException("DB down")
         every { runRepository.save(any()) } answers { firstArg<CrowdStrikeCleanupRun>().apply { id = 11L } }
 
         val result = service.run(
@@ -215,5 +215,77 @@ class CrowdStrikeCleanupAuditServiceTest {
         assertThat(result.status).isEqualTo("FAILED")
         assertThat(result.errors).hasSize(1)
         verify(exactly = 1) { notificationService.notifyAdmins(any()) }
+    }
+
+    // ---------- Feature 087 — override-vs-default resolution (T012) ----------
+    // FR-010: per-run override is optional. null → use configured default;
+    // true/false → force the legacy rule for that run regardless of default.
+
+    @Test
+    fun `run with includeLegacy=true forces rule B on even when configured default is false`() {
+        // Default service in setUp uses includeLegacyDefault = false.
+        val cutoff = nowLdt.minusDays(7)
+        every { cleanupService.cleanup(7, true, "admin", true) } returns CrowdStrikeAssetCleanupResponse(
+            days = 7, cutoff = cutoff, dryRun = true,
+            candidateCount = 0, deletedCount = 0, skippedCount = 0,
+            candidates = emptyList(), errors = emptyList()
+        )
+
+        service.run(days = 7, dryRun = true, triggeredBy = "admin", includeLegacy = true)
+
+        verify(exactly = 1) { cleanupService.cleanup(7, true, "admin", true) }
+    }
+
+    @Test
+    fun `run with includeLegacy=false forces rule B off even when configured default is true`() {
+        val serviceWithDefaultTrue = CrowdStrikeCleanupAuditService(
+            cleanupService, runRepository, assetRepository, notificationService, clock,
+            includeLegacyDefault = true
+        )
+        val cutoff = nowLdt.minusDays(7)
+        every { cleanupService.cleanup(7, true, "admin", false) } returns CrowdStrikeAssetCleanupResponse(
+            days = 7, cutoff = cutoff, dryRun = true,
+            candidateCount = 0, deletedCount = 0, skippedCount = 0,
+            candidates = emptyList(), errors = emptyList()
+        )
+
+        serviceWithDefaultTrue.run(days = 7, dryRun = true, triggeredBy = "admin", includeLegacy = false)
+
+        verify(exactly = 1) { cleanupService.cleanup(7, true, "admin", false) }
+    }
+
+    @Test
+    fun `run with includeLegacy=null falls back to configured default (false direction)`() {
+        // Default service uses includeLegacyDefault = false.
+        val cutoff = nowLdt.minusDays(7)
+        every { cleanupService.cleanup(7, true, "admin", false) } returns CrowdStrikeAssetCleanupResponse(
+            days = 7, cutoff = cutoff, dryRun = true,
+            candidateCount = 0, deletedCount = 0, skippedCount = 0,
+            candidates = emptyList(), errors = emptyList()
+        )
+
+        // No includeLegacy argument → defaults to null → resolves to false.
+        service.run(days = 7, dryRun = true, triggeredBy = "admin")
+
+        verify(exactly = 1) { cleanupService.cleanup(7, true, "admin", false) }
+    }
+
+    @Test
+    fun `run with includeLegacy=null falls back to configured default (true direction)`() {
+        val serviceWithDefaultTrue = CrowdStrikeCleanupAuditService(
+            cleanupService, runRepository, assetRepository, notificationService, clock,
+            includeLegacyDefault = true
+        )
+        val cutoff = nowLdt.minusDays(7)
+        every { cleanupService.cleanup(7, true, "scheduler", true) } returns CrowdStrikeAssetCleanupResponse(
+            days = 7, cutoff = cutoff, dryRun = true,
+            candidateCount = 0, deletedCount = 0, skippedCount = 0,
+            candidates = emptyList(), errors = emptyList()
+        )
+
+        // Scheduler call path passes no override → resolves to configured true.
+        serviceWithDefaultTrue.run(days = 7, dryRun = true, triggeredBy = "scheduler")
+
+        verify(exactly = 1) { cleanupService.cleanup(7, true, "scheduler", true) }
     }
 }
