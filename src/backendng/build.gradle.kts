@@ -22,23 +22,23 @@ dependencies {
     implementation(project(":shared"))
     
     // Micronaut Core
-    implementation("io.micronaut:micronaut-http-client:4.10.22")
-    implementation("io.micronaut:micronaut-http-server-netty:4.10.22")
-    implementation("io.micronaut:micronaut-jackson-databind:4.10.22")
+    implementation("io.micronaut:micronaut-http-client:4.10.23")
+    implementation("io.micronaut:micronaut-http-server-netty:4.10.23")
+    implementation("io.micronaut:micronaut-jackson-databind:4.10.23")
     implementation("io.micronaut.kotlin:micronaut-kotlin-runtime")
     implementation("io.micronaut.kotlin:micronaut-kotlin-extension-functions")
-    implementation("io.micronaut:micronaut-retry:4.10.22")
+    implementation("io.micronaut:micronaut-retry:4.10.23")
     implementation("io.micronaut.cache:micronaut-cache-caffeine")
-    
+
     // Database
-    implementation("io.micronaut.data:micronaut-data-hibernate-jpa:4.14.3")
+    implementation("io.micronaut.data:micronaut-data-hibernate-jpa:4.14.4")
     implementation("io.micronaut.sql:micronaut-hibernate-jpa:7.0.0")
     implementation("io.micronaut.sql:micronaut-jdbc-hikari:7.0.0")
     runtimeOnly("org.mariadb.jdbc:mariadb-java-client:3.5.8")
 
 	implementation("io.micronaut.flyway:micronaut-flyway:7.9.2")
-	runtimeOnly("org.flywaydb:flyway-core:12.5.0")
-	runtimeOnly("org.flywaydb:flyway-mysql:12.5.0")
+	runtimeOnly("org.flywaydb:flyway-core:12.6.0")
+	runtimeOnly("org.flywaydb:flyway-mysql:12.6.0")
 	
     // Security
     implementation("io.micronaut.security:micronaut-security-jwt:4.18.0")
@@ -69,8 +69,8 @@ dependencies {
     // Kotlin
     implementation("org.jetbrains.kotlin:kotlin-reflect:${kotlinVersion}")
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:${kotlinVersion}")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor:1.10.2")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor:1.11.0")
 
     // MCP (Model Context Protocol) Dependencies
     // Note: Using JSON-RPC and reactive streams for MCP implementation
@@ -82,7 +82,7 @@ dependencies {
     // Logging
     runtimeOnly("ch.qos.logback:logback-classic:1.5.32")
     // Bridge Log4j to Logback (required for Apache POI)
-    runtimeOnly("org.apache.logging.log4j:log4j-to-slf4j:2.25.4")
+    runtimeOnly("org.apache.logging.log4j:log4j-to-slf4j:2.26.0")
     // Logstash encoder for JSON logging (Feature 046)
     implementation("net.logstash.logback:logstash-logback-encoder:9.0")
     // Conditional logging support (Janino) - for SECMAN_LOGGING env var
