@@ -179,9 +179,11 @@ Triggered by `/e2eexception`, `/admin-asset-e2e`, `/e2ejs`, `/e2evulnexception` 
 
 *Last updated: 2026-05-08*
 
-## Active Technologies
-- Kotlin 2.3.21 / Java 21 (backend); TypeScript with Astro 6.2 + React 19 islands (frontend). + Micronaut 4.10 (DI, scheduling, security), Hibernate JPA, Micronaut Data, Flyway, Apache POI 5.3 (unused for this feature), Bootstrap 5.3, Axios. (087-crowdstrike-legacy-stale-cleanup)
-- MariaDB 11.4 in production; H2 in-memory for unit tests; Testcontainers MariaDB 11.4 for integration tests. Both H2 and MariaDB support `COALESCE` in JPQL. (087-crowdstrike-legacy-stale-cleanup)
-
 ## Recent Changes
-- 087-crowdstrike-legacy-stale-cleanup: Added Kotlin 2.3.21 / Java 21 (backend); TypeScript with Astro 6.2 + React 19 islands (frontend). + Micronaut 4.10 (DI, scheduling, security), Hibernate JPA, Micronaut Data, Flyway, Apache POI 5.3 (unused for this feature), Bootstrap 5.3, Axios.
+
+- **Feature 087** — CrowdStrike legacy stale-asset cleanup. Adds rule B alongside the existing timestamp rule:
+  - Canonical owner literal lives at `com.secman.constants.AssetOwners.CROWDSTRIKE_IMPORT`. Used as the writer in `CrowdStrikeVulnerabilityImportService.createNewAsset`, the dropdown source in `AssetController.getOwnerCandidates`, and the predicate parameter for `AssetRepository.findLegacyCrowdStrikeStale`.
+  - New flag `secman.crowdstrike.cleanup.include-legacy` (env: `CROWDSTRIKE_CLEANUP_INCLUDE_LEGACY`, default `false`) gates rule B. Manual runs may override per-call via `includeLegacy: Boolean?` on the request body.
+  - Rule-B fence: `owner = "CrowdStrike Import"` AND `crowdStrikeLastImportedAt IS NULL` AND no `manualCreator` AND no `scanUploader` AND `COALESCE(lastSeen, updatedAt, createdAt) < cutoff`.
+  - `crowdstrike_cleanup_run` gains `legacy_candidate_count` and `legacy_deleted_count` (V210). Safety brake denominator widens to `countCrowdStrikeTracked + countLegacyCrowdStrikeTotal` when `include-legacy` is on.
+  - Each cleanup candidate carries a `CleanupCandidateReason` enum (`TIMESTAMP_STALE` | `LEGACY_NULL_TIMESTAMP`) — surfaced in the dry-run summary and history table on the admin Falcon-config page.
