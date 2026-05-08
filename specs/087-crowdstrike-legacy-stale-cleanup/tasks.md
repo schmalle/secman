@@ -34,9 +34,9 @@ description: "Task list for Feature 087 — CrowdStrike Legacy Stale-Asset Clean
 
 **Purpose**: Wire the new flag into the configuration surface and the schema layer so all downstream tasks can compile/run.
 
-- [ ] T001 Create Flyway migration `src/backendng/src/main/resources/db/migration/V210__crowdstrike_cleanup_run_legacy_columns.sql` with body: `ALTER TABLE crowdstrike_cleanup_run ADD COLUMN legacy_candidate_count INT NOT NULL DEFAULT 0, ADD COLUMN legacy_deleted_count INT NOT NULL DEFAULT 0;`
-- [ ] T002 Add `secman.crowdstrike.cleanup.include-legacy: false` (under the existing `secman.crowdstrike.cleanup` block) in `src/backendng/src/main/resources/application.yml`
-- [ ] T003 [P] Document `CROWDSTRIKE_CLEANUP_INCLUDE_LEGACY` (default `false`) in the existing CrowdStrike section of `docs/ENVIRONMENT.md` — describe the toggle, the rule-B fence, and that it gates both the scheduled job and the configured default of the manual-run override
+- [X] T001 Create Flyway migration `src/backendng/src/main/resources/db/migration/V210__crowdstrike_cleanup_run_legacy_columns.sql` with body: `ALTER TABLE crowdstrike_cleanup_run ADD COLUMN legacy_candidate_count INT NOT NULL DEFAULT 0, ADD COLUMN legacy_deleted_count INT NOT NULL DEFAULT 0;`
+- [X] T002 Add `secman.crowdstrike.cleanup.include-legacy: false` (under the existing `secman.crowdstrike.cleanup` block) in `src/backendng/src/main/resources/application.yml`
+- [X] T003 [P] Document `CROWDSTRIKE_CLEANUP_INCLUDE_LEGACY` (default `false`) in the existing CrowdStrike section of `docs/ENVIRONMENT.md` — describe the toggle, the rule-B fence, and that it gates both the scheduled job and the configured default of the manual-run override
 
 **Checkpoint**: Schema migration ready; backend can pick up the new flag on startup.
 

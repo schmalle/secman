@@ -264,6 +264,13 @@ secman:
       # assets would be deleted in a single pass (protects against import outages).
       # Setting to 100 disables the brake.
       max-delete-percent: ${CROWDSTRIKE_CLEANUP_MAX_DELETE_PERCENT:10}
+      # Feature 087: opt-in to also delete legacy CrowdStrike-imported assets
+      # that pre-date the crowdstrike_last_imported_at column (rule B). When
+      # true, the four-part fence (owner='CrowdStrike Import' AND no import
+      # timestamp AND no manualCreator AND no scanUploader AND stale by
+      # COALESCE(lastSeen, updatedAt, createdAt)) selects these rows for
+      # deletion. Default off — flip to true once you've reviewed a dry-run.
+      include-legacy: ${CROWDSTRIKE_CLEANUP_INCLUDE_LEGACY:false}
   http:
     services:
       translation:
