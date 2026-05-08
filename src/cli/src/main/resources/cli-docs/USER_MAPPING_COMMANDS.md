@@ -337,7 +337,7 @@ command retains its pre-Feature-085 exit behavior (0 on success, 1 on error).
 
 ```bash
 # Weekly Monday 08:00 distribution
-0 8 * * 1 /opt/secman/scriptpp/secmancli manage-user-mappings list --send-email \
+0 8 * * 1 /opt/secman/scripts/secmancli manage-user-mappings list --send-email \
   || echo "user-mapping stats distribution failed with exit $?" | mail -s "secman alert" ops@example.com
 ```
 
@@ -541,7 +541,7 @@ Errors:
 
 **Syntax**:
 ```bash
-./scriptpp/secman manage-user-mappings import-s3 \
+./scripts/secman manage-user-mappings import-s3 \
   --bucket <bucket-name> \
   --key <object-key> \
   [--aws-region <region>] \
@@ -588,13 +588,13 @@ The command uses the standard AWS SDK credential chain:
 **Examples**:
 ```bash
 # Basic import
-./scriptpp/secman manage-user-mappings import-s3 \
+./scripts/secman manage-user-mappings import-s3 \
   --bucket my-mapping-bucket \
   --key user-mappings/current.csv \
   --admin-user admin@example.com
 
 # With specific region and profile
-./scriptpp/secman manage-user-mappings import-s3 \
+./scripts/secman manage-user-mappings import-s3 \
   --bucket my-mapping-bucket \
   --key user-mappings/current.csv \
   --aws-region eu-west-1 \
@@ -602,7 +602,7 @@ The command uses the standard AWS SDK credential chain:
   --admin-user admin@example.com
 
 # Dry-run validation
-./scriptpp/secman manage-user-mappings import-s3 \
+./scripts/secman manage-user-mappings import-s3 \
   --bucket my-mapping-bucket \
   --key user-mappings/current.csv \
   --dry-run \
@@ -613,7 +613,7 @@ The command uses the standard AWS SDK credential chain:
 
 To notify ADMIN/REPORT users about the imported mappings, follow up with:
 ```bash
-./scriptpp/secman manage-user-mappings list --send-email
+./scripts/secman manage-user-mappings list --send-email
 ```
 
 Use `--dry-run` to preview recipients, or `--verbose` for per-recipient delivery status.
@@ -730,7 +730,7 @@ This is the read-only counterpart to `import-s3`:
   --force'
 
 # Explicit credentials + region (typical cron usage)
-./scriptpp/secman manage-user-mappings download-s3 \
+./scripts/secman manage-user-mappings download-s3 \
   --bucket my-bucket \
   --key mappings.csv \
   --aws-access-key-id "$AWS_KEY" \
@@ -854,15 +854,15 @@ This split lets you do things like `print-s3 ... --format CSV --quiet | jq -R 's
   --format JSON'
 
 # Print as CSV, pipe through downstream tooling
-./scriptpp/secman manage-user-mappings print-s3 \
+./scripts/secman manage-user-mappings print-s3 \
   --bucket my-bucket --key mappings.csv \
   --format CSV --quiet | grep '^alice@'
 
 # Diff S3 source-of-truth against secman DB
-./scriptpp/secman manage-user-mappings print-s3 \
+./scripts/secman manage-user-mappings print-s3 \
   --bucket my-bucket --key mappings.csv \
   --format CSV --quiet > /tmp/s3.csv
-./scriptpp/secman manage-user-mappings list \
+./scripts/secman manage-user-mappings list \
   --type AWS --format CSV --output /tmp/db.csv
 diff /tmp/s3.csv /tmp/db.csv
 
@@ -975,19 +975,19 @@ bob@example.com,AWS_ACCOUNT,555566667777
 ### 4. S3 Import with Admin Notification
 ```bash
 # 1. Import mappings from S3
-./scriptpp/secman manage-user-mappings import-s3 \
+./scripts/secman manage-user-mappings import-s3 \
   --bucket company-mappings --key daily/users.csv
 
 # 2. Preview who would receive the email
-./scriptpp/secman manage-user-mappings list --send-email --dry-run
+./scripts/secman manage-user-mappings list --send-email --dry-run
 
 # 3. Send statistics email to all ADMIN/REPORT users
-./scriptpp/secman manage-user-mappings list --send-email
+./scripts/secman manage-user-mappings list --send-email
 
 # Or chain both steps (email only sent if import succeeds)
-./scriptpp/secman manage-user-mappings import-s3 \
+./scripts/secman manage-user-mappings import-s3 \
   --bucket company-mappings --key daily/users.csv && \
-  ./scriptpp/secman manage-user-mappings list --send-email
+  ./scripts/secman manage-user-mappings list --send-email
 ```
 
 ### 5. Audit User Access

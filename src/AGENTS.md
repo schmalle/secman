@@ -9,9 +9,9 @@ See repo-root `CLAUDE.md` for the authoritative rules. Quick reference for agent
 - `shared/` — code shared between backend and CLI.
 
 ## Build / test
-- Backend: `cd ../scriptpp && ./startbackenddev.sh` (canonical) or from repo root `./gradlew build` / `./gradlew :backendng:test`.
+- Backend: `cd ../scripts && ./startbackenddev.sh` (canonical) or from repo root `./gradlew build` / `./gradlew :backendng:test`.
 - Frontend: `cd frontend && npm install`, then `npm run dev`, `npm run build`, `npm run preview`, `npm run test` (full Playwright) or `npm run test:checkin` (lite).
-- CLI: `./gradlew :cli:shadowJar`, then `./scriptpp/secman <cmd>`.
+- CLI: `./gradlew :cli:shadowJar`, then `./scripts/secman <cmd>`.
 
 ## Style
 - Kotlin: 4-space indent, `UpperCamelCase` types, `lowerCamelCase` members, Micronaut DI, prefer immutable data classes. Keep config near its feature package.
@@ -26,4 +26,4 @@ See repo-root `CLAUDE.md` for the authoritative rules. Quick reference for agent
 `type(scope): description` (or short `Type: Summary`). Imperative ≤72 chars. PR covers motivation, verification (`./gradlew build`, `npm run test:checkin`), and screenshots for UI changes. Highlight new dependencies — especially anything touching auth, storage, or crypto — and confirm license compatibility.
 
 ## Secrets
-Never commit credentials or DB dumps. Use env vars or `application-local.yml` overrides; resolve secrets via `pass-cli` (Proton Pass). Never reintroduce `op run`.
+Never commit credentials or DB dumps. Use env vars or `application-local.yml` overrides; resolve secrets via `pass-cli` (Proton Pass).

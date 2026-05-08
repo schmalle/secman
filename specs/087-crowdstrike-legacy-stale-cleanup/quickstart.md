@@ -114,7 +114,7 @@ If the legacy rule misbehaves in production, set `secman.crowdstrike.cleanup.inc
 ## Mandatory project gates (non-quickstart, blocking for merge)
 
 - `./gradlew build` clean.
-- `./scriptpp/startbackenddev.sh` starts cleanly, then stop.
+- `./scripts/startbackenddev.sh` starts cleanly, then stop.
 - `/e2ejs` reports 0 errors for both admin and normal-user roles against `SECMAN_HOST`.
 - `/e2evulnexception` runs with 0 failures.
 

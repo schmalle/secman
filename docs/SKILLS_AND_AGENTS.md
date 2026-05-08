@@ -17,7 +17,7 @@ Skills run in `fork` mode (dedicated context) or inline; agents are spawned as s
 
 Triggers: "run exception e2e", "test exception workflow", "e2eexception".
 
-Loop: start backend (`./scriptpp/startbackenddev.sh`) → start frontend (`./scriptpp/startfrontenddev.sh`) → wait for ports `8080`/`4321` → run `scriptpp/test/test-e2e-exception-workflowsupport.sh` → on failure classify, fix, restart if needed, re-run. Up to `maxRetries` (default 5).
+Loop: start backend (`./scripts/startbackenddev.sh`) → start frontend (`./scripts/startfrontenddev.sh`) → wait for ports `8080`/`4321` → run `scripts/test/test-e2e-exception-workflowsupport.sh` → on failure classify, fix, restart if needed, re-run. Up to `maxRetries` (default 5).
 
 Test = 11-step MCP-based exception lifecycle (see `docs/E2E_EXCEPTION_WORKFLOW_TEST.md`).
 
@@ -159,7 +159,7 @@ Logs: `.e2e-logs/{backend,frontend}.log` (gitignored).
 | `frontend.start` | `npm run dev` |
 | `frontend.healthUrl` | `http://localhost:4321` |
 | `frontend.healthTimeout` | `60` s |
-| `e2e.script` | `./scriptpp/e2e-test.sh` |
+| `e2e.script` | `./scripts/e2e-test.sh` |
 | `e2e.maxRetries` | `5` |
 | `e2e.retryDelay` | `5` s |
 
@@ -171,4 +171,4 @@ Hooks (`.claude/settings.json`):
 | `PostToolUse` Edit/Write | any file edit | `on-file-changed.sh` — alerts runner about hot-reload |
 | `PreToolUse` / `PostToolUse` Task | task tool boundaries | pre/post-task housekeeping |
 
-E2E helper script: `scriptpp/e2e-test.sh`.
+E2E helper script: `scripts/e2e-test.sh`.

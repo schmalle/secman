@@ -2,8 +2,8 @@
 
 Wrappers (canonical):
 
-- `./scriptpp/secman <cmd>` — symlink to `secmancli`, resolves secrets via `pass-cli`.
-- `./scriptpp/secmanng <cmd>` — alternative wrapper with explicit env exports (e.g. `SECMAN_INSECURE=1` for self-signed TLS).
+- `./scripts/secman <cmd>` — symlink to `secmancli`, resolves secrets via `pass-cli`.
+- `./scripts/secmanng <cmd>` — alternative wrapper with explicit env exports (e.g. `SECMAN_INSECURE=1` for self-signed TLS).
 
 Legacy `java -jar secman-cli.jar` invocation is shown in some examples for clarity. Prefer the wrappers in real use. See `docs/PASS_CLI.md` for the secret resolution map.
 
@@ -42,7 +42,7 @@ export SECMAN_BACKEND_URL=https://api.example.com   # default http://localhost:8
 If the backend uses a self-signed or otherwise untrusted certificate, the CLI will fail with `PKIX path building failed: unable to find valid certification path to requested target`. Two ways to bypass certificate verification (use only on trusted networks):
 
 - Add `--insecure` to the command (e.g. `secman delete-asset-not-seen 30 --dry-run --insecure`).
-- Export `SECMAN_INSECURE=true` (also accepts `1`, `yes`, `on`) before invoking. The wrapper scripts in `scriptpp/` already honour this — `deleteoutdated.sh` resolves the value via `pass-cli`.
+- Export `SECMAN_INSECURE=true` (also accepts `1`, `yes`, `on`) before invoking. The wrapper scripts in `scripts/` already honour this — `deleteoutdated.sh` resolves the value via `pass-cli`.
 
 Both routes set the Micronaut HTTP client property `micronaut.http.client.ssl.insecure-trust-all-certificates=true` for the entire CLI process. The flag is parsed before the application context starts, so it applies to every subcommand (including ones that use the injected `CliHttpClient`).
 
@@ -53,8 +53,8 @@ Full env reference: `docs/ENVIRONMENT.md`.
 ### `query servers` — CrowdStrike vulnerability query
 
 ```bash
-./scriptpp/secman query servers --hostname web-01 --severity HIGH,CRITICAL --min-days-open 30 --save
-./scriptpp/secmanng query servers --severity CRITICAL,HIGH --save --device-type SERVER \
+./scripts/secman query servers --hostname web-01 --severity HIGH,CRITICAL --min-days-open 30 --save
+./scripts/secmanng query servers --severity CRITICAL,HIGH --save --device-type SERVER \
   --last-seen-days 1 --min-days-open 1 --insecure --verbose
 ```
 
@@ -77,8 +77,8 @@ Full env reference: `docs/ENVIRONMENT.md`.
 Deletes assets that have not appeared in a CrowdStrike import for more than N days. Always run `--dry-run` first.
 
 ```bash
-./scriptpp/secman delete-asset-not-seen 30 --dry-run --verbose
-./scriptpp/secman delete-asset-not-seen 90
+./scripts/secman delete-asset-not-seen 30 --dry-run --verbose
+./scripts/secman delete-asset-not-seen 90
 ```
 
 | Option | Default | Notes |
@@ -97,8 +97,8 @@ Existing assets start with `crowdstrike_last_imported_at = NULL` after the schem
 ### `send-notifications` — outdated-asset & new-vuln emails
 
 ```bash
-./scriptpp/secman send-notifications --dry-run --verbose
-./scriptpp/secman send-notifications --outdated-only
+./scripts/secman send-notifications --dry-run --verbose
+./scripts/secman send-notifications --outdated-only
 ```
 
 | Option | Default | Notes |
@@ -113,20 +113,20 @@ Subcommands: `list`, `add-aws`, `add-domain`, `import`, `import-s3`, `download-s
 
 ```bash
 # list (default table; supports --format json|csv, --output FILE, --type AWS|DOMAIN|ALL)
-./scriptpp/secman manage-user-mappings list --type AWS --format csv --output aws-mappings.csv
-./scriptpp/secman manage-user-mappings list --send-email --dry-run     # preview ADMIN/REPORT recipients
-./scriptpp/secman manage-user-mappings list --send-email --verbose     # dispatch with per-recipient status
+./scripts/secman manage-user-mappings list --type AWS --format csv --output aws-mappings.csv
+./scripts/secman manage-user-mappings list --send-email --dry-run     # preview ADMIN/REPORT recipients
+./scripts/secman manage-user-mappings list --send-email --verbose     # dispatch with per-recipient status
 
 # add
-./scriptpp/secman manage-user-mappings add-aws    --email u@x --aws-account-id 123456789012
-./scriptpp/secman manage-user-mappings add-domain --email u@x --domain CORP.X.COM
+./scripts/secman manage-user-mappings add-aws    --email u@x --aws-account-id 123456789012
+./scripts/secman manage-user-mappings add-domain --email u@x --domain CORP.X.COM
 
 # import (CSV/JSON, --dry-run validates without persisting)
-./scriptpp/secman manage-user-mappings import --file mappings.csv  --format csv  --dry-run
-./scriptpp/secman manage-user-mappings import --file mappings.json --format json
+./scripts/secman manage-user-mappings import --file mappings.csv  --format csv  --dry-run
+./scripts/secman manage-user-mappings import --file mappings.json --format json
 
 # remove
-./scriptpp/secman manage-user-mappings remove --id 42
+./scripts/secman manage-user-mappings remove --id 42
 ```
 
 #### `list --send-email` (Feature 085)
@@ -172,7 +172,7 @@ All three `*-s3` commands share AWS options: `--aws-region`, `--aws-profile`, `-
 Manual upsert. Auto-creates asset if hostname missing (`type=SERVER`, `owner=CLI-IMPORT`). Same `(asset, cve)` updates instead of duplicating.
 
 ```bash
-./scriptpp/secman add-vulnerability --hostname web-01 --cve CVE-2024-1234 \
+./scripts/secman add-vulnerability --hostname web-01 --cve CVE-2024-1234 \
   --criticality HIGH --days-open 30 --username admin --password ***
 ```
 
@@ -190,27 +190,27 @@ Exit codes: `0` ok, `1` validation/auth error, `2` connection error.
 Subcommands: `list`, `assign-assets`, `remove-assets`.
 
 ```bash
-./scriptpp/secman manage-workgroups list                          # list workgroups
-./scriptpp/secman manage-workgroups list --workgroup Production   # assets in WG
-./scriptpp/secman manage-workgroups list --search-assets "ip-10-*"
+./scripts/secman manage-workgroups list                          # list workgroups
+./scripts/secman manage-workgroups list --workgroup Production   # assets in WG
+./scripts/secman manage-workgroups list --search-assets "ip-10-*"
 
-./scriptpp/secman manage-workgroups assign-assets --workgroup Production \
+./scripts/secman manage-workgroups assign-assets --workgroup Production \
   --pattern "*prod*" --type SERVER --admin-user admin@x
 
-./scriptpp/secman manage-workgroups assign-assets --workgroup Production --ids 1,2,3 \
+./scripts/secman manage-workgroups assign-assets --workgroup Production --ids 1,2,3 \
   --admin-user admin@x
 
-./scriptpp/secman manage-workgroups assign-assets --workgroup Production --pattern "*" --dry-run
-./scriptpp/secman manage-workgroups remove-assets --workgroup Test --pattern "*test*" --admin-user admin@x
-./scriptpp/secman manage-workgroups remove-assets --workgroup Test --all              --admin-user admin@x
-./scriptpp/secman manage-workgroups list --format JSON
+./scripts/secman manage-workgroups assign-assets --workgroup Production --pattern "*" --dry-run
+./scripts/secman manage-workgroups remove-assets --workgroup Test --pattern "*test*" --admin-user admin@x
+./scripts/secman manage-workgroups remove-assets --workgroup Test --all              --admin-user admin@x
+./scripts/secman manage-workgroups list --format JSON
 ```
 
 Wildcards: `*` (any), `?` (single char), `*foo*` (contains).
 
 ### Other commands
 
-`send-admin-summary`, `import` (local file), `import-s3`, `config`, `monitor`, `list`, `list-workgroups`, `remove`, `delete-all-requirements`, `deduplicate-vulnerabilities`, `delete-asset-not-seen`, `port-scan`, `send-notification-users`, `add-aws`, `add-domain`, `add-requirement`, `export-requirements`. `./scriptpp/secman help <cmd>` for details.
+`send-admin-summary`, `import` (local file), `import-s3`, `config`, `monitor`, `list`, `list-workgroups`, `remove`, `delete-all-requirements`, `deduplicate-vulnerabilities`, `delete-asset-not-seen`, `port-scan`, `send-notification-users`, `add-aws`, `add-domain`, `add-requirement`, `export-requirements`. `./scripts/secman help <cmd>` for details.
 
 ## Cron
 

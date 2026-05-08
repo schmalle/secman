@@ -93,7 +93,7 @@ class NewTool @Inject constructor(
 **Rationale**:
 - Aligns with clarification answer (Bash + curl + jq)
 - Existing pattern proven in similar E2E tests
-- Minimal dependencies (curl, jq, op CLI)
+- Minimal dependencies (curl, jq, pass-cli)
 
 **Script Structure**:
 ```bash
@@ -101,7 +101,7 @@ class NewTool @Inject constructor(
 set -euo pipefail
 
 # Prerequisites check
-# 1Password credential resolution
+# Proton Pass credential resolution
 # Authentication
 # Test workflow execution
 # Assertions
@@ -155,7 +155,7 @@ set -euo pipefail
 ### Test Script Dependencies
 - `curl` - HTTP client
 - `jq` - JSON parser
-- `op` - 1Password CLI v2.x
+- `pass-cli` (Proton Pass) v2.x
 
 ## Authorization Model
 

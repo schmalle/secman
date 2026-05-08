@@ -3,7 +3,7 @@
 ## Prerequisites
 
 1. **secman application** running and accessible (both backend + frontend)
-2. **1Password CLI** (`op`) v2.x installed and authenticated
+2. **`pass-cli` (Proton Pass)** (`pass-cli`) v2.x installed and authenticated
 3. **Google Chrome** and **Microsoft Edge** installed on the test machine
 4. **Node.js** 18+ installed
 
@@ -17,14 +17,14 @@ npx playwright install chrome msedge
 
 ## Running Tests
 
-### With 1Password (recommended)
+### With Proton Pass (recommended)
 
 ```bash
 cd tests/e2e
 ./run-e2e.sh
 ```
 
-The runner script resolves credentials from 1Password vault `test/secman` and runs the full test matrix.
+The runner script resolves credentials from Proton Pass vault `test/secman` and runs the full test matrix.
 
 ### With manual credentials
 
@@ -77,5 +77,5 @@ Opens the HTML test report in a browser showing pass/fail per browser/user combi
 | "Browser not found" | Run `npx playwright install chrome msedge` |
 | "Cannot connect to..." | Ensure secman frontend is running at the configured URL |
 | "Login failed" | Verify credentials and that the user accounts exist |
-| "op: command not found" | Install 1Password CLI: `brew install 1password-cli` |
-| "Vault not found" | Run `op signin` and verify vault access |
+| "pass-cli: command not found" | Install `pass-cli` (Proton Pass): `brew install pass-cli` |
+| "Vault not found" | Run `pass-cli login` and verify vault access |

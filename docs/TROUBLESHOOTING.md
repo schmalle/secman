@@ -170,8 +170,8 @@ mysql -u secman -p secman -e \
 mysql -u secman -p secman -e "SELECT email,last_login FROM users ORDER BY last_login DESC LIMIT 5"
 
 # CLI
-./scriptpp/secman help
-./scriptpp/secman query servers --dry-run --limit 10 --verbose
+./scripts/secman help
+./scripts/secman query servers --dry-run --limit 10 --verbose
 ```
 
 ## Log locations

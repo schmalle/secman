@@ -3,7 +3,7 @@
 **Feature Branch**: `081-playwright-vuln-e2e`
 **Created**: 2026-03-03
 **Status**: Draft
-**Input**: User description: "Implement an end-to-end test case to login via Playwright and then go to the Vulnmanagement Lense submenu. No JavaScript errors must occur. Two different accounts: one with admin role and one normal user. Credentials must be passed via command line injected from 1Password. Playwright must use Edge and Chrome browsers for testing."
+**Input**: User description: "Implement an end-to-end test case to login via Playwright and then go to the Vulnmanagement Lense submenu. No JavaScript errors must occur. Two different accounts: one with admin role and one normal user. Credentials must be passed via command line injected from Proton Pass. Playwright must use Edge and Chrome browsers for testing."
 
 ## Clarifications
 
@@ -15,7 +15,7 @@
 
 ### User Story 1 - Admin User Navigates to Vulnmanagement Lense (Priority: P1)
 
-A QA engineer runs the Playwright E2E test suite with admin credentials injected from 1Password. The test logs in as an admin user, navigates to the Vulnerability Management section in the sidebar, clicks the "Lense" submenu item, and verifies the Vulnerability Statistics page loads successfully. The browser console is monitored throughout — no JavaScript errors must occur during the entire flow.
+A QA engineer runs the Playwright E2E test suite with admin credentials injected from Proton Pass. The test logs in as an admin user, navigates to the Vulnerability Management section in the sidebar, clicks the "Lense" submenu item, and verifies the Vulnerability Statistics page loads successfully. The browser console is monitored throughout — no JavaScript errors must occur during the entire flow.
 
 **Why this priority**: Admin users have full access to all Vulnerability Management menu items. Testing the admin path first validates the complete navigation structure and confirms the Lense page renders without errors for the most privileged role.
 
@@ -62,18 +62,18 @@ The E2E test suite runs on both Microsoft Edge and Google Chrome browsers. Each 
 
 ---
 
-### User Story 4 - 1Password Credential Injection (Priority: P2)
+### User Story 4 - Proton Pass Credential Injection (Priority: P2)
 
-The test suite accepts credentials via command-line environment variables or arguments. These credentials are injected from 1Password using the `op` CLI tool (e.g., `op run` or `op read`), ensuring no credentials are hardcoded in test files, environment files, or CI configuration. The test runner script demonstrates the 1Password integration pattern.
+The test suite accepts credentials via command-line environment variables or arguments. These credentials are injected from Proton Pass using the `pass-cli` CLI tool (e.g., `pass-cli run` or `pass-cli read`), ensuring no credentials are hardcoded in test files, environment files, or CI configuration. The test runner script demonstrates the Proton Pass integration pattern.
 
 **Why this priority**: Secure credential management is critical for a security tool's own test infrastructure, but the injection mechanism is an infrastructure concern that can be refined after core tests work.
 
-**Independent Test**: Can be tested by running the test with `op run` wrapper or by manually providing environment variables, confirming the tests pick up credentials from the environment.
+**Independent Test**: Can be tested by running the test with `pass-cli run` wrapper or by manually providing environment variables, confirming the tests pick up credentials from the environment.
 
 **Acceptance Scenarios**:
 
 1. **Given** credentials are set via environment variables, **When** the test suite runs, **Then** it uses those credentials for login without any hardcoded fallback
-2. **Given** 1Password CLI is available, **When** the test is invoked through the provided runner script with `op` integration, **Then** credentials are securely injected at runtime
+2. **Given** `pass-cli` (Proton Pass) is available, **When** the test is invoked through the provided runner script with `pass-cli` integration, **Then** credentials are securely injected at runtime
 3. **Given** no credentials are provided, **When** the test suite starts, **Then** it fails immediately with a clear error message indicating which credentials are missing
 
 ---
@@ -98,7 +98,7 @@ The test suite accepts credentials via command-line environment variables or arg
 - **FR-006**: The test suite MUST run on both Google Chrome and Microsoft Edge browsers
 - **FR-007**: The test suite MUST accept user credentials via environment variables (e.g., `SECMAN_ADMIN_NAME`, `SECMAN_ADMIN_PASS`, `SECMAN_USER_USER`, `SECMAN_USER_PASS`)
 - **FR-008**: The test suite MUST accept the application base URL via environment variable (e.g., `SECMAN_BASE_URL`)
-- **FR-009**: The test suite MUST provide a runner script demonstrating 1Password CLI (`op`) integration for credential injection
+- **FR-009**: The test suite MUST provide a runner script demonstrating `pass-cli` integration for credential injection
 - **FR-010**: The test suite MUST fail with a clear error message when required credentials or base URL are not provided
 - **FR-011**: JavaScript warnings and informational console messages MUST NOT cause test failure — only `error`-level messages should fail the test
 
@@ -117,7 +117,7 @@ The test suite accepts credentials via command-line environment variables or arg
 - The secman application is already running and accessible at a known URL before the test suite is executed (the tests do not start/stop the application)
 - The admin and normal user accounts already exist in the system with appropriate roles assigned
 - The normal user account has at least the VULN role so the Vulnerability Management menu section is visible
-- 1Password CLI (`op`) v2.x is installed on the machine where the runner script is used
-- The target environment has the necessary 1Password vault access configured for the QA engineer
+- `pass-cli` v2.x is installed on the machine where the runner script is used
+- The target environment has the necessary Proton Pass vault access configured for the QA engineer
 - Microsoft Edge is Chromium-based (as all modern Edge versions are), so Playwright's `msedge` channel is used
 - The application login uses the standard username/password form (not OAuth/OIDC) for these E2E tests

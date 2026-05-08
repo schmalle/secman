@@ -14,10 +14,10 @@
 # 8. Cleanup test data
 #
 # Usage:
-#   ./scriptpp/test/test-e2e-exception-workflowsupport.sh
-#   BASE_URL=http://localhost:8080 SECMAN_MCP_KEY=sk-xxx ./scriptpp/test/test-e2e-exception-workflowsupport.sh
-#   ./scriptpp/test/test-e2e-exception-workflowsupport.sh --verbose
-#   ./scriptpp/test/test-e2e-exception-workflowsupport.sh --help
+#   ./scripts/test/test-e2e-exception-workflowsupport.sh
+#   BASE_URL=http://localhost:8080 SECMAN_MCP_KEY=sk-xxx ./scripts/test/test-e2e-exception-workflowsupport.sh
+#   ./scripts/test/test-e2e-exception-workflowsupport.sh --verbose
+#   ./scripts/test/test-e2e-exception-workflowsupport.sh --help
 #
 
 set -euo pipefail

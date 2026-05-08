@@ -88,20 +88,20 @@ expect(consoleErrors).toEqual([]);
 
 **Source**: `VulnerabilityStatisticsPage.tsx` line 66-69
 
-## R7: 1Password Integration Pattern
+## R7: Proton Pass Integration Pattern
 
-**Decision**: Follow the existing project pattern using `op://test/secman/...` URI format with a bash runner script that resolves credentials before invoking Playwright.
+**Decision**: Follow the existing project pattern using `pass://test/secman/...` URI format with a bash runner script that resolves credentials before invoking Playwright.
 
-**Rationale**: The project already uses this pattern in `tests/mcp-e2e-workgroup-test.sh`. Consistency reduces cognitive overhead. The runner script uses `op run` which auto-resolves `op://` URIs in environment variables.
+**Rationale**: The project already uses this pattern in `tests/mcp-e2e-workgroup-test.sh`. Consistency reduces cognitive overhead. The runner script uses `pass-cli run` which auto-resolves `pass://` URIs in environment variables.
 
 **Environment variables**:
-| Variable | 1Password URI | Purpose |
+| Variable | Proton Pass URI | Purpose |
 |----------|---------------|---------|
 | `SECMAN_BASE_URL` | (plain value) | Frontend URL, e.g., `http://localhost:4321` |
-| `SECMAN_ADMIN_NAME` | `op://test/secman/SECMAN_ADMIN_NAME` | Admin username |
-| `SECMAN_ADMIN_PASS` | `op://test/secman/SECMAN_ADMIN_PASS` | Admin password |
-| `SECMAN_USER_USER` | `op://test/secman/SECMAN_USER_USER` | Normal user username |
-| `SECMAN_USER_PASS` | `op://test/secman/SECMAN_USER_PASS` | Normal user password |
+| `SECMAN_ADMIN_NAME` | `pass://test/secman/SECMAN_ADMIN_NAME` | Admin username |
+| `SECMAN_ADMIN_PASS` | `pass://test/secman/SECMAN_ADMIN_PASS` | Admin password |
+| `SECMAN_USER_USER` | `pass://test/secman/SECMAN_USER_USER` | Normal user username |
+| `SECMAN_USER_PASS` | `pass://test/secman/SECMAN_USER_PASS` | Normal user password |
 
 ## R8: Test File Structure
 

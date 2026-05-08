@@ -31,9 +31,9 @@ Env: `SECMAN_ADMIN_EMAIL` (or `--admin-user`) for audit logging.
 ## `list-bucket`
 
 ```bash
-./scriptpp/secmanng manage-user-mappings list-bucket --bucket my-bucket
-./scriptpp/secmanng manage-user-mappings list-bucket --bucket my-bucket --prefix user-mappings/
-./scriptpp/secmanng manage-user-mappings list-bucket --bucket my-bucket --prefix user-mappings/ \
+./scripts/secmanng manage-user-mappings list-bucket --bucket my-bucket
+./scripts/secmanng manage-user-mappings list-bucket --bucket my-bucket --prefix user-mappings/
+./scripts/secmanng manage-user-mappings list-bucket --bucket my-bucket --prefix user-mappings/ \
   --aws-profile production --aws-region eu-west-1
 ```
 
@@ -49,11 +49,11 @@ Options: `--bucket -b` (req), `--prefix -p`, `--aws-region`, `--aws-profile`, `-
 ## `import-s3` (download + push to backend)
 
 ```bash
-./scriptpp/secmanng manage-user-mappings import-s3 --bucket my-bucket --key user-mappings/latest.csv
-./scriptpp/secmanng manage-user-mappings import-s3 --bucket my-bucket --key …  --dry-run
-./scriptpp/secmanng manage-user-mappings import-s3 --bucket my-bucket --key …  --aws-profile prod
-./scriptpp/secmanng manage-user-mappings import-s3 --bucket my-bucket --key … --aws-region eu-west-1
-./scriptpp/secmanng manage-user-mappings import-s3 --bucket my-bucket --key …  --format JSON
+./scripts/secmanng manage-user-mappings import-s3 --bucket my-bucket --key user-mappings/latest.csv
+./scripts/secmanng manage-user-mappings import-s3 --bucket my-bucket --key …  --dry-run
+./scripts/secmanng manage-user-mappings import-s3 --bucket my-bucket --key …  --aws-profile prod
+./scripts/secmanng manage-user-mappings import-s3 --bucket my-bucket --key … --aws-region eu-west-1
+./scripts/secmanng manage-user-mappings import-s3 --bucket my-bucket --key …  --format JSON
 ```
 
 Options: `--bucket -b`, `--key -k` (both req), `--format` (`AUTO|CSV|JSON`, default `AUTO`), `--dry-run`, `--admin-user -u` (or `$SECMAN_ADMIN_EMAIL`), all AWS shared options.
@@ -71,15 +71,15 @@ Exit codes: `0` ok / `1` partial errors (imported what it could) / `2` fatal S3/
 ## `download-s3` (no backend)
 
 ```bash
-./scriptpp/secmanng manage-user-mappings download-s3 \
+./scripts/secmanng manage-user-mappings download-s3 \
   --bucket my-bucket --key user-mappings/latest.csv --output ./aws-mappings.csv
 
-./scriptpp/secmanng manage-user-mappings download-s3 \
+./scripts/secmanng manage-user-mappings download-s3 \
   --bucket my-bucket --key user-mappings/latest.csv \
   --aws-profile production --aws-region eu-west-1 \
   --output ./aws-mappings.csv --force
 
-./scriptpp/secmanng manage-user-mappings download-s3 \
+./scripts/secmanng manage-user-mappings download-s3 \
   --bucket my-bucket --key user-mappings/latest.csv \
   --output /var/lib/secman/aws-mappings.csv --force --quiet      # cron mode
 ```
@@ -95,18 +95,18 @@ Exit codes: `0` ok / `1` I/O / `2` fatal S3/config / `3` unexpected.
 Downloads to a temp file, parses, prints to **stdout**, deletes the temp on exit.
 
 ```bash
-./scriptpp/secmanng manage-user-mappings print-s3 --bucket my-bucket --key user-mappings/latest.csv
+./scripts/secmanng manage-user-mappings print-s3 --bucket my-bucket --key user-mappings/latest.csv
 
 # JSON for downstream tooling
-./scriptpp/secmanng manage-user-mappings print-s3 \
+./scripts/secmanng manage-user-mappings print-s3 \
   --bucket my-bucket --key user-mappings/latest.csv \
   --type ALL --format JSON
 
 # Diff S3 vs DB (note --quiet keeps stdout pure)
-./scriptpp/secmanng manage-user-mappings print-s3 \
+./scripts/secmanng manage-user-mappings print-s3 \
   --bucket my-bucket --key user-mappings/latest.csv \
   --format CSV --quiet > /tmp/s3.csv
-./scriptpp/secmanng manage-user-mappings list \
+./scripts/secmanng manage-user-mappings list \
   --type AWS --format CSV --output /tmp/db.csv
 diff /tmp/s3.csv /tmp/db.csv
 ```
@@ -172,13 +172,13 @@ aws s3api create-bucket --bucket test --endpoint-url http://localhost:9090
 aws s3api put-object --bucket test --key mappings.csv --body ./test-mappings.csv \
   --endpoint-url http://localhost:9090
 
-./scriptpp/secmanng manage-user-mappings list-bucket --bucket test --endpoint-url http://localhost:9090
-./scriptpp/secmanng manage-user-mappings import-s3 --bucket test --key mappings.csv \
+./scripts/secmanng manage-user-mappings list-bucket --bucket test --endpoint-url http://localhost:9090
+./scripts/secmanng manage-user-mappings import-s3 --bucket test --key mappings.csv \
   --endpoint-url http://localhost:9090 --dry-run
 
 # Or via env:
 export AWS_ENDPOINT_URL=http://localhost:9090
-./scriptpp/secman manage-user-mappings list-bucket --bucket test
+./scripts/secman manage-user-mappings list-bucket --bucket test
 ```
 
 ## Troubleshooting

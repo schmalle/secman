@@ -5,14 +5,14 @@
 
 ## Summary
 
-Create a standalone test script that authenticates against a secman instance using 1Password-stored credentials, visits all statically-routable frontend pages via a headless browser, captures both uncaught JavaScript exceptions and `console.error` messages (labeled separately), and produces a structured report with an exit code reflecting the result. Must support self-signed certificates.
+Create a standalone test script that authenticates against a secman instance using Proton Pass-stored credentials, visits all statically-routable frontend pages via a headless browser, captures both uncaught JavaScript exceptions and `console.error` messages (labeled separately), and produces a structured report with an exit code reflecting the result. Must support self-signed certificates.
 
-**Technical Approach**: A bash wrapper script (`tests/js-error-scanner.sh`) handles 1Password credential resolution via `op run`, then invokes a Node.js script (`tests/js-error-scanner.mjs`) that uses the Playwright library API to drive a headless Chromium browser. The Node.js script performs form-based login, iterates through a hardcoded list of static page URIs (derived from `src/frontend/src/pages/`), captures `pageerror` events and `console.error` messages per page, and outputs a grouped summary report.
+**Technical Approach**: A bash wrapper script (`tests/js-error-scanner.sh`) handles Proton Pass credential resolution via `pass-cli run`, then invokes a Node.js script (`tests/js-error-scanner.mjs`) that uses the Playwright library API to drive a headless Chromium browser. The Node.js script performs form-based login, iterates through a hardcoded list of static page URIs (derived from `src/frontend/src/pages/`), captures `pageerror` events and `console.error` messages per page, and outputs a grouped summary report.
 
 ## Technical Context
 
 **Language/Version**: Bash 5.x (wrapper), Node.js (script using Playwright API)
-**Primary Dependencies**: Playwright (from existing `tests/e2e/node_modules/`), 1Password CLI (`op`)
+**Primary Dependencies**: Playwright (from existing `tests/e2e/node_modules/`), `pass-cli`
 **Storage**: N/A (no persistence)
 **Testing**: Manual execution against running secman instance
 **Target Platform**: macOS / Linux (developer workstation)
@@ -27,7 +27,7 @@ Create a standalone test script that authenticates against a secman instance usi
 
 | Principle | Applicable? | Status | Notes |
 |-----------|-------------|--------|-------|
-| I. Security-First | Yes | PASS | Credentials from 1Password, never hardcoded; no user input accepted beyond env vars |
+| I. Security-First | Yes | PASS | Credentials from Proton Pass, never hardcoded; no user input accepted beyond env vars |
 | III. API-First | No | N/A | This is a test script, not an API endpoint |
 | IV. User-Requested Testing | Yes | PASS | This IS the user-requested test tooling |
 | V. RBAC | No | N/A | Script uses existing auth, doesn't modify access control |
@@ -52,7 +52,7 @@ specs/083-js-error-scanner/
 
 ```text
 tests/
-├── js-error-scanner.sh      # Bash wrapper: 1Password creds, op run, SSL config
+├── js-error-scanner.sh      # Bash wrapper: Proton Pass creds, pass-cli run, SSL config
 └── js-error-scanner.mjs     # Node.js script: Playwright browser automation & report
 ```
 
@@ -86,9 +86,9 @@ The script logs in through the actual login form (`/login` page) rather than cal
 
 ### 4. Self-Signed Certificate Support
 
-- **Bash wrapper**: Reads `SECMAN_SSL_ACCEPT_ALL` from 1Password, sets `NODE_TLS_REJECT_UNAUTHORIZED=0` when enabled
+- **Bash wrapper**: Reads `SECMAN_SSL_ACCEPT_ALL` from Proton Pass, sets `NODE_TLS_REJECT_UNAUTHORIZED=0` when enabled
 - **Playwright**: Uses `ignoreHTTPSErrors: true` in browser context launch options when SSL flag is set
-- Follows the same `true`/`1`/`yes` case-insensitive pattern as `./scriptpp/secmanng`
+- Follows the same `true`/`1`/`yes` case-insensitive pattern as `./scripts/secmanng`
 
 ### 5. Error Classification
 

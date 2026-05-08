@@ -17,9 +17,9 @@ Security requirement, vulnerability and risk management platform.
 
 ## Tooling Conventions (canonical, do not deviate)
 
-- **Scripts**: `./scriptpp/` only. `./scripts/` at the repo root is deprecated — any reference is a bug.
-- **Secrets**: `pass-cli` (Proton Pass) only. Never hardcode secrets. Never reintroduce `op run` / 1Password.
-- **Backend dev start**: `./scriptpp/startbackenddev.sh` (sources `pass-cli` env, runs Micronaut). Do not call `./gradlew run` directly.
+- **Scripts**: `./scripts/` only.
+- **Secrets**: `pass-cli` (Proton Pass) only. Never hardcode secrets.
+- **Backend dev start**: `./scripts/startbackenddev.sh` (sources `pass-cli` env, runs Micronaut). Do not call `./gradlew run` directly.
 - **Host URL in tests**: read `SECMAN_HOST` from `pass-cli`. Never hardcode `http://localhost:8080` or `http://localhost:4321`.
 
 ## Key Entities
@@ -69,14 +69,14 @@ MCP tool families mirror these (delegation required): `list_/create_/delete_rele
 ```bash
 # Backend
 ./gradlew build                            # build + tests
-./scriptpp/startbackenddev.sh              # canonical dev start (pass-cli wraps gradle run)
+./scripts/startbackenddev.sh              # canonical dev start (pass-cli wraps gradle run)
 
 # Frontend
 cd src/frontend && npm run dev             # port 4321
 
 # CLI
 ./gradlew :cli:shadowJar                   # build once
-./scriptpp/secman <command>                # query servers, send-notifications, manage-user-mappings,
+./scripts/secman <command>                # query servers, send-notifications, manage-user-mappings,
                                            # add-vulnerability, add-requirement, export-requirements, ...
 
 # Tests
@@ -94,13 +94,13 @@ CrowdStrike monitoring: `src/clinotify/check_crowdstrike_checkin.py` polls `/api
 2. RBAC enforced at controller (`@Secured`) AND in UI.
 3. Schema = Flyway migrations + Hibernate auto-update.
 4. Always write tests. Source of truth for credentials and URLs is `pass-cli`.
-5. **A change is complete only when** `./gradlew build` is clean **AND** `./scriptpp/startbackenddev.sh` starts cleanly. Compile-clean ≠ runtime-clean (Micronaut bean wiring, Flyway, SessionFactory only check at startup). Stop the backend after verifying.
+5. **A change is complete only when** `./gradlew build` is clean **AND** `./scripts/startbackenddev.sh` starts cleanly. Compile-clean ≠ runtime-clean (Micronaut bean wiring, Flyway, SessionFactory only check at startup). Stop the backend after verifying.
 6. Tests route HTTP through `SECMAN_HOST` (from `pass-cli`). No hardcoded localhost URLs.
 7. **Mandatory post-change E2E gates** (in addition to build + startup):
    - **`/e2ejs`** must report **0 JS errors** for both admin and normal-user runs against `SECMAN_HOST`. RBAC 403s on role-gated endpoints and documented 404s (e.g., `/api/wg-vulns`, `/api/domain-vulns` for users without mappings) are NOT JS errors. A page that throws or logs `console.error` IS — fix before merge.
    - **`/e2evulnexception`** must run the full vuln + exception lifecycle (MCP + UI, setup + teardown) with **0 failures**.
 
-   Doc-only edits outside `src/`, `tests/`, `scriptpp/` may skip the gates — state so explicitly. Otherwise both gates are non-negotiable.
+   Doc-only edits outside `src/`, `tests/`, `scripts/` may skip the gates — state so explicitly. Otherwise both gates are non-negotiable.
 
 ## Patterns (worth knowing)
 

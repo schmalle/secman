@@ -16,10 +16,10 @@ import java.nio.file.Path
  * deleted on exit (no on-disk artifact).
  *
  * Usage:
- *   ./scriptpp/secman manage-user-mappings download-parse \
+ *   ./scripts/secman manage-user-mappings download-parse \
  *       --bucket my-bucket --key mappings.csv
  *
- *   ./scriptpp/secman manage-user-mappings download-parse \
+ *   ./scripts/secman manage-user-mappings download-parse \
  *       --bucket my-bucket --key data/mappings.json --aws-profile prod
  *
  * Differences vs the related S3 commands:

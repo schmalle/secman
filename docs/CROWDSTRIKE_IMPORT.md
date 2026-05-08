@@ -6,7 +6,7 @@ Spec: `specs/048-prevent-duplicate-vulnerabilities/`.
 CLI invocation:
 ```bash
 SECMAN_BACKEND_URL=https://secman.example.com SECMAN_SSL_INSECURE=true \
-  ./scriptpp/secmanng query servers --device-type SERVER \
+  ./scripts/secmanng query servers --device-type SERVER \
   --severity CRITICAL,HIGH --min-days-open 1 --last-seen-days 1 --save
 ```
 

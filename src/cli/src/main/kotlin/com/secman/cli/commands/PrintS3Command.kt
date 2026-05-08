@@ -18,19 +18,19 @@ import java.nio.file.Path
  * source of truth is the S3 file, not the DB.
  *
  * Usage:
- *   ./scriptpp/secman manage-user-mappings print-s3 \
+ *   ./scripts/secman manage-user-mappings print-s3 \
  *       --bucket my-bucket --key mappings.csv
  *
  *   # Show domain mappings instead of AWS account mappings
- *   ./scriptpp/secman manage-user-mappings print-s3 \
+ *   ./scripts/secman manage-user-mappings print-s3 \
  *       --bucket my-bucket --key mappings.csv --type DOMAIN
  *
  *   # Print everything (AWS + domain) as JSON
- *   ./scriptpp/secman manage-user-mappings print-s3 \
+ *   ./scripts/secman manage-user-mappings print-s3 \
  *       --bucket my-bucket --key mappings.csv --type ALL --format JSON
  *
  *   # Print as CSV (handy for piping into a diff with `list --output`)
- *   ./scriptpp/secman manage-user-mappings print-s3 \
+ *   ./scripts/secman manage-user-mappings print-s3 \
  *       --bucket my-bucket --key mappings.csv --format CSV
  *
  * Differences vs the related S3 commands:

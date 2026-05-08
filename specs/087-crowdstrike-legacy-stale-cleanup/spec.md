@@ -125,7 +125,7 @@ These are the locked technical decisions captured from the user's input. They ar
 - **No backfill**: legacy rows are NOT backfilled with a synthetic `crowdstrike_last_imported_at`; they are deleted via the new rule.
 - **De-duplication strategy**: `.distinctBy { it.id }` after combining the two candidate lists; the order in which rules are evaluated does not change which candidate "wins" the reason since downstream code treats both identically for deletion.
 - **Scheduled job uses the configured default**: the daily cleanup scheduler reads `secman.crowdstrike.cleanup.include-legacy` and does not accept a per-run override (only manual API runs do).
-- **Mandatory gates** per project policy: `./gradlew build` clean, `./scriptpp/startbackenddev.sh` starts cleanly (then stop), `/e2ejs` reports 0 errors for admin and normal-user runs against `SECMAN_HOST`, `/e2evulnexception` runs with 0 failures.
+- **Mandatory gates** per project policy: `./gradlew build` clean, `./scripts/startbackenddev.sh` starts cleanly (then stop), `/e2ejs` reports 0 errors for admin and normal-user runs against `SECMAN_HOST`, `/e2evulnexception` runs with 0 failures.
 
 ## Dependencies
 

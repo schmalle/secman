@@ -8,22 +8,22 @@
 ### Required Tools
 - `curl` - HTTP client (usually pre-installed)
 - `jq` - JSON processor (`brew install jq` on macOS)
-- `op` - 1Password CLI v2.x (`brew install 1password-cli`)
+- `pass-cli` (Proton Pass) v2.x (`brew install pass-cli`)
 
-### 1Password Setup
+### Proton Pass Setup
 ```bash
-# Login to 1Password
-op signin
+# Login to Proton Pass
+pass-cli login
 
 # Verify access to vault
-op vault list
+pass-cli vault list
 ```
 
 ### Environment Variables
 Set these in your shell profile or before running the test:
 ```bash
-export SECMAN_ADMIN_NAME="op://test/secman/SECMAN_ADMIN_NAME"
-export SECMAN_ADMIN_PASS="op://test/secman/SECMAN_ADMIN_PASS"
+export SECMAN_ADMIN_NAME="pass://test/secman/SECMAN_ADMIN_NAME"
+export SECMAN_ADMIN_PASS="pass://test/secman/SECMAN_ADMIN_PASS"
 export SECMAN_MCP_KEY="pass://test/secman/SECMAN_MCP_KEY"
 ```
 
@@ -51,7 +51,7 @@ DEBUG=1 ./tests/mcp-e2e-workgroup-test.sh
 ```
 === MCP E2E Test: User-Asset-Workgroup Workflow ===
 [INFO] Checking prerequisites...
-[INFO] Resolving credentials from 1Password...
+[INFO] Resolving credentials from Proton Pass...
 [INFO] Authenticating to secman...
 [INFO] Step 1: Creating TEST user with VULN role...
 [INFO] Step 2: Creating test asset with CRITICAL vulnerability...
@@ -73,8 +73,8 @@ DEBUG=1 ./tests/mcp-e2e-workgroup-test.sh
 ### Step 1: Authenticate
 ```bash
 # Resolve credentials
-USERNAME=$(op read "op://test/secman/SECMAN_ADMIN_NAME")
-PASSWORD=$(op read "op://test/secman/SECMAN_ADMIN_PASS")
+USERNAME=$(pass-cli read "pass://test/secman/SECMAN_ADMIN_NAME")
+PASSWORD=$(pass-cli read "pass://test/secman/SECMAN_ADMIN_PASS")
 
 # Get JWT token
 TOKEN=$(curl -s -X POST http://localhost:8080/api/auth/login \
@@ -210,13 +210,13 @@ curl -s -X POST http://localhost:8080/api/mcp/tools/call \
 
 ## Troubleshooting
 
-### 1Password CLI Issues
+### `pass-cli` (Proton Pass) Issues
 ```bash
 # Check if signed in
-op whoami
+pass-cli whoami
 
 # Re-authenticate if needed
-op signin
+pass-cli login
 ```
 
 ### Backend Not Reachable

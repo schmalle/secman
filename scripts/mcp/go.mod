@@ -1,3 +1,3 @@
-module github.com/schmalle/secman/scriptpp/mcp
+module github.com/schmalle/secman/scripts/mcp
 
 go 1.22

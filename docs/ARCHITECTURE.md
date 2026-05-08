@@ -193,6 +193,6 @@ src/
   frontend/src/{pages,components,services,layouts}/
   cli/src/main/kotlin/com/secman/cli/{commands,service}/
 docs/
-scriptpp/             all scripts (./scripts deprecated)
+scripts/             all scripts (./scripts deprecated)
 specs/                historical implementation plans
 ```

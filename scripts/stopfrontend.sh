@@ -1,1 +1,1 @@
-sudo systemctl stop secman-backend.service
+sudo systemctl stop secman-frontend.service

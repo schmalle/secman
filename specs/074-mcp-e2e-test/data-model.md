@@ -84,7 +84,7 @@ enum class McpPermission {
        │
        ▼
 ┌─────────────────────────┐
-│  Resolve Credentials    │ (1Password → env vars)
+│  Resolve Credentials    │ (Proton Pass → env vars)
 └──────────┬──────────────┘
            │
            ▼

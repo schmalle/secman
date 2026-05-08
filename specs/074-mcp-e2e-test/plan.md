@@ -5,12 +5,12 @@
 
 ## Summary
 
-Implement 5 new MCP tools for workgroup management (`create_workgroup`, `delete_workgroup`, `assign_assets_to_workgroup`, `assign_users_to_workgroup`, `delete_asset`), update the MCP key generation UI to display the new WORKGROUPS_WRITE permission, and create an E2E Bash test script that validates the complete user-asset-workgroup access control workflow using 1Password for credential management.
+Implement 5 new MCP tools for workgroup management (`create_workgroup`, `delete_workgroup`, `assign_assets_to_workgroup`, `assign_users_to_workgroup`, `delete_asset`), update the MCP key generation UI to display the new WORKGROUPS_WRITE permission, and create an E2E Bash test script that validates the complete user-asset-workgroup access control workflow using Proton Pass for credential management.
 
 ## Technical Context
 
 **Language/Version**: Kotlin 2.3.0 / Java 25 (backend), Bash (test script), TypeScript/React 19 (frontend)
-**Primary Dependencies**: Micronaut 4.10, Hibernate JPA, curl, jq, 1Password CLI v2.x
+**Primary Dependencies**: Micronaut 4.10, Hibernate JPA, curl, jq, `pass-cli` (Proton Pass) v2.x
 **Storage**: MariaDB 11.4 (existing tables: users, assets, vulnerabilities, workgroups, user_workgroups, asset_workgroups)
 **Testing**: E2E Bash script with assertions, manual verification for UI
 **Target Platform**: Linux/macOS server (localhost for test script)
@@ -141,7 +141,7 @@ main()
 ### Runtime Dependencies (Test Script)
 - curl (HTTP client)
 - jq (JSON parser)
-- op (1Password CLI v2.x)
+- pass-cli (Proton Pass) v2.x
 
 ### Service Dependencies
 - WorkgroupService (existing)
@@ -151,7 +151,7 @@ main()
 ## Security Considerations
 
 1. **Authorization**: All new tools require ADMIN role via user delegation
-2. **Credential Protection**: Test script uses 1Password CLI, never echoes secrets
+2. **Credential Protection**: Test script uses `pass-cli` (Proton Pass), never echoes secrets
 3. **Input Validation**: All tool inputs validated against schema before processing
 4. **Audit Trail**: Operations logged via existing audit infrastructure
 5. **Access Control**: Workgroup assignment respects RBAC model

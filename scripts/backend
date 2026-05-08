@@ -1,4 +1,4 @@
 #!/bin/bash
 # secman - CLI wrapper for secman security management tool
 
-op run --env-file ./secman.env -- gradle :backendng:run
+pass-cli run --env-file ./secmanpp.env -- gradle :backendng:run

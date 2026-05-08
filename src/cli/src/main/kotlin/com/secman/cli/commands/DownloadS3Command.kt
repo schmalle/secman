@@ -19,14 +19,14 @@ import java.nio.file.StandardCopyOption
  * target object.
  *
  * Usage:
- *   ./scriptpp/secman manage-user-mappings download-s3 \
+ *   ./scripts/secman manage-user-mappings download-s3 \
  *       --bucket my-bucket --key mappings.csv --output aws-mappings.csv
  *
- *   ./scriptpp/secman manage-user-mappings download-s3 \
+ *   ./scripts/secman manage-user-mappings download-s3 \
  *       --bucket my-bucket --key data/users.json --aws-profile prod \
  *       --output ./users.json
  *
- *   ./scriptpp/secman manage-user-mappings download-s3 \
+ *   ./scripts/secman manage-user-mappings download-s3 \
  *       --bucket my-bucket --key mappings.csv \
  *       --aws-access-key-id AKIA... --aws-secret-access-key ... \
  *       --output mappings.csv

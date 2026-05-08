@@ -38,8 +38,8 @@ brew install openjdk@21 node@20 mariadb@11.4 git
 ```bash
 git clone https://github.com/schmalle/secman.git && cd secman
 sudo systemctl enable --now mariadb
-cd scriptpp/install/db && ./installdb.sh && cd -    # DB 'secman', user 'secman'/'CHANGEME'
-./scriptpp/startbackenddev.sh                       # canonical dev start
+cd scripts/install/db && ./installdb.sh && cd -    # DB 'secman', user 'secman'/'CHANGEME'
+./scripts/startbackenddev.sh                       # canonical dev start
 cd src/frontend && npm install && npm run dev       # http://localhost:4321
 ```
 
@@ -51,7 +51,7 @@ On first startup the backend logs a 20-char random admin password — **copy it 
   Password: <…> (CHANGE IMMEDIATELY!)
 ==========================================================
 ```
-If you miss it, reset: `./scriptpp/reset_database.sh` (or `DELETE FROM user_roles; DELETE FROM users;` then restart) — a fresh password will be generated.
+If you miss it, reset: `./scripts/reset_database.sh` (or `DELETE FROM user_roles; DELETE FROM users;` then restart) — a fresh password will be generated.
 
 ## Manual DB setup (alternative to `installdb.sh`)
 
@@ -144,14 +144,14 @@ Full nginx + SSL + fail2ban guide: `docs/DEPLOYMENT.md`.
 
 ```bash
 ./gradlew :cli:shadowJar
-./scriptpp/secman help                              # always go through the wrapper
-./scriptpp/secman query servers --dry-run
-./scriptpp/secman send-notifications --dry-run
-./scriptpp/secman manage-user-mappings list --send-email --dry-run
-./scriptpp/secman add-vulnerability --hostname host --cve CVE-2024-1234 --criticality HIGH
+./scripts/secman help                              # always go through the wrapper
+./scripts/secman query servers --dry-run
+./scripts/secman send-notifications --dry-run
+./scripts/secman manage-user-mappings list --send-email --dry-run
+./scripts/secman add-vulnerability --hostname host --cve CVE-2024-1234 --criticality HIGH
 ```
 
-`./scriptpp/secman` resolves secrets via `pass-cli` (Proton Pass). See `docs/PASS_CLI.md`.
+`./scripts/secman` resolves secrets via `pass-cli` (Proton Pass). See `docs/PASS_CLI.md`.
 
 ## Verify
 
@@ -168,7 +168,7 @@ curl -X POST http://localhost:8080/api/auth/login \
 | Symptom | Fix |
 |---|---|
 | "Cannot connect to database" | `systemctl status mariadb`; verify `DB_*` env vars; `mysql -u secman -p secman` |
-| Missed admin password | `./scriptpp/reset_database.sh` then restart |
+| Missed admin password | `./scripts/reset_database.sh` then restart |
 | Port 8080 / 4321 in use | `lsof -i :8080`; kill or set `MICRONAUT_SERVER_PORT=8081` / edit `astro.config.mjs` |
 | Gradle build fails | `java -version` (must be 21); `./gradlew clean build` |
 | `npm install` fails | `npm cache clean --force`; `rm -rf src/frontend/node_modules src/frontend/package-lock.json && npm install` |

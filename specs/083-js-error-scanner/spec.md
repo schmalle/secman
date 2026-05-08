@@ -3,7 +3,7 @@
 **Feature Branch**: `083-js-error-scanner`
 **Created**: 2026-03-20
 **Status**: Draft
-**Input**: User description: "Create a test script that retrieves authentication data and SECMAN_HOST the same way as ./scriptpp/secmanng, logs in using SECMAN_USER and SECMAN_ADMIN_PASS from 1Password, visits every page in secman, and reports which subpages/URIs contain JavaScript errors. Must work with self-signed certificates."
+**Input**: User description: "Create a test script that retrieves authentication data and SECMAN_HOST the same way as ./scripts/secmanng, logs in using SECMAN_USER and SECMAN_ADMIN_PASS from Proton Pass, visits every page in secman, and reports which subpages/URIs contain JavaScript errors. Must work with self-signed certificates."
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -17,31 +17,31 @@ A developer or QA engineer runs a single test script from the `tests/` directory
 
 **Acceptance Scenarios**:
 
-1. **Given** a running secman instance with valid credentials in 1Password, **When** the script is executed, **Then** it authenticates successfully and visits all known secman pages.
+1. **Given** a running secman instance with valid credentials in Proton Pass, **When** the script is executed, **Then** it authenticates successfully and visits all known secman pages.
 2. **Given** a page with a JavaScript error (e.g., undefined variable, failed API call), **When** the script visits that page, **Then** the error is captured and associated with the page URI in the report.
 3. **Given** all pages load without JavaScript errors, **When** the script completes, **Then** it reports a clean result with zero errors and lists all pages visited.
 
 ---
 
-### User Story 2 - 1Password Credential Integration (Priority: P1)
+### User Story 2 - Proton Pass Credential Integration (Priority: P1)
 
-The script retrieves SECMAN_USER, SECMAN_ADMIN_PASS, and SECMAN_HOST from 1Password using the same `op://test/secman/` vault references as the existing `./scriptpp/secmanng` wrapper. This ensures credentials are never hardcoded and the script works consistently with the existing toolchain.
+The script retrieves SECMAN_USER, SECMAN_ADMIN_PASS, and SECMAN_HOST from Proton Pass using the same `pass://test/secman/` vault references as the existing `./scripts/secmanng` wrapper. This ensures credentials are never hardcoded and the script works consistently with the existing toolchain.
 
 **Why this priority**: Without secure credential retrieval, the script cannot authenticate. This is a prerequisite for all other functionality.
 
-**Independent Test**: Can be tested by running the script and observing it resolves 1Password references and authenticates — verified by a successful login (no auth errors in output).
+**Independent Test**: Can be tested by running the script and observing it resolves Proton Pass references and authenticates — verified by a successful login (no auth errors in output).
 
 **Acceptance Scenarios**:
 
-1. **Given** 1Password CLI (`op`) is installed and the user is authenticated, **When** the script runs, **Then** credentials are resolved from `op://test/secman/` vault references.
-2. **Given** 1Password CLI is not installed, **When** the script runs, **Then** it exits immediately with a clear error message explaining the dependency.
-3. **Given** the 1Password session has expired, **When** the script runs, **Then** `op run` prompts for re-authentication before proceeding.
+1. **Given** `pass-cli` is installed and the user is authenticated, **When** the script runs, **Then** credentials are resolved from `pass://test/secman/` vault references.
+2. **Given** `pass-cli` (Proton Pass) is not installed, **When** the script runs, **Then** it exits immediately with a clear error message explaining the dependency.
+3. **Given** the Proton Pass session has expired, **When** the script runs, **Then** `pass-cli run` prompts for re-authentication before proceeding.
 
 ---
 
 ### User Story 3 - Self-Signed Certificate Support (Priority: P1)
 
-The script works against secman instances using self-signed TLS certificates without failing on certificate validation errors. It reads the `SECMAN_SSL_ACCEPT_ALL` flag from 1Password (same as `./scriptpp/secmanng`) and configures the headless browser to accept self-signed certificates when enabled.
+The script works against secman instances using self-signed TLS certificates without failing on certificate validation errors. It reads the `SECMAN_SSL_ACCEPT_ALL` flag from Proton Pass (same as `./scripts/secmanng`) and configures the headless browser to accept self-signed certificates when enabled.
 
 **Why this priority**: Many development and staging environments use self-signed certificates; without this, the script would fail in the most common testing scenarios.
 
@@ -49,7 +49,7 @@ The script works against secman instances using self-signed TLS certificates wit
 
 **Acceptance Scenarios**:
 
-1. **Given** `SECMAN_SSL_ACCEPT_ALL` is set to `true`/`1`/`yes` in 1Password, **When** the script connects to an instance with a self-signed certificate, **Then** the connection succeeds without TLS errors.
+1. **Given** `SECMAN_SSL_ACCEPT_ALL` is set to `true`/`1`/`yes` in Proton Pass, **When** the script connects to an instance with a self-signed certificate, **Then** the connection succeeds without TLS errors.
 2. **Given** `SECMAN_SSL_ACCEPT_ALL` is not set or is `false`, **When** the script connects to an instance with a self-signed certificate, **Then** the default certificate validation behavior applies.
 
 ---
@@ -81,7 +81,7 @@ After visiting all pages, the script produces a structured summary report showin
 
 ### Functional Requirements
 
-- **FR-001**: Script MUST retrieve `SECMAN_ADMIN_NAME`, `SECMAN_ADMIN_PASS`, `SECMAN_HOST`, and `SECMAN_SSL_ACCEPT_ALL` from 1Password using `op://test/secman/` vault references, matching the pattern used in `./scriptpp/secmanng`.
+- **FR-001**: Script MUST retrieve `SECMAN_ADMIN_NAME`, `SECMAN_ADMIN_PASS`, `SECMAN_HOST`, and `SECMAN_SSL_ACCEPT_ALL` from Proton Pass using `pass://test/secman/` vault references, matching the pattern used in `./scripts/secmanng`.
 - **FR-002**: Script MUST authenticate against the secman instance by performing a login using the retrieved credentials and storing the authentication token for subsequent page visits.
 - **FR-003**: Script MUST visit all statically-routable pages in secman (pages without dynamic `[id]` parameters) using a headless browser that captures JavaScript console errors.
 - **FR-004**: Script MUST capture both uncaught JavaScript exceptions and `console.error` messages on each page, labeling them separately in the report (e.g., "UNCAUGHT EXCEPTION" vs. "CONSOLE ERROR") and associating each with the page URI. Both types affect the exit code.
@@ -89,7 +89,7 @@ After visiting all pages, the script produces a structured summary report showin
 - **FR-006**: Script MUST produce a summary report listing: total pages visited, count of pages with errors, count of clean pages, and for each errored page the URI and the specific error messages — with uncaught exceptions and console errors clearly distinguished by label.
 - **FR-007**: Script MUST exit with code 0 when no JavaScript errors are found, and exit with code 1 when errors are detected.
 - **FR-008**: Script MUST apply a per-page timeout to prevent hanging on unresponsive pages, reporting timed-out pages separately from JS errors.
-- **FR-009**: Script MUST check for 1Password CLI availability before proceeding and display a clear error message if it is not installed.
+- **FR-009**: Script MUST check for `pass-cli` (Proton Pass) availability before proceeding and display a clear error message if it is not installed.
 - **FR-010**: Script MUST be a standalone executable script located in the `tests/` directory with a descriptive name.
 
 ## Success Criteria *(mandatory)*
@@ -98,7 +98,7 @@ After visiting all pages, the script produces a structured summary report showin
 
 - **SC-001**: The script completes a full scan of all static secman pages in under 5 minutes on a typical development instance.
 - **SC-002**: 100% of JavaScript errors present on visited pages are captured and reported — no silent failures.
-- **SC-003**: The script can be run by any team member with 1Password access using a single command with no manual setup beyond having the `op` CLI and a headless browser available.
+- **SC-003**: The script can be run by any team member with Proton Pass access using a single command with no manual setup beyond having the `pass-cli` CLI and a headless browser available.
 - **SC-004**: The exit code accurately reflects the scan result: 0 for clean, non-zero for errors found — enabling use in automated checks.
 - **SC-005**: The script successfully operates against instances with self-signed certificates without manual certificate installation or browser configuration by the user.
 
@@ -113,5 +113,5 @@ After visiting all pages, the script produces a structured summary report showin
 - The secman frontend is an Astro + React application with file-based routing; all page URIs can be derived from the `src/frontend/src/pages/` directory structure.
 - Pages requiring dynamic parameters (e.g., `/outdated-assets/[id]`, `/releases/[id]`) will be skipped rather than requiring test data setup, as the goal is a quick smoke test of all static pages.
 - The script will use a headless browser (Playwright is already a project dependency in `tests/e2e/`) with built-in console error capture and self-signed certificate support.
-- The 1Password vault `test/secman` contains all required fields: `SECMAN_ADMIN_NAME`, `SECMAN_ADMIN_PASS`, `SECMAN_HOST`, and `SECMAN_SSL_ACCEPT_ALL`.
+- The Proton Pass vault `test/secman` contains all required fields: `SECMAN_ADMIN_NAME`, `SECMAN_ADMIN_PASS`, `SECMAN_HOST`, and `SECMAN_SSL_ACCEPT_ALL`.
 - Admin-only pages may show permission errors for non-admin users; permission-denied UI responses are not counted as JavaScript errors unless they cause uncaught exceptions.

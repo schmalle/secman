@@ -60,19 +60,19 @@
 
 **Rationale**: `NODE_TLS_REJECT_UNAUTHORIZED=0` handles any Node.js-level HTTPS calls (e.g., if the script makes direct fetch calls). `ignoreHTTPSErrors: true` in the Playwright browser context handles the browser's certificate validation. Both are needed for complete coverage.
 
-**Detection**: Read `SECMAN_SSL_ACCEPT_ALL` from environment (resolved by `op run` from 1Password). Parse `true`/`1`/`yes` case-insensitively, matching the pattern in `./scriptpp/secmanng`.
+**Detection**: Read `SECMAN_SSL_ACCEPT_ALL` from environment (resolved by `pass-cli run` from Proton Pass). Parse `true`/`1`/`yes` case-insensitively, matching the pattern in `./scripts/secmanng`.
 
-### 5. 1Password Credential Fields
+### 5. Proton Pass Credential Fields
 
-**Decision**: Use `SECMAN_ADMIN_NAME` and `SECMAN_ADMIN_PASS` from `op://test/secman/` vault, plus `SECMAN_HOST` and `SECMAN_SSL_ACCEPT_ALL`.
+**Decision**: Use `SECMAN_ADMIN_NAME` and `SECMAN_ADMIN_PASS` from `pass://test/secman/` vault, plus `SECMAN_HOST` and `SECMAN_SSL_ACCEPT_ALL`.
 
-**Rationale**: These are the same fields used by `./scriptpp/secmanng`. The e2e tests use different fields (`SECMAN_ADMIN_NAME`, `SECMAN_ADMIN_PASS`) but the user explicitly requested the `./scriptpp/secmanng` pattern.
+**Rationale**: These are the same fields used by `./scripts/secmanng`. The e2e tests use different fields (`SECMAN_ADMIN_NAME`, `SECMAN_ADMIN_PASS`) but the user explicitly requested the `./scripts/secmanng` pattern.
 
 **Fields**:
-- `SECMAN_ADMIN_NAME` → `op://test/secman/SECMAN_ADMIN_NAME`
-- `SECMAN_ADMIN_PASS` → `op://test/secman/SECMAN_ADMIN_PASS`
-- `SECMAN_BACKEND_URL` → `op://test/secman/SECMAN_HOST` (the backend/frontend host)
-- `SECMAN_INSECURE` → `op://test/secman/SECMAN_SSL_ACCEPT_ALL`
+- `SECMAN_ADMIN_NAME` → `pass://test/secman/SECMAN_ADMIN_NAME`
+- `SECMAN_ADMIN_PASS` → `pass://test/secman/SECMAN_ADMIN_PASS`
+- `SECMAN_BACKEND_URL` → `pass://test/secman/SECMAN_HOST` (the backend/frontend host)
+- `SECMAN_INSECURE` → `pass://test/secman/SECMAN_SSL_ACCEPT_ALL`
 
 ### 6. Page Load Wait Strategy
 
