@@ -234,6 +234,34 @@ class CliHttpClient(
     }
 
     /**
+     * Send a DELETE request returning the HTTP status code and (optionally) the parsed
+     * body. Used by destructive admin operations (delete asset, bulk delete) so the
+     * caller can distinguish 200 / 403 / 404 / 409 / 422 / 500 for clear exit codes.
+     */
+    fun deleteMapWithStatus(url: String, authToken: String): Pair<Int, Map<*, *>?> {
+        val request = HttpRequest.DELETE<Any>(url)
+            .header("Authorization", "Bearer $authToken")
+            .accept(MediaType.APPLICATION_JSON)
+
+        return try {
+            val response = httpClient.toBlocking().exchange(request, Map::class.java)
+            response.status.code to response.body()
+        } catch (e: io.micronaut.http.client.exceptions.HttpClientResponseException) {
+            val status = e.status.code
+            val errorBody = try {
+                e.response.getBody(Map::class.java).orElse(null)
+            } catch (_: Exception) {
+                null
+            }
+            log.warn("DELETE {} returned {}: {}", url, status, e.message)
+            status to errorBody
+        } catch (e: Exception) {
+            log.error("DELETE {} error: {}", url, e.message)
+            -1 to null
+        }
+    }
+
+    /**
      * Send a GET request returning a list of maps (for array responses)
      */
     @Suppress("UNCHECKED_CAST")

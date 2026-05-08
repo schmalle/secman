@@ -2,8 +2,11 @@ package com.secman.cli
 
 import com.secman.cli.commands.AddRequirementCommand
 import com.secman.cli.commands.AddVulnerabilityCommand
+import com.secman.cli.commands.BroadcastEmailCommand
 import com.secman.cli.commands.ConfigCommand
 import com.secman.cli.commands.DeduplicateVulnerabilitiesCommand
+import com.secman.cli.commands.DeleteAllAssetsCommand
+import com.secman.cli.commands.DeleteAssetCommand
 import com.secman.cli.commands.DeleteAssetNotSeenCommand
 import com.secman.cli.commands.DeleteAllRequirementsCommand
 import com.secman.cli.commands.ExportRequirementsCommand
@@ -298,6 +301,27 @@ class SecmanCli {
                 }
                 0
             }
+            args[0] == "delete-asset" -> {
+                val subArgs = args.drop(1).toTypedArray()
+                createCliContext().use { ctx ->
+                    PicocliRunner.run(DeleteAssetCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
+            args[0] == "delete-all-assets" -> {
+                val subArgs = args.drop(1).toTypedArray()
+                createCliContext().use { ctx ->
+                    PicocliRunner.run(DeleteAllAssetsCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
+            args[0] == "broadcast-email" -> {
+                val subArgs = args.drop(1).toTypedArray()
+                createCliContext().use { ctx ->
+                    PicocliRunner.run(BroadcastEmailCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
             args[0] == "port-scan" -> {
                 // Port-scan internet-facing assets using nmap
                 val subArgs = args.drop(1).toTypedArray()
@@ -350,6 +374,7 @@ class SecmanCli {
                 send-notifications     Send email notifications for outdated assets
                 send-admin-summary     Send system statistics summary email to ADMIN users
                 send-notification-users  Send vulnerability notifications to users by AWS account
+                broadcast-email        Send a custom HTML email to every user with a recorded login (ADMIN)
 
               User & Access Management:
                 manage-user-mappings   Manage user mappings for domains and AWS accounts
@@ -361,6 +386,10 @@ class SecmanCli {
               Vulnerabilities:
                 add-vulnerability      Add or update a vulnerability for an asset
                 deduplicate-vulnerabilities  Remove duplicate vulnerability records (ADMIN)
+
+              Assets (ADMIN, destructive):
+                delete-asset           Delete a single asset by ID with cascade (ADMIN)
+                delete-all-assets      Delete ALL assets with cascade (ADMIN, --confirm)
                 delete-asset-not-seen  Delete CrowdStrike assets not imported for N days (ADMIN)
 
               Requirements:
@@ -717,6 +746,84 @@ class SecmanCli {
                   secman deduplicate-vulnerabilities --username admin --password secret
                   secman deduplicate-vulnerabilities --verbose
                   secman deduplicate-vulnerabilities --backend-url http://prod:8080
+            """.trimIndent(),
+
+            "delete-asset" to """
+                secman delete-asset - Delete a single asset by ID with cascade deletion
+
+                Usage: secman delete-asset <id> [options]
+
+                Requires: ADMIN role
+
+                Cascade deletes:
+                  - vulnerabilities
+                  - vulnerability exception requests
+                  - ASSET-type vulnerability exceptions
+
+                Options:
+                  --force-timeout          Force deletion even if it may exceed the server timeout estimate
+                  --backend-url <url>      Backend API URL (default: SECMAN_HOST, SECMAN_BACKEND_URL, or http://localhost:8080)
+                  --username <user>        Backend username with ADMIN role (or SECMAN_ADMIN_NAME env var)
+                  --password <pass>        Backend password (or SECMAN_ADMIN_PASS env var)
+                  --verbose, -v            Verbose output
+
+                Examples:
+                  secman delete-asset 42
+                  secman delete-asset 42 --force-timeout
+                  secman delete-asset 42 --backend-url https://secman.example.com
+            """.trimIndent(),
+
+            "delete-all-assets" to """
+                secman delete-all-assets - Delete ALL assets with cascade deletion
+
+                Usage: secman delete-all-assets --confirm [options]
+
+                WARNING: This is a destructive operation! Requires ADMIN role.
+
+                Cascade deletes:
+                  - vulnerabilities
+                  - scan results and scan ports
+                  - asset-workgroup links
+                  - demand.existing_asset_id references (nullified, demand rows preserved)
+
+                Options:
+                  --confirm                Required safety flag. Without --confirm, the command refuses to run.
+                  --backend-url <url>      Backend API URL (default: SECMAN_HOST, SECMAN_BACKEND_URL, or http://localhost:8080)
+                  --username <user>        Backend username with ADMIN role (or SECMAN_ADMIN_NAME env var)
+                  --password <pass>        Backend password (or SECMAN_ADMIN_PASS env var)
+                  --verbose, -v            Verbose output
+
+                Examples:
+                  secman delete-all-assets --confirm
+                  secman delete-all-assets --confirm --verbose
+            """.trimIndent(),
+
+            "broadcast-email" to """
+                secman broadcast-email - Send a custom HTML email broadcast to every user with a recorded login
+
+                Usage: secman broadcast-email --subject <subject> (--html <html> | --html-file <path>) [options]
+
+                Requires: ADMIN role
+
+                Options:
+                  --subject <text>         Email subject (1-255 characters, required)
+                  --html <html>            HTML body content
+                  --html-file <path>       Path to a file containing the HTML body
+                  --dry-run                Report planned recipient count without creating a broadcast job
+                  --backend-url <url>      Backend API URL (default: SECMAN_HOST, SECMAN_BACKEND_URL, or http://localhost:8080)
+                  --username <user>        Backend username with ADMIN role (or SECMAN_ADMIN_NAME env var)
+                  --password <pass>        Backend password (or SECMAN_ADMIN_PASS env var)
+                  --verbose, -v            Verbose output
+
+                Notes:
+                  Recipients are every user with `lastLogin != null`. The HTML body is rendered
+                  inside the SecMan branded shell (logo + footer). Use --dry-run to preview the
+                  recipient count before queueing a real broadcast.
+
+                Examples:
+                  secman broadcast-email --subject "Maintenance window" --dry-run
+                  secman broadcast-email --subject "Outage notice" --html "<p>The system will be down...</p>"
+                  secman broadcast-email --subject "Release notes" --html-file release-notes.html
             """.trimIndent(),
 
             "delete-asset-not-seen" to """

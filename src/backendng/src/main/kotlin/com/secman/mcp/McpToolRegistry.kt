@@ -92,7 +92,10 @@ class McpToolRegistry(
     // Feature: Workgroup AWS Account Assignment
     @Inject private val listWorkgroupAwsAccountsTool: ListWorkgroupAwsAccountsTool,
     @Inject private val addWorkgroupAwsAccountTool: AddWorkgroupAwsAccountTool,
-    @Inject private val removeWorkgroupAwsAccountTool: RemoveWorkgroupAwsAccountTool
+    @Inject private val removeWorkgroupAwsAccountTool: RemoveWorkgroupAwsAccountTool,
+    // Admin tools: outdated-asset cleanup + broadcast email
+    @Inject private val deleteOutdatedAssetsTool: DeleteOutdatedAssetsTool,
+    @Inject private val broadcastEmailTool: BroadcastEmailTool
 ) {
     private val logger = LoggerFactory.getLogger(McpToolRegistry::class.java)
 
@@ -181,7 +184,10 @@ class McpToolRegistry(
             // Feature: Workgroup AWS Account Assignment
             listWorkgroupAwsAccountsTool,
             addWorkgroupAwsAccountTool,
-            removeWorkgroupAwsAccountTool
+            removeWorkgroupAwsAccountTool,
+            // Admin tools: outdated-asset cleanup + broadcast email
+            deleteOutdatedAssetsTool,
+            broadcastEmailTool
         ).forEach { tool ->
             toolMap[tool.name] = tool
             logger.debug("Registered MCP tool: {}", tool.name)
@@ -450,6 +456,14 @@ class McpToolRegistry(
             // Feature: Workgroup AWS Account Assignment (ADMIN only via User Delegation)
             "list_workgroup_aws_accounts", "add_workgroup_aws_account", "remove_workgroup_aws_account" -> {
                 permissions.contains(McpPermission.WORKGROUPS_WRITE) // ADMIN role checked in tool execute()
+            }
+
+            // Admin tools: outdated-asset cleanup + broadcast email (ADMIN only via User Delegation)
+            "delete_outdated_assets" -> {
+                permissions.contains(McpPermission.ASSETS_READ) // ADMIN role checked in tool execute()
+            }
+            "broadcast_email" -> {
+                permissions.contains(McpPermission.NOTIFICATIONS_SEND) // ADMIN role checked in tool execute()
             }
 
             else -> false
