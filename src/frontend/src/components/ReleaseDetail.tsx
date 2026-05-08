@@ -20,6 +20,7 @@ import { canDeleteRelease } from '../utils/permissions';
 import ReleaseStatusActions from './ReleaseStatusActions';
 import ReleaseDeleteConfirm from './ReleaseDeleteConfirm';
 import Toast from './Toast';
+import RichContent from './RichContent';
 
 interface ReleaseDetailProps {
     releaseId: number;
@@ -86,14 +87,14 @@ const SnapshotDetailModal: React.FC<SnapshotDetailModalProps> = ({ snapshot, isO
 
                                 <dt className="col-sm-3">Details:</dt>
                                 <dd className="col-sm-9">
-                                    <div style={{ whiteSpace: 'pre-wrap' }}>{snapshot.details}</div>
+                                    <RichContent value={snapshot.details} />
                                 </dd>
 
                                 {snapshot.motivation && (
                                     <>
                                         <dt className="col-sm-3">Motivation:</dt>
                                         <dd className="col-sm-9">
-                                            <div style={{ whiteSpace: 'pre-wrap' }}>{snapshot.motivation}</div>
+                                            <RichContent value={snapshot.motivation} />
                                         </dd>
                                     </>
                                 )}
@@ -102,7 +103,7 @@ const SnapshotDetailModal: React.FC<SnapshotDetailModalProps> = ({ snapshot, isO
                                     <>
                                         <dt className="col-sm-3">Example:</dt>
                                         <dd className="col-sm-9">
-                                            <div style={{ whiteSpace: 'pre-wrap' }}>{snapshot.example}</div>
+                                            <RichContent value={snapshot.example} />
                                         </dd>
                                     </>
                                 )}
@@ -318,10 +319,12 @@ const ReleaseDetail: React.FC<ReleaseDetailProps> = ({ releaseId }) => {
         return date.toLocaleString();
     }
 
-    // Truncate text for table preview
+    // Truncate text for table preview. Strips HTML tags so HTML-authored bodies
+    // (from HtmlEditor) render as readable text instead of raw markup.
     function truncate(text: string, maxLength: number = 100): string {
         if (!text) return '';
-        return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+        const plain = text.includes('<') ? text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() : text;
+        return plain.length > maxLength ? plain.substring(0, maxLength) + '...' : plain;
     }
 
     // Render loading state

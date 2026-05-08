@@ -1,6 +1,7 @@
 package com.secman.controller
 
 import com.secman.domain.EmailBroadcastJob
+import com.secman.domain.EmailBroadcastTargetGroup
 import com.secman.service.EmailBroadcastService
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.annotation.*
@@ -31,8 +32,16 @@ open class EmailBroadcastController(
     private val log = LoggerFactory.getLogger(EmailBroadcastController::class.java)
 
     @Get("/recipients")
-    open fun recipientCount(): HttpResponse<Map<String, Long>> =
-        HttpResponse.ok(mapOf("count" to emailBroadcastService.recipientCount()))
+    open fun recipientCount(
+        @QueryValue(defaultValue = "ALL_USERS") targetGroup: EmailBroadcastTargetGroup,
+        authentication: Authentication
+    ): HttpResponse<Map<String, Any>> =
+        HttpResponse.ok(
+            mapOf(
+                "count" to emailBroadcastService.recipientCount(targetGroup, authentication.name),
+                "targetGroup" to targetGroup.name
+            )
+        )
 
     @Post
     open fun createBroadcast(
@@ -47,7 +56,8 @@ open class EmailBroadcastController(
         val job = emailBroadcastService.createJob(
             subject = request.subject,
             htmlContent = htmlText,
-            createdBy = authentication.name
+            createdBy = authentication.name,
+            targetGroup = request.targetGroup ?: EmailBroadcastTargetGroup.ALL_USERS
         )
 
         if (job.totalRecipients == 0) {
@@ -72,6 +82,7 @@ open class EmailBroadcastController(
     @io.micronaut.serde.annotation.Serdeable
     data class BroadcastRequest(
         @field:NotBlank @field:Size(max = 255) val subject: String,
-        @field:NotBlank @field:Size(max = 1_000_000) val htmlContent: String
+        @field:NotBlank @field:Size(max = 1_000_000) val htmlContent: String,
+        val targetGroup: EmailBroadcastTargetGroup? = null
     )
 }

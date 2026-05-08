@@ -2,6 +2,8 @@ package com.secman.service
 
 import com.secman.domain.EmailBroadcastJob
 import com.secman.domain.EmailBroadcastStatus
+import com.secman.domain.EmailBroadcastTargetGroup
+import com.secman.domain.User
 import com.secman.repository.EmailBroadcastJobRepository
 import com.secman.repository.UserRepository
 import io.micronaut.scheduling.TaskExecutors
@@ -27,15 +29,21 @@ open class EmailBroadcastService(
     private val log = LoggerFactory.getLogger(EmailBroadcastService::class.java)
 
     @Transactional
-    open fun createJob(subject: String, htmlContent: String, createdBy: String): EmailBroadcastJob {
-        val total = userRepository.countByLastLoginIsNotNull().toInt()
+    open fun createJob(
+        subject: String,
+        htmlContent: String,
+        createdBy: String,
+        targetGroup: EmailBroadcastTargetGroup
+    ): EmailBroadcastJob {
+        val total = resolveRecipients(targetGroup, createdBy).size
         val job = EmailBroadcastJob(
             status = EmailBroadcastStatus.PENDING,
             subject = subject.trim(),
             htmlContent = htmlContent,
             totalRecipients = total,
             createdBy = createdBy,
-            createdAt = LocalDateTime.now()
+            createdAt = LocalDateTime.now(),
+            targetGroup = targetGroup
         )
         return emailBroadcastJobRepository.save(job)
     }
@@ -62,8 +70,11 @@ open class EmailBroadcastService(
 
         markProcessing(jobId)
 
-        val recipients = userRepository.findByLastLoginIsNotNull()
-        log.info("Broadcast job {}: dispatching to {} recipients", jobId, recipients.size)
+        val recipients = resolveRecipients(job.targetGroup, job.createdBy)
+        log.info(
+            "Broadcast job {}: dispatching to {} recipients (targetGroup={})",
+            jobId, recipients.size, job.targetGroup
+        )
 
         val wrappedHtml = wrapWithBrand(job.subject, job.htmlContent)
         val textContent = htmlToText(job.htmlContent)
@@ -141,7 +152,33 @@ open class EmailBroadcastService(
 
     fun getJob(id: Long): EmailBroadcastJob? = emailBroadcastJobRepository.findById(id).orElse(null)
 
-    fun recipientCount(): Long = userRepository.countByLastLoginIsNotNull()
+    fun recipientCount(targetGroup: EmailBroadcastTargetGroup, requester: String): Long =
+        resolveRecipients(targetGroup, requester).size.toLong()
+
+    /**
+     * Single source of truth for "who receives this broadcast?".
+     *
+     * - ALL_USERS / ADMINS_ONLY / ADMINS_AND_SECCHAMPIONS: only users with lastLogin != null
+     *   (we never email accounts that have never been activated).
+     * - SELF: just the admin who triggered the broadcast — useful for previewing the rendered
+     *   email against a real inbox before sending to the wider audience.
+     */
+    internal fun resolveRecipients(targetGroup: EmailBroadcastTargetGroup, requester: String): List<User> {
+        return when (targetGroup) {
+            EmailBroadcastTargetGroup.ALL_USERS ->
+                userRepository.findByLastLoginIsNotNull()
+            EmailBroadcastTargetGroup.ADMINS_ONLY ->
+                userRepository.findByLastLoginIsNotNull()
+                    .filter { it.hasRole(User.Role.ADMIN) }
+            EmailBroadcastTargetGroup.ADMINS_AND_SECCHAMPIONS ->
+                userRepository.findByLastLoginIsNotNull()
+                    .filter { it.hasRole(User.Role.ADMIN) || it.hasRole(User.Role.SECCHAMPION) }
+            EmailBroadcastTargetGroup.SELF ->
+                userRepository.findByUsername(requester)
+                    .map { listOf(it) }
+                    .orElse(emptyList())
+        }
+    }
 
     private fun loadLogoInlineImage(): Map<String, Pair<ByteArray, String>> {
         return try {

@@ -6,9 +6,25 @@ import {
   getRecipientCount,
   listJobs,
   type EmailBroadcastJob,
+  type EmailBroadcastTargetGroup,
 } from '../../services/emailBroadcastService';
 
 const ACTIVE_STATUSES = new Set<EmailBroadcastJob['status']>(['PENDING', 'PROCESSING']);
+
+const TARGET_GROUP_OPTIONS: { value: EmailBroadcastTargetGroup; label: string; help: string }[] = [
+  { value: 'ALL_USERS', label: 'All users', help: 'Every activated SecMan user.' },
+  { value: 'ADMINS_ONLY', label: 'Admins only', help: 'Users with the ADMIN role.' },
+  {
+    value: 'ADMINS_AND_SECCHAMPIONS',
+    label: 'Admins and Sec Champions',
+    help: 'Users with the ADMIN or SECCHAMPION role.',
+  },
+  { value: 'SELF', label: 'Only me (preview)', help: 'Send a single test message to yourself.' },
+];
+
+function targetGroupLabel(group: EmailBroadcastTargetGroup): string {
+  return TARGET_GROUP_OPTIONS.find((opt) => opt.value === group)?.label ?? group;
+}
 
 function StatusBadge({ status }: { status: EmailBroadcastJob['status'] }) {
   const cls =
@@ -31,6 +47,7 @@ export default function EmailBroadcastManager() {
   const [recipientCount, setRecipientCount] = useState<number | null>(null);
   const [subject, setSubject] = useState('');
   const [html, setHtml] = useState('<p>Hello,</p><p>Type your announcement here.</p>');
+  const [targetGroup, setTargetGroup] = useState<EmailBroadcastTargetGroup>('ALL_USERS');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [jobs, setJobs] = useState<EmailBroadcastJob[]>([]);
@@ -38,9 +55,9 @@ export default function EmailBroadcastManager() {
   const [activeJobId, setActiveJobId] = useState<number | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const refresh = async () => {
+  const refresh = async (group: EmailBroadcastTargetGroup = targetGroup) => {
     try {
-      const [count, list] = await Promise.all([getRecipientCount(), listJobs()]);
+      const [count, list] = await Promise.all([getRecipientCount(group), listJobs()]);
       setRecipientCount(count);
       setJobs(list);
     } catch (e: unknown) {
@@ -50,8 +67,27 @@ export default function EmailBroadcastManager() {
   };
 
   useEffect(() => {
-    refresh();
+    refresh(targetGroup);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Re-query the recipient count whenever the audience selection changes.
+  useEffect(() => {
+    let cancelled = false;
+    setRecipientCount(null);
+    getRecipientCount(targetGroup)
+      .then((count) => {
+        if (!cancelled) setRecipientCount(count);
+      })
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        const msg = e instanceof Error ? e.message : 'Failed to load recipient count';
+        setError(msg);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [targetGroup]);
 
   // Poll while there's an active job in the list.
   useEffect(() => {
@@ -86,7 +122,11 @@ export default function EmailBroadcastManager() {
     setError(null);
     setSubmitting(true);
     try {
-      const job = await createBroadcast({ subject: subject.trim(), htmlContent: html });
+      const job = await createBroadcast({
+        subject: subject.trim(),
+        htmlContent: html,
+        targetGroup,
+      });
       setActiveJobId(job.id);
       setJobs((prev) => [job, ...prev]);
       setConfirmOpen(false);
@@ -135,7 +175,8 @@ export default function EmailBroadcastManager() {
                 <strong>
                   {recipientCount === null ? '…' : recipientCount}
                 </strong>{' '}
-                user{recipientCount === 1 ? '' : 's'} (excludes pending accounts that have never logged in)
+                user{recipientCount === 1 ? '' : 's'}
+                {targetGroup !== 'SELF' && ' (excludes pending accounts that have never logged in)'}
               </span>
             </div>
             <div className="card-body">
@@ -144,6 +185,27 @@ export default function EmailBroadcastManager() {
                   {error}
                 </div>
               )}
+
+              <div className="mb-3">
+                <label htmlFor="targetGroup" className="form-label">
+                  Target audience
+                </label>
+                <select
+                  id="targetGroup"
+                  className="form-select"
+                  value={targetGroup}
+                  onChange={(e) => setTargetGroup(e.target.value as EmailBroadcastTargetGroup)}
+                >
+                  {TARGET_GROUP_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+                <div className="form-text">
+                  {TARGET_GROUP_OPTIONS.find((opt) => opt.value === targetGroup)?.help}
+                </div>
+              </div>
 
               <div className="mb-3">
                 <label htmlFor="subject" className="form-label">
@@ -175,7 +237,8 @@ export default function EmailBroadcastManager() {
                   onClick={() => setConfirmOpen(true)}
                 >
                   <i className="bi bi-send me-1"></i>
-                  Send to {recipientCount ?? '…'} user{recipientCount === 1 ? '' : 's'}
+                  Send to {recipientCount ?? '…'} {targetGroupLabel(targetGroup).toLowerCase()}{' '}
+                  recipient{recipientCount === 1 ? '' : 's'}
                 </button>
                 <button
                   type="button"
@@ -236,7 +299,11 @@ export default function EmailBroadcastManager() {
           <div className="card">
             <div className="card-header d-flex justify-content-between align-items-center">
               <h5 className="mb-0">Recent broadcasts</h5>
-              <button type="button" className="btn btn-sm btn-outline-secondary" onClick={refresh}>
+              <button
+                type="button"
+                className="btn btn-sm btn-outline-secondary"
+                onClick={() => refresh(targetGroup)}
+              >
                 <i className="bi bi-arrow-clockwise"></i>
               </button>
             </div>
@@ -251,6 +318,9 @@ export default function EmailBroadcastManager() {
                       </div>
                       <div className="small text-muted">
                         {j.createdBy} · {new Date(j.createdAt).toLocaleString()}
+                      </div>
+                      <div className="small text-muted">
+                        Audience: {targetGroupLabel(j.targetGroup ?? 'ALL_USERS')}
                       </div>
                     </div>
                     <StatusBadge status={j.status} />
@@ -308,9 +378,12 @@ export default function EmailBroadcastManager() {
                 <p>
                   This will send the email to{' '}
                   <strong>
-                    {recipientCount ?? 0} user{recipientCount === 1 ? '' : 's'}
-                  </strong>
-                  . Pending accounts that have never logged in are excluded.
+                    {recipientCount ?? 0} recipient{recipientCount === 1 ? '' : 's'}
+                  </strong>{' '}
+                  in the audience{' '}
+                  <strong>{targetGroupLabel(targetGroup)}</strong>.
+                  {targetGroup !== 'SELF' &&
+                    ' Pending accounts that have never logged in are excluded.'}
                 </p>
                 <p className="mb-0">
                   Subject: <em>{subject}</em>

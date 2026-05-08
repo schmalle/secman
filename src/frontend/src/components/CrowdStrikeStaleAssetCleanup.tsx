@@ -50,14 +50,43 @@ const CrowdStrikeStaleAssetCleanup: React.FC = () => {
     const [includeLegacy, setIncludeLegacy] = useState<boolean>(false);
 
     useEffect(() => {
-        const user = (window as any).currentUser;
-        const admin = user?.roles?.includes('ADMIN') || false;
-        setIsAdmin(admin);
-        if (admin) {
-            void load();
+        let timeoutId: ReturnType<typeof setTimeout> | null = null;
+        let eventHandled = false;
+
+        const resolve = () => {
+            const user = (window as any).currentUser;
+            const admin = user?.roles?.includes('ADMIN') || false;
+            setIsAdmin(admin);
+            if (admin) {
+                void load();
+            } else {
+                setLoading(false);
+            }
+        };
+
+        // window.currentUser is populated asynchronously by auth-init.ts.
+        // If the island hydrates first, wait for the userLoaded event (with timeout).
+        if ((window as any).currentUser !== undefined) {
+            resolve();
         } else {
-            setLoading(false);
+            const onLoaded = () => {
+                eventHandled = true;
+                if (timeoutId) clearTimeout(timeoutId);
+                resolve();
+            };
+            window.addEventListener('userLoaded', onLoaded, { once: true });
+            timeoutId = setTimeout(() => {
+                if (!eventHandled) {
+                    window.removeEventListener('userLoaded', onLoaded);
+                    setIsAdmin(false);
+                    setLoading(false);
+                }
+            }, 5000);
         }
+
+        return () => {
+            if (timeoutId) clearTimeout(timeoutId);
+        };
     }, []);
 
     const load = async () => {

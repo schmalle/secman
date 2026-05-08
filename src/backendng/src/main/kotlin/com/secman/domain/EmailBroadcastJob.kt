@@ -56,7 +56,12 @@ class EmailBroadcastJob(
     var startedAt: LocalDateTime? = null,
 
     @Column(name = "completed_at")
-    var completedAt: LocalDateTime? = null
+    var completedAt: LocalDateTime? = null,
+
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Enumerated(EnumType.STRING)
+    @Column(name = "target_group", nullable = false, length = 40)
+    var targetGroup: EmailBroadcastTargetGroup = EmailBroadcastTargetGroup.ALL_USERS
 ) {
     fun progressPercent(): Int {
         if (totalRecipients == 0) return 0
@@ -69,4 +74,11 @@ enum class EmailBroadcastStatus {
     PROCESSING,
     COMPLETED,
     FAILED
+}
+
+enum class EmailBroadcastTargetGroup {
+    ALL_USERS,
+    ADMINS_ONLY,
+    ADMINS_AND_SECCHAMPIONS,
+    SELF
 }

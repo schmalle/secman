@@ -55,11 +55,13 @@ const AssetVulnTable: React.FC<AssetVulnTableProps> = ({ assets, awsAccountId })
         );
     }
 
+    // bg-success/bg-danger/etc. are forced solid via !important in bootstrap-overrides.css,
+    // which defeats bg-opacity-10 and makes text-* the same hue as bg — invisible numbers.
     const getVulnBadgeClass = (count: number): string => {
-        if (count === 0) return 'bg-success bg-opacity-10 text-success border border-success';
-        if (count < 10) return 'bg-secondary bg-opacity-10 text-secondary border border-secondary';
-        if (count < 50) return 'bg-warning bg-opacity-10 text-warning border border-warning';
-        return 'bg-danger bg-opacity-10 text-danger border border-danger';
+        if (count === 0) return 'scand-success';
+        if (count < 10) return 'scand-medium';
+        if (count < 50) return 'scand-high';
+        return 'scand-critical';
     };
 
     return (

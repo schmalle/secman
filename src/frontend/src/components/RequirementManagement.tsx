@@ -1,8 +1,9 @@
 import { Fragment, useState, useEffect } from 'react';
-import ReactMarkdown from 'react-markdown'; // Import ReactMarkdown
 import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete } from '../utils/auth';
 import ReleaseIndicator from './ReleaseIndicator';
 import ReleaseSelector from './ReleaseSelector';
+import HtmlEditor from './admin/HtmlEditor';
+import RichContent from './RichContent';
 
 interface UseCase {
     id: number;
@@ -317,12 +318,29 @@ export default function RequirementManagement() {
                 ? `/api/requirements/${selectedRequirement.id}` 
                 : '/api/requirements';
             
-            const response = selectedRequirement 
+            const response = selectedRequirement
                 ? await authenticatedPut(url, requirementDataToSubmit)
                 : await authenticatedPost(url, requirementDataToSubmit);
 
             if (response.ok) {
-                fetchRequirements();
+                // In release-view, /api/releases/{id}/requirements returns an
+                // immutable snapshot — refetching after a live edit re-reads the
+                // pre-edit text and makes the save look reverted. Patch the live
+                // response into local state so the row reflects what was saved.
+                if (selectedRequirement && selectedReleaseId !== null) {
+                    try {
+                        const saved = await response.json();
+                        if (saved && saved.id) {
+                            setRequirements(prev => prev.map(r =>
+                                r.id === saved.id ? { ...r, ...saved } : r
+                            ));
+                        }
+                    } catch {
+                        fetchRequirements();
+                    }
+                } else {
+                    fetchRequirements();
+                }
                 resetForm();
             }
         } catch (error) {
@@ -704,22 +722,12 @@ export default function RequirementManagement() {
                                         />
                                     </div>
 
-                                    {/* Details Field */}
-                                    {selectedRequirement && formData.details && (
-                                        <div className="mb-2 p-2 border rounded bg-light">
-                                            <label className="form-label fw-bold">Details Preview:</label>
-                                            <ReactMarkdown>{formData.details}</ReactMarkdown>
-                                        </div>
-                                    )}
                                     <div className="mb-3">
-                                        <label htmlFor="details" className="form-label">Details</label>
-                                        <textarea
-                                            className="form-control"
-                                            id="details"
-                                            name="details"
-                                            value={formData.details}
-                                            onChange={handleInputChange}
-                                            rows={5} // Increased rows slightly
+                                        <label className="form-label">Details</label>
+                                        <HtmlEditor
+                                            value={formData.details || ''}
+                                            onChange={(html) => setFormData(prev => ({ ...prev, details: html }))}
+                                            minHeight={220}
                                         />
                                     </div>
 
@@ -735,34 +743,21 @@ export default function RequirementManagement() {
                                         />
                                     </div>
 
-                                    {/* Example Field */}
-                                    {selectedRequirement && formData.example && (
-                                        <div className="mb-2 p-2 border rounded bg-light">
-                                            <label className="form-label fw-bold">Example Preview:</label>
-                                            <ReactMarkdown>{formData.example}</ReactMarkdown>
-                                        </div>
-                                    )}
                                     <div className="mb-3">
-                                        <label htmlFor="example" className="form-label">Example</label>
-                                        <textarea
-                                            className="form-control"
-                                            id="example"
-                                            name="example"
-                                            value={formData.example}
-                                            onChange={handleInputChange}
-                                            rows={5} // Increased rows slightly
+                                        <label className="form-label">Example</label>
+                                        <HtmlEditor
+                                            value={formData.example || ''}
+                                            onChange={(html) => setFormData(prev => ({ ...prev, example: html }))}
+                                            minHeight={180}
                                         />
                                     </div>
 
                                     <div className="mb-3">
-                                        <label htmlFor="motivation" className="form-label">Motivation</label>
-                                        <textarea
-                                            className="form-control"
-                                            id="motivation"
-                                            name="motivation"
-                                            value={formData.motivation}
-                                            onChange={handleInputChange}
-                                            rows={3}
+                                        <label className="form-label">Motivation</label>
+                                        <HtmlEditor
+                                            value={formData.motivation || ''}
+                                            onChange={(html) => setFormData(prev => ({ ...prev, motivation: html }))}
+                                            minHeight={140}
                                         />
                                     </div>
 
@@ -1094,7 +1089,7 @@ export default function RequirementManagement() {
                                                                 <>
                                                                     <dt className="col-sm-2 text-muted">Details</dt>
                                                                     <dd className="col-sm-10">
-                                                                        <ReactMarkdown>{req.details}</ReactMarkdown>
+                                                                        <RichContent value={req.details} />
                                                                     </dd>
                                                                 </>
                                                             )}
@@ -1102,7 +1097,7 @@ export default function RequirementManagement() {
                                                                 <>
                                                                     <dt className="col-sm-2 text-muted">Motivation</dt>
                                                                     <dd className="col-sm-10">
-                                                                        <ReactMarkdown>{req.motivation}</ReactMarkdown>
+                                                                        <RichContent value={req.motivation} />
                                                                     </dd>
                                                                 </>
                                                             )}
@@ -1110,7 +1105,7 @@ export default function RequirementManagement() {
                                                                 <>
                                                                     <dt className="col-sm-2 text-muted">Example</dt>
                                                                     <dd className="col-sm-10">
-                                                                        <ReactMarkdown>{req.example}</ReactMarkdown>
+                                                                        <RichContent value={req.example} />
                                                                     </dd>
                                                                 </>
                                                             )}

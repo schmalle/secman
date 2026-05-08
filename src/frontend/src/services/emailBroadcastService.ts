@@ -5,6 +5,12 @@ const ROOT = `${API_BASE}/admin/email-broadcast`;
 
 export type EmailBroadcastStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
 
+export type EmailBroadcastTargetGroup =
+  | 'ALL_USERS'
+  | 'ADMINS_ONLY'
+  | 'ADMINS_AND_SECCHAMPIONS'
+  | 'SELF';
+
 export interface EmailBroadcastJob {
   id: number;
   status: EmailBroadcastStatus;
@@ -18,15 +24,22 @@ export interface EmailBroadcastJob {
   createdAt: string;
   startedAt: string | null;
   completedAt: string | null;
+  targetGroup: EmailBroadcastTargetGroup;
 }
 
 export interface BroadcastRequest {
   subject: string;
   htmlContent: string;
+  targetGroup: EmailBroadcastTargetGroup;
 }
 
-export async function getRecipientCount(): Promise<number> {
-  const res = await axios.get<{ count: number }>(`${ROOT}/recipients`);
+export async function getRecipientCount(
+  targetGroup: EmailBroadcastTargetGroup = 'ALL_USERS',
+): Promise<number> {
+  const res = await axios.get<{ count: number; targetGroup: EmailBroadcastTargetGroup }>(
+    `${ROOT}/recipients`,
+    { params: { targetGroup } },
+  );
   return res.data.count;
 }
 

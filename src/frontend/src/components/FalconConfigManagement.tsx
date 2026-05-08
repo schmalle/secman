@@ -30,20 +30,44 @@ const FalconConfigManagement = () => {
     });
 
     useEffect(() => {
-        checkAdminAndLoadConfigs();
-    }, []);
+        let timeoutId: ReturnType<typeof setTimeout> | null = null;
+        let eventHandled = false;
 
-    const checkAdminAndLoadConfigs = async () => {
-        const user = (window as any).currentUser;
-        const hasAdmin = user?.roles?.includes('ADMIN') || false;
-        setIsAdmin(hasAdmin);
+        const resolve = () => {
+            const user = (window as any).currentUser;
+            const hasAdmin = user?.roles?.includes('ADMIN') || false;
+            setIsAdmin(hasAdmin);
+            if (hasAdmin) {
+                void loadConfigs();
+            } else {
+                setLoading(false);
+            }
+        };
 
-        if (hasAdmin) {
-            await loadConfigs();
+        // window.currentUser is populated asynchronously by auth-init.ts.
+        // If the island hydrates first, wait for the userLoaded event (with timeout).
+        if ((window as any).currentUser !== undefined) {
+            resolve();
         } else {
-            setLoading(false);
+            const onLoaded = () => {
+                eventHandled = true;
+                if (timeoutId) clearTimeout(timeoutId);
+                resolve();
+            };
+            window.addEventListener('userLoaded', onLoaded, { once: true });
+            timeoutId = setTimeout(() => {
+                if (!eventHandled) {
+                    window.removeEventListener('userLoaded', onLoaded);
+                    setIsAdmin(false);
+                    setLoading(false);
+                }
+            }, 5000);
         }
-    };
+
+        return () => {
+            if (timeoutId) clearTimeout(timeoutId);
+        };
+    }, []);
 
     const loadConfigs = async () => {
         try {
@@ -164,6 +188,18 @@ const FalconConfigManagement = () => {
         setFormData({ clientId: '', clientSecret: '', cloudRegion: 'us-1' });
     };
 
+    if (loading) {
+        return (
+            <div className="container mt-4">
+                <div className="d-flex justify-content-center">
+                    <div className="spinner-border" role="status">
+                        <span className="visually-hidden">Checking permissions…</span>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     if (!isAdmin) {
         return (
             <div className="container mt-4">
@@ -175,17 +211,6 @@ const FalconConfigManagement = () => {
         );
     }
 
-    if (loading) {
-        return (
-            <div className="container mt-4">
-                <div className="text-center">
-                    <div className="spinner-border" role="status">
-                        <span className="visually-hidden">Loading...</span>
-                    </div>
-                </div>
-            </div>
-        );
-    }
 
     return (
         <div className="container mt-4">

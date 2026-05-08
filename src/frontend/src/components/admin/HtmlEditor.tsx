@@ -1,4 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
+import DOMPurify from 'dompurify';
+
+// Sanitize before innerHTML assignment: stored content may have come from
+// another author and can contain attribute-based XSS payloads
+// (e.g. `<img onerror=...>`) that fire on innerHTML even inside contentEditable.
+const sanitizeHtml = (html: string): string =>
+  DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
 
 interface Props {
   value: string;
@@ -26,15 +33,25 @@ const TOOLBAR: ToolbarButton[] = [
 export default function HtmlEditor({ value, onChange, minHeight = 280 }: Props) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [showSource, setShowSource] = useState(false);
-  const lastEmittedRef = useRef(value);
+  // Sentinel `null` ensures the first effect run always populates the DOM,
+  // so editing an existing record loads its body. Equal-comparison thereafter
+  // skips DOM writes during user typing (which would reset the caret).
+  const lastEmittedRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!ref.current) return;
     if (value !== lastEmittedRef.current) {
-      ref.current.innerHTML = value;
+      // SAFETY: sanitize before innerHTML assignment.
+      ref.current.innerHTML = sanitizeHtml(value);
       lastEmittedRef.current = value;
+    } else if (!showSource && ref.current.innerHTML !== value) {
+      // Re-mount after toggling out of source view leaves the new
+      // contentEditable empty even though `value` is unchanged. Re-sync
+      // without touching `lastEmittedRef` so emit-tracking stays correct.
+      // SAFETY: sanitize before innerHTML assignment.
+      ref.current.innerHTML = sanitizeHtml(value);
     }
-  }, [value]);
+  }, [value, showSource]);
 
   const exec = (cmd: string, arg?: string) => {
     ref.current?.focus();
