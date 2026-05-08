@@ -26,15 +26,15 @@ import java.time.LocalDateTime
  * history view shows every actual deletion regardless of trigger.
  */
 @Singleton
-open class CrowdStrikeCleanupAuditService(
-    @Inject private val cleanupService: CrowdStrikeAssetCleanupService,
-    @Inject private val runRepository: CrowdStrikeCleanupRunRepository,
-    @Inject private val assetRepository: AssetRepository,
-    @Inject private val notificationService: CrowdStrikeCleanupNotificationService,
+open class CrowdStrikeCleanupAuditService @Inject constructor(
+    private val cleanupService: CrowdStrikeAssetCleanupService,
+    private val runRepository: CrowdStrikeCleanupRunRepository,
+    private val assetRepository: AssetRepository,
+    private val notificationService: CrowdStrikeCleanupNotificationService,
     // Feature 087: configured default for the legacy rule (rule B). Manual API
     // runs may override per-call via run(includeLegacy = ...); the scheduler
     // never overrides and always reads this value.
-    @Value("\${secman.crowdstrike.cleanup.include-legacy:false}") private val includeLegacyDefault: Boolean = false
+    @Value("\${secman.crowdstrike.cleanup.include-legacy:false}") private val includeLegacyDefault: Boolean
 ) {
     private val logger = LoggerFactory.getLogger(CrowdStrikeCleanupAuditService::class.java)
     private var clock: Clock = Clock.systemDefaultZone()
