@@ -253,6 +253,21 @@ const AdminPage = () => {
                     <div className="card">
                         <div className="card-body">
                             <h5 className="card-title">
+                                <i className="bi bi-megaphone-fill me-2"></i>
+                                Email Broadcast
+                            </h5>
+                            <p className="card-text">Compose and send a one-off HTML email to every active SecMan user.</p>
+                            <a href="/admin/email-broadcast" className="btn btn-primary">
+                                Compose Broadcast
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="col-md-4 mb-3">
+                    <div className="card">
+                        <div className="card-body">
+                            <h5 className="card-title">
                                 <i className="bi bi-exclamation-triangle-fill text-warning me-2"></i>
                                 Maintenance Banners
                             </h5>
