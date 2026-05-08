@@ -1,5 +1,6 @@
 package com.secman.controller
 
+import com.secman.constants.AssetOwners
 import com.secman.domain.Asset
 import com.secman.domain.Criticality
 import com.secman.domain.NetworkZone
@@ -199,7 +200,7 @@ open class AssetController(
     @Secured("ADMIN", "SECCHAMPION")
     fun getOwnerCandidates(): HttpResponse<List<OwnerCandidate>> {
         val candidates = mutableListOf<OwnerCandidate>()
-        candidates.add(OwnerCandidate("CrowdStrike Import", "CrowdStrike Import"))
+        candidates.add(OwnerCandidate(AssetOwners.CROWDSTRIKE_IMPORT, AssetOwners.CROWDSTRIKE_IMPORT))
         val users = userRepository.findAll().sortedBy { it.username.lowercase() }
         for (user in users) {
             candidates.add(OwnerCandidate(user.username, "${user.username} (${user.email})"))
@@ -857,7 +858,8 @@ open class AssetController(
                 days = request.days,
                 dryRun = request.dryRun,
                 triggeredBy = authentication.name,
-                maxDeletePercent = null
+                maxDeletePercent = null,
+                includeLegacy = request.includeLegacy  // Feature 087 — null = use configured default
             )
             HttpResponse.ok(result)
         } catch (e: IllegalArgumentException) {

@@ -1,11 +1,14 @@
 package com.secman.service
 
+import com.secman.constants.AssetOwners
 import com.secman.domain.CrowdStrikeCleanupRun
 import com.secman.domain.CrowdStrikeCleanupStatus
+import com.secman.dto.CleanupCandidateReason
 import com.secman.dto.CrowdStrikeAssetCleanupErrorDto
 import com.secman.dto.CrowdStrikeAssetCleanupResponse
 import com.secman.repository.AssetRepository
 import com.secman.repository.CrowdStrikeCleanupRunRepository
+import io.micronaut.context.annotation.Value
 import jakarta.inject.Inject
 import jakarta.inject.Singleton
 import org.slf4j.LoggerFactory
@@ -23,11 +26,15 @@ import java.time.LocalDateTime
  * history view shows every actual deletion regardless of trigger.
  */
 @Singleton
-open class CrowdStrikeCleanupAuditService(
-    @Inject private val cleanupService: CrowdStrikeAssetCleanupService,
-    @Inject private val runRepository: CrowdStrikeCleanupRunRepository,
-    @Inject private val assetRepository: AssetRepository,
-    @Inject private val notificationService: CrowdStrikeCleanupNotificationService
+open class CrowdStrikeCleanupAuditService @Inject constructor(
+    private val cleanupService: CrowdStrikeAssetCleanupService,
+    private val runRepository: CrowdStrikeCleanupRunRepository,
+    private val assetRepository: AssetRepository,
+    private val notificationService: CrowdStrikeCleanupNotificationService,
+    // Feature 087: configured default for the legacy rule (rule B). Manual API
+    // runs may override per-call via run(includeLegacy = ...); the scheduler
+    // never overrides and always reads this value.
+    @Value("\${secman.crowdstrike.cleanup.include-legacy:false}") private val includeLegacyDefault: Boolean
 ) {
     private val logger = LoggerFactory.getLogger(CrowdStrikeCleanupAuditService::class.java)
     private var clock: Clock = Clock.systemDefaultZone()
@@ -37,8 +44,9 @@ open class CrowdStrikeCleanupAuditService(
         runRepository: CrowdStrikeCleanupRunRepository,
         assetRepository: AssetRepository,
         notificationService: CrowdStrikeCleanupNotificationService,
-        clock: Clock
-    ) : this(cleanupService, runRepository, assetRepository, notificationService) {
+        clock: Clock,
+        includeLegacyDefault: Boolean = false
+    ) : this(cleanupService, runRepository, assetRepository, notificationService, includeLegacyDefault) {
         this.clock = clock
     }
 
@@ -51,28 +59,34 @@ open class CrowdStrikeCleanupAuditService(
      * @param maxDeletePercent if set (0..100), aborts the run when the candidate
      *                         set exceeds this percentage of CrowdStrike-tracked
      *                         assets. Manual runs typically pass null.
+     * @param includeLegacy Feature 087 — override for the legacy rule. `true`/`false`
+     *                      forces rule B on/off for this run; `null` (default)
+     *                      falls back to `secman.crowdstrike.cleanup.include-legacy`.
      */
     fun run(
         days: Int,
         dryRun: Boolean,
         triggeredBy: String,
-        maxDeletePercent: Int? = null
+        maxDeletePercent: Int? = null,
+        includeLegacy: Boolean? = null
     ): CrowdStrikeAssetCleanupResponse {
         require(days > 0) { "Days must be greater than zero" }
 
+        val effectiveIncludeLegacy = includeLegacy ?: includeLegacyDefault
+
         if (dryRun) {
-            return cleanupService.cleanup(days, dryRun = true, username = triggeredBy)
+            return cleanupService.cleanup(days, dryRun = true, username = triggeredBy, includeLegacy = effectiveIncludeLegacy)
         }
 
         val startedAt = LocalDateTime.now(clock)
 
         if (maxDeletePercent != null) {
-            val brakeOutcome = checkSafetyBrake(days, triggeredBy, startedAt, maxDeletePercent)
+            val brakeOutcome = checkSafetyBrake(days, triggeredBy, startedAt, maxDeletePercent, effectiveIncludeLegacy)
             if (brakeOutcome != null) return brakeOutcome
         }
 
         val response = try {
-            cleanupService.cleanup(days, dryRun = false, username = triggeredBy)
+            cleanupService.cleanup(days, dryRun = false, username = triggeredBy, includeLegacy = effectiveIncludeLegacy)
         } catch (e: Exception) {
             logger.error("CrowdStrike cleanup run failed (triggeredBy={})", triggeredBy, e)
             val failed = persistRun(
@@ -83,7 +97,9 @@ open class CrowdStrikeCleanupAuditService(
                 candidateCount = 0,
                 deletedCount = 0,
                 errorCount = 1,
-                totalTracked = safeTotal(),
+                legacyCandidateCount = 0,
+                legacyDeletedCount = 0,
+                totalTracked = safeTotalCombined(effectiveIncludeLegacy),
                 startedAt = startedAt,
                 errorMessage = e.message?.take(1000) ?: e.javaClass.simpleName
             )
@@ -121,7 +137,9 @@ open class CrowdStrikeCleanupAuditService(
             candidateCount = response.candidateCount,
             deletedCount = response.deletedCount,
             errorCount = response.errors.size,
-            totalTracked = safeTotal(),
+            legacyCandidateCount = response.legacyCandidateCount,
+            legacyDeletedCount = response.legacyDeletedCount,
+            totalTracked = safeTotalCombined(effectiveIncludeLegacy),
             startedAt = startedAt,
             errorMessage = null
         )
@@ -137,22 +155,39 @@ open class CrowdStrikeCleanupAuditService(
         days: Int,
         triggeredBy: String,
         startedAt: LocalDateTime,
-        maxDeletePercent: Int
+        maxDeletePercent: Int,
+        includeLegacy: Boolean
     ): CrowdStrikeAssetCleanupResponse? {
         if (maxDeletePercent >= 100) return null
 
         val cutoff = LocalDateTime.now(clock).minusDays(days.toLong())
-        val candidates = assetRepository.findByCrowdStrikeLastImportedAtBefore(cutoff)
+
+        // Rule A — timestamped CrowdStrike-stale assets.
+        val timestampCandidates = assetRepository.findByCrowdStrikeLastImportedAtBefore(cutoff)
             .count { it.crowdStrikeLastImportedAt != null && it.id != null }
-        val totalTracked = safeTotal()
+
+        // Rule B — legacy CrowdStrike-origin stale rows. Only counted into the
+        // numerator when the legacy rule is enabled for this run; otherwise
+        // treated as zero.
+        val legacyCandidates = if (includeLegacy) {
+            assetRepository.findLegacyCrowdStrikeStale(AssetOwners.CROWDSTRIKE_IMPORT, cutoff)
+                .count { it.id != null }
+        } else 0
+
+        val candidates = timestampCandidates + legacyCandidates
+
+        // Denominator widens to include the rule-B population so the
+        // percentage stays meaningful when rule B is active.
+        val totalTracked = safeTotalCombined(includeLegacy)
         if (totalTracked <= 0L) return null
 
         val percent = (candidates.toDouble() / totalTracked.toDouble()) * 100.0
         if (percent <= maxDeletePercent.toDouble()) return null
 
         logger.warn(
-            "CrowdStrike cleanup safety brake tripped: {} of {} tracked assets ({}%) exceeds max {}%",
-            candidates, totalTracked, "%.2f".format(percent), maxDeletePercent
+            "CrowdStrike cleanup safety brake tripped: {} (timestamp: {}, legacy: {}) of {} tracked assets ({}%) exceeds max {}%",
+            candidates, timestampCandidates, legacyCandidates,
+            totalTracked, "%.2f".format(percent), maxDeletePercent
         )
 
         val saved = persistRun(
@@ -163,6 +198,10 @@ open class CrowdStrikeCleanupAuditService(
             candidateCount = candidates,
             deletedCount = 0,
             errorCount = 0,
+            // Aborted before deletion: legacy candidate count records what
+            // *would have been* deleted; legacy deleted count is zero.
+            legacyCandidateCount = legacyCandidates,
+            legacyDeletedCount = 0,
             totalTracked = totalTracked,
             startedAt = startedAt,
             errorMessage = "Safety brake: ${"%.2f".format(percent)}% of CrowdStrike-tracked assets " +
@@ -186,7 +225,9 @@ open class CrowdStrikeCleanupAuditService(
                 )
             ),
             status = CrowdStrikeCleanupStatus.ABORTED_SAFETY_BRAKE.name,
-            runId = saved.id
+            runId = saved.id,
+            legacyCandidateCount = legacyCandidates,
+            legacyDeletedCount = 0
         )
     }
 
@@ -198,6 +239,8 @@ open class CrowdStrikeCleanupAuditService(
         candidateCount: Int,
         deletedCount: Int,
         errorCount: Int,
+        legacyCandidateCount: Int,
+        legacyDeletedCount: Int,
         totalTracked: Long,
         startedAt: LocalDateTime,
         errorMessage: String?
@@ -211,6 +254,8 @@ open class CrowdStrikeCleanupAuditService(
             candidateCount = candidateCount,
             deletedCount = deletedCount,
             errorCount = errorCount,
+            legacyCandidateCount = legacyCandidateCount,
+            legacyDeletedCount = legacyDeletedCount,
             totalCrowdStrikeTracked = totalTracked,
             startedAt = startedAt,
             completedAt = completedAt,
@@ -220,8 +265,18 @@ open class CrowdStrikeCleanupAuditService(
         return runRepository.save(run)
     }
 
-    private fun safeTotal(): Long = try {
-        assetRepository.countCrowdStrikeTracked()
+    /**
+     * Combined "total CrowdStrike-tracked" denominator. When `includeLegacy`
+     * is true, widens to include the rule-B population so the safety-brake
+     * percentage stays meaningful. When false, equals the original rule-A
+     * denominator.
+     */
+    private fun safeTotalCombined(includeLegacy: Boolean): Long = try {
+        val ruleA = assetRepository.countCrowdStrikeTracked()
+        val ruleB = if (includeLegacy) {
+            assetRepository.countLegacyCrowdStrikeTotal(AssetOwners.CROWDSTRIKE_IMPORT)
+        } else 0L
+        ruleA + ruleB
     } catch (e: Exception) {
         logger.warn("Failed to count CrowdStrike-tracked assets: {}", e.message)
         0L

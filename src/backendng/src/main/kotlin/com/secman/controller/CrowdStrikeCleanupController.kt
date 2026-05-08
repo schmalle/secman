@@ -29,7 +29,10 @@ open class CrowdStrikeCleanupController(
     private val runRepository: CrowdStrikeCleanupRunRepository,
     @Value("\${secman.crowdstrike.cleanup.enabled:false}") private val enabled: Boolean,
     @Value("\${secman.crowdstrike.cleanup.stale-days:30}") private val staleDays: Int,
-    @Value("\${secman.crowdstrike.cleanup.max-delete-percent:10}") private val maxDeletePercent: Int
+    @Value("\${secman.crowdstrike.cleanup.max-delete-percent:10}") private val maxDeletePercent: Int,
+    // Feature 087: configured default for the legacy rule (rule B). Surfaced to
+    // the admin UI so the toggle initial state matches the backend (spec SC-006).
+    @Value("\${secman.crowdstrike.cleanup.include-legacy:false}") private val includeLegacy: Boolean
 ) {
     private val log = LoggerFactory.getLogger(CrowdStrikeCleanupController::class.java)
 
@@ -38,7 +41,9 @@ open class CrowdStrikeCleanupController(
         val enabled: Boolean,
         val staleDays: Int,
         val maxDeletePercent: Int,
-        val cron: String
+        val cron: String,
+        // Feature 087.
+        val includeLegacy: Boolean
     )
 
     @Get("/config")
@@ -48,7 +53,8 @@ open class CrowdStrikeCleanupController(
                 enabled = enabled,
                 staleDays = staleDays,
                 maxDeletePercent = maxDeletePercent,
-                cron = "0 30 2 * * ?"
+                cron = "0 30 2 * * ?",
+                includeLegacy = includeLegacy
             )
         )
     }

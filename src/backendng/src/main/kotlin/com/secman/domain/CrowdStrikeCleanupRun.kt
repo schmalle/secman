@@ -59,6 +59,15 @@ data class CrowdStrikeCleanupRun(
     @Column(name = "error_count", nullable = false)
     var errorCount: Int = 0,
 
+    // Feature 087: rule-B contribution split. Defaults to 0 so historical rows
+    // (persisted before V210) and constructions that omit these fields continue
+    // to work. Populated for non-dry-run cleanups by CrowdStrikeCleanupAuditService.
+    @Column(name = "legacy_candidate_count", nullable = false)
+    var legacyCandidateCount: Int = 0,
+
+    @Column(name = "legacy_deleted_count", nullable = false)
+    var legacyDeletedCount: Int = 0,
+
     @Column(name = "total_crowdstrike_tracked", nullable = false)
     var totalCrowdStrikeTracked: Long = 0,
 

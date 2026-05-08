@@ -177,4 +177,13 @@ Triggered by `/e2eexception`, `/admin-asset-e2e`, `/e2ejs`, `/e2evulnexception` 
 
 ---
 
-*Last updated: 2026-05-03*
+*Last updated: 2026-05-08*
+
+## Recent Changes
+
+- **Feature 087** — CrowdStrike legacy stale-asset cleanup. Adds rule B alongside the existing timestamp rule:
+  - Canonical owner literal lives at `com.secman.constants.AssetOwners.CROWDSTRIKE_IMPORT`. Used as the writer in `CrowdStrikeVulnerabilityImportService.createNewAsset`, the dropdown source in `AssetController.getOwnerCandidates`, and the predicate parameter for `AssetRepository.findLegacyCrowdStrikeStale`.
+  - New flag `secman.crowdstrike.cleanup.include-legacy` (env: `CROWDSTRIKE_CLEANUP_INCLUDE_LEGACY`, default `false`) gates rule B. Manual runs may override per-call via `includeLegacy: Boolean?` on the request body.
+  - Rule-B fence: `owner = "CrowdStrike Import"` AND `crowdStrikeLastImportedAt IS NULL` AND no `manualCreator` AND no `scanUploader` AND `COALESCE(lastSeen, updatedAt, createdAt) < cutoff`.
+  - `crowdstrike_cleanup_run` gains `legacy_candidate_count` and `legacy_deleted_count` (V210). Safety brake denominator widens to `countCrowdStrikeTracked + countLegacyCrowdStrikeTotal` when `include-legacy` is on.
+  - Each cleanup candidate carries a `CleanupCandidateReason` enum (`TIMESTAMP_STALE` | `LEGACY_NULL_TIMESTAMP`) — surfaced in the dry-run summary and history table on the admin Falcon-config page.

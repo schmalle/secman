@@ -72,6 +72,7 @@ Daily scheduled job (02:30 server TZ) that deletes assets whose `crowdStrikeLast
 | `CROWDSTRIKE_CLEANUP_ENABLED` | `false` | opt-in master switch for the scheduled job |
 | `CROWDSTRIKE_CLEANUP_STALE_DAYS` | `30` | delete CrowdStrike-tracked assets last imported > N days ago |
 | `CROWDSTRIKE_CLEANUP_MAX_DELETE_PERCENT` | `10` | abort the scheduled run if candidates exceed this % of CrowdStrike-tracked assets; set `100` to disable the brake |
+| `CROWDSTRIKE_CLEANUP_INCLUDE_LEGACY` | `false` | also delete legacy CrowdStrike-imported assets where `crowdStrikeLastImportedAt IS NULL` (Feature 087, "rule B"). Four-part fence: `owner='CrowdStrike Import'` AND no import timestamp AND no `manualCreator` AND no `scanUploader` AND `COALESCE(lastSeen, updatedAt, createdAt) < cutoff`. Gates BOTH the scheduled job AND the configured default of the manual-run override (which can override per-run via the `includeLegacy` request field). Manually-created and scan-uploaded assets are protected. |
 
 Notifications: ADMIN users receive an email whenever a run deletes ≥1 asset, hits errors, or trips the safety brake. "Boring" runs (0 deletions, 0 errors) are silent.
 
@@ -159,6 +160,7 @@ SECMAN_AUTH_COOKIE_SECURE=true
 # CROWDSTRIKE_CLEANUP_ENABLED=false
 # CROWDSTRIKE_CLEANUP_STALE_DAYS=30
 # CROWDSTRIKE_CLEANUP_MAX_DELETE_PERCENT=10
+# CROWDSTRIKE_CLEANUP_INCLUDE_LEGACY=false
 ```
 
 `/etc/secman/frontend.env`:
