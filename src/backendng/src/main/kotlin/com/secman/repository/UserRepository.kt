@@ -107,6 +107,14 @@ interface UserRepository : JpaRepository<User, Long> {
     """)
     fun findByRolesContaining(role: User.Role): List<User>
 
+    /**
+     * Find all users that have logged in at least once.
+     * Used by the admin broadcast feature to skip pending (never-activated) accounts.
+     */
+    fun findByLastLoginIsNotNull(): List<User>
+
+    fun countByLastLoginIsNotNull(): Long
+
     // Note: For other admin user queries, use findAll() and filter in service layer
     // (e.g., users.filter { it.hasRole(Role.ADMIN) })
 }
