@@ -25,8 +25,8 @@
 #   VERBOSE=true for debug logging
 #
 # Usage:
-#   pass-cli run --env-file ./secmanpp.env -- ./scriptpp/test/test-e2e-vuln-exception-full.sh
-#   ./scriptpp/test/test-e2e-vuln-exception-full.sh --verbose
+#   pass-cli run --env-file ./secmanpp.env -- ./scripts/test/test-e2e-vuln-exception-full.sh
+#   ./scripts/test/test-e2e-vuln-exception-full.sh --verbose
 #
 
 set -euo pipefail
@@ -877,7 +877,7 @@ else
     log "=== Phase 9: Web UI (Playwright) ==="
 
     if ! curl -sf -o /dev/null --connect-timeout 5 "$FRONTEND_URL" 2>/dev/null; then
-        fail "Frontend not reachable at $FRONTEND_URL — start it with ./scriptpp/startfrontenddev.sh"
+        fail "Frontend not reachable at $FRONTEND_URL — start it with ./scripts/startfrontenddev.sh"
     fi
 
     if [[ -z "$ADMIN_USERNAME" || -z "$ADMIN_PASSWORD" ]]; then

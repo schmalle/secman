@@ -1,5 +1,5 @@
 ```
-  # With 1Password:
+  # With Proton Pass:
   ./tests/e2e/run-e2e.sh
 
   # Manually:

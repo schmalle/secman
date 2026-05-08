@@ -848,7 +848,7 @@ Expected: BUILD SUCCESSFUL with no test failures across all modules.
 - [ ] **Step 2: Backend startup smoke test**
 
 ```bash
-./scriptpp/startbackenddev.sh
+./scripts/startbackenddev.sh
 ```
 
 Watch for these log lines (in any order):

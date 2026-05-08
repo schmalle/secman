@@ -49,9 +49,9 @@ Required tools: `curl`, `jq` (`brew install jq` / `apt-get install jq`).
 ## Run
 
 ```bash
-SECMAN_MCP_KEY=sk-… ./scriptpp/test/test-e2e-exception-workflowsupport.sh
-SECMAN_MCP_KEY=sk-… BASE_URL=http://localhost:8080 ./scriptpp/test/test-e2e-exception-workflowsupport.sh
-SECMAN_MCP_KEY=sk-… ./scriptpp/test/test-e2e-exception-workflowsupport.sh --verbose
+SECMAN_MCP_KEY=sk-… ./scripts/test/test-e2e-exception-workflowsupport.sh
+SECMAN_MCP_KEY=sk-… BASE_URL=http://localhost:8080 ./scripts/test/test-e2e-exception-workflowsupport.sh
+SECMAN_MCP_KEY=sk-… ./scripts/test/test-e2e-exception-workflowsupport.sh --verbose
 ```
 
 | Env | Required | Default |
@@ -93,6 +93,6 @@ SECMAN_MCP_KEY=sk-… ./scriptpp/test/test-e2e-exception-workflowsupport.sh --ve
   env:
     SECMAN_MCP_KEY: ${{ secrets.MCP_ADMIN_API_KEY }}
     BASE_URL: http://localhost:8080
-  run: ./scriptpp/test/test-e2e-exception-workflowsupport.sh
+  run: ./scripts/test/test-e2e-exception-workflowsupport.sh
 ```
 Backend must be running before this step.

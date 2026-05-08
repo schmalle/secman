@@ -54,13 +54,13 @@
 
 ### 4. E2E Test Approach
 
-**Decision**: New bash script at `scripts/release-e2e-test.sh` using direct env vars (SECMAN_ADMIN_NAME, SECMAN_ADMIN_PASS, SECMAN_MCP_KEY) without 1Password dependency.
+**Decision**: New bash script at `scripts/release-e2e-test.sh` using direct env vars (SECMAN_ADMIN_NAME, SECMAN_ADMIN_PASS, SECMAN_MCP_KEY) without Proton Pass dependency.
 
-**Rationale**: The existing `tests/release-e2e-test.sh` requires 1Password CLI (`op`). The new script uses plain environment variables per spec FR-012, making it portable for CI environments.
+**Rationale**: The existing `tests/release-e2e-test.sh` requires `pass-cli`. The new script uses plain environment variables per spec FR-012, making it portable for CI environments.
 
 **Alternatives considered**:
 - Modify existing test at `tests/release-e2e-test.sh` (rejected: different authentication approach, different test scope)
-- Use 1Password integration (rejected: spec says use env vars directly)
+- Use Proton Pass integration (rejected: spec says use env vars directly)
 
 ### 5. Ownership-Based Delete Logic
 

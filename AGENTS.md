@@ -7,13 +7,13 @@
 - `src/frontend/` — Astro + React; pages in `src/pages/`, components in `src/components/`, Playwright in `tests/`.
 - `src/cli/` — Picocli CLI.
 - `src/shared/` — code shared between backend and CLI.
-- `scriptpp/` — **all** scripts (`./scripts/` is deprecated). `tests/`, `docker/`, `docs/`.
+- `scripts/` — **all** scripts (`./scripts/` is deprecated). `tests/`, `docker/`, `docs/`.
 
 ## Build, run, test
-- Backend dev: `./scriptpp/startbackenddev.sh` (canonical — wraps `gradle run` with `pass-cli`-resolved env).
+- Backend dev: `./scripts/startbackenddev.sh` (canonical — wraps `gradle run` with `pass-cli`-resolved env).
 - Build everything (incl. tests): `./gradlew build`.
 - Frontend: `cd src/frontend && npm install && npm run dev`; production check `npm run build && npm run preview`; lint `npm run lint`.
-- CLI: build once `./gradlew :cli:shadowJar`, then `./scriptpp/secman <cmd>`.
+- CLI: build once `./gradlew :cli:shadowJar`, then `./scripts/secman <cmd>`.
 
 ## Style
 - Kotlin: 4-space indent, `UpperCamelCase` types, constructor injection, immutable data classes; ktlint if configured.
@@ -28,7 +28,7 @@ Always write tests for new code. JUnit 6 + Mockk for unit; Testcontainers (Maria
 - Flag schema changes, feature toggles, manual data steps, new dependencies.
 
 ## Security & secrets
-- Secrets via `pass-cli` only — never commit, never reintroduce `op run`.
+- Secrets via `pass-cli` only — never commit.
 - Copy `.env.example` → `.env` for local overrides (gitignored).
 - Update sample configs and docs when ports/env vars change.
 - Authentication, encryption, RBAC, or export changes require a security review before merge.

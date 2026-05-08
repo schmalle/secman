@@ -1312,14 +1312,14 @@ Expected: `BUILD SUCCESSFUL`.
 
 Run:
 ```bash
-cd /Users/flake/sources/misc/secman && ./scriptpp/startbackenddev.sh 2>&1 | tail -50
+cd /Users/flake/sources/misc/secman && ./scripts/startbackenddev.sh 2>&1 | tail -50
 ```
 Wait until the Micronaut banner appears with "Started application in N seconds". Then send Ctrl-C to stop. Expected: clean startup, no Hibernate warnings about the new entities/events, no bean-wiring failures.
 
 If the startup output goes to a log rather than stdout in your shell, instead:
 
 ```bash
-cd /Users/flake/sources/misc/secman && (./scriptpp/startbackenddev.sh > /tmp/secman-backend.log 2>&1 &) && sleep 30 && tail -80 /tmp/secman-backend.log
+cd /Users/flake/sources/misc/secman && (./scripts/startbackenddev.sh > /tmp/secman-backend.log 2>&1 &) && sleep 30 && tail -80 /tmp/secman-backend.log
 ```
 
 Then verify the log shows "Started application", and stop the backend:

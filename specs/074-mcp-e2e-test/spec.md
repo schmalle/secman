@@ -3,7 +3,7 @@
 **Feature Branch**: `074-mcp-e2e-test`
 **Created**: 2026-02-04
 **Status**: Draft
-**Input**: User description: "MCP E2E test script for complete user-asset-workgroup workflow using 1Password credentials"
+**Input**: User description: "MCP E2E test script for complete user-asset-workgroup workflow using Proton Pass credentials"
 
 ## Clarifications
 
@@ -53,7 +53,7 @@ The test script requires MCP operations that do not currently exist. These missi
 
 ### User Story 3 - Secure Credential Management (Priority: P2)
 
-The test script uses 1Password CLI to securely retrieve credentials rather than storing them in plain text. Environment variables reference 1Password secret URIs.
+The test script uses `pass-cli` (Proton Pass) to securely retrieve credentials rather than storing them in plain text. Environment variables reference Proton Pass secret URIs.
 
 **Why this priority**: Security best practice - credentials should never be hardcoded or stored in plain text in test scripts.
 
@@ -61,9 +61,9 @@ The test script uses 1Password CLI to securely retrieve credentials rather than 
 
 **Acceptance Scenarios**:
 
-1. **Given** environment variables `SECMAN_ADMIN_NAME`, `SECMAN_ADMIN_PASS`, `SECMAN_MCP_KEY` set with Proton Pass URIs (e.g., `pass://test/secman/SECMAN_ADMIN_NAME`), **When** the test script starts, **Then** credentials are resolved using `op run` or `pass-cli item view`
-2. **Given** 1Password credentials are resolved, **When** authenticating to secman, **Then** authentication succeeds and a session token is obtained
-3. **Given** 1Password is not available or credentials are missing, **When** the test script starts, **Then** a clear error message is shown explaining the missing prerequisites
+1. **Given** environment variables `SECMAN_ADMIN_NAME`, `SECMAN_ADMIN_PASS`, `SECMAN_MCP_KEY` set with Proton Pass URIs (e.g., `pass://test/secman/SECMAN_ADMIN_NAME`), **When** the test script starts, **Then** credentials are resolved using `pass-cli run` or `pass-cli item view`
+2. **Given** Proton Pass credentials are resolved, **When** authenticating to secman, **Then** authentication succeeds and a session token is obtained
+3. **Given** Proton Pass is not available or credentials are missing, **When** the test script starts, **Then** a clear error message is shown explaining the missing prerequisites
 
 ---
 
@@ -86,7 +86,7 @@ When new MCP tools are added, the MCP key generation UI must be updated to displ
 ### Edge Cases
 
 - What happens when the TEST user already exists from a previous failed run? The script should handle cleanup gracefully or detect and remove stale test data at startup.
-- What happens when 1Password CLI (`op`) is not installed? The script should fail fast with a clear error message.
+- What happens when `pass-cli` is not installed? The script should fail fast with a clear error message.
 - What happens when the secman backend is not reachable? The script should timeout with a meaningful error.
 - What happens when a workgroup with the same name exists? The script should use unique names (e.g., with timestamp) or clean up first.
 - What happens if cleanup fails midway? Partial cleanup should be handled gracefully with warnings about remaining artifacts.
@@ -103,7 +103,7 @@ When new MCP tools are added, the MCP key generation UI must be updated to displ
 - **FR-004a**: System MUST provide MCP tool `delete_asset` that removes a specific asset by ID (ADMIN role required)
 
 **Test Script Workflow:**
-- **FR-005**: Test script MUST use 1Password CLI to resolve credentials from environment variable URIs
+- **FR-005**: Test script MUST use `pass-cli` (Proton Pass) to resolve credentials from environment variable URIs
 - **FR-006**: Test script MUST authenticate using provided credentials before performing MCP operations
 - **FR-007**: Test script MUST create a user named "TEST" with VULN role via MCP
 - **FR-008**: Test script MUST create an asset via MCP (using `add_vulnerability` which auto-creates assets)
@@ -140,16 +140,16 @@ When new MCP tools are added, the MCP key generation UI must be updated to displ
 - **SC-002**: All 5 new MCP tools (create_workgroup, assign_assets_to_workgroup, assign_users_to_workgroup, delete_workgroup, delete_asset) are implemented and callable
 - **SC-003**: TEST user, when listing assets via MCP, sees exactly 1 asset after workgroup assignment
 - **SC-004**: After cleanup, no test artifacts remain in the system (user, asset, workgroup all deleted)
-- **SC-005**: Test script works with 1Password-referenced environment variables without exposing credentials in logs
+- **SC-005**: Test script works with Proton Pass-referenced environment variables without exposing credentials in logs
 - **SC-006**: Security review confirms no credential leakage, proper authorization checks, and input validation in new MCP tools
 - **SC-007**: MCP key generation UI displays all 5 new tools and allows permission selection
 
 ## Assumptions
 
 - `curl` and `jq` are installed on the test machine for HTTP calls and JSON parsing
-- 1Password CLI (`op`) version 2.x is installed and configured on the test machine
+- `pass-cli` version 2.x is installed and configured on the test machine
 - The secman backend is running and accessible at localhost (default configuration)
-- The ADMIN user credentials stored in 1Password have sufficient permissions to create users, assets, and workgroups
+- The ADMIN user credentials stored in Proton Pass have sufficient permissions to create users, assets, and workgroups
 - MCP endpoint is available at the standard secman API path
 - Test user email will use `test@example.com` format
 - Existing `add_user`, `add_vulnerability`, `delete_user`, and `get_assets` MCP tools function correctly

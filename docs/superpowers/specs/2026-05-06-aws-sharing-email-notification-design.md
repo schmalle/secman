@@ -158,7 +158,7 @@ Extend an existing integration test under `BaseIntegrationTest` (Testcontainers 
 A change is complete only when:
 
 1. `./gradlew build` is clean.
-2. `./scriptpp/startbackenddev.sh` starts cleanly (verifies bean wiring of the new listener and event publisher) and is then stopped.
+2. `./scripts/startbackenddev.sh` starts cleanly (verifies bean wiring of the new listener and event publisher) and is then stopped.
 3. `/e2ejs` reports **0 JS errors** for both admin and normal-user runs.
 4. `/e2evulnexception` reports **0 failures**.
 

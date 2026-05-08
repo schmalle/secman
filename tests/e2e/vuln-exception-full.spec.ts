@@ -3,7 +3,7 @@ import { test, expect, type Page } from '@playwright/test';
 /**
  * Phase 8 (UI) of the full vulnerability + exception E2E test.
  *
- * Assumes the shell driver (scriptpp/test/test-e2e-vuln-exception-full.sh) has
+ * Assumes the shell driver (scripts/test/test-e2e-vuln-exception-full.sh) has
  * already created the testbed via MCP:
  *   - Users:  e2etestuser1, e2etestuser2  (USER + VULN + REQ roles)
  *   - Assets: testasset1 (owner=user1), testasset2 (owner=user2)
@@ -34,7 +34,7 @@ const missing = required.filter((k) => !process.env[k]);
 if (missing.length > 0) {
     throw new Error(
         `Missing required env vars for vuln-exception-full.spec.ts: ${missing.join(', ')}. ` +
-        `Run via scriptpp/test/test-e2e-vuln-exception-full.sh which sets them.`,
+        `Run via scripts/test/test-e2e-vuln-exception-full.sh which sets them.`,
     );
 }
 

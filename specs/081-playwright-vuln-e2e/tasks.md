@@ -81,17 +81,17 @@
 
 ---
 
-## Phase 6: User Story 4 — 1Password Credential Injection (Priority: P2)
+## Phase 6: User Story 4 — Proton Pass Credential Injection (Priority: P2)
 
-**Goal**: A runner script wraps Playwright execution with 1Password credential injection so no secrets are hardcoded
+**Goal**: A runner script wraps Playwright execution with Proton Pass credential injection so no secrets are hardcoded
 
-**Independent Test**: Run `./tests/e2e/run-e2e.sh` on a machine with 1Password CLI configured — full test suite passes with credentials resolved from vault
+**Independent Test**: Run `./tests/e2e/run-e2e.sh` on a machine with `pass-cli` (Proton Pass) configured — full test suite passes with credentials resolved from vault
 
 ### Implementation for User Story 4
 
-- [x] T008 [US4] Create `tests/e2e/run-e2e.sh` — bash script with `#!/usr/bin/env bash` and `set -euo pipefail`; check `op --version` is available (exit with error if not); export env vars using `op://test/secman/...` URI format for `SECMAN_ADMIN_NAME`, `SECMAN_ADMIN_PASS`, `SECMAN_USER_USER`, `SECMAN_USER_PASS`; accept optional `SECMAN_BASE_URL` (default `http://localhost:4321`); run `op run -- npx playwright test "$@"` to pass through CLI args; make script executable with `chmod +x` (implements FR-009; ref: research.md R7)
+- [x] T008 [US4] Create `tests/e2e/run-e2e.sh` — bash script with `#!/usr/bin/env bash` and `set -euo pipefail`; check `pass-cli --version` is available (exit with error if not); export env vars using `pass://test/secman/...` URI format for `SECMAN_ADMIN_NAME`, `SECMAN_ADMIN_PASS`, `SECMAN_USER_USER`, `SECMAN_USER_PASS`; accept optional `SECMAN_BASE_URL` (default `http://localhost:4321`); run `pass-cli run -- npx playwright test "$@"` to pass through CLI args; make script executable with `chmod +x` (implements FR-009; ref: research.md R7)
 
-**Checkpoint**: `./tests/e2e/run-e2e.sh` executes full test matrix with 1Password-resolved credentials
+**Checkpoint**: `./tests/e2e/run-e2e.sh` executes full test matrix with Proton Pass-resolved credentials
 
 ---
 
@@ -169,7 +169,7 @@ Task T008: "Create tests/e2e/run-e2e.sh runner script"             (US4)
 2. Add US1 (admin test) → Validate on Chrome → **MVP!**
 3. Add US2 (normal user test) → Both users verified on Chrome
 4. Run US3 (cross-browser) → Full 4-combination matrix green
-5. Add US4 (1Password runner) → Secure credential injection works
+5. Add US4 (Proton Pass runner) → Secure credential injection works
 6. Polish → Documentation updated, quickstart validated
 
 ---

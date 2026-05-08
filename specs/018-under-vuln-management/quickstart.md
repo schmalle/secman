@@ -49,7 +49,7 @@ npm run dev
 
 ```bash
 # From repository root
-./scriptpp/tests/populate-testdata.sh
+./scripts/tests/populate-testdata.sh
 ```
 
 **Creates**:

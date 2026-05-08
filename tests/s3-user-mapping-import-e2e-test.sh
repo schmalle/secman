@@ -6,7 +6,7 @@
 # from an AWS S3 bucket via the CLI import-s3 command.
 #
 # Test flow:
-# 1. Resolve credentials (1Password URIs for AWS keys, secman admin email)
+# 1. Resolve credentials (Proton Pass URIs for AWS keys, secman admin email)
 # 2. Build CLI fat JAR
 # 3. Create test CSV with unique timestamped data
 # 4. Upload test CSV to S3
@@ -16,8 +16,8 @@
 # 8. Cleanup: delete test mappings and S3 test file
 #
 # Prerequisites:
-# - curl, jq, op (1Password CLI), aws CLI installed
-# - Environment variables set (with 1Password URIs or direct values):
+# - curl, jq, pass-cli (Proton Pass), aws CLI installed
+# - Environment variables set (with Proton Pass URIs or direct values):
 #   S3_TEST_BUCKET, S3_TEST_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY,
 #   SECMAN_ADMIN_EMAIL
 #
@@ -27,12 +27,12 @@
 
 set -euo pipefail
 
-# 1Password URI defaults (override with direct values or your own URIs)
-export S3_TEST_BUCKET="${S3_TEST_BUCKET:-op://test/secman-s3/S3_TEST_BUCKET}"
-export S3_TEST_REGION="${S3_TEST_REGION:-op://test/secman-s3/S3_TEST_REGION}"
-export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-op://test/secman-s3/AWS_ACCESS_KEY_ID}"
-export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-op://test/secman-s3/AWS_SECRET_ACCESS_KEY}"
-export SECMAN_ADMIN_EMAIL="${SECMAN_ADMIN_EMAIL:-op://test/secman/SECMAN_ADMIN_EMAIL}"
+# Proton Pass URI defaults (override with direct values or your own URIs)
+export S3_TEST_BUCKET="${S3_TEST_BUCKET:-pass://test/secman-s3/S3_TEST_BUCKET}"
+export S3_TEST_REGION="${S3_TEST_REGION:-pass://test/secman-s3/S3_TEST_REGION}"
+export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-pass://test/secman-s3/AWS_ACCESS_KEY_ID}"
+export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-pass://test/secman-s3/AWS_SECRET_ACCESS_KEY}"
+export SECMAN_ADMIN_EMAIL="${SECMAN_ADMIN_EMAIL:-pass://test/secman/SECMAN_ADMIN_EMAIL}"
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -71,7 +71,7 @@ check_prerequisites() {
     local missing=()
     command -v aws  &>/dev/null || missing+=("aws (AWS CLI)")
     command -v jq   &>/dev/null || missing+=("jq")
-    command -v op   &>/dev/null || missing+=("op (1Password CLI)")
+    command -v pass-cli   &>/dev/null || missing+=("pass-cli (Proton Pass)")
     command -v java &>/dev/null || missing+=("java")
 
     if [[ ${#missing[@]} -gt 0 ]]; then
@@ -89,14 +89,14 @@ check_prerequisites() {
     log_success "Prerequisites check passed"
 }
 
-# Resolve credentials from 1Password
+# Resolve credentials from Proton Pass
 resolve_credentials() {
-    log_info "Resolving credentials from 1Password..."
+    log_info "Resolving credentials from Proton Pass..."
 
     resolve_op_var() {
         local val="$1"
-        if [[ "$val" == op://* ]]; then
-            op read "$val" 2>/dev/null || { log_error "Failed to resolve $val from 1Password"; exit 1; }
+        if [[ "$val" == pass://* ]]; then
+            pass-cli read "$val" 2>/dev/null || { log_error "Failed to resolve $val from Proton Pass"; exit 1; }
         else
             echo "$val"
         fi

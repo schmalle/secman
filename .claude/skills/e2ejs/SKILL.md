@@ -76,8 +76,8 @@ Rules:
 ## High-Level Loop
 
 ```
-1. Start backend   (./scriptpp/startbackenddev.sh)
-2. Start frontend  (./scriptpp/startfrontenddev.sh)
+1. Start backend   (./scripts/startbackenddev.sh)
+2. Start frontend  (./scripts/startfrontenddev.sh)
 3. Wait for both to be healthy (via shared URL, not localhost)
 4. Export SECMAN_BACKEND_URL=https://secman.covestro.net
 5. Run JS error scanner (./tests/js-error-scanner-pp.sh)
@@ -87,7 +87,7 @@ Rules:
    a. Parse the structured error output
    b. Classify each error (backend vs frontend)
    c. Fix backend errors first, then frontend errors
-   d. Restart backend (kill → restart ./scriptpp/startbackenddev.sh)
+   d. Restart backend (kill → restart ./scripts/startbackenddev.sh)
    e. Wait for backend health check via https://secman.covestro.net
    f. Go to step 5
 9. After 5 iterations without progress → stop and report remaining failures
@@ -114,14 +114,14 @@ Rules:
 
 3. **Start backend** in background:
    ```bash
-   nohup ./scriptpp/startbackenddev.sh > .e2e-logs/backend.log 2>&1 &
+   nohup ./scripts/startbackenddev.sh > .e2e-logs/backend.log 2>&1 &
    ```
    Record the PID. The backend uses `pass-cli run -- gradle :backendng:clean :backendng:run`
    internally with Proton Pass secret injection.
 
 4. **Start frontend** in background:
    ```bash
-   nohup ./scriptpp/startfrontenddev.sh > .e2e-logs/frontend.log 2>&1 &
+   nohup ./scripts/startfrontenddev.sh > .e2e-logs/frontend.log 2>&1 &
    ```
    Record the PID. The frontend uses `pass-cli run -- npm run dev` internally.
 
@@ -238,12 +238,12 @@ After applying fixes (whether backend or frontend):
 1. **Stop the backend** via the canonical script (handles graceful + force kill,
    port 8080):
    ```bash
-   ./scriptpp/stopbackenddev.sh
+   ./scripts/stopbackenddev.sh
    ```
    Never call `kill` or `lsof | xargs kill` inline — always go through the script.
 2. **Restart backend**:
    ```bash
-   nohup ./scriptpp/startbackenddev.sh > .e2e-logs/backend.log 2>&1 &
+   nohup ./scripts/startbackenddev.sh > .e2e-logs/backend.log 2>&1 &
    ```
 3. **Wait for backend health check via the shared URL** —
    poll `https://secman.covestro.net/` until it responds (120s timeout).
@@ -266,8 +266,8 @@ error count decreased.
 
 ### Phase 4 — Teardown & Report
 
-- Stop backend and frontend via `./scriptpp/stopbackenddev.sh` and
-  `./scriptpp/stopfrontenddev.sh` (never raw `kill`).
+- Stop backend and frontend via `./scripts/stopbackenddev.sh` and
+  `./scripts/stopfrontenddev.sh` (never raw `kill`).
 - Leave any user-managed local reverse proxy alone.
 - Print a summary table with **per-role** columns (each iteration runs both roles):
 
@@ -291,12 +291,9 @@ error count decreased.
   `http://`, no `localhost`, no alternate ports. Both production and
   development share this URL; on dev machines it resolves to `127.0.0.1`.
 - **Never commit or push** — only edit files locally.
-- **Secrets are handled by the dev scripts** — `scriptpp/startbackenddev.sh`
-  and `scriptpp/startfrontenddev.sh` use `pass-cli run` to inject Proton Pass
+- **Secrets are handled by the dev scripts** — `scripts/startbackenddev.sh`
+  and `scripts/startfrontenddev.sh` use `pass-cli run` to inject Proton Pass
   secrets. Do not set secrets manually.
-- **Always use the Proton Pass variants** (`scriptpp/*.sh` and
-  `tests/js-error-scanner-pp.sh`). Do not fall back to the 1Password scripts
-  in `scripts/` — this skill is pinned to Proton Pass.
 - **Port collisions**: Before starting, check if ports 8080 and 4321 are
   already in use and kill existing processes. Do not kill whatever owns :443
   unless you are sure it is your own leftover — it is likely the user's

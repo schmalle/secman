@@ -61,7 +61,7 @@
 
 ## Phase 4: User Story 1 + User Story 3 - E2E Test Script (Priority: P1/P2)
 
-**Goal**: Create Bash test script with 1Password credential management that validates the complete workflow
+**Goal**: Create Bash test script with Proton Pass credential management that validates the complete workflow
 
 **Independent Test**: Run `./tests/mcp-e2e-workgroup-test.sh` against local secman instance
 
@@ -71,8 +71,8 @@
 
 - [x] T012 [US1/US3] Create `tests/` directory at repository root if not exists
 - [x] T013 [US1/US3] Create `tests/mcp-e2e-workgroup-test.sh` with shebang and `set -euo pipefail`
-- [x] T014 [US3] Implement `check_prerequisites()` function - verify curl, jq, op CLI are available
-- [x] T015 [US3] Implement `resolve_credentials()` function - use `pass-cli item view` to resolve 1Password URIs from SECMAN_ADMIN_NAME, SECMAN_ADMIN_PASS, SECMAN_MCP_KEY environment variables
+- [x] T014 [US3] Implement `check_prerequisites()` function - verify curl, jq, pass-cli are available
+- [x] T015 [US3] Implement `resolve_credentials()` function - use `pass-cli item view` to resolve Proton Pass URIs from SECMAN_ADMIN_NAME, SECMAN_ADMIN_PASS, SECMAN_MCP_KEY environment variables
 - [x] T016 [US1] Implement `authenticate()` function - POST to /api/auth/login and extract JWT token
 - [x] T017 [US1] Implement `mcp_call()` helper function - curl wrapper for MCP tool calls with auth headers
 - [x] T018 [US1] Implement `create_test_user()` function - call add_user MCP tool for TEST user with VULN role

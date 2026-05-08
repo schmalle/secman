@@ -214,7 +214,7 @@ Expected: silent exit (zero errors).
 
 - [ ] **Step 5: Smoke-test the migration**
 
-Run: `./scriptpp/startbackenddev.sh` (background OK)
+Run: `./scripts/startbackenddev.sh` (background OK)
 Expected: Flyway logs `Migrating schema 'secman' to version "201"` followed by `Successfully applied 1 migration`. Backend starts cleanly.
 
 Verify the table:
@@ -272,7 +272,7 @@ Expected: zero errors.
 
 - [ ] **Step 3: Smoke-test that Hibernate doesn't recreate the table differently**
 
-Run: `./scriptpp/startbackenddev.sh`
+Run: `./scripts/startbackenddev.sh`
 Expected: backend starts; no `ALTER TABLE workgroup_aws_account` log lines (Hibernate sees the schema matches the entity).
 
 Then run:
@@ -576,7 +576,7 @@ Expected: zero errors.
 
 - [ ] **Step 3: Smoke-test the HTTP surface**
 
-Start the backend (`./scriptpp/startbackenddev.sh`), then with a fresh ADMIN JWT:
+Start the backend (`./scripts/startbackenddev.sh`), then with a fresh ADMIN JWT:
 
 ```bash
 # Replace WG_ID with an existing workgroup id and TOKEN with a valid admin JWT.

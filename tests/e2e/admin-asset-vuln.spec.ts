@@ -12,7 +12,7 @@ const missing = requiredEnvVars.filter((v) => !process.env[v]);
 if (missing.length > 0) {
   throw new Error(
     `Missing required environment variables: ${missing.join(', ')}. ` +
-    `Set them directly or use ./run-e2e.sh with 1Password.`
+    `Set them directly or use ./run-e2e.sh with Proton Pass.`
   );
 }
 

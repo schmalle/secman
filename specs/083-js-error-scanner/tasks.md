@@ -25,21 +25,21 @@
 
 ---
 
-## Phase 2: User Story 2 - 1Password Credential Integration (Priority: P1) 🎯 MVP Prerequisite
+## Phase 2: User Story 2 - Proton Pass Credential Integration (Priority: P1) 🎯 MVP Prerequisite
 
-**Goal**: Create the bash wrapper that resolves credentials from 1Password and invokes the Node.js scanner script
+**Goal**: Create the bash wrapper that resolves credentials from Proton Pass and invokes the Node.js scanner script
 
-**Independent Test**: Run `./tests/js-error-scanner.sh` and verify it checks for `op` CLI, resolves 1Password vault references, and attempts to invoke the Node.js script (which won't exist yet — expected to fail at that step)
+**Independent Test**: Run `./tests/js-error-scanner.sh` and verify it checks for `pass-cli` CLI, resolves Proton Pass vault references, and attempts to invoke the Node.js script (which won't exist yet — expected to fail at that step)
 
 ### Implementation for User Story 2
 
 - [x] T002 [US2] Create `tests/js-error-scanner.sh` with shebang (`#!/usr/bin/env bash`), `set -euo pipefail`, and `SCRIPT_DIR` resolution matching the pattern in `tests/e2e/run-e2e.sh`
-- [x] T003 [US2] Add `op` CLI availability check in `tests/js-error-scanner.sh` — exit with clear error message if `op` command is not found (matching pattern from `tests/e2e/run-e2e.sh` lines 7-11)
-- [x] T004 [US2] Add 1Password vault reference exports in `tests/js-error-scanner.sh`: `SECMAN_ADMIN_NAME="op://test/secman/SECMAN_ADMIN_NAME"`, `SECMAN_ADMIN_PASS="op://test/secman/SECMAN_ADMIN_PASS"`, `SECMAN_BACKEND_URL="op://test/secman/SECMAN_HOST"`, `SECMAN_INSECURE="op://test/secman/SECMAN_SSL_ACCEPT_ALL"` — matching the field names from `./scriptpp/secmanng`
-- [x] T005 [US2] Add `NODE_PATH` setup and `op run -- node` invocation in `tests/js-error-scanner.sh` — set `NODE_PATH="${SCRIPT_DIR}/e2e/node_modules"` and invoke `op run -- node "${SCRIPT_DIR}/js-error-scanner.mjs"`, passing through the exit code
+- [x] T003 [US2] Add `pass-cli` CLI availability check in `tests/js-error-scanner.sh` — exit with clear error message if `pass-cli` command is not found (matching pattern from `tests/e2e/run-e2e.sh` lines 7-11)
+- [x] T004 [US2] Add Proton Pass vault reference exports in `tests/js-error-scanner.sh`: `SECMAN_ADMIN_NAME="pass://test/secman/SECMAN_ADMIN_NAME"`, `SECMAN_ADMIN_PASS="pass://test/secman/SECMAN_ADMIN_PASS"`, `SECMAN_BACKEND_URL="pass://test/secman/SECMAN_HOST"`, `SECMAN_INSECURE="pass://test/secman/SECMAN_SSL_ACCEPT_ALL"` — matching the field names from `./scripts/secmanng`
+- [x] T005 [US2] Add `NODE_PATH` setup and `pass-cli run -- node` invocation in `tests/js-error-scanner.sh` — set `NODE_PATH="${SCRIPT_DIR}/e2e/node_modules"` and invoke `pass-cli run -- node "${SCRIPT_DIR}/js-error-scanner.mjs"`, passing through the exit code
 - [x] T006 [US2] Set execute permission on `tests/js-error-scanner.sh` via `chmod +x`
 
-**Checkpoint**: Bash wrapper resolves 1Password credentials and invokes Node.js script — US2 is complete
+**Checkpoint**: Bash wrapper resolves Proton Pass credentials and invokes Node.js script — US2 is complete
 
 ---
 
@@ -72,7 +72,7 @@
 ### Implementation for User Story 3
 
 - [x] T014 [P] [US3] Add SSL flag parsing in `tests/js-error-scanner.mjs` — read `SECMAN_INSECURE` env var, parse `true`/`1`/`yes` case-insensitively, pass `ignoreHTTPSErrors: true` to `browser.newContext()` when enabled
-- [x] T015 [P] [US3] Add `NODE_TLS_REJECT_UNAUTHORIZED=0` conditional export in `tests/js-error-scanner.sh` — inside the `op run` subshell, detect `SECMAN_INSECURE` value (matching the `case` pattern from `./scriptpp/secmanng` lines 26-29) and export the Node.js env var before invoking `node`
+- [x] T015 [P] [US3] Add `NODE_TLS_REJECT_UNAUTHORIZED=0` conditional export in `tests/js-error-scanner.sh` — inside the `pass-cli run` subshell, detect `SECMAN_INSECURE` value (matching the `case` pattern from `./scripts/secmanng` lines 26-29) and export the Node.js env var before invoking `node`
 
 **Checkpoint**: Scanner works against instances with self-signed certificates — US3 is complete
 
@@ -150,7 +150,7 @@ After US3 completes:
 ```bash
 # These two story phases work on different files and can run simultaneously:
 # Agent A: US2 — Bash wrapper
-Task: "Create tests/js-error-scanner.sh with 1Password integration"
+Task: "Create tests/js-error-scanner.sh with Proton Pass integration"
 
 # Agent B: US1 — Node.js scanner
 Task: "Create tests/js-error-scanner.mjs with Playwright page scanning"
@@ -163,7 +163,7 @@ Task: "Create tests/js-error-scanner.mjs with Playwright page scanning"
 ### MVP First (US2 + US1)
 
 1. Complete Phase 1: Setup (verify Playwright)
-2. Complete Phase 2: US2 (bash wrapper with 1Password)
+2. Complete Phase 2: US2 (bash wrapper with Proton Pass)
 3. Complete Phase 3: US1 (core scanner with basic output)
 4. **STOP and VALIDATE**: Run `./tests/js-error-scanner.sh` — should authenticate and scan pages
 5. Scanner is usable at this point with basic output

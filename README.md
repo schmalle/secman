@@ -28,8 +28,8 @@ Prereqs: Java 21, Node 20+, MariaDB 11.4+, Git.
 
 ```bash
 git clone https://github.com/schmalle/secman.git && cd secman
-cd scriptpp/install/db && ./installdb.sh && cd -    # creates DB 'secman' / user 'secman'/'CHANGEME'
-./scriptpp/startbackenddev.sh                       # canonical dev start (pass-cli wraps gradle)
+cd scripts/install/db && ./installdb.sh && cd -    # creates DB 'secman' / user 'secman'/'CHANGEME'
+./scripts/startbackenddev.sh                       # canonical dev start (pass-cli wraps gradle)
 cd src/frontend && npm install && npm run dev       # http://localhost:4321
 ```
 
@@ -45,7 +45,7 @@ src/
   frontend/   Astro pages + React islands, services/ (Axios)
   cli/        Picocli commands + service/
 docs/         see below
-scriptpp/     ALL scripts live here (./scripts is deprecated)
+scripts/     ALL scripts live here (./scripts is deprecated)
 specs/        historical implementation plans (frozen)
 ```
 
@@ -54,17 +54,17 @@ specs/        historical implementation plans (frozen)
 ```bash
 # Build & run
 ./gradlew build                          # full build incl. unit + integration tests
-./scriptpp/startbackenddev.sh            # backend dev (port 8080)
+./scripts/startbackenddev.sh            # backend dev (port 8080)
 cd src/frontend && npm run dev           # frontend dev (port 4321)
 
 # CLI (build once, then use wrapper)
 ./gradlew :cli:shadowJar
-./scriptpp/secman help
-./scriptpp/secman query servers --dry-run
-./scriptpp/secman send-notifications --dry-run --verbose
-./scriptpp/secman manage-user-mappings list --send-email
-./scriptpp/secman add-vulnerability --hostname host --cve CVE-2024-1234 --criticality HIGH
-./scriptpp/secman export-requirements --format xlsx
+./scripts/secman help
+./scripts/secman query servers --dry-run
+./scripts/secman send-notifications --dry-run --verbose
+./scripts/secman manage-user-mappings list --send-email
+./scripts/secman add-vulnerability --hostname host --cve CVE-2024-1234 --criticality HIGH
+./scripts/secman export-requirements --format xlsx
 
 # Tests
 ./gradlew :backendng:test --tests "*ServiceTest*"      # unit

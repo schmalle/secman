@@ -214,7 +214,7 @@ r = requests.post("http://localhost:8080/mcp", headers={
 print(r.json())
 ```
 
-A standalone Go MCP client lives in `scriptpp/mcp/`.
+A standalone Go MCP client lives in `scripts/mcp/`.
 
 ## Errors
 

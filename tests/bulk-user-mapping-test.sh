@@ -9,8 +9,8 @@
 # 5. Cleanup (delete test mappings)
 #
 # Prerequisites:
-# - curl, jq, op (1Password CLI) installed
-# - Environment variables set (with 1Password URIs or direct values):
+# - curl, jq, pass-cli (Proton Pass) installed
+# - Environment variables set (with Proton Pass URIs or direct values):
 #   SECMAN_ADMIN_NAME, SECMAN_ADMIN_PASS
 #
 # Usage:
@@ -21,9 +21,9 @@
 
 set -euo pipefail
 
-# 1Password URI defaults (override with direct values or your own URIs)
-export SECMAN_ADMIN_NAME="${SECMAN_ADMIN_NAME:-op://test/secman/SECMAN_ADMIN_NAME}"
-export SECMAN_ADMIN_PASS="${SECMAN_ADMIN_PASS:-op://test/secman/SECMAN_ADMIN_PASS}"
+# Proton Pass URI defaults (override with direct values or your own URIs)
+export SECMAN_ADMIN_NAME="${SECMAN_ADMIN_NAME:-pass://test/secman/SECMAN_ADMIN_NAME}"
+export SECMAN_ADMIN_PASS="${SECMAN_ADMIN_PASS:-pass://test/secman/SECMAN_ADMIN_PASS}"
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -59,7 +59,7 @@ check_prerequisites() {
     local missing=()
     command -v curl &>/dev/null || missing+=("curl")
     command -v jq   &>/dev/null || missing+=("jq")
-    command -v op   &>/dev/null || missing+=("op (1Password CLI)")
+    command -v pass-cli   &>/dev/null || missing+=("pass-cli (Proton Pass)")
 
     if [[ ${#missing[@]} -gt 0 ]]; then
         log_error "Missing required tools: ${missing[*]}"
@@ -76,14 +76,14 @@ check_prerequisites() {
     log_success "Prerequisites check passed"
 }
 
-# Resolve credentials from 1Password
+# Resolve credentials from Proton Pass
 resolve_credentials() {
     log_info "Resolving credentials..."
 
     resolve_op_var() {
         local val="$1"
-        if [[ "$val" == op://* ]]; then
-            op read "$val" 2>/dev/null || { log_error "Failed to resolve $val from 1Password"; exit 1; }
+        if [[ "$val" == pass://* ]]; then
+            pass-cli read "$val" 2>/dev/null || { log_error "Failed to resolve $val from Proton Pass"; exit 1; }
         else
             echo "$val"
         fi

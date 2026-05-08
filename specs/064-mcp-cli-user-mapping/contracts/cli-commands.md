@@ -9,7 +9,7 @@
 
 **Usage**:
 ```bash
-./scriptpp/secman manage-user-mappings import --file <path> [--format <CSV|JSON|AUTO>] [--dry-run]
+./scripts/secman manage-user-mappings import --file <path> [--format <CSV|JSON|AUTO>] [--dry-run]
 ```
 
 ### Options
@@ -106,7 +106,7 @@ Total: 5 mapping(s) processed
 
 **Usage**:
 ```bash
-./scriptpp/secman manage-user-mappings list [--email <email>] [--status <ACTIVE|PENDING>] [--format <table|json>]
+./scripts/secman manage-user-mappings list [--email <email>] [--status <ACTIVE|PENDING>] [--format <table|json>]
 ```
 
 ### Options
@@ -165,19 +165,19 @@ Total: 3 mapping(s)
 
 ```bash
 # List all mappings (table format)
-./scriptpp/secman manage-user-mappings list
+./scripts/secman manage-user-mappings list
 
 # List mappings for specific email
-./scriptpp/secman manage-user-mappings list --email user@example.com
+./scripts/secman manage-user-mappings list --email user@example.com
 
 # List pending mappings only
-./scriptpp/secman manage-user-mappings list --status PENDING
+./scripts/secman manage-user-mappings list --status PENDING
 
 # Export to JSON for scripting
-./scriptpp/secman manage-user-mappings list --format json > mappings.json
+./scripts/secman manage-user-mappings list --format json > mappings.json
 
 # Pipe to jq for filtering
-./scriptpp/secman manage-user-mappings list --format json | jq '.mappings[] | select(.status == "PENDING")'
+./scripts/secman manage-user-mappings list --format json | jq '.mappings[] | select(.status == "PENDING")'
 ```
 
 ### Exit Codes

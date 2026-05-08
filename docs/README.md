@@ -36,8 +36,8 @@ Stack: Kotlin 2.3.21 / Java 21 · Micronaut 4.10 · Hibernate JPA · Astro 6.3 /
 | [PASS_CLI.md](./PASS_CLI.md) | `pass-cli` (Proton Pass) secret resolution |
 | [../src/clinotify/README.md](../src/clinotify/README.md) | CrowdStrike checkin Telegram monitor |
 | [../docker/README.md](../docker/README.md) | Docker container deployment |
-| [../scriptpp/install/db/README.md](../scriptpp/install/db/README.md) | DB setup scripts and defaults |
-| [../scriptpp/mcp/README.md](../scriptpp/mcp/README.md) | Standalone Go MCP client |
+| [../scripts/install/db/README.md](../scripts/install/db/README.md) | DB setup scripts and defaults |
+| [../scripts/mcp/README.md](../scripts/mcp/README.md) | Standalone Go MCP client |
 | [../pictures/README.md](../pictures/README.md) | UI screenshots |
 
 ## By role
@@ -50,17 +50,17 @@ Stack: Kotlin 2.3.21 / Java 21 · Micronaut 4.10 · Hibernate JPA · Astro 6.3 /
 
 ```bash
 # DB
-cd scriptpp/install/db && ./installdb.sh && cd -
+cd scripts/install/db && ./installdb.sh && cd -
 
 # Backend (port 8080)
-./scriptpp/startbackenddev.sh
+./scripts/startbackenddev.sh
 
 # Frontend (port 4321)
 cd src/frontend && npm install && npm run dev
 
 # CLI (build once, then wrapper)
 ./gradlew :cli:shadowJar
-./scriptpp/secman help
+./scripts/secman help
 ```
 
 First-run admin password is logged to backend stdout — copy it from the `DEFAULT ADMIN USER CREATED` block.

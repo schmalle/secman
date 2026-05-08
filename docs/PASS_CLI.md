@@ -1,8 +1,6 @@
 # pass-cli (Proton Pass)
 
-`pass-cli` is the **canonical** secret-resolution tool for this project (per `CLAUDE.md`). All scripts that need credentials must source them via `pass-cli`. Never hardcode secrets. Never reintroduce `op run` / 1Password.
-
-> Earlier docs referred to 1Password CLI (`op`). That setup is deprecated. Existing references to `op://…` URIs in the codebase should be migrated to `pass-cli` lookups.
+`pass-cli` is the **canonical** secret-resolution tool for this project (per `CLAUDE.md`). All scripts that need credentials must source them via `pass-cli`. Never hardcode secrets.
 
 ## Setup
 
@@ -39,9 +37,9 @@
 ## Usage
 
 ### Canonical entry points
-- Backend dev: `./scriptpp/startbackenddev.sh` (sets `MICRONAUT_ENVIRONMENTS=dev`, `SECMAN_DEBUG=true`, generates random `JWT_SECRET`, sources `pass-cli`).
-- Frontend dev: `./scriptpp/startfrontenddev.sh`.
-- CLI: `./scriptpp/secman <cmd>` or `./scriptpp/secmanng <cmd>`.
+- Backend dev: `./scripts/startbackenddev.sh` (sets `MICRONAUT_ENVIRONMENTS=dev`, `SECMAN_DEBUG=true`, generates random `JWT_SECRET`, sources `pass-cli`).
+- Frontend dev: `./scripts/startfrontenddev.sh`.
+- CLI: `./scripts/secman <cmd>` or `./scripts/secmanng <cmd>`.
 - E2E (Playwright): `./tests/e2e/run-e2e.sh`.
 
 ### Manual (no wrapper)
@@ -62,12 +60,12 @@ pass-cli read "test/secman/SECMAN_ADMIN_NAME"
 
 | Script | Secrets |
 |---|---|
-| `scriptpp/backend` | full `secman.env` |
-| `scriptpp/startbackenddev.sh` | `DB_CONNECT`, `SECMAN_BACKEND_BASE_URL` |
-| `scriptpp/startfrontenddev.sh` | `SECMAN_BACKEND_BASE_URL`, `SECMAN_HOST` |
-| `scriptpp/secmancli` | CrowdStrike + admin creds + AWS + MCP key + host |
-| `scriptpp/secmanng` | admin creds, host, SSL setting |
-| `scriptpp/secmanserverca`, `scriptpp/import.sh` | full `secman.env` |
+| `scripts/backend` | full `secman.env` |
+| `scripts/startbackenddev.sh` | `DB_CONNECT`, `SECMAN_BACKEND_BASE_URL` |
+| `scripts/startfrontenddev.sh` | `SECMAN_BACKEND_BASE_URL`, `SECMAN_HOST` |
+| `scripts/secmancli` | CrowdStrike + admin creds + AWS + MCP key + host |
+| `scripts/secmanng` | admin creds, host, SSL setting |
+| `scripts/secmanserverca`, `scripts/import.sh` | full `secman.env` |
 | `tests/e2e/run-e2e.sh` | admin + user creds |
 | `tests/js-error-scanner.sh` | admin creds, host, SSL setting |
 | `tests/mcp-e2e-*-test.sh`, `tests/release-e2e-test.sh`, `tests/alignment-review-e2e-test.sh` | admin creds, MCP key, test domain |

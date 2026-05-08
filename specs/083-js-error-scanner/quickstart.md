@@ -4,10 +4,10 @@
 
 ## Prerequisites
 
-1. **1Password CLI** (`op`) installed and authenticated:
+1. **`pass-cli` (Proton Pass)** (`pass-cli`) installed and authenticated:
    ```bash
-   brew install 1password-cli
-   op signin
+   brew install pass-cli
+   pass-cli login
    ```
 
 2. **Playwright browsers** installed (via existing e2e test setup):
@@ -17,7 +17,7 @@
 
 3. **Secman instance** running and accessible (local or remote)
 
-4. **1Password vault** `test/secman` must contain:
+4. **Proton Pass vault** `test/secman` must contain:
    - `SECMAN_ADMIN_NAME` — login username
    - `SECMAN_ADMIN_PASS` — login password
    - `SECMAN_HOST` — instance URL (e.g., `https://secman.example.com`)
@@ -32,7 +32,7 @@
 ```
 
 That's it. The script:
-1. Resolves credentials from 1Password
+1. Resolves credentials from Proton Pass
 2. Launches a headless browser
 3. Logs into secman
 4. Visits all ~40 static pages
@@ -41,13 +41,13 @@ That's it. The script:
 
 ### Override the host URL
 
-If you want to scan a different instance without changing 1Password:
+If you want to scan a different instance without changing Proton Pass:
 
 ```bash
 SECMAN_BACKEND_URL="https://staging.secman.example.com" ./tests/js-error-scanner.sh
 ```
 
-### Skip 1Password (direct credentials)
+### Skip Proton Pass (direct credentials)
 
 ```bash
 SECMAN_ADMIN_NAME="admin" \
@@ -90,5 +90,5 @@ Exit code: 1
 
 | File | Purpose |
 |------|---------|
-| `tests/js-error-scanner.sh` | Bash wrapper — 1Password creds, SSL config, invokes Node.js script |
+| `tests/js-error-scanner.sh` | Bash wrapper — Proton Pass creds, SSL config, invokes Node.js script |
 | `tests/js-error-scanner.mjs` | Node.js script — Playwright browser automation and report output |

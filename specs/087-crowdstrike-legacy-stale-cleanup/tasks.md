@@ -125,7 +125,7 @@ description: "Task list for Feature 087 — CrowdStrike Legacy Stale-Asset Clean
 
 - [X] T023 [P] Replaced the agent-context script's verbose auto-appended "Active Technologies" / "Recent Changes" lines in `CLAUDE.md` with a concise Feature 087 reference covering: AssetOwners constant location, the include-legacy flag (with env var), the four-part rule-B fence, the V210 audit-row schema delta + denominator widening, and the CleanupCandidateReason enum
 - [X] T024 `./gradlew :backendng:build` BUILD SUCCESSFUL — full backend build (compile + tests + assemble) clean. Mandatory gate per CLAUDE.md Hard Principle 5 satisfied for the backend module
-- [ ] T025 Run `./scriptpp/startbackenddev.sh`, confirm Micronaut starts cleanly (Flyway V210 applies, beans wire, no SessionFactory errors), then stop the backend (mandatory gate per CLAUDE.md Hard Principle 5)
+- [ ] T025 Run `./scripts/startbackenddev.sh`, confirm Micronaut starts cleanly (Flyway V210 applies, beans wire, no SessionFactory errors), then stop the backend (mandatory gate per CLAUDE.md Hard Principle 5)
 - [ ] T026 Run the `/e2ejs` skill against `SECMAN_HOST` for both admin and normal-user roles. Confirm 0 JS errors (mandatory gate per CLAUDE.md Hard Principle 7)
 - [ ] T027 Run the `/e2evulnexception` skill. Confirm 0 failures across the full lifecycle (mandatory gate per CLAUDE.md Hard Principle 7)
 - [ ] T028 Manually walk through `specs/087-crowdstrike-legacy-stale-cleanup/quickstart.md` Steps 0–6 against a deployed instance with seed legacy data. Confirm each expected outcome

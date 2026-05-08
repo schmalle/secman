@@ -386,7 +386,7 @@ Expected: BUILD SUCCESSFUL.
 
 - [ ] **Step 5: Manual smoke test**
 
-Start the backend and frontend per CLAUDE.md (`./scriptpp/startbackenddev.sh` and `npm run dev` in `src/frontend`). Once up, call:
+Start the backend and frontend per CLAUDE.md (`./scripts/startbackenddev.sh` and `npm run dev` in `src/frontend`). Once up, call:
 
 ```bash
 curl -s -H "Authorization: Bearer $ADMIN_JWT" "http://localhost:8080/api/users" | jq 'length'
@@ -997,7 +997,7 @@ public-safe DTO to non-ADMIN callers.
 - [ ] **Step 1: Start the stack**
 
 ```bash
-./scriptpp/startbackenddev.sh   # in one terminal
+./scripts/startbackenddev.sh   # in one terminal
 cd src/frontend && npm run dev  # in another
 ```
 

@@ -20,7 +20,7 @@ retry budget.
 ## Test Overview
 
 The driver script is
-`scriptpp/test/test-e2e-vuln-exception-full.sh`. It owns the testbed:
+`scripts/test/test-e2e-vuln-exception-full.sh`. It owns the testbed:
 
 **Users** (USER + VULN + REQ — no ADMIN/SECCHAMPION so requests stay PENDING):
 - `e2etestuser1` (`e2etestuser1@e2e.test`)
@@ -66,15 +66,15 @@ for Phase 8, passing the captured IDs/credentials through env vars.
 ## High-Level Loop
 
 ```
-1. Start backend   (./scriptpp/startbackenddev.sh)
-2. Start frontend  (./scriptpp/startfrontenddev.sh)
+1. Start backend   (./scripts/startbackenddev.sh)
+2. Start frontend  (./scripts/startfrontenddev.sh)
 3. Wait for both ports to be bound (8080 / 4321)
 4. Run the driver:
      pass-cli run --env-file ./secmanpp.env -- \
-       ./scriptpp/test/test-e2e-vuln-exception-full.sh --verbose
+       ./scripts/test/test-e2e-vuln-exception-full.sh --verbose
 5. IF all green → done, report success
 6. IF failure →
-   a. STOP both services (./scriptpp/stopbackenddev.sh, ./scriptpp/stopfrontenddev.sh)
+   a. STOP both services (./scripts/stopbackenddev.sh, ./scripts/stopfrontenddev.sh)
    b. Diagnose backend vs frontend vs test
    c. Apply the fix
    d. RESTART both services
@@ -98,10 +98,10 @@ respect `BASE_URL` / `FRONTEND_URL` / `SECMAN_BASE_URL`.
 
 | Setting                  | Default                           |
 | ------------------------ | --------------------------------- |
-| Backend start            | `./scriptpp/startbackenddev.sh`   |
+| Backend start            | `./scripts/startbackenddev.sh`   |
 | Backend port             | `8080` (liveness via port binding)|
 | Backend wait timeout     | `120` seconds                     |
-| Frontend start           | `./scriptpp/startfrontenddev.sh`  |
+| Frontend start           | `./scripts/startfrontenddev.sh`  |
 | Frontend port            | `4321` (liveness via port binding)|
 | Frontend wait timeout    | `60` seconds                      |
 
@@ -113,11 +113,11 @@ respect `BASE_URL` / `FRONTEND_URL` / `SECMAN_BASE_URL`.
    stop it via the canonical scripts (never `kill` inline).
 3. Start backend in background:
    ```bash
-   nohup ./scriptpp/startbackenddev.sh > .e2e-logs/backend.log 2>&1 &
+   nohup ./scripts/startbackenddev.sh > .e2e-logs/backend.log 2>&1 &
    ```
 4. Start frontend in background:
    ```bash
-   nohup ./scriptpp/startfrontenddev.sh > .e2e-logs/frontend.log 2>&1 &
+   nohup ./scripts/startfrontenddev.sh > .e2e-logs/frontend.log 2>&1 &
    ```
 5. **Wait for liveness via port binding** (not HTTP probes against localhost):
    - Backend: poll `lsof -iTCP:8080 -sTCP:LISTEN -n -P` until non-empty (120s).
@@ -135,7 +135,7 @@ Run the driver with Proton Pass injection:
 
 ```bash
 pass-cli run --env-file ./secmanpp.env -- \
-    ./scriptpp/test/test-e2e-vuln-exception-full.sh --verbose 2>&1 \
+    ./scripts/test/test-e2e-vuln-exception-full.sh --verbose 2>&1 \
     | tee .e2e-logs/e2e-vuln-exception-run-<N>.log
 ```
 
@@ -177,8 +177,8 @@ Classify the most recent failure:
 #### Step 3a: Stop Both Services
 
 ```bash
-./scriptpp/stopbackenddev.sh
-./scriptpp/stopfrontenddev.sh
+./scripts/stopbackenddev.sh
+./scripts/stopfrontenddev.sh
 ```
 
 Wait 3 seconds for processes to terminate. Never call `kill` directly.
@@ -218,7 +218,7 @@ Fix priority: **backend first**, then frontend.
 | Approval dashboard UI                    | `src/frontend/src/components/ExceptionApprovalDashboard.tsx`                                     |
 | Account vulnerabilities UI               | `src/frontend/src/pages/account-vulns.astro`                                                     |
 | Outdated assets UI                       | `src/frontend/src/pages/outdated-assets.astro`                                                   |
-| Driver script                            | `scriptpp/test/test-e2e-vuln-exception-full.sh`                                                  |
+| Driver script                            | `scripts/test/test-e2e-vuln-exception-full.sh`                                                  |
 | Playwright spec                          | `tests/e2e/vuln-exception-full.spec.ts`                                                          |
 
 **Diagnosis steps:**
@@ -246,8 +246,8 @@ Fix priority: **backend first**, then frontend.
 #### Step 3c: Restart Both
 
 ```bash
-nohup ./scriptpp/startbackenddev.sh > .e2e-logs/backend.log 2>&1 &
-nohup ./scriptpp/startfrontenddev.sh > .e2e-logs/frontend.log 2>&1 &
+nohup ./scripts/startbackenddev.sh > .e2e-logs/backend.log 2>&1 &
+nohup ./scripts/startfrontenddev.sh > .e2e-logs/frontend.log 2>&1 &
 ```
 
 Wait for ports `8080` and `4321` to be bound (same timeouts as Phase 1).
@@ -270,8 +270,8 @@ The driver's `trap EXIT` handler already removes test data even on failure.
 After the loop:
 
 ```bash
-./scriptpp/stopbackenddev.sh
-./scriptpp/stopfrontenddev.sh
+./scripts/stopbackenddev.sh
+./scripts/stopfrontenddev.sh
 ```
 
 Print a summary table:
@@ -294,13 +294,13 @@ Once green, **re-run the driver immediately** (same command) without doing any
 cleanup yourself. The trap and pre-run cleanup should mean the second pass is
 also green with zero fixes. If the second pass fails, treat it as a regression
 in the cleanup logic and fix `cleanup()` in
-`scriptpp/test/test-e2e-vuln-exception-full.sh`.
+`scripts/test/test-e2e-vuln-exception-full.sh`.
 
 ## Important Notes
 
 - **Never commit or push** — only edit files locally. The user drives commits.
-- **Secrets via Proton Pass** — both `scriptpp/startbackenddev.sh`,
-  `scriptpp/startfrontenddev.sh`, and the test driver use `pass-cli run`.
+- **Secrets via Proton Pass** — both `scripts/startbackenddev.sh`,
+  `scripts/startfrontenddev.sh`, and the test driver use `pass-cli run`.
   Never hardcode credentials.
 - **No `localhost` literals in tests** — use `BASE_URL` / `FRONTEND_URL` /
   `SECMAN_BASE_URL`. Liveness checks use port binding, not HTTP probes.

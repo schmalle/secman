@@ -16,7 +16,7 @@ until the test passes or you've exhausted the retry budget.
 
 ## Test Overview
 
-The test script (`scriptpp/test/test-e2e-exception-workflowsupport.sh`) performs
+The test script (`scripts/test/test-e2e-exception-workflowsupport.sh`) performs
 an 11-step MCP-based workflow:
 
 1. Clean up pre-existing test user (if any)
@@ -37,8 +37,8 @@ for direct database operations (cleanup, view truncation, ID lookups).
 ## High-Level Loop
 
 ```
-1. Start backend   (scriptpp/startbackenddev.sh)
-2. Start frontend  (scriptpp/startfrontenddev.sh)
+1. Start backend   (scripts/startbackenddev.sh)
+2. Start frontend  (scripts/startfrontenddev.sh)
 3. Wait for both to be healthy
 4. Run E2E exception workflow test
 5. IF all green -> done, report success
@@ -69,13 +69,13 @@ running. This ensures a clean state for each attempt.
 
 3. **Start backend** in background:
    ```bash
-   nohup ./scriptpp/startbackenddev.sh > .e2e-logs/backend.log 2>&1 &
+   nohup ./scripts/startbackenddev.sh > .e2e-logs/backend.log 2>&1 &
    ```
    Record the PID so you can kill it later.
 
 4. **Start frontend** in background:
    ```bash
-   nohup ./scriptpp/startfrontenddev.sh > .e2e-logs/frontend.log 2>&1 &
+   nohup ./scripts/startfrontenddev.sh > .e2e-logs/frontend.log 2>&1 &
    ```
    Record the PID.
 
@@ -92,7 +92,7 @@ export BASE_URL="http://localhost:8080"
 export SECMAN_MCP_KEY="pass://Test/SECMAN/SECMAN_MCP_KEY"
 export SECMAN_ADMIN_EMAIL="pass://Test/SECMAN/SECMAN_ADMIN_EMAIL"
 
-pass-cli run -- ./scriptpp/test/test-e2e-exception-workflowsupport.sh --verbose 2>&1 | tee .e2e-logs/e2e-exception-run-<N>.log
+pass-cli run -- ./scripts/test/test-e2e-exception-workflowsupport.sh --verbose 2>&1 | tee .e2e-logs/e2e-exception-run-<N>.log
 ```
 
 Where `<N>` is the iteration number (starting at 1).
@@ -127,12 +127,12 @@ On **any** failure:
 
 #### Step 3a: Stop Both Services
 
-Always stop via the canonical scripts in `./scriptpp/` — never call `kill`
+Always stop via the canonical scripts in `./scripts/` — never call `kill`
 or `lsof | xargs kill` inline:
 
 ```bash
-./scriptpp/stopbackenddev.sh
-./scriptpp/stopfrontenddev.sh
+./scripts/stopbackenddev.sh
+./scripts/stopfrontenddev.sh
 ```
 
 Both scripts target the dev ports (8080 and 4321), graceful-kill first, then
@@ -176,11 +176,11 @@ After fixing, restart **both** services:
 
 ```bash
 # Start backend
-nohup ./scriptpp/startbackenddev.sh > .e2e-logs/backend.log 2>&1 &
+nohup ./scripts/startbackenddev.sh > .e2e-logs/backend.log 2>&1 &
 BACKEND_PID=$!
 
 # Start frontend
-nohup ./scriptpp/startfrontenddev.sh > .e2e-logs/frontend.log 2>&1 &
+nohup ./scripts/startfrontenddev.sh > .e2e-logs/frontend.log 2>&1 &
 FRONTEND_PID=$!
 ```
 
@@ -200,8 +200,8 @@ Go back to Phase 2 and re-run the test script. Increment the iteration counter.
 
 ### Phase 4 — Teardown & Report
 
-- Stop backend and frontend via `./scriptpp/stopbackenddev.sh` and
-  `./scriptpp/stopfrontenddev.sh` (never raw `kill`).
+- Stop backend and frontend via `./scripts/stopbackenddev.sh` and
+  `./scripts/stopfrontenddev.sh` (never raw `kill`).
 - Print a summary table:
 
 ```
@@ -217,11 +217,9 @@ Go back to Phase 2 and re-run the test script. Increment the iteration counter.
 ## Important Notes
 
 - **Never commit or push** — only edit files locally.
-- **Secrets are handled by Proton Pass** — `scriptpp/startbackenddev.sh` and
-  `scriptpp/startfrontenddev.sh` use `pass-cli run` to inject secrets. The test script
+- **Secrets are handled by Proton Pass** — `scripts/startbackenddev.sh` and
+  `scripts/startfrontenddev.sh` use `pass-cli run` to inject secrets. The test script
   must also be run with `pass-cli run` to resolve `SECMAN_MCP_KEY` and `SECMAN_ADMIN_EMAIL`.
-- **Always use the Proton Pass variants** (`scriptpp/*.sh` and `scriptpp/test/*.sh`).
-  Do not fall back to the 1Password scripts in `scripts/` — this skill is pinned to Proton Pass.
 - **Port collisions**: Before starting, check if ports 8080 and 4321 are in use
   and kill existing processes.
 - **Log files** go to `.e2e-logs/` — this directory is gitignored.

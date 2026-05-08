@@ -1,6 +1,6 @@
 {
   "backend": {
-    "start": "op run --env-file=secman.env -- gradle :backendng:clean :backendng:run --no-daemon",
+    "start": "pass-cli run --env-file=secman.env -- gradle :backendng:clean :backendng:run --no-daemon",
     "healthUrl": "http://localhost:8080",
     "healthTimeout": 120
   },
@@ -11,7 +11,7 @@
     "cwd": "./frontend"
   },
   "e2e": {
-    "script": "./scriptpp/e2e-test.sh",
+    "script": "./scripts/e2e-test.sh",
     "maxRetries": 5,
     "retryDelay": 5,
     "env": {

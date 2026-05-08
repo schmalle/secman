@@ -1,4 +1,4 @@
 #!/bin/bash
-# secman - CLI wrapper for secman security management tool using 1Password
+# secman - CLI wrapper for secman security management tool using Proton Pass
 
-op run --env-file ./secman.env -- ./scriptpp/secmanclisupport
+pass-cli run --env-file ./secmanpp.env -- ./scripts/secmanclisupport

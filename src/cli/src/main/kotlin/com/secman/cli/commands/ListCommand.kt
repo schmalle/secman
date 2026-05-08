@@ -14,16 +14,16 @@ import java.io.StringWriter
  * CLI command to list user mappings (Feature 049)
  *
  * Usage:
- *   ./scriptpp/secman manage-user-mappings list
- *   ./scriptpp/secman manage-user-mappings list --email user@example.com
- *   ./scriptpp/secman manage-user-mappings list --status PENDING
- *   ./scriptpp/secman manage-user-mappings list --format JSON
- *   ./scriptpp/secman manage-user-mappings list --format CSV
+ *   ./scripts/secman manage-user-mappings list
+ *   ./scripts/secman manage-user-mappings list --email user@example.com
+ *   ./scripts/secman manage-user-mappings list --status PENDING
+ *   ./scripts/secman manage-user-mappings list --format JSON
+ *   ./scripts/secman manage-user-mappings list --format CSV
  *
  * Download mappings to a file (CSV is round-trip compatible with `import`):
- *   ./scriptpp/secman manage-user-mappings list --type AWS --format CSV --output aws.csv
- *   ./scriptpp/secman manage-user-mappings list --type DOMAIN --format JSON --output domains.json
- *   ./scriptpp/secman manage-user-mappings list --format CSV --output all-mappings.csv
+ *   ./scripts/secman manage-user-mappings list --type AWS --format CSV --output aws.csv
+ *   ./scripts/secman manage-user-mappings list --type DOMAIN --format JSON --output domains.json
+ *   ./scripts/secman manage-user-mappings list --format CSV --output all-mappings.csv
  *
  * Filters:
  *   --email   single user
