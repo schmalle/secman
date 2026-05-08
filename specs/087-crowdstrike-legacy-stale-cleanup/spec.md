@@ -5,6 +5,12 @@
 **Status**: Draft
 **Input**: User description: "Extend CrowdStrike stale-asset cleanup to also identify and remove legacy CrowdStrike-imported assets where `crowdstrike_last_imported_at IS NULL`, gated behind an additive include-legacy flag."
 
+## Clarifications
+
+### Session 2026-05-08
+
+- Q: When the legacy toggle is OFF, should the dry-run summary still show a preview of legacy candidates that would be selected if the toggle were enabled? → A: No — the toggle is a complete gate. Toggle OFF means the dry-run summary shows zero legacy candidates and no preview; real and dry runs with the same inputs always produce the same candidate set. Admins who want to see legacy candidates must turn the toggle ON for that one dry-run.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Admin reclaims stale legacy CrowdStrike rows (Priority: P1)
@@ -21,7 +27,7 @@ A platform admin opens the Falcon configuration page to clean up the asset inven
 2. **Given** the same legacy row, **When** an admin runs the cleanup with the legacy toggle disabled, **Then** the asset is **not** listed as a candidate and is **not** deleted (existing behaviour preserved).
 3. **Given** an asset matching the legacy pattern but with a manual creator OR a scan uploader recorded against it, **When** the cleanup runs with the toggle enabled, **Then** the asset is **not** selected — manual/scan ownership protects it.
 4. **Given** a legacy row whose `last_seen` is null but whose `updated_at` is older than the threshold, **When** the cleanup runs with the toggle enabled, **Then** the asset is selected (the staleness check falls through to the next available timestamp).
-5. **Given** a candidate set that contains the same asset under both rules (its `crowdstrike_last_imported_at` is old AND it also satisfies the legacy fence — possible if the timestamp is set but the legacy fence is independently true), **When** the cleanup runs, **Then** the asset appears once in the candidate list (de-duplicated by id) and only one delete is attempted.
+5. **Given** two stale assets — one selected by the timestamp rule (its `crowdstrike_last_imported_at` is old) and one by the legacy rule (its `crowdstrike_last_imported_at` is null) — and noting that the two predicates are mutually exclusive on the import-timestamp column, **When** the cleanup runs with both rules active, **Then** each asset appears exactly once in the candidate list with the reason it was selected, and one delete is attempted per asset. (De-duplication by id is a defensive belt-and-braces step that has no practical effect under the current predicates but protects correctness if either predicate is widened in the future.)
 
 ---
 
@@ -63,6 +69,7 @@ After turning the legacy rule on, an admin needs to verify that nightly runs are
 - A manual run requests `includeLegacy=true` while the configured default is `false`. The per-run override wins for that one run; the configured default is unchanged for the next scheduled run.
 - The configured default is `true` but a manual run explicitly requests `includeLegacy=false`. The override wins for that run.
 - Two runs are kicked off back-to-back. The audit-row writes are serialised through the existing run repository — no special concurrency handling is added.
+- A manual cleanup run with `includeLegacy=true` does NOT apply the safety brake. Manual runs intentionally bypass the brake (the admin is the deliberate decision-maker, typically after a dry-run) and that behaviour is preserved when the legacy rule contributes candidates. The brake — with its widened denominator per FR-007 — applies only to the scheduled run.
 
 ## Requirements *(mandatory)*
 
@@ -79,7 +86,7 @@ After turning the legacy rule on, an admin needs to verify that nightly runs are
 - **FR-009**: The cleanup-config endpoint MUST expose the effective default of the legacy toggle so the admin UI shows the current configured state rather than a hardcoded value.
 - **FR-010**: A manual cleanup request MUST accept an optional per-run override for the legacy toggle; when omitted, the configured default applies.
 - **FR-011**: The admin "Stale Asset Cleanup" panel MUST present a toggle for including legacy rows that initialises from the cleanup-config endpoint.
-- **FR-012**: The dry-run summary in the admin panel MUST display the candidate split (timestamp vs. legacy) so admins see the contribution of each rule before authorising a destructive run.
+- **FR-012**: When the legacy toggle is enabled (per configured default or per-run override), the dry-run summary in the admin panel MUST display the candidate split (timestamp vs. legacy) so admins see the contribution of each rule before authorising a destructive run. When the legacy toggle is disabled, the dry-run summary MUST NOT include legacy candidates and MUST NOT show a "would-find-N-legacy" preview — the toggle is a complete gate and the dry-run summary always reflects exactly what a real run with the same inputs would produce.
 - **FR-013**: The cleanup history table MUST display the legacy candidate and legacy deletion counts as distinct columns or a clearly labelled compound cell.
 - **FR-014**: The owner literal "CrowdStrike Import" MUST be defined exactly once in code and referenced everywhere it is checked or written, so rule B's predicate cannot drift from how rows are created.
 - **FR-015**: Manually-created assets (those with a recorded manual creator) and scan-uploaded assets (those with a recorded scan uploader) MUST never be selected by the legacy rule, regardless of any other field.
@@ -98,7 +105,7 @@ After turning the legacy rule on, an admin needs to verify that nightly runs are
 - **SC-001**: After enabling the legacy rule on a representative dataset, dry-run candidate counts increase by at least the number of legacy CrowdStrike-origin rows that are stale by `last_seen`/`updated_at`/`created_at` — i.e., the rule actually finds rows that the existing rule misses.
 - **SC-002**: Zero manually-created or scan-uploaded assets are selected by the legacy rule across acceptance and integration tests covering every fence-violation case.
 - **SC-003**: Across acceptance scenarios where an asset matches both rules, the candidate appears exactly once in the dry-run output and exactly one delete is attempted on a real run (de-duplication by id is enforced).
-- **SC-004**: With the legacy rule on, the safety brake does NOT abort a run whose true blast-radius percentage (counting both rule types in numerator and denominator) is at or below the configured limit.
+- **SC-004**: With the legacy rule on, the safety brake does NOT abort a *scheduled* run whose true blast-radius percentage (counting both rule types in numerator and denominator) is at or below the configured limit. (Manual runs continue to bypass the brake by design.)
 - **SC-005**: Admins reviewing cleanup history can attribute every deletion to a rule (timestamp or legacy) without consulting the database directly — the history panel exposes the breakdown.
 - **SC-006**: The admin UI's legacy toggle initial state matches the backend's configured default in 100% of page loads (no hardcoded UI defaults).
 - **SC-007**: All mandatory project gates pass (build, backend dev startup, JS-error scan for both admin and normal-user roles, vulnerability-exception E2E) before the feature is considered done.
