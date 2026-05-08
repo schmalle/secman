@@ -3,6 +3,7 @@ package com.secman.service
 import com.secman.domain.Asset
 import com.secman.domain.CrowdStrikeCleanupRun
 import com.secman.domain.CrowdStrikeCleanupStatus
+import com.secman.dto.CleanupCandidateReason
 import com.secman.dto.CrowdStrikeAssetCleanupCandidateDto
 import com.secman.dto.CrowdStrikeAssetCleanupErrorDto
 import com.secman.dto.CrowdStrikeAssetCleanupResponse
@@ -73,7 +74,7 @@ class CrowdStrikeCleanupAuditServiceTest {
             candidateCount = 2,
             deletedCount = 2,
             skippedCount = 0,
-            candidates = listOf(CrowdStrikeAssetCleanupCandidateDto(1, "a", cutoff.minusDays(1))),
+            candidates = listOf(CrowdStrikeAssetCleanupCandidateDto(1, "a", cutoff.minusDays(1), CleanupCandidateReason.TIMESTAMP_STALE)),
             errors = emptyList()
         )
         every { assetRepository.countCrowdStrikeTracked() } returns 100L

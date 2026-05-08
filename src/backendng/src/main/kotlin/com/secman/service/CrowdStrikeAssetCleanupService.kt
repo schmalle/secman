@@ -1,5 +1,6 @@
 package com.secman.service
 
+import com.secman.dto.CleanupCandidateReason
 import com.secman.dto.CrowdStrikeAssetCleanupCandidateDto
 import com.secman.dto.CrowdStrikeAssetCleanupErrorDto
 import com.secman.dto.CrowdStrikeAssetCleanupResponse
@@ -37,7 +38,8 @@ open class CrowdStrikeAssetCleanupService(
                 CrowdStrikeAssetCleanupCandidateDto(
                     assetId = assetId,
                     name = asset.name,
-                    crowdStrikeLastImportedAt = importedAt
+                    crowdStrikeLastImportedAt = importedAt,
+                    reason = CleanupCandidateReason.TIMESTAMP_STALE
                 )
             }
             .sortedBy { it.name.lowercase() }
