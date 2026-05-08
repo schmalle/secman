@@ -131,6 +131,21 @@ This document resolves every "NEEDS CLARIFICATION" candidate the planner identif
 
 ---
 
+## Decision 11 — OpenAPI/Swagger maintenance (Constitution III)
+
+**Decision**: Feature 087 does NOT introduce an OpenAPI/Swagger spec. The HTTP contract MD files in `contracts/` document the JSON shapes for the new and changed endpoints during this feature's lifecycle.
+
+**Rationale**: Audit of the repository (during the `/speckit.analyze` finding C1) shows no OpenAPI plugin (`io.micronaut.openapi` is absent from `src/backendng/build.gradle.kts`), no static `openapi.yml`/`swagger.yml` under `docs/` or `src/backendng/src/main/resources/`, and no Swagger UI endpoint. Constitution Principle III's mandate ("OpenAPI/Swagger documentation MUST be maintained") is currently unmet codebase-wide. Introducing OpenAPI for Feature 087 alone would create a partial spec covering only three endpoints out of the many on the API surface — a misleading deliverable. Resolving the constitution-level gap requires a separate, codebase-scoped initiative (add the plugin, annotate every controller, validate the generated spec against existing tests).
+
+**Alternatives considered**:
+- *Add OpenAPI for the modified endpoints only*: rejected — produces a misleading partial spec that implies the rest of the API is undocumented.
+- *Block Feature 087 on adding repo-wide OpenAPI*: rejected — grossly out of proportion for an additive cleanup-rule feature, and would couple two unrelated initiatives.
+- *Generate per-endpoint Swagger fragments inline in controller KDoc*: rejected — non-standard, not consumed by any tooling here, and creates the same partial-coverage problem.
+
+**Follow-up**: A separate ticket should propose adding `io.micronaut.openapi` to the build and producing a complete spec. Until then, the per-feature `contracts/*.md` files in each `specs/NNN-…/contracts/` directory carry the contract documentation burden.
+
+---
+
 ## Open items deferred to `/speckit.tasks`
 
 - Exact ordering of unit-test cases (independent — order does not matter).
