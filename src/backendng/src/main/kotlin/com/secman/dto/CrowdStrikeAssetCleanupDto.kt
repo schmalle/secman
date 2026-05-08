@@ -32,5 +32,10 @@ data class CrowdStrikeAssetCleanupResponse(
     val deletedCount: Int,
     val skippedCount: Int,
     val candidates: List<CrowdStrikeAssetCleanupCandidateDto>,
-    val errors: List<CrowdStrikeAssetCleanupErrorDto>
+    val errors: List<CrowdStrikeAssetCleanupErrorDto>,
+    // Optional run status — populated by CrowdStrikeCleanupAuditService.
+    // One of: SUCCESS, PARTIAL, ABORTED_SAFETY_BRAKE, FAILED. Null on legacy paths.
+    val status: String? = null,
+    // Audit-row id, present when the run was persisted to crowdstrike_cleanup_run.
+    val runId: Long? = null
 )

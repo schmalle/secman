@@ -52,7 +52,8 @@ open class AssetController(
     private val assetExportService: com.secman.service.AssetExportService,
     private val assetCascadeDeleteService: com.secman.service.AssetCascadeDeleteService,
     private val assetMergeService: com.secman.service.AssetMergeService,
-    private val crowdStrikeAssetCleanupService: com.secman.service.CrowdStrikeAssetCleanupService
+    private val crowdStrikeAssetCleanupService: com.secman.service.CrowdStrikeAssetCleanupService,
+    private val crowdStrikeCleanupAuditService: com.secman.service.CrowdStrikeCleanupAuditService
 ) {
     
     private val log = LoggerFactory.getLogger(AssetController::class.java)
@@ -848,10 +849,15 @@ open class AssetController(
         authentication: Authentication
     ): HttpResponse<*> {
         return try {
-            val result = crowdStrikeAssetCleanupService.cleanup(
+            // Manual runs go through the audit service so they are persisted in
+            // crowdstrike_cleanup_run alongside scheduled runs. The safety brake
+            // is intentionally not applied here — the admin already chose this
+            // action (typically after a --dry-run).
+            val result = crowdStrikeCleanupAuditService.run(
                 days = request.days,
                 dryRun = request.dryRun,
-                username = authentication.name
+                triggeredBy = authentication.name,
+                maxDeletePercent = null
             )
             HttpResponse.ok(result)
         } catch (e: IllegalArgumentException) {

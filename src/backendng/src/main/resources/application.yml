@@ -253,6 +253,17 @@ secman:
     # When true: vulnerabilities without patch_publication_date are skipped during import
     # When false: all vulnerabilities are imported (current behavior)
     require-patch-publication-date: ${VULN_REQUIRE_PATCH_PUBLICATION_DATE:false}
+  crowdstrike:
+    # Scheduled cleanup of assets that have not been re-imported by CrowdStrike
+    # for `stale-days` days. Opt-in: disabled by default so existing deployments
+    # keep current behavior until ops flips the flag.
+    cleanup:
+      enabled: ${CROWDSTRIKE_CLEANUP_ENABLED:false}
+      stale-days: ${CROWDSTRIKE_CLEANUP_STALE_DAYS:30}
+      # Safety brake: abort the run if more than this percent of CrowdStrike-tracked
+      # assets would be deleted in a single pass (protects against import outages).
+      # Setting to 100 disables the brake.
+      max-delete-percent: ${CROWDSTRIKE_CLEANUP_MAX_DELETE_PERCENT:10}
   http:
     services:
       translation:
