@@ -142,6 +142,15 @@ interface AssetRepository : JpaRepository<Asset, Long> {
 
     fun findByCrowdStrikeLastImportedAtBefore(cutoff: LocalDateTime): List<Asset>
 
+    /**
+     * Count assets that have ever been imported by CrowdStrike (timestamp not null).
+     * Used as the denominator for the stale-asset cleanup safety brake.
+     */
+    @io.micronaut.data.annotation.Query(
+        "SELECT COUNT(a) FROM Asset a WHERE a.crowdStrikeLastImportedAt IS NOT NULL"
+    )
+    fun countCrowdStrikeTracked(): Long
+
     // MCP Tool Support - Feature 006: Asset inventory queries with pagination
 
     /**

@@ -1,10 +1,12 @@
 ---
 import Layout from '../../layouts/Layout.astro';
 import FalconConfigManagement from '../../components/FalconConfigManagement';
+import CrowdStrikeStaleAssetCleanup from '../../components/CrowdStrikeStaleAssetCleanup';
 ---
 
 <Layout title="CrowdStrike Falcon Configuration - Admin">
   <FalconConfigManagement client:load />
+  <CrowdStrikeStaleAssetCleanup client:load />
   <div class="mt-4">
     <a href="/admin" class="btn btn-secondary">Back to Admin</a>
   </div>

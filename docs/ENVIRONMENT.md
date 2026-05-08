@@ -64,6 +64,17 @@ Monitor: `GET /memory` (used/max/free/total MB). Set to `false` to roll back.
 | `VULN_USE_PATCH_PUBLICATION_DATE` | `false` | `false`: `daysOpen = now − detection`. `true`: `now − patchPublicationDate`. |
 | `VULN_REQUIRE_PATCH_PUBLICATION_DATE` | `false` | only import vulns with patch-publication date |
 
+### CrowdStrike stale-asset cleanup
+Daily scheduled job (02:30 server TZ) that deletes assets whose `crowdStrikeLastImportedAt` is older than `STALE_DAYS`. Manual runs (admin UI / CLI `delete-asset-not-seen`) ignore the brake but are still recorded in `crowdstrike_cleanup_run`.
+
+| Var | Default | Effect |
+|---|---|---|
+| `CROWDSTRIKE_CLEANUP_ENABLED` | `false` | opt-in master switch for the scheduled job |
+| `CROWDSTRIKE_CLEANUP_STALE_DAYS` | `30` | delete CrowdStrike-tracked assets last imported > N days ago |
+| `CROWDSTRIKE_CLEANUP_MAX_DELETE_PERCENT` | `10` | abort the scheduled run if candidates exceed this % of CrowdStrike-tracked assets; set `100` to disable the brake |
+
+Notifications: ADMIN users receive an email whenever a run deletes ≥1 asset, hits errors, or trips the safety brake. "Boring" runs (0 deletions, 0 errors) are silent.
+
 ### Debug & logging
 | Var | Default | Effect |
 |---|---|---|
@@ -145,6 +156,9 @@ SECMAN_AUTH_COOKIE_SECURE=true
 # OAUTH_STATE_RETRY_BACKOFF_MULTIPLIER=1.5
 # OAUTH_TOKEN_EXCHANGE_MAX_RETRIES=2
 # OAUTH_TOKEN_EXCHANGE_RETRY_DELAY=500
+# CROWDSTRIKE_CLEANUP_ENABLED=false
+# CROWDSTRIKE_CLEANUP_STALE_DAYS=30
+# CROWDSTRIKE_CLEANUP_MAX_DELETE_PERCENT=10
 ```
 
 `/etc/secman/frontend.env`:
