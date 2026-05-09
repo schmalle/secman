@@ -88,6 +88,9 @@ export async function getOutdatedAssets(
 
   const url = `/api/outdated-assets${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
   const response = await authenticatedGet(url);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch outdated assets: ${response.status}`);
+  }
   return await response.json();
 }
 
@@ -101,6 +104,9 @@ export async function getLastRefreshTimestamp(): Promise<string | null> {
     const response = await authenticatedGet('/api/outdated-assets/last-refresh');
     if (response.status === 204) {
       return null;
+    }
+    if (!response.ok) {
+      throw new Error(`Failed to fetch last refresh timestamp: ${response.status}`);
     }
     const data: LastRefreshResponse = await response.json();
     return data.lastRefreshTimestamp;
@@ -120,8 +126,11 @@ export async function getLastRefreshTimestamp(): Promise<string | null> {
  */
 export async function getAdDomains(): Promise<string[]> {
   const response = await authenticatedGet('/api/outdated-assets/ad-domains');
+  if (!response.ok) {
+    throw new Error(`Failed to fetch AD domains: ${response.status}`);
+  }
   const data: AdDomainsResponse = await response.json();
-  return data.adDomains;
+  return data.adDomains ?? [];
 }
 
 /**

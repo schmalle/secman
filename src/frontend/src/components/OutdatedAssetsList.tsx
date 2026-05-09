@@ -85,13 +85,16 @@ const OutdatedAssetsList: React.FC = () => {
 
       const page: OutdatedAssetsPage = await getOutdatedAssets(params);
 
-      setAssets(page.content);
-      setTotalPages(page.totalPages);
-      setTotalElements(page.totalElements);
-      setCurrentPage(page.number);
+      setAssets(page.content ?? []);
+      setTotalPages(page.totalPages ?? 0);
+      setTotalElements(page.totalElements ?? 0);
+      setCurrentPage(page.number ?? 0);
     } catch (err: any) {
-      console.error('Failed to fetch outdated assets:', err);
-      setError(err.response?.data?.message || 'Failed to load outdated assets');
+      // Suppress console noise for expected RBAC denials
+      if (!/\b(403|401)\b/.test(err?.message || '')) {
+        console.error('Failed to fetch outdated assets:', err);
+      }
+      setError(err.response?.data?.message || err?.message || 'Failed to load outdated assets');
     } finally {
       setLoading(false);
     }
@@ -104,8 +107,11 @@ const OutdatedAssetsList: React.FC = () => {
     try {
       const timestamp = await getLastRefreshTimestamp();
       setLastRefresh(timestamp);
-    } catch (err) {
-      console.error('Failed to fetch last refresh timestamp:', err);
+    } catch (err: any) {
+      // Suppress console noise for expected RBAC denials
+      if (!/\b(403|401)\b/.test(err?.message || '')) {
+        console.error('Failed to fetch last refresh timestamp:', err);
+      }
     }
   };
 
@@ -115,9 +121,12 @@ const OutdatedAssetsList: React.FC = () => {
   const fetchAdDomains = async () => {
     try {
       const domains = await getAdDomains();
-      setAdDomainOptions(domains);
-    } catch (err) {
-      console.error('Failed to fetch AD domains:', err);
+      setAdDomainOptions(domains ?? []);
+    } catch (err: any) {
+      // Suppress console noise for expected RBAC denials
+      if (!/\b(403|401)\b/.test(err?.message || '')) {
+        console.error('Failed to fetch AD domains:', err);
+      }
     }
   };
 

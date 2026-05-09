@@ -118,7 +118,10 @@ const ProductsOverview: React.FC = () => {
                 setSelectedProduct('');
             }
         } catch (err: any) {
-            console.error('Failed to fetch products:', err);
+            // Suppress console noise for expected RBAC denials
+            if (!/\b(403|401)\b/.test(err?.message || '')) {
+                console.error('Failed to fetch products:', err);
+            }
             setError('Failed to load products. Please try again.');
         } finally {
             setLoadingProducts(false);
@@ -135,7 +138,10 @@ const ProductsOverview: React.FC = () => {
             const response = await getTopProducts(15);
             setTopProducts(response.products || []);
         } catch (err: any) {
-            console.error('Failed to fetch top products:', err);
+            // Suppress console noise for expected RBAC denials
+            if (!/\b(403|401)\b/.test(err?.message || '')) {
+                console.error('Failed to fetch top products:', err);
+            }
             // Don't set error for top products - just log it
         } finally {
             setLoadingTopProducts(false);

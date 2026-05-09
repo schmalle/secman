@@ -98,21 +98,35 @@ const requiresRedirect = !user && !isPublicPage;
 
         {/* Client-side Auth Check and Redirect */}
         <script define:vars={{ isPublicPage }}>
-            // Define a global variable to hold user info
-            window.currentUser = null;
+            // window.currentUser starts as `undefined` and is left that way until
+            // checkAuthAndRedirect() resolves. React islands rely on the
+            // undefined → resolved transition (and the `userLoaded` event) to
+            // distinguish "auth pending" from "auth resolved with no user".
+            // Pre-setting it to null caused a race where Edge/IE clients (slower
+            // network or different hydration scheduling) hydrated React islands
+            // before this fetch returned, made the islands treat null as "no
+            // user", and rendered Access Denied permanently.
 
             // Migration cleanup: remove legacy authToken from localStorage and cookies.
             // Authentication is now handled solely via the HttpOnly secman_auth cookie.
             localStorage.removeItem('authToken');
             document.cookie = 'authToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
 
+            function resolveAuth(user) {
+                window.currentUser = user;
+                window.dispatchEvent(new CustomEvent('userLoaded'));
+            }
+
             async function checkAuthAndRedirect() {
                 if (isPublicPage) {
-                    // Don't redirect if on a public page like /login or /about
+                    // Public pages (e.g. /login) don't gate components on
+                    // currentUser; signal "no user" so any island that mounts
+                    // here resolves immediately instead of timing out.
+                    resolveAuth(null);
                     return;
                 }
                 try {
-                    // Check for user data in localStorage (indicates a logged-in session)
+                    // Check for user data in sessionStorage (indicates a logged-in session)
                     // The actual JWT token is stored in an HttpOnly cookie (secman_auth)
                     // for XSS protection and is sent automatically with credentials: 'include'
                     const userStr = sessionStorage.getItem('user');
@@ -131,27 +145,27 @@ const requiresRedirect = !user && !isPublicPage;
                         credentials: 'include'  // Sends HttpOnly cookie automatically
                     });
                     if (!response.ok) {
-                        // Not logged in or session invalid, redirect to login
                         if (response.status === 401) {
                              console.log('Not authenticated, clearing user data and redirecting to /login');
-                             // Clear user data (token is in HttpOnly cookie, cleared by server)
                              sessionStorage.removeItem('user');
                              window.location.href = '/login';
-                        } else {
-                            // Handle other errors if needed
-                            console.error('Auth status check failed:', response.statusText);
+                             return;
                         }
-                    } else {
-                        // User is logged in, store user data globally.
-                        const user = await response.json();
-                        window.currentUser = user; // Store user data
-                        console.log('User authenticated:', user.username, 'Roles:', user.roles);
-                        // Trigger a custom event to initialize session keep-alive
-                        window.dispatchEvent(new CustomEvent('userLoaded'));
+                        // Other server errors: signal "no user" so islands stop
+                        // waiting and render their unauthorized state instead of
+                        // hanging on the 5s timeout.
+                        console.error('Auth status check failed:', response.statusText);
+                        resolveAuth(null);
+                        return;
                     }
+                    const user = await response.json();
+                    console.log('User authenticated:', user.username, 'Roles:', user.roles);
+                    resolveAuth(user);
                 } catch (error) {
+                    // Network errors during navigation are expected; don't
+                    // redirect, but do resolve so islands don't hang.
                     console.warn('Failed to fetch auth status:', error);
-                    // Network errors during navigation are expected; don't redirect
+                    resolveAuth(null);
                 }
             }
             checkAuthAndRedirect();
