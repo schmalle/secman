@@ -1,28 +1,45 @@
 # AWS dev scripts (alternative to pass-cli)
 
-This document covers the AWS-flavored dev launchers:
+This document covers the AWS-flavored launchers — counterparts to every
+pass-cli script under `scripts/`. Each one resolves credentials from **AWS
+Secrets Manager** instead of Proton Pass, and is safe to run from cron and
+systemd on Amazon Linux.
 
-- `scripts/startbackenddevaws.sh` — backend dev (counterpart to `scripts/startbackenddev.sh`)
-- `scripts/startfrontenddevaws.sh` — frontend dev (counterpart to `scripts/startfrontenddev.sh`)
-
-They behave exactly like the canonical `pass-cli` versions but pull credentials from
-**AWS Secrets Manager** instead of Proton Pass. Useful when running secman on EC2
-(Amazon Linux 2 / 2023) where pass-cli is not the natural choice and the EC2 instance
-already has an IAM role.
-
-The original `pass-cli` scripts remain canonical (per `CLAUDE.md`). The AWS variants
-are an alternative entry point — they are not intended to replace pass-cli for local
+The original `pass-cli` scripts remain canonical (per `CLAUDE.md`). The AWS
+variants are an alternative entry point — not a replacement for local
 developer workflows.
 
-## How it works
+## Script index
 
-Both scripts:
+| pass-cli script | AWS variant | Purpose |
+|---|---|---|
+| `scripts/startbackenddev.sh` | `scripts/startbackenddevaws.sh` | Backend dev (port 8080) |
+| `scripts/startfrontenddev.sh` | `scripts/startfrontenddevaws.sh` | Frontend dev (port 4321) |
+| `scripts/backend` | `scripts/backendaws.sh` | Backend run via Gradle (no `:clean`) |
+| `scripts/deleteoutdated.sh` | `scripts/deleteoutdatedaws.sh` | CLI: dry-run delete-asset-not-seen |
+| `scripts/e2e-test.sh` | `scripts/e2e-testaws.sh` | E2E smoke + JS-error scanner |
+| `scripts/import.sh` | `scripts/importaws.sh` | CLI: query servers --save (CrowdStrike → backend) |
+| `scripts/release-e2e-test.sh` | `scripts/release-e2e-testaws.sh` | Release lifecycle E2E (REQADMIN) |
+| `scripts/secmancli` | `scripts/secmancliaws.sh` | General-purpose CLI wrapper |
+| `scripts/secmanng` | `scripts/secmanngaws.sh` | CLI wrapper with insecure-SSL flag |
+| `scripts/secmanreportenv` | `scripts/secmanreportenvaws.sh` | Report-env preset (sourceable) |
+| `scripts/secmanserverca` | `scripts/secmansercaaws.sh` | Runs `secmanclisupport` |
+| `scripts/test/provision-test-user.sh` | `scripts/test/provision-test-useraws.sh` | Idempotent test-user provisioning |
+| `scripts/test/test-e2e-exception-workflow.sh` | `scripts/test/test-e2e-exception-workflowaws.sh` | Exception workflow E2E |
+| `scripts/test/test-e2e-vuln-exception-full.sh` | `scripts/test/test-e2e-vuln-exception-fullaws.sh` | Full vuln + exception E2E (MCP + UI) |
 
-1. Read a single JSON secret from AWS Secrets Manager (default name `secman/dev`).
-2. Export each JSON field to the environment variable expected by the backend / frontend.
-3. Exec the appropriate dev command (`gradle :backendng:run` or `npm run dev`).
+All AWS variants share `scripts/lib/aws-secrets.sh` (sourced, not executed).
+The shared library:
 
-Stop scripts (`stopbackenddev.sh`, `stopfrontenddev.sh`) work unchanged for both
+1. Builds a cron-safe `PATH` and sources SDKMAN (and nvm if present), so
+   SDKMAN-managed `java`/`gradle` and nvm-managed `node`/`npm` are visible
+   even though cron does not read `~/.bashrc`.
+2. Reads a single JSON secret from AWS Secrets Manager (default name
+   `secman/dev`).
+3. Exposes `secman_aws_export_envfile` which exports the same env vars that
+   `pass-cli run --env-file secmanpp.env` would set.
+
+The stop helpers (`stopbackenddev.sh`, `stopfrontenddev.sh`) work for both
 flavors — they kill whatever is bound to ports 8080 / 4321.
 
 ## Required tools on Amazon Linux
@@ -338,26 +355,67 @@ SDKMAN/PATH bootstrap also handles the empty environment systemd provides.
 
 ## Secret keys reference
 
+The shared library (`scripts/lib/aws-secrets.sh::secman_aws_export_envfile`)
+maps every JSON field below to its env-var name. Missing keys are skipped — so
+optional fields (e.g. application-side AWS credentials when an EC2 instance
+role is in use) can simply be omitted from the secret.
+
 | JSON key in secret | Exported as | Used by |
 |---|---|---|
-| `DB_CONNECT` | `DB_CONNECT` | backend |
-| `SECMAN_BACKEND_BASE_URL` | `SECMAN_BACKEND_URL` (backend), `SECMAN_DOMAIN` (frontend) | both |
-| `SECMAN_HOST` | `SECMAN_HOST` | frontend |
-| `SECMAN_SSL_ACCEPT_ALL` | `SECMAN_INSECURE` | backend |
-| `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS` / `SECMAN_ADMIN_EMAIL` | same names | backend bootstrap |
-| `SECMAN_MCP_KEY` | `SECMAN_MCP_KEY` | backend MCP |
-| `FALCON_CLIENT_ID` / `FALCON_CLIENT_SECRET` / `FALCON_CLOUD_REGION` | same names | backend CrowdStrike |
+| `DB_CONNECT` | `DB_CONNECT` | backend, CLI |
+| `SECMAN_BACKEND_BASE_URL` | `SECMAN_BACKEND_URL`, `SECMAN_DOMAIN` | backend dev, frontend dev |
+| `SECMAN_HOST` | `SECMAN_HOST` | frontend, test scripts |
+| `SECMAN_SSL_ACCEPT_ALL` | `SECMAN_INSECURE` | backend, CLI |
+| `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS` / `SECMAN_ADMIN_EMAIL` | same names | backend bootstrap, CLI, E2E |
+| `SECMAN_USER_NAME` / `SECMAN_USER_PASS` | same names | E2E test-user provisioning |
+| `SECMAN_MCP_KEY` | `SECMAN_MCP_KEY` | backend MCP, MCP E2E |
+| `SECMAN_DB_HOST` / `SECMAN_DB_PORT` / `SECMAN_DB_NAME` | same names | CLI (paths that build JDBC themselves) |
+| `SECMAN_DB_USER` | `DB_USERNAME` | CLI |
+| `SECMAN_DB_PASSWORD` | `DB_PASSWORD` | CLI |
+| `FALCON_CLIENT_ID` / `FALCON_CLIENT_SECRET` / `FALCON_CLOUD_REGION` | same names | CrowdStrike import |
 | `OPENROUTER_API_KEY` | `SECMAN_OPENROUTER_API_KEY` | backend translation |
 | `SECMAN_AWS_ACCESS_KEY_ID` | `AWS_ACCESS_KEY_ID` | backend (optional override) |
 | `SECMAN_AWS_SECRET_ACCESS_KEY` | `AWS_SECRET_ACCESS_KEY` | backend (optional override) |
 | `SECMAN_AWS_ACCESS_TOKEN` | `AWS_SESSION_TOKEN` | backend (optional override) |
 
-Missing keys are skipped — they do not cause failure. This is intentional so an
-EC2 instance role can supply application-side AWS credentials without static
-keys having to live in the secret.
-
 `JWT_SECRET` is generated fresh on every backend start (`openssl rand -base64 48`),
 matching `startbackenddev.sh`.
+
+## Usage
+
+All AWS variants are invoked the same way as their pass-cli counterparts —
+just substitute the file name. Examples:
+
+```bash
+# Dev launchers
+./scripts/startbackenddevaws.sh
+./scripts/startfrontenddevaws.sh
+
+# Headless backend (no :clean) — useful for cron / systemd
+./scripts/backendaws.sh
+
+# CLI invocations
+./scripts/secmancliaws.sh help
+./scripts/secmancliaws.sh manage-user-mappings list-bucket --bucket my-bucket
+./scripts/secmanngaws.sh export-requirements --format xlsx
+./scripts/importaws.sh
+./scripts/deleteoutdatedaws.sh
+
+# Report-style env preset (sources the standard env block; useful for ad-hoc
+# `java -jar` invocations on AWS hosts)
+source ./scripts/secmanreportenvaws.sh
+java -jar src/cli/build/libs/cli-0.1.0-all.jar <some-report-command>
+
+# E2E tests
+./scripts/e2e-testaws.sh
+./scripts/release-e2e-testaws.sh
+./scripts/test/provision-test-useraws.sh
+./scripts/test/test-e2e-exception-workflowaws.sh
+./scripts/test/test-e2e-vuln-exception-fullaws.sh
+```
+
+Every variant requires the CLI shadow JAR (`./gradlew :cli:shadowJar`) to be
+built before first use, just like the pass-cli versions.
 
 ## Troubleshooting
 
@@ -371,12 +429,63 @@ matching `startbackenddev.sh`.
 | Backend starts but Flyway / DB connection fails | Verify `DB_CONNECT` in the secret points at a reachable MariaDB instance; remember the secret value must be a full JDBC URL. |
 | Backend starts but auth fails | Check that `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS` exist in the secret. The first start bootstraps the admin user from these values. |
 
+## Cron usage for any AWS variant
+
+Every AWS variant inherits cron-safety from `scripts/lib/aws-secrets.sh`, so
+each one can be scheduled directly. Sample crontab entries:
+
+```cron
+# Hourly CrowdStrike import
+17 * * * * /home/ec2-user/secman/scripts/importaws.sh \
+            >> /var/log/secman/import.log 2>&1
+
+# Nightly stale-asset dry-run
+0 3 * * *  /home/ec2-user/secman/scripts/deleteoutdatedaws.sh \
+            >> /var/log/secman/deleteoutdated.log 2>&1
+
+# Reboot launchers
+@reboot    /home/ec2-user/secman/scripts/startbackenddevaws.sh  >> /var/log/secman/backend.log 2>&1
+@reboot    /home/ec2-user/secman/scripts/startfrontenddevaws.sh >> /var/log/secman/frontend.log 2>&1
+```
+
+Tips:
+
+- Run cron entries as the **same user that owns the SDKMAN install** — cron
+  uses that user's `$HOME` to find `~/.sdkman/bin/sdkman-init.sh`.
+- If SDKMAN lives elsewhere, put `SDKMAN_DIR=/opt/sdkman` (and similarly
+  `NVM_DIR=...`) at the top of the crontab.
+- Reproduce the cron environment locally before scheduling to confirm the
+  bootstrap works:
+  ```bash
+  env -i HOME="$HOME" PATH=/usr/bin:/bin /home/ec2-user/secman/scripts/secmancliaws.sh help
+  ```
+
+## Extending the AWS variants
+
+If you add a new pass-cli script, add a matching `*aws.sh` variant by sourcing
+the shared lib:
+
+```bash
+#!/bin/bash
+set -euo pipefail
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/aws-secrets.sh"
+secman_aws_export_envfile
+cd "${PROJECT_ROOT}"
+exec <your command>
+```
+
+If your script needs an env var that isn't in the table above, either add it
+to `secman_aws_export_envfile` in `scripts/lib/aws-secrets.sh` (preferred —
+keeps every script in sync) or call `secman_aws_export <ENV_VAR> <SECRET_KEY>`
+directly from your launcher.
+
 ## Relationship to canonical workflow
 
 - The `pass-cli` scripts remain canonical for local developer workflows
   (per `CLAUDE.md`). Tests, E2E runners, and the CLI wrapper continue to
-  resolve secrets via pass-cli.
+  resolve secrets via pass-cli during day-to-day development.
 - The AWS scripts target the deployed EC2 environment where pass-cli is
   unavailable but Secrets Manager + IAM are already in place.
-- If you add new env vars to `startbackenddev.sh` / `startfrontenddev.sh`,
-  add the matching JSON key to `secman/dev` and update the table above.
+- When you add new env vars to a pass-cli script, add the matching JSON key
+  to `secman/dev`, extend `secman_aws_export_envfile`, and create / update
+  the `*aws.sh` variant.
