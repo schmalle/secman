@@ -122,6 +122,16 @@ interface AssetRepository : JpaRepository<Asset, Long> {
     fun findByName(name: String): Optional<Asset>
 
     /**
+     * Find all assets with the given exact name.
+     * Used by the exception import to resolve assetRef by name, potentially returning
+     * multiple matches (e.g., same hostname across environments) disambiguated by IP.
+     *
+     * @param name The asset name (hostname)
+     * @return List of all matching assets (empty if none)
+     */
+    fun findListByName(name: String): List<Asset>
+
+    /**
      * Find asset by case-insensitive name match
      * Prevents duplicate asset creation with different casing (e.g., "SERVER1" vs "server1")
      * Related to: Feature 030 (CrowdStrike Asset Auto-Creation) - FR-006

@@ -203,7 +203,15 @@ class McpToolPermissionService(
             }
             "get_overdue_assets", "create_exception_request", "get_my_exception_requests",
             "get_pending_exception_requests", "approve_exception_request",
-            "reject_exception_request", "cancel_exception_request" -> {
+            "reject_exception_request", "cancel_exception_request",
+            "list_vulnerability_exceptions" -> {
+                permissions.contains(McpPermission.VULNERABILITIES_READ)
+            }
+            // Bulk admin tool — gated to VULNERABILITIES_READ here AND ADMIN role
+            // inside the tool's execute(). Without this entry the
+            // checkPermissionSetForTool fallback (else -> false) denies the
+            // admin-delegated call before the tool's own role check runs.
+            "delete_all_vulnerability_exceptions" -> {
                 permissions.contains(McpPermission.VULNERABILITIES_READ)
             }
             // Feature 063: E2E Vulnerability Exception Workflow Tools

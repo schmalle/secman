@@ -52,6 +52,7 @@ class McpToolRegistry(
     @Inject private val deleteExceptionRequestTool: DeleteExceptionRequestTool,
     @Inject private val reconcileExceptionRequestsTool: ReconcileExceptionRequestsTool,
     @Inject private val listVulnerabilityExceptionsTool: ListVulnerabilityExceptionsTool,
+    @Inject private val deleteAllVulnerabilityExceptionsTool: DeleteAllVulnerabilityExceptionsTool,
     // Feature 063: MCP Tools for E2E Vulnerability Exception Workflow
     @Inject private val deleteAllAssetsTool: DeleteAllAssetsTool,
     @Inject private val addVulnerabilityTool: AddVulnerabilityTool,
@@ -143,6 +144,7 @@ class McpToolRegistry(
             deleteExceptionRequestTool,
             reconcileExceptionRequestsTool,
             listVulnerabilityExceptionsTool,
+            deleteAllVulnerabilityExceptionsTool,
             // Feature 063: MCP Tools for E2E Vulnerability Exception Workflow
             deleteAllAssetsTool,
             addVulnerabilityTool,
@@ -383,6 +385,9 @@ class McpToolRegistry(
             }
             "list_vulnerability_exceptions" -> {
                 permissions.contains(McpPermission.VULNERABILITIES_READ) // ADMIN/SECCHAMPION/VULN role checked in tool
+            }
+            "delete_all_vulnerability_exceptions" -> {
+                permissions.contains(McpPermission.VULNERABILITIES_READ) // ADMIN role checked in tool execute()
             }
 
             // Feature 063: MCP Tools for E2E Vulnerability Exception Workflow

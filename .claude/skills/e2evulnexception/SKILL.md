@@ -58,6 +58,7 @@ The driver script is
 | 7 | MCP authorization negatives: user2 cannot approve, user1 cannot create on user2's asset, missing `X-MCP-User-Email` |
 | 8 | **MCP AWS account sharing** — create `UserMapping`s + AWS-tagged assets, `create_aws_account_sharing` (scoped to one account), verify directional + scoped visibility, add a second mapping/asset to the source user and prove it does **not** leak to the target, `list_aws_account_sharing` as admin |
 | 9 | Web UI (Playwright `tests/e2e/vuln-exception-full.spec.ts`): scoped visibility, my-requests states, approval dashboard, **admin AWS sharing dashboard, `/account-vulns` for user1 and user2 to verify scoped sharing in the UI** |
+| 10 | **Exception import/export/delete-all** — REST `/export`, MCP `delete_all_vulnerability_exceptions`, MCP `list_vulnerability_exceptions`, REST `/import`. 17 steps including non-admin negatives, idempotency, and baseline restore. |
 | (trap) | Post-run cleanup — runs even on failure |
 
 The shell driver calls MCP via `curl`/`jq` and shells out to `npx playwright`
@@ -171,6 +172,13 @@ Classify the most recent failure:
 | Playwright `expect(body).toContain(CVE_*)` fails          | **frontend** | UI page didn't render — check page route, hydration, API call    |
 | Playwright login redirect timeout                         | **frontend** | Login form / auth handler regression                             |
 | Playwright `expected APPROVED|Approved`                   | **frontend** | `MyExceptionRequests.tsx` doesn't render status text             |
+| `10.6 round-trip count != 1` | **backend** | Service `importFromJson` or `exportAll` mismatch. Check `VulnerabilityExceptionImportExportService.kt`. |
+| `10.10 imported != 1` | **backend** | Asset resolution or fingerprint logic. Inspect `findListByName`, fingerprint match. |
+| `10.13 skippedDup != 1` | **backend** | `existingFingerprints` set logic in service. |
+| `10.14 ... returned 200, expected 403` | **backend** | Role check missing on `/export` endpoint. |
+| `10.15 non-admin was NOT denied` | **backend** | `DeleteAllVulnerabilityExceptionsTool` not enforcing `context.isAdmin`. |
+| `10.17 final count ... expected ...` | **backend** | Baseline restore import skipped rows it shouldn't. Check duplicate detection. |
+| Playwright `exceptions UI shows zero rows` | **frontend** | `VulnerabilityExceptionsTable` not refreshing after delete-all, or admin-only buttons leaking to non-admins. |
 
 ### Phase 3 — Fix Loop (Stop-Fix-Restart)
 
@@ -220,6 +228,12 @@ Fix priority: **backend first**, then frontend.
 | Outdated assets UI                       | `src/frontend/src/pages/outdated-assets.astro`                                                   |
 | Driver script                            | `scripts/test/test-e2e-vuln-exception-full.sh`                                                  |
 | Playwright spec                          | `tests/e2e/vuln-exception-full.spec.ts`                                                          |
+| Import/export service                      | `src/backendng/src/main/kotlin/com/secman/service/VulnerabilityExceptionImportExportService.kt`                |
+| Import/export DTOs                         | `src/backendng/src/main/kotlin/com/secman/dto/VulnerabilityExceptionImportExportDtos.kt`                       |
+| Import/export REST endpoints               | `src/backendng/src/main/kotlin/com/secman/controller/VulnerabilityManagementController.kt` (`exportAllExceptions`, `importExceptions`, `deleteAllExceptions`) |
+| MCP delete-all-exceptions tool             | `src/backendng/src/main/kotlin/com/secman/mcp/tools/DeleteAllVulnerabilityExceptionsTool.kt`                   |
+| Frontend bulk admin buttons                | `src/frontend/src/components/VulnerabilityExceptionsTable.tsx`                                                 |
+| Frontend service-layer fns                 | `src/frontend/src/services/vulnerabilityManagementService.ts` (`exportAllExceptions`, `importExceptions`, `deleteAllExceptions`) |
 
 **Diagnosis steps:**
 
@@ -331,3 +345,10 @@ in the cleanup logic and fix `cleanup()` in
   `@Pattern(regexp = "^\\d{12}$")`. The hard-coded test IDs
   (`123456789012` / `876543210987` / `555555555555`) satisfy that regex.
   If the constants change, keep them 12-digit numeric.
+- **Phase 10 is destructive on real data**. Steps 10.2 and 10.7 issue
+  `delete_all_vulnerability_exceptions`, which wipes every row in the
+  DB — including any pre-existing real exceptions on the dev/test
+  machine. Step 10.16 re-imports the baseline file captured at 10.1 to
+  restore them. The trap cleanup then removes only test rows by
+  `reason LIKE 'E2E TEST %'`. Never weaken the cleanup to match by
+  `created_by` — that would nuke real admin-authored exceptions.

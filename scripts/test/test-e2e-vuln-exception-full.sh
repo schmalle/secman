@@ -373,6 +373,172 @@ create_user_mapping() {
 }
 
 # =============================================================================
+# Phase 10: Exception import/export/delete-all (MCP + REST)
+# =============================================================================
+
+run_phase_10_exception_import_export() {
+    log "===== PHASE 10: Exception import/export/delete-all (MCP + REST) ====="
+
+    local admin_token
+    admin_token=$(ensure_admin_jwt) || { fail "Phase 10: cannot get admin JWT"; }
+
+    local baseline_file=".e2e-logs/exceptions-baseline.json"
+    local roundtrip_file=".e2e-logs/exceptions-roundtrip.json"
+
+    # 10.1 — Export current exceptions (baseline)
+    log "10.1 export baseline"
+    if ! curl -fsS -H "Authorization: Bearer ${admin_token}" \
+        "${BASE_URL}/api/vulnerability-exceptions/export" -o "${baseline_file}"; then
+        fail "10.1 baseline export failed"
+    fi
+    local baseline_count
+    baseline_count=$(jq -r '.count' "${baseline_file}")
+    log "10.1 baseline contains ${baseline_count} exception(s)"
+
+    # 10.2 — Delete all via MCP
+    log "10.2 MCP delete_all_vulnerability_exceptions"
+    local del_result
+    del_result=$(mcp_call "delete_all_vulnerability_exceptions" \
+        '{"confirm":"DELETE_ALL"}' "$ADMIN_USER_EMAIL")
+    local mcp_deleted
+    mcp_deleted=$(echo "${del_result}" | jq -r '.deletedCount // 0')
+    [[ "${mcp_deleted}" == "${baseline_count}" ]] || \
+        fail "10.2 MCP deleted=${mcp_deleted} != baseline=${baseline_count}"
+
+    # 10.3 — Verify empty via MCP
+    log "10.3 MCP list_vulnerability_exceptions (expect 0)"
+    local list_result
+    list_result=$(mcp_call "list_vulnerability_exceptions" '{}' "$ADMIN_USER_EMAIL")
+    local list_count
+    list_count=$(echo "${list_result}" | jq -r '.exceptions | length')
+    [[ "${list_count}" == "0" ]] || fail "10.3 MCP list shows ${list_count}, expected 0"
+
+    # 10.4 — Verify empty via REST
+    log "10.4 REST list (expect [])"
+    local rest_count
+    rest_count=$(curl -fsS -H "Authorization: Bearer ${admin_token}" \
+        "${BASE_URL}/api/vulnerability-exceptions" | jq 'length')
+    [[ "${rest_count}" == "0" ]] || fail "10.4 REST list shows ${rest_count}, expected 0"
+
+    # 10.5 — Add one exception via REST
+    log "10.5 add test exception"
+    curl -fsS -X POST -H "Authorization: Bearer ${admin_token}" \
+        -H "Content-Type: application/json" \
+        -d '{"subject":"CVE","scope":"GLOBAL","subjectValue":"CVE-2099-90001",
+             "reason":"E2E TEST export round-trip","expirationDate":"2099-01-01T00:00:00"}' \
+        "${BASE_URL}/api/vulnerability-exceptions" >/dev/null \
+        || fail "10.5 create failed"
+
+    # 10.6 — Export again to a new file
+    log "10.6 export round-trip file"
+    curl -fsS -H "Authorization: Bearer ${admin_token}" \
+        "${BASE_URL}/api/vulnerability-exceptions/export" -o "${roundtrip_file}" \
+        || fail "10.6 round-trip export failed"
+    [[ "$(jq -r '.count' "${roundtrip_file}")" == "1" ]] || fail "10.6 round-trip count != 1"
+    [[ "$(jq -r '.exceptions[0].subjectValue' "${roundtrip_file}")" == "CVE-2099-90001" ]] \
+        || fail "10.6 wrong subjectValue"
+    # Confirm id is omitted from the export envelope.
+    [[ "$(jq -r 'has("id")' "${roundtrip_file}")" == "false" ]] || \
+        fail "10.6 envelope must not contain top-level id"
+
+    # 10.7 — Delete all again via MCP
+    log "10.7 MCP delete_all again"
+    mcp_call "delete_all_vulnerability_exceptions" '{"confirm":"DELETE_ALL"}' \
+        "$ADMIN_USER_EMAIL" >/dev/null
+
+    # 10.8 — Verify gone via MCP
+    log "10.8 MCP list (expect 0)"
+    list_result=$(mcp_call "list_vulnerability_exceptions" '{}' "$ADMIN_USER_EMAIL")
+    list_count=$(echo "${list_result}" | jq -r '.exceptions | length')
+    [[ "${list_count}" == "0" ]] || fail "10.8 MCP list nonzero (got ${list_count})"
+
+    # 10.9 (UI) — handled in the Playwright spec (Phase 11). Export env vars for it.
+    export EXPECTED_EXCEPTION_COUNT_AFTER_DELETE=0
+    export EXPECTED_EXCEPTION_CVE="CVE-2099-90001"
+
+    # 10.10 — Re-import the round-trip file
+    log "10.10 import round-trip"
+    local import_resp
+    import_resp=$(curl -fsS -X POST -H "Authorization: Bearer ${admin_token}" \
+        -F "file=@${roundtrip_file}" \
+        "${BASE_URL}/api/vulnerability-exceptions/import") \
+        || fail "10.10 import failed"
+    [[ "$(echo "${import_resp}" | jq -r '.imported')" == "1" ]] || \
+        fail "10.10 imported != 1: ${import_resp}"
+    [[ "$(echo "${import_resp}" | jq -r '.skippedDuplicates')" == "0" ]] || \
+        fail "10.10 skippedDuplicates != 0: ${import_resp}"
+
+    # 10.11 — Verify re-imported via MCP, with subjectValue preserved
+    log "10.11 MCP list (expect 1 with original subjectValue)"
+    list_result=$(mcp_call "list_vulnerability_exceptions" '{}' "$ADMIN_USER_EMAIL")
+    local re_imported
+    re_imported=$(echo "${list_result}" | jq -r '.exceptions | length')
+    [[ "${re_imported}" == "1" ]] || fail "10.11 list count ${re_imported}, expected 1"
+    local re_subject
+    re_subject=$(echo "${list_result}" | jq -r '.exceptions[0].subjectValue')
+    [[ "${re_subject}" == "CVE-2099-90001" ]] || fail "10.11 wrong subjectValue: ${re_subject}"
+    local re_created_by
+    re_created_by=$(echo "${list_result}" | jq -r '.exceptions[0].createdBy')
+    # Step 10.5 created the exception via REST as the admin user, so the original
+    # createdBy must equal that admin user's username after the round-trip.
+    [[ "${re_created_by}" == "${ADMIN_USERNAME}" ]] || {
+        fail "10.11 createdBy=${re_created_by}, expected ${ADMIN_USERNAME} (provenance not preserved)"
+    }
+
+    # 10.12 (UI) — handled by Playwright; env var below
+    export EXPECTED_EXCEPTION_COUNT_AFTER_IMPORT=1
+
+    # 10.13 — Idempotency: import same file again, expect skippedDuplicates=1
+    log "10.13 import same file again (expect skippedDuplicates=1)"
+    import_resp=$(curl -fsS -X POST -H "Authorization: Bearer ${admin_token}" \
+        -F "file=@${roundtrip_file}" \
+        "${BASE_URL}/api/vulnerability-exceptions/import") \
+        || fail "10.13 second import failed"
+    [[ "$(echo "${import_resp}" | jq -r '.imported')" == "0" ]] || fail "10.13 imported != 0: ${import_resp}"
+    [[ "$(echo "${import_resp}" | jq -r '.skippedDuplicates')" == "1" ]] || fail "10.13 skippedDup != 1: ${import_resp}"
+
+    # 10.14 — Negative: non-admin export (expect 403)
+    log "10.14 non-admin export (expect 403)"
+    local user1_token
+    user1_token=$(get_jwt "$USER1_USERNAME" "$USER1_PASSWORD")
+    local code
+    code=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer ${user1_token}" \
+        "${BASE_URL}/api/vulnerability-exceptions/export")
+    [[ "${code}" == "403" ]] || fail "10.14 non-admin export returned ${code}, expected 403"
+    ok "10.14 non-admin export denied (403)"
+
+    # 10.15 — Negative: non-admin MCP delete-all (expect error)
+    log "10.15 non-admin MCP delete_all (expect error)"
+    local neg_result
+    neg_result=$(mcp_call "delete_all_vulnerability_exceptions" \
+        '{"confirm":"DELETE_ALL"}' "$USER1_EMAIL" --allow-error)
+    local neg_code
+    neg_code=$(echo "${neg_result}" | jq -r '.code // empty')
+    [[ -n "${neg_code}" ]] || fail "10.15 non-admin was NOT denied (no error code): ${neg_result}"
+    ok "10.15 non-admin delete_all denied (code=${neg_code})"
+
+    # 10.16 — Restore baseline
+    log "10.16 restore baseline"
+    if [[ "${baseline_count}" -gt 0 ]]; then
+        curl -fsS -X POST -H "Authorization: Bearer ${admin_token}" \
+            -F "file=@${baseline_file}" \
+            "${BASE_URL}/api/vulnerability-exceptions/import" >/dev/null \
+            || fail "10.16 baseline restore failed"
+    fi
+
+    # 10.17 — Verify baseline restored (count == baseline + the test CVE)
+    log "10.17 verify baseline restored"
+    list_result=$(mcp_call "list_vulnerability_exceptions" '{}' "$ADMIN_USER_EMAIL")
+    local final_count
+    final_count=$(echo "${list_result}" | jq -r '.exceptions | length')
+    local expected=$(( baseline_count + 1 ))
+    [[ "${final_count}" == "${expected}" ]] \
+        || fail "10.17 final count ${final_count}, expected ${expected}"
+
+    ok "Phase 10 complete"
+}
+
+# =============================================================================
 # Cleanup (idempotent — safe to run multiple times)
 # =============================================================================
 
@@ -391,6 +557,7 @@ cleanup() {
         db_exec "
             DELETE FROM exception_request_audit
               WHERE actor_user_id IN ($user_ids_csv);
+            DELETE FROM vulnerability_exception WHERE reason LIKE 'E2E TEST %';
             DELETE FROM vulnerability_exception_request
               WHERE requested_by_user_id IN ($user_ids_csv)
                  OR reviewed_by_user_id IN ($user_ids_csv);
@@ -437,6 +604,7 @@ cleanup() {
                  WHERE vulnerability_id IN (SELECT id FROM vulnerability WHERE asset_id IN ($asset_ids_csv))
                     OR asset_id IN ($asset_ids_csv)
               );
+            DELETE FROM vulnerability_exception WHERE reason LIKE 'E2E TEST %';
             DELETE FROM vulnerability_exception_request
               WHERE vulnerability_id IN (SELECT id FROM vulnerability WHERE asset_id IN ($asset_ids_csv))
                  OR asset_id IN ($asset_ids_csv);
@@ -913,6 +1081,12 @@ else
     popd >/dev/null
     ok "UI phase complete"
 fi
+
+# =============================================================================
+# Phase 10: Exception import/export/delete-all
+# =============================================================================
+
+run_phase_10_exception_import_export
 
 # =============================================================================
 # Summary
