@@ -13,6 +13,7 @@ import com.secman.repository.NormRepository
 import com.secman.service.TranslationService
 import com.secman.service.InputValidationService
 import com.secman.service.RequirementService
+import com.secman.service.RequirementIdService
 import io.micronaut.core.annotation.Nullable
 import io.micronaut.data.model.Pageable
 import io.micronaut.http.HttpResponse
@@ -55,7 +56,8 @@ open class RequirementController(
     private val inputValidationService: InputValidationService,
     private val releaseRepository: ReleaseRepository,
     private val snapshotRepository: RequirementSnapshotRepository,
-    private val requirementService: RequirementService
+    private val requirementService: RequirementService,
+    private val requirementIdService: RequirementIdService
 ) {
 
     @Serdeable
@@ -382,6 +384,8 @@ open class RequirementController(
         try {
             // Delete all requirements (cascade will handle relationships)
             requirementRepository.deleteAll()
+            // Reset the REQ-NNN sequence so the next imported requirement starts at REQ-001
+            requirementIdService.resetSequence()
             return HttpResponse.ok(mapOf("message" to "All requirements deleted successfully"))
         } catch (e: Exception) {
             return HttpResponse.serverError<Any>().body(mapOf("error" to "An internal error occurred"))

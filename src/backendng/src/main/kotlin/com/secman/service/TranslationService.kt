@@ -3,28 +3,80 @@ package com.secman.service
 import com.secman.domain.TranslationConfig
 import com.secman.repository.TranslationConfigRepository
 import com.fasterxml.jackson.databind.ObjectMapper
-import io.micronaut.context.annotation.Bean
-import io.micronaut.http.HttpRequest
-import io.micronaut.http.HttpResponse
+import com.github.benmanes.caffeine.cache.Cache
+import com.github.benmanes.caffeine.cache.Caffeine
 import io.micronaut.http.MediaType
-import io.micronaut.http.client.HttpClient
-import io.micronaut.http.client.annotation.Client
 import io.micronaut.http.uri.UriBuilder
-import io.micronaut.jackson.annotation.JacksonFeatures
-import io.micronaut.scheduling.annotation.Async
 import io.micronaut.serde.annotation.Serdeable
+import jakarta.annotation.PostConstruct
+import jakarta.inject.Named
 import jakarta.inject.Singleton
 import org.slf4j.LoggerFactory
+import java.io.IOException
+import java.net.URI
+import java.net.http.HttpClient as JdkHttpClient
+import java.net.http.HttpRequest as JdkHttpRequest
+import java.net.http.HttpResponse.BodyHandlers
+import java.time.Duration
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.atomic.AtomicInteger
 
 @Singleton
 open class TranslationService(
     private val translationConfigRepository: TranslationConfigRepository,
-    private val httpClient: HttpClient,
-    private val objectMapper: ObjectMapper
+    private val objectMapper: ObjectMapper,
+    @Named("translation") private val translationExecutor: ExecutorService
 ) {
-    
+
     private val logger = LoggerFactory.getLogger(TranslationService::class.java)
+
+    private companion object {
+        const val MAX_ATTEMPTS = 3
+        const val INITIAL_BACKOFF_MS = 1_000L
+        const val MAX_BACKOFF_MS = 8_000L
+        const val BACKOFF_MULTIPLIER = 2.0
+        const val CACHE_MAX_SIZE = 10_000L
+        val CACHE_TTL: Duration = Duration.ofHours(24)
+        val CONNECT_TIMEOUT: Duration = Duration.ofSeconds(10)
+        val REQUEST_TIMEOUT: Duration = Duration.ofSeconds(120)
+    }
+
+    // In-process cache keyed by (sourceText, targetLanguage). Holds only successful
+    // translations — refusals and fallbacks to the original text are NEVER cached,
+    // so a transient model refusal won't pin a bad result for 24h.
+    private val translationCache: Cache<Pair<String, String>, String> = Caffeine.newBuilder()
+        .maximumSize(CACHE_MAX_SIZE)
+        .expireAfterWrite(CACHE_TTL)
+        .recordStats()
+        .build()
+
+    // JDK HttpClient — explicit, observable connection behavior. HTTP/1.1 forces one TCP
+    // connection per concurrent request (no HTTP/2 stream multiplexing limit).
+    //
+    // CRITICAL: do NOT call .executor(translationExecutor) here. JDK HttpClient uses its
+    // configured executor for response-completion tasks (reading headers, decoding body).
+    // If all 8 worker threads are blocked inside .send(), and the same pool is supposed to
+    // process incoming responses, the responses cannot be delivered → indefinite hang.
+    // Letting JDK use its default internal cached pool decouples I/O completion from our
+    // worker threads, so .send() unblocks normally.
+    private val jdkHttpClient: JdkHttpClient = JdkHttpClient.newBuilder()
+        .connectTimeout(CONNECT_TIMEOUT)
+        .version(JdkHttpClient.Version.HTTP_1_1)
+        .build()
+
+    // Diagnostic counter — bumped at the start of each HTTP call, decremented on completion.
+    // Logged with the thread name so you can verify true concurrency in production logs.
+    private val inFlight = AtomicInteger(0)
+
+    @PostConstruct
+    fun logExecutorInfo() {
+        logger.info(
+            "TranslationService initialized: executor={}, jdkHttpClient version={}",
+            translationExecutor.javaClass.name,
+            JdkHttpClient.Version.HTTP_1_1
+        )
+    }
 
     @Serdeable
     data class TranslateRequest(
@@ -37,7 +89,10 @@ open class TranslationService(
     @Serdeable
     data class Message(
         val role: String,
-        val content: String,
+        // Nullable: OpenRouter returns content=null for refusals, safety-filtered prompts,
+        // and reasoning-only responses (e.g. o1, claude-thinking). Treated as a translation
+        // miss downstream — we keep the original text rather than blowing up deserialization.
+        val content: String? = null,
         val refusal: String? = null,
         val reasoning: String? = null
     )
@@ -92,96 +147,170 @@ open class TranslationService(
     }
 
     /**
-     * Translate text from English to the specified target language
+     * Translate text from English to the specified target language.
+     *
+     * Synchronous portion (config check + cache lookup) runs on the caller thread.
+     * Actual HTTP work is dispatched to the named "translation" executor via
+     * supplyAsync, which works regardless of self-invocation (unlike @Async).
      */
-    @Async
     open fun translateText(text: String, targetLanguage: String): CompletableFuture<String> {
         val config = getActiveConfig()
-            ?: return CompletableFuture.completedFuture(text) // Return original if no config
+            ?: return CompletableFuture.completedFuture(text)
 
         if (!config.isValid()) {
             logger.warn("Translation config is not valid: {}", config)
             return CompletableFuture.completedFuture(text)
         }
 
+        val cacheKey = text to targetLanguage
+        translationCache.getIfPresent(cacheKey)?.let { cached ->
+            logger.debug("Translation cache hit for '{}' [{}]", text.take(40), targetLanguage)
+            return CompletableFuture.completedFuture(cached)
+        }
+
+        return CompletableFuture.supplyAsync(
+            { doTranslateBlocking(text, targetLanguage, config, cacheKey) },
+            translationExecutor
+        )
+    }
+
+    /**
+     * Blocking translation worker — runs on a translationExecutor thread.
+     * Always returns a non-null String: either the translated text on success,
+     * or the original text as a fallback on any failure.
+     */
+    private fun doTranslateBlocking(
+        text: String,
+        targetLanguage: String,
+        config: TranslationConfig,
+        cacheKey: Pair<String, String>
+    ): String {
+        val prompt = buildTranslationPrompt(text, targetLanguage)
+        val request = TranslateRequest(
+            model = config.modelName,
+            messages = listOf(Message("user", prompt)),
+            max_tokens = config.maxTokens,
+            temperature = config.temperature
+        )
+
+        val fullUrl = "${config.baseUrl}/chat/completions"
+        val requestJson = objectMapper.writeValueAsString(request)
+        val jdkRequest = JdkHttpRequest.newBuilder()
+            .uri(URI.create(fullUrl))
+            .timeout(REQUEST_TIMEOUT)
+            .header("Content-Type", MediaType.APPLICATION_JSON)
+            .header("Authorization", "Bearer ${config.apiKey}")
+            .header("HTTP-Referer", "https://secman.local")
+            .header("X-Title", "SecMan Translation Service")
+            .POST(JdkHttpRequest.BodyPublishers.ofString(requestJson))
+            .build()
+
         return try {
-            val prompt = buildTranslationPrompt(text, targetLanguage)
-            val request = TranslateRequest(
-                model = config.modelName,
-                messages = listOf(
-                    Message("user", prompt)
-                ),
-                max_tokens = config.maxTokens,
-                temperature = config.temperature
-            )
-
-            val fullUrl = "${config.baseUrl}/chat/completions"
-            val httpRequest = HttpRequest.POST(fullUrl, request)
-                .contentType(MediaType.APPLICATION_JSON)
-                .header("Authorization", "Bearer ${config.apiKey}")
-                .header("HTTP-Referer", "https://secman.local")
-                .header("X-Title", "SecMan Translation Service")
-
-            logger.debug("Making translation request to: {}", fullUrl)
-            val response = httpClient.toBlocking().exchange(httpRequest, String::class.java)
-            
-            if (response.status.code == 200) {
-                val responseBodyString = response.body()
-                logger.debug("Raw API response: {}", responseBodyString?.take(200))
-                
-                if (responseBodyString.isNullOrBlank()) {
-                    logger.error("Empty response body from translation API")
-                    return CompletableFuture.completedFuture(text)
+            val translated = executeWithRetry("translateText[${targetLanguage}]") {
+                val current = inFlight.incrementAndGet()
+                logger.debug(
+                    "Making translation request to: {} (in-flight={}, thread={})",
+                    fullUrl, current, Thread.currentThread().name
+                )
+                val response = try {
+                    jdkHttpClient.send(jdkRequest, BodyHandlers.ofString())
+                } finally {
+                    inFlight.decrementAndGet()
                 }
-                
-                return try {
-                    // Parse JSON using injected ObjectMapper (configured with Kotlin module)
-                    val responseBody = objectMapper.readValue(responseBodyString, TranslateResponse::class.java)
-                    
-                    if (responseBody.error != null) {
-                        logger.error("Translation API error: {}", responseBody.error.message)
-                        return CompletableFuture.completedFuture(text)
-                    }
-                    
-                    val translatedText = responseBody.choices?.firstOrNull()?.message?.content
-                    if (!translatedText.isNullOrBlank()) {
-                        logger.info("Translation successful: '{}' -> '{}'", text.take(50), translatedText.take(50))
-                        CompletableFuture.completedFuture(translatedText.trim())
-                    } else {
-                        logger.warn("Empty translation response for text: {}", text.take(50))
-                        CompletableFuture.completedFuture(text)
-                    }
-                } catch (e: Exception) {
-                    logger.error("Failed to parse translation response: {}", responseBodyString.take(200), e)
-                    CompletableFuture.completedFuture(text)
+                val statusCode = response.statusCode()
+                if (statusCode in 500..599 || statusCode == 408 || statusCode == 429) {
+                    throw IOException("Translation API HTTP $statusCode")
                 }
+                if (statusCode !in 200..299) {
+                    logger.error("Translation API returned non-success status {}: {}", statusCode, response.body()?.take(200))
+                    throw RuntimeException("Translation API HTTP $statusCode")
+                }
+                val body = response.body()
+                if (body.isNullOrBlank()) {
+                    throw IOException("Empty response body from translation API")
+                }
+                val parsed = objectMapper.readValue(body, TranslateResponse::class.java)
+                if (parsed.error != null) {
+                    logger.error("Translation API error: {}", parsed.error.message)
+                    null
+                } else {
+                    val msg = parsed.choices?.firstOrNull()?.message
+                    if (msg != null && msg.content.isNullOrBlank()) {
+                        logger.warn(
+                            "Translation produced no content (refusal='{}', reasoning='{}', finish_reason='{}') for text: {}",
+                            msg.refusal?.take(120),
+                            msg.reasoning?.take(120),
+                            parsed.choices.firstOrNull()?.finish_reason,
+                            text.take(80)
+                        )
+                    }
+                    msg?.content
+                }
+            }
+            if (!translated.isNullOrBlank()) {
+                val trimmed = translated.trim()
+                translationCache.put(cacheKey, trimmed)
+                logger.info("Translation successful: '{}' -> '{}'", text.take(50), trimmed.take(50))
+                trimmed
             } else {
-                logger.error("Translation API request failed with status: {} {}", response.status.code, response.status.reason)
-                return CompletableFuture.completedFuture(text)
+                logger.warn("Empty translation response for text: {}", text.take(50))
+                text
             }
         } catch (e: Exception) {
-            logger.error("Translation failed for text: {}", text.take(50), e)
-            return CompletableFuture.completedFuture(text)
+            logger.error("Translation failed for text after retries: {}", text.take(50), e)
+            text
         }
     }
 
     /**
-     * Translate multiple texts concurrently
+     * Run [block] with bounded exponential backoff retries on transient HTTP failures
+     * (read timeouts, connection issues, 408, 429, 5xx). All other exceptions and
+     * non-retryable parse-level outcomes propagate unchanged so callers can fall back.
      */
-    @Async
+    private fun <T> executeWithRetry(operation: String, block: () -> T): T {
+        var attempt = 1
+        var delay = INITIAL_BACKOFF_MS
+        while (true) {
+            try {
+                return block()
+            } catch (e: Exception) {
+                if (attempt >= MAX_ATTEMPTS || !isRetryable(e)) {
+                    throw e
+                }
+                val jitter = (Math.random() * delay / 4).toLong()
+                val sleep = (delay + jitter).coerceAtMost(MAX_BACKOFF_MS)
+                logger.warn(
+                    "{} failed (attempt {}/{}): {} — retrying in {} ms",
+                    operation, attempt, MAX_ATTEMPTS, e.javaClass.simpleName, sleep
+                )
+                Thread.sleep(sleep)
+                attempt++
+                delay = (delay * BACKOFF_MULTIPLIER).toLong().coerceAtMost(MAX_BACKOFF_MS)
+            }
+        }
+    }
+
+    private fun isRetryable(e: Throwable): Boolean = when (e) {
+        is IOException -> true            // covers JDK send() IOExceptions, our 5xx/408/429 wraps
+        is InterruptedException -> false  // surface interruption immediately
+        else -> false
+    }
+
+    /**
+     * Translate multiple texts concurrently.
+     *
+     * Each translateText call submits its blocking work to translationExecutor via
+     * supplyAsync, so this method fans out N futures that run in parallel up to the
+     * executor's pool size (n-threads=8 in application.yml). No @Async here — this
+     * method just orchestrates futures and returns immediately.
+     */
     open fun translateTexts(texts: List<String>, targetLanguage: String): CompletableFuture<List<String>> {
         if (texts.isEmpty()) {
             return CompletableFuture.completedFuture(emptyList())
         }
-
-        val futures = texts.map { text ->
-            translateText(text, targetLanguage)
-        }
-
+        val futures = texts.map { translateText(it, targetLanguage) }
         return CompletableFuture.allOf(*futures.toTypedArray())
-            .thenApply { _ ->
-                futures.map { it.get() }
-            }
+            .thenApply { _ -> futures.map { it.get() } }
     }
 
     /**
@@ -199,7 +328,7 @@ open class TranslationService(
         return try {
             val testText = "Hello, this is a test."
             val prompt = buildTranslationPrompt(testText, "de")
-            
+
             val request = TranslateRequest(
                 model = config.modelName,
                 messages = listOf(Message("user", prompt)),
@@ -207,17 +336,21 @@ open class TranslationService(
                 temperature = 0.1
             )
 
-            val httpRequest = HttpRequest.POST(UriBuilder.of(config.baseUrl).path("/chat/completions").build(), request)
-                .contentType(MediaType.APPLICATION_JSON)
+            val fullUrl = UriBuilder.of(config.baseUrl).path("/chat/completions").build().toString()
+            val jdkRequest = JdkHttpRequest.newBuilder()
+                .uri(URI.create(fullUrl))
+                .timeout(REQUEST_TIMEOUT)
+                .header("Content-Type", MediaType.APPLICATION_JSON)
                 .header("Authorization", "Bearer ${config.apiKey}")
                 .header("HTTP-Referer", "https://secman.local")
                 .header("X-Title", "SecMan Translation Service Test")
+                .POST(JdkHttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(request)))
+                .build()
 
-            val response = httpClient.toBlocking().exchange(httpRequest, TranslateResponse::class.java)
-            
-            when {
-                response.status.code == 200 -> {
-                    val body = response.body()
+            val response = jdkHttpClient.send(jdkRequest, BodyHandlers.ofString())
+            when (response.statusCode()) {
+                200 -> {
+                    val body = response.body()?.let { objectMapper.readValue(it, TranslateResponse::class.java) }
                     when {
                         body?.error != null -> TestResult(
                             success = false,
@@ -235,25 +368,13 @@ open class TranslationService(
                         else -> TestResult(
                             success = false,
                             message = "Empty or invalid API response",
-                            details = "Response body: $body"
+                            details = "Response body: ${response.body()?.take(200)}"
                         )
                     }
                 }
-                response.status.code == 401 -> TestResult(
-                    success = false,
-                    message = "Authentication failed",
-                    details = "Invalid API key or insufficient permissions"
-                )
-                response.status.code == 429 -> TestResult(
-                    success = false,
-                    message = "Rate limit exceeded",
-                    details = "Too many requests to the translation API"
-                )
-                else -> TestResult(
-                    success = false,
-                    message = "HTTP error ${response.status.code}",
-                    details = "Status: ${response.status}, Reason: ${response.status.reason}"
-                )
+                401 -> TestResult(success = false, message = "Authentication failed", details = "Invalid API key or insufficient permissions")
+                429 -> TestResult(success = false, message = "Rate limit exceeded", details = "Too many requests to the translation API")
+                else -> TestResult(success = false, message = "HTTP error ${response.statusCode()}", details = "Body: ${response.body()?.take(200)}")
             }
         } catch (e: Exception) {
             logger.error("Translation configuration test failed", e)

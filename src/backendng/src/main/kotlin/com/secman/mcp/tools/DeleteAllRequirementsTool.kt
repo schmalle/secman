@@ -3,6 +3,7 @@ package com.secman.mcp.tools
 import com.secman.domain.McpOperation
 import com.secman.dto.mcp.McpExecutionContext
 import com.secman.repository.RequirementRepository
+import com.secman.service.RequirementIdService
 import jakarta.inject.Inject
 import jakarta.inject.Singleton
 import jakarta.transaction.Transactional
@@ -16,7 +17,8 @@ import jakarta.transaction.Transactional
  */
 @Singleton
 open class DeleteAllRequirementsTool(
-    @Inject private val requirementRepository: RequirementRepository
+    @Inject private val requirementRepository: RequirementRepository,
+    @Inject private val requirementIdService: RequirementIdService
 ) : McpTool {
 
     override val name = "delete_all_requirements"
@@ -61,6 +63,8 @@ open class DeleteAllRequirementsTool(
 
             // Delete all requirements
             requirementRepository.deleteAll()
+            // Reset the REQ-NNN sequence so the next imported requirement starts at REQ-001
+            requirementIdService.resetSequence()
 
             val result = mapOf(
                 "success" to true,

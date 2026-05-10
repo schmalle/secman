@@ -20,6 +20,19 @@ open class RequirementIdService(
         return formatId(nextVal)
     }
 
+    /**
+     * Reset the sequence so the next issued ID is REQ-001 again.
+     * Intended for callers that have just deleted all requirements
+     * (e.g. the admin "Delete All Requirements" action).
+     */
+    @Transactional
+    open fun resetSequence() {
+        val sequence = sequenceRepository.findByIdForUpdate(1L)
+            .orElseThrow { IllegalStateException("Requirement ID sequence not initialized. Run database migrations.") }
+        sequence.nextValue = 1
+        sequenceRepository.update(sequence)
+    }
+
     fun formatId(num: Int): String {
         return if (num < 1000) {
             "REQ-${num.toString().padStart(3, '0')}"

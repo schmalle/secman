@@ -6,6 +6,14 @@ micronaut:
       type: scheduled
       core-pool-size: 2
       maximum-pool-size: 5
+    # Dedicated pool for outbound LLM translation calls (OpenRouter).
+    # Default @Async executor is single-threaded → exports of 100+ strings serialize.
+    # 8 threads balances throughput against upstream rate limits.
+    # NOTE: property is `number-of-threads` (maps to UserExecutorConfiguration.numberOfThreads).
+    # `n-threads` is silently ignored and falls back to defaults.
+    translation:
+      type: fixed
+      number-of-threads: 8
   server:
     port: 8080
     max-request-size: 100MB  # Increased from 20MB for large vulnerability batch imports
@@ -300,6 +308,14 @@ secman:
       translation:
         read-timeout: 120s  # Extended for AI operations (norm mapping batches)
         connect-timeout: 10s
+        # Without an explicit pool block, Micronaut's Netty client serializes
+        # concurrent requests to the same host very conservatively (~2 in flight).
+        # Allow enough HTTP connections to saturate the 8-thread translation pool.
+        pool:
+          enabled: true
+          max-connections: 16
+          max-pending-acquires: 200
+          acquire-timeout: 30s
       crowdstrike:
         read-timeout: 60s   # Increased from 10s - large vulnerability sets can take longer
         connect-timeout: 10s  # Increased from 5s for reliability
