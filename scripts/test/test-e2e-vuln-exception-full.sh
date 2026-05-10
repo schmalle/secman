@@ -424,7 +424,7 @@ run_phase_10_exception_import_export() {
     log "10.5 add test exception"
     curl -fsS -X POST -H "Authorization: Bearer ${admin_token}" \
         -H "Content-Type: application/json" \
-        -d '{"subject":"CVE","scope":"GLOBAL","subjectValue":"CVE-E2E-EXPORT-001",
+        -d '{"subject":"CVE","scope":"GLOBAL","subjectValue":"CVE-2099-90001",
              "reason":"E2E TEST export round-trip","expirationDate":"2099-01-01T00:00:00"}' \
         "${BASE_URL}/api/vulnerability-exceptions" >/dev/null \
         || fail "10.5 create failed"
@@ -435,7 +435,7 @@ run_phase_10_exception_import_export() {
         "${BASE_URL}/api/vulnerability-exceptions/export" -o "${roundtrip_file}" \
         || fail "10.6 round-trip export failed"
     [[ "$(jq -r '.count' "${roundtrip_file}")" == "1" ]] || fail "10.6 round-trip count != 1"
-    [[ "$(jq -r '.exceptions[0].subjectValue' "${roundtrip_file}")" == "CVE-E2E-EXPORT-001" ]] \
+    [[ "$(jq -r '.exceptions[0].subjectValue' "${roundtrip_file}")" == "CVE-2099-90001" ]] \
         || fail "10.6 wrong subjectValue"
     # Confirm id is omitted from the export envelope.
     [[ "$(jq -r 'has("id")' "${roundtrip_file}")" == "false" ]] || \
@@ -454,7 +454,7 @@ run_phase_10_exception_import_export() {
 
     # 10.9 (UI) — handled in the Playwright spec (Phase 11). Export env vars for it.
     export EXPECTED_EXCEPTION_COUNT_AFTER_DELETE=0
-    export EXPECTED_EXCEPTION_CVE="CVE-E2E-EXPORT-001"
+    export EXPECTED_EXCEPTION_CVE="CVE-2099-90001"
 
     # 10.10 — Re-import the round-trip file
     log "10.10 import round-trip"
@@ -476,7 +476,7 @@ run_phase_10_exception_import_export() {
     [[ "${re_imported}" == "1" ]] || fail "10.11 list count ${re_imported}, expected 1"
     local re_subject
     re_subject=$(echo "${list_result}" | jq -r '.exceptions[0].subjectValue')
-    [[ "${re_subject}" == "CVE-E2E-EXPORT-001" ]] || fail "10.11 wrong subjectValue: ${re_subject}"
+    [[ "${re_subject}" == "CVE-2099-90001" ]] || fail "10.11 wrong subjectValue: ${re_subject}"
     local re_created_by
     re_created_by=$(echo "${list_result}" | jq -r '.exceptions[0].createdBy')
     # Step 10.5 created the exception via REST as the admin user, so the original
