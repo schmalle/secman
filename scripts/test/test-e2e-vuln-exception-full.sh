@@ -391,6 +391,7 @@ cleanup() {
         db_exec "
             DELETE FROM exception_request_audit
               WHERE actor_user_id IN ($user_ids_csv);
+            DELETE FROM vulnerability_exception WHERE reason LIKE 'E2E TEST %';
             DELETE FROM vulnerability_exception_request
               WHERE requested_by_user_id IN ($user_ids_csv)
                  OR reviewed_by_user_id IN ($user_ids_csv);
@@ -437,6 +438,7 @@ cleanup() {
                  WHERE vulnerability_id IN (SELECT id FROM vulnerability WHERE asset_id IN ($asset_ids_csv))
                     OR asset_id IN ($asset_ids_csv)
               );
+            DELETE FROM vulnerability_exception WHERE reason LIKE 'E2E TEST %';
             DELETE FROM vulnerability_exception_request
               WHERE vulnerability_id IN (SELECT id FROM vulnerability WHERE asset_id IN ($asset_ids_csv))
                  OR asset_id IN ($asset_ids_csv);
