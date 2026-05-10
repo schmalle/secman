@@ -121,9 +121,20 @@ const TranslationConfigManagement: React.FC = () => {
 
     setTesting(id);
     try {
-      await authenticatedPost(`/api/translation-config/${id}/test`, { testText });
-      setError('Translation test successful!');
-      setTimeout(() => setError(null), 3000);
+      const response = await authenticatedPost(`/api/translation-config/${id}/test`, { testText });
+      // Backend returns 200 with {success, message, details} even on logical
+      // failure (so admins can see the upstream rejection). We must inspect
+      // the body — a 200 here is NOT enough to claim success.
+      const result = await response.json().catch(() => null);
+      if (result && result.success === true) {
+        setError(`Translation test successful: ${result.message ?? ''}`);
+        setTimeout(() => setError(null), 5000);
+      } else if (result) {
+        const details = result.details ? ` — ${result.details}` : '';
+        setError(`Translation test failed: ${result.message ?? 'unknown error'}${details}`);
+      } else {
+        setError('Translation test failed: empty response from server');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to test translation configuration');
     } finally {

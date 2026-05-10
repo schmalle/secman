@@ -9,13 +9,15 @@ import com.secman.repository.ReleaseRepository
 import com.secman.repository.RequirementRepository
 import com.secman.repository.RequirementReviewRepository
 import com.secman.repository.RequirementSnapshotRepository
+import com.secman.repository.RiskAssessmentRepository
 import com.secman.repository.UserRepository
 import io.micronaut.security.authentication.Authentication
 import jakarta.inject.Singleton
+import jakarta.transaction.Transactional
 import org.slf4j.LoggerFactory
 
 @Singleton
-class ReleaseService(
+open class ReleaseService(
     private val releaseRepository: ReleaseRepository,
     private val requirementRepository: RequirementRepository,
     private val snapshotRepository: RequirementSnapshotRepository,
@@ -23,7 +25,8 @@ class ReleaseService(
     private val alignmentSessionRepository: AlignmentSessionRepository,
     private val alignmentSnapshotRepository: AlignmentSnapshotRepository,
     private val alignmentReviewerRepository: AlignmentReviewerRepository,
-    private val requirementReviewRepository: RequirementReviewRepository
+    private val requirementReviewRepository: RequirementReviewRepository,
+    private val riskAssessmentRepository: RiskAssessmentRepository
 ) {
     private val logger = LoggerFactory.getLogger(ReleaseService::class.java)
 
@@ -122,17 +125,18 @@ class ReleaseService(
      * Delete a release and its snapshots
      *
      * @param releaseId ID of release to delete
+     * @param force when true, bypass the ACTIVE-release guard (used by bulk admin debug delete)
      * @throws NoSuchElementException if release not found
-     * @throws IllegalStateException if release is ACTIVE
+     * @throws IllegalStateException if release is ACTIVE and force=false
      */
-    fun deleteRelease(releaseId: Long) {
-        logger.info("Deleting release ID=$releaseId")
+    fun deleteRelease(releaseId: Long, force: Boolean = false) {
+        logger.info("Deleting release ID=$releaseId (force=$force)")
 
         val release = releaseRepository.findById(releaseId)
             .orElseThrow { NoSuchElementException("Release with ID $releaseId not found") }
 
-        // Prevent deletion of ACTIVE releases
-        if (release.status == Release.ReleaseStatus.ACTIVE) {
+        // Prevent deletion of ACTIVE releases unless forced (admin debug bulk delete)
+        if (!force && release.status == Release.ReleaseStatus.ACTIVE) {
             throw IllegalStateException("Cannot delete an ACTIVE release. Set another release as active first.")
         }
 
@@ -241,5 +245,57 @@ class ReleaseService(
         logger.info("Release $releaseId status updated to $newStatus")
 
         return updatedRelease
+    }
+
+    /**
+     * Delete every release in the system. Admin-only debug helper.
+     *
+     * Refuses to run if any RiskAssessment has status="STARTED" (i.e. a risk
+     * assessment is currently running). Risk assessments in any other state
+     * are detached from their locked release before deletion so the FK
+     * release_id → release.id does not block the cascade.
+     *
+     * @return number of releases deleted
+     * @throws IllegalStateException if a risk assessment is currently running
+     */
+    @Transactional
+    open fun deleteAllReleases(): Int {
+        val running = riskAssessmentRepository.findByStatus("STARTED")
+        if (running.isNotEmpty()) {
+            throw IllegalStateException(
+                "Cannot delete releases: ${running.size} risk assessment(s) are currently running (status=STARTED). " +
+                "Wait for them to complete or change their status first."
+            )
+        }
+
+        val allReleases = releaseRepository.findAllOrderByCreatedAtDesc()
+        if (allReleases.isEmpty()) {
+            logger.info("deleteAllReleases: no releases to delete")
+            return 0
+        }
+
+        // Detach all risk assessments (none are running per the guard above) so
+        // the FK release_id → release.id does not block deletion.
+        val lockedAssessments = riskAssessmentRepository.findAll().filter { it.lockedRelease != null }
+        for (ra in lockedAssessments) {
+            ra.lockedRelease = null
+            riskAssessmentRepository.update(ra)
+        }
+        if (lockedAssessments.isNotEmpty()) {
+            logger.info("Detached ${lockedAssessments.size} risk assessment(s) from releases before bulk delete")
+        }
+
+        var deleted = 0
+        for (release in allReleases) {
+            try {
+                deleteRelease(release.id!!, force = true)
+                deleted++
+            } catch (e: Exception) {
+                logger.error("Failed to delete release ID=${release.id} (${release.version}) during bulk delete", e)
+                throw e
+            }
+        }
+        logger.warn("deleteAllReleases: deleted $deleted release(s) (admin debug action)")
+        return deleted
     }
 }

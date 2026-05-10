@@ -119,9 +119,9 @@ open class TranslationConfigController(
             }
 
             val config = TranslationConfig(
-                apiKey = request.apiKey,
-                baseUrl = request.baseUrl,
-                modelName = request.modelName,
+                apiKey = request.apiKey.trim(),
+                baseUrl = request.baseUrl.trim(),
+                modelName = request.modelName.trim(),
                 maxTokens = request.maxTokens,
                 temperature = request.temperature,
                 isActive = request.isActive
@@ -146,14 +146,16 @@ open class TranslationConfigController(
             val config = existingConfig.get()
 
             // Update fields if provided
-            request.baseUrl?.let { config.baseUrl = it }
-            request.modelName?.let { config.modelName = it }
+            request.baseUrl?.let { config.baseUrl = it.trim() }
+            request.modelName?.let { config.modelName = it.trim() }
             request.maxTokens?.let { config.maxTokens = it }
             request.temperature?.let { config.temperature = it }
 
-            // Handle API key update (only if not the masked value)
+            // Handle API key update (only if not the masked value).
+            // Trim defensively: invisible whitespace from a paste corrupts the
+            // upstream Authorization header.
             if (config.shouldUpdateApiKey(request.apiKey)) {
-                config.apiKey = request.apiKey!!
+                config.apiKey = request.apiKey!!.trim()
             }
 
             // Handle activation status

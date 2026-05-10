@@ -302,6 +302,29 @@ export const releaseService = {
     },
 
     /**
+     * Delete every release (ADMIN-only debug helper).
+     *
+     * Backend refuses with 409 if any risk assessment is currently running.
+     * @returns number of releases deleted
+     */
+    async deleteAll(): Promise<number> {
+        const response = await authenticatedFetch('/api/releases/all', {
+            method: 'DELETE',
+        });
+
+        if (!response.ok) {
+            if (response.status === 403) {
+                throw new Error('You do not have permission to delete all releases.');
+            }
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || `Failed to delete all releases: ${response.statusText}`);
+        }
+
+        const data = await response.json().catch(() => ({}));
+        return Number(data.deletedCount ?? 0);
+    },
+
+    /**
      * Get requirement snapshots for a release
      *
      * @param id Release ID

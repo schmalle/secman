@@ -130,6 +130,31 @@ open class ReleaseController(
     }
 
     /**
+     * DELETE /api/releases/all - Delete every release (ADMIN-only debug helper).
+     *
+     * Refuses if any risk assessment is currently running (status="STARTED").
+     * On success returns 200 with `{ deletedCount }`.
+     * On running-assessment conflict returns 409 with explanation.
+     */
+    @Delete("/all")
+    @Secured("ADMIN")
+    open fun deleteAllReleases(): HttpResponse<Map<String, Any>> {
+        logger.warn("Bulk delete of all releases requested by admin")
+        return try {
+            val count = releaseService.deleteAllReleases()
+            HttpResponse.ok(mapOf("deletedCount" to count))
+        } catch (e: IllegalStateException) {
+            logger.warn("Bulk delete refused: ${e.message}")
+            HttpResponse.status<Map<String, Any>>(HttpStatus.CONFLICT).body(
+                mapOf(
+                    "error" to "Conflict",
+                    "message" to (e.message ?: "Cannot delete releases right now")
+                )
+            )
+        }
+    }
+
+    /**
      * DELETE /api/releases/{id} - Delete release
      * Authorization: ADMIN or REQADMIN only
      */

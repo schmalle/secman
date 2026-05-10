@@ -4,7 +4,6 @@ import com.secman.domain.UserMapping
 import com.secman.repository.UserMappingRepository
 import io.micronaut.serde.annotation.Serdeable
 import jakarta.inject.Singleton
-import jakarta.transaction.Transactional
 import org.apache.commons.csv.CSVFormat
 import org.apache.commons.csv.CSVParser
 import org.apache.commons.csv.CSVRecord
@@ -86,7 +85,6 @@ open class CSVUserMappingParser(
      * @throws IllegalArgumentException if file format is invalid or headers are missing
      */
     @Suppress("DEPRECATION")
-    @Transactional
     open fun parse(file: File): ImportResult {
         log.info("Starting CSV parsing: file={}, size={}", file.name, file.length())
 

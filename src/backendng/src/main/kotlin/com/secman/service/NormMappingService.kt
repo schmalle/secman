@@ -181,11 +181,14 @@ Rules:
             temperature = config.temperature
         )
 
-        // Construct full URL from database config (same pattern as TranslationService)
-        val fullUrl = "${config.baseUrl}/chat/completions"
+        // Construct full URL from database config (same pattern as TranslationService).
+        // Trim the key defensively: a trailing newline pasted from a chat/email
+        // would otherwise corrupt the Authorization header and produce
+        // OpenRouter's "User not found." 401, which is hard to diagnose.
+        val fullUrl = "${config.baseUrl.trimEnd('/')}/chat/completions"
         val httpRequest = HttpRequest.POST(fullUrl, request)
             .contentType(MediaType.APPLICATION_JSON)
-            .header("Authorization", "Bearer ${config.apiKey}")
+            .header("Authorization", "Bearer ${config.apiKey.trim()}")
             .header("HTTP-Referer", "https://secman.local")
             .header("X-Title", "SecMan Norm Mapping Service")
 
@@ -243,7 +246,7 @@ Rules:
             logger.error("OpenRouter API call failed - Status: {}, Body: {}", e.status, errorBody, e)
 
             // Try to parse error details from response
-            val errorMessage = if (errorBody != null) {
+            val rawUpstreamMessage = if (errorBody != null) {
                 try {
                     val errorResponse = objectMapper.readValue<OpenRouterResponse>(errorBody)
                     errorResponse.error?.message ?: "HTTP ${e.status.code}: ${e.message}"
@@ -252,6 +255,16 @@ Rules:
                 }
             } else {
                 "HTTP ${e.status.code}: ${e.message}"
+            }
+
+            // Map upstream's terse 401 wording to something a SecMan admin can act on.
+            val errorMessage = when {
+                rawUpstreamMessage.contains("User not found", ignoreCase = true) ->
+                    "OpenRouter rejected the API key (account/user not found). " +
+                    "The key may have been deleted at openrouter.ai/keys, or it isn't an OpenRouter key " +
+                    "(OpenRouter keys start with 'sk-or-v1-'). " +
+                    "Re-enter the key in Admin → Translation Config and use the Test button to verify."
+                else -> rawUpstreamMessage
             }
 
             throw RuntimeException("AI service error: $errorMessage", e)

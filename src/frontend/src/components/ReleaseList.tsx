@@ -54,6 +54,10 @@ const ReleaseList: React.FC<ReleaseListProps> = () => {
     const [releaseToActivate, setReleaseToActivate] = useState<Release | null>(null);
     const [isActivating, setIsActivating] = useState(false);
 
+    // Delete-All (admin debug) modal state
+    const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
+    const [isDeletingAll, setIsDeletingAll] = useState(false);
+
     // Toast state
     const [toast, setToast] = useState<{
         show: boolean;
@@ -69,6 +73,7 @@ const ReleaseList: React.FC<ReleaseListProps> = () => {
     const user = typeof window !== 'undefined' ? getUser() : null;
     const userRoles = user?.roles || [];
     const canCreate = typeof window !== 'undefined' && (hasRole('ADMIN') || hasRole('REQADMIN'));
+    const isAdmin = typeof window !== 'undefined' && hasRole('ADMIN');
 
     // Debounce search query (300ms)
     useEffect(() => {
@@ -273,6 +278,39 @@ const ReleaseList: React.FC<ReleaseListProps> = () => {
         }
     }
 
+    // Handle "Delete All Releases" admin debug click
+    function handleDeleteAllClick() {
+        setShowDeleteAllModal(true);
+    }
+
+    function handleDeleteAllModalClose() {
+        if (!isDeletingAll) {
+            setShowDeleteAllModal(false);
+        }
+    }
+
+    async function handleDeleteAllConfirm() {
+        setIsDeletingAll(true);
+        try {
+            const count = await releaseService.deleteAll();
+            setToast({
+                show: true,
+                message: count === 0
+                    ? 'No releases to delete.'
+                    : `Deleted ${count} release${count === 1 ? '' : 's'}.`,
+                type: 'success',
+            });
+            setShowDeleteAllModal(false);
+            await loadReleases();
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : 'Failed to delete all releases.';
+            setToast({ show: true, message: errorMessage, type: 'error' });
+            setShowDeleteAllModal(false);
+        } finally {
+            setIsDeletingAll(false);
+        }
+    }
+
     // Navigate to detail page
     function handleReleaseClick(releaseId: number) {
         window.location.href = `/releases/${releaseId}`;
@@ -364,6 +402,23 @@ const ReleaseList: React.FC<ReleaseListProps> = () => {
                         </button>
                     )}
                 </div>
+
+                {/* Create Release Modal — must be rendered here too so the
+                    "Create First Release" / "Create New Release" buttons work
+                    from the empty state. */}
+                <ReleaseCreateModal
+                    isOpen={showCreateModal}
+                    onClose={handleModalClose}
+                    onSuccess={handleCreateSuccess}
+                />
+
+                {/* Toast Notifications */}
+                <Toast
+                    message={toast.message}
+                    type={toast.type}
+                    show={toast.show}
+                    onClose={handleToastClose}
+                />
             </div>
         );
     }
@@ -387,6 +442,17 @@ const ReleaseList: React.FC<ReleaseListProps> = () => {
                         <button className="btn btn-sm btn-primary" onClick={handleCreateClick}>
                             <i className="bi bi-plus-circle me-2"></i>
                             Create New Release
+                        </button>
+                    )}
+                    {isAdmin && totalItems > 0 && (
+                        <button
+                            className="btn btn-sm btn-outline-danger"
+                            onClick={handleDeleteAllClick}
+                            title="Delete every release (admin debug). Refused while a risk assessment is running."
+                            data-testid="delete-all-releases"
+                        >
+                            <i className="bi bi-trash me-2"></i>
+                            Delete All Releases
                         </button>
                     )}
                 </div>
@@ -663,6 +729,83 @@ const ReleaseList: React.FC<ReleaseListProps> = () => {
                                             </>
                                         ) : (
                                             'Confirm Set Active'
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </>
+            )}
+
+            {/* Delete All Releases Modal (admin debug) */}
+            {showDeleteAllModal && (
+                <>
+                    <div
+                        className="modal-backdrop fade show"
+                        onClick={isDeletingAll ? undefined : handleDeleteAllModalClose}
+                        style={{ zIndex: 1040 }}
+                    ></div>
+                    <div
+                        className="modal fade show d-block"
+                        tabIndex={-1}
+                        role="dialog"
+                        style={{ zIndex: 1050 }}
+                        aria-labelledby="deleteAllModalLabel"
+                        aria-modal="true"
+                    >
+                        <div className="modal-dialog">
+                            <div className="modal-content">
+                                <div className="modal-header bg-danger text-white">
+                                    <h5 className="modal-title" id="deleteAllModalLabel">
+                                        Delete ALL Releases?
+                                    </h5>
+                                    <button
+                                        type="button"
+                                        className="btn-close btn-close-white"
+                                        aria-label="Close"
+                                        onClick={handleDeleteAllModalClose}
+                                        disabled={isDeletingAll}
+                                    ></button>
+                                </div>
+                                <div className="modal-body">
+                                    <p className="mb-2">
+                                        This will permanently delete <strong>every release</strong>, including
+                                        ACTIVE ones, along with all requirement snapshots and alignment session
+                                        data.
+                                    </p>
+                                    <p className="mb-2">
+                                        The request will be refused if any risk assessment is currently running
+                                        (status <code>STARTED</code>). Otherwise, locked-release references on
+                                        non-running risk assessments will be detached automatically.
+                                    </p>
+                                    <p className="text-danger mb-0">
+                                        <strong>This action cannot be undone.</strong> Intended for debugging only.
+                                    </p>
+                                </div>
+                                <div className="modal-footer">
+                                    <button
+                                        type="button"
+                                        className="btn btn-secondary"
+                                        onClick={handleDeleteAllModalClose}
+                                        disabled={isDeletingAll}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="btn btn-danger"
+                                        onClick={handleDeleteAllConfirm}
+                                        disabled={isDeletingAll}
+                                        data-testid="confirm-delete-all-releases"
+                                    >
+                                        {isDeletingAll ? (
+                                            <>
+                                                <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                                Deleting...
+                                            </>
+                                        ) : (
+                                            'Delete All Releases'
                                         )}
                                     </button>
                                 </div>

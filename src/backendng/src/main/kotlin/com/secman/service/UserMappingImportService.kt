@@ -4,7 +4,6 @@ import com.secman.domain.UserMapping
 import com.secman.repository.UserMappingRepository
 import io.micronaut.serde.annotation.Serdeable
 import jakarta.inject.Singleton
-import jakarta.transaction.Transactional
 import org.apache.poi.ss.usermodel.*
 import org.apache.poi.xssf.usermodel.XSSFWorkbook
 import org.slf4j.LoggerFactory
@@ -69,7 +68,6 @@ open class UserMappingImportService(
      * @return ImportResult with counts and error details
      * @throws IllegalArgumentException if file format is invalid
      */
-    @Transactional
     open fun importFromExcel(inputStream: InputStream): ImportResult {
         val workbook = XSSFWorkbook(inputStream)
         val sheet = workbook.getSheetAt(0) 

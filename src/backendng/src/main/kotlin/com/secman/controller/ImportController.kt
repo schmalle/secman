@@ -5,9 +5,7 @@ import com.secman.domain.Requirement
 import com.secman.domain.UseCase
 import com.secman.repository.NormRepository
 import com.secman.repository.RequirementRepository
-import com.secman.repository.UseCaseRepository
 import com.secman.service.NormParsingService
-import com.secman.service.RequirementService
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.HttpStatus
 import io.micronaut.http.MediaType
@@ -19,9 +17,7 @@ import io.micronaut.security.annotation.Secured
 import io.micronaut.security.authentication.Authentication
 import io.micronaut.security.rules.SecurityRule
 import io.micronaut.serde.annotation.Serdeable
-import io.micronaut.transaction.annotation.Transactional
 import jakarta.inject.Inject
-import jakarta.persistence.EntityManager
 import java.time.LocalDateTime
 import org.apache.poi.ss.usermodel.*
 import org.apache.poi.xssf.usermodel.XSSFWorkbook
@@ -35,11 +31,8 @@ import java.nio.file.attribute.PosixFilePermissions
 @ExecuteOn(TaskExecutors.BLOCKING)
 open class ImportController(
     private val requirementRepository: RequirementRepository,
-    private val requirementService: RequirementService,
     private val normRepository: NormRepository,
-    private val useCaseRepository: UseCaseRepository,
     private val normParsingService: NormParsingService,
-    private val entityManager: EntityManager,
     private val vulnerabilityImportService: com.secman.service.VulnerabilityImportService,
     private val masscanParserService: com.secman.service.MasscanParserService,
     private val assetRepository: com.secman.repository.AssetRepository,
@@ -47,7 +40,8 @@ open class ImportController(
     private val scanResultRepository: com.secman.repository.ScanResultRepository,
     private val userMappingImportService: com.secman.service.UserMappingImportService,
     private val csvUserMappingParser: com.secman.service.CSVUserMappingParser,
-    private val assetImportService: com.secman.service.AssetImportService
+    private val assetImportService: com.secman.service.AssetImportService,
+    private val requirementImportService: com.secman.service.RequirementImportService
 ) {
     
     private val log = LoggerFactory.getLogger(ImportController::class.java)
@@ -95,7 +89,6 @@ open class ImportController(
 
     @Post("/upload-xlsx")
     @Consumes(MediaType.MULTIPART_FORM_DATA)
-    @Transactional
     @Secured("ADMIN", "REQADMIN")
     open fun uploadXlsx(@Part xlsxFile: CompletedFileUpload): HttpResponse<*> {
         return try {
@@ -286,14 +279,20 @@ open class ImportController(
         
         // Parse and create use cases
         if (!useCaseString.isNullOrEmpty()) {
-            try {
-                val useCases = parseAndCreateUseCases(useCaseString)
-                requirement.usecases = useCases.toMutableSet()
-            } catch (e: Exception) {
-                log.warn("Failed to parse use cases for requirement '{}': {}", shortreq, e.message)
+            val useCaseNames = useCaseString.split(",")
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+            val useCases = mutableListOf<UseCase>()
+            for (name in useCaseNames) {
+                try {
+                    useCases.add(requirementImportService.findOrCreateUseCase(name))
+                } catch (e: Exception) {
+                    log.warn("Failed to create use case '{}' for requirement '{}': {}", name, shortreq, e.message)
+                }
             }
+            requirement.usecases = useCases.toMutableSet()
         }
-        
+
         return requirement
     }
     
@@ -346,62 +345,17 @@ open class ImportController(
         }
     }
     
-    @Transactional
-    open fun parseAndCreateUseCases(useCaseString: String): List<UseCase> {
-        val useCases = mutableListOf<UseCase>()
-        
-        // Split by comma and create individual use cases
-        val useCaseNames = useCaseString.split(",")
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-        
-        for (name in useCaseNames) {
-            try {
-                val useCase = findOrCreateUseCase(name)
-                useCases.add(useCase)
-            } catch (e: Exception) {
-                log.warn("Failed to create use case '{}': {}", name, e.message)
-            }
-        }
-        
-        return useCases
-    }
-    
-    @Transactional
-    open fun findOrCreateUseCase(name: String): UseCase {
-        // Try to find existing use case (case-insensitive)
-        val existing = useCaseRepository.findByNameIgnoreCase(name).orElse(null)
-        if (existing != null) {
-            log.debug("Found existing use case: {}", name)
-            return existing
-        }
-        
-        // Create new use case
-        val newUseCase = UseCase(name = name)
-        val saved = useCaseRepository.save(newUseCase)
-        log.debug("Created new use case: {}", name)
-        
-        return saved
-    }
-    
-    @Transactional
-    open fun saveRequirements(requirements: List<Requirement>): Int {
+    private fun saveRequirements(requirements: List<Requirement>): Int {
         var processedCount = 0
-        
+
         for (requirement in requirements) {
             try {
-                // Use service to properly assign internalId
-                val savedRequirement = requirementService.createRequirement(requirement)
-
-                // Force flush to ensure it's persisted
-                entityManager.flush()
-
-                log.debug("Saved requirement: {} with ID {}", savedRequirement.shortreq, savedRequirement.internalId)
+                val saved = requirementImportService.saveOne(requirement)
+                log.debug("Saved requirement: {} with ID {}", saved.shortreq, saved.internalId)
                 processedCount++
-
             } catch (e: Exception) {
                 log.warn("Failed to save requirement '{}': {}", requirement.shortreq, e.message)
-                // Continue with next requirement instead of failing entire import
+                // Continue with next requirement; its REQUIRES_NEW transaction rolled back independently.
             }
         }
 
@@ -423,7 +377,6 @@ open class ImportController(
      */
     @Post("/upload-vulnerability-xlsx")
     @Consumes(MediaType.MULTIPART_FORM_DATA)
-    @Transactional
     @Secured("ADMIN", "VULN")
     open fun uploadVulnerabilityXlsx(
         @Part xlsxFile: CompletedFileUpload,
@@ -514,7 +467,6 @@ open class ImportController(
      */
     @Post("/upload-user-mappings")
     @Consumes(MediaType.MULTIPART_FORM_DATA)
-    @Transactional
     @Secured("ADMIN")
     open fun uploadUserMappings(
         @Part xlsxFile: CompletedFileUpload
@@ -571,7 +523,6 @@ open class ImportController(
      */
     @Post("/upload-user-mappings-csv")
     @Consumes(MediaType.MULTIPART_FORM_DATA)
-    @Transactional
     @Secured("ADMIN")
     open fun uploadUserMappingsCSV(
         @Part csvFile: CompletedFileUpload,
@@ -733,7 +684,6 @@ open class ImportController(
      */
     @Post("/upload-masscan-xml")
     @Consumes(MediaType.MULTIPART_FORM_DATA)
-    @Transactional
     @Secured("ADMIN", "VULN")
     open fun uploadMasscanXml(
         @Part xmlFile: CompletedFileUpload,
