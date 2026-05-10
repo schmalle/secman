@@ -303,4 +303,48 @@ test.describe.serial('Vulnerability + exception lifecycle (UI)', () => {
 
         await logout(page);
     });
+
+    // ========================================================================
+    // Phase 10 import/export UI checks
+    //
+    // These tests are gated by env vars set by the shell driver after Phase 10
+    // (export → delete-all → import round-trip). They are skipped when the
+    // driver hasn't run Phase 10 so the spec remains usable in isolation.
+    // ========================================================================
+
+    test('exceptions UI shows zero rows after MCP delete-all (Phase 10.9)', async ({ page }) => {
+        test.skip(
+            !process.env.EXPECTED_EXCEPTION_COUNT_AFTER_DELETE,
+            'Phase 10 driver did not run; skip this UI check'
+        );
+
+        await login(page, ADMIN.user, ADMIN.pass);
+        await page.goto('/vulnerabilities/exceptions');
+        await page.waitForLoadState('domcontentloaded');
+        // Wait for the table to fully render (header label is stable).
+        await page.waitForSelector('text=Vulnerability Exceptions');
+
+        const expectedCve = process.env.EXPECTED_EXCEPTION_CVE!;
+        // No row containing the test CVE.
+        await expect(page.locator(`tr:has-text("${expectedCve}")`)).toHaveCount(0);
+
+        await logout(page);
+    });
+
+    test('exceptions UI shows the re-imported row (Phase 10.12)', async ({ page }) => {
+        test.skip(
+            !process.env.EXPECTED_EXCEPTION_COUNT_AFTER_IMPORT,
+            'Phase 10 driver did not import; skip this UI check'
+        );
+
+        await login(page, ADMIN.user, ADMIN.pass);
+        await page.goto('/vulnerabilities/exceptions');
+        await page.waitForLoadState('domcontentloaded');
+        await page.waitForSelector('text=Vulnerability Exceptions');
+
+        const expectedCve = process.env.EXPECTED_EXCEPTION_CVE!;
+        await expect(page.locator(`tr:has-text("${expectedCve}")`).first()).toBeVisible();
+
+        await logout(page);
+    });
 });
