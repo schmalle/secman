@@ -477,7 +477,15 @@ run_phase_10_exception_import_export() {
     local re_subject
     re_subject=$(echo "${list_result}" | jq -r '.exceptions[0].subjectValue')
     [[ "${re_subject}" == "CVE-E2E-EXPORT-001" ]] || fail "10.11 wrong subjectValue: ${re_subject}"
+    local re_created_by
+    re_created_by=$(echo "${list_result}" | jq -r '.exceptions[0].createdBy')
+    # Step 10.5 created the exception via REST as the admin user, so the original
+    # createdBy must equal that admin user's username after the round-trip.
+    [[ "${re_created_by}" == "${ADMIN_USERNAME}" ]] || {
+        fail "10.11 createdBy=${re_created_by}, expected ${ADMIN_USERNAME} (provenance not preserved)"
+    }
 
+    # 10.12 (UI) — handled by Playwright; env var below
     export EXPECTED_EXCEPTION_COUNT_AFTER_IMPORT=1
 
     # 10.13 — Idempotency: import same file again, expect skippedDuplicates=1
