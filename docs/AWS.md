@@ -27,58 +27,86 @@ flavors — they kill whatever is bound to ports 8080 / 4321.
 
 ## Required tools on Amazon Linux
 
+The scripts need three OS-level packages plus a Java/Node toolchain. The
+toolchain can come from SDKMAN/nvm (recommended — see the next sections) or
+from system packages.
+
 ### Amazon Linux 2023
 
 ```bash
-# AWS CLI v2 (preinstalled on most AL2023 AMIs — verify with: aws --version)
+# AWS CLI v2 — preinstalled on most AL2023 AMIs (verify with: aws --version)
 sudo dnf install -y awscli
 
-# JSON parser
-sudo dnf install -y jq
-
-# OpenSSL + lsof (typically already installed)
-sudo dnf install -y openssl lsof
-
-# Java 21 (Corretto)
-sudo dnf install -y java-21-amazon-corretto-devel
-
-# Node.js 20+ (for the frontend)
-curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
-sudo dnf install -y nodejs
-
-# Git
-sudo dnf install -y git
+# Required: jq + openssl + lsof + git
+sudo dnf install -y jq openssl lsof git unzip zip curl
 ```
 
 ### Amazon Linux 2
 
 ```bash
-sudo yum install -y jq openssl lsof git
+sudo yum install -y jq openssl lsof git unzip zip curl
 
-# AWS CLI v2 (replaces preinstalled v1)
+# AWS CLI v2 (replaces the preinstalled v1)
 curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o awscliv2.zip
 unzip awscliv2.zip && sudo ./aws/install --update
-
-# Java 21 (Corretto)
-sudo amazon-linux-extras enable corretto21
-sudo yum install -y java-21-amazon-corretto-devel
-
-# Node.js 20+
-curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
-sudo yum install -y nodejs
 ```
 
-### Gradle
+`unzip`, `zip`, and `curl` are needed by the SDKMAN installer.
 
-The project ships a Gradle wrapper (`./gradlew`), so a system Gradle install is
-optional — `startbackenddevaws.sh` falls back to `./gradlew` if `gradle` is not
-on `PATH`. To install a system Gradle (matching the project's 9.5.0):
+### Java + Gradle via SDKMAN (recommended)
+
+The launcher scripts source SDKMAN automatically if it's installed under
+`$SDKMAN_DIR` (default `$HOME/.sdkman`), so a system-wide Java/Gradle install
+is not required.
 
 ```bash
+# Install SDKMAN
+curl -s "https://get.sdkman.io" | bash
+source "$HOME/.sdkman/bin/sdkman-init.sh"
+
+# Java 21 (Amazon Corretto build via SDKMAN)
+sdk install java 21-amzn
+
+# Gradle 9.5.0 (project version)
+sdk install gradle 9.5
+```
+
+The scripts source `${SDKMAN_DIR}/bin/sdkman-init.sh` themselves, so a fresh
+shell (including a cron-spawned shell that does **not** read `~/.bashrc`)
+will see `java` and `gradle` once the above is done. You do not have to wire
+SDKMAN into your shell rc for the scripts to work.
+
+If SDKMAN lives somewhere other than `$HOME/.sdkman`, point `SDKMAN_DIR` at it
+in the cron environment.
+
+### Java + Gradle via system packages (alternative)
+
+```bash
+# Java 21 (Corretto)
+sudo dnf install -y java-21-amazon-corretto-devel   # AL2023
+# or, on AL2:
+sudo amazon-linux-extras enable corretto21 && sudo yum install -y java-21-amazon-corretto-devel
+
+# System Gradle (optional — ./gradlew works as a fallback)
 curl -fsSL https://services.gradle.org/distributions/gradle-9.5-bin.zip -o /tmp/gradle.zip
 sudo mkdir -p /opt/gradle && sudo unzip -d /opt/gradle /tmp/gradle.zip
 echo 'export PATH=$PATH:/opt/gradle/gradle-9.5/bin' | sudo tee /etc/profile.d/gradle.sh
-. /etc/profile.d/gradle.sh
+```
+
+The project ships a Gradle wrapper (`./gradlew`). `startbackenddevaws.sh` calls
+the system `gradle` if available; otherwise it falls back to `./gradlew`.
+
+### Node.js via nvm (optional)
+
+`startfrontenddevaws.sh` sources nvm (`$NVM_DIR/nvm.sh`, default
+`$HOME/.nvm/nvm.sh`) when present, so a Node managed by nvm is visible under
+cron without needing system Node installed.
+
+```bash
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+. "$HOME/.nvm/nvm.sh"
+nvm install 20
+nvm alias default 20
 ```
 
 ## AWS authentication
@@ -217,6 +245,8 @@ From the project root:
 | `AWS_REGION`           | `eu-central-1` | Region containing the secret |
 | `AWS_DEFAULT_REGION`   | (fallback for `AWS_REGION`) | |
 | `AWS_PROFILE`          | (none) | Named profile from `~/.aws/credentials` |
+| `SDKMAN_DIR`           | `$HOME/.sdkman` | SDKMAN install location (sourced by both scripts) |
+| `NVM_DIR`              | `$HOME/.nvm` | nvm install location (sourced by `startfrontenddevaws.sh`) |
 
 Examples:
 
@@ -227,6 +257,84 @@ SECMAN_AWS_SECRET_ID=secman/staging AWS_REGION=us-east-1 ./scripts/startbackendd
 # Local dev with a named profile
 AWS_PROFILE=secman-dev ./scripts/startbackenddevaws.sh
 ```
+
+## Running under cron
+
+Both scripts are written to be cron-safe:
+
+- They build their own `PATH` (`$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`),
+  so they don't depend on whatever PATH cron passed in.
+- They source `${SDKMAN_DIR}/bin/sdkman-init.sh` if SDKMAN is installed, exposing
+  the SDKMAN-managed `java` and `gradle` to the script — even though cron does
+  not source `~/.bashrc` / `~/.profile`.
+- `startfrontenddevaws.sh` additionally sources `${NVM_DIR}/nvm.sh` if nvm is
+  installed.
+- They `cd` to the project root using their own location, so the working
+  directory cron starts in does not matter.
+- AWS credentials come from the standard provider chain. On EC2 the instance
+  profile is picked up automatically; otherwise set `AWS_PROFILE` (and
+  `AWS_SHARED_CREDENTIALS_FILE` / `AWS_CONFIG_FILE` if the user running cron
+  doesn't have `~/.aws/`).
+
+### Example crontab entry
+
+Run as the same user that owns the SDKMAN install (cron uses that user's
+`$HOME`):
+
+```cron
+# m h dom mon dow command
+@reboot /home/ec2-user/secman/scripts/startbackenddevaws.sh  >> /var/log/secman/backend.log 2>&1
+@reboot /home/ec2-user/secman/scripts/startfrontenddevaws.sh >> /var/log/secman/frontend.log 2>&1
+```
+
+If you keep SDKMAN somewhere else, override the path explicitly:
+
+```cron
+SDKMAN_DIR=/opt/sdkman
+NVM_DIR=/opt/nvm
+AWS_REGION=eu-central-1
+@reboot /home/ec2-user/secman/scripts/startbackenddevaws.sh >> /var/log/secman/backend.log 2>&1
+```
+
+### Verifying the cron environment
+
+Cron is notorious for "works in shell, fails in cron". To reproduce cron's
+minimal environment from an interactive shell and confirm the scripts still
+run, use `env -i`:
+
+```bash
+env -i HOME="$HOME" PATH=/usr/bin:/bin /home/ec2-user/secman/scripts/startbackenddevaws.sh
+```
+
+If that succeeds, the same invocation will succeed under cron.
+
+### systemd alternative
+
+For a long-running service, prefer a systemd unit over `@reboot` cron — it
+gives you proper restart-on-failure, log capture via `journalctl`, and graceful
+shutdown. Sketch:
+
+```ini
+# /etc/systemd/system/secman-backend.service
+[Unit]
+Description=Secman backend (dev)
+After=network-online.target
+
+[Service]
+Type=simple
+User=ec2-user
+WorkingDirectory=/home/ec2-user/secman
+Environment=AWS_REGION=eu-central-1
+ExecStart=/home/ec2-user/secman/scripts/startbackenddevaws.sh
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Then `sudo systemctl enable --now secman-backend.service`. The script's
+SDKMAN/PATH bootstrap also handles the empty environment systemd provides.
 
 ## Secret keys reference
 
