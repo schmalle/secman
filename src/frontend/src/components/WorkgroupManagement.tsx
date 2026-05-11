@@ -91,6 +91,7 @@ const WorkgroupManagement: React.FC = () => {
   // Pending removals: ids the user has marked × in the "Currently assigned" panel.
   // Strikethrough until Save changes — keeps the operation reversible inside the modal.
   const [assetIdsToRemove, setAssetIdsToRemove] = useState<number[]>([]);
+  const [userIdsToRemove, setUserIdsToRemove] = useState<number[]>([]);
   const [accountsModalState, setAccountsModalState] = useState<{
     isOpen: boolean;
     workgroupId: number | null;
@@ -207,6 +208,7 @@ const WorkgroupManagement: React.FC = () => {
     setUserSearchTerm('');
     setAssignedUsers([]);
     setAssignedUsersError(null);
+    setUserIdsToRemove([]);
     setShowAssignUsers(true);
     fetchAssignedUsers(workgroup.id);
   };
@@ -259,6 +261,12 @@ const WorkgroupManagement: React.FC = () => {
     );
   };
 
+  const toggleUserRemoval = (userId: number) => {
+    setUserIdsToRemove(prev =>
+      prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]
+    );
+  };
+
   /**
    * Filter assets based on search term with wildcard support
    * Supports: partial match, * wildcard, case-insensitive
@@ -295,18 +303,34 @@ const WorkgroupManagement: React.FC = () => {
   const filteredAssets = filterAssets(assetSearchTerm);
 
   const submitAssignUsers = async () => {
-    if (!selectedWorkgroup || selectedUserRefs.length === 0) {
-      setError('Please select at least one user');
+    if (!selectedWorkgroup) return;
+    if (selectedUserRefs.length === 0 && userIdsToRemove.length === 0) {
+      setError('Select at least one user to add or remove');
       return;
     }
 
     try {
-      const response = await authenticatedPost(`/api/workgroups/${selectedWorkgroup.id}/users`, {
-        userRefs: selectedUserRefs
-      });
+      // Removals first (same ordering rationale as submitAssignAssets): if the add
+      // step fails, the workgroup is still in its intended steady state for what
+      // succeeded. Partial progress is not regression.
+      if (userIdsToRemove.length > 0) {
+        const removeResp = await authenticatedDelete(
+          `/api/workgroups/${selectedWorkgroup.id}/users`,
+          { userIds: userIdsToRemove }
+        );
+        if (!removeResp.ok) {
+          throw new Error(await extractErrorMessage(removeResp, 'Failed to remove users'));
+        }
+      }
 
-      if (!response.ok) {
-        throw new Error(await extractErrorMessage(response, 'Failed to assign users'));
+      if (selectedUserRefs.length > 0) {
+        const addResp = await authenticatedPost(
+          `/api/workgroups/${selectedWorkgroup.id}/users`,
+          { userRefs: selectedUserRefs }
+        );
+        if (!addResp.ok) {
+          throw new Error(await extractErrorMessage(addResp, 'Failed to assign users'));
+        }
       }
 
       await fetchWorkgroups();
@@ -316,6 +340,7 @@ const WorkgroupManagement: React.FC = () => {
       setUserSearchTerm('');
       setAssignedUsers([]);
       setAssignedUsersError(null);
+      setUserIdsToRemove([]);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -534,14 +559,19 @@ const WorkgroupManagement: React.FC = () => {
                 <button type="button" className="btn-close" onClick={() => setShowAssignUsers(false)}></button>
               </div>
               <div className="modal-body">
-                {/* Currently assigned members — visible at the top so the admin sees who is already in the group. */}
-                <div className="mb-3">
-                  <div className="d-flex align-items-center mb-2">
+                {/* Currently assigned members — mirrors the Manage Assets dialog. The × marks
+                    a row for removal but does not call the API until "Save changes" is pressed. */}
+                <div className="mb-3 p-2 border rounded bg-light">
+                  <div className="d-flex justify-content-between align-items-center mb-1">
                     <strong>Currently assigned ({assignedUsers.length})</strong>
+                    {userIdsToRemove.length > 0 && (
+                      <span className="badge bg-warning text-dark">
+                        {userIdsToRemove.length} pending removal
+                      </span>
+                    )}
                   </div>
                   {assignedUsersError && (
-                    <div className="alert alert-warning py-2 mb-2">
-                      <i className="bi bi-exclamation-triangle me-1"></i>
+                    <div className="alert alert-warning py-1 px-2 my-1 small mb-0" role="alert">
                       {assignedUsersError}
                     </div>
                   )}
@@ -549,13 +579,35 @@ const WorkgroupManagement: React.FC = () => {
                     <div className="text-muted small fst-italic">No users assigned yet.</div>
                   )}
                   {assignedUsers.length > 0 && (
-                    <div className="d-flex flex-wrap gap-1">
-                      {assignedUsers.map(u => (
-                        <span key={u.id} className="badge bg-success-subtle text-success-emphasis border border-success-subtle">
-                          <i className="bi bi-person-check me-1"></i>
-                          {u.username} <span className="opacity-75">({u.email})</span>
-                        </span>
-                      ))}
+                    <div style={{ maxHeight: '180px', overflowY: 'auto' }}>
+                      {assignedUsers.map(u => {
+                        const pending = userIdsToRemove.includes(u.id);
+                        return (
+                          <div
+                            key={u.id}
+                            className="d-flex justify-content-between align-items-center py-1 px-1 border-bottom"
+                          >
+                            <span
+                              style={{
+                                textDecoration: pending ? 'line-through' : 'none',
+                                color: pending ? '#999' : 'inherit',
+                              }}
+                            >
+                              <i className="bi bi-person-check me-1"></i>
+                              <strong>{u.username}</strong>
+                              <span className="text-muted small"> ({u.email})</span>
+                            </span>
+                            <button
+                              type="button"
+                              className={`btn btn-sm ${pending ? 'btn-outline-secondary' : 'btn-outline-danger'}`}
+                              onClick={() => toggleUserRemoval(u.id)}
+                              title={pending ? 'Undo removal' : 'Mark for removal'}
+                            >
+                              {pending ? 'Undo' : '× Remove'}
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -665,8 +717,13 @@ const WorkgroupManagement: React.FC = () => {
                 <button type="button" className="btn btn-secondary" onClick={() => setShowAssignUsers(false)}>
                   Cancel
                 </button>
-                <button type="button" className="btn btn-primary" onClick={submitAssignUsers}>
-                  Assign Users
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={submitAssignUsers}
+                  disabled={selectedUserRefs.length === 0 && userIdsToRemove.length === 0}
+                >
+                  Save changes
                 </button>
               </div>
             </div>

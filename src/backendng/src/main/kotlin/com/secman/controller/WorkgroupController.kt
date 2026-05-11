@@ -409,6 +409,47 @@ open class WorkgroupController(
     }
 
     /**
+     * Bulk-remove users from a workgroup. Member-or-admin. Mirrors POST /{id}/users
+     * so the "Assign Users" modal can apply pending removals in one round-trip.
+     *
+     * DELETE /api/workgroups/{id}/users
+     * Body: { "userIds": [1, 2, 3] }
+     * Returns: 204 No Content, 400 if body empty/missing userIds, 404 if workgroup or any user not found.
+     * Idempotent: ids not currently in the workgroup are silently skipped.
+     */
+    @Delete("/{id}/users")
+    @Secured(SecurityRule.IS_AUTHENTICATED)
+    @Transactional
+    open fun removeUsers(
+        @PathVariable id: Long,
+        @Body @Valid request: RemoveUsersRequest,
+        authentication: Authentication
+    ): HttpResponse<Void> {
+        return try {
+            if (request.userIds.isEmpty()) {
+                return HttpResponse.badRequest()
+            }
+            val workgroup = workgroupRepository.findById(id).orElse(null)
+                ?: return HttpResponse.notFound()
+            if (!isMemberOrAdmin(workgroup, authentication)) {
+                return HttpResponse.status(io.micronaut.http.HttpStatus.FORBIDDEN)
+            }
+            val removedCount = workgroupService.removeUsersFromWorkgroup(id, request.userIds)
+            logger.info(
+                "AUDIT: operation=REMOVE_USERS_BULK, actor={}, workgroup={}, requested={}, removed={}",
+                authentication.name, workgroup.name, request.userIds.size, removedCount
+            )
+            HttpResponse.noContent()
+        } catch (e: IllegalArgumentException) {
+            if (e.message?.contains("not found") == true) {
+                HttpResponse.notFound()
+            } else {
+                HttpResponse.badRequest()
+            }
+        }
+    }
+
+    /**
      * Assign assets to workgroup
      * FR-011: ADMIN only, bulk asset assignment
      *
@@ -1121,6 +1162,16 @@ data class AssignUsersRequest(
 data class AssignAssetsRequest(
     @field:NotNull(message = "Asset IDs are required")
     val assetIds: List<Long>
+)
+
+/**
+ * Request to bulk-remove users from a workgroup. Distinct shape from AssignUsersRequest
+ * because removal only deals in resolved User ids — there's no "pending email" path.
+ */
+@Serdeable
+data class RemoveUsersRequest(
+    @field:NotNull(message = "User IDs are required")
+    val userIds: List<Long>
 )
 
 /**

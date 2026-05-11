@@ -226,6 +226,35 @@ open class WorkgroupService(
     }
 
     /**
+     * Bulk-remove users from a workgroup. Mirrors assignUsersToWorkgroup so the
+     * "Assign Users" UI can apply removals in a single round-trip.
+     *
+     * Idempotent: users that are not in the workgroup are silently skipped.
+     * Missing users throw, same as the single-user path, so the controller can
+     * return 404 consistently.
+     *
+     * @return number of users actually removed (excludes skips)
+     */
+    @Transactional
+    open fun removeUsersFromWorkgroup(workgroupId: Long, userIds: List<Long>): Int {
+        val workgroup = workgroupRepository.findById(workgroupId).orElseThrow {
+            IllegalArgumentException("Workgroup not found: $workgroupId")
+        }
+        var removed = 0
+        userIds.forEach { userId ->
+            val user = userRepository.findByIdWithWorkgroups(userId).orElseThrow {
+                IllegalArgumentException("User not found: $userId")
+            }
+            if (user.workgroups.contains(workgroup)) {
+                user.workgroups.remove(workgroup)
+                userRepository.update(user)
+                removed++
+            }
+        }
+        return removed
+    }
+
+    /**
      * Assign assets to workgroup
      * FR-011: Allow administrators to assign assets to workgroups
      * Feature 073: Uses findByIdWithWorkgroups() for LAZY loading support.
