@@ -1,5 +1,7 @@
 package com.secman.service
 
+import com.secman.domain.Asset
+import com.secman.domain.Workgroup
 import com.secman.dto.AssetVulnCountDto
 import com.secman.dto.CrowdStrikeImportStatusDto
 import com.secman.dto.WorkgroupGroupDto
@@ -8,6 +10,7 @@ import com.secman.repository.AssetRepository
 import com.secman.repository.VulnerabilityRepository
 import com.secman.repository.WorkgroupRepository
 import com.secman.repository.CrowdStrikeImportHistoryRepository
+import com.secman.repository.WorkgroupAwsAccountRepository
 import io.micronaut.security.authentication.Authentication
 import jakarta.inject.Singleton
 import jakarta.persistence.EntityManager
@@ -26,8 +29,9 @@ import org.slf4j.LoggerFactory
  *
  * Access Control:
  * - Admin users are rejected (should use System Vulns instead)
- * - Non-admin users see assets from their workgroups only
- * - Workgroup membership is PRIMARY access control
+ * - Non-admin users see assets from their workgroups (direct membership) AND
+ *   assets whose cloudAccountId matches an AWS account assigned to one of their
+ *   workgroups via WorkgroupAwsAccount (Unified Asset Access rule #9).
  */
 @Singleton
 class WorkgroupVulnsService(
@@ -35,7 +39,8 @@ class WorkgroupVulnsService(
     private val assetRepository: AssetRepository,
     private val vulnerabilityRepository: VulnerabilityRepository,
     private val entityManager: EntityManager,
-    private val importHistoryRepository: CrowdStrikeImportHistoryRepository
+    private val importHistoryRepository: CrowdStrikeImportHistoryRepository,
+    private val workgroupAwsAccountRepository: WorkgroupAwsAccountRepository
 ) {
 
     private val logger = LoggerFactory.getLogger(WorkgroupVulnsService::class.java)
@@ -185,26 +190,67 @@ class WorkgroupVulnsService(
         // Get workgroup IDs
         val workgroupIds = userWorkgroups.mapNotNull { it.id }
 
-        // Get all assets in user's workgroups
-        val assets = assetRepository.findByWorkgroupIdIn(workgroupIds)
+        // Direct-membership assets (asset ↔ workgroup join). The repository query
+        // uses LEFT JOIN FETCH on workgroups, so asset.workgroups is safe to read.
+        val directAssets = assetRepository.findByWorkgroupIdIn(workgroupIds)
+        val directAssetIds = directAssets.mapNotNullTo(HashSet()) { it.id }
 
-        logger.debug("Found {} assets for user {} across {} workgroups", 
-            assets.size, userEmail, userWorkgroups.size)
+        // Unified Asset Access rule #9: assets in AWS accounts assigned to the
+        // user's workgroups (WorkgroupAwsAccount, direct workgroup membership only).
+        // Build workgroupId -> set<awsAccountId> so we can also map each EC2 asset
+        // back to the workgroup column it should appear under.
+        val workgroupToAwsAccounts: Map<Long, Set<String>> = workgroupIds.associateWith { wgId ->
+            workgroupAwsAccountRepository.findByWorkgroupId(wgId)
+                .map { it.awsAccountId }
+                .toSet()
+        }
+        val allWorkgroupCloudAccountIds = workgroupToAwsAccounts.values
+            .flatten()
+            .distinct()
+        val cloudAssets = if (allWorkgroupCloudAccountIds.isNotEmpty()) {
+            assetRepository.findByCloudAccountIdIn(allWorkgroupCloudAccountIds)
+        } else {
+            emptyList()
+        }
+
+        // distinctBy keeps the first occurrence — directAssets first ensures the
+        // version with the eagerly-fetched workgroups collection wins, avoiding
+        // a lazy read on cloud-only assets later.
+        val assets = (directAssets + cloudAssets).distinctBy { it.id }
+
+        logger.debug(
+            "Found {} assets for user {} ({} direct, {} via workgroup AWS accounts) across {} workgroups",
+            assets.size, userEmail, directAssets.size, cloudAssets.size, userWorkgroups.size
+        )
 
         // Get severity counts for all assets
         val assetIds = assets.mapNotNull { it.id }
         val severityCountsMap = countVulnerabilitiesBySeverity(assetIds)
-        
-        // Group assets by workgroup
-        // Note: An asset can belong to multiple workgroups, so we handle this carefully
-        val assetsByWorkgroup = assets.groupBy { asset ->
-            // Get all workgroups for this asset that the user is a member of
-            asset.workgroups.filter { wg -> wg.id in workgroupIds }
-        }.flatMap { (workgroups, assetsInGroup) ->
-            // Create a pair for each workgroup-asset combination
-            workgroups.map { wg -> wg to assetsInGroup }
-        }.groupBy({ it.first }, { it.second })
-        .mapValues { it.value.flatten().distinct() }
+
+        // Map every accessible asset to the user-workgroups it should appear under.
+        // For direct-membership assets we read asset.workgroups (fetched eagerly).
+        // For cloud-only assets we MUST NOT read asset.workgroups (lazy proxy from
+        // findByCloudAccountIdIn) — match via cloudAccountId instead.
+        val workgroupById: Map<Long, Workgroup> = userWorkgroups.associateBy { it.id!! }
+        val assetWorkgroups: Map<Long, List<Workgroup>> = assets.mapNotNull { asset ->
+            val id = asset.id ?: return@mapNotNull null
+            val directWgs: List<Workgroup> = if (id in directAssetIds) {
+                asset.workgroups.filter { it.id in workgroupIds }
+            } else {
+                emptyList()
+            }
+            val cloudWgs: List<Workgroup> = asset.cloudAccountId?.let { cid ->
+                workgroupToAwsAccounts
+                    .filterValues { cid in it }
+                    .keys
+                    .mapNotNull { workgroupById[it] }
+            } ?: emptyList()
+            id to (directWgs + cloudWgs).distinctBy { it.id }
+        }.toMap()
+
+        val assetsByWorkgroup: Map<Workgroup, List<Asset>> = userWorkgroups.associateWith { wg ->
+            assets.filter { asset -> assetWorkgroups[asset.id]?.any { it.id == wg.id } == true }
+        }
 
         // Build workgroup groups for ALL user's workgroups (including those with no assets)
         val workgroupGroups = userWorkgroups.map { workgroup ->

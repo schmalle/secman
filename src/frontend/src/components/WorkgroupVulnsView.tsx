@@ -264,11 +264,13 @@ const WorkgroupVulnsView: React.FC = () => {
                                         Imported by {lastImport.importedBy || 'system automation'}
                                     </small>
                                 </div>
+                                {/* bg-{primary,success,danger} are forced solid via !important in bootstrap-overrides.css,
+                                    which collapses bg-opacity-10 + text-* into invisible text. Use scand-* badges instead. */}
                                 <div className="d-flex flex-wrap gap-2 ms-lg-auto">
-                                    <span className="badge bg-primary bg-opacity-10 text-primary border border-primary">
+                                    <span className="badge scand-medium">
                                         {lastImport.serversProcessed} servers processed
                                     </span>
-                                    <span className="badge bg-success bg-opacity-10 text-success border border-success">
+                                    <span className="badge scand-success">
                                         {lastImport.vulnerabilitiesImported} vulnerabilities imported
                                     </span>
                                     <span className="badge bg-secondary bg-opacity-10 text-secondary border border-secondary">
@@ -278,7 +280,7 @@ const WorkgroupVulnsView: React.FC = () => {
                                         {lastImport.serversCreated} created / {lastImport.serversUpdated} updated
                                     </span>
                                     {lastImport.errorCount > 0 && (
-                                        <span className="badge bg-danger bg-opacity-10 text-danger border border-danger">
+                                        <span className="badge scand-critical">
                                             {lastImport.errorCount} error{lastImport.errorCount !== 1 ? 's' : ''}
                                         </span>
                                     )}

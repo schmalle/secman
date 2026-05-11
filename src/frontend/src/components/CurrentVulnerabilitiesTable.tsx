@@ -1065,20 +1065,11 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                                     </span>
                                   )}
                                 </span>
-                              ) : vuln.overdueStatus === "OVERDUE" ? (
+                              ) : (
                                 <button
                                   className="btn btn-sm btn-outline-primary"
                                   onClick={() => handleRequestException(vuln)}
                                   title="Request an exception for this vulnerability"
-                                >
-                                  <i className="bi bi-shield-plus me-1"></i>
-                                  Request Exception
-                                </button>
-                              ) : (
-                                <button
-                                  className="btn btn-sm btn-outline-secondary"
-                                  disabled={true}
-                                  title="Exceptions can only be requested for overdue vulnerabilities"
                                 >
                                   <i className="bi bi-shield-plus me-1"></i>
                                   Request Exception

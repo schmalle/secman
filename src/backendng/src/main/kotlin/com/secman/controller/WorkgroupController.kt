@@ -80,6 +80,25 @@ open class WorkgroupController(
     }
 
     /**
+     * Returns the IDs of workgroups the caller is allowed to see, or null when the
+     * caller is privileged enough to see everything (ADMIN or SECCHAMPION). Mirrors
+     * the gating used by the flat list endpoint so the tree-view endpoints agree
+     * with `GET /api/workgroups` on which workgroups exist from the caller's POV.
+     *
+     * Returning null (instead of "all ids") avoids a second DB round-trip for the
+     * common admin path and lets callers branch on `== null` for "no filter".
+     */
+    private fun accessibleWorkgroupIdsOrNull(authentication: Authentication): Set<Long>? {
+        if (isAdmin(authentication) || authentication.roles.contains("SECCHAMPION")) {
+            return null
+        }
+        val user = currentUser(authentication)
+        return workgroupRepository.findWorkgroupsByUserEmail(user.email)
+            .mapNotNull { it.id }
+            .toSet()
+    }
+
+    /**
      * Create a new workgroup
      * FR-001, FR-004, FR-006: ADMIN only, unique name validation
      *
@@ -423,6 +442,84 @@ open class WorkgroupController(
     }
 
     /**
+     * List assets currently assigned to a workgroup. Member-or-admin only.
+     * Companion to POST /{id}/assets so the "Manage Assets" UI can render a
+     * "Currently assigned" panel without requiring the ADMIN-only /cli/ endpoint.
+     *
+     * GET /api/workgroups/{id}/assets
+     * Returns: 200 OK with [{id, name, type, ip, owner}], 403 if caller not a member, 404 if missing.
+     */
+    @Get("/{id}/assets")
+    @Secured(SecurityRule.IS_AUTHENTICATED)
+    @Transactional
+    open fun listAssignedAssets(
+        @PathVariable id: Long,
+        authentication: Authentication
+    ): HttpResponse<*> {
+        return try {
+            val workgroup = workgroupService.getWorkgroupById(id)
+            if (!isMemberOrAdmin(workgroup, authentication)) {
+                return HttpResponse.status<Map<String, String>>(io.micronaut.http.HttpStatus.FORBIDDEN)
+                    .body(mapOf("error" to "You must be a member of '${workgroup.name}' to view its assets"))
+            }
+            val assets = assetRepository.findByWorkgroupsIdOrderByNameAsc(id).map {
+                AssignedAssetDto(
+                    id = it.id!!,
+                    name = it.name,
+                    type = it.type,
+                    ip = it.ip,
+                    owner = it.owner
+                )
+            }
+            HttpResponse.ok(assets)
+        } catch (e: IllegalArgumentException) {
+            HttpResponse.status<Map<String, String>>(io.micronaut.http.HttpStatus.NOT_FOUND)
+                .body(mapOf("error" to (e.message ?: "Workgroup not found")))
+        }
+    }
+
+    /**
+     * Bulk-remove assets from a workgroup. Member-or-admin. Mirrors POST /{id}/assets
+     * so the "Manage Assets" modal can apply pending removals in one round-trip.
+     *
+     * DELETE /api/workgroups/{id}/assets
+     * Body: { "assetIds": [1, 2, 3] }
+     * Returns: 204 No Content, 400 if body empty/missing assetIds, 404 if workgroup not found.
+     * Idempotent: ids not currently in the workgroup are silently skipped.
+     */
+    @Delete("/{id}/assets")
+    @Secured(SecurityRule.IS_AUTHENTICATED)
+    @Transactional
+    open fun removeAssets(
+        @PathVariable id: Long,
+        @Body @Valid request: AssignAssetsRequest,
+        authentication: Authentication
+    ): HttpResponse<Void> {
+        return try {
+            if (request.assetIds.isEmpty()) {
+                return HttpResponse.badRequest()
+            }
+            val workgroup = workgroupRepository.findById(id).orElse(null)
+                ?: return HttpResponse.notFound()
+            if (!isMemberOrAdmin(workgroup, authentication)) {
+                return HttpResponse.status(io.micronaut.http.HttpStatus.FORBIDDEN)
+            }
+            val removedCount = workgroupService.removeAssetsFromWorkgroup(id, request.assetIds)
+            logger.info(
+                "AUDIT: operation=REMOVE_ASSETS_BULK, actor={}, workgroup={}, requested={}, removed={}",
+                authentication.name, workgroup.name, request.assetIds.size, removedCount
+            )
+            HttpResponse.noContent()
+        } catch (e: IllegalArgumentException) {
+            if (e.message?.contains("not found") == true) {
+                HttpResponse.notFound()
+            } else {
+                HttpResponse.badRequest()
+            }
+        }
+    }
+
+    /**
      * Remove asset from workgroup
      * FR-012: ADMIN only, single asset removal
      *
@@ -496,11 +593,26 @@ open class WorkgroupController(
     @Get("/{id}/children")
     @Secured(SecurityRule.IS_AUTHENTICATED)
     @Transactional
-    open fun getChildren(@PathVariable id: Long): HttpResponse<List<WorkgroupResponse>> {
+    open fun getChildren(
+        @PathVariable id: Long,
+        authentication: Authentication
+    ): HttpResponse<List<WorkgroupResponse>> {
         return try {
+            // Tree-view consistency: non-privileged callers must not see children
+            // of a workgroup they can't access, nor children outside their accessible
+            // set. Return 404 (not 403) so we don't leak the existence of hidden
+            // parents — matches the posture of the flat list endpoint.
+            val accessibleIds = accessibleWorkgroupIdsOrNull(authentication)
+            if (accessibleIds != null && id !in accessibleIds) {
+                return HttpResponse.notFound()
+            }
             val children = workgroupService.getChildren(id)
-            val response = children.map { toWorkgroupResponse(it) }
-            HttpResponse.ok(response)
+            val filtered = if (accessibleIds == null) {
+                children
+            } else {
+                children.filter { it.id in accessibleIds }
+            }
+            HttpResponse.ok(filtered.map { toWorkgroupResponse(it) })
         } catch (e: IllegalArgumentException) {
             HttpResponse.notFound()
         }
@@ -516,10 +628,23 @@ open class WorkgroupController(
     @Get("/root")
     @Secured(SecurityRule.IS_AUTHENTICATED)
     @Transactional
-    open fun getRootWorkgroups(): HttpResponse<List<WorkgroupResponse>> {
-        val roots = workgroupService.getRootWorkgroups()
-        val response = roots.map { toWorkgroupResponse(it) }
-        return HttpResponse.ok(response)
+    open fun getRootWorkgroups(authentication: Authentication): HttpResponse<List<WorkgroupResponse>> {
+        val accessibleIds = accessibleWorkgroupIdsOrNull(authentication)
+        val roots = if (accessibleIds == null) {
+            // ADMIN / SECCHAMPION see the real top-level tree.
+            workgroupService.getRootWorkgroups()
+        } else {
+            // For a restricted user, "root" means "as far up the tree as they can see".
+            // An accessible workgroup whose parent is null OR not accessible is a
+            // visible-root — that way a member of a deep workgroup whose ancestors
+            // are hidden still gets an entry point into the tree.
+            val all = workgroupService.listAllWorkgroups()
+            all.filter {
+                it.id in accessibleIds &&
+                    (it.parent == null || it.parent?.id !in accessibleIds)
+            }
+        }
+        return HttpResponse.ok(roots.map { toWorkgroupResponse(it) })
     }
 
     /**
@@ -1006,6 +1131,19 @@ data class AssignedUserDto(
     val id: Long,
     val username: String,
     val email: String
+)
+
+/**
+ * Asset listing payload for the Manage Assets dialog. Distinct from CliAssetDto so
+ * the non-CLI surface can evolve independently of CLI consumers.
+ */
+@Serdeable
+data class AssignedAssetDto(
+    val id: Long,
+    val name: String,
+    val type: String?,
+    val ip: String?,
+    val owner: String?
 )
 
 /**

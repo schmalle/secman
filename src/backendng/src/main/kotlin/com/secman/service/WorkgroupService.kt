@@ -279,6 +279,35 @@ open class WorkgroupService(
     }
 
     /**
+     * Bulk-remove assets from a workgroup. Mirrors assignAssetsToWorkgroup so the
+     * "Manage Assets" UI can apply removals in a single round-trip.
+     *
+     * Idempotent: assets that are not in the workgroup are silently skipped and
+     * counted as "skipped" by the caller. Missing assets throw, same as the
+     * single-asset path, so the controller can return 404 consistently.
+     *
+     * @return number of assets actually removed (excludes skips)
+     */
+    @Transactional
+    open fun removeAssetsFromWorkgroup(workgroupId: Long, assetIds: List<Long>): Int {
+        val workgroup = workgroupRepository.findById(workgroupId).orElseThrow {
+            IllegalArgumentException("Workgroup not found: $workgroupId")
+        }
+        var removed = 0
+        assetIds.forEach { assetId ->
+            val asset = assetRepository.findByIdWithWorkgroups(assetId).orElseThrow {
+                IllegalArgumentException("Asset not found: $assetId")
+            }
+            if (asset.workgroups.contains(workgroup)) {
+                asset.workgroups.remove(workgroup)
+                assetRepository.update(asset)
+                removed++
+            }
+        }
+        return removed
+    }
+
+    /**
      * Get all workgroups
      * FR-005: Provide list view of all workgroups
      *

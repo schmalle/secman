@@ -154,10 +154,15 @@ export async function authenticatedPut(url: string, data?: any): Promise<Respons
 }
 
 /**
- * Convenience method for DELETE requests
+ * Convenience method for DELETE requests.
+ * Optional body for bulk-delete endpoints that accept JSON payloads
+ * (e.g. DELETE /api/workgroups/{id}/assets with { assetIds: [...] }).
  */
-export async function authenticatedDelete(url: string): Promise<Response> {
-    return authenticatedFetch(url, { method: 'DELETE' });
+export async function authenticatedDelete(url: string, data?: any): Promise<Response> {
+    return authenticatedFetch(url, {
+        method: 'DELETE',
+        body: data ? JSON.stringify(data) : undefined,
+    });
 }
 
 // Session keep-alive configuration

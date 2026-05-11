@@ -54,6 +54,16 @@ interface Asset {
   type: string;
 }
 
+// Shape returned by GET /api/workgroups/{id}/assets — includes owner/ip for context
+// rows in the "Currently assigned" panel. `type` is nullable on the backend Asset.
+interface AssignedAsset {
+  id: number;
+  name: string;
+  type: string | null;
+  ip: string | null;
+  owner: string | null;
+}
+
 const WorkgroupManagement: React.FC = () => {
   const [workgroups, setWorkgroups] = useState<Workgroup[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -76,6 +86,11 @@ const WorkgroupManagement: React.FC = () => {
   const [userSearchTerm, setUserSearchTerm] = useState<string>('');
   const [assignedUsers, setAssignedUsers] = useState<Array<{ id: number; username: string; email: string }>>([]);
   const [assignedUsersError, setAssignedUsersError] = useState<string | null>(null);
+  const [assignedAssets, setAssignedAssets] = useState<AssignedAsset[]>([]);
+  const [assignedAssetsError, setAssignedAssetsError] = useState<string | null>(null);
+  // Pending removals: ids the user has marked × in the "Currently assigned" panel.
+  // Strikethrough until Save changes — keeps the operation reversible inside the modal.
+  const [assetIdsToRemove, setAssetIdsToRemove] = useState<number[]>([]);
   const [accountsModalState, setAccountsModalState] = useState<{
     isOpen: boolean;
     workgroupId: number | null;
@@ -215,7 +230,33 @@ const WorkgroupManagement: React.FC = () => {
     setSelectedWorkgroup(workgroup);
     setSelectedAssetIds([]);
     setAssetSearchTerm('');
+    setAssignedAssets([]);
+    setAssignedAssetsError(null);
+    setAssetIdsToRemove([]);
     setShowAssignAssets(true);
+    fetchAssignedAssets(workgroup.id);
+  };
+
+  const fetchAssignedAssets = async (workgroupId: number) => {
+    try {
+      const response = await authenticatedGet(`/api/workgroups/${workgroupId}/assets`);
+      if (response.ok) {
+        const data = await response.json();
+        setAssignedAssets(Array.isArray(data) ? data : []);
+      } else {
+        const body = await response.json().catch(() => ({}));
+        setAssignedAssetsError(body.error || `Failed to load current assets (HTTP ${response.status})`);
+      }
+    } catch (err) {
+      setAssignedAssetsError(err instanceof Error ? err.message : 'Failed to load current assets');
+    }
+  };
+
+  // Toggle a row in the "Currently assigned" panel between kept and pending-removal.
+  const toggleAssetRemoval = (assetId: number) => {
+    setAssetIdsToRemove(prev =>
+      prev.includes(assetId) ? prev.filter(id => id !== assetId) : [...prev, assetId]
+    );
   };
 
   /**
@@ -282,24 +323,42 @@ const WorkgroupManagement: React.FC = () => {
   };
 
   const submitAssignAssets = async () => {
-    if (!selectedWorkgroup || selectedAssetIds.length === 0) {
-      setError('Please select at least one asset');
+    if (!selectedWorkgroup) return;
+    if (selectedAssetIds.length === 0 && assetIdsToRemove.length === 0) {
+      setError('Select at least one asset to add or remove');
       return;
     }
 
     try {
-      const response = await authenticatedPost(`/api/workgroups/${selectedWorkgroup.id}/assets`, {
-        assetIds: selectedAssetIds
-      });
+      // Removals first so the workgroup is in its intended steady state even if the
+      // subsequent add fails — partially-applied changes are still progress, never regress.
+      if (assetIdsToRemove.length > 0) {
+        const removeResp = await authenticatedDelete(
+          `/api/workgroups/${selectedWorkgroup.id}/assets`,
+          { assetIds: assetIdsToRemove }
+        );
+        if (!removeResp.ok) {
+          throw new Error(await extractErrorMessage(removeResp, 'Failed to remove assets'));
+        }
+      }
 
-      if (!response.ok) {
-        throw new Error(await extractErrorMessage(response, 'Failed to assign assets'));
+      if (selectedAssetIds.length > 0) {
+        const addResp = await authenticatedPost(
+          `/api/workgroups/${selectedWorkgroup.id}/assets`,
+          { assetIds: selectedAssetIds }
+        );
+        if (!addResp.ok) {
+          throw new Error(await extractErrorMessage(addResp, 'Failed to assign assets'));
+        }
       }
 
       await fetchWorkgroups();
       setShowAssignAssets(false);
       setSelectedWorkgroup(null);
       setSelectedAssetIds([]);
+      setAssetIdsToRemove([]);
+      setAssignedAssets([]);
+      setAssignedAssetsError(null);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -615,17 +674,70 @@ const WorkgroupManagement: React.FC = () => {
         </div>
       )}
 
-      {/* Assign Assets Modal */}
+      {/* Manage Assets Modal */}
       {showAssignAssets && selectedWorkgroup && (
         <div className="modal show d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
           <div className="modal-dialog modal-lg">
             <div className="modal-content">
               <div className="modal-header">
-                <h5 className="modal-title">Assign Assets to {selectedWorkgroup.name}</h5>
+                <h5 className="modal-title">Manage Assets in {selectedWorkgroup.name}</h5>
                 <button type="button" className="btn-close" onClick={() => setShowAssignAssets(false)}></button>
               </div>
               <div className="modal-body">
-                <p className="text-muted">Select assets to assign to this workgroup:</p>
+                {/* Currently assigned — mirrors the Assign Users dialog. The × marks a row
+                    for removal but does not call the API until "Save changes" is pressed. */}
+                <div className="mb-3 p-2 border rounded bg-light">
+                  <div className="d-flex justify-content-between align-items-center mb-1">
+                    <strong>Currently assigned ({assignedAssets.length})</strong>
+                    {assetIdsToRemove.length > 0 && (
+                      <span className="badge bg-warning text-dark">
+                        {assetIdsToRemove.length} pending removal
+                      </span>
+                    )}
+                  </div>
+                  {assignedAssetsError && (
+                    <div className="alert alert-warning py-1 px-2 my-1 small mb-0" role="alert">
+                      {assignedAssetsError}
+                    </div>
+                  )}
+                  {assignedAssets.length === 0 && !assignedAssetsError && (
+                    <div className="text-muted small fst-italic">No assets assigned yet.</div>
+                  )}
+                  {assignedAssets.length > 0 && (
+                    <div style={{ maxHeight: '180px', overflowY: 'auto' }}>
+                      {assignedAssets.map(a => {
+                        const pending = assetIdsToRemove.includes(a.id);
+                        return (
+                          <div
+                            key={a.id}
+                            className="d-flex justify-content-between align-items-center py-1 px-1 border-bottom"
+                          >
+                            <span
+                              style={{
+                                textDecoration: pending ? 'line-through' : 'none',
+                                color: pending ? '#999' : 'inherit',
+                              }}
+                            >
+                              <strong>{a.name}</strong>
+                              {a.type && <span className="text-muted small"> ({a.type})</span>}
+                              {a.ip && <span className="text-muted small"> · {a.ip}</span>}
+                            </span>
+                            <button
+                              type="button"
+                              className={`btn btn-sm ${pending ? 'btn-outline-secondary' : 'btn-outline-danger'}`}
+                              onClick={() => toggleAssetRemoval(a.id)}
+                              title={pending ? 'Undo removal' : 'Mark for removal'}
+                            >
+                              {pending ? 'Undo' : '× Remove'}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <p className="text-muted">Add more assets to this workgroup:</p>
 
                 {/* Search input */}
                 <div className="mb-3">
@@ -659,17 +771,21 @@ const WorkgroupManagement: React.FC = () => {
                 </div>
 
                 {/* Select all filtered / Clear selection buttons */}
-                {filteredAssets.length > 0 && (
+                {filteredAssets.length > 0 && (() => {
+                  const assignedIds = new Set(assignedAssets.map(a => a.id));
+                  const addable = filteredAssets.filter(a => !assignedIds.has(a.id));
+                  return (
                   <div className="mb-2">
                     <button
                       type="button"
                       className="btn btn-sm btn-outline-primary me-2"
+                      disabled={addable.length === 0}
                       onClick={() => {
-                        const filteredIds = filteredAssets.map(a => a.id);
-                        setSelectedAssetIds(prev => [...new Set([...prev, ...filteredIds])]);
+                        const addableIds = addable.map(a => a.id);
+                        setSelectedAssetIds(prev => [...new Set([...prev, ...addableIds])]);
                       }}
                     >
-                      Select all shown ({filteredAssets.length})
+                      Select all shown ({addable.length})
                     </button>
                     {selectedAssetIds.length > 0 && (
                       <button
@@ -681,7 +797,8 @@ const WorkgroupManagement: React.FC = () => {
                       </button>
                     )}
                   </div>
-                )}
+                  );
+                })()}
 
                 <div className="list-group" style={{ maxHeight: '350px', overflowY: 'auto' }}>
                   {filteredAssets.length === 0 ? (
@@ -691,17 +808,25 @@ const WorkgroupManagement: React.FC = () => {
                         : 'No assets available'}
                     </div>
                   ) : (
-                    filteredAssets.map(asset => (
-                      <label key={asset.id} className="list-group-item list-group-item-action">
-                        <input
-                          type="checkbox"
-                          className="form-check-input me-2"
-                          checked={selectedAssetIds.includes(asset.id)}
-                          onChange={() => toggleAssetSelection(asset.id)}
-                        />
-                        <strong>{asset.name}</strong> ({asset.type})
-                      </label>
-                    ))
+                    (() => {
+                      // Hide assets already in the workgroup from the "add more" picker —
+                      // they can only be removed via the Currently assigned panel. Keep
+                      // the lookup O(1) so the 119-row dataset doesn't blow rendering.
+                      const assignedIds = new Set(assignedAssets.map(a => a.id));
+                      return filteredAssets
+                        .filter(asset => !assignedIds.has(asset.id))
+                        .map(asset => (
+                          <label key={asset.id} className="list-group-item list-group-item-action">
+                            <input
+                              type="checkbox"
+                              className="form-check-input me-2"
+                              checked={selectedAssetIds.includes(asset.id)}
+                              onChange={() => toggleAssetSelection(asset.id)}
+                            />
+                            <strong>{asset.name}</strong> ({asset.type})
+                          </label>
+                        ));
+                    })()
                   )}
                 </div>
                 <p className="mt-3 text-muted">{selectedAssetIds.length} asset(s) selected</p>
@@ -710,8 +835,13 @@ const WorkgroupManagement: React.FC = () => {
                 <button type="button" className="btn btn-secondary" onClick={() => setShowAssignAssets(false)}>
                   Cancel
                 </button>
-                <button type="button" className="btn btn-primary" onClick={submitAssignAssets}>
-                  Assign Assets
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={submitAssignAssets}
+                  disabled={selectedAssetIds.length === 0 && assetIdsToRemove.length === 0}
+                >
+                  Save changes
                 </button>
               </div>
             </div>
@@ -808,7 +938,7 @@ const WorkgroupManagement: React.FC = () => {
                       <button
                         className="btn btn-outline-success"
                         onClick={() => handleAssignAssets(workgroup)}
-                        title="Assign assets"
+                        title="Manage assets"
                       >
                         Assets
                       </button>

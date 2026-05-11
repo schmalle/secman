@@ -317,7 +317,7 @@ const AccountVulnsView: React.FC = () => {
                                             {lastImport.serversCreated} created / {lastImport.serversUpdated} updated
                                         </span>
                                         {lastImport.errorCount > 0 && (
-                                            <span className="badge bg-danger bg-opacity-10 text-danger border border-danger">
+                                            <span className="badge scand-critical">
                                                 {lastImport.errorCount} error{lastImport.errorCount !== 1 ? 's' : ''}
                                             </span>
                                         )}
