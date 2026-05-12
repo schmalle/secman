@@ -176,8 +176,12 @@ class WorkgroupVulnsService(
             throw IllegalStateException("Admin users should use System Vulns view instead")
         }
 
-        // Get user's workgroups from workgroup membership
-        val userWorkgroups = workgroupRepository.findWorkgroupsByUserEmail(userEmail)
+        // Get user's *effective* workgroups: direct memberships UNION all
+        // descendants (Feature 040). Membership cascades downward so a member
+        // of an L2 workgroup sees the L3 sub-teams and their vulnerable assets
+        // here. AWS-account-driven access (rule #9) likewise picks up the
+        // descendants' linked accounts because they are included in this set.
+        val userWorkgroups = workgroupRepository.findEffectiveWorkgroupsByUserEmail(userEmail)
 
         // Check if user has any workgroup memberships
         if (userWorkgroups.isEmpty()) {

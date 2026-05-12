@@ -59,6 +59,42 @@ interface WorkgroupRepository : JpaRepository<Workgroup, Long> {
     """)
     fun findWorkgroupsByUserEmail(email: String): List<Workgroup>
 
+    /**
+     * Find the user's *effective* workgroup memberships — direct memberships
+     * UNION all descendants reachable through the parent→child hierarchy
+     * (Feature 040). Membership cascades downward: a user assigned to an L2
+     * workgroup is treated as a member of every L3/L4/... beneath it for the
+     * purposes of listing workgroups and viewing their content.
+     *
+     * Implemented as a recursive CTE seeded from direct memberships and walking
+     * children via `parent_id`. Depth-capped at 10 (matches the safety limit in
+     * `Workgroup.calculateDepth` and `findAllDescendants`).
+     *
+     * @param email User email address
+     * @return Distinct list of workgroups the user has effective access to,
+     *         ordered by name.
+     */
+    @io.micronaut.data.annotation.Query(value = """
+        WITH RECURSIVE effective AS (
+            SELECT w.id, w.parent_id, 1 AS depth
+            FROM workgroup w
+            INNER JOIN user_workgroups uw ON uw.workgroup_id = w.id
+            INNER JOIN users u ON u.id = uw.user_id
+            WHERE u.email = :email
+
+            UNION ALL
+
+            SELECT w.id, w.parent_id, e.depth + 1
+            FROM workgroup w
+            INNER JOIN effective e ON w.parent_id = e.id
+            WHERE e.depth < 10
+        )
+        SELECT w.* FROM workgroup w
+        WHERE w.id IN (SELECT DISTINCT id FROM effective)
+        ORDER BY w.name ASC
+    """, nativeQuery = true)
+    fun findEffectiveWorkgroupsByUserEmail(email: String): List<Workgroup>
+
     // Feature 040: Nested Workgroups - Hierarchy Query Methods
 
     /**

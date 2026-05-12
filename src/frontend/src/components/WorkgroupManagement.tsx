@@ -623,7 +623,7 @@ const WorkgroupManagement: React.FC = () => {
                     <input
                       type="text"
                       className="form-control"
-                      placeholder="Search by username or email..."
+                      placeholder="Search existing users — or type a full email to invite someone new"
                       value={userSearchTerm}
                       onChange={(e) => setUserSearchTerm(e.target.value)}
                       autoFocus
@@ -639,12 +639,29 @@ const WorkgroupManagement: React.FC = () => {
                       </button>
                     )}
                   </div>
+                  {/* Persistent helper — many users never realize the search box doubles as an invite-by-email
+                      field. State the affordance up front so they don't have to discover it. */}
+                  {(() => {
+                    const caller = (typeof window !== 'undefined' ? window.currentUser : null) || null;
+                    const dom = caller?.email?.split('@')[1] || 'your-domain.com';
+                    const isAdmin = (caller?.roles || []).includes('ADMIN');
+                    return (
+                      <div className="form-text mt-1">
+                        <i className="bi bi-lightbulb me-1"></i>
+                        Not in the list? Type a full email like <code>name@{dom}</code> to invite a new user.
+                        {!isAdmin && (
+                          <> New users must be at <code>@{dom}</code> (your domain).</>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {(() => {
                   const assignedIds = new Set(assignedUsers.map(u => u.id));
                   const assignedEmails = new Set(assignedUsers.map(u => u.email.toLowerCase()));
-                  const term = userSearchTerm.trim().toLowerCase();
+                  const termRaw = userSearchTerm.trim();
+                  const term = termRaw.toLowerCase();
                   const filtered = users.filter(u => {
                     if (!term) return true;
                     return (u.username || '').toLowerCase().includes(term)
@@ -658,16 +675,71 @@ const WorkgroupManagement: React.FC = () => {
                     return (a.username || a.email).localeCompare(b.username || b.email);
                   });
 
-                  if (sorted.length === 0) {
+                  // Invite-by-email affordance: visible when the search term parses as an
+                  // email that isn't already in the user list. Domain-restricted on the
+                  // client (UX), enforced again on the server (security).
+                  const looksLikeEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(termRaw);
+                  const matchesExistingEmail = users.some(u => u.email.toLowerCase() === term);
+                  const caller = (typeof window !== 'undefined' ? window.currentUser : null) || null;
+                  const callerEmail = caller?.email || '';
+                  const callerDomain = callerEmail.split('@')[1]?.toLowerCase() || '';
+                  const callerIsAdmin = (caller?.roles || []).includes('ADMIN');
+                  const inviteDomain = looksLikeEmail ? (termRaw.split('@')[1]?.toLowerCase() || '') : '';
+                  const inviteShouldShow = looksLikeEmail && !matchesExistingEmail;
+                  const inviteAllowed = inviteShouldShow && (callerIsAdmin || (!!callerDomain && callerDomain === inviteDomain));
+                  const inviteChecked = inviteShouldShow && selectedUserRefs.some(r => r.email.toLowerCase() === term);
+
+                  const inviteRow = inviteShouldShow ? (
+                    <label
+                      key={`invite:${term}`}
+                      className={`list-group-item list-group-item-action ${inviteAllowed ? '' : 'list-group-item-light text-muted'}`}
+                      title={
+                        inviteAllowed
+                          ? 'Invite this email as a new pending user'
+                          : `New users must share your email domain (@${callerDomain || '?'})`
+                      }
+                    >
+                      <input
+                        type="checkbox"
+                        className="form-check-input me-2"
+                        checked={inviteChecked}
+                        disabled={!inviteAllowed}
+                        onChange={() => toggleUserSelection({ id: null, username: termRaw.split('@')[0], email: termRaw, isPending: true })}
+                      />
+                      <i className={`bi ${inviteAllowed ? 'bi-person-plus' : 'bi-shield-lock'} me-1`}></i>
+                      <strong>Invite new user:</strong> {termRaw}
+                      <span className={`badge ms-2 ${inviteAllowed ? 'scand-success' : 'scand-critical'}`}>
+                        {inviteAllowed ? 'new pending' : 'wrong domain'}
+                      </span>
+                    </label>
+                  ) : null;
+
+                  if (sorted.length === 0 && !inviteRow) {
+                    // No existing user match AND not a parseable email yet. Tell the
+                    // user exactly what to type next so they don't get stuck — the
+                    // common failure mode is typing a username and giving up.
+                    const hasAtSign = termRaw.includes('@');
                     return (
-                      <div className="text-center text-muted py-3">
-                        No users match "{userSearchTerm}"
+                      <div className="text-center text-muted py-4 border rounded bg-light">
+                        <div className="mb-2">
+                          <i className="bi bi-search me-1"></i>
+                          No users match "<strong>{userSearchTerm}</strong>"
+                        </div>
+                        <div className="small">
+                          <i className="bi bi-person-plus me-1"></i>
+                          {hasAtSign
+                            ? <>Keep typing the rest of the email address to invite a new user.</>
+                            : <>To invite someone new, type their <strong>complete email address</strong> here.</>}
+                        </div>
                       </div>
                     );
                   }
 
                   return (
                     <div className="list-group" style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                      {/* Invite row first — putting it at the top of a possibly-long list
+                          guarantees the user sees it without scrolling. */}
+                      {inviteRow}
                       {sorted.map(user => {
                         const isAssigned = (user.id != null && assignedIds.has(user.id))
                           || assignedEmails.has(user.email.toLowerCase());
@@ -705,6 +777,38 @@ const WorkgroupManagement: React.FC = () => {
                           </label>
                         );
                       })}
+                    </div>
+                  );
+                })()}
+
+                {(() => {
+                  // Show staged "new pending" invites separately from existing-user picks so
+                  // the admin can audit them even after clearing the search box.
+                  const knownEmails = new Set(users.map(u => u.email.toLowerCase()));
+                  const stagedInvites = selectedUserRefs.filter(
+                    r => r.id == null && !knownEmails.has(r.email.toLowerCase())
+                  );
+                  if (stagedInvites.length === 0) return null;
+                  return (
+                    <div className="mt-3 p-2 border rounded border-success-subtle bg-success-subtle">
+                      <div className="d-flex align-items-center mb-1">
+                        <i className="bi bi-person-plus me-1 text-success"></i>
+                        <strong className="small">Will create {stagedInvites.length} new user{stagedInvites.length !== 1 ? 's' : ''}</strong>
+                      </div>
+                      <div className="d-flex flex-wrap gap-1">
+                        {stagedInvites.map(r => (
+                          <span key={`staged:${r.email}`} className="badge scand-success">
+                            {r.email}
+                            <button
+                              type="button"
+                              className="btn-close btn-close-sm ms-2"
+                              style={{ fontSize: '0.6rem' }}
+                              aria-label={`Cancel invite for ${r.email}`}
+                              onClick={() => toggleUserSelection({ id: null, username: r.email.split('@')[0], email: r.email, isPending: true })}
+                            ></button>
+                          </span>
+                        ))}
+                      </div>
                     </div>
                   );
                 })()}

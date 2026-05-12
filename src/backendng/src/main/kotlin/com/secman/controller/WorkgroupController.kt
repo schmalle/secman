@@ -71,12 +71,26 @@ open class WorkgroupController(
 
     /**
      * Member-or-admin authorization for workgroup-scoped actions.
-     * Caller must already be inside a transaction so the LAZY users collection can be read.
+     *
+     * Effective membership cascades downward (Feature 040): a direct member of
+     * an ancestor workgroup is treated as a member of every descendant. So an
+     * L2 member can view/edit L3 children, matching the management semantics
+     * of the hierarchy. Direct-membership is still checked first via the
+     * already-loaded `workgroup.users` collection to avoid the DB round-trip in
+     * the common case.
+     *
+     * Caller must already be inside a transaction so the LAZY users collection
+     * can be read.
      */
     private fun isMemberOrAdmin(workgroup: Workgroup, authentication: Authentication): Boolean {
         if (isAdmin(authentication)) return true
         val user = currentUser(authentication)
-        return workgroup.users.any { it.id == user.id }
+        if (workgroup.users.any { it.id == user.id }) return true
+        // Fall back to recursive-CTE lookup: covers the L2-member-of-L3 case.
+        val effectiveIds = workgroupRepository.findEffectiveWorkgroupsByUserEmail(user.email)
+            .mapNotNull { it.id }
+            .toSet()
+        return workgroup.id in effectiveIds
     }
 
     /**
@@ -93,7 +107,11 @@ open class WorkgroupController(
             return null
         }
         val user = currentUser(authentication)
-        return workgroupRepository.findWorkgroupsByUserEmail(user.email)
+        // Effective membership cascades downward in the hierarchy: a member of
+        // an L2 workgroup is treated as a member of every L3+ descendant. The
+        // tree-view, list view, and member-or-admin gating all share this set,
+        // so they agree on visibility (Feature 040).
+        return workgroupRepository.findEffectiveWorkgroupsByUserEmail(user.email)
             .mapNotNull { it.id }
             .toSet()
     }
@@ -156,7 +174,8 @@ open class WorkgroupController(
             workgroupService.listAllWorkgroups()
         } else {
             val user = currentUser(authentication)
-            workgroupRepository.findWorkgroupsByUserEmail(user.email)
+            // Include descendant workgroups so L2 members see their L3 sub-teams.
+            workgroupRepository.findEffectiveWorkgroupsByUserEmail(user.email)
         }
         val response = workgroups.map { wg ->
             val ancestors = wg.getAncestors()
@@ -309,10 +328,10 @@ open class WorkgroupController(
         @PathVariable id: Long,
         @Body @Valid request: AssignUsersRequest,
         authentication: Authentication
-    ): HttpResponse<Void> {
+    ): HttpResponse<*> {
         return try {
             if (request.isEmpty()) {
-                return HttpResponse.badRequest()
+                return HttpResponse.badRequest<Any>()
             }
 
             // Validate workgroup BEFORE resolving refs — UserResolutionService.resolveAll
@@ -320,9 +339,46 @@ open class WorkgroupController(
             // first and the workgroup turned out to be missing, the new User rows
             // would already be committed and orphaned.
             val workgroup = workgroupRepository.findById(id).orElse(null)
-                ?: return HttpResponse.notFound()
+                ?: return HttpResponse.notFound<Any>()
             if (!isMemberOrAdmin(workgroup, authentication)) {
-                return HttpResponse.status(io.micronaut.http.HttpStatus.FORBIDDEN)
+                return HttpResponse.status<Any>(io.micronaut.http.HttpStatus.FORBIDDEN)
+            }
+
+            // Domain restriction: non-admin callers can only lazy-create new pending users
+            // from their own email domain. Existing users (by id, or by email already in
+            // the DB) are vetted identities and pass through. Enforced here — BEFORE
+            // resolveAll runs — because lazy-create is irreversible.
+            if (!isAdmin(authentication) && !request.userRefs.isNullOrEmpty()) {
+                val callerEmail = currentUser(authentication).email
+                val callerDomain = callerEmail.substringAfter('@', "").lowercase()
+                if (callerDomain.isBlank()) {
+                    logger.warn(
+                        "AUDIT: operation=ASSIGN_USERS_DENIED, reason=NO_CALLER_DOMAIN, actor={}, workgroup={}",
+                        authentication.name, workgroup.name
+                    )
+                    return HttpResponse.status<Map<String, String>>(io.micronaut.http.HttpStatus.BAD_REQUEST)
+                        .body(mapOf("error" to "Your account has no email domain; cannot invite new users."))
+                }
+                val forbiddenEmails = request.userRefs
+                    .filter { it.id == null && !it.email.isNullOrBlank() }
+                    .map { it.email!!.trim() }
+                    .filter { email ->
+                        // Only restrict NEW emails. If a User row already exists with this
+                        // email, the assignment is a regular existing-user pick.
+                        userRepository.findByEmailIgnoreCase(email).isEmpty &&
+                            !email.substringAfter('@', "").equals(callerDomain, ignoreCase = true)
+                    }
+                if (forbiddenEmails.isNotEmpty()) {
+                    logger.warn(
+                        "AUDIT: operation=ASSIGN_USERS_DENIED, reason=CROSS_DOMAIN_INVITE, actor={}, workgroup={}, emails={}",
+                        authentication.name, workgroup.name, forbiddenEmails.size
+                    )
+                    return HttpResponse.status<Map<String, String>>(io.micronaut.http.HttpStatus.BAD_REQUEST)
+                        .body(mapOf(
+                            "error" to "New users must share your email domain (@$callerDomain). " +
+                                "Rejected: ${forbiddenEmails.joinToString(", ")}"
+                        ))
+                }
             }
 
             // userRefs wins when both shapes are present.
@@ -335,14 +391,14 @@ open class WorkgroupController(
             }
 
             workgroupService.assignUsersToWorkgroup(id, resolvedIds)
-            HttpResponse.ok()
+            HttpResponse.ok<Any>()
         } catch (e: NoSuchElementException) {
-            HttpResponse.notFound()
+            HttpResponse.notFound<Any>()
         } catch (e: IllegalArgumentException) {
             if (e.message?.contains("Workgroup not found") == true) {
-                HttpResponse.notFound()
+                HttpResponse.notFound<Any>()
             } else {
-                HttpResponse.badRequest()
+                HttpResponse.badRequest<Any>()
             }
         }
     }
