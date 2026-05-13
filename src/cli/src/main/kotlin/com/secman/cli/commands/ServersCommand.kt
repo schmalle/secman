@@ -148,6 +148,12 @@ class ServersCommand {
             if (save && hostnames.isNullOrEmpty()) {
                 System.out.println("Querying and importing in streaming mode...")
 
+                // Captured BEFORE the Falcon query starts. Any vuln row whose
+                // importTimestamp is older than this when the run ends is by
+                // definition stale — its host disappeared from the import.
+                // Used as the staleness fence by the reconcile call at the end.
+                val runStartedAt = java.time.LocalDateTime.now()
+
                 var totalServersProcessed = 0
                 var totalServersCreated = 0
                 var totalServersUpdated = 0
@@ -232,6 +238,27 @@ class ServersCommand {
                     System.out.println("Servers with no vulnerabilities older than $overdueThreshold days: $totalWithoutOverdue of $totalServersProcessed")
 
                     captureSnapshotViaHttp(resolvedBackendUrl, totalServersProcessed, totalSystemsWithOverdueVulns, overdueThreshold)
+                }
+
+                // Reconcile silent-remediation gap: hosts that had HIGH/CRITICAL findings in
+                // earlier imports but no longer match this run's --severity filter never enter
+                // the per-host delete-insert loop, so their old rows persist indefinitely.
+                // The backend deletes any CrowdStrike-import-owned row for this severity slice
+                // whose importTimestamp predates runStartedAt.
+                val severitiesList = severity.split(",").map { it.trim() }.filter { it.isNotBlank() }
+                if (severitiesList.isNotEmpty() && authToken != null) {
+                    val reconcileResult = storageService.reconcileStaleVulnerabilities(
+                        importStartedAt = runStartedAt,
+                        severities = severitiesList,
+                        backendUrl = resolvedBackendUrl,
+                        authToken = authToken
+                    )
+                    System.out.println("\n--- Reconciliation ---")
+                    if (reconcileResult != null) {
+                        System.out.println("Stale rows cleared (severities=${severitiesList.joinToString(",")}, cutoff=$runStartedAt): ${reconcileResult.rowsDeleted}")
+                    } else {
+                        System.err.println("Warning: reconciliation step did not complete; previously-stale rows may persist.")
+                    }
                 }
 
                 if (totalErrorCount > 0) {

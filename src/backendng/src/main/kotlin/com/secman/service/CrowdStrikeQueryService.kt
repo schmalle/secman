@@ -295,6 +295,16 @@ open class CrowdStrikeQueryService(
             .findByExpirationDateIsNullOrExpirationDateGreaterThan(LocalDateTime.now())
 
         val now = LocalDateTime.now()
+        // Honest freshness: report when the underlying rows were last touched by an
+        // import, not when this query happened. Without this, the "Cached (X min ago)"
+        // badge always shows ~0 and the frontend's auto-refresh-after-120-min branch
+        // (CrowdStrikeVulnerabilityLookup.tsx) can never fire — masking stale rows
+        // that the periodic importer never re-touched.
+        val dataAsOf = vulns.content.asSequence()
+            .mapNotNull { it.importTimestamp ?: it.scanTimestamp }
+            .maxOrNull()
+            ?: asset.crowdStrikeLastImportedAt
+            ?: now
         return CrowdStrikeQueryResponse(
             hostname = asset.name,
             instanceId = asset.cloudInstanceId,
@@ -324,7 +334,7 @@ open class CrowdStrikeQueryService(
                 )
             },
             totalCount = vulns.totalSize.toInt(),
-            queriedAt = LocalDateTime.now()
+            queriedAt = dataAsOf
         )
     }
 
@@ -343,6 +353,16 @@ open class CrowdStrikeQueryService(
             .findByExpirationDateIsNullOrExpirationDateGreaterThan(LocalDateTime.now())
 
         val now = LocalDateTime.now()
+        // Honest freshness: report when the underlying rows were last touched by an
+        // import, not when this query happened. Without this, the "Cached (X min ago)"
+        // badge always shows ~0 and the frontend's auto-refresh-after-120-min branch
+        // (CrowdStrikeVulnerabilityLookup.tsx) can never fire — masking stale rows
+        // that the periodic importer never re-touched.
+        val dataAsOf = vulns.content.asSequence()
+            .mapNotNull { it.importTimestamp ?: it.scanTimestamp }
+            .maxOrNull()
+            ?: asset.crowdStrikeLastImportedAt
+            ?: now
         return CrowdStrikeQueryResponse(
             hostname = asset.name,
             instanceId = asset.cloudInstanceId,
@@ -372,7 +392,7 @@ open class CrowdStrikeQueryService(
                 )
             },
             totalCount = vulns.totalSize.toInt(),
-            queriedAt = LocalDateTime.now()
+            queriedAt = dataAsOf
         )
     }
 
@@ -411,10 +431,12 @@ open class CrowdStrikeQueryService(
             }
         }
 
+        // Preserve the upstream queriedAt — for DB-served responses that is the real
+        // data freshness anchor (see queryFromDatabaseByHostname); resetting it here
+        // would defeat the frontend's auto-refresh-after-120-min branch.
         return response.copy(
             vulnerabilities = filtered,
-            totalCount = filtered.size,
-            queriedAt = LocalDateTime.now()
+            totalCount = filtered.size
         )
     }
 }

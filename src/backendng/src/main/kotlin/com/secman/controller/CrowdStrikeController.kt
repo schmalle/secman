@@ -1,11 +1,14 @@
 package com.secman.controller
 
+import com.secman.constants.AssetOwners
 import com.secman.dto.CrowdStrikeImportStatusDto
 import com.secman.dto.CrowdStrikeQueryResponse
 import com.secman.dto.CrowdStrikeSaveRequest
 import com.secman.dto.CrowdStrikeSaveResponse
 import com.secman.dto.CrowdStrikeVulnerabilityBatchDto
 import com.secman.dto.ImportStatisticsDto
+import com.secman.dto.ReconcileStaleVulnerabilitiesRequest
+import com.secman.dto.ReconcileStaleVulnerabilitiesResponse
 import com.secman.service.CrowdStrikeError
 import com.secman.service.CrowdStrikeQueryService
 import com.secman.service.CrowdStrikeVulnerabilityImportService
@@ -332,6 +335,54 @@ open class CrowdStrikeController(
                 username, e.javaClass.name, e.message, rootCause.javaClass.simpleName, rootCause.message, e)
             HttpResponse.status<Map<String, String>>(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(mapOf("error" to "An internal error occurred while importing server vulnerabilities"))
+        }
+    }
+
+    /**
+     * Reconcile stale CrowdStrike-import-owned vulnerabilities after a severity-filtered
+     * import cycle completes.
+     *
+     * Closes the silent-remediation gap: the daily CLI cron runs with `--severity CRITICAL,HIGH`,
+     * so a host whose findings have dropped below that threshold drops out of the import
+     * payload and its existing HIGH/CRITICAL rows are never deleted by the per-host
+     * delete-insert path. This endpoint, called by the CLI after streaming completes,
+     * deletes the leftover rows in one statement using the run-start timestamp as the
+     * staleness fence.
+     *
+     * Body: `{ importStartedAt, severities }`. Owner is implicitly `CROWDSTRIKE_IMPORT`.
+     *
+     * Security: inherits class-level `@Secured("ADMIN", "VULN")`.
+     */
+    @Post("/crowdstrike/servers/reconcile-stale")
+    open fun reconcileStaleVulnerabilities(
+        @Body @Valid request: ReconcileStaleVulnerabilitiesRequest,
+        authentication: Authentication
+    ): HttpResponse<*> {
+        val username = authentication.name
+        log.info(
+            "Reconcile stale CrowdStrike vulns: importStartedAt={}, severities={}, user={}",
+            request.importStartedAt, request.severities, username
+        )
+        return try {
+            val deleted = importService.reconcileStaleCrowdStrikeImports(
+                cutoff = request.importStartedAt,
+                severities = request.severities
+            )
+            HttpResponse.ok(
+                ReconcileStaleVulnerabilitiesResponse(
+                    rowsDeleted = deleted,
+                    cutoff = request.importStartedAt,
+                    severities = request.severities,
+                    owner = AssetOwners.CROWDSTRIKE_IMPORT
+                )
+            )
+        } catch (e: IllegalArgumentException) {
+            log.warn("Invalid reconcile request: user={}", username, e)
+            HttpResponse.badRequest(mapOf("error" to (e.message ?: "Invalid request")))
+        } catch (e: Exception) {
+            log.error("Error reconciling stale CrowdStrike vulnerabilities: user={}", username, e)
+            HttpResponse.status<Map<String, String>>(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(mapOf("error" to "An internal error occurred while reconciling stale vulnerabilities"))
         }
     }
 
