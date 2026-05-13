@@ -125,6 +125,23 @@ micronaut:
       - pattern: /mcp/**
         access:
           - isAnonymous()
+      # MCP REST endpoints under /api/mcp use X-MCP-API-Key (not JWT) for auth.
+      # Without these explicit rules, the /api/** catch-all forces JWT validation
+      # on every request — and a foreign-issued RS256 token (e.g. from a Postman
+      # OAuth helper) fails the HS256 secret verifier with "Unsupported JWS
+      # algorithm RS256", returning 401 before the controller-level
+      # @Secured(IS_ANONYMOUS) is ever consulted.
+      # Admin paths stay authenticated so @Secured("ADMIN") on McpAdminController
+      # still gates them.
+      - pattern: /api/mcp/admin/**
+        access:
+          - isAuthenticated()
+      - pattern: /api/mcp
+        access:
+          - isAnonymous()
+      - pattern: /api/mcp/**
+        access:
+          - isAnonymous()
       - pattern: /api/auth/status
         access:
           - isAuthenticated()
