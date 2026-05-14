@@ -37,8 +37,8 @@ dependencies {
     runtimeOnly("org.mariadb.jdbc:mariadb-java-client:3.5.8")
 
 	implementation("io.micronaut.flyway:micronaut-flyway:7.9.2")
-	runtimeOnly("org.flywaydb:flyway-core:12.6.0")
-	runtimeOnly("org.flywaydb:flyway-mysql:12.6.0")
+	runtimeOnly("org.flywaydb:flyway-core:12.6.1")
+	runtimeOnly("org.flywaydb:flyway-mysql:12.6.1")
 	
     // Security
     implementation("io.micronaut.security:micronaut-security-jwt:4.18.0")
