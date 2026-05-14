@@ -52,8 +52,8 @@ open class CrowdStrikeApiClientImpl(
     @field:Value("\${secman.crowdstrike.batch-size:20}")
     protected var configuredBatchSize: Int = 20
 
-    @field:Value("\${secman.crowdstrike.max-parallel-batches:4}")
-    protected var configuredMaxParallelBatches: Int = 4
+    @field:Value("\${secman.crowdstrike.max-parallel-batches:10}")
+    protected var configuredMaxParallelBatches: Int = 10
 
     /**
      * Query vulnerabilities for a specific hostname

@@ -152,10 +152,43 @@ Telegram alert script: `src/clinotify/check_crowdstrike_checkin.py`. Stdlib-only
   --url https://secman.example.com --max-age-minutes 120
 ```
 
+## Stale vulnerability cleanup (silent-remediation safeguard)
+
+The per-host transactional replace only runs for hosts the CLI actually
+sends. When yesterday's critical is patched and today Falcon reports nothing
+(or only LOW findings) for that host, the host drops out of the per-host
+batch entirely — the per-host wipe never fires for it.
+
+To close that gap, after all per-host imports the CLI calls
+`POST /api/crowdstrike/servers/reconcile-stale`, which deletes any
+CrowdStrike-sourced vuln row whose `import_timestamp` predates the run start.
+
+Three layers of safety prevent over-deletion:
+
+1. **`vulnerability.source` (V213)** — every row carries the importer that
+   wrote it. The reconcile sweep only touches rows where
+   `source = 'CROWDSTRIKE'`, so XLSX/manual rows are isolated.
+   See `com.secman.constants.VulnerabilitySources`.
+2. **Severity history (V214)** — `crowdstrike_severity_history` records every
+   severity ever queried by a CrowdStrike run. The sweep uses the union of
+   the current run's `--severity` flag and that history. Drift between runs
+   (e.g. yesterday `CRITICAL,HIGH`, today `CRITICAL`) no longer creates a
+   gap: today's sweep still covers HIGH because HIGH is in the history.
+3. **Hard-fail on reconcile error** — `VulnerabilityStorageService` throws
+   `ReconcileFailedException` on any HTTP/transport error; the CLI exits
+   with code `2` and prints an explicit operator message. Cron pipelines
+   see the failure instead of silently leaving stale rows.
+
+Coverage: `CrowdStrikeStaleVulnerabilityIntegrationTest` (5 cases — happy path,
+empty payload, source-on-human-owned-asset, severity drift, XLSX isolation).
+
 ## Tests
 
 `src/backendng/src/test/kotlin/com/secman/service/CrowdStrikeVulnerabilityImportServiceTest.kt` covers: idempotent re-import, initial create, remediation removal, per-asset isolation, null-CVE filtering, expansion.
 
+`src/backendng/src/test/kotlin/com/secman/integration/CrowdStrikeStaleVulnerabilityIntegrationTest.kt` covers the reconcile/source/severity-history pipeline end-to-end against a real MariaDB.
+
 ```bash
 ./gradlew test --tests "CrowdStrikeVulnerabilityImportServiceTest"
+./gradlew test --tests "CrowdStrikeStaleVulnerabilityIntegrationTest"
 ```

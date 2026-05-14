@@ -181,6 +181,13 @@ Triggered by `/e2eexception`, `/admin-asset-e2e`, `/e2ejs`, `/e2evulnexception` 
 
 ## Recent Changes
 
+- **CrowdStrike stale-vuln cleanup hardening** (V213, V214). Closes the silent-remediation gap when a host's only matching vulnerability gets patched and it drops out of the next CLI batch:
+  - `vulnerability.source` column (V213) replaces owner-based scoping in the reconcile sweep — CrowdStrike vulns on human-owned assets are now cleaned up. Canonical literals: `com.secman.constants.VulnerabilitySources` (`CROWDSTRIKE`, `XLSX`, `CLI_MANUAL`, `UNKNOWN`).
+  - `crowdstrike_severity_history` table (V214) persists the union of all severities ever queried; the reconcile sweeps that union, not just today's `--severity` flag. Drift across runs no longer leaves stale rows.
+  - CLI hard-fails (exit 2) on reconcile HTTP errors via `ReconcileFailedException` — operators/cron see the failure instead of a silent warning.
+  - Repository method renamed: `VulnerabilityRepository.deleteStaleCrowdStrikeImports` → `deleteStaleVulnerabilitiesBySource`.
+  - Coverage: `CrowdStrikeStaleVulnerabilityIntegrationTest` (5 cases).
+
 - **Feature 087** — CrowdStrike legacy stale-asset cleanup. Adds rule B alongside the existing timestamp rule:
   - Canonical owner literal lives at `com.secman.constants.AssetOwners.CROWDSTRIKE_IMPORT`. Used as the writer in `CrowdStrikeVulnerabilityImportService.createNewAsset`, the dropdown source in `AssetController.getOwnerCandidates`, and the predicate parameter for `AssetRepository.findLegacyCrowdStrikeStale`.
   - New flag `secman.crowdstrike.cleanup.include-legacy` (env: `CROWDSTRIKE_CLEANUP_INCLUDE_LEGACY`, default `false`) gates rule B. Manual runs may override per-call via `includeLegacy: Boolean?` on the request body.
