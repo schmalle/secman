@@ -103,50 +103,20 @@ open class CrowdStrikeApiClientImpl(
     }
 
     /**
-     * Query all vulnerabilities with automatic pagination
+     * Query all vulnerabilities for a single hostname.
+     *
+     * The CrowdStrike Spotlight per-host endpoint returns every vulnerability for the device
+     * in one response, so there is no page-size knob to honor. This method is a thin wrapper
+     * over [queryVulnerabilities] kept for callers that historically expected a paginating
+     * variant; the wrapper now exists for API stability only.
      *
      * Task: T032
-     *
-     * @param hostname System hostname to query
-     * @param config CrowdStrike configuration
-     * @param limit Page size (default: 100)
-     * @return CrowdStrikeQueryResponse with all vulnerabilities
      */
     override fun queryAllVulnerabilities(
         hostname: String,
-        config: FalconConfigDto,
-        limit: Int
+        config: FalconConfigDto
     ): CrowdStrikeQueryResponse {
-        require(limit in 1..5000) { "Limit must be between 1 and 5000" }
-
-        log.info("Querying CrowdStrike for all vulnerabilities (paginated): hostname={}, limit={}", hostname, limit)
-
-        var allVulnerabilities = mutableListOf<CrowdStrikeVulnerabilityDto>()
-        var offset = 0
-        var hasMore = true
-
-        while (hasMore) {
-            try {
-                val response = queryVulnerabilities(hostname, config)
-                allVulnerabilities.addAll(response.vulnerabilities)
-
-                // For now, return single page (pagination requires CrowdStrike cursor/offset support)
-                hasMore = false
-            } catch (e: CrowdStrikeException) {
-                // Don't log stack trace for known CrowdStrike exceptions - just rethrow
-                throw e
-            } catch (e: Exception) {
-                log.error("Error during pagination: offset={}", offset, e)
-                throw e
-            }
-        }
-
-        return CrowdStrikeQueryResponse(
-            hostname = hostname,
-            vulnerabilities = allVulnerabilities,
-            totalCount = allVulnerabilities.size,
-            queriedAt = LocalDateTime.now()
-        )
+        return queryVulnerabilities(hostname, config)
     }
 
     /**

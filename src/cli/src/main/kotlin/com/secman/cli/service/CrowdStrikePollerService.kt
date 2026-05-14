@@ -79,7 +79,7 @@ class CrowdStrikePollerService(
                 log.debug("Querying hostname: {}", hostname)
                 
                 // Query CrowdStrike API
-                val response = apiClient.queryAllVulnerabilities(hostname, config, limit = 5000)
+                val response = apiClient.queryAllVulnerabilities(hostname, config)
                 devicesQueried++
                 
                 // Filter for HIGH and CRITICAL severity (Task: T6)

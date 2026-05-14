@@ -69,7 +69,7 @@ class QueryCommand {
             log.info("Querying CrowdStrike API for hostname: {}", hostname)
             System.out.println("Querying vulnerabilities for: $hostname")
 
-            val response = apiClient.queryAllVulnerabilities(hostname, config, limit)
+            val response = apiClient.queryAllVulnerabilities(hostname, config)
 
             val filteredByServerity = if (severity != null) {
                 val severityLevels = severity!!.split(",").map { it.trim().lowercase() }

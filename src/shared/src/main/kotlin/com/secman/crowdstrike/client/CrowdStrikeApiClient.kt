@@ -33,19 +33,21 @@ interface CrowdStrikeApiClient {
     fun queryVulnerabilities(hostname: String, config: FalconConfigDto): CrowdStrikeQueryResponse
 
     /**
-     * Query all vulnerabilities with automatic pagination
+     * Query all vulnerabilities for a single hostname.
+     *
+     * The per-host Spotlight endpoint returns all of a device's vulnerabilities in a single
+     * response, so this method does not accept a caller-supplied page size. Callers that need
+     * a cap on results should slice the returned list themselves.
      *
      * Task: T032
      *
      * @param hostname System hostname to query
      * @param config CrowdStrike Falcon configuration
-     * @param limit Page size (default: 100)
      * @return CrowdStrikeQueryResponse with all vulnerabilities
      */
     fun queryAllVulnerabilities(
         hostname: String,
-        config: FalconConfigDto,
-        limit: Int = 100
+        config: FalconConfigDto
     ): CrowdStrikeQueryResponse
 
     /**

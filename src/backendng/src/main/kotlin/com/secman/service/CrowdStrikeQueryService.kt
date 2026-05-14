@@ -64,7 +64,9 @@ open class CrowdStrikeQueryService(
      * @param hostname System hostname
      * @param severity Optional severity filter
      * @param product Optional product filter
-     * @param limit Page size (default: 100)
+     * @param limit DB-cache page size (default: 20000). Only applied when results are served
+     *              from the local DB cache; the live CrowdStrike call is naturally bounded
+     *              per host and ignores this value.
      * @return CrowdStrikeQueryResponse
      * @throws CrowdStrikeError on API errors
      */
@@ -99,7 +101,7 @@ open class CrowdStrikeQueryService(
             val config = getConfiguration()
 
             // Query API (returns shared module's CrowdStrikeQueryResponse)
-            val sharedResponse = apiClient.queryAllVulnerabilities(hostname, config, limit)
+            val sharedResponse = apiClient.queryAllVulnerabilities(hostname, config)
 
             // Convert shared response to backend response, then apply filters
             val backendResponse = sharedResponse.toBackendResponse()
@@ -203,7 +205,8 @@ open class CrowdStrikeQueryService(
      * @param instanceId AWS EC2 Instance ID (format: i-XXXXXXXXX...)
      * @param severity Optional severity filter
      * @param product Optional product filter
-     * @param limit Page size (default: 100)
+     * @param limit DB-cache page size (default: 20000). Only applied when results are served
+     *              from the local DB cache; the live CrowdStrike call ignores this value.
      * @return CrowdStrikeQueryResponse
      * @throws CrowdStrikeError on API errors
      */
