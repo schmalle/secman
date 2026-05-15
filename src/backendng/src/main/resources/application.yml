@@ -14,6 +14,12 @@ micronaut:
     translation:
       type: fixed
       number-of-threads: 8
+    # Feature 088 — AI-Assisted Risk Assessment Answers.
+    # Dedicated pool for outbound LLM calls during AI pre-fill of risk-assessment
+    # responses. Sized to match `translation` (the same OpenRouter idiom).
+    ai:
+      type: fixed
+      number-of-threads: 8
   server:
     port: 8080
     max-request-size: 100MB  # Increased from 20MB for large vulnerability batch imports
@@ -337,7 +343,42 @@ secman:
         read-timeout: 60s   # Increased from 10s - large vulnerability sets can take longer
         connect-timeout: 10s  # Increased from 5s for reliability
         max-content-length: 52428800  # 50MB for large result sets
-      
+  # Feature 088 — AI-Assisted Risk Assessment Answers.
+  # Default OFF; flip via env var when an OpenRouter key is provisioned.
+  ai:
+    risk-assessment:
+      enabled: ${AI_RISK_ASSESSMENT_ENABLED:false}
+      # OpenRouter model identifier. `:online` suffix enables OpenRouter's
+      # built-in web search; citations come back as message.annotations[].
+      model: ${AI_RISK_ASSESSMENT_MODEL:anthropic/claude-sonnet-4.6:online}
+      # Per-job hard cap. Pre-flight projects from token estimate; if mid-flight
+      # accumulation crosses cap, remaining requirements are aborted and the
+      # job is FAILED. Partial successes retained.
+      max-cost-per-job-usd: ${AI_RISK_ASSESSMENT_MAX_COST:5.0}
+      # Global concurrency cap across all assessments. Prevents thundering-herd
+      # spend if multiple SECCHAMPIONs kick off whole-assessment runs at once.
+      max-concurrent-jobs-global: ${AI_RISK_ASSESSMENT_MAX_JOBS:2}
+      per-request-timeout-seconds: 60
+      job-timeout-minutes: 30
+      confidence:
+        high-threshold: 0.75
+        medium-threshold: 0.50
+      # Token-usage estimate used for pre-flight cost projection. The real
+      # cost-cap check runs mid-flight against actual usage returned by
+      # OpenRouter; this is just a guardrail to reject obvious over-budget runs.
+      token-estimate:
+        input-per-requirement: 400
+        output-per-requirement: 200
+      # USD per 1k tokens — keep updated as OpenRouter pricing evolves.
+      # Used only for projection and audit, not for billing.
+      pricing-per-1k-tokens:
+        anthropic/claude-sonnet-4.6:online:
+          input: 0.003
+          output: 0.015
+  # OpenRouter API key. Resolved via `pass-cli` per CLAUDE.md tooling conventions.
+  openrouter:
+    api-key: ${OPENROUTER_API_KEY:}
+
 oauth:
   http-client:
     url: https://api.github.com

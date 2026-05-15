@@ -181,6 +181,19 @@ Triggered by `/e2eexception`, `/admin-asset-e2e`, `/e2ejs`, `/e2evulnexception` 
 
 ## Recent Changes
 
+- **Feature 088** — AI-assisted risk-assessment answers (V215, V216). ADMIN and SECCHAMPION users (the assessment's assessor or requestor; ADMIN can act on any) can trigger an OpenRouter LLM to pre-fill compliance answers as draft `Response` rows with confidence + citations. Human always reviews and submits.
+  - DB-backed master switch on `app_settings.ai_risk_assessment_enabled` (V216), flippable by ADMIN at `/appsettings`. Env var `AI_RISK_ASSESSMENT_ENABLED` only seeds the default at first create — once a row exists, the DB column is authoritative. `OPENROUTER_API_KEY` resolved via `pass-cli` is still required for the feature to actually call out. The UI "AI Pre-fill" button is gated on `GET /api/ai-risk-assessment/status` so it stays hidden when the switch is off.
+  - Per-job hard cost cap `secman.ai.risk-assessment.max-cost-per-job-usd` (default 5 USD) plus global concurrency cap `max-concurrent-jobs-global` (default 2). Pre-flight rejects over-budget runs; mid-flight aborts and marks `FAILED`, retaining partial successes.
+  - New endpoints under `/api/risk-assessments/{id}/ai-suggestions/...`: `POST /jobs`, `GET /jobs/{jobId}`, `DELETE /jobs/{jobId}` (cancel), `GET /jobs/{jobId}/events` (SSE), `GET` (list applied), `POST /clear-low-confidence`. All `@Secured("ADMIN","SECCHAMPION")` plus `AssessmentOwnershipGuard`.
+  - Provenance: new `response.source` column (`MANUAL | AI_GENERATED | AI_EDITED`, indexed, backfilled `MANUAL`) plus `response.ai_suggestion_id` FK. `ResponseController` flips `AI_GENERATED → AI_EDITED` whenever a human changes answerType or comment.
+  - Confidence band derivation: `score = 0.5·self_reported + 0.3·min(valid_citations, 3)/3 + 0.2·answer_is_not_UNKNOWN`. HIGH requires ≥1 valid citation (downgrade rule). Stored both raw + band so thresholds can retune without re-running the model.
+  - Redaction (NFR-4): `PromptBuilder.redact()` scrubs emails, IPv4 addresses, and `*.internal/*.local/*.corp/*.lan/*.intranet` URLs from the prompt regardless of caller hygiene. Locked by `PromptBuilderTest`.
+  - Re-run safety: `startJob` excludes `source = AI_EDITED` rows unless `force = true`. `clear-low-confidence` only touches `AI_GENERATED` rows whose linked suggestion has `confidenceBand = LOW`.
+  - Mirrors `TranslationService` (JDK HttpClient + dedicated `ai` executor + Caffeine 24h cache) and `ExportJobService` (DB-backed job, IO executor, heartbeat, scheduled stale-job reclaim).
+  - Docs: `docs/AI_RISK_ASSESSMENT.md`; spec/plan/tasks under `specs/088-ai-risk-assessment-answers/`.
+
+
+
 - **CLI `asset-match-clear`** — reconciles AWS assets against an authoritative resource snapshot JSON downloaded from S3. Required env vars `AWS_ASSET_BUCKET_NAME` and `AWS_BUCKET_KEY_NAME` (or `--bucket`/`--key`). Matches `Asset.cloudInstanceId` (case-insensitive) against the snapshot's `resourceId` set, scoped strictly to `accountId`s present in the snapshot — assets in other accounts are never touched (partial-snapshot safe). Default safety brake at 25% (`--max-delete-percent`, set 0 to disable); empty snapshots are rejected. Backend endpoint: `POST /api/assets/match-clear-aws` (ADMIN). Full reference: `docs/CLI_ASSET_MATCH_CLEAR.md`.
 
 - **CrowdStrike stale-vuln cleanup hardening** (V213, V214). Closes the silent-remediation gap when a host's only matching vulnerability gets patched and it drops out of the next CLI batch:

@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { authenticatedGet, authenticatedPost, authenticatedPut } from '../utils/auth';
+import { clearLowConfidence, listAppliedSuggestions, type AppliedSuggestion, type ConfidenceBand } from '../services/aiSuggestions';
+import AiSuggestionPanel from './AiSuggestionPanel';
 
 interface Asset {
   id: number;
@@ -48,6 +50,9 @@ interface Response {
   requirement: { id: number };
   answerType: 'YES' | 'NO' | 'N_A';
   comment?: string;
+  // Feature 088 — provenance of the answer.
+  source?: 'MANUAL' | 'AI_GENERATED' | 'AI_EDITED';
+  aiSuggestionId?: number | null;
 }
 
 interface AssessmentData {
@@ -100,6 +105,11 @@ const AssessmentPerformance: React.FC<AssessmentPerformanceProps> = ({
   const [saveMessage, setSaveMessage] = useState('');
   const [currentTab, setCurrentTab] = useState<'assessment' | 'risk-raising'>('assessment');
   const [filterStatus, setFilterStatus] = useState<'all' | 'compliant' | 'non-compliant' | 'not-applicable'>('all');
+  // Feature 088 — AI suggestions per requirement and local provenance overrides.
+  const [aiSuggestions, setAiSuggestions] = useState<Record<number, AppliedSuggestion>>({});
+  const [provenanceOverrides, setProvenanceOverrides] = useState<Record<number, 'AI_EDITED'>>({});
+  const [confidenceFilter, setConfidenceFilter] = useState<'ALL' | ConfidenceBand | 'NONE'>('ALL');
+  const [clearingLow, setClearingLow] = useState(false);
 
   useEffect(() => {
     fetchAssessmentData();
@@ -139,6 +149,19 @@ const AssessmentPerformance: React.FC<AssessmentPerformanceProps> = ({
         };
       });
       setResponses(initialResponses);
+
+      // Feature 088: fetch any AI suggestions for this assessment. The endpoint
+      // returns [] for callers who don't have AI access, so no extra gating
+      // here is needed — degrade silently.
+      try {
+        const sugg = await listAppliedSuggestions(assessmentId);
+        const map: Record<number, AppliedSuggestion> = {};
+        sugg.forEach(s => { map[s.requirementId] = s; });
+        setAiSuggestions(map);
+      } catch (e) {
+        // Don't surface — the feature may be off or the user is RISK-only.
+        console.debug('listAppliedSuggestions failed (likely 403 or feature off):', e);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -154,6 +177,12 @@ const AssessmentPerformance: React.FC<AssessmentPerformanceProps> = ({
         answerType
       }
     }));
+    // Feature 088: if this row was AI_GENERATED and the user is now changing
+    // the answer, flip the provenance optimistically. Server will persist on save.
+    const original = requirementsWithResponses.find(r => r.requirement.id === requirementId)?.response;
+    if (original?.source === 'AI_GENERATED' && original.answerType !== answerType) {
+      setProvenanceOverrides(prev => ({ ...prev, [requirementId]: 'AI_EDITED' }));
+    }
   };
 
   const handleCommentChange = (requirementId: number, comment: string) => {
@@ -323,21 +352,57 @@ const AssessmentPerformance: React.FC<AssessmentPerformanceProps> = ({
   };
 
   const getFilteredRequirements = () => {
-    if (filterStatus === 'all') return requirementsWithResponses;
-    
-    return requirementsWithResponses.filter(item => {
-      const answerType = responses[item.requirement.id]?.answerType;
-      switch (filterStatus) {
-        case 'compliant':
-          return answerType === 'YES';
-        case 'non-compliant':
-          return answerType === 'NO';
-        case 'not-applicable':
-          return answerType === 'N_A';
-        default:
-          return true;
-      }
-    });
+    let base = requirementsWithResponses;
+    if (filterStatus !== 'all') {
+      base = base.filter(item => {
+        const answerType = responses[item.requirement.id]?.answerType;
+        switch (filterStatus) {
+          case 'compliant':
+            return answerType === 'YES';
+          case 'non-compliant':
+            return answerType === 'NO';
+          case 'not-applicable':
+            return answerType === 'N_A';
+          default:
+            return true;
+        }
+      });
+    }
+    if (confidenceFilter !== 'ALL') {
+      base = base.filter(item => {
+        const s = aiSuggestions[item.requirement.id];
+        if (confidenceFilter === 'NONE') return !s;
+        return s?.confidenceBand === confidenceFilter;
+      });
+    }
+    return base;
+  };
+
+  // Feature 088 — segment counts for the coverage strip and Clear-LOW guard.
+  const coverage = (() => {
+    let high = 0, med = 0, low = 0, none = 0;
+    for (const item of requirementsWithResponses) {
+      const s = aiSuggestions[item.requirement.id];
+      if (!s) none++;
+      else if (s.confidenceBand === 'HIGH') high++;
+      else if (s.confidenceBand === 'MEDIUM') med++;
+      else low++;
+    }
+    return { high, med, low, none, total: requirementsWithResponses.length };
+  })();
+
+  const handleClearLow = async () => {
+    if (coverage.low === 0) return;
+    if (!window.confirm(`Delete ${coverage.low} low-confidence AI drafts? Your edits are not affected.`)) return;
+    setClearingLow(true);
+    try {
+      await clearLowConfidence(assessmentId);
+      await fetchAssessmentData();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to clear low-confidence drafts');
+    } finally {
+      setClearingLow(false);
+    }
   };
 
   if (loading) {
@@ -465,6 +530,47 @@ const AssessmentPerformance: React.FC<AssessmentPerformanceProps> = ({
               </li>
             </ul>
 
+            {/* Feature 088 — AI coverage strip + confidence filter + Clear LOW */}
+            {currentTab === 'assessment' && (coverage.high + coverage.med + coverage.low) > 0 && (
+              <div className="mb-3">
+                <div className="d-flex justify-content-between align-items-center mb-1">
+                  <small className="text-muted">AI coverage</small>
+                  <small className="text-muted">
+                    {coverage.high + coverage.med + coverage.low} of {coverage.total} requirements drafted by AI
+                  </small>
+                </div>
+                <div className="progress" style={{ height: '0.6rem' }}>
+                  <div className="progress-bar bg-success" style={{ width: `${(coverage.high / coverage.total) * 100}%` }} title={`${coverage.high} HIGH`} />
+                  <div className="progress-bar bg-warning" style={{ width: `${(coverage.med / coverage.total) * 100}%` }} title={`${coverage.med} MEDIUM`} />
+                  <div className="progress-bar bg-danger" style={{ width: `${(coverage.low / coverage.total) * 100}%` }} title={`${coverage.low} LOW`} />
+                </div>
+                <div className="mt-2 d-flex gap-2 flex-wrap align-items-center">
+                  <small className="text-muted me-1">Filter:</small>
+                  {(['ALL', 'HIGH', 'MEDIUM', 'LOW', 'NONE'] as const).map(b => (
+                    <button
+                      key={b}
+                      type="button"
+                      className={`btn btn-sm ${confidenceFilter === b ? 'btn-secondary' : 'btn-outline-secondary'}`}
+                      onClick={() => setConfidenceFilter(b)}
+                    >
+                      {b === 'ALL' ? 'All' : b === 'NONE' ? 'No AI' : b}
+                    </button>
+                  ))}
+                  {coverage.low > 0 && mode === 'perform' && (
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-danger ms-auto"
+                      onClick={handleClearLow}
+                      disabled={clearingLow}
+                      title="Delete only LOW-confidence AI drafts — your edits are not affected"
+                    >
+                      {clearingLow ? 'Clearing…' : `Clear ${coverage.low} LOW drafts`}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Filter for Review Mode */}
             {mode === 'review' && currentTab === 'assessment' && (
               <div className="mb-3">
@@ -500,7 +606,13 @@ const AssessmentPerformance: React.FC<AssessmentPerformanceProps> = ({
             {/* Assessment Tab */}
             {currentTab === 'assessment' && (
               <div className="list-group">
-                {getFilteredRequirements().map((item, index) => (
+                {getFilteredRequirements().map((item, index) => {
+                  const suggestion = aiSuggestions[item.requirement.id];
+                  const effectiveSource =
+                    provenanceOverrides[item.requirement.id] ??
+                    item.response?.source ??
+                    'MANUAL';
+                  return (
                   <div key={item.requirement.id} className="list-group-item">
                     <div className="d-flex justify-content-between align-items-start mb-2">
                       <h6 className="mb-1">
@@ -510,18 +622,29 @@ const AssessmentPerformance: React.FC<AssessmentPerformanceProps> = ({
                             {responses[item.requirement.id].answerType.replace('_', '/')}
                           </span>
                         )}
+                        {effectiveSource === 'AI_GENERATED' && (
+                          <span className="badge bg-info text-dark ms-2" title="Drafted by AI — review before submitting">✦ AI-generated</span>
+                        )}
+                        {effectiveSource === 'AI_EDITED' && (
+                          <span className="badge bg-secondary ms-2" title="AI-drafted, edited by a human">✦ AI-edited</span>
+                        )}
                       </h6>
                     </div>
-                    
+
                     {item.requirement.details && (
                       <p className="text-muted small mb-2">{item.requirement.details}</p>
                     )}
-                    
+
                     {item.requirement.norm && (
                       <p className="text-muted small mb-2">
-                        <strong>Norm:</strong> {item.requirement.norm} 
+                        <strong>Norm:</strong> {item.requirement.norm}
                         {item.requirement.chapter && ` - Chapter: ${item.requirement.chapter}`}
                       </p>
+                    )}
+
+                    {/* Feature 088 — AI suggestion panel */}
+                    {suggestion && (
+                      <AiSuggestionPanel suggestion={suggestion} />
                     )}
 
                     <div className="row">
@@ -602,7 +725,8 @@ const AssessmentPerformance: React.FC<AssessmentPerformanceProps> = ({
                       </div>
                     )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 

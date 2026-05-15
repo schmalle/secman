@@ -28,6 +28,24 @@ data class Response(
     @Email
     var respondentEmail: String? = null,
 
+    /**
+     * Provenance of this Response. Feature 088. Default MANUAL keeps existing
+     * rows correct. AI_GENERATED rows are written by AiSuggestionJobService;
+     * editing one flips the value to AI_EDITED via ResponseController.
+     */
+    @Column(name = "source", length = 16, nullable = false)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
+    @Enumerated(EnumType.STRING)
+    var source: ResponseSource = ResponseSource.MANUAL,
+
+    /**
+     * Link to the AiAnswerSuggestion that produced this Response, if any.
+     * Null for MANUAL rows. Kept as a raw FK (not @ManyToOne) so we don't drag
+     * the suggestion into every response payload.
+     */
+    @Column(name = "ai_suggestion_id")
+    var aiSuggestionId: Long? = null,
+
     @ManyToOne
     @JoinColumn(name = "risk_assessment_id", nullable = false)
     @NotNull
