@@ -2,6 +2,7 @@ package com.secman.cli
 
 import com.secman.cli.commands.AddRequirementCommand
 import com.secman.cli.commands.AddVulnerabilityCommand
+import com.secman.cli.commands.AssetMatchClearCommand
 import com.secman.cli.commands.ConfigCommand
 import com.secman.cli.commands.CrowdStrikeLastImportCommand
 import com.secman.cli.commands.DeduplicateVulnerabilitiesCommand
@@ -299,6 +300,13 @@ class SecmanCli {
                 }
                 0
             }
+            args[0] == "asset-match-clear" -> {
+                val subArgs = args.drop(1).toTypedArray()
+                createCliContext().use { ctx ->
+                    PicocliRunner.run(AssetMatchClearCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
             args[0] == "port-scan" -> {
                 // Port-scan internet-facing assets using nmap
                 val subArgs = args.drop(1).toTypedArray()
@@ -372,6 +380,7 @@ class SecmanCli {
                 add-vulnerability      Add or update a vulnerability for an asset
                 deduplicate-vulnerabilities  Remove duplicate vulnerability records (ADMIN)
                 delete-asset-not-seen  Delete CrowdStrike assets not imported for N days (ADMIN)
+                asset-match-clear      Delete AWS assets missing from an S3 resource snapshot (ADMIN)
 
               Requirements:
                 export-requirements    Export all requirements to Excel or Word
@@ -729,6 +738,80 @@ class SecmanCli {
                   secman deduplicate-vulnerabilities --backend-url http://prod:8080
             """.trimIndent(),
 
+            "asset-match-clear" to """
+                secman asset-match-clear - Delete AWS assets missing from an S3 resource snapshot
+
+                Usage: secman asset-match-clear [options]
+
+                Requires: ADMIN role
+
+                Description:
+                  Downloads a JSON snapshot of authoritative AWS resources from S3 and
+                  deletes every AWS asset in secman whose cloudAccountId is present in
+                  the snapshot's account set AND whose cloudInstanceId is NOT in the
+                  snapshot's resourceId set. Assets in accounts NOT covered by the
+                  snapshot are never touched (partial-snapshot safe).
+
+                Snapshot format (JSON array of objects):
+                  [
+                    {"accountId":"199942131465","resourceId":"i-0001e614fcd21166d","awsRegion":"eu-central-1","tags":[...]},
+                    ...
+                  ]
+                  Entries missing accountId or resourceId are skipped.
+
+                S3 source (resolution order, highest priority first):
+                  --bucket           or AWS_ASSET_BUCKET_NAME env var (required)
+                  --key              or AWS_BUCKET_KEY_NAME env var   (required)
+
+                Options:
+                  --bucket <name>          S3 bucket name (or AWS_ASSET_BUCKET_NAME env var)
+                  --key <path>             S3 object key (or AWS_BUCKET_KEY_NAME env var)
+                  --aws-region <region>    AWS region (default: SDK auto-resolution)
+                  --aws-profile <name>     AWS credential profile name
+                  --aws-access-key-id      AWS access key ID (or AWS_ACCESS_KEY_ID)
+                  --aws-secret-access-key  AWS secret access key (or AWS_SECRET_ACCESS_KEY)
+                  --aws-session-token      AWS session token for temporary credentials
+                  --dry-run                Preview matching assets without deleting them
+                  --max-delete-percent <n> Abort if proposed deletions exceed N% of scoped
+                                           AWS assets (default: 25, set 0 to disable)
+                  --backend-url <url>      Backend API URL (or SECMAN_HOST / SECMAN_BACKEND_URL)
+                  --username <user>        Backend username (or SECMAN_ADMIN_NAME env var)
+                  --password <pass>        Backend password (or SECMAN_ADMIN_PASS env var)
+                  --insecure               Accept self-signed TLS certificates (or SECMAN_INSECURE=true)
+                  --verbose, -v            Show matching asset details and credential diagnostics
+
+                Safety:
+                  - Operates ONLY on assets with a non-blank cloudInstanceId AND whose
+                    cloudAccountId appears in the snapshot. Assets in other accounts
+                    are NEVER deleted.
+                  - Rejects empty snapshots (no accountIds OR no resourceIds).
+                  - Safety brake aborts a real run when proposed deletions exceed
+                    --max-delete-percent of the scoped account total. Trips with
+                    status=ABORTED_SAFETY_BRAKE and exits 2.
+
+                Exit codes:
+                  0  Success
+                  1  Per-asset deletion errors or pre-flight failure (S3, auth, parse)
+                  2  Safety brake tripped
+
+                IAM permissions required on the S3 object:
+                  s3:GetObject  (mandatory)
+                  s3:HeadObject (recommended — enables pre-download size check)
+
+                Examples:
+                  # Local config via env vars, dry run first:
+                  export AWS_ASSET_BUCKET_NAME=cov-aws-inventory
+                  export AWS_BUCKET_KEY_NAME=cov-instances/latest.json
+                  export AWS_REGION=eu-central-1
+                  export SECMAN_ADMIN_NAME=admin
+                  export SECMAN_ADMIN_PASS=...
+
+                  secman asset-match-clear --dry-run --verbose
+                  secman asset-match-clear --max-delete-percent 10
+                  secman asset-match-clear --bucket cov-aws-inventory --key snapshots/2026-05-15.json
+                  secman asset-match-clear --aws-profile prod --backend-url https://secman.example.com
+            """.trimIndent(),
+
             "delete-asset-not-seen" to """
                 secman delete-asset-not-seen - Delete CrowdStrike assets not imported for N days
 
@@ -898,6 +981,8 @@ class SecmanCli {
                   AWS_SECRET_ACCESS_KEY    AWS secret access key (or use --aws-secret-access-key)
                   AWS_SESSION_TOKEN        AWS session token for temporary credentials
                   AWS_REGION               Default AWS region for S3 operations
+                  AWS_ASSET_BUCKET_NAME    S3 bucket for the asset-match-clear snapshot JSON
+                  AWS_BUCKET_KEY_NAME      S3 object key for the asset-match-clear snapshot JSON
 
                 AWS Credential Resolution Priority (highest to lowest):
                   1. Explicit CLI flags (--aws-access-key-id + --aws-secret-access-key)
