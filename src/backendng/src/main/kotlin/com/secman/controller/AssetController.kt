@@ -54,7 +54,8 @@ open class AssetController(
     private val assetCascadeDeleteService: com.secman.service.AssetCascadeDeleteService,
     private val assetMergeService: com.secman.service.AssetMergeService,
     private val crowdStrikeAssetCleanupService: com.secman.service.CrowdStrikeAssetCleanupService,
-    private val crowdStrikeCleanupAuditService: com.secman.service.CrowdStrikeCleanupAuditService
+    private val crowdStrikeCleanupAuditService: com.secman.service.CrowdStrikeCleanupAuditService,
+    private val assetMatchClearService: com.secman.service.AssetMatchClearService
 ) {
     
     private val log = LoggerFactory.getLogger(AssetController::class.java)
@@ -868,6 +869,38 @@ open class AssetController(
             log.error("CrowdStrike stale asset cleanup failed", e)
             HttpResponse.serverError<ErrorResponse>()
                 .body(ErrorResponse("CrowdStrike stale asset cleanup failed"))
+        }
+    }
+
+    /**
+     * Reconcile secman's AWS asset inventory against an authoritative resource
+     * snapshot supplied by the caller. Deletes every AWS asset whose
+     * `cloudAccountId` is in `accountIds` and whose `cloudInstanceId` is NOT
+     * in `resourceIds`. Used by the `asset-match-clear` CLI command.
+     */
+    @Post("/match-clear-aws")
+    @Secured("ADMIN")
+    open fun matchClearAws(
+        @Body request: AssetMatchClearRequest,
+        authentication: Authentication
+    ): HttpResponse<*> {
+        return try {
+            val result = assetMatchClearService.clear(
+                accountIds = request.accountIds,
+                resourceIds = request.resourceIds,
+                dryRun = request.dryRun,
+                username = authentication.name,
+                maxDeletePercent = request.maxDeletePercent
+            )
+            HttpResponse.ok(result)
+        } catch (e: com.secman.service.AssetMatchClearService.EmptySnapshotException) {
+            HttpResponse.badRequest(ErrorResponse(e.message ?: "Empty snapshot rejected"))
+        } catch (e: IllegalArgumentException) {
+            HttpResponse.badRequest(ErrorResponse(e.message ?: "Invalid match-clear request"))
+        } catch (e: Exception) {
+            log.error("asset-match-clear failed", e)
+            HttpResponse.serverError<ErrorResponse>()
+                .body(ErrorResponse("Asset match-clear failed"))
         }
     }
 

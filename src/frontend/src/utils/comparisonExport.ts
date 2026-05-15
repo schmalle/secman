@@ -14,7 +14,7 @@
  * Related to: Feature 012-build-ui-for, User Story 4 (Compare Releases)
  */
 
-import ExcelJS from 'exceljs';
+import type ExcelJS from 'exceljs';
 
 export interface ReleaseInfo {
     id: number;
@@ -90,7 +90,8 @@ const THIN_BORDER: Partial<ExcelJS.Borders> = {
  * Export comparison results to Excel file
  */
 export async function exportComparisonToExcel(comparison: ComparisonResult): Promise<void> {
-    const workbook = new ExcelJS.Workbook();
+    const { default: ExcelJSRuntime } = await import('exceljs');
+    const workbook = new ExcelJSRuntime.Workbook();
 
     workbook.creator = 'Secman';
     workbook.created = new Date();

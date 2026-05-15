@@ -177,7 +177,7 @@ Triggered by `/e2eexception`, `/admin-asset-e2e`, `/e2ejs`, `/e2evulnexception` 
 
 ---
 
-*Last updated: 2026-05-08*
+*Last updated: 2026-05-15*
 
 ## Recent Changes
 
@@ -191,6 +191,10 @@ Triggered by `/e2eexception`, `/admin-asset-e2e`, `/e2ejs`, `/e2evulnexception` 
   - Re-run safety: `startJob` excludes `source = AI_EDITED` rows unless `force = true`. `clear-low-confidence` only touches `AI_GENERATED` rows whose linked suggestion has `confidenceBand = LOW`.
   - Mirrors `TranslationService` (JDK HttpClient + dedicated `ai` executor + Caffeine 24h cache) and `ExportJobService` (DB-backed job, IO executor, heartbeat, scheduled stale-job reclaim).
   - Docs: `docs/AI_RISK_ASSESSMENT.md`; spec/plan/tasks under `specs/088-ai-risk-assessment-answers/`.
+
+
+
+- **CLI `asset-match-clear`** — reconciles AWS assets against an authoritative resource snapshot JSON downloaded from S3. Required env vars `AWS_ASSET_BUCKET_NAME` and `AWS_BUCKET_KEY_NAME` (or `--bucket`/`--key`). Matches `Asset.cloudInstanceId` (case-insensitive) against the snapshot's `resourceId` set, scoped strictly to `accountId`s present in the snapshot — assets in other accounts are never touched (partial-snapshot safe). Default safety brake at 25% (`--max-delete-percent`, set 0 to disable); empty snapshots are rejected. Backend endpoint: `POST /api/assets/match-clear-aws` (ADMIN). Full reference: `docs/CLI_ASSET_MATCH_CLEAR.md`.
 
 - **CrowdStrike stale-vuln cleanup hardening** (V213, V214). Closes the silent-remediation gap when a host's only matching vulnerability gets patched and it drops out of the next CLI batch:
   - `vulnerability.source` column (V213) replaces owner-based scoping in the reconcile sweep — CrowdStrike vulns on human-owned assets are now cleaned up. Canonical literals: `com.secman.constants.VulnerabilitySources` (`CROWDSTRIKE`, `XLSX`, `CLI_MANUAL`, `UNKNOWN`).
