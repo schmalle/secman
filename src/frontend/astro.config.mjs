@@ -37,6 +37,11 @@ export default defineConfig({
   },
   vite: {
     plugins: [suppressDevWarnings],
+    build: {
+      // exceljs minified is ~916 KB intrinsically; raise the threshold so the
+      // warning fires only on chunks that are actually fixable.
+      chunkSizeWarningLimit: 1000,
+    },
     server: {
         allowedHosts: [
             allowedHost
