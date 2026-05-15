@@ -62,6 +62,23 @@ export interface ClearLowConfidenceResponse {
 const baseUrl = (assessmentId: number) =>
   `/api/risk-assessments/${assessmentId}/ai-suggestions`;
 
+export interface AiFeatureStatus {
+  enabled: boolean;
+  model: string;
+}
+
+/**
+ * Cheap status probe so the management UI can hide the "AI Pre-fill" button
+ * when an ADMIN has flipped the feature off (or no API key is configured).
+ * Returns { enabled: false, model: '' } if the caller doesn't have the right
+ * role rather than throwing — so the UI just hides the button silently.
+ */
+export async function getAiFeatureStatus(): Promise<AiFeatureStatus> {
+  const r = await authenticatedGet('/api/ai-risk-assessment/status');
+  if (!r.ok) return { enabled: false, model: '' };
+  return r.json();
+}
+
 export async function startAiJob(
   assessmentId: number,
   payload: { scope: SuggestionScope; requirementIds?: number[]; force?: boolean }

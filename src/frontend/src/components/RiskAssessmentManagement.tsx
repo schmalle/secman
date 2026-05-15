@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete } from '../utils/auth';
 import AssessmentPerformance from './AssessmentPerformance';
 import AiPrefillModal from './AiPrefillModal';
+import { getAiFeatureStatus } from '../services/aiSuggestions';
 
 interface Asset {
   id: number;
@@ -94,8 +95,9 @@ const RiskAssessmentManagement: React.FC = () => {
   const [showAssessmentModal, setShowAssessmentModal] = useState(false);
   const [assessmentModalMode, setAssessmentModalMode] = useState<'perform' | 'review'>('perform');
   const [selectedAssessmentId, setSelectedAssessmentId] = useState<number | null>(null);
-  // Feature 088 — AI pre-fill modal state.
+  // Feature 088 — AI pre-fill modal state + master-switch status.
   const [aiPrefillAssessment, setAiPrefillAssessment] = useState<RiskAssessment | null>(null);
+  const [aiFeatureEnabled, setAiFeatureEnabled] = useState(false);
   const [assessorRefValue, setAssessorRefValue] = useState<string>('');
   const [respondentRefValue, setRespondentRefValue] = useState<string>('');
   const [formData, setFormData] = useState<RiskAssessment>({
@@ -150,6 +152,14 @@ const RiskAssessmentManagement: React.FC = () => {
       fetchAssets();
       fetchUsers();
       fetchUseCases();
+      // Feature 088: probe whether the AI pre-fill master switch is on.
+      // Fails closed: any error / 403 → button stays hidden.
+      const roles = (currentUser.roles ?? []) as string[];
+      if (roles.includes('ADMIN') || roles.includes('SECCHAMPION')) {
+        getAiFeatureStatus()
+          .then(s => setAiFeatureEnabled(s.enabled))
+          .catch(() => setAiFeatureEnabled(false));
+      }
     }
   }, [currentUser]);
 
@@ -831,10 +841,11 @@ const RiskAssessmentManagement: React.FC = () => {
                                   Perform Assessment
                                 </button>
                               )}
-                              {/* Feature 088: AI Pre-fill. Visible only to creators
-                                  (assessor / requestor) or ADMINs holding the
-                                  SECCHAMPION/ADMIN role. */}
-                              {assessment.status === 'STARTED' && (() => {
+                              {/* Feature 088: AI Pre-fill. Hidden when the
+                                  ADMIN master switch is off, the user lacks
+                                  the right role, or the user did not create
+                                  the assessment. */}
+                              {aiFeatureEnabled && assessment.status === 'STARTED' && (() => {
                                 const roles = (currentUser?.roles ?? []) as string[];
                                 const isAdmin = roles.includes('ADMIN');
                                 const isSecChampion = roles.includes('SECCHAMPION');

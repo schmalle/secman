@@ -38,6 +38,14 @@ data class AppSettings(
     var globalCveApprovalAdminOnly: Boolean = false,
 
     /**
+     * Feature 088 master switch for AI-assisted risk-assessment answers.
+     * Authoritative once persisted; the env var only seeds the default at
+     * first create. Flippable by ADMIN via /api/settings/app.
+     */
+    @Column(nullable = false, name = "ai_risk_assessment_enabled")
+    var aiRiskAssessmentEnabled: Boolean = false,
+
+    /**
      * Username of ADMIN who last updated these settings
      */
     @Column(nullable = true, length = 100, name = "updated_by")

@@ -181,8 +181,8 @@ Triggered by `/e2eexception`, `/admin-asset-e2e`, `/e2ejs`, `/e2evulnexception` 
 
 ## Recent Changes
 
-- **Feature 088** — AI-assisted risk-assessment answers (V215). ADMIN and SECCHAMPION users (the assessment's assessor or requestor; ADMIN can act on any) can trigger an OpenRouter LLM to pre-fill compliance answers as draft `Response` rows with confidence + citations. Human always reviews and submits.
-  - Feature flag `secman.ai.risk-assessment.enabled` (env: `AI_RISK_ASSESSMENT_ENABLED`, default `false`). `OPENROUTER_API_KEY` resolved via `pass-cli`.
+- **Feature 088** — AI-assisted risk-assessment answers (V215, V216). ADMIN and SECCHAMPION users (the assessment's assessor or requestor; ADMIN can act on any) can trigger an OpenRouter LLM to pre-fill compliance answers as draft `Response` rows with confidence + citations. Human always reviews and submits.
+  - DB-backed master switch on `app_settings.ai_risk_assessment_enabled` (V216), flippable by ADMIN at `/appsettings`. Env var `AI_RISK_ASSESSMENT_ENABLED` only seeds the default at first create — once a row exists, the DB column is authoritative. `OPENROUTER_API_KEY` resolved via `pass-cli` is still required for the feature to actually call out. The UI "AI Pre-fill" button is gated on `GET /api/ai-risk-assessment/status` so it stays hidden when the switch is off.
   - Per-job hard cost cap `secman.ai.risk-assessment.max-cost-per-job-usd` (default 5 USD) plus global concurrency cap `max-concurrent-jobs-global` (default 2). Pre-flight rejects over-budget runs; mid-flight aborts and marks `FAILED`, retaining partial successes.
   - New endpoints under `/api/risk-assessments/{id}/ai-suggestions/...`: `POST /jobs`, `GET /jobs/{jobId}`, `DELETE /jobs/{jobId}` (cancel), `GET /jobs/{jobId}/events` (SSE), `GET` (list applied), `POST /clear-low-confidence`. All `@Secured("ADMIN","SECCHAMPION")` plus `AssessmentOwnershipGuard`.
   - Provenance: new `response.source` column (`MANUAL | AI_GENERATED | AI_EDITED`, indexed, backfilled `MANUAL`) plus `response.ai_suggestion_id` FK. `ResponseController` flips `AI_GENERATED → AI_EDITED` whenever a human changes answerType or comment.

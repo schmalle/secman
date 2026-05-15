@@ -49,6 +49,7 @@ open class ComplianceAssistantService(
     private val promptBuilder: PromptBuilder,
     private val confidenceScorer: ConfidenceScorer,
     private val citationValidator: CitationValidator,
+    private val appSettingsService: AppSettingsService,
     @Named("ai") private val aiExecutor: ExecutorService
 ) {
     private val log = LoggerFactory.getLogger(ComplianceAssistantService::class.java)
@@ -85,7 +86,7 @@ open class ComplianceAssistantService(
     fun init() {
         loadSystemPrompt()
         log.info(
-            "ComplianceAssistantService initialized: enabled={}, model={}, promptVersion={}, maxCost={}, maxConcurrent={}",
+            "ComplianceAssistantService initialized: envDefault={}, model={}, promptVersion={}, maxCost={}, maxConcurrent={}",
             config.enabled, config.model, promptVersion, config.maxCostPerJobUsd, config.maxConcurrentJobsGlobal
         )
     }
@@ -106,11 +107,14 @@ open class ComplianceAssistantService(
     }
 
     /**
-     * True when the feature flag is on AND a key is configured. Controllers
-     * gate POSTs on this; tests with isEnabled() mocked can exercise the
-     * service end-to-end without a live API key.
+     * Effective feature-flag state: the DB-backed toggle (flippable by ADMIN
+     * via the AppSettings UI) AND an API key being configured. The env var
+     * `secman.ai.risk-assessment.enabled` only seeds the DB default at first
+     * create — it does NOT override the DB once a row exists. Controllers
+     * gate POSTs on this; tests can stub `appSettingsService.isAiRiskAssessmentEnabled()`.
      */
-    fun isEnabled(): Boolean = config.enabled && openRouterConfig.apiKey.isNotBlank()
+    fun isEnabled(): Boolean =
+        appSettingsService.isAiRiskAssessmentEnabled() && openRouterConfig.apiKey.isNotBlank()
 
     /**
      * Cheap pre-flight cost projection from the configured per-1k pricing.

@@ -22,6 +22,7 @@ const AppSettingsAdmin: React.FC = () => {
   // Form state
   const [baseUrl, setBaseUrl] = useState('');
   const [globalCveApprovalAdminOnly, setGlobalCveApprovalAdminOnly] = useState(false);
+  const [aiRiskAssessmentEnabled, setAiRiskAssessmentEnabled] = useState(false);
 
   // Load settings on component mount
   useEffect(() => {
@@ -40,6 +41,7 @@ const AppSettingsAdmin: React.FC = () => {
       setSettings(data);
       setBaseUrl(data.baseUrl);
       setGlobalCveApprovalAdminOnly(data.globalCveApprovalAdminOnly);
+      setAiRiskAssessmentEnabled(data.aiRiskAssessmentEnabled);
     } catch (err) {
       console.error('[AppSettingsAdmin] Failed to load settings:', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to load application settings';
@@ -73,11 +75,16 @@ const AppSettingsAdmin: React.FC = () => {
       setSaving(true);
       console.log('[AppSettingsAdmin] Saving settings:', { baseUrl });
 
-      const updatedSettings = await updateAppSettings(baseUrl.replace(/\/$/, ''), globalCveApprovalAdminOnly);
+      const updatedSettings = await updateAppSettings(
+        baseUrl.replace(/\/$/, ''),
+        globalCveApprovalAdminOnly,
+        aiRiskAssessmentEnabled
+      );
 
       console.log('[AppSettingsAdmin] Settings saved successfully:', updatedSettings);
       setSettings(updatedSettings);
       setBaseUrl(updatedSettings.baseUrl);
+      setAiRiskAssessmentEnabled(updatedSettings.aiRiskAssessmentEnabled);
       setSuccessMessage('Settings saved successfully!');
 
       // Clear success message after 3 seconds
@@ -204,6 +211,31 @@ const AppSettingsAdmin: React.FC = () => {
               When enabled, only ADMIN users can approve CVE_PATTERN (global CVE) exception requests
               that affect all assets system-wide. SECCHAMPION users will still be able to approve
               single-vulnerability scoped requests.
+            </small>
+          </div>
+
+          {/* Feature 088 — AI-Assisted Risk Assessment Master Switch */}
+          <div className="mb-4">
+            <div className="form-check form-switch">
+              <input
+                className="form-check-input"
+                type="checkbox"
+                role="switch"
+                id="aiRiskAssessmentEnabled"
+                checked={aiRiskAssessmentEnabled}
+                onChange={(e) => setAiRiskAssessmentEnabled(e.target.checked)}
+                disabled={saving}
+              />
+              <label className="form-check-label" htmlFor="aiRiskAssessmentEnabled">
+                <strong>Enable AI-Assisted Risk Assessment Answers</strong>
+              </label>
+            </div>
+            <small className="form-text text-muted">
+              When enabled, ADMIN and SECCHAMPION users (who created an assessment) can ask an
+              LLM via OpenRouter to pre-fill the compliance answers, including web-search-grounded
+              citations and a confidence score. Generated answers are always written as drafts —
+              the human reviews and submits. Requires <code>OPENROUTER_API_KEY</code> to be
+              configured on the backend. See <code>docs/AI_RISK_ASSESSMENT.md</code> for details.
             </small>
           </div>
 

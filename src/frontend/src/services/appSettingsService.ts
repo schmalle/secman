@@ -18,6 +18,10 @@ export interface AppSettingsDto {
   /** When true, only ADMIN users can approve CVE_PATTERN (global CVE) exception requests */
   globalCveApprovalAdminOnly: boolean;
 
+  /** Feature 088: AI-assisted risk-assessment master switch. When false the
+   *  "AI Pre-fill" button is hidden and all /ai-suggestions endpoints 403. */
+  aiRiskAssessmentEnabled: boolean;
+
   /** Username of admin who last updated settings */
   updatedBy: string | null;
 
@@ -75,11 +79,15 @@ export async function getAppSettings(): Promise<AppSettingsDto> {
  * @returns Updated application settings
  * @throws Error if request fails, validation fails, or user lacks ADMIN role
  */
-export async function updateAppSettings(baseUrl: string, globalCveApprovalAdminOnly: boolean): Promise<AppSettingsDto> {
-  console.log('[appSettingsService] updateAppSettings called with:', { baseUrl, globalCveApprovalAdminOnly });
+export async function updateAppSettings(
+  baseUrl: string,
+  globalCveApprovalAdminOnly: boolean,
+  aiRiskAssessmentEnabled: boolean
+): Promise<AppSettingsDto> {
+  console.log('[appSettingsService] updateAppSettings called with:', { baseUrl, globalCveApprovalAdminOnly, aiRiskAssessmentEnabled });
   console.log('[appSettingsService] Making authenticated PUT to /api/settings/app');
 
-  const response = await authenticatedPut('/api/settings/app', { baseUrl, globalCveApprovalAdminOnly });
+  const response = await authenticatedPut('/api/settings/app', { baseUrl, globalCveApprovalAdminOnly, aiRiskAssessmentEnabled });
 
   console.log('[appSettingsService] Response received:', {
     ok: response.ok,

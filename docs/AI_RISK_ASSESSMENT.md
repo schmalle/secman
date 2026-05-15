@@ -27,15 +27,18 @@ All endpoints (`/api/risk-assessments/{id}/ai-suggestions/...`) are gated by `@S
 
 ## Configuration
 
-See `docs/ENVIRONMENT.md` for the env-var table. Quick recap:
+There are two layers:
+
+1. **Runtime master switch (DB-backed)** — `app_settings.ai_risk_assessment_enabled`. Flippable by ADMIN in the **Application Settings** page at `/appsettings`. This is the authoritative value at runtime. `ComplianceAssistantService.isEnabled()` returns `true` only when this is `true` AND an `OPENROUTER_API_KEY` is configured. The frontend probes `GET /api/ai-risk-assessment/status` (ADMIN/SECCHAMPION) and hides the "AI Pre-fill" button when off.
+2. **Environment variables** — seed the DB default at first creation and provide the API key. After the row exists, only the toggle in the UI affects runtime behaviour.
 
 | Var | Default | Notes |
 |---|---|---|
-| `AI_RISK_ASSESSMENT_ENABLED` | `false` | Master flag. Must be `true` and an API key must be present for any endpoint to do anything. |
+| `AI_RISK_ASSESSMENT_ENABLED` | `false` | Seeds `app_settings.ai_risk_assessment_enabled` at first create. **Does not** override the DB row afterwards. |
 | `AI_RISK_ASSESSMENT_MODEL` | `anthropic/claude-sonnet-4.6:online` | The `:online` suffix turns on OpenRouter's built-in web search; citations come back as `message.annotations[].url_citation`. |
 | `AI_RISK_ASSESSMENT_MAX_COST` | `5.0` | Per-job hard cap (USD). Pre-flight rejects over-budget runs; mid-flight aborts and marks the job `FAILED`, retaining partial successes. |
 | `AI_RISK_ASSESSMENT_MAX_JOBS` | `2` | Global concurrent-job limit. Prevents thundering herd if multiple SECCHAMPIONs trigger whole-assessment runs at once. |
-| `OPENROUTER_API_KEY` | unset | Provided via `pass-cli`. Without it, the feature stays off regardless of the flag. |
+| `OPENROUTER_API_KEY` | unset | Provided via `pass-cli`. Without it, the feature stays off regardless of the toggle. |
 
 Token-cost estimates per model live under `secman.ai.risk-assessment.pricing-per-1k-tokens` in `application.yml` and feed pre-flight cost projection. Update them when OpenRouter pricing changes.
 
