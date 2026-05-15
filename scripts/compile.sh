@@ -6,6 +6,6 @@ cd src/backendng
 
 # Build frontend
 cd ../frontend
-npm ci --production
+npm ci --omit=dev
 npm run build
 # Build output will be in: dist/ directory
