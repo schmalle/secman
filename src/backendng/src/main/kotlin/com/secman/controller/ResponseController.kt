@@ -369,10 +369,15 @@ open class ResponseController(
                 .findByRiskAssessmentIdAndRequirementId(assessment.id!!, request.requirementId)
             
             val response = if (existingResponse != null) {
-                // Update existing response, preserve or update respondent email
+                // Feature 088 provenance flip: see bulkSaveResponsesAuthenticated.
+                val incomingComment = request.comment?.trim()?.takeIf { it.isNotBlank() }
+                val changed = existingResponse.answerType != request.answerType ||
+                              existingResponse.comment != incomingComment
+                if (changed && existingResponse.source == ResponseSource.AI_GENERATED) {
+                    existingResponse.source = ResponseSource.AI_EDITED
+                }
                 existingResponse.answerType = request.answerType
-                existingResponse.comment = request.comment?.trim()?.takeIf { it.isNotBlank() }
-                // Set email if it's not already set
+                existingResponse.comment = incomingComment
                 if (existingResponse.respondentEmail.isNullOrBlank()) {
                     existingResponse.respondentEmail = currentUserEmail
                 }
@@ -388,8 +393,8 @@ open class ResponseController(
                 )
                 responseRepository.save(newResponse)
             }
-            
-            log.info("Saved response for requirement {} in assessment {} with email {}", 
+
+            log.info("Saved response for requirement {} in assessment {} with email {}",
                 request.requirementId, assessment.id, currentUserEmail)
             HttpResponse.ok(response)
         } catch (e: Exception) {
@@ -436,9 +441,19 @@ open class ResponseController(
                         .findByRiskAssessmentIdAndRequirementId(assessment.id!!, responseRequest.requirementId)
                     
                     val response = if (existingResponse != null) {
-                        // Update existing response
+                        // Update existing response.
+                        // Feature 088: if the row was AI_GENERATED and the human
+                        // is changing the answer or comment, flip the source to
+                        // AI_EDITED so re-runs leave it alone. MANUAL stays
+                        // MANUAL; AI_EDITED stays AI_EDITED.
+                        val incomingComment = responseRequest.comment?.trim()?.takeIf { it.isNotBlank() }
+                        val changed = existingResponse.answerType != responseRequest.answerType ||
+                                      existingResponse.comment != incomingComment
+                        if (changed && existingResponse.source == ResponseSource.AI_GENERATED) {
+                            existingResponse.source = ResponseSource.AI_EDITED
+                        }
                         existingResponse.answerType = responseRequest.answerType
-                        existingResponse.comment = responseRequest.comment?.trim()?.takeIf { it.isNotBlank() }
+                        existingResponse.comment = incomingComment
                         // Set email if it's not already set
                         if (existingResponse.respondentEmail.isNullOrBlank()) {
                             existingResponse.respondentEmail = currentUserEmail

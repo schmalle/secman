@@ -28,12 +28,12 @@
 
 **Purpose**: Wire up configuration, feature flag, executor pool, and document the new env var. No business logic yet.
 
-- [ ] T001 Add `micronaut.executors.ai` (type=fixed, nThreads=8) to `src/backendng/src/main/resources/application.yml` (insert next to existing `translation` executor)
-- [ ] T002 Add `secman.ai.risk-assessment.*` block (enabled, model, max-cost-per-job-usd, max-concurrent-jobs-global, per-request-timeout, job-timeout, confidence.high-threshold, confidence.medium-threshold, pricing map) to `src/backendng/src/main/resources/application.yml`
-- [ ] T003 Add `secman.openrouter.api-key: ${OPENROUTER_API_KEY:}` block to `src/backendng/src/main/resources/application.yml` (top-level under `secman`)
-- [ ] T004 [P] Create `AiRiskAssessmentConfig` `@ConfigurationProperties("secman.ai.risk-assessment")` in `src/backendng/src/main/kotlin/com/secman/config/AiRiskAssessmentConfig.kt` (fields mirror application.yml, plus nested `Confidence` and `Pricing` records)
-- [ ] T005 [P] Document `AI_RISK_ASSESSMENT_*` env vars and `OPENROUTER_API_KEY` (resolved via `pass-cli` per CLAUDE.md) in `docs/ENVIRONMENT.md`
-- [ ] T006 [P] Create system prompt file `src/backendng/src/main/resources/ai-prompts/compliance-assistant.txt` — first line `VERSION: 001`; body instructs strict JSON output `{answer ∈ YES|NO|N_A|UNKNOWN, confidence ∈ [0..1], rationale, citations: [{title,url,snippet}]}`; explains web-search usage and "use UNKNOWN if not enough evidence"
+- [x] T001 Add `micronaut.executors.ai` (type=fixed, nThreads=8) to `src/backendng/src/main/resources/application.yml` (insert next to existing `translation` executor)
+- [x] T002 Add `secman.ai.risk-assessment.*` block (enabled, model, max-cost-per-job-usd, max-concurrent-jobs-global, per-request-timeout, job-timeout, confidence.high-threshold, confidence.medium-threshold, pricing map) to `src/backendng/src/main/resources/application.yml`
+- [x] T003 Add `secman.openrouter.api-key: ${OPENROUTER_API_KEY:}` block to `src/backendng/src/main/resources/application.yml` (top-level under `secman`)
+- [x] T004 [P] Create `AiRiskAssessmentConfig` `@ConfigurationProperties("secman.ai.risk-assessment")` in `src/backendng/src/main/kotlin/com/secman/config/AiRiskAssessmentConfig.kt` (fields mirror application.yml, plus nested `Confidence` and `Pricing` records)
+- [x] T005 [P] Document `AI_RISK_ASSESSMENT_*` env vars and `OPENROUTER_API_KEY` (resolved via `pass-cli` per CLAUDE.md) in `docs/ENVIRONMENT.md`
+- [x] T006 [P] Create system prompt file `src/backendng/src/main/resources/ai-prompts/compliance-assistant.txt` — first line `VERSION: 001`; body instructs strict JSON output `{answer ∈ YES|NO|N_A|UNKNOWN, confidence ∈ [0..1], rationale, citations: [{title,url,snippet}]}`; explains web-search usage and "use UNKNOWN if not enough evidence"
 
 ---
 
@@ -45,34 +45,34 @@
 
 ### Database migration
 
-- [ ] T007 Create Flyway migration `src/backendng/src/main/resources/db/migration/V215__ai_risk_assessment_answers.sql` containing: (a) `ai_suggestion_job` table, (b) `ai_answer_suggestion` table, (c) `ALTER TABLE response ADD COLUMN source ENUM(...) NOT NULL DEFAULT 'MANUAL'`, (d) `ALTER TABLE response ADD COLUMN ai_suggestion_id BIGINT NULL` + FK + indexes per plan.md §"Data model"
+- [x] T007 Create Flyway migration `src/backendng/src/main/resources/db/migration/V215__ai_risk_assessment_answers.sql` containing: (a) `ai_suggestion_job` table, (b) `ai_answer_suggestion` table, (c) `ALTER TABLE response ADD COLUMN source ENUM(...) NOT NULL DEFAULT 'MANUAL'`, (d) `ALTER TABLE response ADD COLUMN ai_suggestion_id BIGINT NULL` + FK + indexes per plan.md §"Data model"
 
 ### Domain entities
 
-- [ ] T008 [P] Create `ResponseSource` enum (`MANUAL, AI_GENERATED, AI_EDITED`) in `src/backendng/src/main/kotlin/com/secman/domain/ResponseSource.kt`
-- [ ] T009 [P] Create `ConfidenceBand` enum (`HIGH, MEDIUM, LOW`) in `src/backendng/src/main/kotlin/com/secman/domain/ConfidenceBand.kt`
-- [ ] T010 [P] Create `SuggestedAnswerType` enum (`YES, NO, N_A, UNKNOWN`) in `src/backendng/src/main/kotlin/com/secman/domain/SuggestedAnswerType.kt` (separate from existing `AnswerType` because UNKNOWN is AI-only)
-- [ ] T011 [P] Create `AiSuggestionJobStatus` enum (`QUEUED, RUNNING, COMPLETED, FAILED, CANCELLED`) in `src/backendng/src/main/kotlin/com/secman/domain/AiSuggestionJobStatus.kt`
-- [ ] T012 [P] Create `AiSuggestionScope` enum (`WHOLE_ASSESSMENT, SUBSET, SINGLE_REQUIREMENT`) in `src/backendng/src/main/kotlin/com/secman/domain/AiSuggestionScope.kt`
-- [ ] T013 [P] Create `AiAnswerSuggestionStatus` enum (`APPLIED, SUPERSEDED, FAILED`) in `src/backendng/src/main/kotlin/com/secman/domain/AiAnswerSuggestionStatus.kt`
-- [ ] T014 Create JPA entity `AiSuggestionJob` in `src/backendng/src/main/kotlin/com/secman/domain/AiSuggestionJob.kt` (fields per plan.md, `@PrePersist` sets createdAt; relationships: ManyToOne RiskAssessment, ManyToOne User triggeredBy)
-- [ ] T015 Create JPA entity `AiAnswerSuggestion` in `src/backendng/src/main/kotlin/com/secman/domain/AiAnswerSuggestion.kt` (ManyToOne AiSuggestionJob, RiskAssessment, Requirement; `@Convert(JsonConverter)` for citations JSON column)
-- [ ] T016 Extend `src/backendng/src/main/kotlin/com/secman/domain/Response.kt` with `var source: ResponseSource = ResponseSource.MANUAL` and `var aiSuggestionId: Long? = null` (ManyToOne is overkill; raw FK is enough)
+- [x] T008 [P] Create `ResponseSource` enum (`MANUAL, AI_GENERATED, AI_EDITED`) in `src/backendng/src/main/kotlin/com/secman/domain/ResponseSource.kt`
+- [x] T009 [P] Create `ConfidenceBand` enum (`HIGH, MEDIUM, LOW`) in `src/backendng/src/main/kotlin/com/secman/domain/ConfidenceBand.kt`
+- [x] T010 [P] Create `SuggestedAnswerType` enum (`YES, NO, N_A, UNKNOWN`) in `src/backendng/src/main/kotlin/com/secman/domain/SuggestedAnswerType.kt` (separate from existing `AnswerType` because UNKNOWN is AI-only)
+- [x] T011 [P] Create `AiSuggestionJobStatus` enum (`QUEUED, RUNNING, COMPLETED, FAILED, CANCELLED`) in `src/backendng/src/main/kotlin/com/secman/domain/AiSuggestionJobStatus.kt`
+- [x] T012 [P] Create `AiSuggestionScope` enum (`WHOLE_ASSESSMENT, SUBSET, SINGLE_REQUIREMENT`) in `src/backendng/src/main/kotlin/com/secman/domain/AiSuggestionScope.kt`
+- [x] T013 [P] Create `AiAnswerSuggestionStatus` enum (`APPLIED, SUPERSEDED, FAILED`) in `src/backendng/src/main/kotlin/com/secman/domain/AiAnswerSuggestionStatus.kt`
+- [x] T014 Create JPA entity `AiSuggestionJob` in `src/backendng/src/main/kotlin/com/secman/domain/AiSuggestionJob.kt` (fields per plan.md, `@PrePersist` sets createdAt; relationships: ManyToOne RiskAssessment, ManyToOne User triggeredBy)
+- [x] T015 Create JPA entity `AiAnswerSuggestion` in `src/backendng/src/main/kotlin/com/secman/domain/AiAnswerSuggestion.kt` (ManyToOne AiSuggestionJob, RiskAssessment, Requirement; `@Convert(JsonConverter)` for citations JSON column)
+- [x] T016 Extend `src/backendng/src/main/kotlin/com/secman/domain/Response.kt` with `var source: ResponseSource = ResponseSource.MANUAL` and `var aiSuggestionId: Long? = null` (ManyToOne is overkill; raw FK is enough)
 
 ### Repositories
 
-- [ ] T017 [P] Create `AiSuggestionJobRepository` (`CrudRepository<AiSuggestionJob, Long>`) in `src/backendng/src/main/kotlin/com/secman/repository/AiSuggestionJobRepository.kt` with query methods: `findByStatus`, `findByRiskAssessmentIdAndStatus`, `countByStatusIn(statuses)` (for global concurrency check)
-- [ ] T018 [P] Create `AiAnswerSuggestionRepository` (`CrudRepository<AiAnswerSuggestion, Long>`) in `src/backendng/src/main/kotlin/com/secman/repository/AiAnswerSuggestionRepository.kt` with: `findByRiskAssessmentIdAndStatus`, `findByJobId`, `findLatestAppliedByAssessmentAndRequirement(assessmentId, requirementId)`, `markSupersededByAssessmentAndRequirement(assessmentId, requirementId)` as `@Modifying @Query` UPDATE
-- [ ] T019 Add to `src/backendng/src/main/kotlin/com/secman/repository/ResponseRepository.kt`: `findByRiskAssessmentIdAndSourceAndAiSuggestion_ConfidenceBand` (for clear-LOW), `existsByRiskAssessmentIdAndRequirementIdAndSource` (for re-run guard)
+- [x] T017 [P] Create `AiSuggestionJobRepository` (`CrudRepository<AiSuggestionJob, Long>`) in `src/backendng/src/main/kotlin/com/secman/repository/AiSuggestionJobRepository.kt` with query methods: `findByStatus`, `findByRiskAssessmentIdAndStatus`, `countByStatusIn(statuses)` (for global concurrency check)
+- [x] T018 [P] Create `AiAnswerSuggestionRepository` (`CrudRepository<AiAnswerSuggestion, Long>`) in `src/backendng/src/main/kotlin/com/secman/repository/AiAnswerSuggestionRepository.kt` with: `findByRiskAssessmentIdAndStatus`, `findByJobId`, `findLatestAppliedByAssessmentAndRequirement(assessmentId, requirementId)`, `markSupersededByAssessmentAndRequirement(assessmentId, requirementId)` as `@Modifying @Query` UPDATE
+- [x] T019 Add to `src/backendng/src/main/kotlin/com/secman/repository/ResponseRepository.kt`: `findByRiskAssessmentIdAndSourceAndAiSuggestion_ConfidenceBand` (for clear-LOW), `existsByRiskAssessmentIdAndRequirementIdAndSource` (for re-run guard)
 
 ### Shared service skeleton
 
-- [ ] T020 Create `src/backendng/src/main/kotlin/com/secman/service/ComplianceAssistantService.kt` skeleton: `@Singleton`, constructor injects `AiRiskAssessmentConfig`, `@Named("ai") ExecutorService`, `ObjectMapper`, optional Caffeine cache bean. JDK `HttpClient` field built lazily. Expose `fun suggest(requirement: Requirement, ctx: AssessmentContext): CompletableFuture<SuggestionResult>` — body throws `NotImplementedError` for now (Phase 3 fills it).
-- [ ] T021 [P] Define DTOs `AssessmentContext`, `SuggestionResult`, `Citation` in `src/backendng/src/main/kotlin/com/secman/dto/AiSuggestionDtos.kt` (data classes, `@Serdeable` on the request/response ones).
+- [x] T020 Create `src/backendng/src/main/kotlin/com/secman/service/ComplianceAssistantService.kt` skeleton: `@Singleton`, constructor injects `AiRiskAssessmentConfig`, `@Named("ai") ExecutorService`, `ObjectMapper`, optional Caffeine cache bean. JDK `HttpClient` field built lazily. Expose `fun suggest(requirement: Requirement, ctx: AssessmentContext): CompletableFuture<SuggestionResult>` — body throws `NotImplementedError` for now (Phase 3 fills it).
+- [x] T021 [P] Define DTOs `AssessmentContext`, `SuggestionResult`, `Citation` in `src/backendng/src/main/kotlin/com/secman/dto/AiSuggestionDtos.kt` (data classes, `@Serdeable` on the request/response ones).
 
 ### Ownership/RBAC helper
 
-- [ ] T022 Create `AssessmentOwnershipGuard` `@Singleton` in `src/backendng/src/main/kotlin/com/secman/service/AssessmentOwnershipGuard.kt` exposing `fun check(assessmentId: Long, authentication: Authentication): RiskAssessment` — throws `AuthorizationException` if caller is not ADMIN AND not assessor/requestor of the assessment. Reused by all AI endpoints.
+- [x] T022 Create `AssessmentOwnershipGuard` `@Singleton` in `src/backendng/src/main/kotlin/com/secman/service/AssessmentOwnershipGuard.kt` exposing `fun check(assessmentId: Long, authentication: Authentication): RiskAssessment` — throws `AuthorizationException` if caller is not ADMIN AND not assessor/requestor of the assessment. Reused by all AI endpoints.
 
 **Checkpoint**: Schema migrated, entities compile, repositories wired, service skeleton present. User-story phases can begin in parallel.
 
@@ -86,48 +86,48 @@
 
 ### Tests for User Story 1 (write first, expect to fail)
 
-- [ ] T023 [P] [US1] Write `ComplianceAssistantServicePromptBuilderTest` in `src/backendng/src/test/kotlin/com/secman/service/ComplianceAssistantServicePromptBuilderTest.kt`: asserts (a) prompt includes requirement shortreq/details/motivation/example/norm, (b) for asset basis, prompt does NOT contain owner email (`alice@example.com`), IP address (`10.0.0.5`), or any internal URL pattern (`*.internal.*`) — NFR-4 redaction.
-- [ ] T024 [P] [US1] Write `ConfidenceScorerTest` in `src/backendng/src/test/kotlin/com/secman/service/ConfidenceScorerTest.kt`: parameterised cases for HIGH≥0.75, MEDIUM 0.5–0.75, LOW<0.5; citation-count cap at 3; UNKNOWN-answer downweight; HIGH-without-citation downgrade to MEDIUM.
-- [ ] T025 [P] [US1] Write `CitationValidatorTest` in `src/backendng/src/test/kotlin/com/secman/service/CitationValidatorTest.kt`: rejects `http://`, oversized (>2KB), duplicate URLs; accepts well-formed https citations.
+- [x] T023 [P] [US1] Write `ComplianceAssistantServicePromptBuilderTest` in `src/backendng/src/test/kotlin/com/secman/service/ComplianceAssistantServicePromptBuilderTest.kt`: asserts (a) prompt includes requirement shortreq/details/motivation/example/norm, (b) for asset basis, prompt does NOT contain owner email (`alice@example.com`), IP address (`10.0.0.5`), or any internal URL pattern (`*.internal.*`) — NFR-4 redaction.
+- [x] T024 [P] [US1] Write `ConfidenceScorerTest` in `src/backendng/src/test/kotlin/com/secman/service/ConfidenceScorerTest.kt`: parameterised cases for HIGH≥0.75, MEDIUM 0.5–0.75, LOW<0.5; citation-count cap at 3; UNKNOWN-answer downweight; HIGH-without-citation downgrade to MEDIUM.
+- [x] T025 [P] [US1] Write `CitationValidatorTest` in `src/backendng/src/test/kotlin/com/secman/service/CitationValidatorTest.kt`: rejects `http://`, oversized (>2KB), duplicate URLs; accepts well-formed https citations.
 - [ ] T026 [P] [US1] Write `AiSuggestionJobServiceIntegrationTest` skeleton in `src/backendng/src/test/kotlin/com/secman/service/AiSuggestionJobServiceIntegrationTest.kt` extending `BaseIntegrationTest`, gated on `DockerAvailable.isDockerAvailable`. Single test method `happyPath_3Requirements_writesDraftsAndAppliedSuggestions` with WireMock-style mocked OpenRouter returning canned JSON.
 - [ ] T027 [P] [US1] Write `AiSuggestionControllerRbacTest` in `src/backendng/src/test/kotlin/com/secman/controller/AiSuggestionControllerRbacTest.kt`: ADMIN OK, SECCHAMPION-as-creator OK, SECCHAMPION-as-other-user 403, RISK 403, USER 403.
 
 ### Implementation — backend service layer
 
-- [ ] T028 [US1] Implement `ComplianceAssistantService.buildPrompt(requirement, ctx)` in `src/backendng/src/main/kotlin/com/secman/service/ComplianceAssistantService.kt`: loads system prompt from `classpath:ai-prompts/compliance-assistant.txt` (cached), extracts `promptVersion` from first line, builds user message from requirement + redacted asset/demand context (asset: name/type/groups/cloudAccountId/osVersion only; demand: description only) + up to 3 few-shot already-answered siblings.
-- [ ] T029 [US1] Implement `ComplianceAssistantService.callOpenRouter(systemPrompt, userPrompt)`: JDK `HttpClient.sendAsync()` POST to `https://openrouter.ai/api/v1/chat/completions` with body `{model, messages:[{role:"system",content:...},{role:"user",content:...}], response_format:{type:"json_schema",json_schema:{...strict schema...}}}`, Authorization bearer `secman.openrouter.api-key`. Reads `message.content` and `message.annotations[].url_citation` (OpenRouter `:online` returns citations there).
-- [ ] T030 [US1] Implement `ComplianceAssistantService.parseAndScore(rawJson, annotations)` returning `SuggestionResult`: strict JSON parse → `CitationValidator` → `ConfidenceScorer` (which implements 0.5×self + 0.3×citation-grounding + 0.2×determinism) → derive band.
-- [ ] T031 [US1] Create `ConfidenceScorer` `@Singleton` in `src/backendng/src/main/kotlin/com/secman/service/ConfidenceScorer.kt`: pure function `score(modelSelfConfidence: Double, validCitationCount: Int, isUnknown: Boolean): Pair<Double, ConfidenceBand>`. HIGH-without-citation downgrade rule lives here.
-- [ ] T032 [US1] Create `CitationValidator` `@Singleton` in `src/backendng/src/main/kotlin/com/secman/service/CitationValidator.kt`: `validate(raw: List<Citation>): List<Citation>` (https only, ≤2KB JSON serialized, dedupe by URL).
-- [ ] T033 [US1] Wire `ComplianceAssistantService.suggest()` to: `buildPrompt` → `callOpenRouter` (on the `ai` executor via `CompletableFuture.supplyAsync`) → `parseAndScore` → return `SuggestionResult`. Wrap in `CompletableFuture`, do NOT block.
+- [x] T028 [US1] Implement `ComplianceAssistantService.buildPrompt(requirement, ctx)` in `src/backendng/src/main/kotlin/com/secman/service/ComplianceAssistantService.kt`: loads system prompt from `classpath:ai-prompts/compliance-assistant.txt` (cached), extracts `promptVersion` from first line, builds user message from requirement + redacted asset/demand context (asset: name/type/groups/cloudAccountId/osVersion only; demand: description only) + up to 3 few-shot already-answered siblings.
+- [x] T029 [US1] Implement `ComplianceAssistantService.callOpenRouter(systemPrompt, userPrompt)`: JDK `HttpClient.sendAsync()` POST to `https://openrouter.ai/api/v1/chat/completions` with body `{model, messages:[{role:"system",content:...},{role:"user",content:...}], response_format:{type:"json_schema",json_schema:{...strict schema...}}}`, Authorization bearer `secman.openrouter.api-key`. Reads `message.content` and `message.annotations[].url_citation` (OpenRouter `:online` returns citations there).
+- [x] T030 [US1] Implement `ComplianceAssistantService.parseAndScore(rawJson, annotations)` returning `SuggestionResult`: strict JSON parse → `CitationValidator` → `ConfidenceScorer` (which implements 0.5×self + 0.3×citation-grounding + 0.2×determinism) → derive band.
+- [x] T031 [US1] Create `ConfidenceScorer` `@Singleton` in `src/backendng/src/main/kotlin/com/secman/service/ConfidenceScorer.kt`: pure function `score(modelSelfConfidence: Double, validCitationCount: Int, isUnknown: Boolean): Pair<Double, ConfidenceBand>`. HIGH-without-citation downgrade rule lives here.
+- [x] T032 [US1] Create `CitationValidator` `@Singleton` in `src/backendng/src/main/kotlin/com/secman/service/CitationValidator.kt`: `validate(raw: List<Citation>): List<Citation>` (https only, ≤2KB JSON serialized, dedupe by URL).
+- [x] T033 [US1] Wire `ComplianceAssistantService.suggest()` to: `buildPrompt` → `callOpenRouter` (on the `ai` executor via `CompletableFuture.supplyAsync`) → `parseAndScore` → return `SuggestionResult`. Wrap in `CompletableFuture`, do NOT block.
 
 ### Implementation — job orchestration (core path only; SSE in US2)
 
-- [ ] T034 [US1] Create `AiSuggestionJobService` `@Singleton` in `src/backendng/src/main/kotlin/com/secman/service/AiSuggestionJobService.kt`: `startJob(assessment, scope, requirementIds, force, triggeredBy): AiSuggestionJob`. Validates: feature-flag on, no other RUNNING job for this assessment, `countByStatusIn([QUEUED, RUNNING]) < max-concurrent-jobs-global`, pre-flight projected cost ≤ `max-cost-per-job-usd` (uses `pricing` map + token estimate of 400 in / 200 out per requirement). Persists job row, transitions to RUNNING, dispatches per-requirement futures onto IO executor (mirrors `ExportJobService.kt`).
-- [ ] T035 [US1] Add to `AiSuggestionJobService` an internal `processOne(job, requirement, ctx)` (`@Transactional open fun`): calls `complianceAssistantService.suggest(...)`; on success writes `AiAnswerSuggestion (status=APPLIED)`, marks prior APPLIED for same (assessment, requirement) as `SUPERSEDED`, **upserts** Response (`source=AI_GENERATED`, `aiSuggestionId=<new>`); on failure writes `AiAnswerSuggestion (status=FAILED)` with rationale=error; increments `job.completedCount` or `failedCount`; checks mid-flight cost cap; updates `lastHeartbeatAt`.
-- [ ] T036 [US1] Add `AiSuggestionJobService.finalize(job)`: when `completedCount + failedCount == totalCount`, set `status=COMPLETED`, `finishedAt=now`. Idempotent.
-- [ ] T037 [US1] Add re-run guard inside `startJob`: when computing target requirements, exclude any with `responseRepository.existsByRiskAssessmentIdAndRequirementIdAndSource(..., AI_EDITED)` unless `force=true`.
+- [x] T034 [US1] Create `AiSuggestionJobService` `@Singleton` in `src/backendng/src/main/kotlin/com/secman/service/AiSuggestionJobService.kt`: `startJob(assessment, scope, requirementIds, force, triggeredBy): AiSuggestionJob`. Validates: feature-flag on, no other RUNNING job for this assessment, `countByStatusIn([QUEUED, RUNNING]) < max-concurrent-jobs-global`, pre-flight projected cost ≤ `max-cost-per-job-usd` (uses `pricing` map + token estimate of 400 in / 200 out per requirement). Persists job row, transitions to RUNNING, dispatches per-requirement futures onto IO executor (mirrors `ExportJobService.kt`).
+- [x] T035 [US1] Add to `AiSuggestionJobService` an internal `processOne(job, requirement, ctx)` (`@Transactional open fun`): calls `complianceAssistantService.suggest(...)`; on success writes `AiAnswerSuggestion (status=APPLIED)`, marks prior APPLIED for same (assessment, requirement) as `SUPERSEDED`, **upserts** Response (`source=AI_GENERATED`, `aiSuggestionId=<new>`); on failure writes `AiAnswerSuggestion (status=FAILED)` with rationale=error; increments `job.completedCount` or `failedCount`; checks mid-flight cost cap; updates `lastHeartbeatAt`.
+- [x] T036 [US1] Add `AiSuggestionJobService.finalize(job)`: when `completedCount + failedCount == totalCount`, set `status=COMPLETED`, `finishedAt=now`. Idempotent.
+- [x] T037 [US1] Add re-run guard inside `startJob`: when computing target requirements, exclude any with `responseRepository.existsByRiskAssessmentIdAndRequirementIdAndSource(..., AI_EDITED)` unless `force=true`.
 
 ### Implementation — controller
 
-- [ ] T038 [US1] Create `AiSuggestionController` in `src/backendng/src/main/kotlin/com/secman/controller/AiSuggestionController.kt` annotated `@Controller("/api/risk-assessments/{id}/ai-suggestions")` `@Secured("ADMIN","SECCHAMPION")`. Endpoints to implement here (skip SSE/DELETE — US2):
+- [x] T038 [US1] Create `AiSuggestionController` in `src/backendng/src/main/kotlin/com/secman/controller/AiSuggestionController.kt` annotated `@Controller("/api/risk-assessments/{id}/ai-suggestions")` `@Secured("ADMIN","SECCHAMPION")`. Endpoints to implement here (skip SSE/DELETE — US2):
   - `POST /jobs` body `StartJobRequest{scope, requirementIds?, force?}` → calls `ownershipGuard.check(id, auth)` → `jobService.startJob(...)` → 201 `{jobId, totalCount, estimatedCostUsd}`
   - `GET /jobs/{jobId}` → returns job status DTO
   - `GET /` → returns list of latest APPLIED suggestions for assessment (DTO with band, confidence, citations, model, rationale, suggestedAnswerType)
-- [ ] T039 [US1] In `AiSuggestionController`, define request/response DTOs as nested `@Serdeable` data classes (`StartJobRequest`, `JobStatusResponse`, `SuggestionListItem`).
+- [x] T039 [US1] In `AiSuggestionController`, define request/response DTOs as nested `@Serdeable` data classes (`StartJobRequest`, `JobStatusResponse`, `SuggestionListItem`).
 
 ### Implementation — provenance flip on edit
 
-- [ ] T040 [US1] Modify `ResponseController.bulkSaveResponses` in `src/backendng/src/main/kotlin/com/secman/controller/ResponseController.kt`: for each incoming response, if the existing row has `source=AI_GENERATED` AND any of `answerType`/`comment` changed, set `source=AI_EDITED` on save. Keep `aiSuggestionId` for audit trail.
+- [x] T040 [US1] Modify `ResponseController.bulkSaveResponses` in `src/backendng/src/main/kotlin/com/secman/controller/ResponseController.kt`: for each incoming response, if the existing row has `source=AI_GENERATED` AND any of `answerType`/`comment` changed, set `source=AI_EDITED` on save. Keep `aiSuggestionId` for audit trail.
 - [ ] T041 [US1] Add unit test `ResponseSourceTransitionTest` in `src/backendng/src/test/kotlin/com/secman/controller/ResponseSourceTransitionTest.kt`: covers MANUAL→stays-MANUAL on save, AI_GENERATED→AI_EDITED on field change, AI_GENERATED→AI_GENERATED when payload identical.
 
 ### Implementation — frontend
 
-- [ ] T042 [P] [US1] Create `src/frontend/src/services/aiSuggestions.ts`: axios wrappers `startAiJob(assessmentId, payload)`, `getJob(assessmentId, jobId)`, `listLatestSuggestions(assessmentId)`. All include `Authorization: Bearer <token>` via existing axios interceptor.
-- [ ] T043 [P] [US1] Create `src/frontend/src/components/AiPrefillModal.tsx`: Bootstrap modal with scope toggle (Whole / Unanswered / By norm), cost estimate field (server-supplied), Start/Cancel buttons. On Start calls `startAiJob` then closes after jobId obtained — live counter lives in parent (US2 polishes via SSE).
-- [ ] T044 [US1] In `src/frontend/src/components/RiskAssessmentManagement.tsx`, add a per-row "AI Pre-fill" action button next to existing "Perform"/"Check answers" actions. Gate visibility: `(isAdmin(roles) || isSecChampion(roles)) && (assessment.assessor.id === currentUser.id || assessment.requestor?.id === currentUser.id || isAdmin(roles))`. Clicking opens `AiPrefillModal`.
-- [ ] T045 [US1] Extend `src/frontend/src/components/AssessmentPerformance.tsx`: fetch `listLatestSuggestions(id)` on mount; build a `suggestionByRequirementId` map; render per-card a collapsible AI panel above the answer inputs containing: confidence chip (color-coded HIGH/MEDIUM/LOW with raw% on hover), rationale, citation links (target=_blank rel=noopener noreferrer), model name. Show a provenance badge next to the answer fields based on `response.source` (✦ AI-generated / ✦ AI-edited / no badge for MANUAL).
-- [ ] T046 [US1] In `src/frontend/src/components/AssessmentPerformance.tsx`, when user edits any AI_GENERATED card's answerType/comment, optimistically flip the badge to "✦ AI-edited" locally; server side confirms on bulk save (T040).
+- [x] T042 [P] [US1] Create `src/frontend/src/services/aiSuggestions.ts`: axios wrappers `startAiJob(assessmentId, payload)`, `getJob(assessmentId, jobId)`, `listLatestSuggestions(assessmentId)`. All include `Authorization: Bearer <token>` via existing axios interceptor.
+- [x] T043 [P] [US1] Create `src/frontend/src/components/AiPrefillModal.tsx`: Bootstrap modal with scope toggle (Whole / Unanswered / By norm), cost estimate field (server-supplied), Start/Cancel buttons. On Start calls `startAiJob` then closes after jobId obtained — live counter lives in parent (US2 polishes via SSE).
+- [x] T044 [US1] In `src/frontend/src/components/RiskAssessmentManagement.tsx`, add a per-row "AI Pre-fill" action button next to existing "Perform"/"Check answers" actions. Gate visibility: `(isAdmin(roles) || isSecChampion(roles)) && (assessment.assessor.id === currentUser.id || assessment.requestor?.id === currentUser.id || isAdmin(roles))`. Clicking opens `AiPrefillModal`.
+- [x] T045 [US1] Extend `src/frontend/src/components/AssessmentPerformance.tsx`: fetch `listLatestSuggestions(id)` on mount; build a `suggestionByRequirementId` map; render per-card a collapsible AI panel above the answer inputs containing: confidence chip (color-coded HIGH/MEDIUM/LOW with raw% on hover), rationale, citation links (target=_blank rel=noopener noreferrer), model name. Show a provenance badge next to the answer fields based on `response.source` (✦ AI-generated / ✦ AI-edited / no badge for MANUAL).
+- [x] T046 [US1] In `src/frontend/src/components/AssessmentPerformance.tsx`, when user edits any AI_GENERATED card's answerType/comment, optimistically flip the badge to "✦ AI-edited" locally; server side confirms on bulk save (T040).
 
 **Checkpoint US1**: SECCHAMPION can create assessment → click AI Pre-fill → drafts written → see confidence + citations → edit → submit via existing endpoint. MVP complete and demoable.
 

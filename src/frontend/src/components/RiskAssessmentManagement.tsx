@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete } from '../utils/auth';
 import AssessmentPerformance from './AssessmentPerformance';
+import AiPrefillModal from './AiPrefillModal';
 
 interface Asset {
   id: number;
@@ -93,6 +94,8 @@ const RiskAssessmentManagement: React.FC = () => {
   const [showAssessmentModal, setShowAssessmentModal] = useState(false);
   const [assessmentModalMode, setAssessmentModalMode] = useState<'perform' | 'review'>('perform');
   const [selectedAssessmentId, setSelectedAssessmentId] = useState<number | null>(null);
+  // Feature 088 — AI pre-fill modal state.
+  const [aiPrefillAssessment, setAiPrefillAssessment] = useState<RiskAssessment | null>(null);
   const [assessorRefValue, setAssessorRefValue] = useState<string>('');
   const [respondentRefValue, setRespondentRefValue] = useState<string>('');
   const [formData, setFormData] = useState<RiskAssessment>({
@@ -820,14 +823,39 @@ const RiskAssessmentManagement: React.FC = () => {
                             <div className="btn-group-vertical btn-group-sm" role="group">
                               <button onClick={() => handleEdit(assessment)} className="btn btn-outline-primary mb-1">Edit</button>
                               {assessment.status === 'STARTED' && (
-                                <button 
-                                  onClick={() => handlePerformAssessment(assessment)} 
+                                <button
+                                  onClick={() => handlePerformAssessment(assessment)}
                                   className="btn btn-outline-success mb-1"
                                   title="Perform risk assessment questionnaire"
                                 >
                                   Perform Assessment
                                 </button>
                               )}
+                              {/* Feature 088: AI Pre-fill. Visible only to creators
+                                  (assessor / requestor) or ADMINs holding the
+                                  SECCHAMPION/ADMIN role. */}
+                              {assessment.status === 'STARTED' && (() => {
+                                const roles = (currentUser?.roles ?? []) as string[];
+                                const isAdmin = roles.includes('ADMIN');
+                                const isSecChampion = roles.includes('SECCHAMPION');
+                                const myId = currentUser?.id;
+                                const isCreator = myId != null && (
+                                  assessment.assessor?.id === myId ||
+                                  assessment.assessorId === myId ||
+                                  assessment.requestor?.id === myId ||
+                                  assessment.requestorId === myId
+                                );
+                                if (!(isAdmin || (isSecChampion && isCreator))) return null;
+                                return (
+                                  <button
+                                    onClick={() => setAiPrefillAssessment(assessment)}
+                                    className="btn btn-outline-dark mb-1"
+                                    title="Ask the AI to draft answers for this assessment"
+                                  >
+                                    ✦ AI Pre-fill
+                                  </button>
+                                );
+                              })()}
                               <button 
                                 onClick={() => handleCheckAnswers(assessment)} 
                                 className="btn btn-outline-warning mb-1"
@@ -883,6 +911,20 @@ const RiskAssessmentManagement: React.FC = () => {
           mode={assessmentModalMode}
           onClose={handleAssessmentModalClose}
           onComplete={handleAssessmentComplete}
+        />
+      )}
+
+      {/* Feature 088 — AI Pre-fill Modal */}
+      {aiPrefillAssessment && aiPrefillAssessment.id && (
+        <AiPrefillModal
+          assessmentId={aiPrefillAssessment.id}
+          assessmentLabel={aiPrefillAssessment.notes || `Assessment #${aiPrefillAssessment.id}`}
+          hasEditedRows={false}
+          onClose={() => setAiPrefillAssessment(null)}
+          onCompleted={() => {
+            setAiPrefillAssessment(null);
+            fetchAssessments();
+          }}
         />
       )}
     </div>

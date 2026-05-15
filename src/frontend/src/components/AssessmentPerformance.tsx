@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { authenticatedGet, authenticatedPost, authenticatedPut } from '../utils/auth';
+import { listAppliedSuggestions, type AppliedSuggestion } from '../services/aiSuggestions';
+import AiSuggestionPanel from './AiSuggestionPanel';
 
 interface Asset {
   id: number;
@@ -48,6 +50,9 @@ interface Response {
   requirement: { id: number };
   answerType: 'YES' | 'NO' | 'N_A';
   comment?: string;
+  // Feature 088 — provenance of the answer.
+  source?: 'MANUAL' | 'AI_GENERATED' | 'AI_EDITED';
+  aiSuggestionId?: number | null;
 }
 
 interface AssessmentData {
@@ -100,6 +105,9 @@ const AssessmentPerformance: React.FC<AssessmentPerformanceProps> = ({
   const [saveMessage, setSaveMessage] = useState('');
   const [currentTab, setCurrentTab] = useState<'assessment' | 'risk-raising'>('assessment');
   const [filterStatus, setFilterStatus] = useState<'all' | 'compliant' | 'non-compliant' | 'not-applicable'>('all');
+  // Feature 088 — AI suggestions per requirement and local provenance overrides.
+  const [aiSuggestions, setAiSuggestions] = useState<Record<number, AppliedSuggestion>>({});
+  const [provenanceOverrides, setProvenanceOverrides] = useState<Record<number, 'AI_EDITED'>>({});
 
   useEffect(() => {
     fetchAssessmentData();
@@ -139,6 +147,19 @@ const AssessmentPerformance: React.FC<AssessmentPerformanceProps> = ({
         };
       });
       setResponses(initialResponses);
+
+      // Feature 088: fetch any AI suggestions for this assessment. The endpoint
+      // returns [] for callers who don't have AI access, so no extra gating
+      // here is needed — degrade silently.
+      try {
+        const sugg = await listAppliedSuggestions(assessmentId);
+        const map: Record<number, AppliedSuggestion> = {};
+        sugg.forEach(s => { map[s.requirementId] = s; });
+        setAiSuggestions(map);
+      } catch (e) {
+        // Don't surface — the feature may be off or the user is RISK-only.
+        console.debug('listAppliedSuggestions failed (likely 403 or feature off):', e);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -154,6 +175,12 @@ const AssessmentPerformance: React.FC<AssessmentPerformanceProps> = ({
         answerType
       }
     }));
+    // Feature 088: if this row was AI_GENERATED and the user is now changing
+    // the answer, flip the provenance optimistically. Server will persist on save.
+    const original = requirementsWithResponses.find(r => r.requirement.id === requirementId)?.response;
+    if (original?.source === 'AI_GENERATED' && original.answerType !== answerType) {
+      setProvenanceOverrides(prev => ({ ...prev, [requirementId]: 'AI_EDITED' }));
+    }
   };
 
   const handleCommentChange = (requirementId: number, comment: string) => {
@@ -500,7 +527,13 @@ const AssessmentPerformance: React.FC<AssessmentPerformanceProps> = ({
             {/* Assessment Tab */}
             {currentTab === 'assessment' && (
               <div className="list-group">
-                {getFilteredRequirements().map((item, index) => (
+                {getFilteredRequirements().map((item, index) => {
+                  const suggestion = aiSuggestions[item.requirement.id];
+                  const effectiveSource =
+                    provenanceOverrides[item.requirement.id] ??
+                    item.response?.source ??
+                    'MANUAL';
+                  return (
                   <div key={item.requirement.id} className="list-group-item">
                     <div className="d-flex justify-content-between align-items-start mb-2">
                       <h6 className="mb-1">
@@ -510,18 +543,29 @@ const AssessmentPerformance: React.FC<AssessmentPerformanceProps> = ({
                             {responses[item.requirement.id].answerType.replace('_', '/')}
                           </span>
                         )}
+                        {effectiveSource === 'AI_GENERATED' && (
+                          <span className="badge bg-info text-dark ms-2" title="Drafted by AI — review before submitting">✦ AI-generated</span>
+                        )}
+                        {effectiveSource === 'AI_EDITED' && (
+                          <span className="badge bg-secondary ms-2" title="AI-drafted, edited by a human">✦ AI-edited</span>
+                        )}
                       </h6>
                     </div>
-                    
+
                     {item.requirement.details && (
                       <p className="text-muted small mb-2">{item.requirement.details}</p>
                     )}
-                    
+
                     {item.requirement.norm && (
                       <p className="text-muted small mb-2">
-                        <strong>Norm:</strong> {item.requirement.norm} 
+                        <strong>Norm:</strong> {item.requirement.norm}
                         {item.requirement.chapter && ` - Chapter: ${item.requirement.chapter}`}
                       </p>
+                    )}
+
+                    {/* Feature 088 — AI suggestion panel */}
+                    {suggestion && (
+                      <AiSuggestionPanel suggestion={suggestion} />
                     )}
 
                     <div className="row">
@@ -602,7 +646,8 @@ const AssessmentPerformance: React.FC<AssessmentPerformanceProps> = ({
                       </div>
                     )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 

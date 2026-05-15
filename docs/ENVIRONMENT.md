@@ -76,6 +76,25 @@ Daily scheduled job (02:30 server TZ) that deletes assets whose `crowdStrikeLast
 
 Notifications: ADMIN users receive an email whenever a run deletes ≥1 asset, hits errors, or trips the safety brake. "Boring" runs (0 deletions, 0 errors) are silent.
 
+### AI-assisted risk assessment answers (Feature 088)
+Opt-in. Lets ADMIN/SECCHAMPION users trigger an LLM (OpenRouter, web search enabled via the `:online` model suffix) to pre-fill compliance answers as draft `Response` rows. Each answer carries a confidence score and citations; the human reviews and edits before submitting.
+
+| Var | Default | Effect |
+|---|---|---|
+| `AI_RISK_ASSESSMENT_ENABLED` | `false` | Master feature flag. When `false`, all `/api/risk-assessments/{id}/ai-suggestions/*` endpoints return 403 and the UI button is hidden. |
+| `AI_RISK_ASSESSMENT_MODEL` | `anthropic/claude-sonnet-4.6:online` | OpenRouter model id. The `:online` suffix enables built-in web search; citations come back as `message.annotations[].url_citation`. |
+| `AI_RISK_ASSESSMENT_MAX_COST` | `5.0` | Per-job hard cap in USD. Pre-flight rejects runs whose projected cost exceeds this; mid-flight aborts when actual usage crosses it. Partial successes are retained. |
+| `AI_RISK_ASSESSMENT_MAX_JOBS` | `2` | Global concurrent-job limit. Prevents thundering-herd spend if multiple SECCHAMPIONs trigger whole-assessment runs at once. |
+| `OPENROUTER_API_KEY` | unset | OpenRouter API key. Resolve via `pass-cli` per repo convention. Without it the feature stays disabled regardless of the flag. |
+
+What is sent to OpenRouter (audit guarantee, NFR-4 in spec):
+- Requirement text + norm/chapter.
+- Asset basis: name, type, groups, cloudAccountId, osVersion. Nothing else.
+- Demand basis: description only.
+- Up to three already-answered sibling requirements as few-shot.
+
+What is NEVER sent: owner emails, IP addresses, internal hostnames, full asset descriptions. Verified by a unit test on the prompt builder.
+
 ### Debug & logging
 | Var | Default | Effect |
 |---|---|---|
