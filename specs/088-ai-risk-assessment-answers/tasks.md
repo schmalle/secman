@@ -146,13 +146,13 @@
 
 ### Implementation
 
-- [ ] T049 [US2] Add `DELETE /api/risk-assessments/{id}/ai-suggestions/jobs/{jobId}` to `AiSuggestionController` → `jobService.cancelJob(jobId, auth)` → 204.
-- [ ] T050 [US2] Implement `AiSuggestionJobService.cancelJob(jobId, auth)` in `src/backendng/src/main/kotlin/com/secman/service/AiSuggestionJobService.kt`: ownership check, set `status=CANCELLED`, `finishedAt=now`, interrupt pending futures (track them in a `ConcurrentHashMap<jobId, List<Future<*>>>` field), emit terminal SSE event.
-- [ ] T051 [US2] Add `GET /api/risk-assessments/{id}/ai-suggestions/jobs/{jobId}/events` (returns `Publisher<Event<JobProgressDto>>` / Micronaut `Flux<Event<...>>`) to `AiSuggestionController`. Reads JWT from `?token=` query param (mirrors existing SSE endpoints like `/api/materialized-view-refresh/progress`). Reuses existing `SseEmitter` style if present; otherwise builds a `Sinks.Many` per jobId.
-- [ ] T052 [US2] In `AiSuggestionJobService.processOne` (T035), after each completed requirement publish an event `{requirementId, band, completedCount, totalCount, failedCount}` to the job's SSE sink. On `finalize` and `cancel`, publish terminal event `{status, totalCostUsd}` and complete the sink.
-- [ ] T053 [US2] Add `JobEventSinkRegistry` `@Singleton` (`src/backendng/src/main/kotlin/com/secman/service/JobEventSinkRegistry.kt`) holding per-job `Sinks.Many<JobProgressDto>` with cleanup after terminal event + 60s grace.
-- [ ] T054 [US2] Extend `AiPrefillModal.tsx` (`src/frontend/src/components/AiPrefillModal.tsx`): after job starts, open `EventSource` to `/api/risk-assessments/{id}/ai-suggestions/jobs/{jobId}/events?token=<jwt>`; show counter `12 / 87 · 3 HIGH · 6 MEDIUM · 3 LOW`; replace Start button with Cancel that calls DELETE; on terminal event close EventSource, refresh suggestion list in parent, close modal.
-- [ ] T055 [US2] Extend `src/frontend/src/services/aiSuggestions.ts` with `cancelJob(assessmentId, jobId)` and an `openJobEventStream(assessmentId, jobId, jwt): EventSource` helper.
+- [x] T049 [US2] Add `DELETE /api/risk-assessments/{id}/ai-suggestions/jobs/{jobId}` to `AiSuggestionController` → `jobService.cancelJob(jobId, auth)` → 204.
+- [x] T050 [US2] Implement `AiSuggestionJobService.cancelJob(jobId, auth)` in `src/backendng/src/main/kotlin/com/secman/service/AiSuggestionJobService.kt`: ownership check, set `status=CANCELLED`, `finishedAt=now`, interrupt pending futures (track them in a `ConcurrentHashMap<jobId, List<Future<*>>>` field), emit terminal SSE event.
+- [x] T051 [US2] Add `GET /api/risk-assessments/{id}/ai-suggestions/jobs/{jobId}/events` (returns `Publisher<Event<JobProgressDto>>` / Micronaut `Flux<Event<...>>`) to `AiSuggestionController`. Reads JWT from `?token=` query param (mirrors existing SSE endpoints like `/api/materialized-view-refresh/progress`). Reuses existing `SseEmitter` style if present; otherwise builds a `Sinks.Many` per jobId.
+- [x] T052 [US2] In `AiSuggestionJobService.processOne` (T035), after each completed requirement publish an event `{requirementId, band, completedCount, totalCount, failedCount}` to the job's SSE sink. On `finalize` and `cancel`, publish terminal event `{status, totalCostUsd}` and complete the sink.
+- [x] T053 [US2] Add `JobEventSinkRegistry` `@Singleton` (`src/backendng/src/main/kotlin/com/secman/service/JobEventSinkRegistry.kt`) holding per-job `Sinks.Many<JobProgressDto>` with cleanup after terminal event + 60s grace.
+- [x] T054 [US2] Extend `AiPrefillModal.tsx` (`src/frontend/src/components/AiPrefillModal.tsx`): after job starts, open `EventSource` to `/api/risk-assessments/{id}/ai-suggestions/jobs/{jobId}/events?token=<jwt>`; show counter `12 / 87 · 3 HIGH · 6 MEDIUM · 3 LOW`; replace Start button with Cancel that calls DELETE; on terminal event close EventSource, refresh suggestion list in parent, close modal.
+- [x] T055 [US2] Extend `src/frontend/src/services/aiSuggestions.ts` with `cancelJob(assessmentId, jobId)` and an `openJobEventStream(assessmentId, jobId, jwt): EventSource` helper.
 
 **Checkpoint US2**: SECCHAMPION can watch live progress, cancel safely.
 
@@ -171,12 +171,12 @@
 
 ### Implementation
 
-- [ ] T058 [US3] Add `POST /api/risk-assessments/{id}/ai-suggestions/clear-low-confidence` to `AiSuggestionController` → `clearLowConfidenceService.clear(assessmentId, auth)` → 200 `{deletedResponseCount, deletedSuggestionCount}`.
-- [ ] T059 [US3] Implement `AiSuggestionJobService.clearLowConfidence(assessmentId, auth)` (`@Transactional`): finds all Responses with `source=AI_GENERATED` AND linked `AiAnswerSuggestion.confidenceBand=LOW`; deletes those Responses; counts and returns. Suggestions remain for audit (status still APPLIED, but no Response — that's fine for history).
-- [ ] T060 [US3] Add "Clear LOW" button to header of `src/frontend/src/components/AssessmentPerformance.tsx` (only visible when any LOW AI_GENERATED row exists). Opens confirm dialog "Delete N low-confidence AI drafts? Your edits are not affected." → calls service → refetches.
-- [ ] T061 [US3] Extend `AiPrefillModal.tsx` (`src/frontend/src/components/AiPrefillModal.tsx`): when opening for re-run on an assessment with any AI_EDITED rows, show a checkbox "Force re-run on rows I've edited (default off)" → passes `force: true` in request body.
-- [ ] T062 [US3] Add segmented coverage strip at top of `src/frontend/src/components/AssessmentPerformance.tsx`: progress bar split into 4 segments (HIGH green / MEDIUM amber / LOW red / no suggestion grey) — count derived from suggestion list + total requirement count. Hover tooltip lists requirement IDs in each segment.
-- [ ] T063 [US3] Add confidence filter chips ("All / HIGH / MEDIUM / LOW / No AI") next to the existing compliant/non-compliant filter in `src/frontend/src/components/AssessmentPerformance.tsx`. Filters the visible requirement cards.
+- [x] T058 [US3] Add `POST /api/risk-assessments/{id}/ai-suggestions/clear-low-confidence` to `AiSuggestionController` → `clearLowConfidenceService.clear(assessmentId, auth)` → 200 `{deletedResponseCount, deletedSuggestionCount}`.
+- [x] T059 [US3] Implement `AiSuggestionJobService.clearLowConfidence(assessmentId, auth)` (`@Transactional`): finds all Responses with `source=AI_GENERATED` AND linked `AiAnswerSuggestion.confidenceBand=LOW`; deletes those Responses; counts and returns. Suggestions remain for audit (status still APPLIED, but no Response — that's fine for history).
+- [x] T060 [US3] Add "Clear LOW" button to header of `src/frontend/src/components/AssessmentPerformance.tsx` (only visible when any LOW AI_GENERATED row exists). Opens confirm dialog "Delete N low-confidence AI drafts? Your edits are not affected." → calls service → refetches.
+- [x] T061 [US3] Extend `AiPrefillModal.tsx` (`src/frontend/src/components/AiPrefillModal.tsx`): when opening for re-run on an assessment with any AI_EDITED rows, show a checkbox "Force re-run on rows I've edited (default off)" → passes `force: true` in request body.
+- [x] T062 [US3] Add segmented coverage strip at top of `src/frontend/src/components/AssessmentPerformance.tsx`: progress bar split into 4 segments (HIGH green / MEDIUM amber / LOW red / no suggestion grey) — count derived from suggestion list + total requirement count. Hover tooltip lists requirement IDs in each segment.
+- [x] T063 [US3] Add confidence filter chips ("All / HIGH / MEDIUM / LOW / No AI") next to the existing compliant/non-compliant filter in `src/frontend/src/components/AssessmentPerformance.tsx`. Filters the visible requirement cards.
 
 **Checkpoint US3**: SECCHAMPION can bulk-clear LOW, safely re-run, see coverage at a glance.
 
@@ -194,10 +194,10 @@
 
 ### Implementation
 
-- [ ] T065 [US4] Update `ResponseController.requirementsWithResponses` in `src/backendng/src/main/kotlin/com/secman/controller/ResponseController.kt`: enrich the returned DTO with `source`, `aiSuggestionId`, and nested `aiSuggestion` payload (model, band, confidence as displayed %, citations, rationale) joined from `AiAnswerSuggestionRepository.findLatestAppliedByAssessmentAndRequirement`.
-- [ ] T066 [US4] Update `RequirementWithResponse` DTO in `src/backendng/src/main/kotlin/com/secman/dto/` (or wherever defined) to include the new fields.
-- [ ] T067 [US4] In `src/frontend/src/components/AssessmentPerformance.tsx` `mode="review"` branch, render the provenance badge (✦ Manual / ✦ AI-generated / ✦ AI-edited) and, for AI-touched rows, an inline expandable "Audit details" block with model + confidence band + citations list.
-- [ ] T068 [US4] Create `docs/AI_RISK_ASSESSMENT.md`: explains the feature, configuration, role gating, audit trail, prompt versioning, redaction guarantees. Links to spec.md and plan.md in this directory.
+- [x] T065 [US4] Update `ResponseController.requirementsWithResponses` in `src/backendng/src/main/kotlin/com/secman/controller/ResponseController.kt`: enrich the returned DTO with `source`, `aiSuggestionId`, and nested `aiSuggestion` payload (model, band, confidence as displayed %, citations, rationale) joined from `AiAnswerSuggestionRepository.findLatestAppliedByAssessmentAndRequirement`.
+- [x] T066 [US4] Update `RequirementWithResponse` DTO in `src/backendng/src/main/kotlin/com/secman/dto/` (or wherever defined) to include the new fields.
+- [x] T067 [US4] In `src/frontend/src/components/AssessmentPerformance.tsx` `mode="review"` branch, render the provenance badge (✦ Manual / ✦ AI-generated / ✦ AI-edited) and, for AI-touched rows, an inline expandable "Audit details" block with model + confidence band + citations list.
+- [x] T068 [US4] Create `docs/AI_RISK_ASSESSMENT.md`: explains the feature, configuration, role gating, audit trail, prompt versioning, redaction guarantees. Links to spec.md and plan.md in this directory.
 
 **Checkpoint US4**: Audit transparency complete; reviewer can defend AI-assisted answers.
 
@@ -207,20 +207,20 @@
 
 **Purpose**: Hardening, caching, retries, prompt versioning, mandatory test gates.
 
-- [ ] T069 [P] Wire Caffeine cache into `ComplianceAssistantService` (`src/backendng/src/main/kotlin/com/secman/service/ComplianceAssistantService.kt`): cache `suggest` results by `hash(systemPrompt + userPrompt + model)` with 24h TTL, max 10_000 entries. Mirror `TranslationService` cache idiom. Add a "cacheHit" boolean to `SuggestionResult` for observability.
-- [ ] T070 [P] Add retry-with-exp-backoff to `ComplianceAssistantService.callOpenRouter`: 3 attempts, 1s/2s/4s delays, only on HTTP 5xx or `IOException`. Fail-through to `SuggestionResult.failed(...)` after final attempt; job records FAILED suggestion, continues with remaining requirements.
-- [ ] T071 [P] Add per-prompt-version handling to `ComplianceAssistantService.buildPrompt`: extract `VERSION:` line at startup, hold in a field, write into every `AiAnswerSuggestion.promptVersion`. Verified by existing `PromptBuilderTest`.
+- [x] T069 [P] Wire Caffeine cache into `ComplianceAssistantService` (`src/backendng/src/main/kotlin/com/secman/service/ComplianceAssistantService.kt`): cache `suggest` results by `hash(systemPrompt + userPrompt + model)` with 24h TTL, max 10_000 entries. Mirror `TranslationService` cache idiom. Add a "cacheHit" boolean to `SuggestionResult` for observability.
+- [x] T070 [P] Add retry-with-exp-backoff to `ComplianceAssistantService.callOpenRouter`: 3 attempts, 1s/2s/4s delays, only on HTTP 5xx or `IOException`. Fail-through to `SuggestionResult.failed(...)` after final attempt; job records FAILED suggestion, continues with remaining requirements.
+- [x] T071 [P] Add per-prompt-version handling to `ComplianceAssistantService.buildPrompt`: extract `VERSION:` line at startup, hold in a field, write into every `AiAnswerSuggestion.promptVersion`. Verified by existing `PromptBuilderTest`.
 - [ ] T072 [P] Add cost-cap abort path test `CostCapAbortIntegrationTest` in `src/backendng/src/test/kotlin/com/secman/service/CostCapAbortIntegrationTest.kt`: configures `max-cost-per-job-usd=0.001`, runs 5-requirement assessment, asserts job status=FAILED with `errorMessage` mentioning cost-cap, partial APPLIED rows present, future requirements not processed.
 - [ ] T073 [P] Add concurrency limit test `GlobalConcurrencyTest` in `src/backendng/src/test/kotlin/com/secman/service/GlobalConcurrencyTest.kt`: configures `max-concurrent-jobs-global=2`, starts 2 long-running jobs (mocked OpenRouter with artificial latency), attempts 3rd → expects HTTP 429 (or 409) with clear message.
-- [ ] T074 [P] Add scheduled cleanup `@Scheduled(fixedRate="1h")` to `AiSuggestionJobService` (`src/backendng/src/main/kotlin/com/secman/service/AiSuggestionJobService.kt`): marks any RUNNING job with `lastHeartbeatAt > 30 min ago` as FAILED ("heartbeat stale"). Mirrors ExportJobService pattern.
-- [ ] T075 Run `./gradlew :backendng:test` — all unit + integration tests must pass.
-- [ ] T076 Run `./gradlew build` — must complete clean (CLAUDE.md §5).
+- [x] T074 [P] Add scheduled cleanup `@Scheduled(fixedRate="1h")` to `AiSuggestionJobService` (`src/backendng/src/main/kotlin/com/secman/service/AiSuggestionJobService.kt`): marks any RUNNING job with `lastHeartbeatAt > 30 min ago` as FAILED ("heartbeat stale"). Mirrors ExportJobService pattern.
+- [x] T075 Run `./gradlew :backendng:test` — all unit + integration tests must pass.
+- [x] T076 Run `./gradlew build` — must complete clean (CLAUDE.md §5).
 - [ ] T077 Run `./scripts/startbackenddev.sh`, verify clean startup (no Micronaut bean errors, no Flyway errors). Stop after verification. (CLAUDE.md §5.)
-- [ ] T078 Create Playwright spec `tests/e2e/ai-risk-assessment.spec.ts` covering US1 happy path: login as SECCHAMPION → create assessment → click AI Pre-fill → wait for SSE complete → verify 3 cards show ✦ AI-generated badge + confidence chip + ≥1 citation → edit one card → save → verify badge flips to ✦ AI-edited → submit → verify status COMPLETED.
+- [x] T078 Create Playwright spec `tests/e2e/ai-risk-assessment.spec.ts` covering US1 happy path: login as SECCHAMPION → create assessment → click AI Pre-fill → wait for SSE complete → verify 3 cards show ✦ AI-generated badge + confidence chip + ≥1 citation → edit one card → save → verify badge flips to ✦ AI-edited → submit → verify status COMPLETED.
 - [ ] T079 Run `tests/e2e/run-e2e.sh tests/e2e/ai-risk-assessment.spec.ts` — must pass.
 - [ ] T080 Run `/e2ejs` (admin AND normal-user) — must report **0 JS errors** for both roles. (CLAUDE.md §7 mandatory gate.)
 - [ ] T081 Run `/e2evulnexception` — must remain 0 failures (regression gate). (CLAUDE.md §7 mandatory gate.)
-- [ ] T082 Update CLAUDE.md "Recent Changes" section with a bullet describing feature 088 (entities, config keys, flag default OFF, redaction guarantee, audit trail).
+- [x] T082 Update CLAUDE.md "Recent Changes" section with a bullet describing feature 088 (entities, config keys, flag default OFF, redaction guarantee, audit trail).
 
 ---
 

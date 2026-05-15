@@ -181,6 +181,17 @@ Triggered by `/e2eexception`, `/admin-asset-e2e`, `/e2ejs`, `/e2evulnexception` 
 
 ## Recent Changes
 
+- **Feature 088** — AI-assisted risk-assessment answers (V215). ADMIN and SECCHAMPION users (the assessment's assessor or requestor; ADMIN can act on any) can trigger an OpenRouter LLM to pre-fill compliance answers as draft `Response` rows with confidence + citations. Human always reviews and submits.
+  - Feature flag `secman.ai.risk-assessment.enabled` (env: `AI_RISK_ASSESSMENT_ENABLED`, default `false`). `OPENROUTER_API_KEY` resolved via `pass-cli`.
+  - Per-job hard cost cap `secman.ai.risk-assessment.max-cost-per-job-usd` (default 5 USD) plus global concurrency cap `max-concurrent-jobs-global` (default 2). Pre-flight rejects over-budget runs; mid-flight aborts and marks `FAILED`, retaining partial successes.
+  - New endpoints under `/api/risk-assessments/{id}/ai-suggestions/...`: `POST /jobs`, `GET /jobs/{jobId}`, `DELETE /jobs/{jobId}` (cancel), `GET /jobs/{jobId}/events` (SSE), `GET` (list applied), `POST /clear-low-confidence`. All `@Secured("ADMIN","SECCHAMPION")` plus `AssessmentOwnershipGuard`.
+  - Provenance: new `response.source` column (`MANUAL | AI_GENERATED | AI_EDITED`, indexed, backfilled `MANUAL`) plus `response.ai_suggestion_id` FK. `ResponseController` flips `AI_GENERATED → AI_EDITED` whenever a human changes answerType or comment.
+  - Confidence band derivation: `score = 0.5·self_reported + 0.3·min(valid_citations, 3)/3 + 0.2·answer_is_not_UNKNOWN`. HIGH requires ≥1 valid citation (downgrade rule). Stored both raw + band so thresholds can retune without re-running the model.
+  - Redaction (NFR-4): `PromptBuilder.redact()` scrubs emails, IPv4 addresses, and `*.internal/*.local/*.corp/*.lan/*.intranet` URLs from the prompt regardless of caller hygiene. Locked by `PromptBuilderTest`.
+  - Re-run safety: `startJob` excludes `source = AI_EDITED` rows unless `force = true`. `clear-low-confidence` only touches `AI_GENERATED` rows whose linked suggestion has `confidenceBand = LOW`.
+  - Mirrors `TranslationService` (JDK HttpClient + dedicated `ai` executor + Caffeine 24h cache) and `ExportJobService` (DB-backed job, IO executor, heartbeat, scheduled stale-job reclaim).
+  - Docs: `docs/AI_RISK_ASSESSMENT.md`; spec/plan/tasks under `specs/088-ai-risk-assessment-answers/`.
+
 - **CrowdStrike stale-vuln cleanup hardening** (V213, V214). Closes the silent-remediation gap when a host's only matching vulnerability gets patched and it drops out of the next CLI batch:
   - `vulnerability.source` column (V213) replaces owner-based scoping in the reconcile sweep — CrowdStrike vulns on human-owned assets are now cleaned up. Canonical literals: `com.secman.constants.VulnerabilitySources` (`CROWDSTRIKE`, `XLSX`, `CLI_MANUAL`, `UNKNOWN`).
   - `crowdstrike_severity_history` table (V214) persists the union of all severities ever queried; the reconcile sweeps that union, not just today's `--severity` flag. Drift across runs no longer leaves stale rows.

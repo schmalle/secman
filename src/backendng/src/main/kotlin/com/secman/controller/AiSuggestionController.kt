@@ -3,12 +3,14 @@ package com.secman.controller
 import com.secman.dto.AiJobStatusDto
 import com.secman.dto.AppliedSuggestionDto
 import com.secman.dto.ClearLowConfidenceResponse
+import com.secman.dto.JobProgressEvent
 import com.secman.dto.StartAiJobRequest
 import com.secman.dto.StartAiJobResponse
 import com.secman.service.AiSuggestionJobService
 import com.secman.service.AssessmentOwnershipGuard
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.HttpStatus
+import io.micronaut.http.MediaType
 import io.micronaut.http.annotation.Body
 import io.micronaut.http.annotation.Controller
 import io.micronaut.http.annotation.Delete
@@ -16,11 +18,13 @@ import io.micronaut.http.annotation.Get
 import io.micronaut.http.annotation.PathVariable
 import io.micronaut.http.annotation.Post
 import io.micronaut.http.exceptions.HttpStatusException
+import io.micronaut.http.sse.Event
 import io.micronaut.scheduling.TaskExecutors
 import io.micronaut.scheduling.annotation.ExecuteOn
 import io.micronaut.security.annotation.Secured
 import io.micronaut.security.authentication.Authentication
 import io.micronaut.serde.annotation.Serdeable
+import org.reactivestreams.Publisher
 import org.slf4j.LoggerFactory
 
 /**
@@ -73,6 +77,30 @@ open class AiSuggestionController(
         val cancelled = jobService.cancelJob(jobId)
         return if (cancelled) HttpResponse.noContent()
         else HttpResponse.status(HttpStatus.CONFLICT)
+    }
+
+    /**
+     * SSE: live progress events for an AI pre-fill job. One event per
+     * completed requirement plus a terminal event (COMPLETED / FAILED /
+     * CANCELLED). Stream completes after the terminal event.
+     *
+     * Auth: the standard `@Secured("ADMIN","SECCHAMPION")` annotation on
+     * this controller is enforced by the Micronaut filter chain on the
+     * initial GET. EventSource clients pass the JWT in the `?token=` query
+     * param (browsers can't set headers on EventSource), handled by the
+     * existing SSE auth filter. We additionally run the ownership guard so
+     * a SECCHAMPION cannot subscribe to a peer's job.
+     */
+    @Get(value = "/jobs/{jobId}/events", produces = [MediaType.TEXT_EVENT_STREAM])
+    open fun streamJobEvents(
+        @PathVariable id: Long,
+        @PathVariable jobId: Long,
+        authentication: Authentication
+    ): Publisher<Event<JobProgressEvent>> {
+        ownershipGuard.check(id, authentication)
+        return jobService.getProgressStream(jobId).map { ev ->
+            Event.of(ev).id(ev.jobId.toString()).name(ev.type.lowercase())
+        }
     }
 
     @Get

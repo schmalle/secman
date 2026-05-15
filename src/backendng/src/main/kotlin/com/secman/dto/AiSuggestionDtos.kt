@@ -124,3 +124,21 @@ data class AppliedSuggestionDto(
 data class ClearLowConfidenceResponse(
     val deletedResponseCount: Long
 )
+
+/**
+ * SSE event payload emitted by AiSuggestionJobService.processOneRequirement
+ * and on terminal transitions. The frontend consumes one event per finished
+ * requirement plus a final event when the job ends.
+ */
+@Serdeable
+data class JobProgressEvent(
+    val jobId: Long,
+    val type: String,                     // "PROGRESS" | "COMPLETED" | "FAILED" | "CANCELLED"
+    val requirementId: Long? = null,
+    val band: ConfidenceBand? = null,
+    val completedCount: Int,
+    val failedCount: Int,
+    val totalCount: Int,
+    val totalCostUsd: BigDecimal? = null,
+    val errorMessage: String? = null
+)

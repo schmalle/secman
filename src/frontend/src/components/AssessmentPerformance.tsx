@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { authenticatedGet, authenticatedPost, authenticatedPut } from '../utils/auth';
-import { listAppliedSuggestions, type AppliedSuggestion } from '../services/aiSuggestions';
+import { clearLowConfidence, listAppliedSuggestions, type AppliedSuggestion, type ConfidenceBand } from '../services/aiSuggestions';
 import AiSuggestionPanel from './AiSuggestionPanel';
 
 interface Asset {
@@ -108,6 +108,8 @@ const AssessmentPerformance: React.FC<AssessmentPerformanceProps> = ({
   // Feature 088 — AI suggestions per requirement and local provenance overrides.
   const [aiSuggestions, setAiSuggestions] = useState<Record<number, AppliedSuggestion>>({});
   const [provenanceOverrides, setProvenanceOverrides] = useState<Record<number, 'AI_EDITED'>>({});
+  const [confidenceFilter, setConfidenceFilter] = useState<'ALL' | ConfidenceBand | 'NONE'>('ALL');
+  const [clearingLow, setClearingLow] = useState(false);
 
   useEffect(() => {
     fetchAssessmentData();
@@ -350,21 +352,57 @@ const AssessmentPerformance: React.FC<AssessmentPerformanceProps> = ({
   };
 
   const getFilteredRequirements = () => {
-    if (filterStatus === 'all') return requirementsWithResponses;
-    
-    return requirementsWithResponses.filter(item => {
-      const answerType = responses[item.requirement.id]?.answerType;
-      switch (filterStatus) {
-        case 'compliant':
-          return answerType === 'YES';
-        case 'non-compliant':
-          return answerType === 'NO';
-        case 'not-applicable':
-          return answerType === 'N_A';
-        default:
-          return true;
-      }
-    });
+    let base = requirementsWithResponses;
+    if (filterStatus !== 'all') {
+      base = base.filter(item => {
+        const answerType = responses[item.requirement.id]?.answerType;
+        switch (filterStatus) {
+          case 'compliant':
+            return answerType === 'YES';
+          case 'non-compliant':
+            return answerType === 'NO';
+          case 'not-applicable':
+            return answerType === 'N_A';
+          default:
+            return true;
+        }
+      });
+    }
+    if (confidenceFilter !== 'ALL') {
+      base = base.filter(item => {
+        const s = aiSuggestions[item.requirement.id];
+        if (confidenceFilter === 'NONE') return !s;
+        return s?.confidenceBand === confidenceFilter;
+      });
+    }
+    return base;
+  };
+
+  // Feature 088 — segment counts for the coverage strip and Clear-LOW guard.
+  const coverage = (() => {
+    let high = 0, med = 0, low = 0, none = 0;
+    for (const item of requirementsWithResponses) {
+      const s = aiSuggestions[item.requirement.id];
+      if (!s) none++;
+      else if (s.confidenceBand === 'HIGH') high++;
+      else if (s.confidenceBand === 'MEDIUM') med++;
+      else low++;
+    }
+    return { high, med, low, none, total: requirementsWithResponses.length };
+  })();
+
+  const handleClearLow = async () => {
+    if (coverage.low === 0) return;
+    if (!window.confirm(`Delete ${coverage.low} low-confidence AI drafts? Your edits are not affected.`)) return;
+    setClearingLow(true);
+    try {
+      await clearLowConfidence(assessmentId);
+      await fetchAssessmentData();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to clear low-confidence drafts');
+    } finally {
+      setClearingLow(false);
+    }
   };
 
   if (loading) {
@@ -491,6 +529,47 @@ const AssessmentPerformance: React.FC<AssessmentPerformanceProps> = ({
                 </button>
               </li>
             </ul>
+
+            {/* Feature 088 — AI coverage strip + confidence filter + Clear LOW */}
+            {currentTab === 'assessment' && (coverage.high + coverage.med + coverage.low) > 0 && (
+              <div className="mb-3">
+                <div className="d-flex justify-content-between align-items-center mb-1">
+                  <small className="text-muted">AI coverage</small>
+                  <small className="text-muted">
+                    {coverage.high + coverage.med + coverage.low} of {coverage.total} requirements drafted by AI
+                  </small>
+                </div>
+                <div className="progress" style={{ height: '0.6rem' }}>
+                  <div className="progress-bar bg-success" style={{ width: `${(coverage.high / coverage.total) * 100}%` }} title={`${coverage.high} HIGH`} />
+                  <div className="progress-bar bg-warning" style={{ width: `${(coverage.med / coverage.total) * 100}%` }} title={`${coverage.med} MEDIUM`} />
+                  <div className="progress-bar bg-danger" style={{ width: `${(coverage.low / coverage.total) * 100}%` }} title={`${coverage.low} LOW`} />
+                </div>
+                <div className="mt-2 d-flex gap-2 flex-wrap align-items-center">
+                  <small className="text-muted me-1">Filter:</small>
+                  {(['ALL', 'HIGH', 'MEDIUM', 'LOW', 'NONE'] as const).map(b => (
+                    <button
+                      key={b}
+                      type="button"
+                      className={`btn btn-sm ${confidenceFilter === b ? 'btn-secondary' : 'btn-outline-secondary'}`}
+                      onClick={() => setConfidenceFilter(b)}
+                    >
+                      {b === 'ALL' ? 'All' : b === 'NONE' ? 'No AI' : b}
+                    </button>
+                  ))}
+                  {coverage.low > 0 && mode === 'perform' && (
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-danger ms-auto"
+                      onClick={handleClearLow}
+                      disabled={clearingLow}
+                      title="Delete only LOW-confidence AI drafts — your edits are not affected"
+                    >
+                      {clearingLow ? 'Clearing…' : `Clear ${coverage.low} LOW drafts`}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Filter for Review Mode */}
             {mode === 'review' && currentTab === 'assessment' && (

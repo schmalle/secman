@@ -1,9 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   startAiJob,
   pollJobUntilTerminal,
   cancelAiJob,
+  getAiJob,
+  openJobEventStream,
   type AiJobStatusDto,
+  type ConfidenceBand,
+  type JobProgressEvent,
   type SuggestionScope,
 } from '../services/aiSuggestions';
 
@@ -35,21 +39,72 @@ const AiPrefillModal: React.FC<Props> = ({
   const [jobId, setJobId] = useState<number | null>(null);
   const [status, setStatus] = useState<AiJobStatusDto | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [bandCounts, setBandCounts] = useState<Record<ConfidenceBand, number>>({ HIGH: 0, MEDIUM: 0, LOW: 0 });
+  const esRef = useRef<EventSource | null>(null);
 
   const running = !!jobId && status && status.status !== 'COMPLETED' && status.status !== 'FAILED' && status.status !== 'CANCELLED';
 
-  // Kick off polling once we have a jobId.
+  // Once we have a jobId, prefer SSE; fall back to polling if it errors.
   useEffect(() => {
     if (!jobId) return;
     let cancelled = false;
-    pollJobUntilTerminal(
-      assessmentId,
-      jobId,
-      s => { if (!cancelled) setStatus(s); }
-    )
-      .then(() => { if (!cancelled) onCompleted(); })
-      .catch(e => { if (!cancelled) setError(e.message ?? 'Polling failed'); });
-    return () => { cancelled = true; };
+    let pollPromise: Promise<unknown> | null = null;
+
+    const startPolling = () => {
+      pollPromise = pollJobUntilTerminal(
+        assessmentId,
+        jobId,
+        s => { if (!cancelled) setStatus(s); }
+      )
+        .then(() => { if (!cancelled) onCompleted(); })
+        .catch(e => { if (!cancelled) setError(e.message ?? 'Polling failed'); });
+    };
+
+    try {
+      const es = openJobEventStream(assessmentId, jobId);
+      esRef.current = es;
+      es.onmessage = (msg: MessageEvent) => {
+        try {
+          const ev = JSON.parse(msg.data) as JobProgressEvent;
+          setStatus(prev => prev ? {
+            ...prev,
+            completedCount: ev.completedCount,
+            failedCount: ev.failedCount,
+            totalCount: ev.totalCount,
+            totalCostUsd: ev.totalCostUsd ?? prev.totalCostUsd,
+            progressPercent: ev.totalCount === 0 ? 0 : Math.round(((ev.completedCount + ev.failedCount) * 100) / ev.totalCount),
+            status: ev.type === 'PROGRESS' ? prev.status : ev.type,
+            errorMessage: ev.errorMessage ?? prev.errorMessage,
+          } : prev);
+          if (ev.band && ev.type === 'PROGRESS') {
+            setBandCounts(prev => ({ ...prev, [ev.band as ConfidenceBand]: (prev[ev.band as ConfidenceBand] ?? 0) + 1 }));
+          }
+          if (ev.type === 'COMPLETED' || ev.type === 'FAILED' || ev.type === 'CANCELLED') {
+            es.close();
+            if (!cancelled) {
+              // Refresh final status once before signalling completion.
+              getAiJob(assessmentId, jobId).then(final => {
+                if (!cancelled) setStatus(final);
+                if (!cancelled) onCompleted();
+              }).catch(() => { if (!cancelled) onCompleted(); });
+            }
+          }
+        } catch {
+          // ignore malformed events; the polling fallback below catches anything we miss
+        }
+      };
+      es.onerror = () => {
+        es.close();
+        if (!cancelled && !pollPromise) startPolling();
+      };
+    } catch {
+      startPolling();
+    }
+
+    return () => {
+      cancelled = true;
+      esRef.current?.close();
+    };
   }, [assessmentId, jobId, onCompleted]);
 
   const handleStart = async () => {
@@ -156,6 +211,13 @@ const AiPrefillModal: React.FC<Props> = ({
                     {status.progressPercent}%
                   </div>
                 </div>
+                {(bandCounts.HIGH + bandCounts.MEDIUM + bandCounts.LOW) > 0 && (
+                  <div className="small mt-1">
+                    <span className="badge bg-success me-1">{bandCounts.HIGH} HIGH</span>
+                    <span className="badge bg-warning text-dark me-1">{bandCounts.MEDIUM} MED</span>
+                    <span className="badge bg-danger me-1">{bandCounts.LOW} LOW</span>
+                  </div>
+                )}
                 {status.estimatedCostUsd && (
                   <div className="small text-muted mt-1">
                     Estimated cost ≈ ${status.estimatedCostUsd}; spent ${status.totalCostUsd}

@@ -16,6 +16,7 @@ import com.secman.dto.AiJobStatusDto
 import com.secman.dto.AppliedSuggestionDto
 import com.secman.dto.AssessmentContext
 import com.secman.dto.Citation
+import com.secman.dto.JobProgressEvent
 import com.secman.dto.StartAiJobRequest
 import com.secman.dto.StartAiJobResponse
 import com.secman.dto.SuggestionResult
@@ -37,6 +38,8 @@ import jakarta.persistence.EntityManager
 import jakarta.transaction.Transactional
 import jakarta.transaction.Transactional.TxType
 import org.slf4j.LoggerFactory
+import reactor.core.publisher.Flux
+import reactor.core.publisher.Sinks
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.time.LocalDateTime
@@ -81,6 +84,14 @@ open class AiSuggestionJobService(
      */
     private val runningFutures = ConcurrentHashMap<Long, MutableList<Future<*>>>()
     private val cancelFlags = ConcurrentHashMap<Long, AtomicBoolean>()
+
+    /**
+     * Per-job SSE event sink. Subscribers (the SSE controller) receive
+     * one event per completed requirement plus a terminal event when the
+     * job ends. Sink is removed shortly after the terminal event so we
+     * don't leak memory if the client disconnects late.
+     */
+    private val progressSinks = ConcurrentHashMap<Long, Sinks.Many<JobProgressEvent>>()
 
     /**
      * Validates and starts an AI pre-fill job. Returns the persisted jobId so
@@ -152,6 +163,7 @@ open class AiSuggestionJobService(
 
         cancelFlags[saved.id!!] = AtomicBoolean(false)
         runningFutures[saved.id!!] = mutableListOf()
+        progressSinks[saved.id!!] = Sinks.many().multicast().onBackpressureBuffer()
 
         // Capture only what the background needs (IDs) — no entity references
         // crossing the transaction boundary.
@@ -245,6 +257,7 @@ open class AiSuggestionJobService(
         j.errorMessage = errorMessage
         j.finishedAt = LocalDateTime.now()
         aiJobRepository.update(j)
+        emitTerminal(j, "FAILED", errorMessage)
     }
 
     @Transactional(TxType.REQUIRES_NEW)
@@ -269,6 +282,7 @@ open class AiSuggestionJobService(
         j.status = AiSuggestionJobStatus.COMPLETED
         j.finishedAt = LocalDateTime.now()
         aiJobRepository.update(j)
+        emitTerminal(j, "COMPLETED", null)
     }
 
     /**
@@ -317,6 +331,7 @@ open class AiSuggestionJobService(
             j.completedCount++
             j.lastHeartbeatAt = LocalDateTime.now()
             aiJobRepository.update(j)
+            emitProgress(j, requirementId, result.confidenceBand)
         }
 
         // 4) upsert the draft Response. UNKNOWN answer → no Response row
@@ -382,6 +397,7 @@ open class AiSuggestionJobService(
             j.failedCount++
             j.lastHeartbeatAt = LocalDateTime.now()
             aiJobRepository.update(j)
+            emitProgress(j, requirementId, com.secman.domain.ConfidenceBand.LOW)
         }
     }
 
@@ -434,8 +450,19 @@ open class AiSuggestionJobService(
         aiJobRepository.update(j)
         cancelFlags[jobId]?.set(true)
         runningFutures[jobId]?.forEach { it.cancel(true) }
+        emitTerminal(j, "CANCELLED", "Cancelled by user")
         log.info("AI job {} cancelled by user", jobId)
         return true
+    }
+
+    /**
+     * Reactor Flux exposing per-requirement progress + a terminal event for
+     * a single job. Returns an empty stream if the job is unknown or already
+     * terminal (the controller follows up with the cached job status).
+     */
+    fun getProgressStream(jobId: Long): Flux<JobProgressEvent> {
+        val sink = progressSinks[jobId] ?: return Flux.empty()
+        return sink.asFlux()
     }
 
     @Transactional
@@ -541,5 +568,49 @@ open class AiSuggestionJobService(
         val a = entityManager.find(RiskAssessment::class.java, assessmentId)
             ?: throw HttpStatusException(HttpStatus.NOT_FOUND, "Assessment $assessmentId not found")
         return contextBuilder.build(a)
+    }
+
+    // --- SSE emit helpers ---------------------------------------------------
+
+    private fun emitProgress(
+        job: AiSuggestionJob,
+        requirementId: Long,
+        band: com.secman.domain.ConfidenceBand
+    ) {
+        val sink = progressSinks[job.id] ?: return
+        sink.tryEmitNext(
+            JobProgressEvent(
+                jobId = job.id!!,
+                type = "PROGRESS",
+                requirementId = requirementId,
+                band = band,
+                completedCount = job.completedCount,
+                failedCount = job.failedCount,
+                totalCount = job.totalCount,
+                totalCostUsd = job.totalCostUsd
+            )
+        )
+    }
+
+    private fun emitTerminal(job: AiSuggestionJob, type: String, errorMessage: String?) {
+        val sink = progressSinks[job.id] ?: return
+        sink.tryEmitNext(
+            JobProgressEvent(
+                jobId = job.id!!,
+                type = type,
+                requirementId = null,
+                band = null,
+                completedCount = job.completedCount,
+                failedCount = job.failedCount,
+                totalCount = job.totalCount,
+                totalCostUsd = job.totalCostUsd,
+                errorMessage = errorMessage
+            )
+        )
+        sink.tryEmitComplete()
+        // Best-effort cleanup; if a slow SSE client subscribes after the
+        // terminal event, getProgressStream returns Flux.empty() and the
+        // client falls back to a single GET /jobs/{jobId} to see final state.
+        progressSinks.remove(job.id)
     }
 }

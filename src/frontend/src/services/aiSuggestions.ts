@@ -109,8 +109,8 @@ export async function clearLowConfidence(
 }
 
 /**
- * Poll a job to completion. Returns the final status. Caller can pass an
- * onTick callback for UI updates. Used by the modal until SSE lands in US2.
+ * Poll a job to completion. Returns the final status. Used as the SSE
+ * fallback when EventSource isn't available or 5xx-ed.
  */
 export async function pollJobUntilTerminal(
   assessmentId: number,
@@ -129,4 +129,34 @@ export async function pollJobUntilTerminal(
     }
     await new Promise(resolve => setTimeout(resolve, pollMs));
   }
+}
+
+// ---- SSE -----------------------------------------------------------------
+
+export interface JobProgressEvent {
+  jobId: number;
+  type: 'PROGRESS' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
+  requirementId: number | null;
+  band: ConfidenceBand | null;
+  completedCount: number;
+  failedCount: number;
+  totalCount: number;
+  totalCostUsd: string | null;
+  errorMessage: string | null;
+}
+
+/**
+ * Open an EventSource over the SSE endpoint. JWT travels in `?token=` because
+ * EventSource has no API for request headers — same pattern as the existing
+ * `/api/exception-badge-updates` and `/api/materialized-view-refresh/progress`.
+ *
+ * Callers must `.close()` the EventSource when done.
+ */
+export function openJobEventStream(
+  assessmentId: number,
+  jobId: number
+): EventSource {
+  const token = (typeof window !== 'undefined' && localStorage.getItem('authToken')) || '';
+  const url = `${baseUrl(assessmentId)}/jobs/${jobId}/events?token=${encodeURIComponent(token)}`;
+  return new EventSource(url, { withCredentials: true });
 }
