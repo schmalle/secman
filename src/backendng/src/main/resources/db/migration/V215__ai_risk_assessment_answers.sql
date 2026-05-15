@@ -34,7 +34,7 @@ CREATE TABLE ai_suggestion_job (
     CONSTRAINT fk_aijob_assessment FOREIGN KEY (risk_assessment_id)
         REFERENCES risk_assessment(id) ON DELETE CASCADE,
     CONSTRAINT fk_aijob_user FOREIGN KEY (triggered_by_user_id)
-        REFERENCES user(id)
+        REFERENCES users(id)
 );
 
 CREATE TABLE ai_answer_suggestion (

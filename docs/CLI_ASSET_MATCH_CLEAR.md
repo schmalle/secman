@@ -79,7 +79,7 @@ candidate list regardless of percentage.
 | Variable | Required | Purpose |
 |---|---|---|
 | `AWS_ASSET_BUCKET_NAME` | yes (unless `--bucket`) | S3 bucket name |
-| `AWS_BUCKET_KEY_NAME` | yes (unless `--key`) | S3 object key (path to JSON) |
+| `AWS_ASSET_BUCKET_KEY_NAME` | yes (unless `--key`) | S3 object key (path to JSON) |
 | `AWS_REGION` | optional | S3 region (SDK chain fallback otherwise) |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_SESSION_TOKEN` | optional | Standard AWS SDK credentials |
 | `SECMAN_ADMIN_NAME`, `SECMAN_ADMIN_PASS` | yes | Backend auth |
@@ -122,7 +122,7 @@ that exceed the 10 MB cap before downloading them.
 ```bash
 # 1. Configure once.
 export AWS_ASSET_BUCKET_NAME=cov-aws-inventory
-export AWS_BUCKET_KEY_NAME=cov-instances/latest.json
+export AWS_ASSET_BUCKET_KEY_NAME=cov-instances/latest.json
 export AWS_REGION=eu-central-1
 export SECMAN_ADMIN_NAME=$(pass-cli get secman/admin/username)
 export SECMAN_ADMIN_PASS=$(pass-cli get secman/admin/password)

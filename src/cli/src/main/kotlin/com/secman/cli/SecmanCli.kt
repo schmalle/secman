@@ -761,11 +761,11 @@ class SecmanCli {
 
                 S3 source (resolution order, highest priority first):
                   --bucket           or AWS_ASSET_BUCKET_NAME env var (required)
-                  --key              or AWS_BUCKET_KEY_NAME env var   (required)
+                  --key              or AWS_ASSET_BUCKET_KEY_NAME env var   (required)
 
                 Options:
                   --bucket <name>          S3 bucket name (or AWS_ASSET_BUCKET_NAME env var)
-                  --key <path>             S3 object key (or AWS_BUCKET_KEY_NAME env var)
+                  --key <path>             S3 object key (or AWS_ASSET_BUCKET_KEY_NAME env var)
                   --aws-region <region>    AWS region (default: SDK auto-resolution)
                   --aws-profile <name>     AWS credential profile name
                   --aws-access-key-id      AWS access key ID (or AWS_ACCESS_KEY_ID)
@@ -801,7 +801,7 @@ class SecmanCli {
                 Examples:
                   # Local config via env vars, dry run first:
                   export AWS_ASSET_BUCKET_NAME=cov-aws-inventory
-                  export AWS_BUCKET_KEY_NAME=cov-instances/latest.json
+                  export AWS_ASSET_BUCKET_KEY_NAME=cov-instances/latest.json
                   export AWS_REGION=eu-central-1
                   export SECMAN_ADMIN_NAME=admin
                   export SECMAN_ADMIN_PASS=...
@@ -982,7 +982,7 @@ class SecmanCli {
                   AWS_SESSION_TOKEN        AWS session token for temporary credentials
                   AWS_REGION               Default AWS region for S3 operations
                   AWS_ASSET_BUCKET_NAME    S3 bucket for the asset-match-clear snapshot JSON
-                  AWS_BUCKET_KEY_NAME      S3 object key for the asset-match-clear snapshot JSON
+                  AWS_ASSET_BUCKET_KEY_NAME      S3 object key for the asset-match-clear snapshot JSON
 
                 AWS Credential Resolution Priority (highest to lowest):
                   1. Explicit CLI flags (--aws-access-key-id + --aws-secret-access-key)

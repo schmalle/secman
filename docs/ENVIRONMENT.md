@@ -149,7 +149,7 @@ AWS S3 operations (`asset-match-clear`, `manage-user-mappings import-s3`, `list-
 | `AWS_SESSION_TOKEN` | required when using ASIA-prefix temporary credentials |
 | `AWS_REGION` | region for S3 operations (SDK chain fallback otherwise) |
 | `AWS_ASSET_BUCKET_NAME` | S3 bucket name for the `asset-match-clear` snapshot JSON |
-| `AWS_BUCKET_KEY_NAME` | S3 object key for the `asset-match-clear` snapshot JSON |
+| `AWS_ASSET_BUCKET_KEY_NAME` | S3 object key for the `asset-match-clear` snapshot JSON |
 
 ## Templates
 

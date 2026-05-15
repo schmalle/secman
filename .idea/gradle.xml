@@ -14,10 +14,11 @@
             <option value="$PROJECT_DIR$/src/shared" />
           </set>
         </option>
+        <option name="myGradleHome" value="$USER_HOME$/.sdkman/candidates/gradle/current" />
       </GradleProjectSettings>
       <GradleProjectSettings>
         <option name="externalProjectPath" value="$PROJECT_DIR$/src/backendng" />
-        <option name="gradleJvm" value="temurin-25 (2)" />
+        <option name="gradleJvm" value="temurin-25 (3)" />
         <option name="modules">
           <set>
             <option value="$PROJECT_DIR$" />
@@ -26,6 +27,7 @@
             <option value="$PROJECT_DIR$/src/shared" />
           </set>
         </option>
+        <option name="myGradleHome" value="$USER_HOME$/.sdkman/candidates/gradle/current" />
       </GradleProjectSettings>
     </option>
   </component>

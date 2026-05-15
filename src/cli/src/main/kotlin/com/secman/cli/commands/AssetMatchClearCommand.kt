@@ -16,7 +16,7 @@ import java.nio.file.Path
  *
  * Workflow:
  *   1. Resolve bucket/key from --bucket/--key flags or
- *      AWS_ASSET_BUCKET_NAME / AWS_BUCKET_KEY_NAME env vars.
+ *      AWS_ASSET_BUCKET_NAME / AWS_ASSET_BUCKET_KEY_NAME env vars.
  *   2. Download the JSON via S3DownloadService (10 MB cap, owner-only temp file).
  *   3. Parse to a flat list of {accountId, resourceId} pairs.
  *   4. POST to /api/assets/match-clear-aws — backend deletes assets whose
@@ -47,7 +47,7 @@ class AssetMatchClearCommand : Runnable {
 
     @Option(
         names = ["--key"],
-        description = ["S3 object key for the JSON snapshot (or set AWS_BUCKET_KEY_NAME env var)"]
+        description = ["S3 object key for the JSON snapshot (or set AWS_ASSET_BUCKET_KEY_NAME env var)"]
     )
     var key: String? = null
 
@@ -102,9 +102,9 @@ class AssetMatchClearCommand : Runnable {
                     "S3 bucket required. Use --bucket flag or set AWS_ASSET_BUCKET_NAME environment variable"
                 )
             val effectiveKey = key
-                ?: System.getenv("AWS_BUCKET_KEY_NAME")
+                ?: System.getenv("AWS_ASSET_BUCKET_KEY_NAME")
                 ?: throw IllegalArgumentException(
-                    "S3 object key required. Use --key flag or set AWS_BUCKET_KEY_NAME environment variable"
+                    "S3 object key required. Use --key flag or set AWS_ASSET_BUCKET_KEY_NAME environment variable"
                 )
 
             val (effectiveUrl, urlSource) = getEffectiveBackendUrlWithSource()
