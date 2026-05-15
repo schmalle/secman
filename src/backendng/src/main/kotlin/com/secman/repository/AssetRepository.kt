@@ -195,6 +195,33 @@ interface AssetRepository : JpaRepository<Asset, Long> {
     """)
     fun countLegacyCrowdStrikeTotal(ownerLiteral: String): Long
 
+    /**
+     * Find AWS assets within a set of account IDs.
+     * Used by `asset-match-clear` to scope deletion candidates to the accounts
+     * actually covered by the snapshot — assets in other accounts are off-limits.
+     *
+     * "AWS asset" means `cloudInstanceId IS NOT NULL` (we match on the EC2
+     * instance ID; assets without one cannot participate in the match).
+     */
+    @io.micronaut.data.annotation.Query("""
+        SELECT a FROM Asset a
+        WHERE a.cloudInstanceId IS NOT NULL
+          AND a.cloudInstanceId <> ''
+          AND a.cloudAccountId IN :accountIds
+    """)
+    fun findAwsAssetsInAccounts(accountIds: Collection<String>): List<Asset>
+
+    /**
+     * Denominator for the asset-match-clear safety brake.
+     */
+    @io.micronaut.data.annotation.Query("""
+        SELECT COUNT(a) FROM Asset a
+        WHERE a.cloudInstanceId IS NOT NULL
+          AND a.cloudInstanceId <> ''
+          AND a.cloudAccountId IN :accountIds
+    """)
+    fun countAwsAssetsInAccounts(accountIds: Collection<String>): Long
+
     // MCP Tool Support - Feature 006: Asset inventory queries with pagination
 
     /**

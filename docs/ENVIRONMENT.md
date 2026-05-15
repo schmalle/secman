@@ -123,6 +123,15 @@ Backend auth (for `--save`):
 | `SECMAN_INSECURE` | accept self-signed TLS (CLI/JS scanner) |
 | `SECMAN_HOST` | shared host URL used by tests; resolved via `pass-cli` |
 
+AWS S3 operations (`asset-match-clear`, `manage-user-mappings import-s3`, `list-bucket`):
+| Var | Notes |
+|---|---|
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | standard SDK chain (or use `--aws-access-key-id` / `--aws-secret-access-key`) |
+| `AWS_SESSION_TOKEN` | required when using ASIA-prefix temporary credentials |
+| `AWS_REGION` | region for S3 operations (SDK chain fallback otherwise) |
+| `AWS_ASSET_BUCKET_NAME` | S3 bucket name for the `asset-match-clear` snapshot JSON |
+| `AWS_BUCKET_KEY_NAME` | S3 object key for the `asset-match-clear` snapshot JSON |
+
 ## Templates
 
 `/etc/secman/backend.env`:
