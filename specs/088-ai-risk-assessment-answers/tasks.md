@@ -119,7 +119,7 @@
 ### Implementation — provenance flip on edit
 
 - [x] T040 [US1] Modify `ResponseController.bulkSaveResponses` in `src/backendng/src/main/kotlin/com/secman/controller/ResponseController.kt`: for each incoming response, if the existing row has `source=AI_GENERATED` AND any of `answerType`/`comment` changed, set `source=AI_EDITED` on save. Keep `aiSuggestionId` for audit trail.
-- [ ] T041 [US1] Add unit test `ResponseSourceTransitionTest` in `src/backendng/src/test/kotlin/com/secman/controller/ResponseSourceTransitionTest.kt`: covers MANUAL→stays-MANUAL on save, AI_GENERATED→AI_EDITED on field change, AI_GENERATED→AI_GENERATED when payload identical.
+- [x] T041 [US1] Add unit test `ResponseSourceTransitionTest` in `src/backendng/src/test/kotlin/com/secman/controller/ResponseSourceTransitionTest.kt`: covers MANUAL→stays-MANUAL on save, AI_GENERATED→AI_EDITED on field change, AI_GENERATED→AI_GENERATED when payload identical.
 
 ### Implementation — frontend
 
