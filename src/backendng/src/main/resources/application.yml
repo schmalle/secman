@@ -399,6 +399,24 @@ datasources:
     # Connection validation to prevent stale connections
     connection-test-query: SELECT 1
     validation-timeout: 5000       # 5 seconds - timeout for connection validation
+    # Connection-pool default isolation: READ COMMITTED.
+    #
+    # MariaDB/InnoDB defaults to REPEATABLE READ, which takes next-key (gap) locks
+    # on secondary-index inserts to prevent phantoms. Under concurrent CrowdStrike
+    # imports (3 CLI workers, ~647k rows across 1881 servers), those gap locks on
+    # shared leaf pages of idx_vulnerability_sort_order / idx_vulnerability_severity
+    # / idx_vulnerability_cve produce transient deadlocks (error 1213). The audit in
+    # the Phase 1 PR confirmed no code path depends on RR snapshot semantics:
+    #   - 50 @Transactional(readOnly = true) methods are single-purpose GETs with
+    #     no cross-statement snapshot invariant.
+    #   - All check-then-act write flows are protected by DB-level unique
+    #     constraints (User, Workgroup, IdentityProvider, Release, Requirement, …)
+    #     or by PESSIMISTIC_WRITE record locks (CrowdStrike import, cascade delete).
+    #   - PESSIMISTIC_WRITE and @Version optimistic locking are isolation-agnostic
+    #     in InnoDB.
+    # See `withDeadlockRetry` in CrowdStrikeVulnerabilityImportService.kt and
+    # docs/CROWDSTRIKE_IMPORT.md for the rationale and rollback path.
+    transaction-isolation: TRANSACTION_READ_COMMITTED
     # MariaDB driver flags (CrowdStrike import perf: rewrites batch inserts into
     # multi-VALUES statements; cache prepared statements; disable server-side
     # prep so the rewrite kicks in). Passed to the driver via HikariCP's

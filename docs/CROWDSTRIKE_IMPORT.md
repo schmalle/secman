@@ -123,6 +123,19 @@ UI: vulns >30 days should show red OVERDUE badge. Threshold under Admin > Vulner
 
 Per-server transactions = small commits, low contention, parallel-friendly. Bulk SQL for both delete and insert. Indexes: `asset_id`, `(asset_id, vulnerability_id)`.
 
+## Concurrency: READ COMMITTED + jittered retry
+
+The CLI dispatches batches across 3 worker threads. Each worker POSTs to `/api/crowdstrike/vulnerabilities/save`, where the backend runs the per-server `@Transactional` delete-then-insert. With ~1881 servers and the `vulnerability` table carrying 9 indexes, three concurrent inserters under MariaDB's default REPEATABLE READ would collide on next-key (gap) locks at the head of `idx_vulnerability_sort_order` (timestamp-leading), `idx_vulnerability_severity` (4-5 distinct values), and `idx_vulnerability_cve` (popular CVEs).
+
+**Mitigation, in order:**
+
+1. **Connection pool defaults to READ COMMITTED** (`application.yml`: `datasources.default.transaction-isolation: TRANSACTION_READ_COMMITTED`). Under RC, secondary-index INSERTs take only the row lock — no gap locks — so concurrent inserters on the same hot pages no longer deadlock. This is the load-bearing fix; the rest are belts.
+2. **Audited safe**: zero code paths in the repo depend on RR snapshot semantics. All multi-step writes use `PESSIMISTIC_WRITE` (isolation-agnostic) or `@Version` optimistic locks. All check-then-act flows are protected by DB-level unique constraints.
+3. **`withDeadlockRetry`** in `CrowdStrikeVulnerabilityImportService` wraps each per-server transaction in 5 attempts (4 retries) with exponential + full jitter (100/200/400/800 ms, randomized ±50%). Catches MariaDB 1213 (deadlock) and 1205 (lock-wait timeout). Each retry is a fresh proxy-wrapped transaction.
+4. **Rollback path**: revert the `transaction-isolation` line in `application.yml` — the per-transaction code paths are unchanged, so the system falls back to REPEATABLE READ instantly. Expect deadlock-error counts to climb back to ~0.5–1% of server imports if you do.
+
+If you see deadlock errors again, check: (a) was the isolation reverted? (`SHOW VARIABLES LIKE 'transaction_isolation'`); (b) did someone add a new low-cardinality index to `vulnerability`?; (c) did CLI parallelism get cranked above 3?
+
 ## Idempotency
 
 ```
