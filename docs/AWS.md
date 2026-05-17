@@ -162,6 +162,10 @@ If the secret was created with a customer-managed KMS key, also grant
 
 ## Creating the secret
 
+> For a step-by-step **AWS Management Console (web UI)** walkthrough — and a
+> mirrored CLI walkthrough — see [`docs/AWS_SECRETS_SETUP.md`](AWS_SECRETS_SETUP.md).
+> The summary below is the CLI quick path.
+
 Store all required keys as a single JSON object. Keys mirror the field names
 used by `pass-cli` under `test/secman` (see `docs/PASS_CLI.md`).
 
