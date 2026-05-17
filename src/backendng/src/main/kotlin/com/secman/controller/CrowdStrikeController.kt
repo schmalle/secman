@@ -359,9 +359,13 @@ open class CrowdStrikeController(
         authentication: Authentication
     ): HttpResponse<*> {
         val username = authentication.name
+        // Log both client- and server-side clocks so any future timezone skew is
+        // visible from a single line. The service-layer guard rejects future
+        // cutoffs (see CrowdStrikeVulnerabilityImportService.reconcileStaleCrowdStrikeImports),
+        // but logging the raw pair here makes the diagnosis instant.
         log.info(
-            "Reconcile stale CrowdStrike vulns: importStartedAt={}, severities={}, user={}",
-            request.importStartedAt, request.severities, username
+            "Reconcile stale CrowdStrike vulns: importStartedAt(client)={}, backendNow={}, severities={}, user={}",
+            request.importStartedAt, java.time.LocalDateTime.now(), request.severities, username
         )
         return try {
             val deleted = importService.reconcileStaleCrowdStrikeImports(
