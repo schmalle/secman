@@ -1,26 +1,83 @@
 #!/usr/bin/env bash
 #
-# compiledistsetup.sh
+# compiledistsetup.sh - build secman locally and ship artifacts to two hosts.
 #
-# Build secman (backend, CLI, frontend) and distribute the artifacts to two
-# target hosts via SSH. SSH key-based auth to both targets is assumed.
+# Full reference: docs/COMPILE_DIST_SETUP.md
 #
-# Usage:
+# SYNOPSIS
 #   ./scripts/compiledistsetup.sh <user1@host1> <user2@host2> [--dest <remote-dir>]
+#   ./scripts/compiledistsetup.sh -h | --help
 #
-# Examples:
-#   ./scripts/compiledistsetup.sh deploy@app01.example.com deploy@app02.example.com
-#   ./scripts/compiledistsetup.sh alice@10.0.0.10 bob@10.0.0.11 --dest /opt/secman
+# ARGUMENTS
+#   <user1@host1>           First SSH target, in user@host form (required).
+#   <user2@host2>           Second SSH target, in user@host form (required).
+#                           Exactly two targets must be supplied; bare
+#                           hostnames (no '@') are rejected.
 #
-# Remote layout created under <remote-dir> (default: ~/secman):
-#   backend/backendng-<version>-all.jar
-#   cli/cli-<version>-all.jar
-#   frontend/                          (contents of src/frontend/dist/)
+# OPTIONS
+#   --dest <remote-dir>     Remote directory on both targets. Default:
+#                           "secman" (relative to the SSH user's $HOME).
+#                           Absolute paths are honoured.
+#   -h, --help              Show this help and exit.
+#
+# WHAT IT BUILDS
+#   - Backend  : ./gradlew :backendng:clean :backendng:shadowJar -x test
+#                -> src/backendng/build/libs/backendng-<ver>-all.jar
+#   - CLI      : ./gradlew :cli:clean :cli:shadowJar -x test
+#                -> src/cli/build/libs/cli-<ver>-all.jar
+#   - Frontend : npm ci && npm run build  (in src/frontend)
+#                -> src/frontend/dist/
+#
+#   Tests are skipped for deploy speed. Run ./gradlew build separately if
+#   you want full coverage before shipping.
+#
+# REMOTE LAYOUT (created under <remote-dir> on each target)
+#   <remote-dir>/
+#     backend/backendng-<ver>-all.jar
+#     cli/cli-<ver>-all.jar
+#     frontend/        (contents of src/frontend/dist/)
+#
+#   Transfer uses rsync -az --delete, so stale files inside backend/,
+#   cli/, and frontend/ are pruned on each run. To keep history, point
+#   --dest at a versioned directory (e.g. releases/2026-05-17) per run.
+#
+# PREREQUISITES
+#   Build host : bash, ssh, rsync, npm, JDK 21 toolchain, ./gradlew.
+#   Each target: sshd reachable on port 22, rsync installed, build host's
+#                public key in ~<user>/.ssh/authorized_keys, write access
+#                to <remote-dir>.
+#
+#   For non-default ports, jump hosts, or specific identity files, add an
+#   entry to ~/.ssh/config -- the script does not expose flags for these.
+#
+# SSH OPTIONS USED
+#   -o BatchMode=yes                  (no password/passphrase prompts)
+#   -o StrictHostKeyChecking=accept-new
+#   -o ConnectTimeout=15
+#
+# BEHAVIOUR
+#   Targets are processed sequentially. If the first target fails, the
+#   script exits and the second is not touched. There is no roll-back.
+#
+# EXIT CODES
+#   0  Build + both deploys succeeded.
+#   1  Bad args, missing tool, build failure, missing artifact, or
+#      ssh/rsync failure.
+#
+# EXAMPLES
+#   ./scripts/compiledistsetup.sh \
+#       deploy@app01.example.com deploy@app02.example.com
+#
+#   ./scripts/compiledistsetup.sh \
+#       alice@10.0.0.10 bob@10.0.0.11 --dest /opt/secman
+#
+#   ./scripts/compiledistsetup.sh \
+#       ops@stage-a ops@stage-b --dest releases/2026-05-17
 
 set -euo pipefail
 
 usage() {
-    sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,75p' "$0" | sed 's/^# \{0,1\}//;s/^#$//'
     exit "${1:-1}"
 }
 
