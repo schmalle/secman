@@ -121,7 +121,7 @@ UI: vulns >30 days should show red OVERDUE badge. Threshold under Admin > Vulner
 | 100 / 500 | <30 s | DB writes |
 | 1000 / 5000 | <5 min | DB writes |
 
-Per-server transactions = small commits, low contention, parallel-friendly. Bulk SQL for both delete and insert. Indexes: `asset_id`, `(asset_id, vulnerability_id)`.
+Per-server transactions = small commits, low contention, parallel-friendly. Bulk SQL for both delete and insert. The `vulnerability` table carries 6 secondary indexes (post V217 trim): `(asset_id, scan_timestamp)`, `(cvss_severity)`, `(vulnerability_id)`, `(asset_id, vulnerability_id)`, `(scan_timestamp)`, `(asset_id, import_timestamp)`. Three earlier indexes — `idx_vulnerability_asset`, `idx_vulnerability_sort_order`, `idx_vulnerability_product` — were dropped because they were prefix-redundant, served no actual ORDER BY (the named ORDER BY interleaves a column from a joined table), and used disqualified `LOWER(...) LIKE '%...%'` patterns respectively. The drop cut per-row index maintenance by ~33% during import.
 
 ## Concurrency: READ COMMITTED + jittered retry
 
