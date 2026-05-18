@@ -136,6 +136,7 @@ open class PublicRequirementDownloadController(
 
         // Group requirements by chapter
         val requirementsByChapter = requirements.groupBy { it.chapter ?: "No Chapter" }
+        var requirementNumber = 1
 
         var isFirstChapter = true
         for ((chapter, chapterRequirements) in requirementsByChapter) {
@@ -163,7 +164,7 @@ open class PublicRequirementDownloadController(
                 shd.fill = "C1D5C0"
 
                 val reqHeaderRun = reqHeaderParagraph.createRun()
-                reqHeaderRun.setText("${requirement.internalId}: ${requirement.shortreq}")
+                reqHeaderRun.setText("REQ-$requirementNumber: ${requirement.shortreq}")
                 reqHeaderRun.fontSize = 12
                 reqHeaderRun.isBold = true
 
@@ -207,7 +208,7 @@ open class PublicRequirementDownloadController(
                 // Internal ID with use cases
                 val canonicalUseCases = setOf("IT", "OT", "NT")
                 val idSuffix = buildString {
-                    append(requirement.internalId.removePrefix("REQ-"))
+                    append(requirementNumber)
                     append(".")
                     append(requirement.versionNumber)
                     val usecaseNames = requirement.usecases
@@ -227,6 +228,7 @@ open class PublicRequirementDownloadController(
                 idRun.color = "999999"
 
                 document.createParagraph()
+                requirementNumber++
             }
         }
 

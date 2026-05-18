@@ -85,3 +85,7 @@ src/helper/.venv/
 .e2e-logs/
 /.playwright-mcp
 docker/backend/app.jar
+/.clawpatch/features
+/.clawpatch/findings
+/.clawpatch/reports
+/.clawpatch/runs

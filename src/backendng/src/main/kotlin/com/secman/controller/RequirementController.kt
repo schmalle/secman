@@ -570,7 +570,7 @@ open class RequirementController(
         // Group requirements by chapter
         val requirementsByChapter = requirements.groupBy { it.chapter ?: "No Chapter" }
         var requirementNumber = 1
-        
+
         var isFirstChapter = true
         for ((chapter, chapterRequirements) in requirementsByChapter) {
             // Page break before each chapter (first chapter already has one from TOC)
@@ -599,7 +599,7 @@ open class RequirementController(
                 shd.fill = "C1D5C0"  // Soft sage green (Scandinavian style)
 
                 val reqHeaderRun = reqHeaderParagraph.createRun()
-                reqHeaderRun.setText("${requirement.internalId}: ${requirement.shortreq}")
+                reqHeaderRun.setText("REQ-$requirementNumber: ${requirement.shortreq}")
                 reqHeaderRun.fontSize = 12
                 reqHeaderRun.isBold = true
                 
@@ -644,7 +644,7 @@ open class RequirementController(
                 // Only include the canonical use case IDs: IT, OT, NT
                 val canonicalUseCases = setOf("IT", "OT", "NT")
                 val idSuffix = buildString {
-                    append(requirement.internalId.removePrefix("REQ-"))
+                    append(requirementNumber)
                     append(".")
                     append(requirement.versionNumber)
                     val usecaseNames = requirement.usecases
@@ -916,112 +916,117 @@ open class RequirementController(
         val translationMap = batchTranslateRequirements(requirements, targetLanguage)
 
         // Add requirements using pre-translated content
-        requirements.forEach { requirement ->
-            // Chapter heading
-            if (!requirement.chapter.isNullOrBlank()) {
+        val requirementsByChapter = requirements.groupBy { requirement ->
+            requirement.chapter?.takeIf { it.isNotBlank() }
+        }
+        var requirementNumber = 1
+
+        for ((chapter, chapterRequirements) in requirementsByChapter) {
+            if (chapter != null) {
                 val chapterParagraph = document.createParagraph()
                 val chapterRun = chapterParagraph.createRun()
-                chapterRun.setText("Chapter: ${requirement.chapter}")
+                chapterRun.setText("Chapter: $chapter")
                 chapterRun.fontSize = 14
                 chapterRun.isBold = true
                 document.createParagraph()
             }
-            
-            // Short requirement (use batch-translated value)
-            val shortReqParagraph = document.createParagraph()
-            val shortReqRun = shortReqParagraph.createRun()
-            shortReqRun.setText("Requirement: ")
-            shortReqRun.isBold = true
 
-            val shortReqTranslated = translationMap[requirement.shortreq] ?: requirement.shortreq
+            for (requirement in chapterRequirements) {
+                // Short requirement (use batch-translated value)
+                val shortReqTranslated = translationMap[requirement.shortreq] ?: requirement.shortreq
 
-            val shortReqValueRun = shortReqParagraph.createRun()
-            shortReqValueRun.setText(shortReqTranslated)
-            
-            // Details (use batch-translated value)
-            if (!requirement.details.isNullOrBlank()) {
-                val detailsParagraph = document.createParagraph()
-                val detailsRun = detailsParagraph.createRun()
-                detailsRun.setText("Details: ")
-                detailsRun.isBold = true
+                val shortReqParagraph = document.createParagraph()
+                val ctp = shortReqParagraph.ctp
+                val ppr = if (ctp.isSetPPr) ctp.pPr else ctp.addNewPPr()
+                val shd = if (ppr.isSetShd) ppr.shd else ppr.addNewShd()
+                shd.fill = "C1D5C0"
 
-                val detailsTranslated = translationMap[requirement.details] ?: requirement.details!!
+                val shortReqRun = shortReqParagraph.createRun()
+                shortReqRun.setText("REQ-$requirementNumber: $shortReqTranslated")
+                shortReqRun.fontSize = 12
+                shortReqRun.isBold = true
 
-                val detailsValueRun = detailsParagraph.createRun()
-                detailsValueRun.setText(detailsTranslated)
-            }
-            
-            // Motivation (use batch-translated value)
-            if (!requirement.motivation.isNullOrBlank()) {
-                val motivationParagraph = document.createParagraph()
-                val motivationRun = motivationParagraph.createRun()
-                motivationRun.setText("Motivation: ")
-                motivationRun.isBold = true
+                // Details (use batch-translated value)
+                if (!requirement.details.isNullOrBlank()) {
+                    val detailsParagraph = document.createParagraph()
+                    val detailsRun = detailsParagraph.createRun()
+                    detailsRun.setText("Details: ")
+                    detailsRun.isBold = true
 
-                val motivationTranslated = translationMap[requirement.motivation] ?: requirement.motivation!!
+                    val detailsTranslated = translationMap[requirement.details] ?: requirement.details!!
 
-                val motivationValueRun = motivationParagraph.createRun()
-                motivationValueRun.setText(motivationTranslated)
-            }
-            
-            // Example (use batch-translated value)
-            if (!requirement.example.isNullOrBlank()) {
-                val exampleParagraph = document.createParagraph()
-                val exampleRun = exampleParagraph.createRun()
-                exampleRun.setText("Example: ")
-                exampleRun.isBold = true
-
-                val exampleTranslated = translationMap[requirement.example] ?: requirement.example!!
-
-                val exampleValueRun = exampleParagraph.createRun()
-                exampleValueRun.setText(exampleTranslated)
-            }
-            
-            // Use cases (use batch-translated label)
-            if (requirement.usecases.isNotEmpty()) {
-                val usecaseParagraph = document.createParagraph()
-                val usecaseRun = usecaseParagraph.createRun()
-                val usecaseLabel = translationMap["Use Cases"] ?: "Use Cases"
-                usecaseRun.setText("$usecaseLabel: ")
-                usecaseRun.isBold = true
-
-                val usecaseValueRun = usecaseParagraph.createRun()
-                usecaseValueRun.setText(requirement.usecases.joinToString(", ") { it.name })
-            }
-            
-            // Norms (use batch-translated label)
-            if (requirement.norms.isNotEmpty()) {
-                val normParagraph = document.createParagraph()
-                val normRun = normParagraph.createRun()
-                val normLabel = translationMap["Standards/Norms"] ?: "Standards/Norms"
-                normRun.setText("$normLabel: ")
-                normRun.isBold = true
-
-                val normValueRun = normParagraph.createRun()
-                normValueRun.setText(requirement.norms.joinToString(", ") { it.name })
-            }
-
-            // Internal ID with use cases - small, non-dominant font
-            val idSuffix = buildString {
-                append(requirement.internalId.removePrefix("REQ-"))
-                append(".")
-                append(requirement.versionNumber)
-                val usecaseNames = requirement.usecases.map { it.name }.sorted()
-                for (uc in usecaseNames) {
-                    append(".")
-                    append(uc)
+                    val detailsValueRun = detailsParagraph.createRun()
+                    detailsValueRun.setText(detailsTranslated)
                 }
-            }
-            val idParagraph = document.createParagraph()
-            idParagraph.alignment = org.apache.poi.xwpf.usermodel.ParagraphAlignment.LEFT
-            val idRun = idParagraph.createRun()
-            idRun.setText("ID $idSuffix")
-            idRun.fontSize = 8
-            idRun.color = "999999"
 
-            // Add space between requirements
-            document.createParagraph()
-            document.createParagraph()
+                // Motivation (use batch-translated value)
+                if (!requirement.motivation.isNullOrBlank()) {
+                    val motivationParagraph = document.createParagraph()
+                    val motivationRun = motivationParagraph.createRun()
+                    motivationRun.setText("Motivation: ")
+                    motivationRun.isBold = true
+
+                    val motivationTranslated = translationMap[requirement.motivation] ?: requirement.motivation!!
+
+                    val motivationValueRun = motivationParagraph.createRun()
+                    motivationValueRun.setText(motivationTranslated)
+                }
+
+                // Example (use batch-translated value)
+                if (!requirement.example.isNullOrBlank()) {
+                    val exampleParagraph = document.createParagraph()
+                    val exampleRun = exampleParagraph.createRun()
+                    exampleRun.setText("Example: ")
+                    exampleRun.isBold = true
+
+                    val exampleTranslated = translationMap[requirement.example] ?: requirement.example!!
+
+                    val exampleValueRun = exampleParagraph.createRun()
+                    exampleValueRun.setText(exampleTranslated)
+                }
+
+                // Use cases (use batch-translated label)
+                if (requirement.usecases.isNotEmpty()) {
+                    val usecaseParagraph = document.createParagraph()
+                    val usecaseRun = usecaseParagraph.createRun()
+                    val usecaseLabel = translationMap["Use Cases"] ?: "Use Cases"
+                    usecaseRun.setText("$usecaseLabel: ")
+                    usecaseRun.isBold = true
+
+                    val usecaseValueRun = usecaseParagraph.createRun()
+                    usecaseValueRun.setText(requirement.usecases.joinToString(", ") { it.name })
+                }
+
+                // Norms (use batch-translated label)
+                if (requirement.norms.isNotEmpty()) {
+                    val normParagraph = document.createParagraph()
+                    val normRun = normParagraph.createRun()
+                    val normLabel = translationMap["Standards/Norms"] ?: "Standards/Norms"
+                    normRun.setText("$normLabel: ")
+                    normRun.isBold = true
+
+                    val normValueRun = normParagraph.createRun()
+                    normValueRun.setText(requirement.norms.joinToString(", ") { it.name })
+                }
+
+                // Internal ID with use cases - small, non-dominant font
+                val idSuffix = buildString {
+                    append(requirementNumber)
+                    append(".")
+                    append(requirement.versionNumber)
+                }
+                val idParagraph = document.createParagraph()
+                idParagraph.alignment = org.apache.poi.xwpf.usermodel.ParagraphAlignment.LEFT
+                val idRun = idParagraph.createRun()
+                idRun.setText("ID $idSuffix")
+                idRun.fontSize = 8
+                idRun.color = "999999"
+
+                // Add space between requirements
+                document.createParagraph()
+                document.createParagraph()
+                requirementNumber++
+            }
         }
         
         return document

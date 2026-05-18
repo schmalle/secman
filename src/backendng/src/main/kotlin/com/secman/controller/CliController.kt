@@ -386,7 +386,8 @@ class CliController(
         val recipients: List<String>,
         val failedRecipients: List<String>,
         val unmappedAccounts: List<String>,
-        val thresholdDays: Int
+        val thresholdDays: Int,
+        val accountDetails: List<UserVulnerabilityNotificationService.AwsAccountNotificationDetail>
     )
 
     /**
@@ -421,7 +422,8 @@ class CliController(
                 recipients = result.recipients,
                 failedRecipients = result.failedRecipients,
                 unmappedAccounts = result.unmappedAccounts,
-                thresholdDays = result.thresholdDays
+                thresholdDays = result.thresholdDays,
+                accountDetails = result.accountDetails
             ))
         } catch (e: Exception) {
             logger.error("Error sending user vulnerability notifications", e)

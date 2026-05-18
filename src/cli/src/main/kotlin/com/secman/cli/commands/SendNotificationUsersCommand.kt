@@ -97,6 +97,7 @@ class SendNotificationUsersCommand : Runnable {
             val failedRecipients = (result["failedRecipients"] as? List<String>) ?: emptyList()
             @Suppress("UNCHECKED_CAST")
             val unmappedAccounts = (result["unmappedAccounts"] as? List<String>) ?: emptyList()
+            val accountDetails = (result["accountDetails"] as? List<*>) ?: emptyList<Any>()
 
             println("AWS accounts with overdue vulnerabilities: $awsAccountsAffected")
             println()
@@ -112,6 +113,8 @@ class SendNotificationUsersCommand : Runnable {
                     failedRecipients.forEach { email -> println("   FAILED $email") }
                 }
             }
+
+            printAccountDetails(accountDetails)
 
             if (unmappedAccounts.isNotEmpty()) {
                 println()
@@ -178,5 +181,46 @@ class SendNotificationUsersCommand : Runnable {
     private fun getEffectiveBackendUrl(): String {
         val url = backendUrl ?: System.getenv("SECMAN_HOST") ?: System.getenv("SECMAN_BACKEND_URL") ?: "http://localhost:8080"
         return if (url.startsWith("http://") || url.startsWith("https://")) url else "https://$url"
+    }
+
+    private fun printAccountDetails(accountDetails: List<*>) {
+        if (accountDetails.isEmpty()) {
+            return
+        }
+
+        println("Affected AWS account details:")
+        accountDetails.forEach { accountEntry ->
+            val account = accountEntry as? Map<*, *> ?: return@forEach
+            val accountId = account["awsAccountId"]?.toString() ?: "unknown"
+            val assets = account["assets"] as? List<*> ?: emptyList<Any>()
+            val vulnerabilityCount = assets.sumOf { assetEntry ->
+                val asset = assetEntry as? Map<*, *> ?: return@sumOf 0
+                (asset["vulnerabilities"] as? List<*>)?.size ?: 0
+            }
+
+            println("AWS account $accountId (${assets.size} EC2, $vulnerabilityCount vulnerabilities)")
+            assets.forEach { assetEntry ->
+                val asset = assetEntry as? Map<*, *> ?: return@forEach
+                val assetName = asset["assetName"]?.toString() ?: "unknown"
+                val assetId = asset["assetId"]?.toString() ?: "unknown"
+                val ip = asset["ip"]?.toString()?.takeIf { it.isNotBlank() } ?: "n/a"
+                val vulnerabilities = asset["vulnerabilities"] as? List<*> ?: emptyList<Any>()
+
+                println("   EC2 $assetName (assetId=$assetId, ip=$ip)")
+                vulnerabilities.forEach { vulnEntry ->
+                    val vulnerability = vulnEntry as? Map<*, *> ?: return@forEach
+                    val vulnerabilityId = vulnerability["vulnerabilityId"]?.toString() ?: "unknown"
+                    val severity = vulnerability["severity"]?.toString() ?: "UNKNOWN"
+                    val ageDays = vulnerability["ageDays"]?.toString() ?: "unknown"
+                    val daysOpen = vulnerability["daysOpen"]?.toString()?.takeIf { it.isNotBlank() }
+                    val product = vulnerability["vulnerableProductVersions"]?.toString()?.takeIf { it.isNotBlank() }
+
+                    val ageText = if (daysOpen != null) "$daysOpen, age=${ageDays}d" else "age=${ageDays}d"
+                    val productText = if (product != null) " [$product]" else ""
+                    println("      - $vulnerabilityId ($severity, $ageText)$productText")
+                }
+            }
+        }
+        println()
     }
 }
