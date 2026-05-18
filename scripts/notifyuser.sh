@@ -91,17 +91,6 @@ run_cli() {
         java -Xmx4g -Xms2g -jar "$JAR_PATH" "$@"
 }
 
-if [[ "$SKIP_IMPORT" == false ]]; then
-    echo "Refreshing server vulnerabilities from CrowdStrike..."
-    run_cli query servers \
-        --device-type SERVER \
-        --severity CRITICAL,HIGH \
-        --min-days-open 1 \
-        --save \
-        --last-seen-days 1 \
-        --overdue-threshold "$DAYS"
-fi
-
 notify_args=(send-notification-users --days "$DAYS")
 
 if [[ "$DRY_RUN" == true ]]; then
