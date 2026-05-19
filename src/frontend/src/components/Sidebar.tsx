@@ -138,6 +138,11 @@ const Sidebar = () => {
                         <i className="bi bi-server me-2"></i> Assets Overview
                     </a>
                 </li>
+                <li>
+                    <a href="/applications" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                        <i className="bi bi-window-stack me-2"></i> Application Register
+                    </a>
+                </li>
 
 
                 {/* REQUIREMENTS Section - ADMIN, REQ, or SECCHAMPION only (Feature: 025-role-based-access-control) */}
