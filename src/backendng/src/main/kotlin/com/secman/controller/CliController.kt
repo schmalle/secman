@@ -379,6 +379,7 @@ class CliController(
     @Serdeable
     data class UserVulnNotificationResultDto(
         val status: String,
+        val notificationScope: String,
         val awsAccountsAffected: Int,
         val usersNotified: Int,
         val emailsSent: Int,
@@ -415,6 +416,7 @@ class CliController(
 
             HttpResponse.ok(UserVulnNotificationResultDto(
                 status = result.status.name,
+                notificationScope = result.notificationScope.name,
                 awsAccountsAffected = result.awsAccountsAffected,
                 usersNotified = result.usersNotified,
                 emailsSent = result.emailsSent,
