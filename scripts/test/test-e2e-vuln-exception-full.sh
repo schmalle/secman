@@ -18,9 +18,9 @@
 #   SECMAN_ADMIN_EMAIL
 #   SECMAN_ADMIN_NAME
 #   SECMAN_ADMIN_PASS
-# Optional:
-#   BASE_URL (default http://localhost:8080)
-#   FRONTEND_URL (default http://localhost:4321)
+# Additional env:
+#   BASE_URL or SECMAN_BACKEND_URL (required backend URL, pass-cli sourced)
+#   FRONTEND_URL (required frontend URL, pass-cli sourced)
 #   SKIP_UI=true to skip Playwright phase
 #   VERBOSE=true for debug logging
 #
@@ -35,8 +35,8 @@ set -euo pipefail
 # Configuration
 # =============================================================================
 
-BASE_URL="${BASE_URL:-${SECMAN_BACKEND_URL:-http://localhost:8080}}"
-FRONTEND_URL="${FRONTEND_URL:-http://localhost:4321}"
+BASE_URL="${BASE_URL:-${SECMAN_BACKEND_URL:-}}"
+FRONTEND_URL="${FRONTEND_URL:-}"
 # Strip trailing whitespace/newlines from secrets — pass-cli can append a trailing
 # newline depending on how the source field is stored, which would corrupt headers
 # (e.g. "X-MCP-API-Key: <key>\n\n" terminates the header block early, producing 400).
@@ -146,8 +146,9 @@ Usage:
     $0 [--verbose|-v] [--skip-ui] [--help|-h]
 
 Environment:
-    BASE_URL              Backend URL (default http://localhost:8080)
-    FRONTEND_URL          Frontend URL (default http://localhost:4321)
+    BASE_URL              Backend URL (required unless SECMAN_BACKEND_URL is set)
+    SECMAN_BACKEND_URL    Backend URL fallback when BASE_URL is not set
+    FRONTEND_URL          Frontend URL (required)
     SECMAN_MCP_KEY        MCP API key (required)
     SECMAN_ADMIN_EMAIL    Admin email for delegation (required)
     SECMAN_ADMIN_NAME     Admin username (required for UI phase)
@@ -177,6 +178,10 @@ done
 
 [[ -z "$SECMAN_MCP_KEY"   ]] && fail "SECMAN_MCP_KEY is required (use pass-cli run)"
 [[ -z "$ADMIN_USER_EMAIL" ]] && fail "SECMAN_ADMIN_EMAIL is required (use pass-cli run)"
+[[ -z "$BASE_URL" ]] && fail "Backend URL is required: set BASE_URL or SECMAN_BACKEND_URL via pass-cli env"
+[[ -z "$FRONTEND_URL" ]] && fail "Frontend URL is required: set FRONTEND_URL via pass-cli env"
+
+log "Resolved pre-flight URLs: BASE_URL=$BASE_URL FRONTEND_URL=$FRONTEND_URL"
 
 if ! curl -sf -o /dev/null --connect-timeout 5 "$BASE_URL" 2>/dev/null; then
     # Some backends don't serve / so also try /api/mcp/capabilities (returns 401 but reachable)

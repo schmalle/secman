@@ -95,7 +95,7 @@ full restart for this skill.)
 This skill is **pinned to Proton Pass** — start services via the wrapper
 scripts that source secrets via `pass-cli`. Never hardcode `localhost:8080`
 or `localhost:4321` in tests; the driver and Playwright config already
-respect `BASE_URL` / `FRONTEND_URL` / `SECMAN_BASE_URL`.
+respect `BASE_URL` / `SECMAN_BACKEND_URL` / `FRONTEND_URL` / `SECMAN_BASE_URL`.
 
 | Setting                  | Default                           |
 | ------------------------ | --------------------------------- |
@@ -131,6 +131,9 @@ respect `BASE_URL` / `FRONTEND_URL` / `SECMAN_BASE_URL`.
    `npx playwright install chrome msedge` per `AGENTS.md`.)
 
 ### Phase 2 — Run Tests
+
+- Driver pre-flight now logs the **resolved** `BASE_URL` and `FRONTEND_URL`; include that line when triaging reachability failures so backend/frontend target ambiguity is eliminated.
+
 
 Run the driver with Proton Pass injection:
 
@@ -316,8 +319,7 @@ in the cleanup logic and fix `cleanup()` in
 - **Secrets via Proton Pass** — both `scripts/startbackenddev.sh`,
   `scripts/startfrontenddev.sh`, and the test driver use `pass-cli run`.
   Never hardcode credentials.
-- **No `localhost` literals in tests** — use `BASE_URL` / `FRONTEND_URL` /
-  `SECMAN_BASE_URL`. Liveness checks use port binding, not HTTP probes.
+- **No `localhost` literals in tests** — strict policy: set backend/frontend URLs from pass-cli env (`BASE_URL` or `SECMAN_BACKEND_URL`, plus `FRONTEND_URL`) and fail fast when missing. Use `SECMAN_BASE_URL` for Playwright. Liveness checks use port binding, not HTTP probes.
 - **Logs**: backend → `.e2e-logs/backend.log`; frontend → `.e2e-logs/frontend.log`;
   driver → `.e2e-logs/e2e-vuln-exception-run-<N>.log`. The directory is gitignored.
 - **MariaDB**: cleanup uses `mariadb -h 127.0.0.1 -u secman -pCHANGEME secman`.
