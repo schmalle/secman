@@ -73,6 +73,52 @@ async function login(page: Page, username: string, password: string) {
     await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 });
 }
 
+
+async function waitForSystemVulnerabilitiesReady(page: Page) {
+    await page.waitForResponse((response) =>
+        response.url().includes('/api/vulnerabilities/current/system') && response.request().method() === 'GET' && response.ok()
+    );
+    await expect(page.locator('table')).toBeVisible();
+}
+
+async function waitForOutdatedAssetsReady(page: Page) {
+    await page.waitForResponse((response) =>
+        response.url().includes('/api/outdated-assets') && response.request().method() === 'GET' && response.ok()
+    );
+    await expect(page.locator('table')).toBeVisible();
+}
+
+async function waitForMyExceptionRequestsReady(page: Page) {
+    await page.waitForResponse((response) =>
+        response.url().includes('/api/vulnerability-exception-requests/my') && response.request().method() === 'GET' && response.ok()
+    );
+    await expect(page.locator('table')).toBeVisible();
+}
+
+async function waitForAccountVulnsReady(page: Page) {
+    await page.waitForResponse((response) =>
+        response.url().includes('/api/assets/by-cloud-account') && response.request().method() === 'GET' && response.ok()
+    );
+    await expect(page.locator('main')).toBeVisible();
+    await expect.poll(async () => (await page.textContent('body')) ?? '').toContain('AWS Account');
+}
+
+async function waitForVulnerabilityExceptionsReady(page: Page) {
+    await page.waitForResponse((response) =>
+        response.url().includes('/api/vulnerability-exceptions') && response.request().method() === 'GET' && response.ok()
+    );
+    await expect(page.getByText('Vulnerability Exceptions')).toBeVisible();
+}
+
+async function waitForAwsAccountSharingReady(page: Page) {
+    await page.waitForResponse((response) =>
+        response.url().includes('/api/aws-account-sharing') && response.request().method() === 'GET' && response.ok()
+    );
+    await expect(page.getByRole('heading', { name: /aws account sharing/i })).toBeVisible();
+    // Fallback: selected-account badge text can lag behind row render in CI.
+    await page.waitForTimeout(500);
+}
+
 async function logout(page: Page) {
     await page.evaluate(() => localStorage.clear());
     await page.context().clearCookies();
@@ -89,7 +135,7 @@ test.describe.serial('Vulnerability + exception lifecycle (UI)', () => {
         // test asset deterministically.
         await page.goto(`/vulnerabilities/system?hostname=${encodeURIComponent(ASSET1)}`);
         await page.waitForLoadState('domcontentloaded');
-        await page.waitForTimeout(2500);
+        await waitForSystemVulnerabilitiesReady(page);
 
         let body = (await page.textContent('body')) ?? '';
         // testasset1 has both CVEs (vuln1 and vuln2).
@@ -99,7 +145,7 @@ test.describe.serial('Vulnerability + exception lifecycle (UI)', () => {
 
         await page.goto(`/vulnerabilities/system?hostname=${encodeURIComponent(ASSET2)}`);
         await page.waitForLoadState('domcontentloaded');
-        await page.waitForTimeout(2500);
+        await waitForSystemVulnerabilitiesReady(page);
 
         body = (await page.textContent('body')) ?? '';
         // testasset2 has only vuln2.
@@ -114,7 +160,7 @@ test.describe.serial('Vulnerability + exception lifecycle (UI)', () => {
 
         await page.goto('/outdated-assets');
         await page.waitForLoadState('domcontentloaded');
-        await page.waitForTimeout(2500);
+        await waitForOutdatedAssetsReady(page);
 
         // The outdated-assets page paginates over potentially thousands of
         // overdue assets. Use the in-page search to scope to our test asset
@@ -124,7 +170,7 @@ test.describe.serial('Vulnerability + exception lifecycle (UI)', () => {
         await search.waitFor({ state: 'visible', timeout: 10_000 });
         await search.fill(ASSET1);
         await page.getByRole('button', { name: /^Search$/ }).click();
-        await page.waitForTimeout(2500); // search round-trip
+        await waitForOutdatedAssetsReady(page);
 
         const body = (await page.textContent('body')) ?? '';
         expect(body).toContain(ASSET1);
@@ -144,7 +190,7 @@ test.describe.serial('Vulnerability + exception lifecycle (UI)', () => {
         // (get_vulnerabilities) which DO enforce owner-based access control.
         await page.goto(`/vulnerabilities/system?hostname=${encodeURIComponent(ASSET1)}`);
         await page.waitForLoadState('domcontentloaded');
-        await page.waitForTimeout(2500);
+        await waitForSystemVulnerabilitiesReady(page);
 
         const body = (await page.textContent('body')) ?? '';
         expect(body).toContain(CVE_V1);
@@ -158,7 +204,7 @@ test.describe.serial('Vulnerability + exception lifecycle (UI)', () => {
 
         await page.goto(`/vulnerabilities/system?hostname=${encodeURIComponent(ASSET2)}`);
         await page.waitForLoadState('domcontentloaded');
-        await page.waitForTimeout(2500);
+        await waitForSystemVulnerabilitiesReady(page);
 
         const body = (await page.textContent('body')) ?? '';
         expect(body).toContain(CVE_V2);
@@ -172,7 +218,7 @@ test.describe.serial('Vulnerability + exception lifecycle (UI)', () => {
 
         await page.goto('/my-exception-requests');
         await page.waitForLoadState('domcontentloaded');
-        await page.waitForTimeout(2500);
+        await waitForMyExceptionRequestsReady(page);
 
         const body = (await page.textContent('body')) ?? '';
         // The approved request references vuln1 / asset1
@@ -187,7 +233,7 @@ test.describe.serial('Vulnerability + exception lifecycle (UI)', () => {
 
         await page.goto('/my-exception-requests');
         await page.waitForLoadState('domcontentloaded');
-        await page.waitForTimeout(2500);
+        await waitForMyExceptionRequestsReady(page);
 
         const body = (await page.textContent('body')) ?? '';
         expect(body).toContain(CVE_V2);
@@ -201,7 +247,10 @@ test.describe.serial('Vulnerability + exception lifecycle (UI)', () => {
 
         await page.goto('/exception-approvals');
         await page.waitForLoadState('domcontentloaded');
-        await page.waitForTimeout(2500);
+        await page.waitForResponse((response) =>
+            response.url().includes('/api/vulnerability-exception-requests/pending') && response.request().method() === 'GET' && response.ok()
+        );
+        await expect(page.locator('main')).toBeVisible();
 
         // The dashboard only lists PENDING requests. We approved/rejected/cancelled
         // every request our test created, so the dashboard should reflect "0 pending"
@@ -219,7 +268,7 @@ test.describe.serial('Vulnerability + exception lifecycle (UI)', () => {
 
         await page.goto('/vulnerabilities/exceptions');
         await page.waitForLoadState('domcontentloaded');
-        await page.waitForTimeout(2500);
+        await waitForVulnerabilityExceptionsReady(page);
 
         const body = (await page.textContent('body')) ?? '';
         // Only CVE_V1's request was APPROVED, so an active exception exists for it.
@@ -248,7 +297,7 @@ test.describe.serial('Vulnerability + exception lifecycle (UI)', () => {
 
         await page.goto('/aws-account-sharing');
         await page.waitForLoadState('domcontentloaded');
-        await page.waitForTimeout(2500);
+        await waitForAwsAccountSharingReady(page);
 
         const body = (await page.textContent('body')) ?? '';
         // Both endpoints of the sharing rule are visible in the row text.
@@ -265,8 +314,7 @@ test.describe.serial('Vulnerability + exception lifecycle (UI)', () => {
 
         await page.goto('/account-vulns');
         await page.waitForLoadState('domcontentloaded');
-        // Account-vulns paints account groups + assets after a fetch round-trip.
-        await page.waitForTimeout(3500);
+        await waitForAccountVulnsReady(page);
 
         const body = (await page.textContent('body')) ?? '';
         // user1 has direct mappings to A and C; both account ids and both asset
@@ -287,7 +335,7 @@ test.describe.serial('Vulnerability + exception lifecycle (UI)', () => {
 
         await page.goto('/account-vulns');
         await page.waitForLoadState('domcontentloaded');
-        await page.waitForTimeout(3500);
+        await waitForAccountVulnsReady(page);
 
         const body = (await page.textContent('body')) ?? '';
         // user2 owns account B and has been granted account A via the scoped rule.
@@ -322,7 +370,7 @@ test.describe.serial('Vulnerability + exception lifecycle (UI)', () => {
         await page.goto('/vulnerabilities/exceptions');
         await page.waitForLoadState('domcontentloaded');
         // Wait for the table to fully render (header label is stable).
-        await page.waitForSelector('text=Vulnerability Exceptions');
+        await waitForVulnerabilityExceptionsReady(page);
 
         const expectedCve = process.env.EXPECTED_EXCEPTION_CVE!;
         // No row containing the test CVE.
@@ -340,7 +388,7 @@ test.describe.serial('Vulnerability + exception lifecycle (UI)', () => {
         await login(page, ADMIN.user, ADMIN.pass);
         await page.goto('/vulnerabilities/exceptions');
         await page.waitForLoadState('domcontentloaded');
-        await page.waitForSelector('text=Vulnerability Exceptions');
+        await waitForVulnerabilityExceptionsReady(page);
 
         const expectedCve = process.env.EXPECTED_EXCEPTION_CVE!;
         await expect(page.locator(`tr:has-text("${expectedCve}")`).first()).toBeVisible();
