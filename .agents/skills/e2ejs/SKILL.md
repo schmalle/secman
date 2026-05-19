@@ -63,10 +63,7 @@ Rules:
 - The scanner URL is **always** `https://secman.covestro.net`. Do not target
   `http://localhost:4321`, `http://localhost:8080`, or any other variant.
 - Always export `SECMAN_BACKEND_URL=https://secman.covestro.net` before
-  invoking the scanner. This is required to override the scanner's built-in
-  local-auto-detect branch in `tests/js-error-scanner-pp.sh`, which would
-  otherwise flip the target to `http://localhost:4321` as soon as the Astro
-  dev server opens that port.
+  invoking the scanner. The wrapper now enforces this host as policy and rejects non-compliant values.
 - Do **NOT** set `SECMAN_INSECURE=true`. The shared hostname must present a
   valid certificate end-to-end — if TLS verification fails, fix the cert /
   proxy setup rather than disabling verification.
@@ -147,10 +144,7 @@ SECMAN_BACKEND_URL=https://secman.covestro.net \
 ```
 Where N is the iteration number (starting at 1).
 
-Setting `SECMAN_BACKEND_URL` to an explicit `https://` URL puts the scanner
-script's `USER_PROVIDED_HTTP=true` branch in effect and suppresses the
-`localhost:4321` auto-substitution that would otherwise trigger the moment
-the Astro dev server opens its port.
+The wrapper enforces `https://secman.covestro.net` and exits early on host/TLS policy violations.
 
 **Important environment variables** — `SECMAN_ADMIN_NAME`,
 `SECMAN_ADMIN_PASS`, `SECMAN_USER_USER` (vault field `SECMAN_USER_NAME`),

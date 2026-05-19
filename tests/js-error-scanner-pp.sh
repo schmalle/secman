@@ -3,7 +3,18 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# --- Local dev auto-detection ---
+## TLS/host policy enforcement
+CURRENT_BACKEND_URL="${SECMAN_BACKEND_URL:-}"
+if [ -n "$CURRENT_BACKEND_URL" ] && [ "$CURRENT_BACKEND_URL" != "https://secman.covestro.net" ] && [[ "$CURRENT_BACKEND_URL" != pass://* ]]; then
+  echo "ERROR: SECMAN_BACKEND_URL must be https://secman.covestro.net (or pass:// URI)."
+  exit 2
+fi
+if [ "${SECMAN_INSECURE:-}" = "true" ] || [ "${SECMAN_INSECURE:-}" = "1" ] || [ "${SECMAN_INSECURE:-}" = "yes" ]; then
+  echo "ERROR: SECMAN_INSECURE must not be true for e2ejs runs."
+  exit 2
+fi
+
+# --- Local dev auto-detection (disabled for policy compliance) ---
 # If a local frontend dev server is reachable on the configured port, override
 # the backend URL to point at it. This prevents the scanner from accidentally
 # targeting the production host (pass://Test/SECMAN/SECMAN_HOST) when an e2e
@@ -35,18 +46,11 @@ case "$CURRENT_BACKEND_URL" in
 esac
 
 DETECTED_LOCAL=false
-if [ "$USER_PROVIDED_HTTP" = false ]; then
-  if probe_tcp "$LOCAL_FRONTEND_HOST" "$LOCAL_FRONTEND_PORT"; then
-    SECMAN_BACKEND_URL="$LOCAL_FRONTEND_URL"
-    SECMAN_INSECURE="true"
-    DETECTED_LOCAL=true
-  fi
-fi
 
 # --- Environment variables with Proton Pass URIs ---
 # Host + TLS flag (shared by both runs).
 export SECMAN_BACKEND_URL="${SECMAN_BACKEND_URL:-pass://Test/SECMAN/SECMAN_HOST}"
-export SECMAN_INSECURE="${SECMAN_INSECURE:-pass://Test/SECMAN/SECMAN_SSL_ACCEPT_ALL}"
+export SECMAN_INSECURE="${SECMAN_INSECURE:-false}"
 
 # Admin credentials.
 export SECMAN_ADMIN_NAME="${SECMAN_ADMIN_NAME:-pass://Test/SECMAN/SECMAN_ADMIN_NAME}"
@@ -103,6 +107,7 @@ run_role() {
     SECMAN_LOGIN_USER="$user" \
     SECMAN_LOGIN_PASS="$pass" \
     SECMAN_RUN_LABEL="$role" \
+    SECMAN_SCAN_JSON_OUT="$SCRIPT_DIR/../.e2e-logs/js-scan-${role}.json" \
         node "$SCRIPT_DIR/js-error-scanner.mjs"
     local rc=$?
     echo "[$role] scanner exit code: $rc"
@@ -137,7 +142,7 @@ if [ "$NEEDS_PASS" = true ]; then
   # Single pass-cli run resolves all four credentials + host + TLS flag at once,
   # so the user is prompted at most once. The inner script then loops over both
   # roles using the already-resolved values.
-  pass-cli run -- bash -c "$INNER_SCRIPT"
+  pass-cli run -- SECMAN_INSECURE=false bash -c "$INNER_SCRIPT"
 else
   echo "Using pre-resolved credentials from environment."
   echo ""
