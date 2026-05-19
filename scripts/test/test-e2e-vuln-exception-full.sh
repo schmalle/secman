@@ -22,6 +22,7 @@
 #   BASE_URL (default http://localhost:8080)
 #   FRONTEND_URL (default http://localhost:4321)
 #   SKIP_UI=true to skip Playwright phase
+#   RUN_PHASE10=false to skip Phase 10 (import/export/delete-all)
 #   VERBOSE=true for debug logging
 #
 # Usage:
@@ -46,6 +47,9 @@ ADMIN_USERNAME="$(printf '%s' "${SECMAN_ADMIN_NAME:-}" | tr -d '\r\n')"
 ADMIN_PASSWORD="$(printf '%s' "${SECMAN_ADMIN_PASS:-}" | tr -d '\r\n')"
 VERBOSE="${VERBOSE:-false}"
 SKIP_UI="${SKIP_UI:-false}"
+RUN_PHASE10="${RUN_PHASE10:-true}"
+MCP_ONLY=false
+UI_ONLY=false
 
 # Test users — passwords are local-only (these accounts only exist for the test)
 USER1_USERNAME="e2etestuser1"
@@ -143,7 +147,7 @@ usage() {
 E2E Vulnerability + Exception Full Workflow Test (MCP + Web UI)
 
 Usage:
-    $0 [--verbose|-v] [--skip-ui] [--help|-h]
+    $0 [--verbose|-v] [--skip-ui] [--skip-phase10] [--mcp-only] [--ui-only] [--help|-h]
 
 Environment:
     BASE_URL              Backend URL (default http://localhost:8080)
@@ -153,6 +157,7 @@ Environment:
     SECMAN_ADMIN_NAME     Admin username (required for UI phase)
     SECMAN_ADMIN_PASS     Admin password (required for UI phase)
     SKIP_UI=true          Skip Playwright UI phase
+    RUN_PHASE10=false     Skip Phase 10 (import/export/delete-all)
     VERBOSE=true          Debug logging
 EOF
     exit 0
@@ -163,9 +168,33 @@ while [[ $# -gt 0 ]]; do
         --help|-h)    usage ;;
         --verbose|-v) VERBOSE=true; shift ;;
         --skip-ui)    SKIP_UI=true; shift ;;
+        --skip-phase10) RUN_PHASE10=false; shift ;;
+        --mcp-only) MCP_ONLY=true; shift ;;
+        --ui-only) UI_ONLY=true; shift ;;
         *) warn "Unknown option: $1"; shift ;;
     esac
 done
+
+if [[ "$MCP_ONLY" == "true" && "$UI_ONLY" == "true" ]]; then
+    fail "Cannot combine --mcp-only and --ui-only"
+fi
+
+if [[ "$MCP_ONLY" == "true" ]]; then
+    SKIP_UI=true
+fi
+
+if [[ "$UI_ONLY" == "true" ]]; then
+    RUN_PHASE10=false
+    warn "UI-only mode enabled: Phases 1-8 are skipped; UI phase expects test data to already exist."
+fi
+
+SKIPPED_PHASES=()
+record_skip() {
+    local phase="$1"
+    local reason="$2"
+    SKIPPED_PHASES+=("$phase ($reason)")
+    warn "Skipping $phase ($reason)"
+}
 
 # =============================================================================
 # Pre-flight
@@ -640,11 +669,14 @@ log "=== Phase 0: pre-run cleanup ==="
 cleanup pre-run
 ok "Pre-run cleanup complete"
 
-# =============================================================================
-# Phase 1 (MCP): Setup
-# =============================================================================
+if [[ "$UI_ONLY" == "true" ]]; then
+    record_skip "Phases 1-8 (MCP setup/workflow/sharing)" "--ui-only"
+else
+    # =============================================================================
+    # Phase 1 (MCP): Setup
+    # =============================================================================
 
-log "=== Phase 1: MCP setup ==="
+    log "=== Phase 1: MCP setup ==="
 
 # Create users
 res=$(mcp_call "add_user" "$(jq -nc \
@@ -1034,13 +1066,18 @@ admin_sees_rule=$(echo "$res" | jq -r --arg id "$AWS_SHARING_RULE_ID" \
     '(.content // []) | map(select(.id == ($id|tonumber))) | length')
 [[ "$admin_sees_rule" == "1" ]] || fail "Admin list_aws_account_sharing missing rule $AWS_SHARING_RULE_ID"
 ok "Admin sees sharing rule $AWS_SHARING_RULE_ID via list_aws_account_sharing"
+fi
 
 # =============================================================================
 # Phase 9 (UI): Playwright
 # =============================================================================
 
-if [[ "$SKIP_UI" == "true" ]]; then
-    warn "Skipping UI phase (SKIP_UI=true)"
+if [[ "$SKIP_UI" == "true" || "$MCP_ONLY" == "true" ]]; then
+    if [[ "$MCP_ONLY" == "true" ]]; then
+        record_skip "Phase 9 (Web UI Playwright)" "--mcp-only"
+    else
+        record_skip "Phase 9 (Web UI Playwright)" "SKIP_UI=true"
+    fi
 else
     log "=== Phase 9: Web UI (Playwright) ==="
 
@@ -1086,7 +1123,13 @@ fi
 # Phase 10: Exception import/export/delete-all
 # =============================================================================
 
-run_phase_10_exception_import_export
+if [[ "$UI_ONLY" == "true" ]]; then
+    record_skip "Phase 10 (Exception import/export/delete-all)" "--ui-only"
+elif [[ "$RUN_PHASE10" != "true" ]]; then
+    record_skip "Phase 10 (Exception import/export/delete-all)" "RUN_PHASE10=false or --skip-phase10"
+else
+    run_phase_10_exception_import_export
+fi
 
 # =============================================================================
 # Summary
@@ -1094,9 +1137,15 @@ run_phase_10_exception_import_export
 
 ELAPSED=$(( $(date +%s) - START_TIME ))
 echo
-echo -e "${GREEN}=========================================${NC}"
-echo -e "${GREEN}  E2E VULN+EXCEPTION FULL TEST PASSED   ${NC}"
-echo -e "${GREEN}=========================================${NC}"
+if [[ ${#SKIPPED_PHASES[@]} -eq 0 ]]; then
+    echo -e "${GREEN}=========================================${NC}"
+    echo -e "${GREEN}  E2E VULN+EXCEPTION FULL TEST PASSED   ${NC}"
+    echo -e "${GREEN}=========================================${NC}"
+else
+    echo -e "${YELLOW}==============================================${NC}"
+    echo -e "${YELLOW}  E2E VULN+EXCEPTION PARTIAL COVERAGE PASSED  ${NC}"
+    echo -e "${YELLOW}==============================================${NC}"
+fi
 echo "Elapsed: ${ELAPSED}s"
 echo "Users:        $USER1_USERNAME(id=$USER1_ID), $USER2_USERNAME(id=$USER2_ID)"
 echo "Assets:       $ASSET1_NAME(id=$ASSET1_ID), $ASSET2_NAME(id=$ASSET2_ID)"
@@ -1106,4 +1155,12 @@ echo "AWS sharing:  rule=$AWS_SHARING_RULE_ID  scope=[${AWS_ACCOUNT_A}]"
 echo "AWS assets:   ${AWS_ASSET_A_NAME}(id=$AWS_ASSET_A_ID,acct=$AWS_ACCOUNT_A)"
 echo "              ${AWS_ASSET_B_NAME}(id=$AWS_ASSET_B_ID,acct=$AWS_ACCOUNT_B)"
 echo "              ${AWS_ASSET_C_NAME}(id=$AWS_ASSET_C_ID,acct=$AWS_ACCOUNT_C  must NOT leak via sharing)"
+if [[ ${#SKIPPED_PHASES[@]} -eq 0 ]]; then
+    echo "Coverage:     full (phases 0-10)"
+else
+    echo "Coverage:     partial"
+    for skipped in "${SKIPPED_PHASES[@]}"; do
+        echo "  - Skipped: $skipped"
+    done
+fi
 echo
