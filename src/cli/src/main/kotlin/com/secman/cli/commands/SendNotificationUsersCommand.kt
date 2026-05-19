@@ -87,6 +87,7 @@ class SendNotificationUsersCommand : Runnable {
             ) ?: throw RuntimeException("Failed to send user vulnerability notifications - no response from server")
 
             val status = result["status"]?.toString() ?: "UNKNOWN"
+            val notificationScope = result["notificationScope"]?.toString() ?: "GLOBAL_AWS_OVERDUE"
             val awsAccountsAffected = (result["awsAccountsAffected"] as? Number)?.toInt() ?: 0
             val usersNotified = (result["usersNotified"] as? Number)?.toInt() ?: 0
             val emailsSent = (result["emailsSent"] as? Number)?.toInt() ?: 0
@@ -100,6 +101,7 @@ class SendNotificationUsersCommand : Runnable {
             val accountDetails = (result["accountDetails"] as? List<*>) ?: emptyList<Any>()
 
             println("AWS accounts with overdue vulnerabilities: $awsAccountsAffected")
+            println("Notification scope: $notificationScope")
             println()
 
             if (dryRun) {

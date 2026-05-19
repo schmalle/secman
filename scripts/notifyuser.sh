@@ -8,7 +8,7 @@ Usage:
   scripts/notifyuser.sh --notification-user USER_EMAIL --dry-run
 
 Options:
-  --notification-user, --user EMAIL  Notify only this user. A positional email is also accepted.
+  --notification-user, --user EMAIL  Notify only this user. If target user has ADMIN role, scope is all AWS overdue vulns; otherwise only the user's mapped AWS accounts.
   --dry-run                          Preview notifications without sending email.
   --days DAYS                        Vulnerability age threshold in days. Default: 30.
   --help, -h                         Show this help.
