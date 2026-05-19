@@ -316,6 +316,30 @@ db_exec() {
     mariadb -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" -N -e "$1" 2>/dev/null || true
 }
 
+emit_db_count_snapshot() {
+    local label="${1:-unspecified}"
+    local counts
+    counts=$(db_exec "
+        SELECT 'vulnerability_exception' AS table_name, COUNT(*) AS cnt FROM vulnerability_exception
+        UNION ALL
+        SELECT 'vulnerability_exception_request' AS table_name, COUNT(*) AS cnt FROM vulnerability_exception_request
+        UNION ALL
+        SELECT 'user_mapping' AS table_name, COUNT(*) AS cnt FROM user_mapping
+        UNION ALL
+        SELECT 'aws_account_sharing' AS table_name, COUNT(*) AS cnt FROM aws_account_sharing;
+    ")
+
+    if [[ -z "$counts" ]]; then
+        warn "[SNAPSHOT] label=${label} unavailable (database query returned no rows)"
+        return 0
+    fi
+
+    while IFS=$'\t' read -r table_name count; do
+        [[ -z "${table_name:-}" ]] && continue
+        echo "[SNAPSHOT] label=${label} table=${table_name} count=${count}"
+    done <<< "$counts"
+}
+
 # Cached admin JWT — multiple REST calls share this so we don't round-trip
 # /api/auth/login per call. Cleared by cleanup() to avoid bleeding across runs.
 ADMIN_JWT_CACHE=""
@@ -545,6 +569,7 @@ run_phase_10_exception_import_export() {
 cleanup() {
     local phase="${1:-post-run}"
     log "Cleanup ($phase): removing test users, assets, exception requests, AWS sharing artefacts..."
+    emit_db_count_snapshot "cleanup-${phase}-before"
 
     # 0) Drop cached admin JWT — a fresh run logs in again so token rotation
     # / password changes do not bite us silently.
@@ -626,6 +651,7 @@ cleanup() {
         db_exec "DELETE FROM outdated_asset_materialized_view WHERE asset_id IN ($asset_ids_csv);"
     fi
 
+    emit_db_count_snapshot "cleanup-${phase}-after"
     log_dbg "Cleanup ($phase) done"
 }
 
@@ -637,6 +663,7 @@ trap 'cleanup post-run' EXIT
 # =============================================================================
 
 log "=== Phase 0: pre-run cleanup ==="
+emit_db_count_snapshot "run-before"
 cleanup pre-run
 ok "Pre-run cleanup complete"
 
@@ -1087,6 +1114,7 @@ fi
 # =============================================================================
 
 run_phase_10_exception_import_export
+emit_db_count_snapshot "run-after"
 
 # =============================================================================
 # Summary
