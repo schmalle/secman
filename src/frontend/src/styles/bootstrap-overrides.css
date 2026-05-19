@@ -509,3 +509,31 @@ thead.table-dark {
 .bg-dark {
   background-color: var(--scand-bg-header) !important;
 }
+
+/* ========================
+   APPLICATION REGISTER
+   ======================== */
+
+.application-register .table td,
+.application-register .table th {
+  white-space: nowrap;
+}
+
+.application-register-list {
+  max-height: 66vh;
+  overflow: auto;
+}
+
+.application-register-assets {
+  max-height: 360px;
+  overflow: auto;
+}
+
+.application-register .nav-tabs .nav-link {
+  color: var(--scand-text-secondary);
+}
+
+.application-register .nav-tabs .nav-link.active {
+  color: var(--scand-text-primary);
+  font-weight: 600;
+}
