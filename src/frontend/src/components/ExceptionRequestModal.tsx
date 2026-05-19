@@ -143,6 +143,9 @@ const ExceptionRequestModal: React.FC<ExceptionRequestModalProps> = ({
             .map(c => c.scope)
         : ['GLOBAL', 'IP', 'ASSET', 'AWS_ACCOUNT'];
 
+    const normalizeAwsAccountInput = (input: string): string =>
+        input.replace(/\D/g, '').slice(0, 12);
+
     function handleExpirationDateChange(e: React.ChangeEvent<HTMLInputElement>) {
         const value = e.target.value;
         if (value && !longExpirationConfirmed) {
@@ -342,18 +345,46 @@ const ExceptionRequestModal: React.FC<ExceptionRequestModalProps> = ({
                                             />
                                         )}
                                         {scope === 'AWS_ACCOUNT' && (
-                                            <select
-                                                className="form-select form-select-sm"
-                                                style={{ minWidth: 200 }}
-                                                value={scopeValue}
-                                                onChange={e => setScopeValue(e.target.value)}
-                                                disabled={loading || loadingAwsAccounts}
-                                            >
-                                                <option value="">— pick account —</option>
-                                                {awsAccounts.map(a => (
-                                                    <option key={a} value={a}>{a}</option>
-                                                ))}
-                                            </select>
+                                            <div className="d-flex flex-wrap gap-2 align-items-start" style={{ minWidth: 320 }}>
+                                                <div className="flex-grow-1" style={{ minWidth: 220 }}>
+                                                    <input
+                                                        id="aws-account-request-scope-input"
+                                                        type="text"
+                                                        className="form-control form-control-sm"
+                                                        placeholder="Enter 12-digit AWS account"
+                                                        value={scopeValue}
+                                                        onChange={e => setScopeValue(normalizeAwsAccountInput(e.target.value))}
+                                                        disabled={loading || loadingAwsAccounts}
+                                                        inputMode="numeric"
+                                                        pattern="\d{12}"
+                                                        maxLength={12}
+                                                        list="accessible-aws-account-request-options"
+                                                        autoComplete="off"
+                                                        aria-label="AWS account number"
+                                                    />
+                                                    <datalist id="accessible-aws-account-request-options">
+                                                        {awsAccounts.map(a => (
+                                                            <option key={a} value={a} />
+                                                        ))}
+                                                    </datalist>
+                                                </div>
+                                                <select
+                                                    className="form-select form-select-sm"
+                                                    style={{ width: 'auto', minWidth: 190 }}
+                                                    value={scopeValue}
+                                                    onChange={e => setScopeValue(e.target.value)}
+                                                    disabled={loading || loadingAwsAccounts}
+                                                    aria-label="Accessible AWS accounts"
+                                                >
+                                                    <option value="">— pick account —</option>
+                                                    {awsAccounts.map(a => (
+                                                        <option key={a} value={a}>{a}</option>
+                                                    ))}
+                                                </select>
+                                                <small className="text-muted w-100">
+                                                    Enter or pick one of your accessible AWS accounts.
+                                                </small>
+                                            </div>
                                         )}
                                     </div>
                                     {validationErrors.scope && (

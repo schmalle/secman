@@ -81,6 +81,16 @@ async function waitForSystemVulnerabilitiesReady(page: Page) {
     await expect(page.locator('table')).toBeVisible();
 }
 
+async function waitForCurrentVulnerabilitiesReady(page: Page) {
+    await page.waitForResponse((response) =>
+        response.url().includes('/api/vulnerabilities/current') &&
+        !response.url().includes('/api/vulnerabilities/current/system') &&
+        response.request().method() === 'GET' &&
+        response.ok()
+    );
+    await expect(page.locator('table')).toBeVisible();
+}
+
 async function waitForOutdatedAssetsReady(page: Page) {
     await page.waitForResponse((response) =>
         response.url().includes('/api/outdated-assets') && response.request().method() === 'GET' && response.ok()
@@ -274,6 +284,32 @@ test.describe.serial('Vulnerability + exception lifecycle (UI)', () => {
         // Only CVE_V1's request was APPROVED, so an active exception exists for it.
         // CVE_V2's requests were REJECTED and CANCELLED — no exception should be created.
         expect(body).toContain(CVE_V1);
+
+        await logout(page);
+    });
+
+    test('exception request modal allows AWS account scope to be typed or picked', async ({ page }) => {
+        await login(page, ADMIN.user, ADMIN.pass);
+
+        await page.goto('/vulnerabilities/current');
+        await page.waitForLoadState('domcontentloaded');
+        await waitForCurrentVulnerabilitiesReady(page);
+
+        await page.getByRole('button', { name: /request exception/i }).first().click();
+        await expect(page.getByRole('heading', { name: /request vulnerability exception/i })).toBeVisible();
+
+        await page.getByLabel('Exception scope').selectOption('AWS_ACCOUNT');
+
+        const accountInput = page.getByLabel('AWS account number');
+        await expect(accountInput).toBeVisible();
+        await expect(accountInput).toBeEnabled();
+        await accountInput.fill(AWS_ACCOUNT_A);
+        await expect(accountInput).toHaveValue(AWS_ACCOUNT_A);
+
+        const accountPicker = page.getByLabel('Accessible AWS accounts');
+        await expect(accountPicker).toContainText(AWS_ACCOUNT_B);
+        await accountPicker.selectOption(AWS_ACCOUNT_B);
+        await expect(accountInput).toHaveValue(AWS_ACCOUNT_B);
 
         await logout(page);
     });
