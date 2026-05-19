@@ -69,6 +69,7 @@ env/
 htmlcov/
 
 # Project specific
+.worktrees/
 .claude/settings.local.json
 ./codex/
 .serena/

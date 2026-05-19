@@ -103,26 +103,25 @@ On each target, the script creates / refreshes this layout under
 
 ```
 <remote-dir>/
-├── backend/
-│   └── backendng-<version>-all.jar
-├── cli/
-│   └── cli-<version>-all.jar
-└── frontend/
-    ├── index.html
-    ├── _astro/
-    ├── ...
-    └── (entire contents of src/frontend/dist/)
+└── src/
+    ├── backendng/
+    │   └── build/libs/backendng-<version>-all.jar
+    ├── cli/
+    │   └── build/libs/cli-<version>-all.jar
+    └── frontend/
+        └── dist/
+            ├── client/
+            ├── server/
+            └── (entire contents of src/frontend/dist/)
 ```
 
 Transfer is done with `rsync -az --delete`:
 
 - `-a` preserves permissions / timestamps.
 - `-z` compresses over the wire.
-- `--delete` removes files on the target that no longer exist locally
-  inside each of the three subdirectories. **This means old artifacts
-  with different version suffixes are pruned** — if you need to keep them,
-  use `--dest` to point at a fresh release directory each run (see the
-  `releases/2026-05-17` example above) and flip a symlink yourself.
+- `--delete` removes files from the target frontend `dist/` tree that no
+  longer exist locally. Backend and CLI jars are copied into their Gradle
+  `build/libs` locations so existing runtime scripts keep working.
 
 ## Behaviour and order of operations
 

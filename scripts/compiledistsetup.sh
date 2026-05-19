@@ -33,13 +33,13 @@
 #
 # REMOTE LAYOUT (created under <remote-dir> on each target)
 #   <remote-dir>/
-#     backend/backendng-<ver>-all.jar
-#     cli/cli-<ver>-all.jar
-#     frontend/        (contents of src/frontend/dist/)
+#     src/backendng/build/libs/backendng-<ver>-all.jar
+#     src/cli/build/libs/cli-<ver>-all.jar
+#     src/frontend/dist/        (contents of src/frontend/dist/)
 #
-#   Transfer uses rsync -az --delete, so stale files inside backend/,
-#   cli/, and frontend/ are pruned on each run. To keep history, point
-#   --dest at a versioned directory (e.g. releases/2026-05-17) per run.
+#   Transfer uses rsync -az --delete for the frontend dist directory.
+#   Backend and CLI jars are copied into their Gradle build/libs locations
+#   so runtime scripts that reference the repository-like tree keep working.
 #
 # PREREQUISITES
 #   Build host : bash, ssh, rsync, npm, JDK 21 toolchain, ./gradlew.
@@ -177,17 +177,21 @@ deploy_to() {
     local target="$1"
     echo "==> Deploying to $target:$REMOTE_DEST"
 
+    local remote_backend_libs="$REMOTE_DEST/src/backendng/build/libs"
+    local remote_cli_libs="$REMOTE_DEST/src/cli/build/libs"
+    local remote_frontend_dist="$REMOTE_DEST/src/frontend/dist"
+
     # Pre-flight: confirm SSH works and create remote layout
-    ssh "${SSH_OPTS[@]}" "$target" "mkdir -p '$REMOTE_DEST/backend' '$REMOTE_DEST/cli' '$REMOTE_DEST/frontend'"
+    ssh "${SSH_OPTS[@]}" "$target" "mkdir -p '$remote_backend_libs' '$remote_cli_libs' '$remote_frontend_dist'"
 
     rsync -az --delete -e "$RSYNC_SSH" \
-        "$BACKEND_JAR" "$target:$REMOTE_DEST/backend/"
+        "$BACKEND_JAR" "$target:$remote_backend_libs/"
 
     rsync -az --delete -e "$RSYNC_SSH" \
-        "$CLI_JAR" "$target:$REMOTE_DEST/cli/"
+        "$CLI_JAR" "$target:$remote_cli_libs/"
 
     rsync -az --delete -e "$RSYNC_SSH" \
-        "$FRONTEND_DIST/" "$target:$REMOTE_DEST/frontend/"
+        "$FRONTEND_DIST/" "$target:$remote_frontend_dist/"
 
     echo "    done: $target"
 }
