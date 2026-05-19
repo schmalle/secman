@@ -5,8 +5,12 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="94ada8b3-9f4e-473c-9fea-3bc9651b5bdd" name="Changes" comment="test change">
-      <change beforePath="$PROJECT_DIR$/docs/COMPILE_DIST_SETUP.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/COMPILE_DIST_SETUP.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/compiledistsetup.sh" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/compiledistsetup.sh" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/domain/ApplicationRegister.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/domain/ApplicationRegister.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/dto/ApplicationRegisterDtos.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/dto/ApplicationRegisterDtos.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/ApplicationRegisterService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/ApplicationRegisterService.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/src/components/ApplicationRegister.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/components/ApplicationRegister.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/src/services/applicationRegisterService.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/services/applicationRegisterService.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/js-error-scanner-pp.sh" beforeDir="false" afterPath="$PROJECT_DIR$/tests/js-error-scanner-pp.sh" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

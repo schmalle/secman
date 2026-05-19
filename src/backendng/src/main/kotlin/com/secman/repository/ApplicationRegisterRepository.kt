@@ -13,6 +13,9 @@ interface ApplicationRegisterRepository : JpaRepository<ApplicationRegister, Lon
 
     fun findByCarIdIgnoreCase(carId: String): Optional<ApplicationRegister>
 
+    @Query("SELECT a.carId FROM ApplicationRegister a")
+    fun findAllCarIds(): List<String>
+
     @Query(
         """
         SELECT a FROM ApplicationRegister a

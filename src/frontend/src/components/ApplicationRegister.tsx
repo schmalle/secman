@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { getUser } from '../utils/auth';
 import { isAdmin, isSecChampion } from '../utils/permissions';
 import {
@@ -10,12 +10,12 @@ import {
   updateApplication,
   type ApplicationAssetSummary,
   type ApplicationRegisterDetail,
-  type ApplicationRegisterRequest,
+  type ApplicationRegisterSaveRequest,
   type ApplicationRegisterSummary,
 } from '../services/applicationRegisterService';
 import { authenticatedGet } from '../utils/auth';
 
-type TabKey = 'operation' | 'technical' | 'organization' | 'relations' | 'compliance' | 'dates' | 'reporting';
+type TabKey = 'operation' | 'technical' | 'organization' | 'relations' | 'compliance' | 'dates';
 
 interface AssetOption {
   id: number;
@@ -25,15 +25,33 @@ interface AssetOption {
   ip?: string | null;
 }
 
-const emptyForm: ApplicationRegisterRequest = {
-  carId: '',
+interface UserOption {
+  id: number | null;
+  username: string;
+  email: string;
+}
+
+interface WorkgroupOption {
+  id: number;
+  name: string;
+}
+
+interface ApplicationRegisterExportRecord extends ApplicationRegisterDetail {
+  assetIds?: number[];
+  assets?: ApplicationAssetSummary[];
+}
+
+interface ApplicationRegisterExportFile {
+  version: 1;
+  exportedAt: string;
+  applications: ApplicationRegisterExportRecord[];
+}
+
+const emptyForm: ApplicationRegisterSaveRequest = {
   name: '',
-  processCluster: '',
-  processArea: '',
   criticality: '',
   operationalStatus: '',
   businessOwner: '',
-  applicationChampion: '',
   applicationManager: '',
   applicationTechnology: '',
   applicationArchitecture: '',
@@ -41,36 +59,12 @@ const emptyForm: ApplicationRegisterRequest = {
   informationClassification: '',
   processingOfPersonalData: '',
   icsRelevant: '',
-  legalRegulatory: '',
-  legalRegulatoryRationaleImpact: '',
-  dataExportControlRelevant: '',
   applicationExportControlRelevant: '',
   operationModel: '',
   productionOperatingHours: '',
   serviceOperatingHours: '',
-  sslCertificatesUsed: '',
-  allMachineUsers: '',
-  recoveryPlanUrl: '',
-  authorizationConceptUrl: '',
-  passwordStorageTool: '',
-  availabilitySupportUrl: '',
-  recurringTasksResponsibilitiesUrl: '',
   backupRecoveryUrl: '',
-  monitoringEscalationUrl: '',
-  toolsUsedForMonitoringUrl: '',
-  licenseManagementUrl: '',
-  communicationChannelsUrl: '',
   incidentAssignmentGroup: '',
-  solverGroupC: '',
-  changeApprovalGroup: '',
-  cabApprovalGroup: '',
-  changeFulfillmentGroup: '',
-  runAndChange: '',
-  managedServiceRun: '',
-  managedServiceChange: '',
-  extendedWorkbenchChange: '',
-  extendedWorkbenchRun: '',
-  managedInternally: '',
   notes: '',
   cmdbWorkspaceUrl: '',
 };
@@ -82,66 +76,33 @@ const tabs: Array<{ key: TabKey; label: string; icon: string }> = [
   { key: 'relations', label: 'Relations', icon: 'bi-link-45deg' },
   { key: 'compliance', label: 'Compliance', icon: 'bi-shield-check' },
   { key: 'dates', label: 'Dates', icon: 'bi-calendar3' },
-  { key: 'reporting', label: 'Reporting', icon: 'bi-file-text' },
 ];
 
-const fieldGroups: Record<Exclude<TabKey, 'relations'>, Array<{ name: keyof ApplicationRegisterRequest; label: string; type?: string; textarea?: boolean }>> = {
-  operation: [
-    { name: 'operationModel', label: 'Operation model' },
-    { name: 'productionOperatingHours', label: 'Production operating hours' },
-    { name: 'serviceOperatingHours', label: 'Service operating hours' },
-    { name: 'sslCertificatesUsed', label: 'SSL certificates used' },
-    { name: 'allMachineUsers', label: 'All machine users' },
-    { name: 'passwordStorageTool', label: 'Password storage tool' },
-  ],
+const fieldGroups: Record<Exclude<TabKey, 'relations'>, Array<{ name: keyof ApplicationRegisterSaveRequest; label: string; type?: string; textarea?: boolean; options?: string[] }>> = {
+  operation: [],
   technical: [
-    { name: 'applicationTechnology', label: 'Application technology' },
-    { name: 'applicationArchitecture', label: 'Application architecture' },
-    { name: 'recoveryPlanUrl', label: 'Recovery plan URL' },
-    { name: 'authorizationConceptUrl', label: 'Authorization concept URL' },
-    { name: 'availabilitySupportUrl', label: 'Availability support URL' },
+    { name: 'applicationTechnology', label: 'Application technology', options: ['SAAS', 'Other'] },
+    { name: 'applicationArchitecture', label: 'Application architecture', options: ['Legacy', 'Container'] },
     { name: 'backupRecoveryUrl', label: 'Backup and recovery URL' },
-    { name: 'monitoringEscalationUrl', label: 'Monitoring escalation URL' },
-    { name: 'toolsUsedForMonitoringUrl', label: 'Tools used for monitoring URL' },
-    { name: 'licenseManagementUrl', label: 'License management URL' },
-    { name: 'communicationChannelsUrl', label: 'Communication channels URL' },
-    { name: 'recurringTasksResponsibilitiesUrl', label: 'Recurring tasks URL' },
   ],
   organization: [
-    { name: 'incidentAssignmentGroup', label: 'Incident assignment group' },
-    { name: 'solverGroupC', label: 'Solver group C' },
-    { name: 'changeApprovalGroup', label: 'Change approval group' },
-    { name: 'cabApprovalGroup', label: 'CAB approval group' },
-    { name: 'changeFulfillmentGroup', label: 'Change fulfillment group' },
-    { name: 'runAndChange', label: 'Run and change' },
-    { name: 'managedServiceRun', label: 'Managed service run' },
-    { name: 'managedServiceChange', label: 'Managed service change' },
-    { name: 'extendedWorkbenchChange', label: 'Extended workbench change' },
-    { name: 'extendedWorkbenchRun', label: 'Extended workbench run' },
-    { name: 'managedInternally', label: 'Managed internally' },
+    { name: 'incidentAssignmentGroup', label: 'Incident management group' },
   ],
   compliance: [
-    { name: 'informationClassification', label: 'Information classification' },
-    { name: 'processingOfPersonalData', label: 'Processing of personal data' },
-    { name: 'icsRelevant', label: 'ICS relevant' },
-    { name: 'legalRegulatory', label: 'Legal regulatory' },
-    { name: 'legalRegulatoryRationaleImpact', label: 'Legal regulatory rationale impact', textarea: true },
-    { name: 'dataExportControlRelevant', label: 'Data export control relevant' },
-    { name: 'applicationExportControlRelevant', label: 'Application export control relevant' },
+    { name: 'informationClassification', label: 'Information classification', options: ['PUBLIC', 'INTERNAL', 'CONFIDENTIAL', 'STRICTLY CONFIDENTIAL'] },
+    { name: 'processingOfPersonalData', label: 'Data Privacy', options: ['YES', 'NO'] },
+    { name: 'icsRelevant', label: 'ICS relevant', options: ['YES', 'NO'] },
+    { name: 'applicationExportControlRelevant', label: 'Application export control relevant', options: ['YES', 'NO'] },
   ],
   dates: [
     { name: 'lastQualityCheck', label: 'Last quality check', type: 'date' },
   ],
-  reporting: [
-    { name: 'notes', label: 'Notes', textarea: true },
-    { name: 'cmdbWorkspaceUrl', label: 'CMDB workspace URL' },
-  ],
 };
 
-const toForm = (application: ApplicationRegisterDetail): ApplicationRegisterRequest => {
+const toForm = (application: ApplicationRegisterDetail): ApplicationRegisterSaveRequest => {
   const form = { ...emptyForm };
   Object.keys(form).forEach((key) => {
-    const typedKey = key as keyof ApplicationRegisterRequest;
+    const typedKey = key as keyof ApplicationRegisterSaveRequest;
     form[typedKey] = (application[typedKey] ?? '') as never;
   });
   return form;
@@ -150,37 +111,65 @@ const toForm = (application: ApplicationRegisterDetail): ApplicationRegisterRequ
 const ApplicationRegister: React.FC = () => {
   const [applications, setApplications] = useState<ApplicationRegisterSummary[]>([]);
   const [selected, setSelected] = useState<ApplicationRegisterDetail | null>(null);
-  const [formData, setFormData] = useState<ApplicationRegisterRequest>(emptyForm);
+  const [formData, setFormData] = useState<ApplicationRegisterSaveRequest>(emptyForm);
   const [assetOptions, setAssetOptions] = useState<AssetOption[]>([]);
+  const [userOptions, setUserOptions] = useState<UserOption[]>([]);
+  const [workgroupOptions, setWorkgroupOptions] = useState<WorkgroupOption[]>([]);
   const [selectedAssetIds, setSelectedAssetIds] = useState<number[]>([]);
   const [search, setSearch] = useState('');
   const [assetSearch, setAssetSearch] = useState('');
   const [activeTab, setActiveTab] = useState<TabKey>('operation');
+  const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
 
   const user = getUser();
   const canMutate = isAdmin(user?.roles) || isSecChampion(user?.roles);
+  const canImportExport = isAdmin(user?.roles);
 
   useEffect(() => {
     void loadApplications();
     void loadAssets();
+    void loadUsers();
+    void loadWorkgroups();
   }, []);
 
-  const filteredApplications = useMemo(() => applications, [applications]);
+  const filteredApplications = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return applications;
+
+    return applications.filter((application) =>
+      [
+        application.carId,
+        application.name,
+        application.businessOwner,
+        application.applicationManager,
+        application.operationalStatus || '',
+        application.criticality || '',
+      ].some((value) => value.toLowerCase().includes(query))
+    );
+  }, [applications, search]);
+
+  const searchPreview = useMemo(() => {
+    if (!search.trim()) return [];
+    return filteredApplications.slice(0, 5);
+  }, [filteredApplications, search]);
   const filteredAssets = useMemo(() => {
     const query = assetSearch.trim().toLowerCase();
     if (!query) return assetOptions.slice(0, 80);
-    return assetOptions.filter((asset) =>
-      [asset.name, asset.type, asset.owner, asset.ip || ''].some((value) => value.toLowerCase().includes(query))
-    ).slice(0, 80);
+    return assetOptions.filter((asset) => asset.name.toLowerCase().includes(query)).slice(0, 80);
   }, [assetOptions, assetSearch]);
 
-  const loadApplications = async (nextSearch = search) => {
+  const loadApplications = async () => {
     setLoading(true);
     try {
-      const data = await listApplications(nextSearch);
+      const data = await listApplications('');
       setApplications(data);
       setError(null);
     } catch (err) {
@@ -201,14 +190,41 @@ const ApplicationRegister: React.FC = () => {
     }
   };
 
-  const selectApplication = async (id: number) => {
+  const loadUsers = async () => {
+    try {
+      const response = await authenticatedGet('/api/users');
+      if (response.ok) {
+        const users: UserOption[] = await response.json();
+        setUserOptions(users.filter((option) => !option.email || !option.email.endsWith('@pending.local')));
+      }
+    } catch (err) {
+      console.error('Failed to load users for application register', err);
+    }
+  };
+
+  const loadWorkgroups = async () => {
+    try {
+      const response = await authenticatedGet('/api/workgroups');
+      if (response.ok) {
+        const workgroups: WorkgroupOption[] = await response.json();
+        setWorkgroupOptions(workgroups.sort((left, right) => left.name.localeCompare(right.name)));
+      }
+    } catch (err) {
+      console.error('Failed to load workgroups for application register', err);
+    }
+  };
+
+  const editApplication = async (id: number) => {
     try {
       const detail = await getApplication(id);
       setSelected(detail);
       setFormData(toForm(detail));
-      setSelectedAssetIds(detail.assets.map((asset) => asset.id));
+      setSelectedAssetIds((detail.assets ?? []).map((asset) => asset.id));
       setActiveTab('operation');
+      setShowForm(true);
       setError(null);
+      setSuccess(null);
+      window.setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 0);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load application');
     }
@@ -219,10 +235,22 @@ const ApplicationRegister: React.FC = () => {
     setFormData({ ...emptyForm });
     setSelectedAssetIds([]);
     setActiveTab('operation');
+    setShowForm(true);
     setError(null);
+    setSuccess(null);
   };
 
-  const updateField = (name: keyof ApplicationRegisterRequest, value: string) => {
+  const cancelForm = () => {
+    setSelected(null);
+    setFormData({ ...emptyForm });
+    setSelectedAssetIds([]);
+    setActiveTab('operation');
+    setShowForm(false);
+    setError(null);
+    setSuccess(null);
+  };
+
+  const updateField = (name: keyof ApplicationRegisterSaveRequest, value: string) => {
     setFormData((current) => ({ ...current, [name]: value }));
   };
 
@@ -237,8 +265,10 @@ const ApplicationRegister: React.FC = () => {
       const withAssets = await replaceApplicationAssets(saved.id, selectedAssetIds);
       setSelected(withAssets);
       setFormData(toForm(withAssets));
+      setShowForm(false);
       await loadApplications();
       setError(null);
+      setSuccess(selected ? 'Application updated.' : 'Application created.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save application');
     } finally {
@@ -246,14 +276,112 @@ const ApplicationRegister: React.FC = () => {
     }
   };
 
-  const remove = async () => {
-    if (!selected || !canMutate || !window.confirm(`Delete ${selected.name}?`)) return;
+  const deleteApplicationFromList = async (application: ApplicationRegisterSummary | ApplicationRegisterDetail) => {
+    if (!canMutate || !window.confirm(`Delete ${application.name}?`)) return;
+    setDeletingId(application.id);
     try {
-      await deleteApplication(selected.id);
-      startNew();
+      await deleteApplication(application.id);
+      if (selected?.id === application.id) {
+        cancelForm();
+      }
       await loadApplications();
+      setSuccess('Application deleted.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete application');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const exportApplications = async () => {
+    if (!canImportExport) return;
+    setExporting(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const allApplications = await listApplications('');
+      const details = await Promise.all(allApplications.map((application) => getApplication(application.id)));
+      const payload: ApplicationRegisterExportFile = {
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        applications: details.map((application) => ({
+          ...application,
+          assetIds: (application.assets ?? []).map((asset) => asset.id),
+        })),
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `secman-applications-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setSuccess(`Exported ${details.length} applications.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to export applications');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const toImportRecord = (value: unknown): ApplicationRegisterExportFile => {
+    if (!value || typeof value !== 'object') {
+      throw new Error('Import file must be a SecMan application export JSON file.');
+    }
+    const maybeFile = value as Partial<ApplicationRegisterExportFile>;
+    if (!Array.isArray(maybeFile.applications)) {
+      throw new Error('Import file does not contain an applications array.');
+    }
+    return {
+      version: 1,
+      exportedAt: typeof maybeFile.exportedAt === 'string' ? maybeFile.exportedAt : '',
+      applications: maybeFile.applications,
+    };
+  };
+
+  const importApplications = async (file: File) => {
+    if (!canImportExport) return;
+    setImporting(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const payload = toImportRecord(JSON.parse(await file.text()));
+      const existingApplications = await listApplications('');
+      const existingByCarId = new Map(existingApplications.map((application) => [application.carId.toLowerCase(), application]));
+      let createdCount = 0;
+      let updatedCount = 0;
+
+      for (const application of payload.applications) {
+        if (!application.carId || !application.name || !application.businessOwner || !application.applicationManager) {
+          throw new Error('Each imported application must include carId, name, businessOwner, and applicationManager.');
+        }
+        const existing = existingByCarId.get(application.carId.toLowerCase());
+        const assetIds = application.assetIds ?? application.assets?.map((asset) => asset.id) ?? [];
+        const saved = existing
+          ? await updateApplication(existing.id, toForm(application))
+          : await createApplication(toForm(application));
+        await replaceApplicationAssets(saved.id, assetIds);
+        if (existing) {
+          updatedCount += 1;
+        } else {
+          createdCount += 1;
+          existingByCarId.set(application.carId.toLowerCase(), saved);
+        }
+      }
+
+      cancelForm();
+      await loadApplications();
+      setSearch('');
+      setSuccess(`Imported ${payload.applications.length} applications (${createdCount} created, ${updatedCount} updated).`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to import applications');
+    } finally {
+      setImporting(false);
+      if (importInputRef.current) {
+        importInputRef.current.value = '';
+      }
     }
   };
 
@@ -263,10 +391,37 @@ const ApplicationRegister: React.FC = () => {
     );
   };
 
-  const renderField = (field: { name: keyof ApplicationRegisterRequest; label: string; type?: string; textarea?: boolean }) => (
+  const renderField = (field: { name: keyof ApplicationRegisterSaveRequest; label: string; type?: string; textarea?: boolean; options?: string[] }) => (
     <div className="col-md-6" key={field.name}>
       <label className="form-label small fw-semibold text-secondary">{field.label}</label>
-      {field.textarea ? (
+      {field.options ? (
+        <select
+          className="form-select form-select-sm"
+          value={(formData[field.name] as string) || ''}
+          disabled={!canMutate}
+          onChange={(event) => updateField(field.name, event.target.value)}
+        >
+          <option value="">Select {field.label.toLowerCase()}</option>
+          {field.options.map((option) => (
+            <option key={option} value={option}>{option}</option>
+          ))}
+        </select>
+      ) : field.name === 'incidentAssignmentGroup' ? (
+        <select
+          className="form-select form-select-sm"
+          value={(formData.incidentAssignmentGroup as string) || ''}
+          disabled={!canMutate}
+          onChange={(event) => updateField('incidentAssignmentGroup', event.target.value)}
+        >
+          <option value="">Select workgroup</option>
+          {formData.incidentAssignmentGroup && !workgroupOptions.some((option) => option.name === formData.incidentAssignmentGroup) && (
+            <option value={formData.incidentAssignmentGroup}>{formData.incidentAssignmentGroup}</option>
+          )}
+          {workgroupOptions.map((option) => (
+            <option key={option.id} value={option.name}>{option.name}</option>
+          ))}
+        </select>
+      ) : field.textarea ? (
         <textarea
           className="form-control form-control-sm"
           rows={field.name === 'notes' ? 5 : 3}
@@ -286,205 +441,407 @@ const ApplicationRegister: React.FC = () => {
     </div>
   );
 
+  const renderOperationFields = () => (
+    <>
+      <div className="col-md-6">
+        <label className="form-label small fw-semibold text-secondary">Operation model</label>
+        <select
+          className="form-select form-select-sm"
+          value={formData.operationModel || ''}
+          disabled={!canMutate}
+          onChange={(event) => updateField('operationModel', event.target.value)}
+        >
+          <option value="">Select operation model</option>
+          <option value="SAAS">SAAS</option>
+          <option value="self-hosted">self-hosted</option>
+        </select>
+      </div>
+      <div className="col-md-6">
+        <label className="form-label small fw-semibold text-secondary">Production operating hours</label>
+        <select
+          className="form-select form-select-sm"
+          value={formData.productionOperatingHours || ''}
+          disabled={!canMutate}
+          onChange={(event) => updateField('productionOperatingHours', event.target.value)}
+        >
+          <option value="">Select operating hours</option>
+          <option value="N/A">N/A</option>
+          <option value="5x8">5x8</option>
+          <option value="24x7">24x7</option>
+          <option value="OTHER">OTHER</option>
+        </select>
+      </div>
+      <div className="col-md-6">
+        <label className="form-label small fw-semibold text-secondary">Service operating hours</label>
+        <select
+          className="form-select form-select-sm"
+          value={formData.serviceOperatingHours || ''}
+          disabled={!canMutate}
+          onChange={(event) => updateField('serviceOperatingHours', event.target.value)}
+        >
+          <option value="">Select operating hours</option>
+          <option value="N/A">N/A</option>
+          <option value="5x8">5x8</option>
+          <option value="24x7">24x7</option>
+          <option value="OTHER">OTHER</option>
+        </select>
+      </div>
+      {fieldGroups.operation.map(renderField)}
+    </>
+  );
+
   const selectedAssets: ApplicationAssetSummary[] = assetOptions
     .filter((asset) => selectedAssetIds.includes(asset.id))
     .map((asset) => ({ id: asset.id, name: asset.name, type: asset.type, owner: asset.owner, ip: asset.ip }));
 
   return (
-    <div className="container-fluid py-3 application-register">
-      <div className="d-flex align-items-center justify-content-between mb-3">
-        <div>
-          <h1 className="h3 mb-1">Application Register</h1>
-          <div className="text-secondary small">Governance records linked to SecMan assets</div>
+    <div className="container-fluid p-4 application-register">
+      <div className="d-flex align-items-center justify-content-between mb-4">
+        <h2>Application Register</h2>
+        <div className="btn-group" role="group">
+          {canMutate && (
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => {
+                if (showForm) {
+                  cancelForm();
+                } else {
+                  startNew();
+                }
+              }}
+            >
+              {showForm ? 'Cancel' : 'Add New Application'}
+            </button>
+          )}
+          {canImportExport && (
+            <>
+              <button type="button" className="btn btn-success" onClick={() => void exportApplications()} disabled={exporting}>
+                <i className="bi bi-download me-2"></i>
+                {exporting ? 'Exporting...' : 'Export Applications'}
+              </button>
+              <button type="button" className="btn btn-outline-success" onClick={() => importInputRef.current?.click()} disabled={importing}>
+                <i className="bi bi-upload me-2"></i>
+                {importing ? 'Importing...' : 'Import Applications'}
+              </button>
+              <input
+                ref={importInputRef}
+                type="file"
+                className="d-none"
+                accept="application/json,.json"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) void importApplications(file);
+                }}
+              />
+            </>
+          )}
         </div>
-        {canMutate && (
-          <button className="btn btn-primary btn-sm" onClick={startNew}>
-            <i className="bi bi-plus-lg me-1"></i>
-            New Application
-          </button>
-        )}
       </div>
 
       {error && <div className="alert alert-danger py-2">{error}</div>}
+      {success && <div className="alert alert-success py-2">{success}</div>}
 
-      <div className="row g-3">
-        <div className="col-xl-4">
-          <div className="border rounded bg-white">
-            <div className="p-3 border-bottom">
-              <label className="form-label small fw-semibold text-secondary">Search register</label>
-              <div className="input-group input-group-sm">
+      {showForm && (
+        <div className="card mb-4">
+          <div className="card-body">
+            <h5 className="card-title">{selected ? 'Edit Application' : 'Add New Application'}</h5>
+            <form onSubmit={save}>
+              <div className="row g-3">
+                <div className="col-md-3">
+                  <label className="form-label">CAR ID</label>
+                  <input className="form-control" value={selected?.carId || 'Allocated on save'} disabled />
+                </div>
+                <div className="col-md-5">
+                  <label className="form-label">Application name *</label>
+                  <input className="form-control" value={formData.name} required disabled={!canMutate} onChange={(event) => updateField('name', event.target.value)} />
+                </div>
+                <div className="col-md-2">
+                  <label className="form-label">Status</label>
+                  <select
+                    className="form-select"
+                    value={formData.operationalStatus || ''}
+                    disabled={!canMutate}
+                    onChange={(event) => updateField('operationalStatus', event.target.value)}
+                  >
+                    <option value="">Select Status</option>
+                    <option value="Operation">Operation</option>
+                    <option value="Decommissioned">Decommissioned</option>
+                  </select>
+                </div>
+                <div className="col-md-2">
+                  <label className="form-label">Criticality</label>
+                  <select
+                    className="form-select"
+                    value={formData.criticality || ''}
+                    disabled={!canMutate}
+                    onChange={(event) => updateField('criticality', event.target.value)}
+                  >
+                    <option value="">Select Criticality</option>
+                    <option value="LOW">LOW</option>
+                    <option value="MEDIUM">MEDIUM</option>
+                    <option value="HIGH">HIGH</option>
+                  </select>
+                </div>
+                <div className="col-md-3">
+                  <label className="form-label">Business owner *</label>
+                  <select
+                    className="form-select"
+                    value={formData.businessOwner}
+                    required
+                    disabled={!canMutate}
+                    onChange={(event) => updateField('businessOwner', event.target.value)}
+                  >
+                    <option value="">Select Business Owner</option>
+                    {formData.businessOwner && !userOptions.some((option) => option.username === formData.businessOwner) && (
+                      <option value={formData.businessOwner}>{formData.businessOwner}</option>
+                    )}
+                    {userOptions.map((option) => (
+                      <option key={`owner-${option.id ?? option.email}`} value={option.username}>
+                        {option.username}{option.email ? ` (${option.email})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="col-md-3">
+                  <label className="form-label">Application manager *</label>
+                  <select
+                    className="form-select"
+                    value={formData.applicationManager}
+                    required
+                    disabled={!canMutate}
+                    onChange={(event) => updateField('applicationManager', event.target.value)}
+                  >
+                    <option value="">Select Application Manager</option>
+                    {formData.applicationManager && !userOptions.some((option) => option.username === formData.applicationManager) && (
+                      <option value={formData.applicationManager}>{formData.applicationManager}</option>
+                    )}
+                    {userOptions.map((option) => (
+                      <option key={`manager-${option.id ?? option.email}`} value={option.username}>
+                        {option.username}{option.email ? ` (${option.email})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <ul className="nav nav-tabs mt-4">
+                {tabs.map((tab) => (
+                  <li className="nav-item" key={tab.key}>
+                    <button type="button" className={`nav-link ${activeTab === tab.key ? 'active' : ''}`} onClick={() => setActiveTab(tab.key)}>
+                      <i className={`bi ${tab.icon} me-1`}></i>
+                      {tab.label}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+
+              <div className="border border-top-0 p-3 mb-3">
+                {activeTab === 'relations' ? (
+                  <div className="row g-3">
+                    <div className="col-md-5">
+                      <label className="form-label">Find SecMan assets</label>
+                      <input className="form-control mb-2" value={assetSearch} onChange={(event) => setAssetSearch(event.target.value)} placeholder="Asset name" />
+                      <div className="application-register-assets border rounded">
+                        {filteredAssets.map((asset) => (
+                          <label className="d-flex gap-2 align-items-start p-2 border-bottom small" key={asset.id}>
+                            <input type="checkbox" className="form-check-input mt-1" disabled={!canMutate} checked={selectedAssetIds.includes(asset.id)} onChange={() => toggleAsset(asset.id)} />
+                            <span>
+                              <span className="fw-semibold">{asset.name}</span>
+                              <span className="text-secondary d-block">{asset.type} / {asset.owner}{asset.ip ? ` / ${asset.ip}` : ''}</span>
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="col-md-7">
+                      <div className="fw-semibold mb-2">Linked assets</div>
+                      <table className="table table-sm align-middle">
+                        <thead>
+                          <tr><th>Name</th><th>Type</th><th>Owner</th><th>IP</th></tr>
+                        </thead>
+                        <tbody>
+                          {selectedAssets.length === 0 ? (
+                            <tr><td colSpan={4} className="text-secondary">No assets linked.</td></tr>
+                          ) : selectedAssets.map((asset) => (
+                            <tr key={asset.id}>
+                              <td>{asset.name}</td>
+                              <td>{asset.type}</td>
+                              <td>{asset.owner}</td>
+                              <td>{asset.ip || '-'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="row g-3">
+                    {activeTab === 'operation' ? renderOperationFields() : fieldGroups[activeTab].map(renderField)}
+                  </div>
+                )}
+              </div>
+
+              <div className="d-flex justify-content-between align-items-center">
+                <div className="text-secondary small">
+                  {selected ? `Created by ${selected.createdBy || '-'} / Updated by ${selected.updatedBy || '-'}` : 'New register record'}
+                </div>
+                {canMutate && (
+                  <div className="d-flex gap-2">
+                    {selected && (
+                      <button type="button" className="btn btn-outline-danger" onClick={() => void deleteApplicationFromList(selected)} disabled={deletingId === selected.id}>
+                        <i className="bi bi-trash me-1"></i>
+                        {deletingId === selected.id ? 'Deleting...' : 'Delete'}
+                      </button>
+                    )}
+                    <button type="submit" className="btn btn-success" disabled={saving}>
+                      {saving ? 'Saving...' : selected ? 'Update' : 'Save'}
+                    </button>
+                    <button type="button" className="btn btn-secondary" onClick={cancelForm}>
+                      Cancel
+                    </button>
+                  </div>
+                )}
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      <div className="card mb-4">
+        <div className="card-body">
+          <h6 className="card-title">Filters</h6>
+          <div className="row">
+            <div className="col-md-6">
+              <label className="form-label">Search register</label>
+              <div className="input-group">
                 <span className="input-group-text"><i className="bi bi-search"></i></span>
                 <input
                   className="form-control"
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') void loadApplications();
-                  }}
                   placeholder="Name, CAR ID, owner, manager, status"
                 />
-                <button className="btn btn-outline-secondary" onClick={() => void loadApplications()}>
-                  Filter
+                <button className="btn btn-outline-secondary" onClick={() => setSearch('')} disabled={!search}>
+                  Clear
                 </button>
               </div>
-            </div>
-            <div className="table-responsive application-register-list">
-              <table className="table table-sm table-hover align-middle mb-0">
-                <thead className="table-light">
-                  <tr>
-                    <th>CAR ID</th>
-                    <th>Name</th>
-                    <th>Status</th>
-                    <th>Criticality</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {loading ? (
-                    <tr><td colSpan={4} className="text-secondary p-3">Loading...</td></tr>
-                  ) : filteredApplications.length === 0 ? (
-                    <tr><td colSpan={4} className="text-secondary p-3">No application records found.</td></tr>
-                  ) : filteredApplications.map((application) => (
-                    <tr
-                      key={application.id}
-                      className={selected?.id === application.id ? 'table-primary' : ''}
-                      onClick={() => void selectApplication(application.id)}
-                      role="button"
-                    >
-                      <td className="fw-semibold">{application.carId}</td>
-                      <td>
-                        <div>{application.name}</div>
-                        <div className="text-secondary small">{application.businessOwner} / {application.applicationManager}</div>
-                      </td>
-                      <td>{application.operationalStatus || '-'}</td>
-                      <td>{application.criticality || '-'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              {search.trim() && (
+                <div className="border rounded mt-2 bg-white">
+                  <div className="px-3 py-2 small text-secondary border-bottom">
+                    {filteredApplications.length} potential {filteredApplications.length === 1 ? 'hit' : 'hits'}
+                  </div>
+                  {searchPreview.length === 0 ? (
+                    <div className="px-3 py-2 text-secondary">No matches found.</div>
+                  ) : (
+                    searchPreview.map((application) => (
+                      <button
+                        type="button"
+                        className="list-group-item list-group-item-action border-0 border-bottom text-start w-100"
+                        key={`search-preview-${application.id}`}
+                        onClick={() => void editApplication(application.id)}
+                      >
+                        <div className="fw-semibold">{application.name}</div>
+                        <div className="small text-secondary">
+                          CAR {application.carId} / {application.businessOwner} / {application.applicationManager}
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
+      </div>
 
-        <div className="col-xl-8">
-          <form className="border rounded bg-white" onSubmit={save}>
-            <div className="p-3 border-bottom">
-              <div className="row g-2">
-                <div className="col-md-3">
-                  <label className="form-label small fw-semibold text-secondary">CAR ID</label>
-                  <input className="form-control form-control-sm" value={formData.carId} required disabled={!canMutate} onChange={(event) => updateField('carId', event.target.value)} />
-                </div>
-                <div className="col-md-5">
-                  <label className="form-label small fw-semibold text-secondary">Application name</label>
-                  <input className="form-control form-control-sm" value={formData.name} required disabled={!canMutate} onChange={(event) => updateField('name', event.target.value)} />
-                </div>
-                <div className="col-md-2">
-                  <label className="form-label small fw-semibold text-secondary">Status</label>
-                  <input className="form-control form-control-sm" value={formData.operationalStatus || ''} disabled={!canMutate} onChange={(event) => updateField('operationalStatus', event.target.value)} />
-                </div>
-                <div className="col-md-2">
-                  <label className="form-label small fw-semibold text-secondary">Criticality</label>
-                  <input className="form-control form-control-sm" value={formData.criticality || ''} disabled={!canMutate} onChange={(event) => updateField('criticality', event.target.value)} />
-                </div>
-                <div className="col-md-3">
-                  <label className="form-label small fw-semibold text-secondary">Business owner</label>
-                  <input className="form-control form-control-sm" value={formData.businessOwner} required disabled={!canMutate} onChange={(event) => updateField('businessOwner', event.target.value)} />
-                </div>
-                <div className="col-md-3">
-                  <label className="form-label small fw-semibold text-secondary">Application manager</label>
-                  <input className="form-control form-control-sm" value={formData.applicationManager} required disabled={!canMutate} onChange={(event) => updateField('applicationManager', event.target.value)} />
-                </div>
-                <div className="col-md-3">
-                  <label className="form-label small fw-semibold text-secondary">Application champion</label>
-                  <input className="form-control form-control-sm" value={formData.applicationChampion || ''} disabled={!canMutate} onChange={(event) => updateField('applicationChampion', event.target.value)} />
-                </div>
-                <div className="col-md-3">
-                  <label className="form-label small fw-semibold text-secondary">Process area</label>
-                  <input className="form-control form-control-sm" value={formData.processArea || ''} disabled={!canMutate} onChange={(event) => updateField('processArea', event.target.value)} />
-                </div>
-                <div className="col-md-3">
-                  <label className="form-label small fw-semibold text-secondary">Process cluster</label>
-                  <input className="form-control form-control-sm" value={formData.processCluster || ''} disabled={!canMutate} onChange={(event) => updateField('processCluster', event.target.value)} />
-                </div>
-              </div>
-            </div>
-
-            <ul className="nav nav-tabs px-3 pt-2">
-              {tabs.map((tab) => (
-                <li className="nav-item" key={tab.key}>
-                  <button type="button" className={`nav-link small ${activeTab === tab.key ? 'active' : ''}`} onClick={() => setActiveTab(tab.key)}>
-                    <i className={`bi ${tab.icon} me-1`}></i>
-                    {tab.label}
-                  </button>
-                </li>
-              ))}
-            </ul>
-
-            <div className="p-3">
-              {activeTab === 'relations' ? (
-                <div className="row g-3">
-                  <div className="col-md-5">
-                    <label className="form-label small fw-semibold text-secondary">Find SecMan assets</label>
-                    <input className="form-control form-control-sm mb-2" value={assetSearch} onChange={(event) => setAssetSearch(event.target.value)} placeholder="Asset name, type, owner, IP" />
-                    <div className="application-register-assets border rounded">
-                      {filteredAssets.map((asset) => (
-                        <label className="d-flex gap-2 align-items-start p-2 border-bottom small" key={asset.id}>
-                          <input type="checkbox" className="form-check-input mt-1" disabled={!canMutate} checked={selectedAssetIds.includes(asset.id)} onChange={() => toggleAsset(asset.id)} />
-                          <span>
-                            <span className="fw-semibold">{asset.name}</span>
-                            <span className="text-secondary d-block">{asset.type} / {asset.owner}{asset.ip ? ` / ${asset.ip}` : ''}</span>
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="col-md-7">
-                    <div className="small fw-semibold text-secondary mb-2">Linked assets</div>
-                    <table className="table table-sm align-middle">
-                      <thead className="table-light">
-                        <tr><th>Name</th><th>Type</th><th>Owner</th><th>IP</th></tr>
-                      </thead>
-                      <tbody>
-                        {selectedAssets.length === 0 ? (
-                          <tr><td colSpan={4} className="text-secondary">No assets linked.</td></tr>
-                        ) : selectedAssets.map((asset) => (
-                          <tr key={asset.id}>
-                            <td>{asset.name}</td>
-                            <td>{asset.type}</td>
-                            <td>{asset.owner}</td>
-                            <td>{asset.ip || '-'}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              ) : (
-                <div className="row g-3">
-                  {fieldGroups[activeTab].map(renderField)}
-                </div>
-              )}
-            </div>
-
-            <div className="d-flex justify-content-between align-items-center border-top p-3">
-              <div className="text-secondary small">
-                {selected ? `Created by ${selected.createdBy || '-'} / Updated by ${selected.updatedBy || '-'}` : 'New register record'}
-              </div>
-              {canMutate && (
-                <div className="d-flex gap-2">
-                  {selected && (
-                    <button type="button" className="btn btn-outline-danger btn-sm" onClick={remove}>
-                      <i className="bi bi-trash me-1"></i>
-                      Delete
-                    </button>
-                  )}
-                  <button type="submit" className="btn btn-primary btn-sm" disabled={saving}>
-                    <i className="bi bi-save me-1"></i>
-                    {saving ? 'Saving...' : 'Save'}
-                  </button>
-                </div>
-              )}
-            </div>
-          </form>
+      <div className="card">
+        <div className="card-body">
+          <div className="d-flex justify-content-between align-items-center mb-3">
+            <h5 className="card-title mb-0">Applications ({filteredApplications.length})</h5>
+            <span className="text-secondary small">Existing application records</span>
+          </div>
+          <div className="table-responsive application-register-list">
+            <table className="table table-striped table-hover align-middle">
+              <thead>
+                <tr>
+                  <th>CAR ID</th>
+                  <th>Name</th>
+                  <th>Ownership</th>
+                  <th>Status</th>
+                  <th>Criticality</th>
+                  <th>Updated</th>
+                  {canMutate && <th>Actions</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td colSpan={canMutate ? 7 : 6} className="text-secondary p-3">Loading...</td></tr>
+                ) : filteredApplications.length === 0 ? (
+                  <tr>
+                    <td colSpan={canMutate ? 7 : 6} className="p-4">
+                      <div className="d-flex align-items-center justify-content-between">
+                        <span className="text-secondary">No application records found.</span>
+                        {canMutate && (
+                          <button type="button" className="btn btn-sm btn-primary" onClick={startNew}>
+                            Add New Application
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ) : filteredApplications.map((application) => (
+                  <tr key={application.id}>
+                    <td className="fw-semibold">{application.carId}</td>
+                    <td>
+                      <div className="fw-semibold">{application.name}</div>
+                      <div className="text-secondary small">Application register record</div>
+                    </td>
+                    <td>
+                      <div>{application.businessOwner}</div>
+                      <div className="text-secondary small">Manager: {application.applicationManager}</div>
+                    </td>
+                    <td>
+                      {application.operationalStatus ? (
+                        <span className="badge bg-secondary">{application.operationalStatus}</span>
+                      ) : (
+                        <span className="text-muted">-</span>
+                      )}
+                    </td>
+                    <td>
+                      {application.criticality ? (
+                        <span className="badge bg-light text-dark border">{application.criticality}</span>
+                      ) : (
+                        <span className="text-muted">-</span>
+                      )}
+                    </td>
+                    <td>{application.updatedAt ? new Date(application.updatedAt).toLocaleDateString() : '-'}</td>
+                    {canMutate && (
+                      <td>
+                        <div className="btn-group" role="group">
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-primary"
+                            onClick={() => void editApplication(application.id)}
+                          >
+                            <i className="bi bi-pencil"></i> Edit
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-danger"
+                            onClick={() => void deleteApplicationFromList(application)}
+                            disabled={deletingId === application.id}
+                          >
+                            <i className="bi bi-trash"></i> {deletingId === application.id ? 'Deleting...' : 'Delete'}
+                          </button>
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>

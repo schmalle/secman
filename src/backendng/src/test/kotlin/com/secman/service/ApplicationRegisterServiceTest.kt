@@ -21,14 +21,14 @@ class ApplicationRegisterServiceTest {
     private val service = ApplicationRegisterService(repository, assetRepository)
 
     @Test
-    fun `create trims required strings before saving`() {
+    fun `create allocates car id and trims required strings before saving`() {
         val savedSlot = slot<ApplicationRegister>()
-        every { repository.existsByCarIdIgnoreCase("CAR-123") } returns false
+        every { repository.findAllCarIds() } returns emptyList()
+        every { repository.existsByCarIdIgnoreCase("1") } returns false
         every { repository.save(capture(savedSlot)) } answers { savedSlot.captured.apply { id = 10L } }
 
         val response = service.create(
             validRequest(
-                carId = "  CAR-123  ",
                 name = "  Application Name  ",
                 businessOwner = "  Business Owner  ",
                 applicationManager = "  Manager  "
@@ -36,7 +36,7 @@ class ApplicationRegisterServiceTest {
             "creator"
         )
 
-        assertEquals("CAR-123", response.carId)
+        assertEquals("1", response.carId)
         assertEquals("Application Name", response.name)
         assertEquals("Business Owner", response.businessOwner)
         assertEquals("Manager", response.applicationManager)
@@ -50,7 +50,7 @@ class ApplicationRegisterServiceTest {
             service.create(validRequest(carId = " ", businessOwner = ""), "creator")
         }
 
-        assertEquals("carId is required; businessOwner is required", exception.message)
+        assertEquals("businessOwner is required", exception.message)
     }
 
     @Test

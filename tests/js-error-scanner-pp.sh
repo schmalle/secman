@@ -142,7 +142,7 @@ if [ "$NEEDS_PASS" = true ]; then
   # Single pass-cli run resolves all four credentials + host + TLS flag at once,
   # so the user is prompted at most once. The inner script then loops over both
   # roles using the already-resolved values.
-  pass-cli run -- SECMAN_INSECURE=false bash -c "$INNER_SCRIPT"
+  pass-cli run -- env SECMAN_INSECURE=false bash -c "$INNER_SCRIPT"
 else
   echo "Using pre-resolved credentials from environment."
   echo ""

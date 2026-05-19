@@ -20,45 +20,18 @@ export interface ApplicationRegisterSummary {
 }
 
 export interface ApplicationRegisterDetail extends ApplicationRegisterSummary {
-  processCluster?: string | null;
-  processArea?: string | null;
-  applicationChampion?: string | null;
   applicationTechnology?: string | null;
   applicationArchitecture?: string | null;
   lastQualityCheck?: string | null;
   informationClassification?: string | null;
   processingOfPersonalData?: string | null;
   icsRelevant?: string | null;
-  legalRegulatory?: string | null;
-  legalRegulatoryRationaleImpact?: string | null;
-  dataExportControlRelevant?: string | null;
   applicationExportControlRelevant?: string | null;
   operationModel?: string | null;
   productionOperatingHours?: string | null;
   serviceOperatingHours?: string | null;
-  sslCertificatesUsed?: string | null;
-  allMachineUsers?: string | null;
-  recoveryPlanUrl?: string | null;
-  authorizationConceptUrl?: string | null;
-  passwordStorageTool?: string | null;
-  availabilitySupportUrl?: string | null;
-  recurringTasksResponsibilitiesUrl?: string | null;
   backupRecoveryUrl?: string | null;
-  monitoringEscalationUrl?: string | null;
-  toolsUsedForMonitoringUrl?: string | null;
-  licenseManagementUrl?: string | null;
-  communicationChannelsUrl?: string | null;
   incidentAssignmentGroup?: string | null;
-  solverGroupC?: string | null;
-  changeApprovalGroup?: string | null;
-  cabApprovalGroup?: string | null;
-  changeFulfillmentGroup?: string | null;
-  runAndChange?: string | null;
-  managedServiceRun?: string | null;
-  managedServiceChange?: string | null;
-  extendedWorkbenchChange?: string | null;
-  extendedWorkbenchRun?: string | null;
-  managedInternally?: string | null;
   notes?: string | null;
   cmdbWorkspaceUrl?: string | null;
   createdAt?: string | null;
@@ -68,6 +41,36 @@ export interface ApplicationRegisterDetail extends ApplicationRegisterSummary {
 }
 
 export type ApplicationRegisterRequest = Omit<ApplicationRegisterDetail, 'id' | 'assets' | 'createdAt' | 'updatedAt' | 'createdBy' | 'updatedBy'>;
+export type ApplicationRegisterSaveRequest = Omit<ApplicationRegisterRequest, 'carId'> & { carId?: string | null };
+
+const optionalApplicationFields: Array<keyof ApplicationRegisterSaveRequest> = [
+  'criticality',
+  'operationalStatus',
+  'applicationTechnology',
+  'applicationArchitecture',
+  'lastQualityCheck',
+  'informationClassification',
+  'processingOfPersonalData',
+  'icsRelevant',
+  'applicationExportControlRelevant',
+  'operationModel',
+  'productionOperatingHours',
+  'serviceOperatingHours',
+  'backupRecoveryUrl',
+  'incidentAssignmentGroup',
+  'notes',
+  'cmdbWorkspaceUrl',
+];
+
+function sanitizeRequest(request: ApplicationRegisterSaveRequest): ApplicationRegisterSaveRequest {
+  const sanitized = { ...request };
+  optionalApplicationFields.forEach((field) => {
+    if (sanitized[field] === '') {
+      sanitized[field] = undefined as never;
+    }
+  });
+  return sanitized;
+}
 
 async function parseOrThrow<T>(response: Response, fallback: string): Promise<T> {
   if (response.ok) {
@@ -88,12 +91,12 @@ export async function getApplication(id: number): Promise<ApplicationRegisterDet
   return parseOrThrow(await authenticatedGet(`/api/applications/${id}`), 'Failed to load application');
 }
 
-export async function createApplication(request: ApplicationRegisterRequest): Promise<ApplicationRegisterDetail> {
-  return parseOrThrow(await authenticatedPost('/api/applications', request), 'Failed to create application');
+export async function createApplication(request: ApplicationRegisterSaveRequest): Promise<ApplicationRegisterDetail> {
+  return parseOrThrow(await authenticatedPost('/api/applications', sanitizeRequest(request)), 'Failed to create application');
 }
 
-export async function updateApplication(id: number, request: ApplicationRegisterRequest): Promise<ApplicationRegisterDetail> {
-  return parseOrThrow(await authenticatedPut(`/api/applications/${id}`, request), 'Failed to update application');
+export async function updateApplication(id: number, request: ApplicationRegisterSaveRequest): Promise<ApplicationRegisterDetail> {
+  return parseOrThrow(await authenticatedPut(`/api/applications/${id}`, sanitizeRequest(request)), 'Failed to update application');
 }
 
 export async function deleteApplication(id: number): Promise<void> {

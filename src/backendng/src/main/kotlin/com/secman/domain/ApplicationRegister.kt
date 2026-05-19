@@ -44,12 +44,6 @@ data class ApplicationRegister(
     @NotBlank
     var name: String,
 
-    @Column(name = "process_cluster", columnDefinition = "TEXT")
-    var processCluster: String? = null,
-
-    @Column(name = "process_area", columnDefinition = "TEXT")
-    var processArea: String? = null,
-
     @Column(length = 100)
     var criticality: String? = null,
 
@@ -59,9 +53,6 @@ data class ApplicationRegister(
     @Column(name = "business_owner", nullable = false, length = 255)
     @NotBlank
     var businessOwner: String,
-
-    @Column(name = "application_champion", columnDefinition = "TEXT")
-    var applicationChampion: String? = null,
 
     @Column(name = "application_manager", nullable = false, length = 255)
     @NotBlank
@@ -85,15 +76,6 @@ data class ApplicationRegister(
     @Column(name = "ics_relevant", columnDefinition = "TEXT")
     var icsRelevant: String? = null,
 
-    @Column(name = "legal_regulatory", columnDefinition = "TEXT")
-    var legalRegulatory: String? = null,
-
-    @Column(name = "legal_regulatory_rationale_impact", columnDefinition = "TEXT")
-    var legalRegulatoryRationaleImpact: String? = null,
-
-    @Column(name = "data_export_control_relevant", columnDefinition = "TEXT")
-    var dataExportControlRelevant: String? = null,
-
     @Column(name = "application_export_control_relevant", columnDefinition = "TEXT")
     var applicationExportControlRelevant: String? = null,
 
@@ -106,74 +88,11 @@ data class ApplicationRegister(
     @Column(name = "service_operating_hours", columnDefinition = "TEXT")
     var serviceOperatingHours: String? = null,
 
-    @Column(name = "ssl_certificates_used", columnDefinition = "TEXT")
-    var sslCertificatesUsed: String? = null,
-
-    @Column(name = "all_machine_users", columnDefinition = "TEXT")
-    var allMachineUsers: String? = null,
-
-    @Column(name = "recovery_plan_url", columnDefinition = "TEXT")
-    var recoveryPlanUrl: String? = null,
-
-    @Column(name = "authorization_concept_url", columnDefinition = "TEXT")
-    var authorizationConceptUrl: String? = null,
-
-    @Column(name = "password_storage_tool", columnDefinition = "TEXT")
-    var passwordStorageTool: String? = null,
-
-    @Column(name = "availability_support_url", columnDefinition = "TEXT")
-    var availabilitySupportUrl: String? = null,
-
-    @Column(name = "recurring_tasks_responsibilities_url", columnDefinition = "TEXT")
-    var recurringTasksResponsibilitiesUrl: String? = null,
-
     @Column(name = "backup_recovery_url", columnDefinition = "TEXT")
     var backupRecoveryUrl: String? = null,
 
-    @Column(name = "monitoring_escalation_url", columnDefinition = "TEXT")
-    var monitoringEscalationUrl: String? = null,
-
-    @Column(name = "tools_used_for_monitoring_url", columnDefinition = "TEXT")
-    var toolsUsedForMonitoringUrl: String? = null,
-
-    @Column(name = "license_management_url", columnDefinition = "TEXT")
-    var licenseManagementUrl: String? = null,
-
-    @Column(name = "communication_channels_url", columnDefinition = "TEXT")
-    var communicationChannelsUrl: String? = null,
-
     @Column(name = "incident_assignment_group", columnDefinition = "TEXT")
     var incidentAssignmentGroup: String? = null,
-
-    @Column(name = "solver_group_c", columnDefinition = "TEXT")
-    var solverGroupC: String? = null,
-
-    @Column(name = "change_approval_group", columnDefinition = "TEXT")
-    var changeApprovalGroup: String? = null,
-
-    @Column(name = "cab_approval_group", columnDefinition = "TEXT")
-    var cabApprovalGroup: String? = null,
-
-    @Column(name = "change_fulfillment_group", columnDefinition = "TEXT")
-    var changeFulfillmentGroup: String? = null,
-
-    @Column(name = "run_and_change", columnDefinition = "TEXT")
-    var runAndChange: String? = null,
-
-    @Column(name = "managed_service_run", columnDefinition = "TEXT")
-    var managedServiceRun: String? = null,
-
-    @Column(name = "managed_service_change", columnDefinition = "TEXT")
-    var managedServiceChange: String? = null,
-
-    @Column(name = "extended_workbench_change", columnDefinition = "TEXT")
-    var extendedWorkbenchChange: String? = null,
-
-    @Column(name = "extended_workbench_run", columnDefinition = "TEXT")
-    var extendedWorkbenchRun: String? = null,
-
-    @Column(name = "managed_internally", columnDefinition = "TEXT")
-    var managedInternally: String? = null,
 
     @Column(columnDefinition = "TEXT")
     var notes: String? = null,
