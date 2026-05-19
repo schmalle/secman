@@ -64,6 +64,24 @@ The driver script is
 The shell driver calls MCP via `curl`/`jq` and shells out to `npx playwright`
 for Phase 8, passing the captured IDs/credentials through env vars.
 
+## Read-Only / QA Scope Mode
+
+If the requested task scope is explicitly read-only or QA-only, run a **static
+review only**:
+
+- Do **not** start backend/frontend services.
+- Do **not** run the shell driver or Playwright.
+- Do **not** modify repository code or test assets.
+- Produce a concise **completeness + optimization report** with actionable
+  findings.
+
+Static-review checklist (inspect artifacts only):
+- Skill doc: `.agents/skills/e2evulnexception/SKILL.md`
+- Shell driver: `scripts/test/test-e2e-vuln-exception-full.sh`
+- Playwright spec: `tests/e2e/vuln-exception-full.spec.ts`
+- Cleanup semantics: pre/post cleanup behavior, idempotency, trap handling
+- Env assumptions: required vars, `pass-cli` usage, host/base-url assumptions
+
 ## High-Level Loop
 
 ```
