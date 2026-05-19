@@ -89,3 +89,5 @@ docker/backend/app.jar
 /.clawpatch/findings
 /.clawpatch/reports
 /.clawpatch/runs
+/docs/superpowers/
+/docs/superpowers/
