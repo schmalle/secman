@@ -26,7 +26,10 @@ import org.apache.commons.csv.CSVParser
  * The HTTP client is created dynamically to support runtime SSL configuration.
  */
 @Singleton
-class UserMappingCliService {
+class UserMappingCliService(
+    private val validator: UserMappingValidator,
+    private val javaHttpClientFactory: CliJavaHttpClientFactory
+) {
     private val log = LoggerFactory.getLogger(UserMappingCliService::class.java)
     private val objectMapper = jacksonObjectMapper()
 
@@ -90,10 +93,6 @@ class UserMappingCliService {
         )
     }
 
-    // Client-side validation regex (fast feedback before HTTP call)
-    private val emailRegex = Regex("^[^@]+@[^@]+\\.[^@]+$")
-    private val awsAccountIdRegex = Regex("^\\d{12}$")
-    private val domainRegex = Regex("^[a-zA-Z0-9.-]+$")
 
     /**
      * Authenticate with backend API and get JWT token
@@ -169,19 +168,13 @@ class UserMappingCliService {
         authToken: String
     ): MappingResult {
         // Client-side validation
-        val invalidEmails = emails.filter { !emailRegex.matches(it) }
-        if (invalidEmails.isNotEmpty()) {
-            throw IllegalArgumentException("Invalid email format: ${invalidEmails.joinToString()}")
-        }
-        val invalidDomains = domains.filter { !domainRegex.matches(it) }
-        if (invalidDomains.isNotEmpty()) {
-            throw IllegalArgumentException("Invalid domain format: ${invalidDomains.joinToString()}")
-        }
+        validator.validateEmails(emails)
+        validator.validateDomains(domains)
 
         // Build cross-product entries
         val entries = emails.flatMap { email ->
             domains.map { domain ->
-                mapOf("email" to email.lowercase().trim(), "domain" to domain.lowercase().trim())
+                mapOf("email" to validator.normalizeEmail(email), "domain" to validator.normalizeDomain(domain))
             }
         }
 
@@ -199,19 +192,13 @@ class UserMappingCliService {
         authToken: String
     ): MappingResult {
         // Client-side validation
-        val invalidEmails = emails.filter { !emailRegex.matches(it) }
-        if (invalidEmails.isNotEmpty()) {
-            throw IllegalArgumentException("Invalid email format: ${invalidEmails.joinToString()}")
-        }
-        val invalidAccounts = awsAccountIds.filter { !awsAccountIdRegex.matches(it) }
-        if (invalidAccounts.isNotEmpty()) {
-            throw IllegalArgumentException("Invalid AWS account ID (must be 12 digits): ${invalidAccounts.joinToString()}")
-        }
+        validator.validateEmails(emails)
+        validator.validateAwsAccountIds(awsAccountIds)
 
         // Build cross-product entries
         val entries = emails.flatMap { email ->
             awsAccountIds.map { accountId ->
-                mapOf("email" to email.lowercase().trim(), "awsAccountId" to accountId.trim())
+                mapOf("email" to validator.normalizeEmail(email), "awsAccountId" to validator.normalizeAccountId(accountId))
             }
         }
 
@@ -234,7 +221,7 @@ class UserMappingCliService {
 
         do {
             val params = mutableListOf("page=$page", "size=$pageSize")
-            if (email != null) params.add("email=${email.lowercase().trim()}")
+            if (email != null) params.add("email=${validator.normalizeEmail(email)}")
             if (status != null) params.add("status=${status.uppercase()}")
 
             val request = HttpRequest.GET<Any>("$backendUrl/api/user-mappings?${params.joinToString("&")}")
@@ -276,7 +263,7 @@ class UserMappingCliService {
         backendUrl: String,
         authToken: String
     ): Int {
-        val normalizedEmail = email.lowercase().trim()
+        val normalizedEmail = validator.normalizeEmail(email)
 
         // Fetch all mappings for this email
         val allMappings = listMappings(
@@ -290,10 +277,10 @@ class UserMappingCliService {
         val mappingsToDelete = when {
             removeAll -> allMappings
             domain != null -> allMappings.filter {
-                it.domain?.lowercase()?.trim() == domain.lowercase().trim()
+                it.domain?.let(validator::normalizeDomain) == validator.normalizeDomain(domain)
             }
             awsAccountId != null -> allMappings.filter {
-                it.awsAccountId?.trim() == awsAccountId.trim()
+                it.awsAccountId?.let(validator::normalizeAccountId) == validator.normalizeAccountId(awsAccountId)
             }
             else -> throw IllegalArgumentException(
                 "Must specify either --domain, --account, or --all to indicate what to remove"
@@ -487,18 +474,18 @@ class UserMappingCliService {
 
                         when (type.uppercase()) {
                             "DOMAIN" -> {
-                                if (!emailRegex.matches(email.trim())) {
+                                if (!validator.validateEmail(email.trim())) {
                                     errors.add("Line $lineNumber: Invalid email format")
-                                } else if (!domainRegex.matches(value.trim())) {
+                                } else if (!validator.validateDomain(value.trim())) {
                                     errors.add("Line $lineNumber: Invalid domain format")
                                 } else {
                                     entries.add(mapOf("email" to email.trim(), "domain" to value.trim()))
                                 }
                             }
                             "AWS_ACCOUNT" -> {
-                                if (!emailRegex.matches(email.trim())) {
+                                if (!validator.validateEmail(email.trim())) {
                                     errors.add("Line $lineNumber: Invalid email format")
-                                } else if (!awsAccountIdRegex.matches(value.trim())) {
+                                } else if (!validator.validateAwsAccountId(value.trim())) {
                                     errors.add("Line $lineNumber: Invalid AWS account ID (must be 12 digits)")
                                 } else {
                                     entries.add(mapOf("email" to email.trim(), "awsAccountId" to value.trim()))
@@ -568,9 +555,9 @@ class UserMappingCliService {
                 // Process domains
                 domains?.forEach { domain ->
                     val domainStr = domain.toString()
-                    if (!emailRegex.matches(email.trim())) {
+                    if (!validator.validateEmail(email.trim())) {
                         errors.add("Invalid email format: $email")
-                    } else if (!domainRegex.matches(domainStr.trim())) {
+                    } else if (!validator.validateDomain(domainStr.trim())) {
                         errors.add("Invalid domain format: $domainStr")
                     } else {
                         entries.add(mapOf("email" to email.trim(), "domain" to domainStr.trim()))
@@ -580,9 +567,9 @@ class UserMappingCliService {
                 // Process AWS accounts
                 awsAccounts?.forEach { account ->
                     val accountStr = account.toString()
-                    if (!emailRegex.matches(email.trim())) {
+                    if (!validator.validateEmail(email.trim())) {
                         errors.add("Invalid email format: $email")
-                    } else if (!awsAccountIdRegex.matches(accountStr.trim())) {
+                    } else if (!validator.validateAwsAccountId(accountStr.trim())) {
                         errors.add("Invalid AWS account ID (must be 12 digits): $accountStr")
                     } else {
                         entries.add(mapOf("email" to email.trim(), "awsAccountId" to accountStr.trim()))
@@ -626,18 +613,7 @@ class UserMappingCliService {
         val jsonBody = objectMapper.writeValueAsString(bodyMap)
 
         try {
-            val clientBuilder = java.net.http.HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(30))
-                .followRedirects(java.net.http.HttpClient.Redirect.NORMAL)
-            if (insecureMode) {
-                clientBuilder.sslContext(createTrustAllSslContext())
-                // Disable hostname verification — empty string doesn't work on all
-                // JDK versions, but null reliably disables the HTTPS endpoint check.
-                val sslParams = javax.net.ssl.SSLParameters()
-                sslParams.endpointIdentificationAlgorithm = null
-                clientBuilder.sslParameters(sslParams)
-            }
-            val javaClient = clientBuilder.build()
+            val javaClient = javaHttpClientFactory.create(insecureMode)
 
             val httpRequest = java.net.http.HttpRequest.newBuilder()
                 .uri(URI.create("$backendUrl/api/user-mappings/bulk"))
@@ -714,17 +690,6 @@ class UserMappingCliService {
         } catch (e: Exception) {
             log.error("Bulk request failed: {}", e.message, e)
             throw IllegalArgumentException("Backend API error: ${e.message}")
-        }
-    }
-
-    private fun createTrustAllSslContext(): javax.net.ssl.SSLContext {
-        val trustAllCerts = arrayOf<javax.net.ssl.TrustManager>(object : javax.net.ssl.X509TrustManager {
-            override fun checkClientTrusted(chain: Array<java.security.cert.X509Certificate>?, authType: String?) {}
-            override fun checkServerTrusted(chain: Array<java.security.cert.X509Certificate>?, authType: String?) {}
-            override fun getAcceptedIssuers(): Array<java.security.cert.X509Certificate> = arrayOf()
-        })
-        return javax.net.ssl.SSLContext.getInstance("TLS").apply {
-            init(null, trustAllCerts, java.security.SecureRandom())
         }
     }
 
@@ -871,16 +836,7 @@ class UserMappingCliService {
         val jsonBody = objectMapper.writeValueAsString(bodyMap)
 
         return try {
-            val clientBuilder = java.net.http.HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(30))
-                .followRedirects(java.net.http.HttpClient.Redirect.NORMAL)
-            if (insecureMode) {
-                clientBuilder.sslContext(createTrustAllSslContext())
-                val sslParams = javax.net.ssl.SSLParameters()
-                sslParams.endpointIdentificationAlgorithm = null
-                clientBuilder.sslParameters(sslParams)
-            }
-            val javaClient = clientBuilder.build()
+            val javaClient = javaHttpClientFactory.create(insecureMode)
 
             val httpRequest = java.net.http.HttpRequest.newBuilder()
                 .uri(URI.create("$backendUrl/api/cli/user-mappings/send-statistics-email"))
