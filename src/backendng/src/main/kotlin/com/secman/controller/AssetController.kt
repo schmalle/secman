@@ -93,7 +93,9 @@ open class AssetController(
         @Nullable val ip: String? = null,
         @Nullable val description: String? = null,
         @Nullable val networkZone: NetworkZone? = null,
-        @Nullable val tags: Map<String, String>? = null
+        @Nullable val tags: Map<String, String>? = null,
+        @Nullable val cloudAccountId: String? = null,
+        @Nullable val cloudInstanceId: String? = null
     )
 
     @Serdeable
@@ -355,7 +357,9 @@ open class AssetController(
                 ip = request.ip?.trim()?.takeIf { it.isNotBlank() },
                 description = request.description?.trim()?.takeIf { it.isNotBlank() },
                 networkZone = request.networkZone,
-                tags = request.tags
+                tags = request.tags,
+                cloudAccountId = request.cloudAccountId?.trim()?.takeIf { it.isNotBlank() },
+                cloudInstanceId = request.cloudInstanceId?.trim()?.takeIf { it.isNotBlank() }
             )
 
             log.info("Asset import: {} {} (id={}) by user: {}",
@@ -890,7 +894,8 @@ open class AssetController(
                 resourceIds = request.resourceIds,
                 dryRun = request.dryRun,
                 username = authentication.name,
-                maxDeletePercent = request.maxDeletePercent
+                maxDeletePercent = request.maxDeletePercent,
+                strict = request.strict
             )
             HttpResponse.ok(result)
         } catch (e: com.secman.service.AssetMatchClearService.EmptySnapshotException) {

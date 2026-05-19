@@ -9,6 +9,7 @@ import picocli.CommandLine.Command
 import picocli.CommandLine.Option
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.StandardCopyOption
 
 /**
  * `secman asset-match-clear` — reconcile AWS assets in secman against a JSON
@@ -19,9 +20,13 @@ import java.nio.file.Path
  *      AWS_ASSET_BUCKET_NAME / AWS_ASSET_BUCKET_KEY_NAME env vars.
  *   2. Download the JSON via S3DownloadService (10 MB cap, owner-only temp file).
  *   3. Parse to a flat list of {accountId, resourceId} pairs.
- *   4. POST to /api/assets/match-clear-aws — backend deletes assets whose
- *      cloudAccountId is in the snapshot's account set AND whose
- *      cloudInstanceId is NOT in the snapshot's resourceId set.
+ *   4. With --check, GET /api/assets and report snapshot resourceIds missing
+ *      from SECMan without calling the delete endpoint.
+ *   5. With --check-fix, create missing SECMan assets via PUT /api/assets/import.
+ *   6. Otherwise POST to /api/assets/match-clear-aws — backend deletes assets whose
+ *      cloudInstanceId is NOT in the snapshot's resourceId set. By default the
+ *      backend only evaluates snapshot-covered accounts; --strict evaluates all
+ *      SECMan AWS assets.
  */
 @Command(
     name = "asset-match-clear",
@@ -70,6 +75,27 @@ class AssetMatchClearCommand : Runnable {
     var dryRun: Boolean = false
 
     @Option(
+        names = ["--strict"],
+        description = ["Treat the snapshot as globally authoritative across all SECMan AWS assets"]
+    )
+    var strict: Boolean = false
+
+    @Option(
+        names = ["--check"],
+        description = ["Only check whether downloaded resource IDs exist in SECMan asset inventory; perform no delete/dry-run action"]
+    )
+    var check: Boolean = false
+
+    @Option(
+        names = ["--check-fix"],
+        description = ["Create missing SECMan assets for downloaded resource IDs; never call match-clear delete endpoint"]
+    )
+    var checkFix: Boolean = false
+
+    @Option(names = ["--save"], description = ["Save the downloaded AWS JSON snapshot to /tmp/asset.json"])
+    var save: Boolean = false
+
+    @Option(
         names = ["--max-delete-percent"],
         description = ["Abort if proposed deletions exceed N% of scoped AWS assets (default: 25, set 0 to disable)"]
     )
@@ -96,6 +122,10 @@ class AssetMatchClearCommand : Runnable {
     override fun run() {
         var tempFile: Path? = null
         try {
+            if (!validateOptions()) {
+                System.exit(1)
+            }
+
             val effectiveBucket = bucket
                 ?: System.getenv("AWS_ASSET_BUCKET_NAME")
                 ?: throw IllegalArgumentException(
@@ -119,7 +149,8 @@ class AssetMatchClearCommand : Runnable {
             println("Asset Match-Clear (AWS)")
             println("============================================================")
             println("Source     : s3://$effectiveBucket/$effectiveKey")
-            println("Mode       : ${if (dryRun) "dry-run" else "delete"}")
+            println("Mode       : ${if (checkFix) "check-fix" else if (check) "check" else if (dryRun) "dry-run" else "delete"}")
+            println("Scope      : ${if (strict) "strict/global" else "snapshot accounts"}")
             println("Safety brake: ${if (maxDeletePercent in 1..99) "$maxDeletePercent%" else "disabled"}")
             println()
 
@@ -168,11 +199,28 @@ class AssetMatchClearCommand : Runnable {
                     "Re-run with --verbose to see exactly which username, source, and backend URL were used."
                 )
 
+            if (check) {
+                runInventoryCheck(effectiveUrl, authToken, parsed)
+                return
+            }
+
+            if (checkFix) {
+                runInventoryCheckFix(effectiveUrl, authToken, parsed)
+                return
+            }
+
+            if (save) {
+                val savedSnapshot = Path.of("/tmp/asset.json")
+                Files.copy(tempFile, savedSnapshot, StandardCopyOption.REPLACE_EXISTING)
+                println("Saved      : $savedSnapshot")
+            }
+
             val requestBody = mapOf(
                 "accountIds" to parsed.accountIds.toList(),
                 "resourceIds" to parsed.resourceIds.toList(),
                 "dryRun" to dryRun,
-                "maxDeletePercent" to maxDeletePercent
+                "maxDeletePercent" to maxDeletePercent,
+                "strict" to strict
             )
 
             val (status, result) = cliHttpClient.postMapWithStatus(
@@ -190,6 +238,8 @@ class AssetMatchClearCommand : Runnable {
             val deletedCount = (result["deletedCount"] as? Number)?.toInt() ?: 0
             val skippedCount = (result["skippedCount"] as? Number)?.toInt() ?: 0
             val scopedAssetCount = (result["scopedAssetCount"] as? Number)?.toInt() ?: 0
+            val uncoveredAccountCount = (result["uncoveredAccountCount"] as? Number)?.toInt() ?: 0
+            val uncoveredAssetCount = (result["uncoveredAssetCount"] as? Number)?.toInt() ?: 0
             val runStatus = result["status"]?.toString() ?: "UNKNOWN"
             val brakeTripped = (result["safetyBrakeTripped"] as? Boolean) ?: false
 
@@ -197,8 +247,13 @@ class AssetMatchClearCommand : Runnable {
             val candidates = result["candidates"] as? List<Map<String, Any?>> ?: emptyList()
             @Suppress("UNCHECKED_CAST")
             val errors = result["errors"] as? List<Map<String, Any?>> ?: emptyList()
+            @Suppress("UNCHECKED_CAST")
+            val uncoveredAccounts = result["uncoveredAccounts"] as? Map<String, Any?> ?: emptyMap()
 
             println("Scoped AWS assets : $scopedAssetCount")
+            if (!strict && uncoveredAssetCount > 0) {
+                println("WARN       : $uncoveredAssetCount SECMan AWS assets in $uncoveredAccountCount accounts are outside the snapshot scope")
+            }
             println("Unmatched (delete candidates): $candidateCount")
             if (dryRun) {
                 println("Deleted    : 0  (dry-run)")
@@ -219,6 +274,14 @@ class AssetMatchClearCommand : Runnable {
                     val account = candidate["cloudAccountId"] ?: "?"
                     val instance = candidate["cloudInstanceId"] ?: "?"
                     println("  - $id  $name  account=$account  instance=$instance")
+                }
+            }
+
+            if (verbose && !strict && uncoveredAccounts.isNotEmpty()) {
+                println()
+                println("Uncovered snapshot accounts:")
+                uncoveredAccounts.toSortedMap().forEach { (account, count) ->
+                    println("  - $account: $count assets")
                 }
             }
 
@@ -254,8 +317,15 @@ class AssetMatchClearCommand : Runnable {
     private data class SnapshotParseResult(
         val accountIds: Set<String>,
         val resourceIds: Set<String>,
+        val entries: List<SnapshotResource>,
         val totalEntries: Int,
         val skippedEntries: Int
+    )
+
+    private data class SnapshotResource(
+        val accountId: String,
+        val resourceId: String,
+        val resourceKey: String = resourceId.lowercase()
     )
 
     private fun parseSnapshot(path: Path): SnapshotParseResult {
@@ -268,6 +338,7 @@ class AssetMatchClearCommand : Runnable {
         }
         val accountIds = mutableSetOf<String>()
         val resourceIds = mutableSetOf<String>()
+        val entries = mutableListOf<SnapshotResource>()
         var skipped = 0
         var total = 0
         for (node in tree) {
@@ -280,13 +351,149 @@ class AssetMatchClearCommand : Runnable {
             }
             accountIds.add(account)
             resourceIds.add(resource.lowercase())
+            entries.add(SnapshotResource(account, resource))
         }
         return SnapshotParseResult(
             accountIds = accountIds,
             resourceIds = resourceIds,
+            entries = entries,
             totalEntries = total,
             skippedEntries = skipped
         )
+    }
+
+    private fun runInventoryCheck(effectiveUrl: String, authToken: String, parsed: SnapshotParseResult) {
+        val assets = cliHttpClient.getList("$effectiveUrl/api/assets", authToken)
+            ?: throw RuntimeException("Could not read SECMan asset inventory")
+        val existingInstanceIds = assets
+            .mapNotNull { it["cloudInstanceId"]?.toString()?.trim()?.lowercase()?.takeIf(String::isNotEmpty) }
+            .toSet()
+        val missingInstanceIds = parsed.resourceIds
+            .filterNot { it in existingInstanceIds }
+            .sorted()
+
+        println("SECMan assets with instance ID : ${existingInstanceIds.size}")
+        println("Downloaded instance IDs        : ${parsed.resourceIds.size}")
+        println("Existing downloaded IDs        : ${parsed.resourceIds.size - missingInstanceIds.size}")
+        println("Missing downloaded IDs         : ${missingInstanceIds.size}")
+        println("Status     : ${if (missingInstanceIds.isEmpty()) "SUCCESS" else "MISSING"}")
+
+        if (verbose && missingInstanceIds.isNotEmpty()) {
+            println()
+            println("Missing downloaded instance IDs:")
+            missingInstanceIds.forEach { id ->
+                println("  - $id")
+            }
+        }
+    }
+
+    private data class CheckFixCandidate(
+        val accountId: String,
+        val resourceId: String,
+        val resourceKey: String
+    )
+
+    private fun runInventoryCheckFix(effectiveUrl: String, authToken: String, parsed: SnapshotParseResult) {
+        val assets = cliHttpClient.getList("$effectiveUrl/api/assets", authToken)
+            ?: throw RuntimeException("Could not read SECMan asset inventory")
+        val existingInstanceIds = assets
+            .mapNotNull { it["cloudInstanceId"]?.toString()?.trim()?.lowercase()?.takeIf(String::isNotEmpty) }
+            .toSet()
+
+        val byResourceKey = parsed.entries.groupBy { it.resourceKey }
+        val missing = byResourceKey
+            .filterKeys { it !in existingInstanceIds }
+            .values
+            .mapNotNull { entries ->
+                val accountIds = entries.map { it.accountId }.toSet()
+                if (accountIds.size == 1) {
+                    val first = entries.first()
+                    CheckFixCandidate(first.accountId, first.resourceId, first.resourceKey)
+                } else {
+                    null
+                }
+            }
+            .sortedBy { it.resourceKey }
+        val ambiguous = byResourceKey
+            .filterKeys { it !in existingInstanceIds }
+            .values
+            .filter { entries -> entries.map { it.accountId }.toSet().size > 1 }
+            .map { entries ->
+                val first = entries.first()
+                CheckFixCandidate(
+                    accountId = entries.map { it.accountId }.distinct().sorted().joinToString(","),
+                    resourceId = first.resourceId,
+                    resourceKey = first.resourceKey
+                )
+            }
+            .sortedBy { it.resourceKey }
+
+        val created = mutableListOf<CheckFixCandidate>()
+        val failed = mutableListOf<Pair<CheckFixCandidate, String>>()
+
+        missing.forEach { candidate ->
+            val requestBody = mapOf(
+                "name" to candidate.resourceId,
+                "type" to "SERVER",
+                "owner" to "AWS Asset Inventory",
+                "description" to "Auto-created by asset-match-clear --check-fix from AWS snapshot",
+                "cloudAccountId" to candidate.accountId,
+                "cloudInstanceId" to candidate.resourceId
+            )
+            val (status, result) = cliHttpClient.putMapWithStatus(
+                "$effectiveUrl/api/assets/import",
+                requestBody,
+                authToken
+            )
+            if (status in 200..299 && result != null) {
+                created.add(candidate)
+            } else {
+                val error = result?.get("error")?.toString() ?: "Backend returned HTTP $status"
+                failed.add(candidate to error)
+            }
+        }
+
+        val missingCount = missing.size + ambiguous.size
+        val failedOrSkippedCount = failed.size + ambiguous.size
+
+        println("SECMan assets with instance ID : ${existingInstanceIds.size}")
+        println("Downloaded instance IDs        : ${parsed.resourceIds.size}")
+        println("Existing downloaded IDs        : ${parsed.resourceIds.size - missingCount}")
+        println("Missing downloaded IDs         : $missingCount")
+        println("Created assets                 : ${created.size}")
+        println("Failed/skipped creates         : $failedOrSkippedCount")
+        println("Status     : ${if (missingCount == created.size) "SUCCESS" else "PARTIAL"}")
+
+        if (verbose && created.isNotEmpty()) {
+            println()
+            println("Created assets:")
+            created.forEach { candidate ->
+                println("  - ${candidate.resourceId} account=${candidate.accountId}")
+            }
+        }
+
+        if (verbose && (ambiguous.isNotEmpty() || failed.isNotEmpty())) {
+            println()
+            println("Failed/skipped creates:")
+            ambiguous.forEach { candidate ->
+                println("  - ${candidate.resourceId} account=${candidate.accountId}: duplicate resourceId across accounts")
+            }
+            failed.forEach { (candidate, error) ->
+                println("  - ${candidate.resourceId} account=${candidate.accountId}: $error")
+            }
+        }
+    }
+
+    fun validateOptions(): Boolean {
+        if (checkFix && check) {
+            System.err.println("Error: --check-fix cannot be combined with --check")
+            return false
+        }
+        if (checkFix && dryRun) {
+            System.err.println("Error: --check-fix cannot be combined with --dry-run")
+            return false
+        }
+        return true
     }
 
     private fun getEffectiveUsernameWithSource(): Pair<String, String> {

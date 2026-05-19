@@ -210,6 +210,7 @@ open class AssetMergeService(
      *
      * Merge strategy for existing assets:
      * - ip, description: update if provided
+     * - cloudAccountId, cloudInstanceId: update if provided
      * - networkZone: update if provided AND current is null or UNKNOWN (never downgrade EXTERNAL/DMZ)
      * - lastSeen: always set to now()
      * - tags: additive merge — update value for existing keys, add new keys, never delete
@@ -225,13 +226,15 @@ open class AssetMergeService(
         ip: String? = null,
         description: String? = null,
         networkZone: NetworkZone? = null,
-        tags: Map<String, String>? = null
+        tags: Map<String, String>? = null,
+        cloudAccountId: String? = null,
+        cloudInstanceId: String? = null
     ): Pair<Asset, Boolean> {
         val existing = assetRepository.findByNameIgnoreCase(name)
 
         val (asset, created) = if (existing != null) {
             log.debug("Import upsert: merging into existing asset {} (id={})", existing.name, existing.id)
-            mergeImportData(existing, ip, description, networkZone)
+            mergeImportData(existing, ip, description, networkZone, cloudAccountId, cloudInstanceId)
             Pair(existing, false)
         } else {
             log.debug("Import upsert: creating new asset {}", name)
@@ -241,7 +244,9 @@ open class AssetMergeService(
                 owner = owner,
                 ip = ip,
                 description = description,
-                networkZone = networkZone
+                networkZone = networkZone,
+                cloudAccountId = cloudAccountId,
+                cloudInstanceId = cloudInstanceId
             )
             newAsset.lastSeen = LocalDateTime.now()
             Pair(assetRepository.save(newAsset), true)
@@ -260,7 +265,9 @@ open class AssetMergeService(
         asset: Asset,
         newIp: String?,
         newDescription: String?,
-        newNetworkZone: NetworkZone?
+        newNetworkZone: NetworkZone?,
+        newCloudAccountId: String?,
+        newCloudInstanceId: String?
     ) {
         if (!newIp.isNullOrBlank() && newIp != asset.ip) {
             asset.ip = newIp
@@ -273,6 +280,14 @@ open class AssetMergeService(
         // Only upgrade networkZone — never downgrade EXTERNAL/DMZ to UNKNOWN/null
         if (newNetworkZone != null && (asset.networkZone == null || asset.networkZone == NetworkZone.UNKNOWN)) {
             asset.networkZone = newNetworkZone
+        }
+
+        if (!newCloudAccountId.isNullOrBlank() && newCloudAccountId != asset.cloudAccountId) {
+            asset.cloudAccountId = newCloudAccountId
+        }
+
+        if (!newCloudInstanceId.isNullOrBlank() && newCloudInstanceId != asset.cloudInstanceId) {
+            asset.cloudInstanceId = newCloudInstanceId
         }
 
         asset.lastSeen = LocalDateTime.now()

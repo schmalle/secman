@@ -58,6 +58,75 @@ from the shared `S3DownloadService`).
 are NEVER touched. If your snapshot only covers account `111` you can never
 accidentally wipe assets in account `222`.
 
+## Check mode
+
+`--check` is read-only. It downloads and parses the same S3 snapshot, then
+checks whether every downloaded `resourceId` exists as a `cloudInstanceId` in
+the secman asset inventory. It does **not** call the match-clear delete
+endpoint, does **not** evaluate delete candidates, and does **not** delete
+assets. If `--check` is set, `--save` is ignored so no snapshot copy is
+written to `/tmp/asset.json`.
+
+Use this when you want to validate whether AWS instance IDs from the snapshot
+are already present in secman:
+
+```bash
+secman asset-match-clear --check --verbose
+./scripts/clearmatchasset.sh --check --verbose
+```
+
+The summary reports how many downloaded instance IDs exist in secman and how
+many are missing. With `--verbose`, missing downloaded instance IDs are listed.
+
+`--strict` does not change check mode; strict scope only affects delete and
+dry-run matching.
+
+## Check-fix mode
+
+`--check-fix` is mutating, but it never calls the match-clear delete endpoint.
+It downloads and parses the snapshot, compares downloaded `resourceId`s to
+secman `cloudInstanceId`s case-insensitively, and creates missing assets via
+`PUT /api/assets/import`.
+
+Created assets use these fixed values:
+
+| Field | Value |
+|---|---|
+| `name` | snapshot `resourceId` |
+| `type` | `SERVER` |
+| `owner` | `AWS Asset Inventory` |
+| `description` | `Auto-created by asset-match-clear --check-fix from AWS snapshot` |
+| `cloudAccountId` | snapshot `accountId` |
+| `cloudInstanceId` | snapshot `resourceId` |
+
+If the same lower-cased `resourceId` appears with multiple `accountId` values,
+the CLI skips that resource as ambiguous instead of creating an asset with the
+wrong account. `--check-fix` cannot be combined with `--check` or `--dry-run`;
+`--save` is ignored.
+
+```bash
+secman asset-match-clear --check-fix --verbose
+./scripts/clearmatchasset.sh --check-fix --verbose
+```
+
+The summary reports secman IDs, downloaded IDs, missing IDs, created assets,
+failed/skipped creates, and status. With `--verbose`, created and
+failed/skipped resource IDs are listed with account IDs.
+
+## Strict mode
+
+By default, `asset-match-clear` is partial-snapshot safe: it only evaluates
+secman AWS assets whose `cloudAccountId` appears in the downloaded snapshot.
+
+`--strict` treats the snapshot as globally authoritative across all secman AWS
+assets with a non-empty `cloudInstanceId`. In strict mode, an AWS asset can
+become a delete candidate even when its `cloudAccountId` is absent from the
+snapshot.
+
+Only use `--strict` when the snapshot is known to cover the full AWS resource
+universe you want secman to reconcile against. The safety brake still applies
+to real delete runs.
+
 ## Safety brake
 
 `--max-delete-percent` (default `25`) aborts a real run if the number of
@@ -130,10 +199,13 @@ export SECMAN_ADMIN_PASS=$(pass-cli get secman/admin/password)
 # 2. Always start with a dry-run.
 secman asset-match-clear --dry-run --verbose
 
-# 3. Review the candidate list. If it looks right, execute.
+# 3. Optionally create secman assets missing from the AWS snapshot.
+secman asset-match-clear --check-fix --verbose
+
+# 4. Review the candidate list. If it looks right, execute.
 secman asset-match-clear
 
-# 4. If the safety brake trips, investigate before raising the threshold.
+# 5. If the safety brake trips, investigate before raising the threshold.
 secman asset-match-clear --max-delete-percent 40    # only if justified
 ```
 

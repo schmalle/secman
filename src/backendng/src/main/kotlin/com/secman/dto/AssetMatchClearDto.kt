@@ -16,7 +16,8 @@ data class AssetMatchClearRequest(
     val accountIds: List<String>,
     val resourceIds: List<String>,
     val dryRun: Boolean = false,
-    val maxDeletePercent: Int? = 25
+    val maxDeletePercent: Int? = 25,
+    val strict: Boolean = false
 )
 
 @Serdeable
@@ -37,9 +38,13 @@ data class AssetMatchClearErrorDto(
 @Serdeable
 data class AssetMatchClearResponse(
     val dryRun: Boolean,
+    val scopeMode: String = "snapshot accounts",
     val snapshotAccountCount: Int,
     val snapshotResourceCount: Int,
     val scopedAssetCount: Int,
+    val uncoveredAccountCount: Int = 0,
+    val uncoveredAssetCount: Int = 0,
+    val uncoveredAccounts: Map<String, Int> = emptyMap(),
     val candidateCount: Int,
     val deletedCount: Int,
     val skippedCount: Int,

@@ -18,7 +18,7 @@ class AssetMatchClearServiceTest {
 
     @BeforeEach
     fun setUp() {
-        assetRepository = mockk()
+        assetRepository = mockk(relaxed = true)
         assetCascadeDeleteService = mockk()
         service = AssetMatchClearService(assetRepository, assetCascadeDeleteService)
     }
@@ -75,6 +75,10 @@ class AssetMatchClearServiceTest {
         every { assetRepository.findAwsAssetsInAccounts(setOf("111")) } returns listOf(
             awsAsset(1L, "in-scope", "111", "i-aaa")
         )
+        every { assetRepository.findAllAwsAssetsWithInstanceId() } returns listOf(
+            awsAsset(1L, "in-scope", "111", "i-aaa"),
+            awsAsset(2L, "out-of-scope", "222", "i-bbb")
+        )
 
         val result = service.clear(
             accountIds = listOf("111"),
@@ -87,7 +91,44 @@ class AssetMatchClearServiceTest {
         assertThat(result.snapshotAccountCount).isEqualTo(1)
         assertThat(result.scopedAssetCount).isEqualTo(1)
         assertThat(result.candidateCount).isEqualTo(1)
+        assertThat(result.uncoveredAccountCount).isEqualTo(1)
+        assertThat(result.uncoveredAssetCount).isEqualTo(1)
         verify { assetRepository.findAwsAssetsInAccounts(setOf("111")) }
+    }
+
+    @Test
+    fun `strict mode marks absent-account asset missing from snapshot as candidate`() {
+        val absentAccount = awsAsset(2L, "absent-account", "222", "i-missing")
+        every { assetRepository.findAllAwsAssetsWithInstanceId() } returns listOf(absentAccount)
+
+        val result = service.clear(
+            accountIds = listOf("111"),
+            resourceIds = listOf("i-present"),
+            dryRun = true,
+            username = "admin",
+            strict = true
+        )
+
+        assertThat(result.scopeMode).isEqualTo("strict/global")
+        assertThat(result.scopedAssetCount).isEqualTo(1)
+        assertThat(result.candidates).extracting("name").containsExactly("absent-account")
+        verify(exactly = 0) { assetRepository.findAwsAssetsInAccounts(any()) }
+    }
+
+    @Test
+    fun `strict mode does not mark absent-account asset whose instance exists in snapshot`() {
+        val absentAccount = awsAsset(2L, "absent-account", "222", "i-present")
+        every { assetRepository.findAllAwsAssetsWithInstanceId() } returns listOf(absentAccount)
+
+        val result = service.clear(
+            accountIds = listOf("111"),
+            resourceIds = listOf("i-present"),
+            dryRun = true,
+            username = "admin",
+            strict = true
+        )
+
+        assertThat(result.candidateCount).isEqualTo(0)
     }
 
     @Test
@@ -139,6 +180,31 @@ class AssetMatchClearServiceTest {
         assertThat(result.status).isEqualTo("ABORTED_SAFETY_BRAKE")
         assertThat(result.deletedCount).isEqualTo(0)
         verify(exactly = 0) { assetCascadeDeleteService.deleteAsset(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `strict mode safety brake uses all AWS assets as denominator`() {
+        val a1 = awsAsset(1L, "a1", "111", "i-1")
+        val a2 = awsAsset(2L, "a2", "222", "i-2")
+        val a3 = awsAsset(3L, "a3", "333", "i-keep")
+        every { assetRepository.findAllAwsAssetsWithInstanceId() } returns listOf(a1, a2, a3)
+        every { assetRepository.countAllAwsAssetsWithInstanceId() } returns 3L
+
+        val result = service.clear(
+            accountIds = listOf("111"),
+            resourceIds = listOf("i-keep"),
+            dryRun = false,
+            username = "admin",
+            maxDeletePercent = 50,
+            strict = true
+        )
+
+        assertThat(result.safetyBrakeTripped).isTrue()
+        assertThat(result.status).isEqualTo("ABORTED_SAFETY_BRAKE")
+        assertThat(result.scopedAssetCount).isEqualTo(3)
+        verify(exactly = 0) { assetCascadeDeleteService.deleteAsset(any(), any(), any(), any()) }
+        verify { assetRepository.countAllAwsAssetsWithInstanceId() }
+        verify(exactly = 0) { assetRepository.countAwsAssetsInAccounts(any()) }
     }
 
     @Test

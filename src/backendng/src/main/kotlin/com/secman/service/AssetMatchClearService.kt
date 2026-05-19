@@ -18,8 +18,10 @@ import org.slf4j.LoggerFactory
  * thinks exist but no longer appear in the upstream inventory.
  *
  * Safety properties:
- *  - Partial-snapshot safe: only deletes within the accounts the snapshot
- *    covers. Assets in other accounts are never touched.
+ *  - Default mode is partial-snapshot safe: only deletes within the accounts
+ *    the snapshot covers. Assets in other accounts are never touched.
+ *  - Strict mode treats the snapshot as globally authoritative across all AWS
+ *    assets with a non-blank cloudInstanceId.
  *  - Empty-snapshot guard: a 0-resource snapshot is rejected — refuses to
  *    treat it as authoritative.
  *  - Safety brake: aborts when the proposed deletion would exceed
@@ -41,7 +43,8 @@ open class AssetMatchClearService(
         resourceIds: Collection<String>,
         dryRun: Boolean,
         username: String,
-        maxDeletePercent: Int? = 25
+        maxDeletePercent: Int? = 25,
+        strict: Boolean = false
     ): AssetMatchClearResponse {
         val normalizedAccounts = accountIds
             .asSequence()
@@ -65,7 +68,32 @@ open class AssetMatchClearService(
             )
         }
 
-        val scopedAssets = assetRepository.findAwsAssetsInAccounts(normalizedAccounts)
+        val allAwsAssets = if (strict) {
+            assetRepository.findAllAwsAssetsWithInstanceId()
+        } else {
+            null
+        }
+        val scopedAssets = if (strict) {
+            allAwsAssets.orEmpty()
+        } else {
+            assetRepository.findAwsAssetsInAccounts(normalizedAccounts)
+        }
+        val uncoveredAccounts = if (strict) {
+            emptyMap()
+        } else {
+            assetRepository.findAllAwsAssetsWithInstanceId()
+                .asSequence()
+                .filter { asset -> asset.cloudAccountId?.trim() !in normalizedAccounts }
+                .mapNotNull { asset ->
+                    val account = asset.cloudAccountId?.trim().orEmpty()
+                    account.takeIf { it.isNotEmpty() }
+                }
+                .groupingBy { it }
+                .eachCount()
+                .toSortedMap()
+        }
+        val uncoveredAssetCount = uncoveredAccounts.values.sum()
+        val scopeMode = if (strict) "strict/global" else "snapshot accounts"
         val candidates = scopedAssets
             .asSequence()
             .filter { asset ->
@@ -86,7 +114,11 @@ open class AssetMatchClearService(
 
         val brakeApplied = maxDeletePercent != null && maxDeletePercent in 0..99
         if (brakeApplied && !dryRun && candidates.isNotEmpty()) {
-            val total = assetRepository.countAwsAssetsInAccounts(normalizedAccounts)
+            val total = if (strict) {
+                assetRepository.countAllAwsAssetsWithInstanceId()
+            } else {
+                assetRepository.countAwsAssetsInAccounts(normalizedAccounts)
+            }
             if (total > 0) {
                 val percent = candidates.size * 100.0 / total
                 if (percent > maxDeletePercent) {
@@ -96,9 +128,13 @@ open class AssetMatchClearService(
                     )
                     return AssetMatchClearResponse(
                         dryRun = false,
+                        scopeMode = scopeMode,
                         snapshotAccountCount = normalizedAccounts.size,
                         snapshotResourceCount = normalizedResources.size,
                         scopedAssetCount = scopedAssets.size,
+                        uncoveredAccountCount = uncoveredAccounts.size,
+                        uncoveredAssetCount = uncoveredAssetCount,
+                        uncoveredAccounts = uncoveredAccounts,
                         candidateCount = candidates.size,
                         deletedCount = 0,
                         skippedCount = candidates.size,
@@ -119,9 +155,13 @@ open class AssetMatchClearService(
             )
             return AssetMatchClearResponse(
                 dryRun = true,
+                scopeMode = scopeMode,
                 snapshotAccountCount = normalizedAccounts.size,
                 snapshotResourceCount = normalizedResources.size,
                 scopedAssetCount = scopedAssets.size,
+                uncoveredAccountCount = uncoveredAccounts.size,
+                uncoveredAssetCount = uncoveredAssetCount,
+                uncoveredAccounts = uncoveredAccounts,
                 candidateCount = candidates.size,
                 deletedCount = 0,
                 skippedCount = candidates.size,
@@ -175,9 +215,13 @@ open class AssetMatchClearService(
 
         return AssetMatchClearResponse(
             dryRun = false,
+            scopeMode = scopeMode,
             snapshotAccountCount = normalizedAccounts.size,
             snapshotResourceCount = normalizedResources.size,
             scopedAssetCount = scopedAssets.size,
+            uncoveredAccountCount = uncoveredAccounts.size,
+            uncoveredAssetCount = uncoveredAssetCount,
+            uncoveredAccounts = uncoveredAccounts,
             candidateCount = candidates.size,
             deletedCount = deletedCount,
             skippedCount = errors.size,

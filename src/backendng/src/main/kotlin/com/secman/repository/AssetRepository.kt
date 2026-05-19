@@ -212,6 +212,17 @@ interface AssetRepository : JpaRepository<Asset, Long> {
     fun findAwsAssetsInAccounts(accountIds: Collection<String>): List<Asset>
 
     /**
+     * Find all AWS assets that can participate in EC2 instance matching.
+     * Used by strict/global asset-match-clear and uncovered-account diagnostics.
+     */
+    @io.micronaut.data.annotation.Query("""
+        SELECT a FROM Asset a
+        WHERE a.cloudInstanceId IS NOT NULL
+          AND a.cloudInstanceId <> ''
+    """)
+    fun findAllAwsAssetsWithInstanceId(): List<Asset>
+
+    /**
      * Denominator for the asset-match-clear safety brake.
      */
     @io.micronaut.data.annotation.Query("""
@@ -221,6 +232,16 @@ interface AssetRepository : JpaRepository<Asset, Long> {
           AND a.cloudAccountId IN :accountIds
     """)
     fun countAwsAssetsInAccounts(accountIds: Collection<String>): Long
+
+    /**
+     * Denominator for strict/global asset-match-clear safety brake.
+     */
+    @io.micronaut.data.annotation.Query("""
+        SELECT COUNT(a) FROM Asset a
+        WHERE a.cloudInstanceId IS NOT NULL
+          AND a.cloudInstanceId <> ''
+    """)
+    fun countAllAwsAssetsWithInstanceId(): Long
 
     // MCP Tool Support - Feature 006: Asset inventory queries with pagination
 

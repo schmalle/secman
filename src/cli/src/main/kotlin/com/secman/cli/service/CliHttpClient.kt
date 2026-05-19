@@ -213,6 +213,29 @@ class CliHttpClient(
         }
     }
 
+    fun putMapWithStatus(url: String, body: Any, authToken: String): Pair<Int, Map<*, *>?> {
+        val request = HttpRequest.PUT(url, body)
+            .header("Authorization", "Bearer $authToken")
+            .contentType(MediaType.APPLICATION_JSON)
+
+        return try {
+            val response = httpClient.toBlocking().exchange(request, Map::class.java)
+            response.status.code to response.body()
+        } catch (e: io.micronaut.http.client.exceptions.HttpClientResponseException) {
+            val status = e.status.code
+            val errorBody = try {
+                e.response.getBody(Map::class.java).orElse(null)
+            } catch (_: Exception) {
+                null
+            }
+            log.warn("PUT {} returned {}: {}", url, status, e.message)
+            status to errorBody
+        } catch (e: Exception) {
+            log.error("PUT {} error: {}", url, e.message)
+            -1 to null
+        }
+    }
+
     /**
      * Send a POST request returning raw string body
      */

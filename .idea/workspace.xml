@@ -5,9 +5,17 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="94ada8b3-9f4e-473c-9fea-3bc9651b5bdd" name="Changes" comment="test change">
-      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/dataSources.local.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/dataSources.local.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/CLI_ASSET_MATCH_CLEAR.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/CLI_ASSET_MATCH_CLEAR.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/clearmatchasset.sh" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/clearmatchasset.sh" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/AssetController.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/AssetController.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/dto/AssetMatchClearDto.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/dto/AssetMatchClearDto.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/repository/AssetRepository.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/repository/AssetRepository.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/AssetMatchClearService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/AssetMatchClearService.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/test/kotlin/com/secman/service/AssetMatchClearServiceTest.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/test/kotlin/com/secman/service/AssetMatchClearServiceTest.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/SecmanCli.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/SecmanCli.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/commands/AssetMatchClearCommand.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/commands/AssetMatchClearCommand.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/service/CliHttpClient.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/service/CliHttpClient.kt" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

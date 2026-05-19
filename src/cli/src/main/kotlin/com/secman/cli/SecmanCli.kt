@@ -772,6 +772,13 @@ class SecmanCli {
                   --aws-secret-access-key  AWS secret access key (or AWS_SECRET_ACCESS_KEY)
                   --aws-session-token      AWS session token for temporary credentials
                   --dry-run                Preview matching assets without deleting them
+                  --check                  Only check whether downloaded resource IDs exist
+                                           in SECMan asset inventory; no delete/dry-run action
+                  --check-fix              Create missing SECMan assets from downloaded
+                                           resource IDs; no delete/dry-run action
+                  --strict                 Treat the snapshot as globally authoritative across all
+                                           SECMan AWS assets with cloudInstanceId
+                  --save                   Save the downloaded AWS JSON snapshot to /tmp/asset.json
                   --max-delete-percent <n> Abort if proposed deletions exceed N% of scoped
                                            AWS assets (default: 25, set 0 to disable)
                   --backend-url <url>      Backend API URL (or SECMAN_HOST / SECMAN_BACKEND_URL)
@@ -784,6 +791,15 @@ class SecmanCli {
                   - Operates ONLY on assets with a non-blank cloudInstanceId AND whose
                     cloudAccountId appears in the snapshot. Assets in other accounts
                     are NEVER deleted.
+                  - With --strict, evaluates all SECMan AWS assets with a non-blank
+                    cloudInstanceId, even when their account is absent from the snapshot.
+                  - With --check, only validates downloaded resourceIds against SECMan
+                    cloudInstanceIds; it never calls the match-clear delete endpoint
+                    and ignores --save.
+                  - With --check-fix, missing resourceIds are imported as SERVER
+                    assets with cloudAccountId=accountId and cloudInstanceId=resourceId;
+                    it never calls the match-clear delete endpoint and ignores --save.
+                  - --check-fix cannot be combined with --check or --dry-run.
                   - Rejects empty snapshots (no accountIds OR no resourceIds).
                   - Safety brake aborts a real run when proposed deletions exceed
                     --max-delete-percent of the scoped account total. Trips with
@@ -807,6 +823,8 @@ class SecmanCli {
                   export SECMAN_ADMIN_PASS=...
 
                   secman asset-match-clear --dry-run --verbose
+                  secman asset-match-clear --check --verbose
+                  secman asset-match-clear --check-fix --verbose
                   secman asset-match-clear --max-delete-percent 10
                   secman asset-match-clear --bucket cov-aws-inventory --key snapshots/2026-05-15.json
                   secman asset-match-clear --aws-profile prod --backend-url https://secman.example.com
