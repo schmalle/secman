@@ -95,7 +95,8 @@ class McpToolRegistry(
     @Inject private val addWorkgroupAwsAccountTool: AddWorkgroupAwsAccountTool,
     @Inject private val removeWorkgroupAwsAccountTool: RemoveWorkgroupAwsAccountTool,
     // CrowdStrike import status
-    @Inject private val getCrowdStrikeLastImportTool: GetCrowdStrikeLastImportTool
+    @Inject private val getCrowdStrikeLastImportTool: GetCrowdStrikeLastImportTool,
+    @Inject private val applicationRegisterTool: ApplicationRegisterTool
 ) {
     private val logger = LoggerFactory.getLogger(McpToolRegistry::class.java)
 
@@ -187,7 +188,8 @@ class McpToolRegistry(
             addWorkgroupAwsAccountTool,
             removeWorkgroupAwsAccountTool,
             // CrowdStrike import status
-            getCrowdStrikeLastImportTool
+            getCrowdStrikeLastImportTool,
+            applicationRegisterTool
         ).forEach { tool ->
             toolMap[tool.name] = tool
             logger.debug("Registered MCP tool: {}", tool.name)
