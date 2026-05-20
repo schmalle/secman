@@ -113,7 +113,7 @@ curl -XPOST http://localhost:8080/mcp \
 | `REQUIREMENTS_READ` | `get_requirements`, `export_requirements`, `list_releases`, `get_release`, `compare_releases`, `create_release`*, `delete_release`*, `set_release_status`* |
 | `REQUIREMENTS_WRITE` | `add_requirement` |
 | `REQUIREMENTS_DELETE` | `delete_all_requirements` (ADMIN) |
-| `ASSETS_READ` | `get_assets`, `get_all_assets_detail`, `get_asset_profile`, `get_asset_complete_profile`, `create_asset`, `update_asset` |
+| `ASSETS_READ` | `get_assets`, `get_all_assets_detail`, `get_asset_profile`, `get_asset_complete_profile`, `create_asset`, `update_asset`, `application_register` |
 | `VULNERABILITIES_READ` | `get_vulnerabilities`, `get_all_vulnerabilities_detail`, `get_asset_most_vulnerabilities`, `get_overdue_assets`, `*_exception_request*`, `get_vulnerability_heatmap`, `refresh_vulnerability_heatmap` |
 | `SCANS_READ` | `get_scans`, `get_asset_scan_results`, `search_products` |
 | `USER_ACTIVITY` | `list_users`, `add_user`, `delete_user`, `import_user_mappings`, `list_user_mappings`, `*_aws_account_sharing` |
@@ -136,6 +136,14 @@ curl -XPOST http://localhost:8080/mcp \
 - **`update_asset`** — `assetId`* + any of `name`, `type`, `owner`, `ip`, `description`, `criticality`, `adDomain`. Partial update; row-level access enforced. Workgroup reassignment is via `assign_assets_to_workgroup`.
 - **`delete_asset`** — `assetId`*, `forceTimeout` (ADMIN). Cascade-deletes vulnerabilities, scan results, exception requests; returns counts and audit-log id.
 - **`delete_all_assets`** — `confirm: true` (ADMIN).
+
+- **`application_register`** — unified Application Register tool via `action`:
+  - `list` (`search` optional)
+  - `get` (`id`*)
+  - `create` (`application`* object; ADMIN/SECCHAMPION, delegation required)
+  - `update` (`id`*, `application`*; ADMIN/SECCHAMPION)
+  - `delete` (`id`*; ADMIN/SECCHAMPION)
+  - `replace_assets` (`id`*, `assetIds[]`; ADMIN/SECCHAMPION)
 
 ### Vulnerabilities
 - **`get_vulnerabilities`** — `page`, `pageSize`, `cveId`, `severity[]` (`Critical|High|Medium|Low|Info`), `assetId`.
