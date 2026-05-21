@@ -49,7 +49,7 @@ class ApplicationRegisterReminderService(
                 appendLine("The following application register entries were not quality-checked in the last $thresholdDays days:")
                 uniqueNames.forEach { appendLine("- $it") }
             }
-            val ok = emailService.sendEmail(recipient, subject, bodyText)
+            val ok = emailService.sendEmail(recipient, subject, bodyText, renderHtmlBody(bodyText)).get()
             if (ok) sent += recipient else failed += recipient
             if (verbose) {
                 // no-op, method kept for parity with other send services
@@ -64,4 +64,15 @@ class ApplicationRegisterReminderService(
 
         return Result(status, thresholdDays, recipientToEntries.size, overdueEntries.size, sent.size, failed.size, sent.sorted(), failed.sorted())
     }
+
+    private fun renderHtmlBody(bodyText: String): String =
+        "<pre>${escapeHtml(bodyText)}</pre>"
+
+    private fun escapeHtml(value: String): String =
+        value
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace("\"", "&quot;")
+            .replace("'", "&#39;")
 }

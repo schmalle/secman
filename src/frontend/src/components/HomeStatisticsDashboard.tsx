@@ -24,11 +24,11 @@ const initialState: DashboardState = {
   lastCrowdStrikeCheckin: null
 };
 
-const formatDateTime = (isoOrNever: string): string => {
+const formatDate = (isoOrNever: string): string => {
   if (isoOrNever === 'never') return 'Never imported';
   const parsed = new Date(isoOrNever);
   if (Number.isNaN(parsed.getTime())) return 'Unknown';
-  return parsed.toLocaleString();
+  return parsed.toLocaleDateString();
 };
 
 const formatCount = (value: number | null): string => {
@@ -78,7 +78,7 @@ const HomeStatisticsDashboard: React.FC = () => {
       try {
         const csResp = await authenticatedGet('/api/crowdstrike/last-checkin');
         if (csResp.ok) {
-          next.lastCrowdStrikeCheckin = formatDateTime((await csResp.text()).trim());
+          next.lastCrowdStrikeCheckin = formatDate((await csResp.text()).trim());
         }
       } catch (error) {
         console.error('Failed to load CrowdStrike check-in statistics:', error);
