@@ -67,6 +67,7 @@ const AwsAccountSharingManager: React.FC = () => {
     const [inviteEmail, setInviteEmail] = useState<string>('');
     // Encoded "id:<n>" or "email:<addr>" — see encodeUserOption.
     const [sourceSelection, setSourceSelection] = useState<string>('');
+    const [sourceSearch, setSourceSearch] = useState<string>('');
     const [targetSelection, setTargetSelection] = useState<string>('');
     const [targetSearch, setTargetSearch] = useState<string>('');
     const [isCreating, setIsCreating] = useState(false);
@@ -170,6 +171,20 @@ const AwsAccountSharingManager: React.FC = () => {
         });
         if (!stillVisible) setTargetSelection('');
     }, [targetSearch, targetSelection, users, sourceSelection, canManageAnyRule, currentUser]);
+
+    // Keep the source <select> aligned with its search filter too. Clearing a
+    // now-hidden source also resets the account picker through the source effect.
+    useEffect(() => {
+        if (!sourceSelection) return;
+        const search = sourceSearch.trim().toLowerCase();
+        if (!search) return;
+        const stillVisible = users.some(u => {
+            if (encodeUserOption(u) !== sourceSelection) return false;
+            return u.username.toLowerCase().includes(search) ||
+                u.email.toLowerCase().includes(search);
+        });
+        if (!stillVisible) setSourceSelection('');
+    }, [sourceSearch, sourceSelection, users]);
 
     // When the effective source user changes, re-fetch its account list and
     // reset the picker. Until accounts arrive, lock to share-all.
@@ -283,6 +298,7 @@ const AwsAccountSharingManager: React.FC = () => {
             );
             setShowCreateForm(false);
             setSourceSelection('');
+            setSourceSearch('');
             setTargetSelection('');
             setTargetSearch('');
             setTargetMode('existing');
@@ -383,6 +399,8 @@ const AwsAccountSharingManager: React.FC = () => {
                             setFormError(null);
                             setTargetMode('existing');
                             setInviteEmail('');
+                            setSourceSearch('');
+                            setTargetSearch('');
                         }
                         setShowCreateForm(!showCreateForm);
                     }}
@@ -452,20 +470,44 @@ const AwsAccountSharingManager: React.FC = () => {
                                         <label htmlFor="sourceUser" className="form-label">
                                             Source User (shares their AWS accounts)
                                         </label>
-                                        <select
-                                            id="sourceUser"
-                                            className="form-select"
-                                            value={sourceSelection}
-                                            onChange={(e) => setSourceSelection(e.target.value)}
-                                            required
-                                        >
-                                            <option value="">-- Select source user --</option>
-                                            {users.map((user) => (
-                                                <option key={encodeUserOption(user)} value={encodeUserOption(user)}>
-                                                    {user.username} ({user.email}){user.isPending ? ' — pending' : ''}
-                                                </option>
-                                            ))}
-                                        </select>
+                                        {(() => {
+                                            const search = sourceSearch.trim().toLowerCase();
+                                            const filtered = search
+                                                ? users.filter(u =>
+                                                    u.username.toLowerCase().includes(search) ||
+                                                    u.email.toLowerCase().includes(search))
+                                                : users;
+                                            return (
+                                                <>
+                                                    <input
+                                                        type="search"
+                                                        className="form-control form-control-sm mb-2"
+                                                        placeholder="Search by username or email…"
+                                                        value={sourceSearch}
+                                                        onChange={(e) => setSourceSearch(e.target.value)}
+                                                        aria-label="Search source user"
+                                                    />
+                                                    <select
+                                                        id="sourceUser"
+                                                        className="form-select"
+                                                        value={sourceSelection}
+                                                        onChange={(e) => setSourceSelection(e.target.value)}
+                                                        required
+                                                    >
+                                                        <option value="">
+                                                            {filtered.length === 0
+                                                                ? '-- No matching users --'
+                                                                : `-- Select source user${search ? ` (${filtered.length} match${filtered.length === 1 ? '' : 'es'})` : ''} --`}
+                                                        </option>
+                                                        {filtered.map((user) => (
+                                                            <option key={encodeUserOption(user)} value={encodeUserOption(user)}>
+                                                                {user.username} ({user.email}){user.isPending ? ' — pending' : ''}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                </>
+                                            );
+                                        })()}
                                     </div>
                                 ) : (
                                     /* VULN and other users: source is fixed to current user */

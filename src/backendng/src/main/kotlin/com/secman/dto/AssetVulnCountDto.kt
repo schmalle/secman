@@ -14,6 +14,8 @@ import io.micronaut.serde.annotation.Serdeable
  * @property criticalCount Number of CRITICAL severity vulnerabilities (nullable for backward compatibility)
  * @property highCount Number of HIGH severity vulnerabilities (nullable for backward compatibility)
  * @property mediumCount Number of MEDIUM severity vulnerabilities (nullable for backward compatibility)
+ * @property exceptedCount Number of vulnerabilities covered by active exceptions (nullable for backward compatibility)
+ * @property nonExceptedCount Number of vulnerabilities not covered by active exceptions (nullable for backward compatibility)
  */
 @Serdeable
 data class AssetVulnCountDto(
@@ -25,5 +27,9 @@ data class AssetVulnCountDto(
     // Severity breakdown (Feature 019 - nullable for backward compatibility)
     val criticalCount: Int? = null,
     val highCount: Int? = null,
-    val mediumCount: Int? = null
+    val mediumCount: Int? = null,
+
+    // Exception breakdown (nullable for backward compatibility)
+    val exceptedCount: Int? = null,
+    val nonExceptedCount: Int? = null
 )

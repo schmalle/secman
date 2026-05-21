@@ -15,6 +15,8 @@ import java.time.LocalDateTime
  * @property globalCritical Total CRITICAL severity vulnerabilities across all accounts (nullable for backward compatibility)
  * @property globalHigh Total HIGH severity vulnerabilities across all accounts (nullable for backward compatibility)
  * @property globalMedium Total MEDIUM severity vulnerabilities across all accounts (nullable for backward compatibility)
+ * @property globalExcepted Total excepted vulnerabilities across all accounts (nullable for backward compatibility)
+ * @property globalNonExcepted Total non-excepted vulnerabilities across all accounts (nullable for backward compatibility)
  */
 @Serdeable
 data class AccountVulnsSummaryDto(
@@ -26,6 +28,10 @@ data class AccountVulnsSummaryDto(
     val globalCritical: Int? = null,
     val globalHigh: Int? = null,
     val globalMedium: Int? = null,
+
+    // Global exception totals (nullable for backward compatibility)
+    val globalExcepted: Int? = null,
+    val globalNonExcepted: Int? = null,
 
     // Metadata about the latest CrowdStrike import (nullable for backward compatibility)
     val lastImport: CrowdStrikeImportStatusDto? = null,

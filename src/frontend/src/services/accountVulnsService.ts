@@ -20,6 +20,10 @@ export interface AssetVulnCount {
   criticalCount?: number;
   highCount?: number;
   mediumCount?: number;
+
+  // Exception breakdown (optional for backward compatibility)
+  exceptedCount?: number;
+  nonExceptedCount?: number;
 }
 
 /**
@@ -36,6 +40,10 @@ export interface AccountGroup {
   totalCritical?: number;
   totalHigh?: number;
   totalMedium?: number;
+
+  // Exception aggregation (optional for backward compatibility)
+  totalExcepted?: number;
+  totalNonExcepted?: number;
 }
 
 /**
@@ -51,6 +59,10 @@ export interface AccountVulnsSummary {
   globalCritical?: number;
   globalHigh?: number;
   globalMedium?: number;
+
+  // Global exception totals (optional for backward compatibility)
+  globalExcepted?: number;
+  globalNonExcepted?: number;
 
   // Metadata about the most recent CrowdStrike import
   lastImport?: CrowdStrikeImportStatus | null;

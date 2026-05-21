@@ -21,6 +21,7 @@
 import React, { useState, useEffect } from 'react';
 import { getAccountVulns, type AccountVulnsSummary } from '../services/accountVulnsService';
 import AssetVulnTable from './AssetVulnTable';
+import ExceptionBreakdownBadges from './ExceptionBreakdownBadges';
 import SeverityBadge from './SeverityBadge';
 import { isAdmin } from '../utils/auth';
 
@@ -265,6 +266,11 @@ const AccountVulnsView: React.FC = () => {
                         <div className="card-body">
                             <h6 className="card-title text-muted mb-3">Total Vulnerabilities</h6>
                             <p className="h3 mb-0">{summary.totalVulnerabilities}</p>
+                            <ExceptionBreakdownBadges
+                                className="justify-content-center mt-3"
+                                exceptedCount={summary.globalExcepted ?? 0}
+                                nonExceptedCount={summary.globalNonExcepted ?? Math.max(summary.totalVulnerabilities - (summary.globalExcepted ?? 0), 0)}
+                            />
                         </div>
                     </div>
                 </div>
@@ -358,6 +364,10 @@ const AccountVulnsView: React.FC = () => {
                                     <SeverityBadge
                                         severity="MEDIUM"
                                         count={group.totalMedium ?? 0}
+                                    />
+                                    <ExceptionBreakdownBadges
+                                        exceptedCount={group.totalExcepted ?? 0}
+                                        nonExceptedCount={group.totalNonExcepted ?? Math.max(group.totalVulnerabilities - (group.totalExcepted ?? 0), 0)}
                                     />
                                 </div>
                             </div>

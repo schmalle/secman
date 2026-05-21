@@ -92,3 +92,4 @@ docker/backend/app.jar
 /.clawpatch/runs
 /docs/superpowers/
 /docs/superpowers/
+*.yml

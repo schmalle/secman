@@ -18,6 +18,7 @@
 
 import React from 'react';
 import type { AssetVulnCount } from '../services/accountVulnsService';
+import ExceptionBreakdownBadges from './ExceptionBreakdownBadges';
 import SeverityBadge from './SeverityBadge';
 
 interface AssetVulnTableProps {
@@ -73,6 +74,7 @@ const AssetVulnTable: React.FC<AssetVulnTableProps> = ({ assets, awsAccountId })
                         <th>Type</th>
                         <th className="text-end">Total Vulnerabilities</th>
                         <th>Severity Breakdown</th>
+                        <th>Exception Breakdown</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -110,6 +112,12 @@ const AssetVulnTable: React.FC<AssetVulnTableProps> = ({ assets, awsAccountId })
                                         count={asset.mediumCount ?? 0} 
                                     />
                                 </div>
+                            </td>
+                            <td>
+                                <ExceptionBreakdownBadges
+                                    exceptedCount={asset.exceptedCount ?? 0}
+                                    nonExceptedCount={asset.nonExceptedCount ?? Math.max(asset.vulnerabilityCount - (asset.exceptedCount ?? 0), 0)}
+                                />
                             </td>
                         </tr>
                     ))}

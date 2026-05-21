@@ -51,6 +51,8 @@ class AccountVulnsService(
      * @property medium Count of MEDIUM severity vulnerabilities
      * @property low Count of LOW severity vulnerabilities
      * @property unknown Count of vulnerabilities with NULL or non-standard severity
+     * @property excepted Count of vulnerabilities covered by active exceptions
+     * @property nonExcepted Count of vulnerabilities not covered by active exceptions
      */
     internal data class SeverityCounts(
         val total: Int,
@@ -58,7 +60,9 @@ class AccountVulnsService(
         val high: Int,
         val medium: Int,
         val low: Int,
-        val unknown: Int
+        val unknown: Int,
+        val excepted: Int,
+        val nonExcepted: Int
     ) {
         /**
          * Check if severity counts sum to total.
@@ -67,7 +71,7 @@ class AccountVulnsService(
          */
         fun isValid(): Boolean {
             val sum = critical + high + medium + low + unknown
-            return sum == total
+            return sum == total && excepted + nonExcepted == total
         }
     }
 
@@ -100,13 +104,16 @@ class AccountVulnsService(
                 SUM(CASE WHEN UPPER(COALESCE(v.cvss_severity, '')) = 'LOW' THEN 1 ELSE 0 END) as low_count,
                 SUM(CASE WHEN COALESCE(v.cvss_severity, '') = ''
                          OR UPPER(v.cvss_severity) NOT IN ('CRITICAL', 'HIGH', 'MEDIUM', 'LOW')
-                    THEN 1 ELSE 0 END) as unknown_count
+                    THEN 1 ELSE 0 END) as unknown_count,
+                SUM(CASE WHEN EXISTS (
+                    SELECT 1 FROM vulnerability_exception e WHERE ${ExceptionMatchSql.EXCEPTION_MATCH}
+                ) THEN 1 ELSE 0 END) as excepted_count,
+                SUM(CASE WHEN NOT EXISTS (
+                    SELECT 1 FROM vulnerability_exception e WHERE ${ExceptionMatchSql.EXCEPTION_MATCH}
+                ) THEN 1 ELSE 0 END) as non_excepted_count
             FROM vulnerability v
             JOIN asset a ON v.asset_id = a.id
             WHERE v.asset_id IN (:assetIds)
-            AND NOT EXISTS (
-                SELECT 1 FROM vulnerability_exception e WHERE ${ExceptionMatchSql.EXCEPTION_MATCH}
-            )
             GROUP BY v.asset_id
         """.trimIndent()
 
@@ -126,17 +133,20 @@ class AccountVulnsService(
                     high = (row[3] as Number).toInt(),
                     medium = (row[4] as Number).toInt(),
                     low = (row[5] as Number).toInt(),
-                    unknown = (row[6] as Number).toInt()
+                    unknown = (row[6] as Number).toInt(),
+                    excepted = (row[7] as Number).toInt(),
+                    nonExcepted = (row[8] as Number).toInt()
                 )
                 
                 // Validate counts and log if mismatch
                 if (!counts.isValid()) {
                     val sum = counts.critical + counts.high + counts.medium + counts.low + counts.unknown
                     logger.error(
-                        "Severity count mismatch for asset {}: sum={}, total={} " +
-                        "(critical={}, high={}, medium={}, low={}, unknown={})",
-                        assetId, sum, counts.total, counts.critical, counts.high, 
-                        counts.medium, counts.low, counts.unknown
+                        "Severity count mismatch for asset {}: sum={}, exceptionSum={}, total={} " +
+                        "(critical={}, high={}, medium={}, low={}, unknown={}, excepted={}, nonExcepted={})",
+                        assetId, sum, counts.excepted + counts.nonExcepted, counts.total,
+                        counts.critical, counts.high, counts.medium, counts.low, counts.unknown,
+                        counts.excepted, counts.nonExcepted
                     )
                 }
                 
@@ -226,7 +236,9 @@ class AccountVulnsService(
                         // Feature 019: Add severity breakdown
                         criticalCount = severityCounts?.critical,
                         highCount = severityCounts?.high,
-                        mediumCount = severityCounts?.medium
+                        mediumCount = severityCounts?.medium,
+                        exceptedCount = severityCounts?.excepted,
+                        nonExceptedCount = severityCounts?.nonExcepted
                     )
                 }
                 .sortedByDescending { it.vulnerabilityCount }
@@ -235,6 +247,8 @@ class AccountVulnsService(
             val totalCritical = sortedAssets.sumOf { it.criticalCount ?: 0 }
             val totalHigh = sortedAssets.sumOf { it.highCount ?: 0 }
             val totalMedium = sortedAssets.sumOf { it.mediumCount ?: 0 }
+            val totalExcepted = sortedAssets.sumOf { it.exceptedCount ?: 0 }
+            val totalNonExcepted = sortedAssets.sumOf { it.nonExceptedCount ?: 0 }
 
             AccountGroupDto(
                 awsAccountId = awsAccountId,
@@ -244,7 +258,9 @@ class AccountVulnsService(
                 // Feature 019: Add account-level severity aggregation
                 totalCritical = totalCritical,
                 totalHigh = totalHigh,
-                totalMedium = totalMedium
+                totalMedium = totalMedium,
+                totalExcepted = totalExcepted,
+                totalNonExcepted = totalNonExcepted
             )
         }
         // Sort account groups by AWS account ID (ascending)
@@ -258,6 +274,8 @@ class AccountVulnsService(
         val globalCritical = accountGroups.sumOf { it.totalCritical ?: 0 }
         val globalHigh = accountGroups.sumOf { it.totalHigh ?: 0 }
         val globalMedium = accountGroups.sumOf { it.totalMedium ?: 0 }
+        val globalExcepted = accountGroups.sumOf { it.totalExcepted ?: 0 }
+        val globalNonExcepted = accountGroups.sumOf { it.totalNonExcepted ?: 0 }
 
         logger.debug("Returning summary: {} account groups (from {} mapped AWS accounts), {} total assets, {} total vulnerabilities " +
             "(Feature 019: {} critical, {} high, {} medium)",
@@ -280,6 +298,8 @@ class AccountVulnsService(
             globalCritical = globalCritical,
             globalHigh = globalHigh,
             globalMedium = globalMedium,
+            globalExcepted = globalExcepted,
+            globalNonExcepted = globalNonExcepted,
             lastImport = latestImport,
             dataFreshness = dataFreshness
         )

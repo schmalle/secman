@@ -15,6 +15,8 @@ import io.micronaut.serde.annotation.Serdeable
  * @property totalCritical Aggregated CRITICAL severity vulnerabilities in this account (nullable for backward compatibility)
  * @property totalHigh Aggregated HIGH severity vulnerabilities in this account (nullable for backward compatibility)
  * @property totalMedium Aggregated MEDIUM severity vulnerabilities in this account (nullable for backward compatibility)
+ * @property totalExcepted Aggregated excepted vulnerabilities in this account (nullable for backward compatibility)
+ * @property totalNonExcepted Aggregated non-excepted vulnerabilities in this account (nullable for backward compatibility)
  */
 @Serdeable
 data class AccountGroupDto(
@@ -26,5 +28,9 @@ data class AccountGroupDto(
     // Severity aggregation (Feature 019 - nullable for backward compatibility)
     val totalCritical: Int? = null,
     val totalHigh: Int? = null,
-    val totalMedium: Int? = null
+    val totalMedium: Int? = null,
+
+    // Exception aggregation (nullable for backward compatibility)
+    val totalExcepted: Int? = null,
+    val totalNonExcepted: Int? = null
 )

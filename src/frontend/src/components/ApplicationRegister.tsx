@@ -120,6 +120,7 @@ const ApplicationRegister: React.FC = () => {
   const [assetSearch, setAssetSearch] = useState('');
   const [activeTab, setActiveTab] = useState<TabKey>('operation');
   const [showForm, setShowForm] = useState(false);
+  const [formMode, setFormMode] = useState<'view' | 'edit' | 'create'>('view');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
@@ -132,6 +133,7 @@ const ApplicationRegister: React.FC = () => {
   const user = getUser();
   const canMutate = isAdmin(user?.roles) || isSecChampion(user?.roles);
   const canImportExport = isAdmin(user?.roles);
+  const isReadOnly = formMode === 'view' || !canMutate;
 
   useEffect(() => {
     void loadApplications();
@@ -214,13 +216,14 @@ const ApplicationRegister: React.FC = () => {
     }
   };
 
-  const editApplication = async (id: number) => {
+  const openApplication = async (id: number, mode: 'view' | 'edit') => {
     try {
       const detail = await getApplication(id);
       setSelected(detail);
       setFormData(toForm(detail));
       setSelectedAssetIds((detail.assets ?? []).map((asset) => asset.id));
       setActiveTab('operation');
+      setFormMode(mode);
       setShowForm(true);
       setError(null);
       setSuccess(null);
@@ -230,11 +233,16 @@ const ApplicationRegister: React.FC = () => {
     }
   };
 
+  const viewApplication = (id: number) => openApplication(id, 'view');
+
+  const editApplication = (id: number) => openApplication(id, 'edit');
+
   const startNew = () => {
     setSelected(null);
     setFormData({ ...emptyForm });
     setSelectedAssetIds([]);
     setActiveTab('operation');
+    setFormMode('create');
     setShowForm(true);
     setError(null);
     setSuccess(null);
@@ -245,6 +253,7 @@ const ApplicationRegister: React.FC = () => {
     setFormData({ ...emptyForm });
     setSelectedAssetIds([]);
     setActiveTab('operation');
+    setFormMode('view');
     setShowForm(false);
     setError(null);
     setSuccess(null);
@@ -398,7 +407,7 @@ const ApplicationRegister: React.FC = () => {
         <select
           className="form-select form-select-sm"
           value={(formData[field.name] as string) || ''}
-          disabled={!canMutate}
+          disabled={isReadOnly}
           onChange={(event) => updateField(field.name, event.target.value)}
         >
           <option value="">Select {field.label.toLowerCase()}</option>
@@ -410,7 +419,7 @@ const ApplicationRegister: React.FC = () => {
         <select
           className="form-select form-select-sm"
           value={(formData.incidentAssignmentGroup as string) || ''}
-          disabled={!canMutate}
+          disabled={isReadOnly}
           onChange={(event) => updateField('incidentAssignmentGroup', event.target.value)}
         >
           <option value="">Select workgroup</option>
@@ -426,7 +435,7 @@ const ApplicationRegister: React.FC = () => {
           className="form-control form-control-sm"
           rows={field.name === 'notes' ? 5 : 3}
           value={(formData[field.name] as string) || ''}
-          disabled={!canMutate}
+          disabled={isReadOnly}
           onChange={(event) => updateField(field.name, event.target.value)}
         />
       ) : (
@@ -434,7 +443,7 @@ const ApplicationRegister: React.FC = () => {
           className="form-control form-control-sm"
           type={field.type || 'text'}
           value={(formData[field.name] as string) || ''}
-          disabled={!canMutate}
+          disabled={isReadOnly}
           onChange={(event) => updateField(field.name, event.target.value)}
         />
       )}
@@ -448,7 +457,7 @@ const ApplicationRegister: React.FC = () => {
         <select
           className="form-select form-select-sm"
           value={formData.operationModel || ''}
-          disabled={!canMutate}
+          disabled={isReadOnly}
           onChange={(event) => updateField('operationModel', event.target.value)}
         >
           <option value="">Select operation model</option>
@@ -461,7 +470,7 @@ const ApplicationRegister: React.FC = () => {
         <select
           className="form-select form-select-sm"
           value={formData.productionOperatingHours || ''}
-          disabled={!canMutate}
+          disabled={isReadOnly}
           onChange={(event) => updateField('productionOperatingHours', event.target.value)}
         >
           <option value="">Select operating hours</option>
@@ -476,7 +485,7 @@ const ApplicationRegister: React.FC = () => {
         <select
           className="form-select form-select-sm"
           value={formData.serviceOperatingHours || ''}
-          disabled={!canMutate}
+          disabled={isReadOnly}
           onChange={(event) => updateField('serviceOperatingHours', event.target.value)}
         >
           <option value="">Select operating hours</option>
@@ -545,7 +554,9 @@ const ApplicationRegister: React.FC = () => {
       {showForm && (
         <div className="card mb-4">
           <div className="card-body">
-            <h5 className="card-title">{selected ? 'Edit Application' : 'Add New Application'}</h5>
+            <h5 className="card-title">
+              {formMode === 'view' ? 'View Application' : selected ? 'Edit Application' : 'Add New Application'}
+            </h5>
             <form onSubmit={save}>
               <div className="row g-3">
                 <div className="col-md-3">
@@ -554,14 +565,14 @@ const ApplicationRegister: React.FC = () => {
                 </div>
                 <div className="col-md-5">
                   <label className="form-label">Application name *</label>
-                  <input className="form-control" value={formData.name} required disabled={!canMutate} onChange={(event) => updateField('name', event.target.value)} />
+                  <input className="form-control" value={formData.name} required disabled={isReadOnly} onChange={(event) => updateField('name', event.target.value)} />
                 </div>
                 <div className="col-md-2">
                   <label className="form-label">Status</label>
                   <select
                     className="form-select"
                     value={formData.operationalStatus || ''}
-                    disabled={!canMutate}
+                    disabled={isReadOnly}
                     onChange={(event) => updateField('operationalStatus', event.target.value)}
                   >
                     <option value="">Select Status</option>
@@ -574,7 +585,7 @@ const ApplicationRegister: React.FC = () => {
                   <select
                     className="form-select"
                     value={formData.criticality || ''}
-                    disabled={!canMutate}
+                    disabled={isReadOnly}
                     onChange={(event) => updateField('criticality', event.target.value)}
                   >
                     <option value="">Select Criticality</option>
@@ -589,7 +600,7 @@ const ApplicationRegister: React.FC = () => {
                     className="form-select"
                     value={formData.businessOwner}
                     required
-                    disabled={!canMutate}
+                    disabled={isReadOnly}
                     onChange={(event) => updateField('businessOwner', event.target.value)}
                   >
                     <option value="">Select Business Owner</option>
@@ -609,7 +620,7 @@ const ApplicationRegister: React.FC = () => {
                     className="form-select"
                     value={formData.applicationManager}
                     required
-                    disabled={!canMutate}
+                    disabled={isReadOnly}
                     onChange={(event) => updateField('applicationManager', event.target.value)}
                   >
                     <option value="">Select Application Manager</option>
@@ -645,7 +656,7 @@ const ApplicationRegister: React.FC = () => {
                       <div className="application-register-assets border rounded">
                         {filteredAssets.map((asset) => (
                           <label className="d-flex gap-2 align-items-start p-2 border-bottom small" key={asset.id}>
-                            <input type="checkbox" className="form-check-input mt-1" disabled={!canMutate} checked={selectedAssetIds.includes(asset.id)} onChange={() => toggleAsset(asset.id)} />
+                            <input type="checkbox" className="form-check-input mt-1" disabled={isReadOnly} checked={selectedAssetIds.includes(asset.id)} onChange={() => toggleAsset(asset.id)} />
                             <span>
                               <span className="fw-semibold">{asset.name}</span>
                               <span className="text-secondary d-block">{asset.type} / {asset.owner}{asset.ip ? ` / ${asset.ip}` : ''}</span>
@@ -686,7 +697,11 @@ const ApplicationRegister: React.FC = () => {
                 <div className="text-secondary small">
                   {selected ? `Created by ${selected.createdBy || '-'} / Updated by ${selected.updatedBy || '-'}` : 'New register record'}
                 </div>
-                {canMutate && (
+                {formMode === 'view' ? (
+                  <button type="button" className="btn btn-secondary" onClick={cancelForm}>
+                    Close
+                  </button>
+                ) : canMutate && (
                   <div className="d-flex gap-2">
                     {selected && (
                       <button type="button" className="btn btn-outline-danger" onClick={() => void deleteApplicationFromList(selected)} disabled={deletingId === selected.id}>
@@ -739,7 +754,7 @@ const ApplicationRegister: React.FC = () => {
                         type="button"
                         className="list-group-item list-group-item-action border-0 border-bottom text-start w-100"
                         key={`search-preview-${application.id}`}
-                        onClick={() => void editApplication(application.id)}
+                        onClick={() => void viewApplication(application.id)}
                       >
                         <div className="fw-semibold">{application.name}</div>
                         <div className="small text-secondary">
@@ -771,15 +786,15 @@ const ApplicationRegister: React.FC = () => {
                   <th>Status</th>
                   <th>Criticality</th>
                   <th>Updated</th>
-                  {canMutate && <th>Actions</th>}
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={canMutate ? 7 : 6} className="text-secondary p-3">Loading...</td></tr>
+                  <tr><td colSpan={7} className="text-secondary p-3">Loading...</td></tr>
                 ) : filteredApplications.length === 0 ? (
                   <tr>
-                    <td colSpan={canMutate ? 7 : 6} className="p-4">
+                    <td colSpan={7} className="p-4">
                       <div className="d-flex align-items-center justify-content-between">
                         <span className="text-secondary">No application records found.</span>
                         {canMutate && (
@@ -816,27 +831,36 @@ const ApplicationRegister: React.FC = () => {
                       )}
                     </td>
                     <td>{application.updatedAt ? new Date(application.updatedAt).toLocaleDateString() : '-'}</td>
-                    {canMutate && (
-                      <td>
-                        <div className="btn-group" role="group">
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-outline-primary"
-                            onClick={() => void editApplication(application.id)}
-                          >
-                            <i className="bi bi-pencil"></i> Edit
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-outline-danger"
-                            onClick={() => void deleteApplicationFromList(application)}
-                            disabled={deletingId === application.id}
-                          >
-                            <i className="bi bi-trash"></i> {deletingId === application.id ? 'Deleting...' : 'Delete'}
-                          </button>
-                        </div>
-                      </td>
-                    )}
+                    <td>
+                      <div className="btn-group" role="group">
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-outline-secondary"
+                          onClick={() => void viewApplication(application.id)}
+                        >
+                          <i className="bi bi-eye"></i> View
+                        </button>
+                        {canMutate && (
+                          <>
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-outline-primary"
+                              onClick={() => void editApplication(application.id)}
+                            >
+                              <i className="bi bi-pencil"></i> Edit
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-outline-danger"
+                              onClick={() => void deleteApplicationFromList(application)}
+                              disabled={deletingId === application.id}
+                            >
+                              <i className="bi bi-trash"></i> {deletingId === application.id ? 'Deleting...' : 'Delete'}
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
