@@ -560,7 +560,7 @@ const ApplicationRegister: React.FC = () => {
             <form onSubmit={save}>
               <div className="row g-3">
                 <div className="col-md-3">
-                  <label className="form-label">CAR ID</label>
+                  <label className="form-label">AppID</label>
                   <input className="form-control" value={selected?.carId || 'Allocated on save'} disabled />
                 </div>
                 <div className="col-md-5">
@@ -735,7 +735,7 @@ const ApplicationRegister: React.FC = () => {
                   className="form-control"
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Name, CAR ID, owner, manager, status"
+                  placeholder="Name, AppID, owner, manager, status"
                 />
                 <button className="btn btn-outline-secondary" onClick={() => setSearch('')} disabled={!search}>
                   Clear
@@ -780,7 +780,7 @@ const ApplicationRegister: React.FC = () => {
             <table className="table table-striped table-hover align-middle">
               <thead>
                 <tr>
-                  <th>CAR ID</th>
+                  <th>AppID</th>
                   <th>Name</th>
                   <th>Ownership</th>
                   <th>Status</th>
