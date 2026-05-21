@@ -88,6 +88,19 @@ open class AssetFilterService(
     }
 
     /**
+     * Get asset IDs accessible to the authenticated user.
+     *
+     * This helper avoids repeatedly materializing full Asset entities for call sites
+     * that only need membership checks or `IN (:assetIds)` filtering.
+     */
+    fun getAccessibleAssetIds(authentication: Authentication): Set<Long> {
+        if (hasRole(authentication, "ADMIN") || hasRole(authentication, "SECCHAMPION")) {
+            return assetRepository.findAll().mapNotNull { it.id }.toSet()
+        }
+        return getAccessibleAssets(authentication).mapNotNull { it.id }.toSet()
+    }
+
+    /**
      * Get accessible assets using unified single-query approach
      * Feature 073: Combines all access criteria in one database round trip.
      *
@@ -188,13 +201,12 @@ open class AssetFilterService(
             return vulnerabilityRepository.findAll()
         }
 
-        // Regular users and VULN: filter by asset accessibility
-        val userId = getUserId(authentication)
-        return vulnerabilityRepository.findByAssetWorkgroupsUsersIdOrAssetManualCreatorIdOrAssetScanUploaderIdOrderByScanTimestampDesc(
-            userId = userId,
-            manualCreatorId = userId,
-            scanUploaderId = userId
-        )
+        // Regular users and VULN: filter by unified asset accessibility rules.
+        val accessibleAssetIds = getAccessibleAssetIds(authentication)
+        if (accessibleAssetIds.isEmpty()) {
+            return emptyList()
+        }
+        return vulnerabilityRepository.findLatestVulnerabilitiesForAssetIds(accessibleAssetIds)
     }
 
     /**
@@ -261,8 +273,7 @@ open class AssetFilterService(
         }
 
         // Check if asset is in user's accessible assets
-        val accessibleAssets = getAccessibleAssets(authentication)
-        return accessibleAssets.any { it.id == assetId }
+        return getAccessibleAssetIds(authentication).contains(assetId)
     }
 
     /**

@@ -46,9 +46,7 @@ open class AccessibleAssetIdsCache(
         if (cachedSnapshot != null && cachedForUserId == currentUserId) {
             return cachedSnapshot
         }
-        val ids = assetFilterService.getAccessibleAssets(authentication)
-            .mapNotNull { it.id }
-            .toSet()
+        val ids = assetFilterService.getAccessibleAssetIds(authentication)
         cached = ids
         cachedForUserId = currentUserId
         return ids
