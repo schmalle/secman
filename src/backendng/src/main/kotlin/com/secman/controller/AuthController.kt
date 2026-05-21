@@ -4,6 +4,7 @@ import com.secman.domain.User
 import com.secman.repository.AwsAccountSharingRepository
 import com.secman.repository.UserMappingRepository
 import com.secman.repository.UserRepository
+import com.secman.service.ActiveUserTracker
 import com.secman.service.AuthCookieService
 import com.secman.service.InputValidationService
 import io.micronaut.http.HttpRequest
@@ -32,7 +33,8 @@ open class AuthController(
     private val awsAccountSharingRepository: AwsAccountSharingRepository,
     private val tokenGenerator: TokenGenerator,
     private val inputValidationService: InputValidationService,
-    private val authCookieService: AuthCookieService
+    private val authCookieService: AuthCookieService,
+    private val activeUserTracker: ActiveUserTracker
 ) {
 
     private val passwordEncoder = BCryptPasswordEncoder()
@@ -112,6 +114,13 @@ open class AuthController(
         val workgroupCount: Long = 0,
         val awsAccountCount: Long = 0,
         val domainCount: Long = 0
+    )
+
+    @Serdeable
+    data class ActivitySummaryResponse(
+        val activeUsers: Int,
+        val windowSeconds: Long,
+        val generatedAt: String
     )
 
     @Post("/login")
@@ -206,13 +215,16 @@ open class AuthController(
             domainCount = userMappingRepository.countDistinctDomainsByEmail(user.email)
         )
 
+        activeUserTracker.markActive(user.username)
+
         // Set JWT in HttpOnly secure cookie (primary auth mechanism)
         return HttpResponse.ok(response).cookie(authCookieService.createAuthCookie(token))
     }
 
     @Post("/logout")
     @Secured(SecurityRule.IS_AUTHENTICATED)
-    fun logout(): HttpResponse<*> {
+    fun logout(authentication: Authentication): HttpResponse<*> {
+        activeUserTracker.remove(authentication.name)
         // Clear the auth cookie by setting an expired cookie
         return HttpResponse.ok(mapOf("message" to "Logged out successfully"))
             .cookie(authCookieService.createLogoutCookie())
@@ -254,6 +266,18 @@ open class AuthController(
         )
 
         return HttpResponse.ok(response)
+    }
+
+    @Get("/activity-summary")
+    @Secured("ADMIN")
+    fun activitySummary(): HttpResponse<ActivitySummaryResponse> {
+        return HttpResponse.ok(
+            ActivitySummaryResponse(
+                activeUsers = activeUserTracker.countActiveUsers(),
+                windowSeconds = activeUserTracker.activeWindow.seconds,
+                generatedAt = Instant.now().toString()
+            )
+        )
     }
 
     @Serdeable

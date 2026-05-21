@@ -11,6 +11,7 @@ type StatItem = {
 type DashboardState = {
   assets: number | null;
   users: number | null;
+  activeUsers: number | null;
   runningAssessments: number | null;
   releases: number | null;
   lastCrowdStrikeCheckin: string | null;
@@ -19,6 +20,7 @@ type DashboardState = {
 const initialState: DashboardState = {
   assets: null,
   users: null,
+  activeUsers: null,
   runningAssessments: null,
   releases: null,
   lastCrowdStrikeCheckin: null
@@ -94,6 +96,16 @@ const HomeStatisticsDashboard: React.FC = () => {
         } catch (error) {
           console.error('Failed to load user statistics:', error);
         }
+
+        try {
+          const activeUsersResp = await authenticatedGet('/api/auth/activity-summary');
+          if (activeUsersResp.ok) {
+            const activity = await activeUsersResp.json();
+            next.activeUsers = typeof activity?.activeUsers === 'number' ? activity.activeUsers : null;
+          }
+        } catch (error) {
+          console.error('Failed to load active user statistics:', error);
+        }
       }
 
       setStats(next);
@@ -118,6 +130,11 @@ const HomeStatisticsDashboard: React.FC = () => {
       value: formatCount(stats.users),
       subtitle: 'Registered user accounts',
       icon: 'bi-people'
+    }, {
+      label: 'Active Users',
+      value: formatCount(stats.activeUsers),
+      subtitle: 'Authenticated activity in last 15 minutes',
+      icon: 'bi-person-check'
     });
   }
 
