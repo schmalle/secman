@@ -17,6 +17,7 @@ import com.secman.cli.commands.QueryCommand
 import com.secman.cli.commands.SendAdminSummaryCommand
 import com.secman.cli.commands.SendNotificationsCommand
 import com.secman.cli.commands.SendNotificationUsersCommand
+import com.secman.cli.commands.SendApplicationRegisterRemindersCommand
 import com.secman.cli.commands.ServersCommand
 import io.micronaut.configuration.picocli.PicocliRunner
 import io.micronaut.context.ApplicationContext
@@ -277,6 +278,13 @@ class SecmanCli {
                 }
                 0
             }
+            args[0] == "send-application-register-reminders" -> {
+                val subArgs = args.drop(1).toTypedArray()
+                createCliContext().use { ctx ->
+                    PicocliRunner.run(SendApplicationRegisterRemindersCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
             args[0] == "send-notification-users" -> {
                 // Use Picocli with Micronaut DI for send-notification-users command
                 val subArgs = args.drop(1).toTypedArray()
@@ -368,6 +376,7 @@ class SecmanCli {
                 send-notifications     Send email notifications for outdated assets
                 send-admin-summary     Send system statistics summary email to ADMIN users
                 send-notification-users  Send vulnerability notifications to users by AWS account
+                send-application-register-reminders  Send reminders for stale application register quality checks
 
               User & Access Management:
                 manage-user-mappings   Manage user mappings for domains and AWS accounts

@@ -7,6 +7,7 @@ import com.secman.service.AdminSummaryService
 import com.secman.service.NotificationService
 import com.secman.service.UserMappingStatisticsService
 import com.secman.service.UserVulnerabilityNotificationService
+import com.secman.service.ApplicationRegisterReminderService
 import io.micronaut.data.model.Pageable
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.MediaType
@@ -37,7 +38,8 @@ class CliController(
     private val userMappingRepository: UserMappingRepository,
     private val adminSummaryService: AdminSummaryService,
     private val userVulnerabilityNotificationService: UserVulnerabilityNotificationService,
-    private val userMappingStatisticsService: UserMappingStatisticsService
+    private val userMappingStatisticsService: UserMappingStatisticsService,
+    private val applicationRegisterReminderService: ApplicationRegisterReminderService
 ) {
     private val logger = LoggerFactory.getLogger(CliController::class.java)
 
@@ -432,4 +434,48 @@ class CliController(
             HttpResponse.serverError()
         }
     }
+
+    @Serdeable
+    data class SendApplicationRegisterRemindersRequest(
+        val thresholdDays: Int = 365,
+        val dryRun: Boolean = false,
+        val verbose: Boolean = false
+    )
+
+    @Serdeable
+    data class ApplicationRegisterReminderResultDto(
+        val status: String,
+        val thresholdDays: Int,
+        val recipientCount: Int,
+        val entriesOverdue: Int,
+        val emailsSent: Int,
+        val emailsFailed: Int,
+        val recipients: List<String>,
+        val failedRecipients: List<String>
+    )
+
+    @Post("/application-register/reminders/send")
+    @Produces(MediaType.APPLICATION_JSON)
+    fun sendApplicationRegisterReminders(
+        @Body request: SendApplicationRegisterRemindersRequest,
+        authentication: Authentication
+    ): HttpResponse<ApplicationRegisterReminderResultDto> {
+        logger.info("CLI application-register reminders requested by user: {} (dryRun={}, thresholdDays={})", authentication.name, request.dryRun, request.thresholdDays)
+        if (request.thresholdDays < 1) return HttpResponse.badRequest()
+
+        val result = applicationRegisterReminderService.sendReminderEmails(request.thresholdDays, request.dryRun, request.verbose)
+        return HttpResponse.ok(
+            ApplicationRegisterReminderResultDto(
+                status = result.status.name,
+                thresholdDays = result.thresholdDays,
+                recipientCount = result.recipientCount,
+                entriesOverdue = result.entriesOverdue,
+                emailsSent = result.emailsSent,
+                emailsFailed = result.emailsFailed,
+                recipients = result.recipients,
+                failedRecipients = result.failedRecipients
+            )
+        )
+    }
+
 }

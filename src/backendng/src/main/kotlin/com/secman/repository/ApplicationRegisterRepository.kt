@@ -6,6 +6,8 @@ import io.micronaut.data.annotation.Repository
 import io.micronaut.data.jpa.repository.JpaRepository
 import java.util.Optional
 
+import java.time.LocalDate
+
 @Repository
 interface ApplicationRegisterRepository : JpaRepository<ApplicationRegister, Long> {
 
@@ -39,4 +41,14 @@ interface ApplicationRegisterRepository : JpaRepository<ApplicationRegister, Lon
         """
     )
     fun findByIdWithAssets(id: Long): Optional<ApplicationRegister>
+
+    @Query(
+        """
+        SELECT a FROM ApplicationRegister a
+        WHERE a.lastQualityCheck IS NULL OR a.lastQualityCheck < :cutoff
+        ORDER BY a.name ASC
+        """
+    )
+    fun findEntriesOverdueForQualityCheck(cutoff: LocalDate): List<ApplicationRegister>
+
 }
