@@ -60,6 +60,9 @@ open class WorkgroupController(
     private fun isAdmin(authentication: Authentication): Boolean =
         authentication.roles.contains("ADMIN")
 
+    private fun canManageWorkgroup(authentication: Authentication): Boolean =
+        isAdmin(authentication) || authentication.roles.contains("SECCHAMPION")
+
     /**
      * Resolve the calling User from the Authentication principal.
      * @throws IllegalStateException if no matching user row exists (should not happen for an authenticated request).
@@ -252,8 +255,8 @@ open class WorkgroupController(
         authentication: Authentication
     ): HttpResponse<*> {
         return try {
-            val existing = workgroupService.getWorkgroupById(id)
-            if (!isMemberOrAdmin(existing, authentication)) {
+            workgroupService.getWorkgroupById(id)
+            if (!canManageWorkgroup(authentication)) {
                 return HttpResponse.status<Any>(io.micronaut.http.HttpStatus.FORBIDDEN)
             }
             val workgroup = workgroupService.updateWorkgroup(
@@ -290,22 +293,13 @@ open class WorkgroupController(
         authentication: Authentication
     ): HttpResponse<Void> {
         return try {
-            val workgroup = workgroupService.getWorkgroupById(id)
-            if (isAdmin(authentication)) {
-                // Admin retains the legacy "promote children to grandparent" semantics
-                // so hierarchy continuity is preserved across organizational re-shuffles.
-                workgroupService.deleteWorkgroupWithPromotion(id)
-                return HttpResponse.noContent()
-            }
-            if (!isMemberOrAdmin(workgroup, authentication)) {
+            workgroupService.getWorkgroupById(id)
+            if (!canManageWorkgroup(authentication)) {
                 return HttpResponse.status(io.micronaut.http.HttpStatus.FORBIDDEN)
             }
-            // Non-admin members may not delete a parent workgroup — promoting children
-            // could re-parent them under a workgroup the deleter cannot see.
-            if (workgroup.children.isNotEmpty()) {
-                return HttpResponse.badRequest()
-            }
-            workgroupService.deleteWorkgroup(id)
+            // Privileged users retain the legacy "promote children to grandparent" semantics
+            // so hierarchy continuity is preserved across organizational re-shuffles.
+            workgroupService.deleteWorkgroupWithPromotion(id)
             HttpResponse.noContent()
         } catch (e: IllegalArgumentException) {
             HttpResponse.notFound()
@@ -340,8 +334,8 @@ open class WorkgroupController(
             // would already be committed and orphaned.
             val workgroup = workgroupRepository.findById(id).orElse(null)
                 ?: return HttpResponse.notFound<Any>()
-            if (!isMemberOrAdmin(workgroup, authentication)) {
-                return HttpResponse.status<Any>(io.micronaut.http.HttpStatus.FORBIDDEN)
+            if (!canManageWorkgroup(authentication)) {
+                return HttpResponse.status(io.micronaut.http.HttpStatus.FORBIDDEN)
             }
 
             // Domain restriction: non-admin callers can only lazy-create new pending users
@@ -450,7 +444,7 @@ open class WorkgroupController(
         return try {
             val workgroup = workgroupRepository.findById(workgroupId).orElse(null)
                 ?: return HttpResponse.notFound()
-            if (!isMemberOrAdmin(workgroup, authentication)) {
+            if (!canManageWorkgroup(authentication)) {
                 return HttpResponse.status(io.micronaut.http.HttpStatus.FORBIDDEN)
             }
             workgroupService.removeUserFromWorkgroup(workgroupId, userId)
@@ -487,7 +481,7 @@ open class WorkgroupController(
             }
             val workgroup = workgroupRepository.findById(id).orElse(null)
                 ?: return HttpResponse.notFound()
-            if (!isMemberOrAdmin(workgroup, authentication)) {
+            if (!canManageWorkgroup(authentication)) {
                 return HttpResponse.status(io.micronaut.http.HttpStatus.FORBIDDEN)
             }
             val removedCount = workgroupService.removeUsersFromWorkgroup(id, request.userIds)
@@ -524,7 +518,7 @@ open class WorkgroupController(
         return try {
             val workgroup = workgroupRepository.findById(id).orElse(null)
                 ?: return HttpResponse.notFound()
-            if (!isMemberOrAdmin(workgroup, authentication)) {
+            if (!canManageWorkgroup(authentication)) {
                 return HttpResponse.status(io.micronaut.http.HttpStatus.FORBIDDEN)
             }
             workgroupService.assignAssetsToWorkgroup(id, request.assetIds)
@@ -598,7 +592,7 @@ open class WorkgroupController(
             }
             val workgroup = workgroupRepository.findById(id).orElse(null)
                 ?: return HttpResponse.notFound()
-            if (!isMemberOrAdmin(workgroup, authentication)) {
+            if (!canManageWorkgroup(authentication)) {
                 return HttpResponse.status(io.micronaut.http.HttpStatus.FORBIDDEN)
             }
             val removedCount = workgroupService.removeAssetsFromWorkgroup(id, request.assetIds)
@@ -634,7 +628,7 @@ open class WorkgroupController(
         return try {
             val workgroup = workgroupRepository.findById(workgroupId).orElse(null)
                 ?: return HttpResponse.notFound()
-            if (!isMemberOrAdmin(workgroup, authentication)) {
+            if (!canManageWorkgroup(authentication)) {
                 return HttpResponse.status(io.micronaut.http.HttpStatus.FORBIDDEN)
             }
             workgroupService.removeAssetFromWorkgroup(workgroupId, assetId)
