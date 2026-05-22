@@ -46,10 +46,10 @@ const HomeStatisticsDashboard: React.FC = () => {
       const next: DashboardState = { ...initialState };
 
       try {
-        const assetsResp = await authenticatedGet('/api/assets');
+        const assetsResp = await authenticatedGet('/api/assets/count');
         if (assetsResp.ok) {
           const assets = await assetsResp.json();
-          next.assets = Array.isArray(assets) ? assets.length : null;
+          next.assets = typeof assets?.count === 'number' ? assets.count : null;
         }
       } catch (error) {
         console.error('Failed to load asset statistics:', error);
@@ -118,7 +118,7 @@ const HomeStatisticsDashboard: React.FC = () => {
   const userName = getUser()?.username ?? 'there';
 
   const cards: StatItem[] = [
-    { label: 'Systems in Asset Inventory', value: formatCount(stats.assets), subtitle: 'Visible to your role', icon: 'bi-hdd-network' },
+    { label: 'Systems in Asset Inventory', value: formatCount(stats.assets), subtitle: 'All asset records', icon: 'bi-hdd-network' },
     { label: 'Active Standard Releases', value: formatCount(stats.releases), subtitle: 'All release records', icon: 'bi-journals' },
     { label: 'Running Risk Assessments', value: formatCount(stats.runningAssessments), subtitle: 'Status: IN_PROGRESS', icon: 'bi-clipboard2-pulse' },
     { label: 'Last CrowdStrike Import', value: stats.lastCrowdStrikeCheckin ?? '—', subtitle: 'Most recent server check-in', icon: 'bi-shield-check' }

@@ -115,6 +115,11 @@ open class AssetController(
         val label: String
     )
 
+    @Serdeable
+    data class AssetCountResponse(
+        val count: Long
+    )
+
     /**
      * Response DTO for Asset entity to prevent exposing internal JPA fields.
      * Security finding HI-8: Excludes ipNumeric, vulnerabilities, scanResults,
@@ -235,6 +240,16 @@ open class AssetController(
             log.error("Error fetching assets for user: {}", authentication.name, e)
             HttpResponse.serverError<List<AssetResponse>>()
         }
+    }
+
+    /**
+     * Count all assets in the system without loading asset rows.
+     * Used by dashboard summary cards where a global inventory count is desired.
+     */
+    @Get("/count")
+    @Transactional(readOnly = true)
+    open fun countAll(): HttpResponse<AssetCountResponse> {
+        return HttpResponse.ok(AssetCountResponse(assetRepository.count()))
     }
 
     /**
