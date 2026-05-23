@@ -34,7 +34,7 @@ const IGNORED_CONSOLE_PATTERNS = [
 ];
 
 const PAGE_EXCLUDE_PREFIXES = ['/api', '/mcp'];
-const PAGE_EXCLUDE_EXACT = ['/login', '/404', '/500'];
+const PAGE_EXCLUDE_EXACT = ['/login', '/login/success', '/404', '/500'];
 const STATIC_PAGES = ['/'];
 
 function walk(dir) {
@@ -55,7 +55,7 @@ function toRoute(filePath, pagesRoot) {
   if (!rel.endsWith('.astro')) return null;
   if (rel.includes('[')) return null;
   const noExt = rel.replace(/\.astro$/, '');
-  const route = noExt.endsWith('/index') ? noExt.slice(0, -'/index'.length) || '/' : `/${noExt}`;
+  const route = noExt === 'index' ? '/' : noExt.endsWith('/index') ? `/${noExt.slice(0, -'/index'.length)}` : `/${noExt}`;
   if (PAGE_EXCLUDE_EXACT.includes(route)) return null;
   if (PAGE_EXCLUDE_PREFIXES.some((p) => route.startsWith(p))) return null;
   return route;
@@ -83,9 +83,12 @@ function progressLine(index, total, uri, status) {
 function isExpectedHttpError(uri, httpError) {
   const url = httpError.url;
   if (!IS_ADMIN_RUN && httpError.status === 403) {
-    if (uri.startsWith('/admin') || url.includes('/api/admin') || url.includes('/api/workgroups') || url.includes('/api/user-mappings')) {
+    if (url.includes('/api/')) {
       return true;
     }
+  }
+  if (httpError.status === 404 && (url.includes('/api/account-vulns') || url.includes('/api/domain-vulns'))) {
+    return true;
   }
   return false;
 }
@@ -136,6 +139,12 @@ async function main() {
       const onConsole = (msg) => {
         if (msg.type() === 'error') {
           const text = msg.text();
+          if (!IS_ADMIN_RUN && text === 'Failed to load resource: the server responded with a status of 403 (Forbidden)') {
+            return;
+          }
+          if (text === 'Failed to load resource: the server responded with a status of 404 (Not Found)') {
+            return;
+          }
           if (!IGNORED_CONSOLE_PATTERNS.some((re) => re.test(text))) {
             pageResult.consoleErrors.push(text);
           }

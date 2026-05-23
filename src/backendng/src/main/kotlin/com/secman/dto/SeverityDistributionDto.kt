@@ -1,5 +1,6 @@
 package com.secman.dto
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import io.micronaut.serde.annotation.Serdeable
 
 /**
@@ -15,6 +16,7 @@ import io.micronaut.serde.annotation.Serdeable
  * Data model: data-model.md Section "SeverityDistributionDto"
  */
 @Serdeable
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class SeverityDistributionDto(
     /**
      * Count of CRITICAL severity vulnerabilities

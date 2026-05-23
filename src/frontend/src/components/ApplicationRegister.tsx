@@ -128,14 +128,16 @@ const ApplicationRegister: React.FC = () => {
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState<ReturnType<typeof getUser>>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
-  const user = getUser();
+  const user = currentUser;
   const canMutate = isAdmin(user?.roles) || isSecChampion(user?.roles);
   const canImportExport = isAdmin(user?.roles);
   const isReadOnly = formMode === 'view' || !canMutate;
 
   useEffect(() => {
+    setCurrentUser(getUser());
     void loadApplications();
     void loadAssets();
     void loadUsers();

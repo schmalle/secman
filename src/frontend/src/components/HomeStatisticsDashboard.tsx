@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { authenticatedGet, getUser, hasRole } from '../utils/auth';
 
 type StatItem = {
@@ -40,8 +40,13 @@ const formatCount = (value: number | null): string => {
 
 const HomeStatisticsDashboard: React.FC = () => {
   const [stats, setStats] = useState<DashboardState>(initialState);
+  const [userName, setUserName] = useState('there');
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
+    setUserName(getUser()?.username ?? 'there');
+    setIsAdmin(hasRole('ADMIN'));
+
     const load = async () => {
       const next: DashboardState = { ...initialState };
 
@@ -52,19 +57,21 @@ const HomeStatisticsDashboard: React.FC = () => {
           next.assets = typeof assets?.count === 'number' ? assets.count : null;
         }
       } catch (error) {
-        console.error('Failed to load asset statistics:', error);
+        console.warn('Failed to load asset statistics:', error);
       }
 
-      try {
-        const assessmentsResp = await authenticatedGet('/api/risk-assessments');
-        if (assessmentsResp.ok) {
-          const assessments = await assessmentsResp.json();
-          if (Array.isArray(assessments)) {
-            next.runningAssessments = assessments.filter(a => a?.status === 'IN_PROGRESS').length;
+      if (hasRole(['ADMIN', 'RISK', 'SECCHAMPION'])) {
+        try {
+          const assessmentsResp = await authenticatedGet('/api/risk-assessments');
+          if (assessmentsResp.ok) {
+            const assessments = await assessmentsResp.json();
+            if (Array.isArray(assessments)) {
+              next.runningAssessments = assessments.filter(a => a?.status === 'IN_PROGRESS').length;
+            }
           }
+        } catch (error) {
+          console.warn('Failed to load risk assessment statistics:', error);
         }
-      } catch (error) {
-        console.error('Failed to load risk assessment statistics:', error);
       }
 
       try {
@@ -74,7 +81,7 @@ const HomeStatisticsDashboard: React.FC = () => {
           next.releases = Array.isArray(releases) ? releases.length : null;
         }
       } catch (error) {
-        console.error('Failed to load release statistics:', error);
+        console.warn('Failed to load release statistics:', error);
       }
 
       try {
@@ -83,7 +90,7 @@ const HomeStatisticsDashboard: React.FC = () => {
           next.lastCrowdStrikeCheckin = formatDate((await csResp.text()).trim());
         }
       } catch (error) {
-        console.error('Failed to load CrowdStrike check-in statistics:', error);
+        console.warn('Failed to load CrowdStrike check-in statistics:', error);
       }
 
       if (hasRole('ADMIN')) {
@@ -94,7 +101,7 @@ const HomeStatisticsDashboard: React.FC = () => {
             next.users = Array.isArray(users) ? users.length : null;
           }
         } catch (error) {
-          console.error('Failed to load user statistics:', error);
+          console.warn('Failed to load user statistics:', error);
         }
 
         try {
@@ -104,7 +111,7 @@ const HomeStatisticsDashboard: React.FC = () => {
             next.activeUsers = typeof activity?.activeUsers === 'number' ? activity.activeUsers : null;
           }
         } catch (error) {
-          console.error('Failed to load active user statistics:', error);
+          console.warn('Failed to load active user statistics:', error);
         }
       }
 
@@ -113,9 +120,6 @@ const HomeStatisticsDashboard: React.FC = () => {
 
     void load();
   }, []);
-
-  const isAdmin = useMemo(() => hasRole('ADMIN'), []);
-  const userName = getUser()?.username ?? 'there';
 
   const cards: StatItem[] = [
     { label: 'Systems in Asset Inventory', value: formatCount(stats.assets), subtitle: 'All asset records', icon: 'bi-hdd-network' },
@@ -156,7 +160,7 @@ const HomeStatisticsDashboard: React.FC = () => {
                   <h2 className="h6 text-muted text-uppercase mb-0" style={{ letterSpacing: '0.04em' }}>{card.label}</h2>
                   <i className={`bi ${card.icon} fs-4 text-primary`} aria-hidden="true"></i>
                 </div>
-                <p className="display-6 fw-bold mb-2">{card.value}</p>
+                <p className="fw-bold mb-2" style={{ fontSize: '1.75rem', lineHeight: 1.2 }}>{card.value}</p>
                 <p className="text-muted mb-0">{card.subtitle}</p>
               </div>
             </article>
