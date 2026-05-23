@@ -11,6 +11,7 @@ import com.secman.repository.OAuthStateRepository
 import com.secman.repository.AwsAccountSharingRepository
 import com.secman.repository.UserMappingRepository
 import com.secman.repository.UserRepository
+import com.secman.repository.WorkgroupRepository
 import com.secman.util.MicrosoftErrorMapper
 import io.micronaut.context.event.ApplicationEventPublisher
 import io.micronaut.http.HttpRequest
@@ -151,6 +152,7 @@ open class OAuthService(
     private val userRepository: UserRepository,
     private val userMappingRepository: UserMappingRepository,
     private val awsAccountSharingRepository: AwsAccountSharingRepository,
+    private val workgroupRepository: WorkgroupRepository,
     private val tokenGenerator: TokenGenerator,
     private val objectMapper: ObjectMapper,
     private val microsoftErrorMapper: MicrosoftErrorMapper,
@@ -589,7 +591,7 @@ open class OAuthService(
                         username = user.username,
                         email = user.email,
                         roles = user.roles.map { it.name },
-                        workgroupCount = userRepository.countWorkgroupsByUsername(user.username),
+                        workgroupCount = workgroupRepository.countEffectiveWorkgroupsByUserEmail(user.email),
                         awsAccountCount = directAwsCount + sharedAwsCount,
                         domainCount = userMappingRepository.countDistinctDomainsByEmail(user.email)
                     )

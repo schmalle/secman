@@ -720,10 +720,13 @@ open class CrowdStrikeApiClientImpl(
                 // Filter by device type, optionally restricting to recently seen devices
                 // - product_type_desc:'Server' or 'Workstation' = Only specified device type
                 // - last_seen:>'now-Nd' = Only devices seen in the last N days (when lastSeenDays > 0)
+                val deviceTypeFilter = requireNotNull(deviceType.toFqlFilter()) {
+                    "DeviceType.ALL must be expanded before querying a single device type"
+                }
                 val filter = if (lastSeenDays > 0) {
-                    "${deviceType.toFqlFilter()}+last_seen:>'now-${lastSeenDays}d'"
+                    "$deviceTypeFilter+last_seen:>'now-${lastSeenDays}d'"
                 } else {
-                    deviceType.toFqlFilter()
+                    deviceTypeFilter
                 }
 
                 val uri = UriBuilder.of("/devices/queries/devices/v1")

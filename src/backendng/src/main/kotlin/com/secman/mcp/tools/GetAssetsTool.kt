@@ -240,7 +240,7 @@ class GetAssetsTool(
     /**
      * Create a manual Page object for lists that don't have native pagination support.
      */
-    private fun <T> createManualPage(content: List<T>, total: Int, pageable: Pageable): io.micronaut.data.model.Page<T> {
+    private fun <T : Any> createManualPage(content: List<T>, total: Int, pageable: Pageable): io.micronaut.data.model.Page<T> {
         return io.micronaut.data.model.Page.of(content, pageable, total.toLong())
     }
 }

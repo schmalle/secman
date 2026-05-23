@@ -1,32 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { WorkgroupResponse } from '../services/workgroupApi';
 import { getWorkgroupChildren, getRootWorkgroups } from '../services/workgroupApi';
-import { authenticatedGet, getUser } from '../utils/auth';
-
-
-
-interface UserProfileResponse {
-  workgroups?: Array<{ id?: number }>;
-}
-
-function canSeeAllWorkgroups(): boolean {
-  const roles = getUser()?.roles ?? [];
-  return roles.includes('ADMIN') || roles.includes('SECCHAMPION');
-}
-
-async function getCurrentUserWorkgroupIds(): Promise<Set<number>> {
-  const response = await authenticatedGet('/api/users/profile');
-  if (!response.ok) {
-    throw new Error(`Failed to fetch current user profile: ${response.status}`);
-  }
-
-  const profile = await response.json() as UserProfileResponse;
-  const ids = (profile.workgroups ?? [])
-    .map(wg => wg.id)
-    .filter((id): id is number => typeof id === 'number');
-
-  return new Set(ids);
-}
 
 /**
  * Workgroup Tree Component
@@ -210,12 +184,7 @@ const WorkgroupTree: React.FC<WorkgroupTreeProps> = ({
     setError(null);
     try {
       const roots = await getRootWorkgroups();
-      if (canSeeAllWorkgroups()) {
-        setRootWorkgroups(roots);
-      } else {
-        const currentUserWorkgroupIds = await getCurrentUserWorkgroupIds();
-        setRootWorkgroups(roots.filter(workgroup => currentUserWorkgroupIds.has(workgroup.id)));
-      }
+      setRootWorkgroups(roots);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load workgroups');
       console.error('Failed to load root workgroups:', err);
@@ -254,7 +223,7 @@ const WorkgroupTree: React.FC<WorkgroupTreeProps> = ({
       <div className="text-center py-5 text-muted">
         <i className="bi bi-folder2-open" style={{ fontSize: '48px' }}></i>
         <p className="mt-3">No workgroups found</p>
-        <p className="small">Create a root-level workgroup to get started</p>
+        <p className="small">No visible workgroups are available.</p>
       </div>
     );
   }

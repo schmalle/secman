@@ -22,12 +22,12 @@ dependencies {
     implementation(project(":shared"))
     
     // Micronaut Core
-    implementation("io.micronaut:micronaut-http-client:4.10.23")
-    implementation("io.micronaut:micronaut-http-server-netty:4.10.23")
-    implementation("io.micronaut:micronaut-jackson-databind:4.10.23")
+    implementation("io.micronaut:micronaut-http-client")
+    implementation("io.micronaut:micronaut-http-server-netty")
+    implementation("io.micronaut:micronaut-jackson-databind")
     implementation("io.micronaut.kotlin:micronaut-kotlin-runtime")
     implementation("io.micronaut.kotlin:micronaut-kotlin-extension-functions")
-    implementation("io.micronaut:micronaut-retry:4.10.23")
+    implementation("io.micronaut:micronaut-retry")
     implementation("io.micronaut.cache:micronaut-cache-caffeine")
 
     // Database
@@ -112,7 +112,7 @@ dependencies {
     ksp("io.micronaut:micronaut-http-validation")
     ksp("io.micronaut.data:micronaut-data-processor")
     ksp("io.micronaut.serde:micronaut-serde-processor")
-    ksp("io.micronaut.security:micronaut-security-annotations")
+    ksp("io.micronaut.security:micronaut-security-processor")
 
     // Test dependencies - Feature 056
     kspTest("io.micronaut:micronaut-inject-java")
@@ -132,12 +132,12 @@ application {
 }
 
 java {
-    sourceCompatibility = JavaVersion.toVersion("21")
-    targetCompatibility = JavaVersion.toVersion("21")
+    sourceCompatibility = JavaVersion.toVersion("25")
+    targetCompatibility = JavaVersion.toVersion("25")
 }
 
 kotlin {
-    jvmToolchain(21)
+    jvmToolchain(25)
 }
 
 allOpen {

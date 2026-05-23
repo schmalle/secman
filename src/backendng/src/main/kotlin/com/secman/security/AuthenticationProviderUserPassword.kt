@@ -4,9 +4,9 @@ package com.secman.security
 
 import com.secman.repository.UserRepository
 import io.micronaut.http.HttpRequest
-import io.micronaut.security.authentication.AuthenticationProvider
 import io.micronaut.security.authentication.AuthenticationRequest
 import io.micronaut.security.authentication.AuthenticationResponse
+import io.micronaut.security.authentication.provider.HttpRequestReactiveAuthenticationProvider
 import jakarta.inject.Singleton
 import org.reactivestreams.Publisher
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
@@ -15,19 +15,19 @@ import reactor.core.publisher.FluxSink
 
 @Singleton
 @Suppress("DEPRECATION")
-class AuthenticationProviderUserPassword(
+class AuthenticationProviderUserPassword<B : Any>(
     private val userRepository: UserRepository
-) : AuthenticationProvider<HttpRequest<*>> {
+) : HttpRequestReactiveAuthenticationProvider<B> {
 
     private val passwordEncoder = BCryptPasswordEncoder()
 
     override fun authenticate(
-        httpRequest: HttpRequest<*>?,
-        authenticationRequest: AuthenticationRequest<*, *>
+        httpRequest: HttpRequest<B>?,
+        authenticationRequest: AuthenticationRequest<String, String>
     ): Publisher<AuthenticationResponse> {
         return Flux.create { emitter: FluxSink<AuthenticationResponse> ->
-            val username = authenticationRequest.identity.toString()
-            val password = authenticationRequest.secret.toString()
+            val username = authenticationRequest.identity
+            val password = authenticationRequest.secret
 
             try {
                 val userOptional = userRepository.findByUsername(username)

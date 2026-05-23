@@ -66,7 +66,7 @@ class ApplicationRegisterControllerIntegrationTest : BaseIntegrationTest() {
         )
 
         assertThat(listResponse.status).isEqualTo(HttpStatus.OK)
-        assertThat(listResponse.body().map { it.id }).contains(application.id)
+        assertThat(listResponse.body()!!.map { it.id }).contains(application.id)
         assertThat(detailResponse.status).isEqualTo(HttpStatus.OK)
         assertThat(detailResponse.body()!!.carId).isEqualTo(application.carId)
     }

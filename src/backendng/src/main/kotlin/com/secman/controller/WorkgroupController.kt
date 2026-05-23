@@ -9,6 +9,7 @@ import com.secman.dto.WorkgroupResponse
 import com.secman.repository.AssetRepository
 import com.secman.repository.UserRepository
 import com.secman.repository.WorkgroupRepository
+import com.secman.service.AssetFilterService
 import com.secman.service.ValidationException
 import com.secman.service.UserResolutionService
 import com.secman.service.WorkgroupService
@@ -52,7 +53,8 @@ open class WorkgroupController(
     private val workgroupAwsAccountRepository: com.secman.repository.WorkgroupAwsAccountRepository,
     private val userResolutionService: UserResolutionService,
     private val workgroupRepository: WorkgroupRepository,
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val assetFilterService: AssetFilterService
 ) {
     private val logger = LoggerFactory.getLogger(WorkgroupController::class.java)
 
@@ -60,8 +62,17 @@ open class WorkgroupController(
     private fun isAdmin(authentication: Authentication): Boolean =
         authentication.roles.contains("ADMIN")
 
-    private fun canManageWorkgroup(authentication: Authentication): Boolean =
+    private fun isAdminOrSecChampion(authentication: Authentication): Boolean =
         isAdmin(authentication) || authentication.roles.contains("SECCHAMPION")
+
+    private fun canManageWorkgroup(authentication: Authentication): Boolean =
+        isAdminOrSecChampion(authentication)
+
+    private fun canDeleteWorkgroup(workgroup: Workgroup, authentication: Authentication): Boolean {
+        if (isAdminOrSecChampion(authentication)) return true
+        val user = currentUser(authentication)
+        return workgroup.createdBy?.id == user.id
+    }
 
     /**
      * Resolve the calling User from the Authentication principal.
@@ -135,16 +146,17 @@ open class WorkgroupController(
     ): HttpResponse<*> {
         return try {
             val criticality = request.criticality ?: Criticality.MEDIUM
-            val workgroup = if (isAdmin(authentication)) {
+            val creator = currentUser(authentication)
+            val workgroup = if (isAdminOrSecChampion(authentication)) {
                 workgroupService.createWorkgroup(
                     name = request.name,
                     description = request.description,
-                    criticality = criticality
+                    criticality = criticality,
+                    creatorUserId = creator.id!!
                 )
             } else {
                 // Non-admin creators are auto-enrolled so they can subsequently
                 // edit/delete the workgroup under member-driven authorization.
-                val creator = currentUser(authentication)
                 workgroupService.createWorkgroupWithCreator(
                     name = request.name,
                     description = request.description,
@@ -293,8 +305,8 @@ open class WorkgroupController(
         authentication: Authentication
     ): HttpResponse<Void> {
         return try {
-            workgroupService.getWorkgroupById(id)
-            if (!canManageWorkgroup(authentication)) {
+            val workgroup = workgroupService.getWorkgroupById(id)
+            if (!canDeleteWorkgroup(workgroup, authentication)) {
                 return HttpResponse.status(io.micronaut.http.HttpStatus.FORBIDDEN)
             }
             // Privileged users retain the legacy "promote children to grandparent" semantics
@@ -518,8 +530,14 @@ open class WorkgroupController(
         return try {
             val workgroup = workgroupRepository.findById(id).orElse(null)
                 ?: return HttpResponse.notFound()
-            if (!canManageWorkgroup(authentication)) {
-                return HttpResponse.status(io.micronaut.http.HttpStatus.FORBIDDEN)
+            if (!isAdminOrSecChampion(authentication)) {
+                if (!isMemberOrAdmin(workgroup, authentication)) {
+                    return HttpResponse.status(io.micronaut.http.HttpStatus.FORBIDDEN)
+                }
+                val accessibleAssetIds = assetFilterService.getAccessibleAssetIds(authentication)
+                if (request.assetIds.any { it !in accessibleAssetIds }) {
+                    return HttpResponse.status(io.micronaut.http.HttpStatus.FORBIDDEN)
+                }
             }
             workgroupService.assignAssetsToWorkgroup(id, request.assetIds)
             HttpResponse.ok()
@@ -657,13 +675,16 @@ open class WorkgroupController(
     @Transactional
     open fun createChildWorkgroup(
         @PathVariable id: Long,
-        @Body @Valid request: CreateChildWorkgroupRequest
+        @Body @Valid request: CreateChildWorkgroupRequest,
+        authentication: Authentication
     ): HttpResponse<*> {
         return try {
+            val creator = currentUser(authentication)
             val child = workgroupService.createChildWorkgroup(
                 parentId = id,
                 name = request.name,
-                description = request.description
+                description = request.description,
+                creatorUserId = creator.id!!
             )
             HttpResponse.created(toWorkgroupResponse(child))
         } catch (e: IllegalArgumentException) {

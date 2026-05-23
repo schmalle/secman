@@ -101,6 +101,15 @@ data class Workgroup(
     var users: MutableSet<User> = mutableSetOf(),
 
     /**
+     * User who created the workgroup. Nullable for legacy rows and to preserve
+     * history if a user is deleted.
+     */
+    @JsonIgnore
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "created_by_id", nullable = true)
+    var createdBy: User? = null,
+
+    /**
      * Many-to-many relationship with Asset
      * Assets can belong to 0..n workgroups
      * Workgroups can have 0..n assets

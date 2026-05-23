@@ -4,6 +4,7 @@ import com.secman.domain.User
 import com.secman.repository.AwsAccountSharingRepository
 import com.secman.repository.UserMappingRepository
 import com.secman.repository.UserRepository
+import com.secman.repository.WorkgroupRepository
 import com.secman.service.ActiveUserTracker
 import com.secman.service.AuthCookieService
 import com.secman.service.InputValidationService
@@ -31,6 +32,7 @@ open class AuthController(
     private val userRepository: UserRepository,
     private val userMappingRepository: UserMappingRepository,
     private val awsAccountSharingRepository: AwsAccountSharingRepository,
+    private val workgroupRepository: WorkgroupRepository,
     private val tokenGenerator: TokenGenerator,
     private val inputValidationService: InputValidationService,
     private val authCookieService: AuthCookieService,
@@ -210,7 +212,7 @@ open class AuthController(
             username = user.username,
             email = user.email,
             roles = user.roles.map { it.name },
-            workgroupCount = userRepository.countWorkgroupsByUsername(user.username),
+            workgroupCount = workgroupRepository.countEffectiveWorkgroupsByUserEmail(user.email),
             awsAccountCount = directAwsCount + sharedAwsCount,
             domainCount = userMappingRepository.countDistinctDomainsByEmail(user.email)
         )
@@ -260,7 +262,7 @@ open class AuthController(
             username = user.username,
             email = user.email,
             roles = user.roles.map { it.name },
-            workgroupCount = userRepository.countWorkgroupsByUsername(user.username),
+            workgroupCount = workgroupRepository.countEffectiveWorkgroupsByUserEmail(user.email),
             awsAccountCount = directAwsCount + sharedAwsCount,
             domainCount = userMappingRepository.countDistinctDomainsByEmail(user.email)
         )

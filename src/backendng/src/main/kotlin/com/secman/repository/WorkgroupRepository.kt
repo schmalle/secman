@@ -95,6 +95,25 @@ interface WorkgroupRepository : JpaRepository<Workgroup, Long> {
     """, nativeQuery = true)
     fun findEffectiveWorkgroupsByUserEmail(email: String): List<Workgroup>
 
+    @io.micronaut.data.annotation.Query(value = """
+        WITH RECURSIVE effective AS (
+            SELECT w.id, w.parent_id, 1 AS depth
+            FROM workgroup w
+            INNER JOIN user_workgroups uw ON uw.workgroup_id = w.id
+            INNER JOIN users u ON u.id = uw.user_id
+            WHERE u.email = :email
+
+            UNION ALL
+
+            SELECT w.id, w.parent_id, e.depth + 1
+            FROM workgroup w
+            INNER JOIN effective e ON w.parent_id = e.id
+            WHERE e.depth < 10
+        )
+        SELECT COUNT(DISTINCT id) FROM effective
+    """, nativeQuery = true)
+    fun countEffectiveWorkgroupsByUserEmail(email: String): Long
+
     // Feature 040: Nested Workgroups - Hierarchy Query Methods
 
     /**

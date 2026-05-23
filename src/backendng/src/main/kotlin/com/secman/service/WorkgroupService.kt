@@ -41,7 +41,8 @@ open class WorkgroupService(
     open fun createWorkgroup(
         name: String,
         description: String? = null,
-        criticality: Criticality = Criticality.MEDIUM
+        criticality: Criticality = Criticality.MEDIUM,
+        creatorUserId: Long? = null
     ): Workgroup {
         // Validate name uniqueness (case-insensitive)
         if (workgroupRepository.existsByNameIgnoreCase(name)) {
@@ -51,10 +52,17 @@ open class WorkgroupService(
         // Name format validation handled by @Pattern annotation on entity
         // Length validation handled by @Size annotation on entity
 
+        val creator = creatorUserId?.let {
+            userRepository.findById(it).orElseThrow {
+                IllegalArgumentException("Creator user not found: $creatorUserId")
+            }
+        }
+
         val workgroup = Workgroup(
             name = name,
             description = description,
-            criticality = criticality
+            criticality = criticality,
+            createdBy = creator
         )
 
         return workgroupRepository.save(workgroup)
@@ -78,7 +86,7 @@ open class WorkgroupService(
         criticality: Criticality = Criticality.MEDIUM,
         creatorUserId: Long
     ): Workgroup {
-        val workgroup = createWorkgroup(name, description, criticality)
+        val workgroup = createWorkgroup(name, description, criticality, creatorUserId)
         val creator = userRepository.findByIdWithWorkgroups(creatorUserId).orElseThrow {
             IllegalArgumentException("Creator user not found: $creatorUserId")
         }
@@ -377,7 +385,8 @@ open class WorkgroupService(
     open fun createChildWorkgroup(
         parentId: Long,
         name: String,
-        description: String? = null
+        description: String? = null,
+        creatorUserId: Long? = null
     ): Workgroup {
         val parent = workgroupRepository.findById(parentId).orElseThrow {
             IllegalArgumentException("Parent workgroup not found: $parentId")
@@ -389,10 +398,17 @@ open class WorkgroupService(
         // Validate sibling uniqueness
         validationService.validateSiblingUniqueness(name, parent)
 
+        val creator = creatorUserId?.let {
+            userRepository.findById(it).orElseThrow {
+                IllegalArgumentException("Creator user not found: $creatorUserId")
+            }
+        }
+
         val child = Workgroup(
             name = name,
             description = description,
-            parent = parent
+            parent = parent,
+            createdBy = creator
         )
 
         return workgroupRepository.save(child)

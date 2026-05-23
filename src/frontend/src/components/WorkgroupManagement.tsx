@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete, getUser } from '../utils/auth';
+import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete } from '../utils/auth';
 import WorkgroupAccountsModal from './WorkgroupAccountsModal';
 
 // Extract a useful error message from a non-OK Response. Handles the three
@@ -65,29 +65,6 @@ interface AssignedAsset {
 }
 
 
-interface UserProfileResponse {
-  workgroups?: Array<{ id?: number }>;
-}
-
-function canSeeAllWorkgroups(): boolean {
-  const roles = getUser()?.roles ?? [];
-  return roles.includes('ADMIN') || roles.includes('SECCHAMPION');
-}
-
-async function getCurrentUserWorkgroupIds(): Promise<Set<number>> {
-  const response = await authenticatedGet('/api/users/profile');
-  if (!response.ok) {
-    throw new Error(`Failed to fetch current user profile: ${response.status}`);
-  }
-
-  const profile = await response.json() as UserProfileResponse;
-  const ids = (profile.workgroups ?? [])
-    .map(wg => wg.id)
-    .filter((id): id is number => typeof id === 'number');
-
-  return new Set(ids);
-}
-
 const WorkgroupManagement: React.FC = () => {
   const [workgroups, setWorkgroups] = useState<Workgroup[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -133,13 +110,7 @@ const WorkgroupManagement: React.FC = () => {
       const response = await authenticatedGet('/api/workgroups');
       if (response.ok) {
         const data = await response.json() as Workgroup[];
-
-        if (canSeeAllWorkgroups()) {
-          setWorkgroups(data);
-        } else {
-          const currentUserWorkgroupIds = await getCurrentUserWorkgroupIds();
-          setWorkgroups(data.filter(workgroup => currentUserWorkgroupIds.has(workgroup.id)));
-        }
+        setWorkgroups(data);
       } else {
         setError(`Failed to fetch workgroups: ${response.status}`);
       }
@@ -1073,7 +1044,7 @@ const WorkgroupManagement: React.FC = () => {
             {workgroups.length === 0 ? (
               <tr>
                 <td colSpan={7} className="text-center text-muted">
-                  No workgroups found. Create one to get started.
+                  No visible workgroups found.
                 </td>
               </tr>
             ) : (

@@ -87,19 +87,19 @@ object TestAuthHelper {
      * @param token JWT token
      * @return HttpRequest with Authorization header set
      */
-    fun <T> authenticatedRequest(
+    fun <T : Any> authenticatedRequest(
         method: io.micronaut.http.HttpMethod,
         uri: String,
         body: T?,
         token: String
-    ): HttpRequest<T> {
+    ): HttpRequest<*> {
         val request = when (method) {
-            io.micronaut.http.HttpMethod.GET -> HttpRequest.GET<T>(uri)
-            io.micronaut.http.HttpMethod.POST -> HttpRequest.POST(uri, body)
-            io.micronaut.http.HttpMethod.PUT -> HttpRequest.PUT(uri, body)
-            io.micronaut.http.HttpMethod.DELETE -> HttpRequest.DELETE<T>(uri)
+            io.micronaut.http.HttpMethod.GET -> HttpRequest.GET<Any>(uri)
+            io.micronaut.http.HttpMethod.POST -> HttpRequest.POST(uri, requireNotNull(body))
+            io.micronaut.http.HttpMethod.PUT -> HttpRequest.PUT(uri, requireNotNull(body))
+            io.micronaut.http.HttpMethod.DELETE -> HttpRequest.DELETE<Any>(uri)
             else -> throw IllegalArgumentException("Unsupported HTTP method: $method")
         }
-        return request.bearerAuth(token) as HttpRequest<T>
+        return request.header("Authorization", "Bearer $token")
     }
 }
