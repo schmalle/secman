@@ -21,12 +21,15 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/secman-test-tls.sh
+source "$SCRIPT_DIR/lib/secman-test-tls.sh"
+
 # Proton Pass URI defaults (override with direct values or your own URIs)
 export SECMAN_ADMIN_NAME="${SECMAN_ADMIN_NAME:-pass://test/secman/SECMAN_ADMIN_NAME}"
 export SECMAN_ADMIN_PASS="${SECMAN_ADMIN_PASS:-pass://test/secman/SECMAN_ADMIN_PASS}"
 
 # Configuration
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE_URL="${SECMAN_BASE_URL:-https://secman.covestro.net}"
 INSECURE="${SECMAN_INSECURE:-true}"  # Skip SSL verification (internal cert)
 TIMESTAMP=$(date +%s)

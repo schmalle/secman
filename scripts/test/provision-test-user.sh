@@ -7,6 +7,10 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=../../tests/lib/secman-test-tls.sh
+source "$(cd "$SCRIPT_DIR/../.." && pwd)/tests/lib/secman-test-tls.sh"
+
 # When invoked directly, set up pass:// templates and re-exec under pass-cli.
 # On the second invocation pass-cli has resolved the env vars, so we skip
 # this block to avoid clobbering the resolved values back to literals.

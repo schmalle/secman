@@ -21,6 +21,9 @@
 
 set -euo pipefail
 
+# shellcheck source=../tests/lib/secman-test-tls.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tests/lib/secman-test-tls.sh"
+
 export SECMAN_ADMIN_NAME="${SECMAN_ADMIN_NAME:-pass://test/secman/SECMAN_ADMIN_NAME}"
 export SECMAN_ADMIN_PASS="${SECMAN_ADMIN_PASS:-pass://test/secman/SECMAN_ADMIN_PASS}"
 export SECMAN_MCP_KEY="${SECMAN_MCP_KEY:-pass://test/secman/SECMAN_MCP_KEY}"

@@ -22,6 +22,10 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=../../tests/lib/secman-test-tls.sh
+source "$(cd "$SCRIPT_DIR/../.." && pwd)/tests/lib/secman-test-tls.sh"
+
 # =============================================================================
 # Configuration
 # =============================================================================

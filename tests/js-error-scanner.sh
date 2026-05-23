@@ -2,6 +2,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/secman-test-tls.sh
+source "$SCRIPT_DIR/lib/secman-test-tls.sh"
 
 # --- Local dev auto-detection ---
 # If a local frontend dev server is reachable on the configured port, override

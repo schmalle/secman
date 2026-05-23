@@ -27,6 +27,10 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/secman-test-tls.sh
+source "$SCRIPT_DIR/lib/secman-test-tls.sh"
+
 # Proton Pass URI defaults (override with direct values or your own URIs)
 export S3_TEST_BUCKET="${S3_TEST_BUCKET:-pass://test/secman-s3/S3_TEST_BUCKET}"
 export S3_TEST_REGION="${S3_TEST_REGION:-pass://test/secman-s3/S3_TEST_REGION}"
@@ -35,7 +39,6 @@ export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-pass://test/secman-s3/AWS
 export SECMAN_ADMIN_EMAIL="${SECMAN_ADMIN_EMAIL:-pass://test/secman/SECMAN_ADMIN_EMAIL}"
 
 # Configuration
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 JAR_PATH="$REPO_ROOT/src/cli/build/libs/cli-0.1.0-all.jar"
 BASE_URL="${SECMAN_BASE_URL:-http://localhost:8080}"

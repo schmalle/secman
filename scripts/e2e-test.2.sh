@@ -17,6 +17,8 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# shellcheck source=../tests/lib/secman-test-tls.sh
+source "$PROJECT_ROOT/tests/lib/secman-test-tls.sh"
 
 BASE_URL="${SECMAN_BACKEND_URL:-http://localhost:8080}"
 API_URL="${SECMAN_BACKEND_URL:-http://localhost:8080}"

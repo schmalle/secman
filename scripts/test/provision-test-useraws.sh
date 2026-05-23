@@ -10,8 +10,11 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=../../tests/lib/secman-test-tls.sh
+source "$(cd "$SCRIPT_DIR/../.." && pwd)/tests/lib/secman-test-tls.sh"
 # shellcheck source=../lib/aws-secrets.sh
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib/aws-secrets.sh"
+source "$SCRIPT_DIR/../lib/aws-secrets.sh"
 
 secman_aws_export_envfile
 

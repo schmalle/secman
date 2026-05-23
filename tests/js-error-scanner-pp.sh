@@ -2,15 +2,13 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/secman-test-tls.sh
+source "$SCRIPT_DIR/lib/secman-test-tls.sh"
 
 ## TLS/host policy enforcement
 CURRENT_BACKEND_URL="${SECMAN_BACKEND_URL:-}"
 if [ -n "$CURRENT_BACKEND_URL" ] && [ "$CURRENT_BACKEND_URL" != "https://secman.covestro.net" ] && [[ "$CURRENT_BACKEND_URL" != pass://* ]]; then
   echo "ERROR: SECMAN_BACKEND_URL must be https://secman.covestro.net (or pass:// URI)."
-  exit 2
-fi
-if [ "${SECMAN_INSECURE:-}" = "true" ] || [ "${SECMAN_INSECURE:-}" = "1" ] || [ "${SECMAN_INSECURE:-}" = "yes" ]; then
-  echo "ERROR: SECMAN_INSECURE must not be true for e2ejs runs."
   exit 2
 fi
 
@@ -142,7 +140,7 @@ if [ "$NEEDS_PASS" = true ]; then
   # Single pass-cli run resolves all four credentials + host + TLS flag at once,
   # so the user is prompted at most once. The inner script then loops over both
   # roles using the already-resolved values.
-  pass-cli run -- env SECMAN_INSECURE=false bash -c "$INNER_SCRIPT"
+  pass-cli run -- bash -c "$INNER_SCRIPT"
 else
   echo "Using pre-resolved credentials from environment."
   echo ""
