@@ -2,6 +2,7 @@ package com.secman.service
 
 import com.secman.domain.AppSettings
 import com.secman.repository.AppSettingsRepository
+import com.secman.config.AiRiskAssessmentConfig
 import io.micronaut.context.annotation.Value
 import io.micronaut.serde.annotation.Serdeable
 import jakarta.inject.Singleton
@@ -14,7 +15,8 @@ import org.slf4j.LoggerFactory
  */
 @Singleton
 open class AppSettingsService(
-    private val appSettingsRepository: AppSettingsRepository
+    private val appSettingsRepository: AppSettingsRepository,
+    private val aiRiskAssessmentConfig: AiRiskAssessmentConfig
 ) {
     private val logger = LoggerFactory.getLogger(AppSettingsService::class.java)
 
@@ -34,6 +36,7 @@ open class AppSettingsService(
         val baseUrl: String,
         val globalCveApprovalAdminOnly: Boolean,
         val aiRiskAssessmentEnabled: Boolean,
+        val aiRiskAssessmentModel: String,
         val updatedBy: String?,
         val updatedAt: String?
     )
@@ -49,6 +52,7 @@ open class AppSettingsService(
             baseUrl = settings.getNormalizedBaseUrl(),
             globalCveApprovalAdminOnly = settings.globalCveApprovalAdminOnly,
             aiRiskAssessmentEnabled = settings.aiRiskAssessmentEnabled,
+            aiRiskAssessmentModel = settings.aiRiskAssessmentModel,
             updatedBy = settings.updatedBy,
             updatedAt = settings.updatedAt?.toString()
         )
@@ -62,6 +66,11 @@ open class AppSettingsService(
     @Transactional
     open fun isAiRiskAssessmentEnabled(): Boolean {
         return getOrCreateSettings().aiRiskAssessmentEnabled
+    }
+
+    @Transactional
+    open fun getAiRiskAssessmentModel(): String {
+        return getOrCreateSettings().aiRiskAssessmentModel
     }
 
     /**
@@ -96,7 +105,8 @@ open class AppSettingsService(
         baseUrl: String,
         updatedBy: String,
         globalCveApprovalAdminOnly: Boolean = false,
-        aiRiskAssessmentEnabled: Boolean = false
+        aiRiskAssessmentEnabled: Boolean = false,
+        aiRiskAssessmentModel: String = aiRiskAssessmentConfig.model
     ): AppSettingsDto {
         val settings = getOrCreateSettings()
 
@@ -104,7 +114,12 @@ open class AppSettingsService(
         settings.baseUrl = baseUrl.trimEnd('/')
         settings.globalCveApprovalAdminOnly = globalCveApprovalAdminOnly
         settings.aiRiskAssessmentEnabled = aiRiskAssessmentEnabled
+        settings.aiRiskAssessmentModel = aiRiskAssessmentModel.trim()
         settings.updatedBy = updatedBy
+
+        if (settings.aiRiskAssessmentModel.isBlank()) {
+            throw IllegalArgumentException("AI risk-assessment model cannot be empty")
+        }
 
         // Validate
         val errors = settings.validateBaseUrl()
@@ -122,6 +137,7 @@ open class AppSettingsService(
             baseUrl = updated.getNormalizedBaseUrl(),
             globalCveApprovalAdminOnly = updated.globalCveApprovalAdminOnly,
             aiRiskAssessmentEnabled = updated.aiRiskAssessmentEnabled,
+            aiRiskAssessmentModel = updated.aiRiskAssessmentModel,
             updatedBy = updated.updatedBy,
             updatedAt = updated.updatedAt?.toString()
         )
@@ -140,6 +156,7 @@ open class AppSettingsService(
             val default = AppSettings(
                 baseUrl = defaultBaseUrl,
                 aiRiskAssessmentEnabled = aiRiskAssessmentDefault,
+                aiRiskAssessmentModel = aiRiskAssessmentConfig.model,
                 updatedBy = "system"
             )
             appSettingsRepository.save(default)
