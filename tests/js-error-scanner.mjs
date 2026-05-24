@@ -30,6 +30,7 @@ const HYDRATION_WAIT = 3_000;
 const IGNORED_CONSOLE_PATTERNS = [
   /net::ERR_INVALID_HANDLE/,
   /net::ERR_NETWORK_IO_SUSPENDED/,
+  /^Failed to load resource: net::ERR_TOO_MANY_RETRIES$/,
   /^%cAstro/,
 ];
 

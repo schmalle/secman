@@ -93,3 +93,4 @@ docker/backend/app.jar
 /docs/superpowers/
 /docs/superpowers/
 *.yml
+.playwright-cli/ChatGPT-Atlas.dmg
