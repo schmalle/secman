@@ -21,6 +21,7 @@ export interface AppSettingsDto {
   /** Feature 088: AI-assisted risk-assessment master switch. When false the
    *  "AI Pre-fill" button is hidden and all /ai-suggestions endpoints 403. */
   aiRiskAssessmentEnabled: boolean;
+  aiRiskAssessmentModel: string;
 
   /** Username of admin who last updated settings */
   updatedBy: string | null;
@@ -82,12 +83,13 @@ export async function getAppSettings(): Promise<AppSettingsDto> {
 export async function updateAppSettings(
   baseUrl: string,
   globalCveApprovalAdminOnly: boolean,
-  aiRiskAssessmentEnabled: boolean
+  aiRiskAssessmentEnabled: boolean,
+  aiRiskAssessmentModel: string
 ): Promise<AppSettingsDto> {
-  console.log('[appSettingsService] updateAppSettings called with:', { baseUrl, globalCveApprovalAdminOnly, aiRiskAssessmentEnabled });
+  console.log('[appSettingsService] updateAppSettings called with:', { baseUrl, globalCveApprovalAdminOnly, aiRiskAssessmentEnabled, aiRiskAssessmentModel });
   console.log('[appSettingsService] Making authenticated PUT to /api/settings/app');
 
-  const response = await authenticatedPut('/api/settings/app', { baseUrl, globalCveApprovalAdminOnly, aiRiskAssessmentEnabled });
+  const response = await authenticatedPut('/api/settings/app', { baseUrl, globalCveApprovalAdminOnly, aiRiskAssessmentEnabled, aiRiskAssessmentModel });
 
   console.log('[appSettingsService] Response received:', {
     ok: response.ok,

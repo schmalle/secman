@@ -46,6 +46,13 @@ data class AppSettings(
     var aiRiskAssessmentEnabled: Boolean = false,
 
     /**
+     * OpenRouter model id used for AI-assisted risk-assessment answers.
+     * Example: anthropic/claude-sonnet-4.6:online
+     */
+    @Column(nullable = false, length = 255, name = "ai_risk_assessment_model")
+    var aiRiskAssessmentModel: String = "anthropic/claude-sonnet-4.6:online",
+
+    /**
      * Username of ADMIN who last updated these settings
      */
     @Column(nullable = true, length = 100, name = "updated_by")

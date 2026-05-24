@@ -23,6 +23,7 @@ const AppSettingsAdmin: React.FC = () => {
   const [baseUrl, setBaseUrl] = useState('');
   const [globalCveApprovalAdminOnly, setGlobalCveApprovalAdminOnly] = useState(false);
   const [aiRiskAssessmentEnabled, setAiRiskAssessmentEnabled] = useState(false);
+  const [aiRiskAssessmentModel, setAiRiskAssessmentModel] = useState('');
 
   // Load settings on component mount
   useEffect(() => {
@@ -42,6 +43,7 @@ const AppSettingsAdmin: React.FC = () => {
       setBaseUrl(data.baseUrl);
       setGlobalCveApprovalAdminOnly(data.globalCveApprovalAdminOnly);
       setAiRiskAssessmentEnabled(data.aiRiskAssessmentEnabled);
+      setAiRiskAssessmentModel(data.aiRiskAssessmentModel);
     } catch (err) {
       console.error('[AppSettingsAdmin] Failed to load settings:', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to load application settings';
@@ -78,13 +80,15 @@ const AppSettingsAdmin: React.FC = () => {
       const updatedSettings = await updateAppSettings(
         baseUrl.replace(/\/$/, ''),
         globalCveApprovalAdminOnly,
-        aiRiskAssessmentEnabled
+        aiRiskAssessmentEnabled,
+        aiRiskAssessmentModel.trim()
       );
 
       console.log('[AppSettingsAdmin] Settings saved successfully:', updatedSettings);
       setSettings(updatedSettings);
       setBaseUrl(updatedSettings.baseUrl);
       setAiRiskAssessmentEnabled(updatedSettings.aiRiskAssessmentEnabled);
+      setAiRiskAssessmentModel(updatedSettings.aiRiskAssessmentModel);
       setSuccessMessage('Settings saved successfully!');
 
       // Clear success message after 3 seconds
@@ -188,6 +192,25 @@ const AppSettingsAdmin: React.FC = () => {
             <small className="form-text text-muted">
               The base URL of your SecMan installation. This is used for generating links in email
               notifications. Example: <code>https://secman.example.com</code>
+            </small>
+          </div>
+
+          <div className="mb-4">
+            <label htmlFor="aiRiskAssessmentModel" className="form-label">
+              <strong>OpenRouter Model for AI Risk Assessment</strong>
+            </label>
+            <input
+              type="text"
+              className="form-control"
+              id="aiRiskAssessmentModel"
+              value={aiRiskAssessmentModel}
+              onChange={(e) => setAiRiskAssessmentModel(e.target.value)}
+              disabled={saving}
+              placeholder="anthropic/claude-sonnet-4.6:online"
+              required
+            />
+            <small className="form-text text-muted">
+              OpenRouter model id used by the AI pre-fill feature. Example: <code>anthropic/claude-sonnet-4.6:online</code>
             </small>
           </div>
 

@@ -42,7 +42,9 @@ open class AppSettingsController(
         @field:NotBlank(message = "Base URL is required")
         val baseUrl: String,
         val globalCveApprovalAdminOnly: Boolean = false,
-        val aiRiskAssessmentEnabled: Boolean = false
+        val aiRiskAssessmentEnabled: Boolean = false,
+        @field:NotBlank(message = "AI risk-assessment model is required")
+        val aiRiskAssessmentModel: String = "anthropic/claude-sonnet-4.6:online"
     )
 
     /**
@@ -104,7 +106,8 @@ open class AppSettingsController(
                 baseUrl = request.baseUrl,
                 updatedBy = username,
                 globalCveApprovalAdminOnly = request.globalCveApprovalAdminOnly,
-                aiRiskAssessmentEnabled = request.aiRiskAssessmentEnabled
+                aiRiskAssessmentEnabled = request.aiRiskAssessmentEnabled,
+                aiRiskAssessmentModel = request.aiRiskAssessmentModel
             )
 
             logger.info("Application settings updated successfully by user '{}'", username)
