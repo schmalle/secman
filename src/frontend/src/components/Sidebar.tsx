@@ -511,7 +511,7 @@ const Sidebar = () => {
                                 </li>
                                 <li>
                                     <a href="/admin/translation-config" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                        <i className="bi bi-translate me-2"></i> Translation Config
+                                        <i className="bi bi-translate me-2"></i> LLM Config
                                     </a>
                                 </li>
                                 <li>

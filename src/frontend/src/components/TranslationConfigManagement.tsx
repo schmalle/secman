@@ -13,6 +13,27 @@ interface TranslationConfig {
   updatedAt?: string;
 }
 
+const openRouterModelOptions = [
+  { value: '~anthropic/claude-opus-latest', label: 'Claude Opus Latest' },
+  { value: 'anthropic/claude-opus-4.7', label: 'Claude Opus 4.7' },
+  { value: 'anthropic/claude-opus-4.7-fast', label: 'Claude Opus 4.7 (Fast)' },
+  { value: 'anthropic/claude-opus-4.6', label: 'Claude Opus 4.6' },
+  { value: 'anthropic/claude-opus-4.6-fast', label: 'Claude Opus 4.6 (Fast)' },
+  { value: '~anthropic/claude-sonnet-latest', label: 'Claude Sonnet Latest' },
+  { value: 'anthropic/claude-sonnet-4.6', label: 'Claude Sonnet 4.6' },
+  { value: '~anthropic/claude-haiku-latest', label: 'Claude Haiku Latest' },
+  { value: 'anthropic/claude-haiku-4.5', label: 'Claude Haiku 4.5' },
+  { value: 'deepseek/deepseek-v4-pro', label: 'DeepSeek V4 Pro' },
+  { value: 'deepseek/deepseek-v4-flash', label: 'DeepSeek V4 Flash' },
+  { value: 'deepseek/deepseek-v4-flash:free', label: 'DeepSeek V4 Flash (free)' },
+  { value: 'openai/gpt-5.5', label: 'GPT-5.5' },
+  { value: 'openai/gpt-5.5-pro', label: 'GPT-5.5 Pro' },
+  { value: 'mistralai/mistral-medium-3-5', label: 'Mistral Medium 3.5' },
+  { value: 'meta-llama/llama-3.3-70b-instruct', label: 'Llama 3.3 70B' },
+];
+
+const CUSTOM_MODEL_OPTION = '__custom__';
+
 const TranslationConfigManagement: React.FC = () => {
   const [configs, setConfigs] = useState<TranslationConfig[]>([]);
   const [loading, setLoading] = useState(true);
@@ -20,10 +41,12 @@ const TranslationConfigManagement: React.FC = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingConfig, setEditingConfig] = useState<TranslationConfig | null>(null);
   const [testing, setTesting] = useState<number | null>(null);
+  const [selectedModelOption, setSelectedModelOption] = useState('~anthropic/claude-haiku-latest');
+  const [customModelName, setCustomModelName] = useState('');
   const [formData, setFormData] = useState<TranslationConfig>({
     apiKey: '',
     baseUrl: 'https://openrouter.ai/api/v1',
-    modelName: 'anthropic/claude-3.5-haiku',
+    modelName: '~anthropic/claude-haiku-latest',
     maxTokens: 4000,
     temperature: 0.3,
     isActive: true
@@ -97,13 +120,20 @@ const TranslationConfigManagement: React.FC = () => {
 
   const handleEdit = (config: TranslationConfig) => {
     setEditingConfig(config);
+    if (openRouterModelOptions.some((model) => model.value === config.modelName)) {
+      setSelectedModelOption(config.modelName);
+      setCustomModelName('');
+    } else {
+      setSelectedModelOption(CUSTOM_MODEL_OPTION);
+      setCustomModelName(config.modelName);
+    }
     // Clear the API key field when editing so user can enter a new one
     setFormData({ ...config, apiKey: '' });
     setShowForm(true);
   };
 
   const handleDelete = async (id: number) => {
-    if (!window.confirm('Are you sure you want to delete this translation configuration?')) {
+    if (!window.confirm('Are you sure you want to delete this LLM configuration?')) {
       return;
     }
 
@@ -117,7 +147,7 @@ const TranslationConfigManagement: React.FC = () => {
   };
 
   const handleTest = async (id: number) => {
-    const testText = prompt('Enter text to test translation (optional):') || 'This is a test message for translation configuration verification.';
+    const testText = prompt('Enter text to test translation (optional):') || 'This is a test message for LLM configuration verification.';
 
     setTesting(id);
     try {
@@ -136,7 +166,7 @@ const TranslationConfigManagement: React.FC = () => {
         setError('Translation test failed: empty response from server');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to test translation configuration');
+      setError(err instanceof Error ? err.message : 'Failed to test LLM configuration');
     } finally {
       setTesting(null);
     }
@@ -146,12 +176,14 @@ const TranslationConfigManagement: React.FC = () => {
     setFormData({
       apiKey: '',
       baseUrl: 'https://openrouter.ai/api/v1',
-      modelName: 'anthropic/claude-3.5-haiku',
+      modelName: '~anthropic/claude-haiku-latest',
       maxTokens: 4000,
       temperature: 0.3,
       isActive: true
     });
     setEditingConfig(null);
+    setSelectedModelOption('~anthropic/claude-haiku-latest');
+    setCustomModelName('');
     setShowForm(false);
   };
 
@@ -164,12 +196,31 @@ const TranslationConfigManagement: React.FC = () => {
     }));
   };
 
+  const handleModelOptionChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = e.target.value;
+    setSelectedModelOption(value);
+    if (value !== CUSTOM_MODEL_OPTION) {
+      setCustomModelName('');
+      setFormData(prev => ({ ...prev, modelName: value }));
+    } else {
+      setFormData(prev => ({ ...prev, modelName: customModelName }));
+    }
+  };
+
+  const handleCustomModelChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setCustomModelName(value);
+    if (selectedModelOption === CUSTOM_MODEL_OPTION) {
+      setFormData(prev => ({ ...prev, modelName: value }));
+    }
+  };
+
   if (!currentUser) {
     return (
       <div className="container-fluid p-4">
         <div className="alert alert-warning" role="alert">
           <h4 className="alert-heading">Authentication Required</h4>
-          <p>You must be logged in to access Translation Configuration Management.</p>
+          <p>You must be logged in to access LLM Configuration Management.</p>
           <hr />
           <p className="mb-0">Please <a href="/login">log in</a> to continue.</p>
         </div>
@@ -192,7 +243,7 @@ const TranslationConfigManagement: React.FC = () => {
       <div className="row">
         <div className="col-12">
           <div className="d-flex justify-content-between align-items-center mb-4">
-            <h2>Translation Configuration Management</h2>
+            <h2>LLM Configuration Management</h2>
             <button
               className="btn btn-primary"
               onClick={() => {
@@ -214,7 +265,7 @@ const TranslationConfigManagement: React.FC = () => {
           <div className="col-12">
             <div className="card">
               <div className="card-body">
-                <h5 className="card-title">{editingConfig ? 'Edit Translation Configuration' : 'Add New Translation Configuration'}</h5>
+                <h5 className="card-title">{editingConfig ? 'Edit LLM Configuration' : 'Add New LLM Configuration'}</h5>
                 <form onSubmit={handleSubmit}>
                   <div className="row">
                     <div className="col-md-6">
@@ -252,42 +303,37 @@ const TranslationConfigManagement: React.FC = () => {
                   <div className="row">
                     <div className="col-md-6">
                       <div className="mb-3">
-                        <label htmlFor="modelName" className="form-label">Model *</label>
+                        <label htmlFor="modelOption" className="form-label">Predefined Model *</label>
                         <select
                           className="form-select"
-                          id="modelName"
-                          name="modelName"
-                          value={formData.modelName}
-                          onChange={handleInputChange}
+                          id="modelOption"
+                          value={selectedModelOption}
+                          onChange={handleModelOptionChange}
                           required
                         >
-                          <optgroup label="Anthropic Claude">
-                            <option value="anthropic/claude-opus-4.5">Claude Opus 4.5 (Most Capable)</option>
-                            <option value="anthropic/claude-opus-4">Claude Opus 4</option>
-                            <option value="anthropic/claude-sonnet-4">Claude Sonnet 4 (Balanced)</option>
-                            <option value="anthropic/claude-3.5-sonnet">Claude 3.5 Sonnet (Previous Gen)</option>
-                            <option value="anthropic/claude-3.5-haiku">Claude 3.5 Haiku (Fast)</option>
-                            <option value="anthropic/claude-3-haiku">Claude 3 Haiku (Legacy)</option>
-                          </optgroup>
-                          <optgroup label="OpenAI GPT">
-                            <option value="openai/gpt-4o">GPT-4o (Most Capable)</option>
-                            <option value="openai/gpt-4o-mini">GPT-4o Mini (Fast & Affordable)</option>
-                            <option value="openai/gpt-4-turbo">GPT-4 Turbo</option>
-                          </optgroup>
-                          <optgroup label="Google Gemini">
-                            <option value="google/gemini-2.0-flash-exp">Gemini 2.0 Flash (Fast)</option>
-                            <option value="google/gemini-pro-1.5">Gemini Pro 1.5</option>
-                          </optgroup>
-                          <optgroup label="Meta Llama (Open Source)">
-                            <option value="meta-llama/llama-3.3-70b-instruct">Llama 3.3 70B</option>
-                            <option value="meta-llama/llama-3.1-70b-instruct">Llama 3.1 70B</option>
-                            <option value="meta-llama/llama-3.1-8b-instruct">Llama 3.1 8B</option>
-                          </optgroup>
-                          <optgroup label="Other">
-                            <option value="mistralai/mistral-large-2411">Mistral Large</option>
-                            <option value="deepseek/deepseek-chat">DeepSeek Chat</option>
-                          </optgroup>
+                          {openRouterModelOptions.map((model) => (
+                            <option key={model.value} value={model.value}>
+                              {model.label}
+                            </option>
+                          ))}
+                          <option value={CUSTOM_MODEL_OPTION}>Custom model ID</option>
                         </select>
+                        <div className="form-text">Choose a known OpenRouter model.</div>
+                      </div>
+                      <div className="mb-3">
+                        <label htmlFor="modelName" className="form-label">Custom Model ID</label>
+                        <input
+                          type="text"
+                          className="form-control"
+                          id="modelName"
+                          name="modelName"
+                          value={customModelName}
+                          onChange={handleCustomModelChange}
+                          disabled={selectedModelOption !== CUSTOM_MODEL_OPTION}
+                          required={selectedModelOption === CUSTOM_MODEL_OPTION}
+                          placeholder="provider/model-name"
+                        />
+                        <div className="form-text">Select "Custom model ID" above to enter a model manually.</div>
                       </div>
                     </div>
                     <div className="col-md-6">
@@ -361,9 +407,9 @@ const TranslationConfigManagement: React.FC = () => {
         <div className="col-12">
           <div className="card">
             <div className="card-body">
-              <h5 className="card-title">Translation Configurations ({configs.length})</h5>
+              <h5 className="card-title">LLM Configurations ({configs.length})</h5>
               {configs.length === 0 ? (
-                <p className="text-muted">No translation configurations found. Click "Add New Configuration" to create one.</p>
+                <p className="text-muted">No LLM configurations found. Click "Add New Configuration" to create one.</p>
               ) : (
                 <div className="table-responsive">
                   <table className="table table-striped table-hover">
