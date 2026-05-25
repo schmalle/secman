@@ -103,11 +103,11 @@ const AdminPage = () => {
                         <div className="card-body">
                             <h5 className="card-title">
                                 <i className="bi bi-translate me-2"></i>
-                                Translation Configuration
+                                LLM Configuration
                             </h5>
                             <p className="card-text">Configure OpenRouter API for document translation.</p>
                             <a href="/admin/translation-config" className="btn btn-primary">
-                                Configure Translation
+                                Configure LLM
                             </a>
                         </div>
                     </div>
