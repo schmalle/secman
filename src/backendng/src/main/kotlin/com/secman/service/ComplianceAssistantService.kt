@@ -122,7 +122,7 @@ open class ComplianceAssistantService(
      * before any HTTP call.
      */
     fun estimateCostUsd(requirementCount: Int): BigDecimal {
-        val pricing = config.pricingPer1kTokens[config.model]
+        val pricing = config.pricingPer1kTokens[currentModel]
         val inPer1k = pricing?.input ?: 0.005   // conservative default
         val outPer1k = pricing?.output ?: 0.020 // conservative default
         val perReq = (config.tokenEstimate.inputPerRequirement * inPer1k +
@@ -131,7 +131,7 @@ open class ComplianceAssistantService(
     }
 
     val currentPromptVersion: String get() = promptVersion
-    val currentModel: String get() = config.model
+    val currentModel: String get() = appSettingsService.getAiRiskAssessmentModel()
 
     /**
      * Produce a suggestion for the given requirement, asynchronously on the
@@ -149,7 +149,7 @@ open class ComplianceAssistantService(
         }
 
         val userPrompt = promptBuilder.build(requirement, context)
-        val cacheKey = hashKey(systemPrompt, userPrompt, config.model)
+        val cacheKey = hashKey(systemPrompt, userPrompt, currentModel)
         cache.getIfPresent(cacheKey)?.let {
             log.debug("Cache hit for requirement={} key={}", requirement.id, cacheKey.take(12))
             return CompletableFuture.completedFuture(it.copy(cacheHit = true))
@@ -181,7 +181,7 @@ open class ComplianceAssistantService(
 
     private fun doSuggestBlocking(userPrompt: String): SuggestionResult {
         val body = ChatRequest(
-            model = config.model,
+            model = currentModel,
             messages = listOf(
                 mapOf("role" to "system", "content" to systemPrompt),
                 mapOf("role" to "user", "content" to userPrompt)
@@ -266,7 +266,7 @@ open class ComplianceAssistantService(
             rawConfidence = raw,
             confidenceBand = band,
             citations = cleaned,
-            model = root.path("model").asText(config.model).ifBlank { config.model },
+            model = root.path("model").asText(currentModel).ifBlank { currentModel },
             promptVersion = promptVersion,
             inputTokens = inputTokens,
             outputTokens = outputTokens,
@@ -290,7 +290,7 @@ open class ComplianceAssistantService(
     }
 
     private fun computeCost(inputTokens: Int?, outputTokens: Int?): BigDecimal? {
-        val pricing = config.pricingPer1kTokens[config.model] ?: return null
+        val pricing = config.pricingPer1kTokens[currentModel] ?: return null
         val inCost = (inputTokens ?: 0) * pricing.input / 1000.0
         val outCost = (outputTokens ?: 0) * pricing.output / 1000.0
         return BigDecimal.valueOf(inCost + outCost).setScale(6, RoundingMode.HALF_UP)

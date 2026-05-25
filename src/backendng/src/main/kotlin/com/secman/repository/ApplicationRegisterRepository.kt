@@ -20,6 +20,15 @@ interface ApplicationRegisterRepository : JpaRepository<ApplicationRegister, Lon
 
     @Query(
         """
+        SELECT DISTINCT a FROM ApplicationRegister a
+        LEFT JOIN FETCH a.assets
+        ORDER BY a.name ASC
+        """
+    )
+    fun findAllWithAssets(): List<ApplicationRegister>
+
+    @Query(
+        """
         SELECT a FROM ApplicationRegister a
         WHERE (:search IS NULL OR :search = ''
           OR LOWER(a.name) LIKE LOWER(CONCAT('%', :search, '%'))

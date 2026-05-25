@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { authenticatedFetch } from '../utils/auth';
 import ReleaseSelector from './ReleaseSelector';
-import { exportAssets } from '../services/assetService';
+import { exportApplications, exportAssets } from '../services/assetService';
 
 interface UseCase {
     id: number;
@@ -369,6 +369,34 @@ const Export = () => {
         }
     }, []);
 
+    const handleExportApplications = useCallback(async () => {
+        setIsExporting(true);
+        setExportStatus('Exporting applications...');
+
+        try {
+            const blob = await exportApplications();
+            const dateStr = new Date().toISOString().split('T')[0];
+            const filename = `applications_export_${dateStr}.xlsx`;
+
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+
+            setExportStatus('Applications exported to Excel successfully');
+        } catch (error: any) {
+            console.error('Application export error:', error);
+            setExportStatus(`Error: ${error.message || 'Could not export applications'}`);
+        } finally {
+            setIsExporting(false);
+        }
+    }, []);
+
     return (
         <div className="container-fluid p-3">
             <div className="row">
@@ -558,6 +586,29 @@ const Export = () => {
                             <button
                                 className="btn btn-warning btn-sm w-100"
                                 onClick={handleExportAssets}
+                                disabled={isExporting}
+                            >
+                                {isExporting ? (
+                                    <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                ) : (
+                                    <>
+                                        <i className="bi bi-download me-1"></i>Export
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Applications - Excel */}
+                <div className="col-md-3 col-sm-6">
+                    <div className="card border-info border-opacity-25 bg-info bg-opacity-5 h-100">
+                        <div className="card-body p-3 text-center">
+                            <i className="bi bi-window-stack text-info mb-2" style={{fontSize: '2rem'}}></i>
+                            <h6 className="card-title mb-2">Applications - All</h6>
+                            <button
+                                className="btn btn-info btn-sm w-100"
+                                onClick={handleExportApplications}
                                 disabled={isExporting}
                             >
                                 {isExporting ? (
