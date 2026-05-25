@@ -1,0 +1,9 @@
+[Image #1] analyze and fix this error
+
+---
+
+ensure the backend build target is java 21
+
+---
+
+start frontend and backend outside the sandbox so that passcli is working and using playwright start a browswer session with https://secman.covestro.net with atlas browser
