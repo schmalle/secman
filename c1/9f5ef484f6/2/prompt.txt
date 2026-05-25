@@ -1,0 +1,13 @@
+start frontend and backend outside the sandbox so that passcli is working and using playwright start a browswer session with https://secman.covestro.net with atlas browser
+
+---
+
+[Image #1] rename Translation configuration to LLM configuration
+
+---
+
+[Image #1] the model listbox seems to be static, please include DeepSeek r4, Opus 4.6 , Haiku and Sonnet in latest available models from Openrouter (see https://openrouter.ai/models). Please also add the possibility to add via textbox the model name.
+
+---
+
+[Image #1] for the model selection i want to have both, a listbox with predefined options and a textbox

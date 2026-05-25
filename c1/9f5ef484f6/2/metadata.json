@@ -1,0 +1,58 @@
+{
+  "cli_version": "0.6.2",
+  "checkpoint_id": "c19f5ef484f6",
+  "session_id": "019e60a1-a7f3-7c12-9df3-2a5b67c1259d",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-25T20:25:32.042101Z",
+  "branch": "devel",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "src/frontend/src/components/AdminPage.tsx",
+    "src/frontend/src/components/Sidebar.tsx",
+    "src/frontend/src/components/TranslationConfigManagement.tsx",
+    "src/frontend/src/pages/admin/translation-config.astro"
+  ],
+  "agent": "Codex",
+  "model": "gpt-5.5",
+  "turn_id": "a6c2d64a140b",
+  "token_usage": {
+    "input_tokens": 315367,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 3306112,
+    "output_tokens": 17579,
+    "api_call_count": 63
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-05-25T20:25:31.974654Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 93,
+    "human_removed": 1,
+    "total_committed": 0,
+    "total_lines_changed": 94,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 50,
+      "user_lines_removed": 47,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "src/frontend/src/components/AdminPage.tsx": 2,
+        "src/frontend/src/components/Sidebar.tsx": 1,
+        "src/frontend/src/components/TranslationConfigManagement.tsx": 45,
+        "src/frontend/src/pages/admin/translation-config.astro": 2
+      },
+      "user_removed_per_file": {
+        "src/frontend/src/components/AdminPage.tsx": 2,
+        "src/frontend/src/components/Sidebar.tsx": 1,
+        "src/frontend/src/components/TranslationConfigManagement.tsx": 42,
+        "src/frontend/src/pages/admin/translation-config.astro": 2
+      }
+    }
+  ]
+}
