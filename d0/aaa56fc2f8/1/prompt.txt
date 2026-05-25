@@ -1,0 +1,9 @@
+start frontend and backend outside the sandbox so that passcli is working and using playwright start a browswer session with https://secman.covestro.net with atlas browser
+
+---
+
+[Image #1] add Ui and functionality for exporting applications from application register
+
+---
+
+[Image #1] how to fix the missing in-app atlas browser ?
