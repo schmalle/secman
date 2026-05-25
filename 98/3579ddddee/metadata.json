@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.6.2",
+  "checkpoint_id": "983579ddddee",
+  "strategy": "manual-commit",
+  "branch": "devel",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "build.gradle.kts",
+    "settings.gradle.kts",
+    "src/backendng/build.gradle.kts",
+    "src/backendng/gradle.properties",
+    "src/cli/gradle.properties",
+    "src/frontend/package-lock.json",
+    "src/frontend/package.json",
+    "src/shared/build.gradle.kts",
+    "src/shared/gradle.properties"
+  ],
+  "sessions": [
+    {
+      "metadata": "/98/3579ddddee/0/metadata.json",
+      "transcript": "/98/3579ddddee/0/full.jsonl",
+      "content_hash": "/98/3579ddddee/0/content_hash.txt",
+      "prompt": ""
+    }
+  ]
+}
