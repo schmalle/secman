@@ -1,0 +1,37 @@
+{
+  "cli_version": "0.6.2",
+  "checkpoint_id": "983579ddddee",
+  "session_id": "019e5b79-bd12-7621-a720-34ab0582326f",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-25T18:46:03.007958Z",
+  "branch": "devel",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "build.gradle.kts",
+    "settings.gradle.kts",
+    "src/backendng/build.gradle.kts",
+    "src/backendng/gradle.properties",
+    "src/cli/gradle.properties",
+    "src/frontend/package-lock.json",
+    "src/frontend/package.json",
+    "src/shared/build.gradle.kts",
+    "src/shared/gradle.properties"
+  ],
+  "agent": "Codex",
+  "model": "gpt-5.5",
+  "turn_id": "b9b8ba400e4b",
+  "checkpoint_transcript_start": 498,
+  "transcript_lines_at_start": 498,
+  "initial_attribution": {
+    "calculated_at": "2026-05-25T18:46:02.951916Z",
+    "agent_lines": 470,
+    "agent_removed": 201,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 470,
+    "total_lines_changed": 671,
+    "agent_percentage": 100,
+    "metric_version": 2
+  }
+}
