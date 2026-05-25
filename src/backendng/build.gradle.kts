@@ -112,7 +112,6 @@ dependencies {
     ksp("io.micronaut:micronaut-http-validation")
     ksp("io.micronaut.data:micronaut-data-processor")
     ksp("io.micronaut.serde:micronaut-serde-processor")
-    ksp("io.micronaut.security:micronaut-security-processor")
 
     // Test dependencies - Feature 056
     kspTest("io.micronaut:micronaut-inject-java")
@@ -132,12 +131,12 @@ application {
 }
 
 java {
-    sourceCompatibility = JavaVersion.toVersion("25")
-    targetCompatibility = JavaVersion.toVersion("25")
+    sourceCompatibility = JavaVersion.toVersion("21")
+    targetCompatibility = JavaVersion.toVersion("21")
 }
 
 kotlin {
-    jvmToolchain(25)
+    jvmToolchain(21)
 }
 
 allOpen {
