@@ -97,6 +97,36 @@ export async function exportAssets(): Promise<Blob> {
 }
 
 /**
+ * Export all applications from the application register to Excel file
+ *
+ * @returns Blob containing Excel file
+ * @throws Error on 400 (no data), 401 (unauthorized), 500 (server error)
+ */
+export async function exportApplications(): Promise<Blob> {
+  const response = await authenticatedGet('/api/applications/export');
+
+  if (response.ok) {
+    return await response.blob();
+  }
+
+  if (response.status === 400) {
+    const error = await response.json();
+    throw new Error(error.error || 'No applications available to export');
+  }
+
+  if (response.status === 401) {
+    throw new Error('Unauthorized. Please login again.');
+  }
+
+  if (response.status === 500) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to export applications');
+  }
+
+  throw new Error(`Failed to export applications: ${response.status}`);
+}
+
+/**
  * Import assets from Excel file
  * User Story 3: Import Assets from File
  *

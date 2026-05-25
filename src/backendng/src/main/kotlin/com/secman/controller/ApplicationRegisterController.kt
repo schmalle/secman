@@ -4,6 +4,7 @@ import com.secman.dto.ApplicationRegisterAssetUpdateRequest
 import com.secman.dto.ApplicationRegisterDetail
 import com.secman.dto.ApplicationRegisterRequest
 import com.secman.dto.ApplicationRegisterSummary
+import com.secman.service.ApplicationRegisterExportService
 import com.secman.service.ApplicationRegisterService
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.annotation.Body
@@ -14,13 +15,17 @@ import io.micronaut.http.annotation.PathVariable
 import io.micronaut.http.annotation.Post
 import io.micronaut.http.annotation.Put
 import io.micronaut.http.annotation.QueryValue
+import io.micronaut.scheduling.TaskExecutors
+import io.micronaut.scheduling.annotation.ExecuteOn
 import io.micronaut.security.annotation.Secured
 import io.micronaut.security.authentication.Authentication
 import io.micronaut.security.rules.SecurityRule
+import java.time.LocalDate
 
 @Controller("/api/applications")
 open class ApplicationRegisterController(
-    private val service: ApplicationRegisterService
+    private val service: ApplicationRegisterService,
+    private val exportService: ApplicationRegisterExportService
 ) {
 
     @Get
@@ -92,6 +97,27 @@ open class ApplicationRegisterController(
             HttpResponse.notFound()
         } catch (e: IllegalArgumentException) {
             HttpResponse.badRequest(mapOf("error" to e.message))
+        }
+    }
+
+    @Get("/export")
+    @Secured(SecurityRule.IS_AUTHENTICATED)
+    @ExecuteOn(TaskExecutors.BLOCKING)
+    open fun exportApplications(): HttpResponse<*> {
+        return try {
+            val applications = exportService.exportApplications()
+            if (applications.isEmpty()) {
+                return HttpResponse.badRequest(mapOf("error" to "No applications available to export"))
+            }
+
+            val outputStream = exportService.writeToExcel(applications)
+            val filename = "applications_export_${LocalDate.now()}.xlsx"
+
+            HttpResponse.ok(outputStream.toByteArray())
+                .header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                .header("Content-Disposition", "attachment; filename=\"$filename\"")
+        } catch (e: Exception) {
+            HttpResponse.serverError(mapOf("error" to "An internal error occurred"))
         }
     }
 }
