@@ -1,0 +1,58 @@
+{
+  "cli_version": "0.6.2",
+  "checkpoint_id": "d0aaa56fc2f8",
+  "session_id": "019e5b70-46b2-7a43-b94e-36ad0d40c6ba",
+  "strategy": "manual-commit",
+  "created_at": "2026-05-25T09:01:44.982538Z",
+  "branch": "devel",
+  "checkpoints_count": 0,
+  "files_touched": [
+    ".idea/workspace.xml",
+    "docs/workgroup-feature-documentation.md",
+    "docs/workgroup-feature-documentation.pptx",
+    "src/backendng/src/main/kotlin/com/secman/controller/ApplicationRegisterController.kt",
+    "src/backendng/src/main/kotlin/com/secman/repository/ApplicationRegisterRepository.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/ApplicationRegisterExportService.kt",
+    "src/backendng/src/test/kotlin/com/secman/service/ApplicationRegisterExportServiceTest.kt",
+    "src/frontend/src/components/Export.tsx",
+    "src/frontend/src/services/assetService.ts"
+  ],
+  "agent": "Codex",
+  "model": "gpt-5.5",
+  "turn_id": "775b40a37658",
+  "token_usage": {
+    "input_tokens": 60149,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 738688,
+    "output_tokens": 4062,
+    "api_call_count": 29
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-05-25T09:01:44.968331Z",
+    "agent_lines": 348,
+    "agent_removed": 3,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 2,
+    "total_committed": 348,
+    "total_lines_changed": 353,
+    "agent_percentage": 99.43342776203966,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 50,
+      "user_lines_removed": 2,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".idea/workspace.xml": 1,
+        "docs/workgroup-feature-documentation.md": 49
+      },
+      "user_removed_per_file": {
+        ".idea/workspace.xml": 2
+      }
+    }
+  ]
+}

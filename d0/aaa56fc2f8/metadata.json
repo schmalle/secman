@@ -1,0 +1,33 @@
+{
+  "cli_version": "0.6.2",
+  "checkpoint_id": "d0aaa56fc2f8",
+  "strategy": "manual-commit",
+  "branch": "devel",
+  "checkpoints_count": 0,
+  "files_touched": [
+    ".idea/workspace.xml",
+    "docs/workgroup-feature-documentation.md",
+    "docs/workgroup-feature-documentation.pptx",
+    "src/backendng/src/main/kotlin/com/secman/controller/ApplicationRegisterController.kt",
+    "src/backendng/src/main/kotlin/com/secman/repository/ApplicationRegisterRepository.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/ApplicationRegisterExportService.kt",
+    "src/backendng/src/test/kotlin/com/secman/service/ApplicationRegisterExportServiceTest.kt",
+    "src/frontend/src/components/Export.tsx",
+    "src/frontend/src/services/assetService.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/d0/aaa56fc2f8/0/metadata.json",
+      "transcript": "/d0/aaa56fc2f8/0/full.jsonl",
+      "content_hash": "/d0/aaa56fc2f8/0/content_hash.txt",
+      "prompt": "/d0/aaa56fc2f8/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 60149,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 738688,
+    "output_tokens": 4062,
+    "api_call_count": 29
+  }
+}
