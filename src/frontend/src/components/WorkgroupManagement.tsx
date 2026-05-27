@@ -66,6 +66,15 @@ interface AssignedAsset {
   owner: string | null;
 }
 
+const getEffectiveAssignedUserCount = (
+  assignedUsers: Array<{ id: number; username: string; email: string }>,
+  userIdsToRemove: number[]
+): number => {
+  const assignedIds = new Set(assignedUsers.map(user => user.id));
+  const pendingRemovals = userIdsToRemove.filter(id => assignedIds.has(id)).length;
+  return Math.max(0, assignedUsers.length - pendingRemovals);
+};
+
 
 const WorkgroupManagement: React.FC = () => {
   const [workgroups, setWorkgroups] = useState<Workgroup[]>([]);
@@ -309,6 +318,12 @@ const WorkgroupManagement: React.FC = () => {
   };
 
   const filteredAssets = filterAssets(assetSearchTerm);
+  const modalExpectedUserCount = selectedWorkgroup?.userCount ?? 0;
+  const modalEffectiveUserCount = getEffectiveAssignedUserCount(assignedUsers, userIdsToRemove);
+  const hasUserCountMismatch = showAssignUsers
+    && !!selectedWorkgroup
+    && !assignedUsersError
+    && modalExpectedUserCount !== modalEffectiveUserCount;
 
   const submitAssignUsers = async () => {
     if (!selectedWorkgroup) return;
@@ -578,6 +593,13 @@ const WorkgroupManagement: React.FC = () => {
                       </span>
                     )}
                   </div>
+                  {hasUserCountMismatch && (
+                    <div className="alert alert-warning py-2 px-2 my-2 small mb-0" role="alert">
+                      <i className="bi bi-exclamation-triangle me-1"></i>
+                      Count mismatch: table shows <strong>{modalExpectedUserCount}</strong>, but current members in this
+                      dialog are <strong>{modalEffectiveUserCount}</strong>.
+                    </div>
+                  )}
                   {assignedUsersError && (
                     <div className="alert alert-warning py-1 px-2 my-1 small mb-0" role="alert">
                       {assignedUsersError}
