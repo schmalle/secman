@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
+import { getDistinctAdDomains } from '../services/vulnerabilityManagementService';
 
 interface WorkgroupAdDomainDto {
   id: number;
@@ -28,9 +29,12 @@ export default function WorkgroupDomainsModal({
   onChange,
 }: Props) {
   const [domains, setDomains] = useState<WorkgroupAdDomainDto[]>([]);
+  const [existingDomains, setExistingDomains] = useState<string[]>([]);
   const [newDomain, setNewDomain] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [existingDomainsError, setExistingDomainsError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [existingDomainsLoading, setExistingDomainsLoading] = useState(false);
 
   const fetchDomains = async () => {
     setLoading(true);
@@ -49,12 +53,32 @@ export default function WorkgroupDomainsModal({
     }
   };
 
+  const fetchExistingDomains = async () => {
+    setExistingDomainsLoading(true);
+    setExistingDomainsError(null);
+    try {
+      const availableDomains = await getDistinctAdDomains();
+      setExistingDomains(
+        Array.from(new Set(availableDomains.map((domain) => domain.trim()).filter(Boolean))).sort()
+      );
+    } catch {
+      setExistingDomainsError('Failed to load existing AD domains');
+      setExistingDomains([]);
+    } finally {
+      setExistingDomainsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    if (isOpen) {
+    if (!isOpen) return;
+
+    queueMicrotask(() => {
       fetchDomains();
+      fetchExistingDomains();
       setNewDomain('');
       setError(null);
-    }
+      setExistingDomainsError(null);
+    });
   }, [isOpen, workgroupId]);
 
   const normalizedDomain = newDomain.trim().toLowerCase();
@@ -134,6 +158,36 @@ export default function WorkgroupDomainsModal({
               >
                 Add
               </button>
+            </div>
+
+            <div className="mb-3">
+              <label htmlFor="existing-ad-domains" className="form-label">
+                Existing AD domains
+              </label>
+              <select
+                id="existing-ad-domains"
+                className="form-select"
+                size={Math.min(Math.max(existingDomains.length, 2), 6)}
+                aria-label="Existing AD domains"
+                value=""
+                onChange={(e) => setNewDomain(e.target.value)}
+                disabled={existingDomainsLoading || existingDomains.length === 0}
+              >
+                {existingDomainsLoading ? (
+                  <option value="">Loading domains...</option>
+                ) : existingDomains.length === 0 ? (
+                  <option value="">No existing AD domains found.</option>
+                ) : (
+                  existingDomains.map((domain) => (
+                    <option key={domain} value={domain}>
+                      {domain}
+                    </option>
+                  ))
+                )}
+              </select>
+              {existingDomainsError && (
+                <div className="form-text text-danger">{existingDomainsError}</div>
+              )}
             </div>
 
             {loading ? (
