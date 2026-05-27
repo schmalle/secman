@@ -140,7 +140,8 @@ open class ExportJobService(
 
         // Start async processing using ExecutorService
         // We need to capture the authentication info since Authentication may not be available in background thread
-        val isAdmin = authentication.roles.contains("ADMIN") || authentication.roles.contains("SECCHAMPION")
+        // Only ADMIN can bypass asset scoping in vulnerability exports.
+        val isAdmin = authentication.roles.contains("ADMIN")
         val accessibleAssetIds = if (isAdmin) {
             emptySet()
         } else {
