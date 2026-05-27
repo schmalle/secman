@@ -318,7 +318,7 @@ const ExceptionRequestModal: React.FC<ExceptionRequestModalProps> = ({
                                     </div>
                                     <div className="d-flex align-items-center flex-wrap gap-2 mb-2">
                                         <span className="fs-6 fw-light">Except</span>
-                                        <span className="badge bg-info text-dark">CVE {vulnerabilityCveId ?? ''}</span>
+                                        <span className="badge bg-info text-dark">{vulnerabilityCveId ?? ''}</span>
                                         <select
                                             className="form-select form-select-sm"
                                             style={{ width: 'auto' }}
