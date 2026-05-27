@@ -224,7 +224,8 @@ open class ConfigBundleController(
                 "falconConfigs",
                 "mcpApiKeys",
                 "awsAccountSharing",
-                "workgroupAwsAccounts"
+                "workgroupAwsAccounts",
+                "workgroupAdDomains"
             ),
             "requiredPermission" to "ADMIN"
         )

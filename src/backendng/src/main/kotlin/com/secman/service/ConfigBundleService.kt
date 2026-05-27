@@ -8,6 +8,7 @@ import com.secman.domain.McpApiKey
 import com.secman.domain.User
 import com.secman.domain.UserMapping
 import com.secman.domain.Workgroup
+import com.secman.domain.WorkgroupAdDomain
 import com.secman.domain.WorkgroupAwsAccount
 import com.secman.dto.*
 import com.secman.repository.*
@@ -34,6 +35,7 @@ open class ConfigBundleService(
     private val mcpApiKeyRepository: McpApiKeyRepository,
     private val awsAccountSharingRepository: AwsAccountSharingRepository,
     private val workgroupAwsAccountRepository: WorkgroupAwsAccountRepository,
+    private val workgroupAdDomainRepository: WorkgroupAdDomainRepository,
     private val entityManager: EntityManager,
     private val auditLogService: AuditLogService
 ) {
@@ -64,6 +66,7 @@ open class ConfigBundleService(
             val mcpApiKeys = exportMcpApiKeys()
             val awsAccountSharing = exportAwsAccountSharing()
             val workgroupAwsAccounts = exportWorkgroupAwsAccounts()
+            val workgroupAdDomains = exportWorkgroupAdDomains()
 
             val bundle = ConfigBundleDto(
                 version = BUNDLE_VERSION,
@@ -80,7 +83,8 @@ open class ConfigBundleService(
                 falconConfigs = falconConfigs,
                 mcpApiKeys = mcpApiKeys,
                 awsAccountSharing = awsAccountSharing,
-                workgroupAwsAccounts = workgroupAwsAccounts
+                workgroupAwsAccounts = workgroupAwsAccounts,
+                workgroupAdDomains = workgroupAdDomains
             )
 
             // Log the export action
@@ -91,7 +95,8 @@ open class ConfigBundleService(
                 details = "Exported ${users.size} users, ${workgroups.size} workgroups, " +
                          "${userMappings.size} mappings, ${identityProviders.size} identity providers, " +
                          "${falconConfigs.size} falcon configs, ${mcpApiKeys.size} MCP keys, " +
-                         "${awsAccountSharing.size} AWS sharing rules, ${workgroupAwsAccounts.size} workgroup AWS account assignments"
+                         "${awsAccountSharing.size} AWS sharing rules, ${workgroupAwsAccounts.size} workgroup AWS account assignments, " +
+                         "${workgroupAdDomains.size} workgroup AD domain assignments"
             )
 
             logger.info("Configuration bundle export completed successfully")
@@ -200,6 +205,12 @@ open class ConfigBundleService(
             errors.addAll(wgAwsResults.errors)
             warnings.addAll(wgAwsResults.warnings)
 
+            val wgAdResults = importWorkgroupAdDomains(bundle.workgroupAdDomains, authentication, options)
+            importedCounts = importedCounts.copy(workgroupAdDomains = wgAdResults.imported)
+            skippedCounts = skippedCounts.copy(workgroupAdDomains = wgAdResults.skipped)
+            errors.addAll(wgAdResults.errors)
+            warnings.addAll(wgAdResults.warnings)
+
             // Log the import action
             auditLogService.logAction(
                 authentication = authentication,
@@ -292,6 +303,18 @@ open class ConfigBundleService(
             ) {
                 conflicts.add(ConflictInfo("WorkgroupAwsAccount",
                     "${wgaws.workgroupName}/${wgaws.awsAccountId}", "already_exists"))
+            }
+        }
+
+        bundle.workgroupAdDomains.forEach { wgad ->
+            val workgroup = workgroupRepository.findByNameIgnoreCase(wgad.workgroupName)
+            if (!workgroup.isPresent) {
+                warnings.add("WorkgroupAdDomain references missing workgroup '${wgad.workgroupName}' (will fail unless imported with this bundle)")
+            } else if (workgroupAdDomainRepository
+                    .existsByWorkgroupIdAndAdDomain(workgroup.get().id!!, wgad.adDomain.lowercase())
+            ) {
+                conflicts.add(ConflictInfo("WorkgroupAdDomain",
+                    "${wgad.workgroupName}/${wgad.adDomain}", "already_exists"))
             }
         }
 
@@ -440,6 +463,17 @@ open class ConfigBundleService(
                 awsAccountId = wgaws.awsAccountId,
                 createdByEmail = wgaws.createdBy?.email,
                 createdAt = wgaws.createdAt
+            )
+        }
+    }
+
+    private fun exportWorkgroupAdDomains(): List<WorkgroupAdDomainExportDto> {
+        return workgroupAdDomainRepository.findAll().map { wgad ->
+            WorkgroupAdDomainExportDto(
+                workgroupName = wgad.workgroup.name,
+                adDomain = wgad.adDomain,
+                createdByEmail = wgad.createdBy?.email,
+                createdAt = wgad.createdAt
             )
         }
     }
@@ -962,6 +996,61 @@ open class ConfigBundleService(
                 imported++
             } catch (e: Exception) {
                 errors.add("Failed to import workgroup AWS assignment '${dto.workgroupName}/${dto.awsAccountId}': ${e.message}")
+            }
+        }
+
+        return ImportEntityResult(imported, skipped, errors, warnings)
+    }
+
+    private fun importWorkgroupAdDomains(
+        assignments: List<WorkgroupAdDomainExportDto>,
+        authentication: Authentication,
+        options: ImportOptions
+    ): ImportEntityResult {
+        var imported = 0
+        var skipped = 0
+        val errors = mutableListOf<String>()
+        val warnings = mutableListOf<String>()
+
+        val fallbackCreator: User? = userRepository.findByUsername(authentication.name).orElse(null)
+            ?: userRepository.findByEmail(authentication.name).orElse(null)
+
+        assignments.forEach { dto ->
+            try {
+                val workgroup = workgroupRepository.findByNameIgnoreCase(dto.workgroupName).orElse(null)
+                if (workgroup == null) {
+                    errors.add("Workgroup AD domain assignment: workgroup '${dto.workgroupName}' not found")
+                    return@forEach
+                }
+                val normalizedDomain = dto.adDomain.trim().lowercase()
+                if (workgroupAdDomainRepository
+                        .existsByWorkgroupIdAndAdDomain(workgroup.id!!, normalizedDomain)
+                ) {
+                    if (options.skipExisting) {
+                        skipped++
+                        warnings.add("Workgroup '${dto.workgroupName}' -> AD domain '${dto.adDomain}' already exists, skipping")
+                    } else {
+                        errors.add("Workgroup '${dto.workgroupName}' -> AD domain '${dto.adDomain}' already exists")
+                    }
+                    return@forEach
+                }
+
+                val createdBy = dto.createdByEmail?.let { userRepository.findByEmail(it).orElse(null) }
+                    ?: fallbackCreator
+                if (createdBy == null) {
+                    errors.add("Workgroup AD domain assignment: cannot resolve a creator user (importer not found in target system)")
+                    return@forEach
+                }
+
+                val assignment = WorkgroupAdDomain(
+                    workgroup = workgroup,
+                    adDomain = normalizedDomain,
+                    createdBy = createdBy
+                )
+                workgroupAdDomainRepository.save(assignment)
+                imported++
+            } catch (e: Exception) {
+                errors.add("Failed to import workgroup AD domain assignment '${dto.workgroupName}/${dto.adDomain}': ${e.message}")
             }
         }
 

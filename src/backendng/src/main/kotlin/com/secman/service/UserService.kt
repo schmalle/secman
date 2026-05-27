@@ -20,6 +20,7 @@ import com.secman.repository.RiskRepository
 import com.secman.repository.UserMappingRepository
 import com.secman.repository.UserRepository
 import com.secman.repository.VulnerabilityExceptionRequestRepository
+import com.secman.repository.WorkgroupAdDomainRepository
 import com.secman.repository.WorkgroupAwsAccountRepository
 import io.micronaut.context.event.ApplicationEventPublisher
 import jakarta.inject.Inject
@@ -48,7 +49,8 @@ open class UserService(
     @Inject private val demandClassificationRuleRepository: DemandClassificationRuleRepository,
     @Inject private val demandClassificationResultRepository: DemandClassificationResultRepository,
     @Inject private val maintenanceBannerRepository: MaintenanceBannerRepository,
-    @Inject private val workgroupAwsAccountRepository: WorkgroupAwsAccountRepository
+    @Inject private val workgroupAwsAccountRepository: WorkgroupAwsAccountRepository,
+    @Inject private val workgroupAdDomainRepository: WorkgroupAdDomainRepository
 ) {
 
     fun getAllUsers(): List<User> {
@@ -146,6 +148,7 @@ open class UserService(
         demandClassificationResultRepository.nullifyOverriddenByForUser(id)
         maintenanceBannerRepository.nullifyCreatedByForUser(id)
         workgroupAwsAccountRepository.nullifyCreatedByForUser(id)
+        workgroupAdDomainRepository.nullifyCreatedByForUser(id)
 
         // 8. Delete user.
         //    NOTE: NOT-NULL User FKs that are NOT cleaned up here will still

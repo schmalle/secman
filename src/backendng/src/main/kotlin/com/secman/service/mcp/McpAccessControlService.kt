@@ -8,6 +8,7 @@ import com.secman.dto.mcp.McpExecutionContext
 import com.secman.repository.AssetRepository
 import com.secman.repository.UserMappingRepository
 import com.secman.repository.UserRepository
+import com.secman.repository.WorkgroupAdDomainRepository
 import com.secman.service.AwsAccountSharingService
 import io.micronaut.cache.annotation.Cacheable
 import jakarta.inject.Singleton
@@ -32,13 +33,15 @@ import org.slf4j.LoggerFactory
  * 6. Asset's adDomain matches user's domain mappings (UserMapping, case-insensitive)
  * 7. Asset's cloudAccountId matches shared AWS accounts (AwsAccountSharing)
  * 8. Asset's owner matches user's username
+ * 9. Asset's adDomain matches an AD domain assigned to a workgroup the user belongs to (WorkgroupAdDomain, direct membership only)
  */
 @Singleton
 open class McpAccessControlService(
     private val assetRepository: AssetRepository,
     private val userMappingRepository: UserMappingRepository,
     private val userRepository: UserRepository,
-    private val awsAccountSharingService: AwsAccountSharingService
+    private val awsAccountSharingService: AwsAccountSharingService,
+    private val workgroupAdDomainRepository: WorkgroupAdDomainRepository
 ) {
     private val logger = LoggerFactory.getLogger(McpAccessControlService::class.java)
 
@@ -176,11 +179,19 @@ open class McpAccessControlService(
         // Criteria 7: Asset owner matches user's username
         val ownerAssets = assetRepository.findByOwner(username).mapNotNull { it.id }
 
-        val allAccessibleIds = (workgroupAssets + awsAssets + domainAssets + sharedAssets + ownerAssets).toSet()
+        // Criteria 8: Workgroup AD-domain assignments (direct membership only)
+        val workgroupDomains = workgroupAdDomainRepository.findDistinctAdDomainsByUserId(userId).map { it.lowercase() }
+        val workgroupDomainAssets = if (workgroupDomains.isNotEmpty()) {
+            assetRepository.findByAdDomainInIgnoreCase(workgroupDomains).mapNotNull { it.id }
+        } else {
+            emptyList()
+        }
+
+        val allAccessibleIds = (workgroupAssets + awsAssets + domainAssets + sharedAssets + ownerAssets + workgroupDomainAssets).toSet()
 
         logger.info(
-            "Computed accessible assets: userId={}, email={}, workgroup={}, aws={}, domain={}, shared={}, owner={}, total={}",
-            userId, userEmail, workgroupAssets.size, awsAssets.size, domainAssets.size, sharedAssets.size, ownerAssets.size, allAccessibleIds.size
+            "Computed accessible assets: userId={}, email={}, workgroup={}, aws={}, domain={}, shared={}, owner={}, workgroupDomain={}, total={}",
+            userId, userEmail, workgroupAssets.size, awsAssets.size, domainAssets.size, sharedAssets.size, ownerAssets.size, workgroupDomainAssets.size, allAccessibleIds.size
         )
 
         return allAccessibleIds

@@ -94,6 +94,9 @@ class McpToolRegistry(
     @Inject private val listWorkgroupAwsAccountsTool: ListWorkgroupAwsAccountsTool,
     @Inject private val addWorkgroupAwsAccountTool: AddWorkgroupAwsAccountTool,
     @Inject private val removeWorkgroupAwsAccountTool: RemoveWorkgroupAwsAccountTool,
+    @Inject private val listWorkgroupAdDomainsTool: ListWorkgroupAdDomainsTool,
+    @Inject private val addWorkgroupAdDomainTool: AddWorkgroupAdDomainTool,
+    @Inject private val removeWorkgroupAdDomainTool: RemoveWorkgroupAdDomainTool,
     // CrowdStrike import status
     @Inject private val getCrowdStrikeLastImportTool: GetCrowdStrikeLastImportTool,
     @Inject private val applicationRegisterTool: ApplicationRegisterTool
@@ -187,6 +190,9 @@ class McpToolRegistry(
             listWorkgroupAwsAccountsTool,
             addWorkgroupAwsAccountTool,
             removeWorkgroupAwsAccountTool,
+            listWorkgroupAdDomainsTool,
+            addWorkgroupAdDomainTool,
+            removeWorkgroupAdDomainTool,
             // CrowdStrike import status
             getCrowdStrikeLastImportTool,
             applicationRegisterTool
@@ -459,7 +465,8 @@ class McpToolRegistry(
             }
 
             // Feature: Workgroup AWS Account Assignment (ADMIN only via User Delegation)
-            "list_workgroup_aws_accounts", "add_workgroup_aws_account", "remove_workgroup_aws_account" -> {
+            "list_workgroup_aws_accounts", "add_workgroup_aws_account", "remove_workgroup_aws_account",
+            "list_workgroup_ad_domains", "add_workgroup_ad_domain", "remove_workgroup_ad_domain" -> {
                 permissions.contains(McpPermission.WORKGROUPS_WRITE) // ADMIN role checked in tool execute()
             }
 

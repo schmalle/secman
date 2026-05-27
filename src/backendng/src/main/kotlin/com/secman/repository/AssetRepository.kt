@@ -41,6 +41,7 @@ interface AssetRepository : JpaRepository<Asset, Long> {
      * 5. Assets with adDomain matching user's domain mappings
      * 6. Assets where owner matches the user's username
      * 7. Assets with cloudAccountId matching an AWS account assigned to a workgroup the user belongs to (WorkgroupAwsAccount)
+     * 8. Assets with adDomain matching an AD domain assigned to a workgroup the user belongs to (WorkgroupAdDomain)
      *
      * Feature: 073-memory-optimization
      * Task: T031
@@ -90,6 +91,11 @@ interface AssetRepository : JpaRepository<Asset, Long> {
                 OR a.cloud_account_id IN (
                     SELECT waa.aws_account_id FROM workgroup_aws_account waa
                     JOIN user_workgroups uw ON uw.workgroup_id = waa.workgroup_id
+                    WHERE uw.user_id = :userId
+                )
+                OR LOWER(a.ad_domain) COLLATE utf8mb4_general_ci IN (
+                    SELECT wad.ad_domain COLLATE utf8mb4_general_ci FROM workgroup_ad_domain wad
+                    JOIN user_workgroups uw ON uw.workgroup_id = wad.workgroup_id
                     WHERE uw.user_id = :userId
                 )
                 OR a.owner = :username

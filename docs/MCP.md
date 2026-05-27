@@ -117,7 +117,7 @@ curl -XPOST http://localhost:8080/mcp \
 | `VULNERABILITIES_READ` | `get_vulnerabilities`, `get_all_vulnerabilities_detail`, `get_asset_most_vulnerabilities`, `get_overdue_assets`, `*_exception_request*`, `get_vulnerability_heatmap`, `refresh_vulnerability_heatmap` |
 | `SCANS_READ` | `get_scans`, `get_asset_scan_results`, `search_products` |
 | `USER_ACTIVITY` | `list_users`, `add_user`, `delete_user`, `import_user_mappings`, `list_user_mappings`, `*_aws_account_sharing` |
-| `WORKGROUPS_WRITE` | `create_workgroup`, `delete_workgroup`, `assign_assets_to_workgroup`, `assign_users_to_workgroup`, `add_/remove_workgroup_aws_account` |
+| `WORKGROUPS_WRITE` | `create_workgroup`, `delete_workgroup`, `assign_assets_to_workgroup`, `assign_users_to_workgroup`, `add_/remove_workgroup_aws_account`, `add_/remove_workgroup_ad_domain` |
 
 \* `create_release`/`delete_release` need ADMIN or REQADMIN; `set_release_status` needs ADMIN or RELEASE_MANAGER.
 
@@ -170,6 +170,7 @@ curl -XPOST http://localhost:8080/mcp \
 - **`delete_workgroup`** — `workgroupId`*. Cascades user/asset associations.
 - **`assign_assets_to_workgroup`** / **`assign_users_to_workgroup`** — `workgroupId`*, `assetIds[]`/`userIds[]`*.
 - **`list_/add_/remove_workgroup_aws_account`** — `workgroupId`*, `cloudAccountId`*.
+- **`list_/add_/remove_workgroup_ad_domain`** — `workgroupId`*, `adDomain`*.
 
 ### User mappings (ADMIN, delegation)
 - **`import_user_mappings`** — `mappings[]`* (≤1000), each `email`* + at least one of `awsAccountId` (12 digits) or `domain`. `dryRun`. Returns counts: `created`, `createdPending` (user not yet exists), `skipped`, `errors[]`.

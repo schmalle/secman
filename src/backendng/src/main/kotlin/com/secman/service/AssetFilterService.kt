@@ -10,6 +10,7 @@ import com.secman.repository.ScanRepository
 import com.secman.repository.UserMappingRepository
 import com.secman.repository.UserRepository
 import com.secman.repository.VulnerabilityRepository
+import com.secman.repository.WorkgroupAdDomainRepository
 import com.secman.repository.WorkgroupAwsAccountRepository
 import io.micronaut.security.authentication.Authentication
 import jakarta.inject.Singleton
@@ -44,7 +45,8 @@ open class AssetFilterService(
     private val userMappingRepository: UserMappingRepository,
     private val memoryConfig: MemoryOptimizationConfig,
     private val awsAccountSharingService: AwsAccountSharingService,
-    private val workgroupAwsAccountRepository: WorkgroupAwsAccountRepository
+    private val workgroupAwsAccountRepository: WorkgroupAwsAccountRepository,
+    private val workgroupAdDomainRepository: WorkgroupAdDomainRepository
 ) {
 
     /**
@@ -61,6 +63,7 @@ open class AssetFilterService(
      * 7. Asset's owner matches the user's username
      * 8. Asset's cloudAccountId matches an AWS account shared with the user via AwsAccountSharing (directional, non-transitive)
      * 9. Asset's cloudAccountId matches an AWS account assigned to a workgroup the user belongs to (WorkgroupAwsAccount, direct membership only)
+     * 10. Asset's adDomain matches an AD domain assigned to a workgroup the user belongs to (WorkgroupAdDomain, direct membership only)
      *
      * Feature 073: When lazyLoadingEnabled=true, uses unified query for single DB round trip.
      * Otherwise, falls back to original multi-query approach for stability.
@@ -181,9 +184,17 @@ open class AssetFilterService(
             emptyList()
         }
 
+        val workgroupDomains = workgroupAdDomainRepository.findDistinctAdDomainsByUserId(userId)
+            .map { it.lowercase() }
+        val workgroupDomainAssets = if (workgroupDomains.isNotEmpty()) {
+            assetRepository.findByAdDomainInIgnoreCase(workgroupDomains)
+        } else {
+            emptyList()
+        }
+
         // Combine and deduplicate by asset ID, then sort by name
         return (workgroupAssets + awsAccountAssets + domainAssets + sharedAwsAccountAssets +
-                workgroupAccountAssets + ownerAssets)
+                workgroupAccountAssets + workgroupDomainAssets + ownerAssets)
             .distinctBy { it.id }
             .sortedBy { it.name }
     }

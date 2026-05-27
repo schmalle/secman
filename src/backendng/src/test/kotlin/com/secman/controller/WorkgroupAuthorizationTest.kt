@@ -52,6 +52,7 @@ class WorkgroupAuthorizationTest {
             workgroupService,
             assetRepository,
             workgroupAwsAccountRepository,
+            mockk(),
             userResolutionService,
             workgroupRepository,
             userRepository,
