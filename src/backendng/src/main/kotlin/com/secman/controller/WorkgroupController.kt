@@ -349,7 +349,8 @@ open class WorkgroupController(
             val workgroup = workgroupRepository.findById(id).orElse(null)
                 ?: return HttpResponse.notFound<Any>()
             if (!canManageWorkgroup(authentication)) {
-                return HttpResponse.status<Any>(io.micronaut.http.HttpStatus.FORBIDDEN)
+                return HttpResponse.status<Map<String, String>>(io.micronaut.http.HttpStatus.FORBIDDEN)
+                    .body(mapOf("error" to "Missing rights"))
             }
 
             // Domain restriction: non-admin callers can only lazy-create new pending users
