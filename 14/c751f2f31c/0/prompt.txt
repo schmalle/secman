@@ -1,0 +1,5 @@
+[Image #1] extend the existing worgroup design, so that also AD Domains can be defined for a workgroup. Please make a holistic plan for this.
+
+---
+
+Implement the plan.
