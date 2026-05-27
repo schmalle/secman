@@ -20,7 +20,8 @@ data class ConfigBundleDto(
     val falconConfigs: List<FalconConfigExportDto> = emptyList(),
     val mcpApiKeys: List<McpApiKeyExportDto> = emptyList(),
     val awsAccountSharing: List<AwsAccountSharingExportDto> = emptyList(),
-    val workgroupAwsAccounts: List<WorkgroupAwsAccountExportDto> = emptyList()
+    val workgroupAwsAccounts: List<WorkgroupAwsAccountExportDto> = emptyList(),
+    val workgroupAdDomains: List<WorkgroupAdDomainExportDto> = emptyList()
 )
 
 /**
@@ -155,6 +156,17 @@ data class WorkgroupAwsAccountExportDto(
 )
 
 /**
+ * Workgroup ↔ AD Domain assignment export data.
+ */
+@Serdeable
+data class WorkgroupAdDomainExportDto(
+    val workgroupName: String,
+    val adDomain: String,
+    val createdByEmail: String? = null,
+    val createdAt: Instant? = null
+)
+
+/**
  * Import result for bundle import operations
  */
 @Serdeable
@@ -180,10 +192,11 @@ data class ImportCounts(
     val falconConfigs: Int = 0,
     val mcpApiKeys: Int = 0,
     val awsAccountSharing: Int = 0,
-    val workgroupAwsAccounts: Int = 0
+    val workgroupAwsAccounts: Int = 0,
+    val workgroupAdDomains: Int = 0
 ) {
     fun total(): Int = users + workgroups + userMappings + identityProviders +
-        falconConfigs + mcpApiKeys + awsAccountSharing + workgroupAwsAccounts
+        falconConfigs + mcpApiKeys + awsAccountSharing + workgroupAwsAccounts + workgroupAdDomains
 }
 
 /**

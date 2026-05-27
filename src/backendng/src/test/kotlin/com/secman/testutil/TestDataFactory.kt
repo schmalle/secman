@@ -55,6 +55,22 @@ object TestDataFactory {
         )
     }
 
+
+    /**
+     * Create a user with SECCHAMPION role.
+     */
+    fun createSecChampionUser(
+        username: String = "testsecchampion",
+        email: String = "testsecchampion@secman.test"
+    ): User {
+        return User(
+            username = username,
+            email = email,
+            passwordHash = defaultPasswordHash,
+            roles = mutableSetOf(Role.USER, Role.SECCHAMPION)
+        )
+    }
+
     /**
      * Create a regular user with only USER role
      */

@@ -6,13 +6,14 @@ This document summarizes the Secman Workgroup feature and its access-rights mode
 ## What is a Workgroup?
 - A workgroup is a scoped collaboration boundary for assets and vulnerabilities.
 - Users only see data for assets linked to workgroups they can access.
-- Workgroups can also carry AWS account assignments for cloud ownership mapping.
+- Workgroups can also carry AWS account assignments and AD domain assignments for ownership mapping.
 
 ## Core Entities
 - **Workgroup**: name, description, criticality, optional creator.
 - **User ↔ Workgroup**: membership mapping controls access.
 - **Asset ↔ Workgroup**: asset scope mapping controls visibility.
 - **Workgroup ↔ AWS account**: cloud account ownership mapping.
+- **Workgroup ↔ AD domain**: domain ownership mapping for assets with matching `adDomain`.
 
 ## Access Control Model
 - **RBAC gate**: endpoint/tool permission checks (e.g., write-level workgroup operations).
@@ -23,7 +24,7 @@ This document summarizes the Secman Workgroup feature and its access-rights mode
 ## Functional Rights
 - Read rights: list/view accessible workgroups and scoped resources.
 - Write rights: create/delete workgroups, assign users/assets.
-- Cloud rights: add/remove/list workgroup AWS accounts.
+- Cloud/domain rights: add/remove/list workgroup AWS accounts and AD domains.
 - Deletion safety: non-privileged users can only delete workgroups they created.
 
 ## MCP/API Operations
@@ -34,12 +35,15 @@ This document summarizes the Secman Workgroup feature and its access-rights mode
 - `list_workgroup_aws_account(workgroupId)`
 - `add_workgroup_aws_account(workgroupId, cloudAccountId)`
 - `remove_workgroup_aws_account(workgroupId, cloudAccountId)`
+- `list_workgroup_ad_domains(workgroupId)`
+- `add_workgroup_ad_domain(workgroupId, adDomain)`
+- `remove_workgroup_ad_domain(workgroupId, adDomain)`
 
 ## Governance Workflow
 1. Create a workgroup for a team/domain boundary.
 2. Assign responsible users.
 3. Assign relevant assets.
-4. Link AWS accounts if cloud ownership applies.
+4. Link AWS accounts or AD domains if ownership-based access applies.
 5. Validate scoped visibility with non-admin users.
 
 ## Security and Operations

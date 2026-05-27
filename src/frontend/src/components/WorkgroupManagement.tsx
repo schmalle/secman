@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete } from '../utils/auth';
 import WorkgroupAccountsModal from './WorkgroupAccountsModal';
+import WorkgroupDomainsModal from './WorkgroupDomainsModal';
 
 // Extract a useful error message from a non-OK Response. Handles the three
 // shapes we see in this app: our own `{error: "..."}`, Micronaut's default
@@ -31,6 +32,7 @@ interface Workgroup {
   userCount: number;
   assetCount: number;
   awsAccountsCount?: number;
+  adDomainsCount?: number;
   createdAt: string;
   updatedAt: string;
   parentId?: number;
@@ -64,6 +66,15 @@ interface AssignedAsset {
   owner: string | null;
 }
 
+const getEffectiveAssignedUserCount = (
+  assignedUsers: Array<{ id: number; username: string; email: string }>,
+  userIdsToRemove: number[]
+): number => {
+  const assignedIds = new Set(assignedUsers.map(user => user.id));
+  const pendingRemovals = userIdsToRemove.filter(id => assignedIds.has(id)).length;
+  return Math.max(0, assignedUsers.length - pendingRemovals);
+};
+
 
 const WorkgroupManagement: React.FC = () => {
   const [workgroups, setWorkgroups] = useState<Workgroup[]>([]);
@@ -94,6 +105,11 @@ const WorkgroupManagement: React.FC = () => {
   const [assetIdsToRemove, setAssetIdsToRemove] = useState<number[]>([]);
   const [userIdsToRemove, setUserIdsToRemove] = useState<number[]>([]);
   const [accountsModalState, setAccountsModalState] = useState<{
+    isOpen: boolean;
+    workgroupId: number | null;
+    workgroupName: string;
+  }>({ isOpen: false, workgroupId: null, workgroupName: '' });
+  const [domainsModalState, setDomainsModalState] = useState<{
     isOpen: boolean;
     workgroupId: number | null;
     workgroupName: string;
@@ -302,6 +318,12 @@ const WorkgroupManagement: React.FC = () => {
   };
 
   const filteredAssets = filterAssets(assetSearchTerm);
+  const modalExpectedUserCount = selectedWorkgroup?.userCount ?? 0;
+  const modalEffectiveUserCount = getEffectiveAssignedUserCount(assignedUsers, userIdsToRemove);
+  const hasUserCountMismatch = showAssignUsers
+    && !!selectedWorkgroup
+    && !assignedUsersError
+    && modalExpectedUserCount !== modalEffectiveUserCount;
 
   const submitAssignUsers = async () => {
     if (!selectedWorkgroup) return;
@@ -571,6 +593,13 @@ const WorkgroupManagement: React.FC = () => {
                       </span>
                     )}
                   </div>
+                  {hasUserCountMismatch && (
+                    <div className="alert alert-warning py-2 px-2 my-2 small mb-0" role="alert">
+                      <i className="bi bi-exclamation-triangle me-1"></i>
+                      Count mismatch: table shows <strong>{modalExpectedUserCount}</strong>, but current members in this
+                      dialog are <strong>{modalEffectiveUserCount}</strong>.
+                    </div>
+                  )}
                   {assignedUsersError && (
                     <div className="alert alert-warning py-1 px-2 my-1 small mb-0" role="alert">
                       {assignedUsersError}
@@ -1026,6 +1055,21 @@ const WorkgroupManagement: React.FC = () => {
         />
       )}
 
+      {/* Domains Modal */}
+      {domainsModalState.workgroupId !== null && (
+        <WorkgroupDomainsModal
+          workgroupId={domainsModalState.workgroupId}
+          workgroupName={domainsModalState.workgroupName}
+          isOpen={domainsModalState.isOpen}
+          onClose={() =>
+            setDomainsModalState({ isOpen: false, workgroupId: null, workgroupName: '' })
+          }
+          onChange={() => {
+            fetchWorkgroups();
+          }}
+        />
+      )}
+
       {/* Workgroups Table */}
       <div className="table-responsive">
         <table className="table table-striped table-hover">
@@ -1036,6 +1080,7 @@ const WorkgroupManagement: React.FC = () => {
               <th>Users</th>
               <th>Assets</th>
               <th>Accounts</th>
+              <th>Domains</th>
               <th>Created</th>
               <th>Actions</th>
             </tr>
@@ -1043,7 +1088,7 @@ const WorkgroupManagement: React.FC = () => {
           <tbody>
             {workgroups.length === 0 ? (
               <tr>
-                <td colSpan={7} className="text-center text-muted">
+                <td colSpan={8} className="text-center text-muted">
                   No visible workgroups found.
                 </td>
               </tr>
@@ -1065,6 +1110,9 @@ const WorkgroupManagement: React.FC = () => {
                     </td>
                     <td>
                       <span className="badge bg-secondary">{workgroup.awsAccountsCount ?? 0}</span>
+                    </td>
+                    <td>
+                      <span className="badge bg-secondary">{workgroup.adDomainsCount ?? 0}</span>
                     </td>
                     <td>{new Date(workgroup.createdAt).toLocaleDateString()}</td>
                   <td>
@@ -1096,6 +1144,20 @@ const WorkgroupManagement: React.FC = () => {
                         title="Manage AWS accounts"
                       >
                         Accounts
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-secondary ms-1"
+                        onClick={() =>
+                          setDomainsModalState({
+                            isOpen: true,
+                            workgroupId: workgroup.id,
+                            workgroupName: workgroup.name,
+                          })
+                        }
+                        title="Manage AD domains"
+                      >
+                        Domains
                       </button>
                       <button
                         className="btn btn-outline-success"

@@ -51,6 +51,7 @@ open class WorkgroupController(
     private val workgroupService: WorkgroupService,
     private val assetRepository: AssetRepository,
     private val workgroupAwsAccountRepository: com.secman.repository.WorkgroupAwsAccountRepository,
+    private val workgroupAdDomainRepository: com.secman.repository.WorkgroupAdDomainRepository,
     private val userResolutionService: UserResolutionService,
     private val workgroupRepository: WorkgroupRepository,
     private val userRepository: UserRepository,
@@ -202,6 +203,7 @@ open class WorkgroupController(
                 userCount = wg.users.size,
                 assetCount = wg.assets.size,
                 awsAccountsCount = workgroupAwsAccountRepository.countByWorkgroupId(wg.id!!),
+                adDomainsCount = workgroupAdDomainRepository.countByWorkgroupId(wg.id!!),
                 createdAt = wg.createdAt!!,
                 updatedAt = wg.updatedAt!!,
                 parentId = wg.parent?.id,
@@ -347,7 +349,8 @@ open class WorkgroupController(
             val workgroup = workgroupRepository.findById(id).orElse(null)
                 ?: return HttpResponse.notFound<Any>()
             if (!canManageWorkgroup(authentication)) {
-                return HttpResponse.status<Any>(io.micronaut.http.HttpStatus.FORBIDDEN)
+                return HttpResponse.status<Map<String, String>>(io.micronaut.http.HttpStatus.FORBIDDEN)
+                    .body(mapOf("error" to "Missing rights"))
             }
 
             // Domain restriction: non-admin callers can only lazy-create new pending users
@@ -1282,6 +1285,7 @@ data class WorkgroupListResponse(
     val userCount: Int,
     val assetCount: Int,
     val awsAccountsCount: Long,
+    val adDomainsCount: Long,
     val createdAt: java.time.Instant,
     val updatedAt: java.time.Instant,
     val parentId: Long?,

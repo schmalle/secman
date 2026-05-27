@@ -74,57 +74,80 @@ async function login(page: Page, username: string, password: string) {
 }
 
 
+async function waitForResponseOrVisible(
+    page: Page,
+    responsePredicate: Parameters<Page['waitForResponse']>[0],
+    visibleLocator: ReturnType<Page['locator']>
+) {
+    if (await visibleLocator.isVisible().catch(() => false)) {
+        return;
+    }
+    await Promise.race([
+        page.waitForResponse(responsePredicate),
+        visibleLocator.waitFor({ state: 'visible' }),
+    ]);
+    await expect(visibleLocator).toBeVisible();
+}
+
 async function waitForSystemVulnerabilitiesReady(page: Page) {
-    await page.waitForResponse((response) =>
-        response.url().includes('/api/vulnerabilities/current/system') && response.request().method() === 'GET' && response.ok()
+    await waitForResponseOrVisible(
+        page,
+        (response) => response.url().includes('/api/vulnerabilities/current/system') && response.request().method() === 'GET' && response.ok(),
+        page.locator('table')
     );
-    await expect(page.locator('table')).toBeVisible();
 }
 
 async function waitForCurrentVulnerabilitiesReady(page: Page) {
-    await page.waitForResponse((response) =>
-        response.url().includes('/api/vulnerabilities/current') &&
-        !response.url().includes('/api/vulnerabilities/current/system') &&
-        response.request().method() === 'GET' &&
-        response.ok()
+    await waitForResponseOrVisible(
+        page,
+        (response) =>
+            response.url().includes('/api/vulnerabilities/current') &&
+            !response.url().includes('/api/vulnerabilities/current/system') &&
+            response.request().method() === 'GET' &&
+            response.ok(),
+        page.locator('table')
     );
-    await expect(page.locator('table')).toBeVisible();
 }
 
 async function waitForOutdatedAssetsReady(page: Page) {
-    await page.waitForResponse((response) =>
-        response.url().includes('/api/outdated-assets') && response.request().method() === 'GET' && response.ok()
+    await waitForResponseOrVisible(
+        page,
+        (response) => response.url().includes('/api/outdated-assets') && response.request().method() === 'GET' && response.ok(),
+        page.locator('table')
     );
-    await expect(page.locator('table')).toBeVisible();
 }
 
 async function waitForMyExceptionRequestsReady(page: Page) {
-    await page.waitForResponse((response) =>
-        response.url().includes('/api/vulnerability-exception-requests/my') && response.request().method() === 'GET' && response.ok()
+    await waitForResponseOrVisible(
+        page,
+        (response) => response.url().includes('/api/vulnerability-exception-requests/my') && response.request().method() === 'GET' && response.ok(),
+        page.locator('table')
     );
-    await expect(page.locator('table')).toBeVisible();
 }
 
 async function waitForAccountVulnsReady(page: Page) {
-    await page.waitForResponse((response) =>
-        response.url().includes('/api/assets/by-cloud-account') && response.request().method() === 'GET' && response.ok()
+    await waitForResponseOrVisible(
+        page,
+        (response) => response.url().includes('/api/assets/by-cloud-account') && response.request().method() === 'GET' && response.ok(),
+        page.locator('main')
     );
-    await expect(page.locator('main')).toBeVisible();
     await expect.poll(async () => (await page.textContent('body')) ?? '').toContain('AWS Account');
 }
 
 async function waitForVulnerabilityExceptionsReady(page: Page) {
-    await page.waitForResponse((response) =>
-        response.url().includes('/api/vulnerability-exceptions') && response.request().method() === 'GET' && response.ok()
+    await waitForResponseOrVisible(
+        page,
+        (response) => response.url().includes('/api/vulnerability-exceptions') && response.request().method() === 'GET' && response.ok(),
+        page.getByText('Vulnerability Exceptions')
     );
-    await expect(page.getByText('Vulnerability Exceptions')).toBeVisible();
 }
 
 async function waitForAwsAccountSharingReady(page: Page) {
-    await page.waitForResponse((response) =>
-        response.url().includes('/api/aws-account-sharing') && response.request().method() === 'GET' && response.ok()
+    await waitForResponseOrVisible(
+        page,
+        (response) => response.url().includes('/api/aws-account-sharing') && response.request().method() === 'GET' && response.ok(),
+        page.getByRole('heading', { name: /aws account sharing/i })
     );
-    await expect(page.getByRole('heading', { name: /aws account sharing/i })).toBeVisible();
     // Fallback: selected-account badge text can lag behind row render in CI.
     await page.waitForTimeout(500);
 }

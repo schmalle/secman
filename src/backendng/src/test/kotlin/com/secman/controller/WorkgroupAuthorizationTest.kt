@@ -52,6 +52,7 @@ class WorkgroupAuthorizationTest {
             workgroupService,
             assetRepository,
             workgroupAwsAccountRepository,
+            mockk(),
             userResolutionService,
             workgroupRepository,
             userRepository,
@@ -71,6 +72,7 @@ class WorkgroupAuthorizationTest {
         )
 
         assertEquals(HttpStatus.FORBIDDEN, response.status)
+        assertEquals(mapOf("error" to "Missing rights"), response.body())
         verify(exactly = 0) { workgroupService.assignUsersToWorkgroup(any(), any()) }
     }
 
