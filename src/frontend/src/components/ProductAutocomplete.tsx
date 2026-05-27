@@ -23,20 +23,48 @@ interface ProductAutocompleteProps {
     disabled?: boolean;
 }
 
+export function getProductSuggestions(value: string, allProducts: string[]): string[] {
+    if (!value.trim()) {
+        return allProducts;
+    }
+
+    const normalizedValue = value.toLowerCase();
+    return allProducts.filter(product =>
+        product.toLowerCase().includes(normalizedValue)
+    );
+}
+
 const ProductAutocomplete: React.FC<ProductAutocompleteProps> = ({
     value,
     onChange,
     placeholder = 'e.g., Apache HTTP Server 2.4.41',
     disabled = false
 }) => {
-    const [suggestions, setSuggestions] = useState<string[]>([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [loading, setLoading] = useState(false);
     const [allProducts, setAllProducts] = useState<string[]>([]);
     const wrapperRef = useRef<HTMLDivElement>(null);
+    const suggestions = getProductSuggestions(value, allProducts);
 
     // Fetch all products on mount
     useEffect(() => {
+        const fetchProducts = async () => {
+            try {
+                setLoading(true);
+                const response = await axios.get('/api/vulnerability-products', {
+                    params: {
+                        limit: 1000
+                    }
+                });
+                setAllProducts(response.data || []);
+            } catch (error) {
+                console.error('Failed to fetch products:', error);
+                setAllProducts([]);
+            } finally {
+                setLoading(false);
+            }
+        };
+
         fetchProducts();
     }, []);
 
@@ -51,36 +79,6 @@ const ProductAutocomplete: React.FC<ProductAutocompleteProps> = ({
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
-
-    // Filter suggestions when value changes
-    useEffect(() => {
-        if (value.trim()) {
-            const filtered = allProducts.filter(product =>
-                product.toLowerCase().includes(value.toLowerCase())
-            ).slice(0, 20); // Limit to 20 suggestions
-
-            setSuggestions(filtered);
-        } else {
-            setSuggestions(allProducts.slice(0, 20)); // Show first 20 when empty
-        }
-    }, [value, allProducts]);
-
-    const fetchProducts = async () => {
-        try {
-            setLoading(true);
-            const response = await axios.get('/api/vulnerability-products', {
-                params: {
-                    limit: 100 // Fetch up to 100 products
-                }
-            });
-            setAllProducts(response.data || []);
-        } catch (error) {
-            console.error('Failed to fetch products:', error);
-            setAllProducts([]);
-        } finally {
-            setLoading(false);
-        }
-    };
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const newValue = e.target.value;
