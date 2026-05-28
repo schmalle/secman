@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.6.2",
+  "checkpoint_id": "a89626748142",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "src/backendng/src/main/resources/db/migration/V230__installed_products.sql"
+  ],
+  "sessions": [
+    {
+      "metadata": "/a8/9626748142/0/metadata.json",
+      "transcript": "/a8/9626748142/0/full.jsonl",
+      "content_hash": "/a8/9626748142/0/content_hash.txt",
+      "prompt": "/a8/9626748142/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 62214,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 621568,
+    "output_tokens": 5213,
+    "api_call_count": 24
+  }
+}
