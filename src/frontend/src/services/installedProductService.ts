@@ -1,4 +1,4 @@
-import { authenticatedGet } from './authService';
+import { authenticatedGet } from '../utils/auth';
 
 export interface InstalledProductResponse {
   id: number;

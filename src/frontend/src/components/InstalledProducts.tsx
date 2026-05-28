@@ -13,7 +13,7 @@ const InstalledProducts: React.FC = () => {
       setLoading(true);
       getInstalledProducts(search)
         .then((response) => {
-          setProducts(response.products);
+          setProducts(response.products ?? []);
           setTotalSystems(response.totalSystems);
           setError(null);
         })
