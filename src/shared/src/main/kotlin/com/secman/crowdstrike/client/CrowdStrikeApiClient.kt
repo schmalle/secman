@@ -2,6 +2,7 @@ package com.secman.crowdstrike.client
 
 import com.secman.crowdstrike.dto.CrowdStrikeQueryResponse
 import com.secman.crowdstrike.dto.CrowdStrikeVulnerabilityDto
+import com.secman.crowdstrike.dto.InstalledProductDto
 import com.secman.crowdstrike.dto.FalconConfigDto
 import com.secman.crowdstrike.model.AuthToken
 
@@ -167,4 +168,20 @@ interface CrowdStrikeApiClient {
         deviceBatchSize: Int = 200,
         overdueThreshold: Int = 30
     ): StreamingSummary
+
+    /**
+     * Query installed products from CrowdStrike Discover in streaming pages.
+     *
+     * @param deviceType Device type filter (SERVER, WORKSTATION, or ALL)
+     * @param config CrowdStrike Falcon configuration
+     * @param limit Page size for pagination (max 1000)
+     * @param batchProcessor Callback invoked with each page of installed products
+     * @return Total number of installed product rows processed
+     */
+    fun queryInstalledProductsStreaming(
+        deviceType: String = "SERVER",
+        config: FalconConfigDto,
+        limit: Int = 1000,
+        batchProcessor: (List<InstalledProductDto>) -> Unit
+    ): Int
 }

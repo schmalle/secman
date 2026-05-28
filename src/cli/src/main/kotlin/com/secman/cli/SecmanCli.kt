@@ -9,6 +9,7 @@ import com.secman.cli.commands.DeduplicateVulnerabilitiesCommand
 import com.secman.cli.commands.DeleteAssetNotSeenCommand
 import com.secman.cli.commands.DeleteAllRequirementsCommand
 import com.secman.cli.commands.ExportRequirementsCommand
+import com.secman.cli.commands.InstalledProductsCommand
 import com.secman.cli.commands.ManageUserMappingsCommand
 import com.secman.cli.commands.ManageWorkgroupsCommand
 import com.secman.cli.commands.MonitorCommand
@@ -53,6 +54,39 @@ class SecmanCli {
             }
             args[0] == "query" && args.size > 1 && args[1] == "--help" -> showCommandHelp("query")
             args[0] == "query" && args.size > 1 && args[1] == "servers" && args.any { it == "--help" || it == "-h" } -> showCommandHelp("query-servers")
+            args[0] == "installed-products" && args.any { it == "--help" || it == "-h" } -> showCommandHelp("installed-products")
+            args[0] == "installed-products" -> {
+                val command = InstalledProductsCommand()
+                var i = 1
+                while (i < args.size) {
+                    when {
+                        args[i] == "--device-type" && i + 1 < args.size -> {
+                            command.deviceType = args[i + 1]
+                            i++
+                        }
+                        args[i] == "--limit" && i + 1 < args.size -> {
+                            command.limit = args[i + 1].toIntOrNull() ?: 1000
+                            i++
+                        }
+                        args[i] == "--client-id" && i + 1 < args.size -> {
+                            command.clientId = args[i + 1]
+                            i++
+                        }
+                        args[i] == "--client-secret" && i + 1 < args.size -> {
+                            command.clientSecret = args[i + 1]
+                            i++
+                        }
+                        args[i] == "--backend-url" && i + 1 < args.size -> {
+                            command.backendUrl = args[i + 1]
+                            i++
+                        }
+                        args[i] == "--dry-run" -> command.dryRun = true
+                        args[i] == "--verbose" -> command.verbose = true
+                    }
+                    i++
+                }
+                command.execute()
+            }
             args[0] == "query" && args.size > 1 && args[1] == "servers" -> {
                 val serversCommand = ServersCommand()
                 // Parse remaining args into properties
@@ -368,6 +402,7 @@ class SecmanCli {
               CrowdStrike:
                 query                  Query CrowdStrike vulnerabilities for a single host
                 query servers          Batch query and import server vulnerabilities
+                installed-products     Import CrowdStrike installed products for known systems
                 monitor                Continuously monitor for HIGH/CRITICAL vulnerabilities
                 config                 Configure CrowdStrike API credentials
                 crowdstrike-last-import  Show timestamp of the most recent CrowdStrike import
@@ -465,6 +500,27 @@ class SecmanCli {
                 See also: secman help query-servers
             """.trimIndent(),
 
+            "installed-products" to """
+                secman installed-products - Import CrowdStrike installed products
+
+                Usage: secman installed-products [options]
+
+                Options:
+                  --device-type <type>     Device type: SERVER, WORKSTATION, or ALL (default: SERVER)
+                  --dry-run                Query CrowdStrike and print summary without writing backend data
+                  --limit <num>            CrowdStrike page size, max 1000 (default: 1000)
+                  --backend-url <url>      Backend API URL (overrides SECMAN_BACKEND_URL/SECMAN_HOST)
+                  --client-id <id>         CrowdStrike API client ID (overrides config file)
+                  --client-secret <secret> CrowdStrike API client secret (overrides config file)
+                  --verbose                Show detailed backend errors
+
+                Requires SECMAN_ADMIN_NAME and SECMAN_ADMIN_PASS unless --dry-run is used.
+
+                Examples:
+                  secman installed-products --device-type SERVER
+                  secman installed-products --device-type WORKSTATION --dry-run
+                  secman installed-products --device-type ALL --limit 500
+            """.trimIndent(),
             "query-servers" to """
                 secman query servers - Batch query and import server vulnerabilities
 

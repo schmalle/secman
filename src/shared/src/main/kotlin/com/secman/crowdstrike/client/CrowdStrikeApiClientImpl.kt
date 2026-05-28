@@ -5,6 +5,7 @@ import com.secman.crowdstrike.dto.CrowdStrikeQueryResponse
 import com.secman.crowdstrike.dto.CrowdStrikeVulnerabilityDto
 import com.secman.crowdstrike.dto.DeviceType
 import com.secman.crowdstrike.dto.FalconConfigDto
+import com.secman.crowdstrike.dto.InstalledProductDto
 import com.secman.crowdstrike.exception.CrowdStrikeException
 import com.secman.crowdstrike.exception.NotFoundException
 import com.secman.crowdstrike.exception.RateLimitException
@@ -487,6 +488,182 @@ open class CrowdStrikeApiClientImpl(
             totalVulnerabilities, deviceChunks.size)
 
         return totalVulnerabilities
+    }
+
+
+    override fun queryInstalledProductsStreaming(
+        deviceType: String,
+        config: FalconConfigDto,
+        limit: Int,
+        batchProcessor: (List<InstalledProductDto>) -> Unit
+    ): Int {
+        val parsedDeviceType = DeviceType.fromString(deviceType)
+        val token = getAuthToken(config)
+        val filters = when (parsedDeviceType) {
+            DeviceType.SERVER -> listOf("host.product_type_desc:'Server'")
+            DeviceType.WORKSTATION -> listOf("host.product_type_desc:'Workstation'")
+            DeviceType.ALL -> listOf("host.product_type_desc:'Server'", "host.product_type_desc:'Workstation'")
+        }
+
+        var totalProcessed = 0
+        filters.forEach { filter ->
+            totalProcessed += queryInstalledProductsForFilter(
+                token = token,
+                filter = filter,
+                limit = limit.coerceIn(1, 1000),
+                batchProcessor = batchProcessor
+            )
+        }
+        return totalProcessed
+    }
+
+    @Retryable(
+        includes = [RateLimitException::class],
+        attempts = "5",
+        delay = "1s",
+        multiplier = "2.0",
+        maxDelay = "60s"
+    )
+    open fun queryInstalledProductsForFilter(
+        token: AuthToken,
+        filter: String,
+        limit: Int,
+        batchProcessor: (List<InstalledProductDto>) -> Unit
+    ): Int {
+        log.info("Querying CrowdStrike installed products with filter: {}", filter)
+        var afterToken: String? = null
+        var totalProcessed = 0
+        var filterProcessed = 0
+        var hasMore = true
+        var page = 0
+
+        while (hasMore) {
+            page++
+            try {
+                val uri = UriBuilder.of("/discover/combined/applications/v1")
+                    .queryParam("filter", filter)
+                    .queryParam("facet", "host_info")
+                    .queryParam("limit", limit)
+                    .apply {
+                        if (!afterToken.isNullOrBlank()) {
+                            queryParam("after", afterToken)
+                        }
+                    }
+                    .build()
+
+                val request = HttpRequest.GET<Any>(uri.toString())
+                    .header("Authorization", "Bearer ${token.accessToken}")
+                    .header("Accept", "application/json")
+
+                val response = httpClient.toBlocking().exchange(request, Map::class.java)
+                when (response.status.code) {
+                    200 -> {
+                        @Suppress("UNCHECKED_CAST")
+                        val responseBody = response.body() as? Map<String, Any>
+                            ?: throw CrowdStrikeException("Empty response from CrowdStrike Discover applications API")
+                        val resources = responseBody["resources"] as? List<*> ?: emptyList<Any>()
+                        val products = mapInstalledProducts(resources)
+                        if (products.isNotEmpty()) {
+                            batchProcessor(products)
+                            totalProcessed += products.size
+                            filterProcessed += products.size
+                        }
+
+                        val meta = responseBody["meta"] as? Map<*, *>
+                        val pagination = meta?.get("pagination") as? Map<*, *>
+                        afterToken = firstNonBlank(
+                            pagination?.get("after")?.toString(),
+                            pagination?.get("next")?.toString(),
+                            responseBody["after"]?.toString()
+                        )
+                        val total = (pagination?.get("total") as? Number)?.toInt()
+                        hasMore = !afterToken.isNullOrBlank() && resources.isNotEmpty() && (total == null || filterProcessed < total)
+                        log.info("Installed products page {} returned {} rows (total processed: {})", page, products.size, totalProcessed)
+                    }
+                    404 -> hasMore = false
+                    429 -> {
+                        val retryAfter = response.headers.get("Retry-After")?.toLongOrNull() ?: 30L
+                        throw RateLimitException("Rate limit exceeded querying installed products", retryAfter)
+                    }
+                    in 500..599 -> throw CrowdStrikeException("CrowdStrike server error querying installed products: ${response.status}")
+                    else -> throw CrowdStrikeException("Unexpected CrowdStrike installed products response: ${response.status}")
+                }
+            } catch (e: io.micronaut.http.client.exceptions.HttpClientResponseException) {
+                when (e.status.code) {
+                    404 -> hasMore = false
+                    429 -> {
+                        val retryAfter = e.response.headers.get("Retry-After")?.toLongOrNull() ?: 30L
+                        throw RateLimitException("Rate limit exceeded querying installed products", retryAfter, e)
+                    }
+                    in 500..599 -> throw CrowdStrikeException("CrowdStrike server error querying installed products: ${e.status}", e)
+                    else -> throw CrowdStrikeException("CrowdStrike installed products API error: ${e.message}", e)
+                }
+            }
+        }
+
+        return totalProcessed
+    }
+
+    private fun mapInstalledProducts(resources: List<*>): List<InstalledProductDto> {
+        return resources.mapNotNull { resource ->
+            val app = resource as? Map<*, *> ?: return@mapNotNull null
+            val host = firstMap(app["host"], app["host_info"], app["hostInfo"])
+            val nestedHost = firstMap(host?.get("host"), app["asset"])
+            val hostname = firstNonBlank(
+                host?.get("hostname")?.toString(),
+                host?.get("host_name")?.toString(),
+                nestedHost?.get("hostname")?.toString(),
+                nestedHost?.get("host_name")?.toString(),
+                app["hostname"]?.toString(),
+                app["host_name"]?.toString()
+            ) ?: return@mapNotNull null
+            val name = firstNonBlank(
+                app["name"]?.toString(),
+                app["product_name"]?.toString(),
+                app["application_name"]?.toString(),
+                app["software_name"]?.toString()
+            ) ?: return@mapNotNull null
+
+            InstalledProductDto(
+                externalId = app["id"]?.toString(),
+                hostname = hostname,
+                aid = firstNonBlank(
+                    host?.get("aid")?.toString(),
+                    host?.get("device_id")?.toString(),
+                    nestedHost?.get("aid")?.toString(),
+                    nestedHost?.get("device_id")?.toString(),
+                    app["aid"]?.toString()
+                ),
+                name = name,
+                vendor = firstNonBlank(app["vendor"]?.toString(), app["publisher"]?.toString()),
+                version = firstNonBlank(app["version"]?.toString(), app["product_version"]?.toString()),
+                category = app["category"]?.toString(),
+                installationPath = firstNonBlank(
+                    (app["installation_paths"] as? List<*>)?.firstOrNull()?.toString(),
+                    app["installation_path"]?.toString()
+                ),
+                installedAt = parseCrowdStrikeDate(app["installation_timestamp"]?.toString()),
+                lastUsedAt = parseCrowdStrikeDate(app["last_used_timestamp"]?.toString()),
+                lastUpdatedAt = parseCrowdStrikeDate(app["last_updated_timestamp"]?.toString())
+            )
+        }
+    }
+
+    private fun firstMap(vararg values: Any?): Map<*, *>? {
+        return values.firstNotNullOfOrNull { it as? Map<*, *> }
+    }
+
+    private fun parseCrowdStrikeDate(value: String?): LocalDateTime? {
+        if (value.isNullOrBlank()) return null
+        return try {
+            LocalDateTime.ofInstant(Instant.parse(value), ZoneId.systemDefault())
+        } catch (e: Exception) {
+            try {
+                LocalDateTime.parse(value.replace(" ", "T").replace("Z", ""))
+            } catch (e2: Exception) {
+                null
+            }
+        }
     }
 
     /**
