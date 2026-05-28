@@ -20,6 +20,7 @@ interface InstalledProductRepository : JpaRepository<InstalledProduct, Long> {
 
     @Query("""
         SELECT p FROM InstalledProduct p
+        JOIN FETCH p.asset
         WHERE (:search IS NULL OR :search = ''
             OR LOWER(p.name) LIKE LOWER(CONCAT('%', :search, '%'))
             OR LOWER(COALESCE(p.vendor, '')) LIKE LOWER(CONCAT('%', :search, '%'))
