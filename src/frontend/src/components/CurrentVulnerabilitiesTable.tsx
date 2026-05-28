@@ -916,6 +916,16 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
               </option>
             ))}
           </select>
+          <input
+            type="text"
+            className="form-control mt-2"
+            placeholder="Or enter account ID manually..."
+            value={cloudAccountIdFilter}
+            onChange={(e) => {
+              setCloudAccountIdFilter(e.target.value.trim());
+              handleFilterChange();
+            }}
+          />
         </div>
       </div>
 
