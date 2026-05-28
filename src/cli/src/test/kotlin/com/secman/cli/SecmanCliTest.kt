@@ -86,6 +86,32 @@ class SecmanCliTest {
     }
 
     @Test
+    fun `test help lists installed products command`() {
+        val cli = SecmanCli()
+
+        val (result, output) = captureStdout {
+            cli.execute(arrayOf("help"))
+        }
+
+        assertEquals(0, result)
+        assertTrue(output.contains("installed-products"))
+    }
+
+    @Test
+    fun `test installed products help command returns 0`() {
+        val cli = SecmanCli()
+
+        val (result, output) = captureStdout {
+            cli.execute(arrayOf("help", "installed-products"))
+        }
+
+        assertEquals(0, result)
+        assertTrue(output.contains("secman installed-products"))
+        assertTrue(output.contains("--device-type"))
+        assertTrue(output.contains("--dry-run"))
+    }
+
+    @Test
     fun `test SecmanCli routes to query command`() {
         // Arrange
         val cli = SecmanCli()
