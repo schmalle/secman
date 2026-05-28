@@ -1,4 +1,4 @@
-CREATE TABLE installed_product (
+CREATE TABLE IF NOT EXISTS installed_product (
     id BIGINT NOT NULL AUTO_INCREMENT,
     asset_id BIGINT NOT NULL,
     external_id VARCHAR(255) NULL,
@@ -18,8 +18,8 @@ CREATE TABLE installed_product (
     CONSTRAINT fk_installed_product_asset FOREIGN KEY (asset_id) REFERENCES asset(id) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_installed_product_asset ON installed_product(asset_id);
-CREATE INDEX idx_installed_product_name ON installed_product(name);
-CREATE INDEX idx_installed_product_vendor ON installed_product(vendor);
-CREATE INDEX idx_installed_product_external ON installed_product(external_id);
-CREATE INDEX idx_installed_product_logical ON installed_product(asset_id, name, vendor, version);
+CREATE INDEX IF NOT EXISTS idx_installed_product_asset ON installed_product(asset_id);
+CREATE INDEX IF NOT EXISTS idx_installed_product_name ON installed_product(name);
+CREATE INDEX IF NOT EXISTS idx_installed_product_vendor ON installed_product(vendor);
+CREATE INDEX IF NOT EXISTS idx_installed_product_external ON installed_product(external_id);
+CREATE INDEX IF NOT EXISTS idx_installed_product_logical ON installed_product(asset_id, name(255), vendor(191), version(191));
