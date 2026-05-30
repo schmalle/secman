@@ -402,7 +402,7 @@ class SecmanCli {
               CrowdStrike:
                 query                  Query CrowdStrike vulnerabilities for a single host
                 query servers          Batch query and import server vulnerabilities
-                installed-products     Import CrowdStrike installed products for known systems
+                installed-products     Import CrowdStrike Discover software inventory for known systems
                 monitor                Continuously monitor for HIGH/CRITICAL vulnerabilities
                 config                 Configure CrowdStrike API credentials
                 crowdstrike-last-import  Show timestamp of the most recent CrowdStrike import
@@ -501,25 +501,35 @@ class SecmanCli {
             """.trimIndent(),
 
             "installed-products" to """
-                secman installed-products - Import CrowdStrike installed products
+                secman installed-products - Import CrowdStrike Discover software inventory
 
                 Usage: secman installed-products [options]
 
-                Options:
-                  --device-type <type>     Device type: SERVER, WORKSTATION, or ALL (default: SERVER)
-                  --dry-run                Query CrowdStrike and print summary without writing backend data
-                  --limit <num>            CrowdStrike page size, max 1000 (default: 1000)
-                  --backend-url <url>      Backend API URL (overrides SECMAN_BACKEND_URL/SECMAN_HOST)
-                  --client-id <id>         CrowdStrike API client ID (overrides config file)
-                  --client-secret <secret> CrowdStrike API client secret (overrides config file)
-                  --verbose                Show detailed backend errors
+                Purpose:
+                  Queries CrowdStrike Discover applications and imports installed
+                  product/application rows for assets that already exist in SecMan.
+                  Missing hosts are skipped and counted as unknown systems; this
+                  command does not create assets.
 
-                Requires SECMAN_ADMIN_NAME and SECMAN_ADMIN_PASS unless --dry-run is used.
+                Options:
+                  --device-type <type>     CrowdStrike host filter: SERVER, WORKSTATION, or ALL (default: SERVER)
+                  --dry-run                Query CrowdStrike only; print batch/summary counts without backend auth or writes
+                  --limit <num>            CrowdStrike page size, coerced to 1..1000 (default: 1000)
+                  --backend-url <url>      Backend API URL (overrides SECMAN_BACKEND_URL/SECMAN_HOST; SECMAN_HOST may be bare host)
+                  --client-id <id>         CrowdStrike API client ID (overrides env/config when paired with --client-secret)
+                  --client-secret <secret> CrowdStrike API client secret (overrides env/config when paired with --client-id)
+                  --verbose                Show detailed backend import errors
+
+                Import behavior:
+                  - Requires SECMAN_ADMIN_NAME and SECMAN_ADMIN_PASS unless --dry-run is used.
+                  - Backend role must be ADMIN or VULN for POST /api/installed-products/import.
+                  - Asset matching uses case-insensitive hostname, then short hostname for FQDNs.
+                  - Product upsert uses CrowdStrike external ID scoped to the asset, or asset/name/vendor/version.
 
                 Examples:
-                  secman installed-products --device-type SERVER
-                  secman installed-products --device-type WORKSTATION --dry-run
-                  secman installed-products --device-type ALL --limit 500
+                  secman installed-products --device-type SERVER --dry-run
+                  secman installed-products --device-type SERVER --backend-url https://secman.example.com
+                  secman installed-products --device-type ALL --limit 500 --verbose
             """.trimIndent(),
             "query-servers" to """
                 secman query servers - Batch query and import server vulnerabilities
