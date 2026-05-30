@@ -4,6 +4,7 @@ import com.secman.dto.InstalledProductImportRequest
 import com.secman.dto.InstalledProductListResponse
 import com.secman.dto.InstalledProductResponse
 import com.secman.repository.InstalledProductRepository
+import com.secman.service.AccessibleAssetIdsCache
 import com.secman.service.InstalledProductImportService
 import io.micronaut.core.annotation.Nullable
 import io.micronaut.http.HttpResponse
@@ -24,18 +25,43 @@ import org.slf4j.LoggerFactory
 @ExecuteOn(TaskExecutors.BLOCKING)
 open class InstalledProductController(
     private val installedProductRepository: InstalledProductRepository,
-    private val installedProductImportService: InstalledProductImportService
+    private val installedProductImportService: InstalledProductImportService,
+    private val accessibleAssetIdsCache: AccessibleAssetIdsCache
 ) {
     private val log = LoggerFactory.getLogger(InstalledProductController::class.java)
 
     @Get
     open fun list(
+        authentication: Authentication,
         @Nullable @QueryValue search: String?,
         @Nullable @QueryValue limit: Int?
     ): HttpResponse<InstalledProductListResponse> {
         val effectiveLimit = (limit ?: 500).coerceIn(1, 2000)
         val normalizedSearch = search?.trim().orEmpty()
-        val products = installedProductRepository.search(normalizedSearch).take(effectiveLimit)
+        val isAdmin = authentication.roles.contains("ADMIN")
+        val accessibleAssetIds = if (isAdmin) null else accessibleAssetIdsCache.get(authentication)
+
+        if (accessibleAssetIds != null && accessibleAssetIds.isEmpty()) {
+            return HttpResponse.ok(
+                InstalledProductListResponse(
+                    products = emptyList(),
+                    totalProducts = 0,
+                    totalSystems = 0
+                )
+            )
+        }
+
+        val products = if (accessibleAssetIds == null) {
+            installedProductRepository.search(normalizedSearch).take(effectiveLimit)
+        } else {
+            installedProductRepository.searchForAssets(normalizedSearch, accessibleAssetIds).take(effectiveLimit)
+        }
+        val totalSystems = if (accessibleAssetIds == null) {
+            installedProductRepository.countDistinctAssets(normalizedSearch)
+        } else {
+            installedProductRepository.countDistinctAssetsForAssets(normalizedSearch, accessibleAssetIds)
+        }
+
         return HttpResponse.ok(
             InstalledProductListResponse(
                 products = products.map { product ->
@@ -47,7 +73,7 @@ open class InstalledProductController(
                         vendor = product.vendor,
                         version = product.version,
                         category = product.category,
-                        installationPath = product.installationPath,
+                        installationPath = null,
                         installedAt = product.installedAt,
                         lastUsedAt = product.lastUsedAt,
                         lastUpdatedAt = product.lastUpdatedAt,
@@ -55,7 +81,7 @@ open class InstalledProductController(
                     )
                 },
                 totalProducts = products.size,
-                totalSystems = installedProductRepository.countDistinctAssets(normalizedSearch)
+                totalSystems = totalSystems
             )
         )
     }
@@ -66,6 +92,12 @@ open class InstalledProductController(
         @Body @Valid request: InstalledProductImportRequest,
         authentication: Authentication
     ): HttpResponse<*> {
+        if (request.products.size > InstalledProductImportService.MAX_PRODUCTS_PER_REQUEST) {
+            return HttpResponse.badRequest(
+                mapOf("error" to "At most ${InstalledProductImportService.MAX_PRODUCTS_PER_REQUEST} products can be imported per request")
+            )
+        }
+
         log.info(
             "Installed products import request: products={}, dryRun={}, user={}",
             request.products.size,

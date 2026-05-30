@@ -18,8 +18,16 @@ open class InstalledProductImportService(
 ) {
     private val log = LoggerFactory.getLogger(InstalledProductImportService::class.java)
 
+    companion object {
+        const val MAX_PRODUCTS_PER_REQUEST = 5_000
+    }
+
     @Transactional
     open fun importProducts(products: List<InstalledProductDto>, dryRun: Boolean): InstalledProductImportResponse {
+        require(products.size <= MAX_PRODUCTS_PER_REQUEST) {
+            "At most $MAX_PRODUCTS_PER_REQUEST products can be imported per request"
+        }
+
         var imported = 0
         var updated = 0
         var skipped = 0
@@ -29,15 +37,18 @@ open class InstalledProductImportService(
 
         products.forEach { dto ->
             try {
-                val asset = resolveAsset(dto.hostname)
+                val hostname = normalize(dto.hostname, 255)
+                val name = normalize(dto.name, 512)
+                if (name == null) {
+                    skipped++
+                    errors.add("Skipped blank product name for ${hostname ?: "unknown host"}")
+                    return@forEach
+                }
+
+                val asset = resolveAsset(hostname)
                 if (asset == null) {
                     unknownSystems++
                     skipped++
-                    return@forEach
-                }
-                if (dto.name.isBlank()) {
-                    skipped++
-                    errors.add("Skipped blank product name for ${dto.hostname}")
                     return@forEach
                 }
                 if (dryRun) {
@@ -46,20 +57,36 @@ open class InstalledProductImportService(
                 }
 
                 val assetId = requireNotNull(asset.id)
-                val existing = dto.externalId?.takeIf { it.isNotBlank() }?.let { installedProductRepository.findByExternalId(it) }
-                    ?: installedProductRepository.findLogicalDuplicate(assetId, dto.name, dto.vendor, dto.version)
+                val externalId = normalize(dto.externalId, 255)
+                val vendor = normalize(dto.vendor, 255)
+                val version = normalize(dto.version, 255)
+                val existing = externalId?.let { installedProductRepository.findByExternalIdAndAssetId(it, assetId) }
+                    ?: installedProductRepository.findLogicalDuplicate(assetId, name, vendor, version)
+
+                val conflictingAssetId = externalId
+                    ?.let { installedProductRepository.findByExternalId(it) }
+                    ?.asset
+                    ?.id
+                    ?.takeIf { it != assetId }
+                if (conflictingAssetId != null) {
+                    skipped++
+                    val message = "Skipped product '$name' for '$hostname': external id is already assigned to another asset"
+                    log.warn("{} (externalId={}, conflictingAssetId={})", message, externalId, conflictingAssetId)
+                    if (errors.size < 100) errors.add(message)
+                    return@forEach
+                }
 
                 if (existing == null) {
                     installedProductRepository.save(
                         InstalledProduct(
                             asset = asset,
-                            externalId = dto.externalId?.take(255),
-                            crowdStrikeAid = dto.aid?.take(64),
-                            name = dto.name.take(512),
-                            vendor = dto.vendor?.take(255),
-                            version = dto.version?.take(255),
-                            category = dto.category?.take(255),
-                            installationPath = dto.installationPath?.take(1024),
+                            externalId = externalId,
+                            crowdStrikeAid = normalize(dto.aid, 64),
+                            name = name,
+                            vendor = vendor,
+                            version = version,
+                            category = normalize(dto.category, 255),
+                            installationPath = normalize(dto.installationPath, 1024),
                             installedAt = dto.installedAt,
                             lastUsedAt = dto.lastUsedAt,
                             lastUpdatedAt = dto.lastUpdatedAt,
@@ -69,13 +96,13 @@ open class InstalledProductImportService(
                     imported++
                 } else {
                     existing.asset = asset
-                    existing.externalId = dto.externalId?.take(255) ?: existing.externalId
-                    existing.crowdStrikeAid = dto.aid?.take(64)
-                    existing.name = dto.name.take(512)
-                    existing.vendor = dto.vendor?.take(255)
-                    existing.version = dto.version?.take(255)
-                    existing.category = dto.category?.take(255)
-                    existing.installationPath = dto.installationPath?.take(1024)
+                    existing.externalId = externalId ?: existing.externalId
+                    existing.crowdStrikeAid = normalize(dto.aid, 64)
+                    existing.name = name
+                    existing.vendor = vendor
+                    existing.version = version
+                    existing.category = normalize(dto.category, 255)
+                    existing.installationPath = normalize(dto.installationPath, 1024)
                     existing.installedAt = dto.installedAt
                     existing.lastUsedAt = dto.lastUsedAt
                     existing.lastUpdatedAt = dto.lastUpdatedAt
@@ -102,10 +129,14 @@ open class InstalledProductImportService(
         )
     }
 
-    private fun resolveAsset(hostname: String): Asset? {
-        val trimmed = hostname.trim()
-        if (trimmed.isBlank()) return null
-        return assetRepository.findByNameIgnoreCase(trimmed)
-            ?: trimmed.substringBefore('.').takeIf { it.isNotBlank() && it != trimmed }?.let { assetRepository.findByNameIgnoreCase(it) }
+    private fun resolveAsset(hostname: String?): Asset? {
+        if (hostname.isNullOrBlank()) return null
+        return assetRepository.findByNameIgnoreCase(hostname)
+            ?: hostname.substringBefore('.').takeIf { it.isNotBlank() && it != hostname }?.let { assetRepository.findByNameIgnoreCase(it) }
     }
+
+    private fun normalize(value: String?, maxLength: Int): String? = value
+        ?.trim()
+        ?.takeIf { it.isNotBlank() }
+        ?.take(maxLength)
 }
