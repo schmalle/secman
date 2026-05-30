@@ -72,6 +72,40 @@ Full env reference: `docs/ENVIRONMENT.md`.
 | `--output-file` / `--format` | — / `json` | `json|csv` |
 | `--verbose` / `--insecure` | false | `--insecure` allows self-signed TLS |
 
+### `installed-products` — CrowdStrike Discover software inventory
+
+Imports installed product/application rows from CrowdStrike Discover into SecMan for assets that already exist in the backend. Use this after `query servers --save` or another asset import has populated the systems table; the command does **not** create missing assets. Unknown hosts are counted as skipped `unknown systems` so operators can identify inventory gaps.
+
+```bash
+# Preview Discover coverage without authenticating to SecMan or writing backend data
+./scripts/secman installed-products --device-type SERVER --dry-run
+
+# Import software inventory for known servers
+./scripts/secman installed-products --device-type SERVER --backend-url https://secman.example.com
+
+# Include servers and workstations, with smaller CrowdStrike pages for constrained environments
+./scripts/secman installed-products --device-type ALL --limit 500 --verbose
+```
+
+| Option | Default | Notes |
+|---|---|---|
+| `--device-type` | `SERVER` | CrowdStrike Discover host filter: `SERVER`, `WORKSTATION`, or `ALL`. `ALL` queries servers and workstations separately. |
+| `--dry-run` | false | Queries CrowdStrike and prints per-batch/summary counts only; does not authenticate to SecMan and does not write backend data. |
+| `--limit` | 1000 | CrowdStrike page size; values are coerced to the API-safe range `1..1000`. This is not a total-row cap. |
+| `--backend-url` | `SECMAN_BACKEND_URL`, then `SECMAN_HOST`, then `http://localhost:8080` | Backend API URL for import mode. `SECMAN_HOST` may be a bare hostname; the CLI prefixes `https://`. |
+| `--client-id` / `--client-secret` | config/env | CrowdStrike API credentials; both must be provided to override `FALCON_CLIENT_ID` / `FALCON_CLIENT_SECRET` or `~/.secman` config. |
+| `--verbose` | false | Prints backend import errors, capped by the backend response. |
+
+Import mode requires `SECMAN_ADMIN_NAME` and `SECMAN_ADMIN_PASS`; the authenticated user must have backend access to `POST /api/installed-products/import` (`ADMIN` or `VULN`). The UI/API listing endpoint `GET /api/installed-products` is available to `ADMIN`, `VULN`, and `SECCHAMPION`, and non-admin listings are filtered to assets the user can access.
+
+Backend import semantics:
+
+- Each CLI batch is posted to `/api/installed-products/import`, which accepts at most 5,000 product rows per request.
+- Rows are matched to an existing asset by case-insensitive hostname; if the CrowdStrike hostname is fully qualified, the short name before the first dot is tried as a fallback.
+- Products are upserted by `(externalId, asset)` when CrowdStrike provides an external ID, otherwise by logical duplicate `(asset, name, vendor, version)`.
+- Product names are required. Blank names, unknown systems, and external IDs already assigned to a different asset are skipped and reflected in the summary.
+- Imported fields include CrowdStrike AID, product name, vendor, version, category, installation path, installed timestamp, last-used timestamp, last-updated timestamp, and SecMan import timestamp.
+
 ### `delete-asset-not-seen` — CrowdStrike stale asset cleanup
 
 Deletes assets that have not appeared in a CrowdStrike import for more than N days. Always run `--dry-run` first.

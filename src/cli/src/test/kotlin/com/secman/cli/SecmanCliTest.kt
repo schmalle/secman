@@ -107,8 +107,11 @@ class SecmanCliTest {
 
         assertEquals(0, result)
         assertTrue(output.contains("secman installed-products"))
+        assertTrue(output.contains("CrowdStrike Discover software inventory"))
         assertTrue(output.contains("--device-type"))
         assertTrue(output.contains("--dry-run"))
+        assertTrue(output.contains("unknown systems"))
+        assertTrue(output.contains("POST /api/installed-products/import"))
     }
 
     @Test
