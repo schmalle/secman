@@ -1,0 +1,31 @@
+{
+  "cli_version": "0.6.2",
+  "checkpoint_id": "b300405c66e2",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "src/backendng/src/main/kotlin/com/secman/controller/ResponseController.kt",
+    "src/backendng/src/main/kotlin/com/secman/controller/RiskAssessmentController.kt",
+    "src/backendng/src/main/kotlin/com/secman/domain/Asset.kt",
+    "src/backendng/src/main/kotlin/com/secman/domain/Response.kt",
+    "src/backendng/src/main/kotlin/com/secman/repository/UseCaseRepository.kt",
+    "tests/e2e/readme.md",
+    "tests/e2e/risk-assessment.spec.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/b3/00405c66e2/0/metadata.json",
+      "transcript": "/b3/00405c66e2/0/full.jsonl",
+      "content_hash": "/b3/00405c66e2/0/content_hash.txt",
+      "prompt": "/b3/00405c66e2/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 781961,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 47543424,
+    "output_tokens": 48633,
+    "api_call_count": 312
+  }
+}

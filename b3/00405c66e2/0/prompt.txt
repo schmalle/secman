@@ -1,0 +1,1 @@
+Implement end2end testcases for the risk assessment functionality. Ensure proper documentation and a full test coverage. For the testing do not use existing users, but create new ones. Ensure that before and after the test all users are deleted. Start backend and frontend if needed outside the sanbox with pass-cli to get all credentials.
