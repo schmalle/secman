@@ -26,6 +26,6 @@ interface UseCaseRepository : JpaRepository<UseCase, Long> {
     fun findByNameIgnoreCaseExcludingId(name: String, id: Long): Optional<UseCase>
     
     // Check if UseCase is associated with Requirements (for deletion validation)
-    @Query("SELECT COUNT(r) FROM Requirement r JOIN r.useCases u WHERE u.id = :useCaseId")
+    @Query("SELECT COUNT(r) FROM Requirement r JOIN r.usecases u WHERE u.id = :useCaseId")
     fun countRequirementsByUseCaseId(useCaseId: Long): Long
 }

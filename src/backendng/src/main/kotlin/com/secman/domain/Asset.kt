@@ -203,6 +203,7 @@ data class Asset(
      */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "manual_creator_id", nullable = true)
+    @JsonIgnore
     var manualCreator: User? = null,
 
     /**
@@ -214,6 +215,7 @@ data class Asset(
      */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "scan_uploader_id", nullable = true)
+    @JsonIgnore
     var scanUploader: User? = null,
 
     /**

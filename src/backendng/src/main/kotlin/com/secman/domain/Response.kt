@@ -1,5 +1,6 @@
 package com.secman.domain
 
+import com.fasterxml.jackson.annotation.JsonIgnore
 import io.micronaut.serde.annotation.Serdeable
 import org.hibernate.annotations.JdbcTypeCode
 import org.hibernate.type.SqlTypes
@@ -20,6 +21,10 @@ data class Response(
     @JdbcTypeCode(SqlTypes.VARCHAR)
     @Enumerated(EnumType.STRING)
     var answerType: AnswerType? = null,
+
+    @JsonIgnore
+    @Column(name = "answer", length = 50, nullable = false)
+    var answer: String = "",
 
     @Column(name = "comment", columnDefinition = "TEXT")
     var comment: String? = null,
@@ -49,6 +54,7 @@ data class Response(
     @ManyToOne
     @JoinColumn(name = "risk_assessment_id", nullable = false)
     @NotNull
+    @JsonIgnore
     var riskAssessment: RiskAssessment,
 
     @ManyToOne
@@ -66,13 +72,19 @@ data class Response(
     @PrePersist
     fun onCreate() {
         val now = LocalDateTime.now()
+        syncLegacyAnswer()
         createdAt = now
         updatedAt = now
     }
 
     @PreUpdate
     fun onUpdate() {
+        syncLegacyAnswer()
         updatedAt = LocalDateTime.now()
+    }
+
+    private fun syncLegacyAnswer() {
+        answer = answerType?.name ?: ""
     }
 
     override fun toString(): String {

@@ -518,6 +518,7 @@ open class RiskAssessmentController(
             }
             
             val updatedAssessment = riskAssessmentRepository.update(assessment)
+            entityManager.flush()
             
             // Force loading of related entities
             entityManager.refresh(updatedAssessment)
