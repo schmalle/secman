@@ -30,6 +30,7 @@ class InstalledProductImportServiceTest {
         val asset = asset(1L, "server01")
         every { assetRepository.findByNameIgnoreCase("server01.example.com") } returns null
         every { assetRepository.findByNameIgnoreCase("server01") } returns asset
+        every { installedProductRepository.findByExternalIdAndAssetId("app-1", 1L) } returns null
         every { installedProductRepository.findByExternalId("app-1") } returns null
         every { installedProductRepository.findLogicalDuplicate(1L, "Chrome", "Google", "1.2.3") } returns null
         val saved = slot<InstalledProduct>()
@@ -74,6 +75,47 @@ class InstalledProductImportServiceTest {
 
         assertThat(result.productsSkipped).isEqualTo(1)
         assertThat(result.unknownSystems).isEqualTo(1)
+    }
+
+
+    @Test
+    fun `skips import when external id belongs to another asset`() {
+        val targetAsset = asset(1L, "server01")
+        val otherAsset = asset(2L, "server02")
+        every { assetRepository.findByNameIgnoreCase("server01") } returns targetAsset
+        every { installedProductRepository.findByExternalIdAndAssetId("app-1", 1L) } returns null
+        every { installedProductRepository.findLogicalDuplicate(1L, "Chrome", "Google", "1.2.3") } returns null
+        every { installedProductRepository.findByExternalId("app-1") } returns InstalledProduct(
+            id = 99L,
+            asset = otherAsset,
+            externalId = "app-1",
+            name = "Chrome"
+        )
+
+        val result = service.importProducts(
+            listOf(InstalledProductDto(externalId = "app-1", hostname = "server01", name = "Chrome", vendor = "Google", version = "1.2.3")),
+            dryRun = false
+        )
+
+        assertThat(result.productsSkipped).isEqualTo(1)
+        assertThat(result.errors).anySatisfy { error ->
+            assertThat(error).contains("external id is already assigned to another asset")
+        }
+        verify(exactly = 0) { installedProductRepository.save(any()) }
+        verify(exactly = 0) { installedProductRepository.update(any<InstalledProduct>()) }
+    }
+
+    @Test
+    fun `rejects oversized import batches`() {
+        val products = List(InstalledProductImportService.MAX_PRODUCTS_PER_REQUEST + 1) { index ->
+            InstalledProductDto(hostname = "server$index", name = "Product $index")
+        }
+
+        val thrown = org.junit.jupiter.api.assertThrows<IllegalArgumentException> {
+            service.importProducts(products, dryRun = true)
+        }
+
+        assertThat(thrown.message).contains("At most ${InstalledProductImportService.MAX_PRODUCTS_PER_REQUEST} products")
     }
 
     private fun asset(id: Long, name: String): Asset = Asset(

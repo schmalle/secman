@@ -10,6 +10,27 @@ SECMAN_BACKEND_URL=https://secman.example.com SECMAN_SSL_INSECURE=true \
   --severity CRITICAL,HIGH --min-days-open 1 --last-seen-days 1 --save
 ```
 
+## Installed products import
+
+Installed products are synchronized from CrowdStrike Discover with the separate CLI command `secman installed-products`. This is a software-inventory import, not a vulnerability import, and it intentionally only attaches rows to assets that already exist in SecMan. Run a vulnerability/asset import such as `query servers --save` first when onboarding a new environment.
+
+```bash
+./scripts/secman installed-products --device-type SERVER --dry-run
+./scripts/secman installed-products --device-type SERVER --backend-url https://secman.example.com
+./scripts/secman installed-products --device-type ALL --limit 500 --verbose
+```
+
+Operational notes:
+
+1. `--dry-run` queries CrowdStrike Discover and reports row/host counts without authenticating to the SecMan backend.
+2. Import mode authenticates with `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS` and posts each page to `POST /api/installed-products/import`; the backend allows `ADMIN` and `VULN` roles for this endpoint.
+3. CrowdStrike host filters are `SERVER`, `WORKSTATION`, or `ALL`; `ALL` runs the server and workstation filters separately.
+4. Backend matching is hostname-based and case-insensitive, with a fallback from FQDN to short hostname. Missing assets are counted as `unknown systems` and skipped rather than auto-created.
+5. Upserts prefer CrowdStrike external ID scoped to the asset, then fall back to logical duplicate matching on asset, product name, vendor, and version. Conflicting external IDs assigned to another asset are skipped.
+6. `GET /api/installed-products` lists imported products for `ADMIN`, `VULN`, and `SECCHAMPION`; non-admin callers only see products for accessible assets.
+
+See `docs/CLI.md` for the full option table and troubleshooting guidance.
+
 ## Pattern: transactional replace
 
 For each (Asset, batch) pair, in one transaction:

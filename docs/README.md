@@ -27,7 +27,7 @@ Stack: Kotlin 2.3.21 / Java 21 · Micronaut 4.10 · Hibernate JPA · Astro 6.3 /
 | [ENVIRONMENT.md](./ENVIRONMENT.md) | All env vars (backend / frontend / CLI) |
 | [CLI.md](./CLI.md) | CLI commands, cron, S3, AWS Secrets Manager |
 | [MCP.md](./MCP.md) | MCP tools, API keys, delegation, troubleshooting |
-| [CROWDSTRIKE_IMPORT.md](./CROWDSTRIKE_IMPORT.md) | Transactional-replace pattern + JPA cascade trap |
+| [CROWDSTRIKE_IMPORT.md](./CROWDSTRIKE_IMPORT.md) | Vulnerability and installed-product imports, transactional-replace pattern, JPA cascade trap |
 | [TESTING.md](./TESTING.md) | JUnit/Mockk/Testcontainers stack and patterns |
 | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) | Symptom → fix |
 | [E2E_EXCEPTION_WORKFLOW_TEST.md](./E2E_EXCEPTION_WORKFLOW_TEST.md) | Vuln-exception MCP E2E |
