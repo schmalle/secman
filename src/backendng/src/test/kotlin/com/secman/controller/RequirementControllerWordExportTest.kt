@@ -4,10 +4,13 @@ import com.secman.domain.Requirement
 import com.secman.domain.UseCase
 import com.secman.repository.NormRepository
 import com.secman.repository.ReleaseRepository
+import com.secman.repository.RequirementExportTemplateRepository
+import com.secman.repository.RequirementExportTemplateUsageRepository
 import com.secman.repository.RequirementRepository
 import com.secman.repository.RequirementSnapshotRepository
 import com.secman.repository.UseCaseRepository
 import com.secman.service.InputValidationService
+import com.secman.service.RequirementExportTemplateValidationService
 import com.secman.service.RequirementIdService
 import com.secman.service.RequirementService
 import com.secman.service.TranslationService
@@ -36,7 +39,10 @@ class RequirementControllerWordExportTest {
         releaseRepository = mockk<ReleaseRepository>(relaxed = true),
         snapshotRepository = mockk<RequirementSnapshotRepository>(relaxed = true),
         requirementService = mockk<RequirementService>(relaxed = true),
-        requirementIdService = mockk<RequirementIdService>(relaxed = true)
+        requirementIdService = mockk<RequirementIdService>(relaxed = true),
+        exportTemplateRepository = mockk<RequirementExportTemplateRepository>(relaxed = true),
+        exportTemplateUsageRepository = mockk<RequirementExportTemplateUsageRepository>(relaxed = true),
+        exportTemplateValidationService = mockk<RequirementExportTemplateValidationService>(relaxed = true)
     )
     private val publicController = PublicRequirementDownloadController(
         requirementRepository = mockk<RequirementRepository>(relaxed = true),

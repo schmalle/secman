@@ -1,10 +1,18 @@
 package com.secman.controller
 
+import com.secman.domain.MissingPlaceholderBehavior
 import com.secman.domain.Requirement
+import com.secman.domain.RequirementExportScope
+import com.secman.domain.RequirementExportTemplate
+import com.secman.domain.RequirementExportTemplateMode
+import com.secman.domain.RequirementExportTemplateStatus
+import com.secman.domain.RequirementExportTemplateUsage
 import com.secman.domain.RequirementSnapshot
 import com.secman.util.ExcelSanitizer
 import com.secman.domain.UseCase
 import com.secman.domain.Norm
+import com.secman.repository.RequirementExportTemplateRepository
+import com.secman.repository.RequirementExportTemplateUsageRepository
 import com.secman.repository.RequirementRepository
 import com.secman.repository.RequirementSnapshotRepository
 import com.secman.repository.ReleaseRepository
@@ -14,11 +22,13 @@ import com.secman.service.TranslationService
 import com.secman.service.InputValidationService
 import com.secman.service.RequirementService
 import com.secman.service.RequirementIdService
+import com.secman.service.RequirementExportTemplateValidationService
 import io.micronaut.core.annotation.Nullable
 import io.micronaut.data.model.Pageable
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.MediaType
 import io.micronaut.http.annotation.*
+import io.micronaut.http.multipart.CompletedFileUpload
 import io.micronaut.http.server.types.files.StreamedFile
 import io.micronaut.security.annotation.Secured
 import io.micronaut.security.authentication.Authentication
@@ -28,6 +38,7 @@ import jakarta.transaction.Transactional
 import jakarta.validation.Valid
 import org.apache.poi.xwpf.usermodel.XWPFDocument
 import org.apache.poi.xwpf.usermodel.XWPFParagraph
+import org.apache.poi.xwpf.usermodel.XWPFTable
 import org.apache.poi.xssf.usermodel.XSSFWorkbook
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -57,7 +68,10 @@ open class RequirementController(
     private val releaseRepository: ReleaseRepository,
     private val snapshotRepository: RequirementSnapshotRepository,
     private val requirementService: RequirementService,
-    private val requirementIdService: RequirementIdService
+    private val requirementIdService: RequirementIdService,
+    private val exportTemplateRepository: RequirementExportTemplateRepository,
+    private val exportTemplateUsageRepository: RequirementExportTemplateUsageRepository,
+    private val exportTemplateValidationService: RequirementExportTemplateValidationService
 ) {
 
     @Serdeable
@@ -393,51 +407,74 @@ open class RequirementController(
     }
 
     @Get("/export/docx")
-    fun exportToDocx(@Nullable @QueryValue("releaseId") releaseId: Long?): HttpResponse<*> {
-        val requirements: List<Requirement>
-        val filename: String
-        val title: String
+    fun exportToDocx(
+        @Nullable @QueryValue("releaseId") releaseId: Long?,
+        @QueryValue(defaultValue = "LATEST") templateMode: String,
+        @Nullable @QueryValue("templateId") templateId: Long?,
+        @QueryValue(defaultValue = "REJECT") missingPlaceholderBehavior: String,
+        @Nullable @QueryValue("classification") classification: String?,
+        authentication: Authentication
+    ): HttpResponse<*> {
+        val exportData = resolveRequirementExportData(releaseId)
+            ?: return HttpResponse.notFound(mapOf("error" to "Release not found"))
 
-        if (releaseId != null) {
-            // Export from release snapshot
-            val releaseOpt = releaseRepository.findById(releaseId)
-            if (releaseOpt.isEmpty) {
-                return HttpResponse.notFound(mapOf("error" to "Release not found"))
-            }
+        return exportWordDocument(
+            requirements = exportData.requirements,
+            title = exportData.title,
+            filename = exportData.filename,
+            templateMode = templateMode,
+            templateId = templateId,
+            adHocTemplate = null,
+            missingPlaceholderBehavior = missingPlaceholderBehavior,
+            classification = classification,
+            language = null,
+            scope = if (releaseId != null) RequirementExportScope.RELEASE else RequirementExportScope.ALL,
+            releaseId = releaseId,
+            usecaseId = null,
+            authentication = authentication
+        )
+    }
 
-            val release = releaseOpt.get()
-            val snapshots = snapshotRepository.findByReleaseId(releaseId)
+    @Post("/export/docx")
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    fun exportToDocxWithAdHocTemplate(
+        @Nullable @QueryValue("releaseId") releaseId: Long?,
+        @Part templateFile: CompletedFileUpload,
+        @Nullable @Part templateMode: String?,
+        @Nullable @Part missingPlaceholderBehavior: String?,
+        @Nullable @Part classification: String?,
+        authentication: Authentication
+    ): HttpResponse<*> {
+        val exportData = resolveRequirementExportData(releaseId)
+            ?: return HttpResponse.notFound(mapOf("error" to "Release not found"))
 
-            // Convert snapshots to Requirements for export
-            requirements = snapshots.map { snapshotToRequirement(it) }.sortedWith(
-                compareBy<Requirement> { it.chapter ?: "" }.thenBy { it.id ?: 0 }
-            )
-
-            val dateStr = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"))
-            filename = "requirements_v${release.version}_$dateStr.docx"
-            title = "Requirements - Release ${release.version}"
-        } else {
-            // Export current requirements (default behavior)
-            requirements = requirementRepository.findAll().sortedWith(
-                compareBy<Requirement> { it.chapter ?: "" }.thenBy { it.id ?: 0 }
-            )
-            filename = "requirements_export.docx"
-            title = "All Requirements"
-        }
-
-        val document = createWordDocument(requirements, title)
-        val outputStream = ByteArrayOutputStream()
-        document.write(outputStream)
-        document.close()
-
-        val inputStream = ByteArrayInputStream(outputStream.toByteArray())
-
-        return HttpResponse.ok(StreamedFile(inputStream, MediaType.of("application/vnd.openxmlformats-officedocument.wordprocessingml.document")))
-            .header("Content-Disposition", "attachment; filename=\"$filename\"")
+        return exportWordDocument(
+            requirements = exportData.requirements,
+            title = exportData.title,
+            filename = exportData.filename,
+            templateMode = templateMode ?: "ADHOC",
+            templateId = null,
+            adHocTemplate = templateFile,
+            missingPlaceholderBehavior = missingPlaceholderBehavior ?: "REJECT",
+            classification = classification,
+            language = null,
+            scope = if (releaseId != null) RequirementExportScope.RELEASE else RequirementExportScope.ALL,
+            releaseId = releaseId,
+            usecaseId = null,
+            authentication = authentication
+        )
     }
 
     @Get("/export/docx/usecase/{usecaseId}")
-    fun exportToDocxByUseCase(@PathVariable usecaseId: Long, @Nullable @QueryValue("releaseId") releaseId: Long?): HttpResponse<*> {
+    fun exportToDocxByUseCase(
+        @PathVariable usecaseId: Long,
+        @Nullable @QueryValue("releaseId") releaseId: Long?,
+        @QueryValue(defaultValue = "LATEST") templateMode: String,
+        @Nullable @QueryValue("templateId") templateId: Long?,
+        @QueryValue(defaultValue = "REJECT") missingPlaceholderBehavior: String,
+        @Nullable @QueryValue("classification") classification: String?,
+        authentication: Authentication
+    ): HttpResponse<*> {
         val useCaseOptional = useCaseRepository.findById(usecaseId)
 
         if (useCaseOptional.isEmpty) {
@@ -451,17 +488,64 @@ open class RequirementController(
             return HttpResponse.ok(mapOf("message" to "No requirements found for this use case"))
         }
 
-        val document = createWordDocument(requirements, "Requirements for UseCase: ${useCase.name}")
-        val outputStream = ByteArrayOutputStream()
-        document.write(outputStream)
-        document.close()
-
-        val inputStream = ByteArrayInputStream(outputStream.toByteArray())
         val filename = "requirements_usecase_${useCase.name.replace(" ", "_")}.docx"
             .replace("\"", "").replace("\r", "").replace("\n", "")
 
-        return HttpResponse.ok(StreamedFile(inputStream, MediaType.of("application/vnd.openxmlformats-officedocument.wordprocessingml.document")))
-            .header("Content-Disposition", "attachment; filename=\"$filename\"")
+        return exportWordDocument(
+            requirements = requirements,
+            title = "Requirements for UseCase: ${useCase.name}",
+            filename = filename,
+            templateMode = templateMode,
+            templateId = templateId,
+            adHocTemplate = null,
+            missingPlaceholderBehavior = missingPlaceholderBehavior,
+            classification = classification,
+            language = null,
+            scope = RequirementExportScope.USE_CASE,
+            releaseId = releaseId,
+            usecaseId = usecaseId,
+            authentication = authentication
+        )
+    }
+
+    @Post("/export/docx/usecase/{usecaseId}")
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    fun exportToDocxByUseCaseWithAdHocTemplate(
+        @PathVariable usecaseId: Long,
+        @Nullable @QueryValue("releaseId") releaseId: Long?,
+        @Part templateFile: CompletedFileUpload,
+        @Nullable @Part templateMode: String?,
+        @Nullable @Part missingPlaceholderBehavior: String?,
+        @Nullable @Part classification: String?,
+        authentication: Authentication
+    ): HttpResponse<*> {
+        val useCaseOptional = useCaseRepository.findById(usecaseId)
+        if (useCaseOptional.isEmpty) {
+            return HttpResponse.notFound<Any>().body(mapOf("error" to "UseCase not found"))
+        }
+        val useCase = useCaseOptional.get()
+        val requirements = getRequirementsByUseCase(usecaseId, releaseId)
+        if (requirements.isEmpty()) {
+            return HttpResponse.ok(mapOf("message" to "No requirements found for this use case"))
+        }
+        val filename = "requirements_usecase_${useCase.name.replace(" ", "_")}.docx"
+            .replace("\"", "").replace("\r", "").replace("\n", "")
+
+        return exportWordDocument(
+            requirements = requirements,
+            title = "Requirements for UseCase: ${useCase.name}",
+            filename = filename,
+            templateMode = templateMode ?: "ADHOC",
+            templateId = null,
+            adHocTemplate = templateFile,
+            missingPlaceholderBehavior = missingPlaceholderBehavior ?: "REJECT",
+            classification = classification,
+            language = null,
+            scope = RequirementExportScope.USE_CASE,
+            releaseId = releaseId,
+            usecaseId = usecaseId,
+            authentication = authentication
+        )
     }
 
     @Get("/export/xlsx")
@@ -531,6 +615,294 @@ open class RequirementController(
         
         return HttpResponse.ok(StreamedFile(inputStream, MediaType.of("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")))
             .header("Content-Disposition", "attachment; filename=\"$filename\"")
+    }
+
+
+    private data class RequirementExportData(
+        val requirements: List<Requirement>,
+        val filename: String,
+        val title: String
+    )
+
+    private data class ResolvedTemplate(
+        val mode: RequirementExportTemplateMode,
+        val savedTemplate: RequirementExportTemplate?,
+        val bytes: ByteArray?,
+        val sha256: String?
+    )
+
+    private fun resolveRequirementExportData(releaseId: Long?): RequirementExportData? {
+        return if (releaseId != null) {
+            val releaseOpt = releaseRepository.findById(releaseId)
+            if (releaseOpt.isEmpty) {
+                null
+            } else {
+                val release = releaseOpt.get()
+                val snapshots = snapshotRepository.findByReleaseId(releaseId)
+                val requirements = snapshots.map { snapshotToRequirement(it) }.sortedWith(
+                    compareBy<Requirement> { it.chapter ?: "" }.thenBy { it.id ?: 0 }
+                )
+                val dateStr = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"))
+                RequirementExportData(
+                    requirements = requirements,
+                    filename = "requirements_v${release.version}_$dateStr.docx",
+                    title = "Requirements - Release ${release.version}"
+                )
+            }
+        } else {
+            RequirementExportData(
+                requirements = requirementRepository.findAll().sortedWith(
+                    compareBy<Requirement> { it.chapter ?: "" }.thenBy { it.id ?: 0 }
+                ),
+                filename = "requirements_export.docx",
+                title = "All Requirements"
+            )
+        }
+    }
+
+    private fun exportWordDocument(
+        requirements: List<Requirement>,
+        title: String,
+        filename: String,
+        templateMode: String,
+        templateId: Long?,
+        adHocTemplate: CompletedFileUpload?,
+        missingPlaceholderBehavior: String,
+        classification: String?,
+        language: String?,
+        scope: RequirementExportScope,
+        releaseId: Long?,
+        usecaseId: Long?,
+        authentication: Authentication
+    ): HttpResponse<*> {
+        val behavior = parseMissingPlaceholderBehavior(missingPlaceholderBehavior)
+        val resolvedTemplate = try {
+            resolveTemplate(templateMode, templateId, adHocTemplate, behavior)
+                ?: return HttpResponse.badRequest(mapOf("error" to "Selected template was not found or is inactive"))
+        } catch (e: IllegalArgumentException) {
+            return HttpResponse.badRequest(mapOf("error" to (e.message ?: "Template validation failed")))
+        }
+
+        val document = if (resolvedTemplate.bytes != null) {
+            createTemplatedWordDocument(
+                templateBytes = resolvedTemplate.bytes,
+                requirements = requirements,
+                title = title,
+                exportedBy = authentication.name,
+                language = language ?: "english",
+                classification = classification ?: "Internal"
+            )
+        } else {
+            createWordDocument(requirements, title)
+        }
+
+        exportTemplateUsageRepository.save(
+            RequirementExportTemplateUsage(
+                template = resolvedTemplate.savedTemplate,
+                templateSha256 = resolvedTemplate.sha256,
+                exportedBy = authentication.name,
+                exportScope = scope,
+                releaseId = releaseId,
+                usecaseId = usecaseId,
+                language = language,
+                templateMode = resolvedTemplate.mode
+            )
+        )
+        resolvedTemplate.savedTemplate?.let { template ->
+            template.lastUsedAt = Instant.now()
+            exportTemplateRepository.update(template)
+        }
+
+        return streamWordDocument(document, filename)
+    }
+
+    private fun resolveTemplate(
+        templateMode: String,
+        templateId: Long?,
+        adHocTemplate: CompletedFileUpload?,
+        missingPlaceholderBehavior: MissingPlaceholderBehavior
+    ): ResolvedTemplate? {
+        val mode = parseTemplateMode(templateMode)
+        return when (mode) {
+            RequirementExportTemplateMode.NONE -> ResolvedTemplate(mode, null, null, null)
+            RequirementExportTemplateMode.LATEST -> {
+                val latest = exportTemplateRepository.findFirstByStatusOrderByCreatedAtDesc(RequirementExportTemplateStatus.ACTIVE)
+                if (latest.isPresent) {
+                    val template = latest.get()
+                    ResolvedTemplate(mode, template, template.content, template.sha256)
+                } else {
+                    ResolvedTemplate(RequirementExportTemplateMode.NONE, null, null, null)
+                }
+            }
+            RequirementExportTemplateMode.SAVED -> {
+                if (templateId == null) return null
+                val template = exportTemplateRepository.findById(templateId)
+                if (template.isEmpty || template.get().status != RequirementExportTemplateStatus.ACTIVE) return null
+                ResolvedTemplate(mode, template.get(), template.get().content, template.get().sha256)
+            }
+            RequirementExportTemplateMode.ADHOC -> {
+                if (adHocTemplate == null) return null
+                val bytes = adHocTemplate.bytes
+                val report = exportTemplateValidationService.validate(
+                    bytes = bytes,
+                    filename = adHocTemplate.filename,
+                    contentType = adHocTemplate.contentType.map { it.toString() }.orElse(null),
+                    requireRequirementsPlaceholder = missingPlaceholderBehavior == MissingPlaceholderBehavior.REJECT
+                )
+                if (!report.valid) {
+                    throw IllegalArgumentException(report.errors.joinToString("; "))
+                }
+                ResolvedTemplate(mode, null, bytes, report.sha256)
+            }
+        }
+    }
+
+
+    private fun parseTemplateMode(templateMode: String): RequirementExportTemplateMode = try {
+        RequirementExportTemplateMode.valueOf(templateMode.trim().uppercase(Locale.ROOT))
+    } catch (e: Exception) {
+        RequirementExportTemplateMode.LATEST
+    }
+
+    private fun parseMissingPlaceholderBehavior(value: String): MissingPlaceholderBehavior = try {
+        MissingPlaceholderBehavior.valueOf(value.trim().uppercase(Locale.ROOT))
+    } catch (e: Exception) {
+        MissingPlaceholderBehavior.REJECT
+    }
+
+    private fun createTemplatedWordDocument(
+        templateBytes: ByteArray,
+        requirements: List<Requirement>,
+        title: String,
+        exportedBy: String,
+        language: String,
+        classification: String
+    ): XWPFDocument {
+        val document = XWPFDocument(ByteArrayInputStream(templateBytes))
+        val replacements = mapOf(
+            "requirements" to "",
+            "documentTitle" to title,
+            "exportDate" to LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")),
+            "releaseVersion" to title.substringAfter("Release ", ""),
+            "releaseStatus" to "",
+            "useCaseName" to title.substringAfter("UseCase: ", ""),
+            "exportedBy" to exportedBy,
+            "language" to language,
+            "requirementCount" to requirements.size.toString(),
+            "classification" to classification
+        )
+        replacePlaceholders(document, replacements)
+        document.createParagraph().createRun().addBreak(org.apache.poi.xwpf.usermodel.BreakType.PAGE)
+        appendRequirementContent(document, requirements)
+        return document
+    }
+
+    private fun replacePlaceholders(document: XWPFDocument, replacements: Map<String, String>) {
+        document.paragraphs.forEach { replacePlaceholdersInParagraph(it, replacements) }
+        document.tables.forEach { replacePlaceholdersInTable(it, replacements) }
+        document.headerList.forEach { header ->
+            header.paragraphs.forEach { replacePlaceholdersInParagraph(it, replacements) }
+            header.tables.forEach { replacePlaceholdersInTable(it, replacements) }
+        }
+        document.footerList.forEach { footer ->
+            footer.paragraphs.forEach { replacePlaceholdersInParagraph(it, replacements) }
+            footer.tables.forEach { replacePlaceholdersInTable(it, replacements) }
+        }
+    }
+
+    private fun replacePlaceholdersInTable(table: XWPFTable, replacements: Map<String, String>) {
+        table.rows.forEach { row ->
+            row.tableCells.forEach { cell ->
+                cell.paragraphs.forEach { replacePlaceholdersInParagraph(it, replacements) }
+                cell.tables.forEach { replacePlaceholdersInTable(it, replacements) }
+            }
+        }
+    }
+
+    private fun replacePlaceholdersInParagraph(paragraph: XWPFParagraph, replacements: Map<String, String>) {
+        if (paragraph.runs.isEmpty()) return
+        val fullText = paragraph.runs.joinToString(separator = "") { it.text() ?: "" }
+        var replaced = fullText
+        replacements.forEach { (key, value) ->
+            replaced = replaced.replace("${'$'}{$key}", value)
+        }
+        if (replaced == fullText) return
+        paragraph.runs.drop(1).forEach { paragraph.removeRun(1) }
+        paragraph.runs.firstOrNull()?.setText(replaced, 0)
+    }
+
+    private fun streamWordDocument(document: XWPFDocument, filename: String): HttpResponse<*> {
+        val outputStream = ByteArrayOutputStream()
+        document.write(outputStream)
+        document.close()
+        val inputStream = ByteArrayInputStream(outputStream.toByteArray())
+        return HttpResponse.ok(StreamedFile(inputStream, MediaType.of(RequirementExportTemplateValidationService.DOCX_MEDIA_TYPE)))
+            .header("Content-Disposition", "attachment; filename=\"${filename.replace("\"", "").replace("\r", "").replace("\n", "")}\"")
+    }
+
+    private fun appendRequirementContent(document: XWPFDocument, requirements: List<Requirement>) {
+        val requirementsByChapter = requirements.groupBy { it.chapter ?: "No Chapter" }
+        var requirementNumber = 1
+        var isFirstChapter = true
+        for ((chapter, chapterRequirements) in requirementsByChapter) {
+            if (!isFirstChapter) {
+                document.createParagraph().createRun().addBreak(org.apache.poi.xwpf.usermodel.BreakType.PAGE)
+            }
+            isFirstChapter = false
+            val chapterParagraph = document.createParagraph()
+            chapterParagraph.style = "Heading1"
+            val chapterRun = chapterParagraph.createRun()
+            chapterRun.setText(chapter)
+            chapterRun.fontSize = 16
+            chapterRun.isBold = true
+            document.createParagraph()
+
+            for (requirement in chapterRequirements) {
+                val reqHeaderParagraph = document.createParagraph()
+                val ctp = reqHeaderParagraph.ctp
+                val ppr = if (ctp.isSetPPr) ctp.pPr else ctp.addNewPPr()
+                val shd = if (ppr.isSetShd) ppr.shd else ppr.addNewShd()
+                shd.fill = "C1D5C0"
+                val reqHeaderRun = reqHeaderParagraph.createRun()
+                reqHeaderRun.setText("REQ-$requirementNumber: ${requirement.shortreq}")
+                reqHeaderRun.fontSize = 12
+                reqHeaderRun.isBold = true
+                requirement.details?.let { document.createParagraph().createRun().setText(it) }
+                requirement.motivation?.let {
+                    val paragraph = document.createParagraph()
+                    paragraph.createRun().apply { setText("Motivation: "); isBold = true }
+                    paragraph.createRun().setText(it)
+                }
+                requirement.example?.let {
+                    val paragraph = document.createParagraph()
+                    paragraph.createRun().apply { setText("Example: "); isBold = true }
+                    paragraph.createRun().setText(it)
+                }
+                requirement.norm?.let {
+                    val paragraph = document.createParagraph()
+                    paragraph.createRun().apply { setText("Norm Reference: "); isBold = true }
+                    paragraph.createRun().setText(it)
+                }
+                val canonicalUseCases = setOf("IT", "OT", "NT")
+                val idSuffix = buildString {
+                    append(requirementNumber)
+                    append(".")
+                    append(requirement.versionNumber)
+                    requirement.usecases.map { it.name }.filter { it in canonicalUseCases }.sorted().forEach {
+                        append(".")
+                        append(it)
+                    }
+                }
+                val idParagraph = document.createParagraph()
+                idParagraph.alignment = org.apache.poi.xwpf.usermodel.ParagraphAlignment.LEFT
+                val idRun = idParagraph.createRun()
+                idRun.setText("ID $idSuffix")
+                idRun.fontSize = 8
+                idRun.color = "999999"
+                document.createParagraph()
+                requirementNumber++
+            }
+        }
     }
 
     private fun createWordDocument(requirements: List<Requirement>, title: String): XWPFDocument {
@@ -748,7 +1120,14 @@ open class RequirementController(
     }
 
     @Get("/export/docx/translated/{language}")
-    fun exportToDocxTranslated(@PathVariable language: String): HttpResponse<*> {
+    fun exportToDocxTranslated(
+        @PathVariable language: String,
+        @QueryValue(defaultValue = "NONE") templateMode: String,
+        @Nullable @QueryValue("templateId") templateId: Long?,
+        @QueryValue(defaultValue = "REJECT") missingPlaceholderBehavior: String,
+        @Nullable @QueryValue("classification") classification: String?,
+        authentication: Authentication
+    ): HttpResponse<*> {
         val activeConfig = translationService.getActiveConfig()
         if (activeConfig == null) {
             return HttpResponse.badRequest(mapOf(
@@ -766,17 +1145,26 @@ open class RequirementController(
         }
 
         return try {
-            val document = createTranslatedWordDocument(requirements, "Translated Requirements", language)
-            val outputStream = ByteArrayOutputStream()
-            document.write(outputStream)
-            document.close()
-
-            val inputStream = ByteArrayInputStream(outputStream.toByteArray())
-            val languageName = translationService.getSupportedLanguages()[language] ?: language
             val filename = "requirements_translated_${language}_${LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"))}.docx"
-            
-            HttpResponse.ok(StreamedFile(inputStream, MediaType.of("application/vnd.openxmlformats-officedocument.wordprocessingml.document")))
-                .header("Content-Disposition", "attachment; filename=\"$filename\"")
+            if (parseTemplateMode(templateMode) == RequirementExportTemplateMode.NONE) {
+                streamWordDocument(createTranslatedWordDocument(requirements, "Translated Requirements", language), filename)
+            } else {
+                exportWordDocument(
+                    requirements = requirements,
+                    title = "Translated Requirements",
+                    filename = filename,
+                    templateMode = templateMode,
+                    templateId = templateId,
+                    adHocTemplate = null,
+                    missingPlaceholderBehavior = missingPlaceholderBehavior,
+                    classification = classification,
+                    language = language,
+                    scope = RequirementExportScope.TRANSLATED,
+                    releaseId = null,
+                    usecaseId = null,
+                    authentication = authentication
+                )
+            }
         } catch (e: Exception) {
             HttpResponse.serverError(mapOf(
                 "error" to "Translation export failed",
@@ -786,7 +1174,16 @@ open class RequirementController(
     }
 
     @Get("/export/docx/usecase/{usecaseId}/translated/{language}")
-    fun exportToDocxTranslatedByUseCase(@PathVariable usecaseId: Long, @PathVariable language: String, @Nullable @QueryValue("releaseId") releaseId: Long?): HttpResponse<*> {
+    fun exportToDocxTranslatedByUseCase(
+        @PathVariable usecaseId: Long,
+        @PathVariable language: String,
+        @Nullable @QueryValue("releaseId") releaseId: Long?,
+        @QueryValue(defaultValue = "NONE") templateMode: String,
+        @Nullable @QueryValue("templateId") templateId: Long?,
+        @QueryValue(defaultValue = "REJECT") missingPlaceholderBehavior: String,
+        @Nullable @QueryValue("classification") classification: String?,
+        authentication: Authentication
+    ): HttpResponse<*> {
         val activeConfig = translationService.getActiveConfig()
         if (activeConfig == null) {
             return HttpResponse.badRequest(mapOf(
@@ -808,18 +1205,27 @@ open class RequirementController(
         }
 
         return try {
-            val document = createTranslatedWordDocument(requirements, "Translated Requirements for UseCase: ${useCase.name}", language)
-            val outputStream = ByteArrayOutputStream()
-            document.write(outputStream)
-            document.close()
-
-            val inputStream = ByteArrayInputStream(outputStream.toByteArray())
-            val languageName = translationService.getSupportedLanguages()[language] ?: language
             val filename = "requirements_usecase_${useCase.name.replace(" ", "_")}_translated_${language}_${LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"))}.docx"
                 .replace("\"", "").replace("\r", "").replace("\n", "")
-            
-            HttpResponse.ok(StreamedFile(inputStream, MediaType.of("application/vnd.openxmlformats-officedocument.wordprocessingml.document")))
-                .header("Content-Disposition", "attachment; filename=\"$filename\"")
+            if (parseTemplateMode(templateMode) == RequirementExportTemplateMode.NONE) {
+                streamWordDocument(createTranslatedWordDocument(requirements, "Translated Requirements for UseCase: ${useCase.name}", language), filename)
+            } else {
+                exportWordDocument(
+                    requirements = requirements,
+                    title = "Translated Requirements for UseCase: ${useCase.name}",
+                    filename = filename,
+                    templateMode = templateMode,
+                    templateId = templateId,
+                    adHocTemplate = null,
+                    missingPlaceholderBehavior = missingPlaceholderBehavior,
+                    classification = classification,
+                    language = language,
+                    scope = RequirementExportScope.TRANSLATED,
+                    releaseId = releaseId,
+                    usecaseId = usecaseId,
+                    authentication = authentication
+                )
+            }
         } catch (e: Exception) {
             HttpResponse.serverError(mapOf(
                 "error" to "Translation export failed",
