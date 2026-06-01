@@ -3,7 +3,7 @@
   "checkpoint_id": "02976294c37d",
   "strategy": "manual-commit",
   "branch": "main",
-  "checkpoints_count": 0,
+  "checkpoints_count": 1,
   "files_touched": [
     "src/shared/src/main/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClientImpl.kt",
     "src/shared/src/test/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClientImplInstalledProductsTest.kt"
@@ -20,6 +20,19 @@
       "transcript": "/02/976294c37d/1/full.jsonl",
       "content_hash": "/02/976294c37d/1/content_hash.txt",
       "prompt": ""
+    },
+    {
+      "metadata": "/02/976294c37d/2/metadata.json",
+      "transcript": "/02/976294c37d/2/full.jsonl",
+      "content_hash": "/02/976294c37d/2/content_hash.txt",
+      "prompt": "/02/976294c37d/2/prompt.txt"
     }
-  ]
+  ],
+  "token_usage": {
+    "input_tokens": 549731,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 16396928,
+    "output_tokens": 26627,
+    "api_call_count": 147
+  }
 }
