@@ -1,0 +1,17 @@
+start frontend and backend outside the sandbox so that passcli is working and using playwright start a browswer session with https://secman.covestro.net with atlas browser
+
+---
+
+[Image #1] in the list box the SAAS option for asset creation is missing, please add
+
+---
+
+/ clear
+
+---
+
+[Image #1] please fix this error, obvisouly the entry on the left works, but the results are not shown
+
+---
+
+restart both frontend and backend

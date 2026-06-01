@@ -1,0 +1,57 @@
+{
+  "cli_version": "0.6.2",
+  "checkpoint_id": "fef6954f746f",
+  "session_id": "019e7f97-93f9-7ea0-b0f1-8dfe76ef731c",
+  "strategy": "manual-commit",
+  "created_at": "2026-06-01T19:10:20.731654Z",
+  "branch": "main",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "src/frontend/src/components/AssetManagement.test.ts",
+    "src/frontend/src/components/AssetManagement.tsx",
+    "src/frontend/src/components/ProductsOverview.test.ts",
+    "src/frontend/src/components/productSearchResults.ts",
+    "src/frontend/src/components/ProductsOverview.tsx"
+  ],
+  "agent": "Codex",
+  "model": "gpt-5.5",
+  "turn_id": "5d314724da44",
+  "token_usage": {
+    "input_tokens": 465165,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 5341184,
+    "output_tokens": 14960,
+    "api_call_count": 64
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-06-01T19:10:20.696274Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 157,
+    "human_modified": 2,
+    "human_removed": 0,
+    "total_committed": 157,
+    "total_lines_changed": 172,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 73,
+      "user_lines_removed": 2,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "src/frontend/src/components/AssetManagement.test.ts": 9,
+        "src/frontend/src/components/AssetManagement.tsx": 1,
+        "src/frontend/src/components/ProductsOverview.test.ts": 23,
+        "src/frontend/src/components/ProductsOverview.tsx": 27,
+        "src/frontend/src/components/productSearchResults.ts": 13
+      },
+      "user_removed_per_file": {
+        "src/frontend/src/components/ProductsOverview.tsx": 2
+      }
+    }
+  ]
+}

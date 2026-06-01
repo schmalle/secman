@@ -1,0 +1,29 @@
+{
+  "cli_version": "0.6.2",
+  "checkpoint_id": "fef6954f746f",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "src/frontend/src/components/AssetManagement.test.ts",
+    "src/frontend/src/components/AssetManagement.tsx",
+    "src/frontend/src/components/ProductsOverview.test.ts",
+    "src/frontend/src/components/ProductsOverview.tsx",
+    "src/frontend/src/components/productSearchResults.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/fe/f6954f746f/0/metadata.json",
+      "transcript": "/fe/f6954f746f/0/full.jsonl",
+      "content_hash": "/fe/f6954f746f/0/content_hash.txt",
+      "prompt": "/fe/f6954f746f/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 465165,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 5341184,
+    "output_tokens": 14960,
+    "api_call_count": 64
+  }
+}
