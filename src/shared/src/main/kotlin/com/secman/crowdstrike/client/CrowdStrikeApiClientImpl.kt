@@ -15,10 +15,15 @@ import io.micronaut.http.HttpRequest
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.client.HttpClient
 import io.micronaut.http.client.annotation.Client
+import io.micronaut.http.client.exceptions.HttpClientException
+import io.micronaut.http.client.exceptions.HttpClientResponseException
 import io.micronaut.http.uri.UriBuilder
 import io.micronaut.retry.annotation.Retryable
+import io.netty.channel.ChannelException
 import jakarta.inject.Singleton
 import org.slf4j.LoggerFactory
+import java.io.IOException
+import java.net.SocketTimeoutException
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -536,9 +541,44 @@ open class CrowdStrikeApiClientImpl(
         var filterProcessed = 0
         var hasMore = true
         var page = 0
+        val maxRetries = 3
+        val retryCounts = mutableMapOf<Int, Int>()
+
+        fun retryInstalledProductsPage(pageNumber: Int, errorType: String, e: Exception): Boolean {
+            val currentRetries = retryCounts.getOrDefault(pageNumber, 0)
+            if (currentRetries >= maxRetries) {
+                log.error(
+                    "Installed products page {}: {} - {}. Max retries ({}) exceeded",
+                    pageNumber,
+                    errorType,
+                    e.message,
+                    maxRetries
+                )
+                return false
+            }
+
+            retryCounts[pageNumber] = currentRetries + 1
+            val backoffMs = (currentRetries + 1) * 2000L
+            log.warn(
+                "Installed products page {}: {} - {}. Retry {}/{} after {}ms",
+                pageNumber,
+                errorType,
+                e.message,
+                currentRetries + 1,
+                maxRetries,
+                backoffMs
+            )
+            try {
+                Thread.sleep(backoffMs)
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                return false
+            }
+            return true
+        }
 
         while (hasMore) {
-            page++
+            val currentPage = page + 1
             try {
                 val uri = UriBuilder.of("/discover/combined/applications/v1")
                     .queryParam("filter", filter)
@@ -556,6 +596,7 @@ open class CrowdStrikeApiClientImpl(
                     .header("Accept", "application/json")
 
                 val response = httpClient.toBlocking().exchange(request, Map::class.java)
+                page = currentPage
                 when (response.status.code) {
                     200 -> {
                         @Suppress("UNCHECKED_CAST")
@@ -578,7 +619,7 @@ open class CrowdStrikeApiClientImpl(
                         )
                         val total = (pagination?.get("total") as? Number)?.toInt()
                         hasMore = !afterToken.isNullOrBlank() && resources.isNotEmpty() && (total == null || filterProcessed < total)
-                        log.info("Installed products page {} returned {} rows (total processed: {})", page, products.size, totalProcessed)
+                        log.info("Installed products page {} returned {} rows (total processed: {})", currentPage, products.size, totalProcessed)
                     }
                     404 -> hasMore = false
                     429 -> {
@@ -588,7 +629,7 @@ open class CrowdStrikeApiClientImpl(
                     in 500..599 -> throw CrowdStrikeException("CrowdStrike server error querying installed products: ${response.status}")
                     else -> throw CrowdStrikeException("Unexpected CrowdStrike installed products response: ${response.status}")
                 }
-            } catch (e: io.micronaut.http.client.exceptions.HttpClientResponseException) {
+            } catch (e: HttpClientResponseException) {
                 when (e.status.code) {
                     404 -> hasMore = false
                     429 -> {
@@ -598,6 +639,31 @@ open class CrowdStrikeApiClientImpl(
                     in 500..599 -> throw CrowdStrikeException("CrowdStrike server error querying installed products: ${e.status}", e)
                     else -> throw CrowdStrikeException("CrowdStrike installed products API error: ${e.message}", e)
                 }
+            } catch (e: SocketTimeoutException) {
+                if (retryInstalledProductsPage(currentPage, "Timeout", e)) {
+                    continue
+                }
+                throw CrowdStrikeException("Timeout querying installed products page $currentPage: ${e.message}", e)
+            } catch (e: IOException) {
+                if (retryInstalledProductsPage(currentPage, "Network I/O error", e)) {
+                    continue
+                }
+                throw CrowdStrikeException("Network error querying installed products page $currentPage: ${e.message}", e)
+            } catch (e: ChannelException) {
+                if (retryInstalledProductsPage(currentPage, "Channel error", e)) {
+                    continue
+                }
+                throw CrowdStrikeException("Channel error querying installed products page $currentPage: ${e.message}", e)
+            } catch (e: HttpClientException) {
+                val message = e.message.orEmpty()
+                val isTransient = message.contains("Connection closed", ignoreCase = true) ||
+                    message.contains("Channel closed", ignoreCase = true) ||
+                    message.contains("closed before response", ignoreCase = true) ||
+                    message.contains("aggregating", ignoreCase = true)
+                if (isTransient && retryInstalledProductsPage(currentPage, "HTTP client error", e)) {
+                    continue
+                }
+                throw CrowdStrikeException("HTTP client error querying installed products page $currentPage: ${e.message}", e)
             }
         }
 

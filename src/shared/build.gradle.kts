@@ -35,6 +35,12 @@ dependencies {
     ksp("io.micronaut:micronaut-http-validation")
     ksp("io.micronaut.validation:micronaut-validation-processor")
     ksp("io.micronaut.serde:micronaut-serde-processor")
+
+    testImplementation("org.junit.jupiter:junit-jupiter-api:6.0.3")
+    testImplementation("org.junit.jupiter:junit-jupiter-engine:6.0.3")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher:6.0.3")
+    testImplementation("io.mockk:mockk:1.14.9")
+    testImplementation("org.assertj:assertj-core:3.27.7")
 }
 
 java {
@@ -53,17 +59,8 @@ tasks {
         }
     }
     
-    // Disable all test tasks
     test {
-        enabled = false
-    }
-    
-    compileTestKotlin {
-        enabled = false
-    }
-    
-    processTestResources {
-        enabled = false
+        useJUnitPlatform()
     }
 }
 

@@ -24,6 +24,7 @@ import {
     type ProductSystemDto,
     type TopProductDto
 } from '../services/productService';
+import { getVisibleProductSearchResults } from './productSearchResults';
 
 const ProductsOverview: React.FC = () => {
     // Product list state
@@ -267,6 +268,8 @@ const ProductsOverview: React.FC = () => {
         return pages;
     };
 
+    const visibleSearchResults = getVisibleProductSearchResults(searchTerm, products, selectedProduct);
+
     // Loading state for products
     if (loadingProducts) {
         return (
@@ -368,8 +371,30 @@ const ProductsOverview: React.FC = () => {
                 </div>
             </div>
 
+            {visibleSearchResults.length > 0 && (
+                <div className="card mb-4">
+                    <div className="card-header">
+                        <i className="bi bi-search me-2"></i>
+                        Matching Products
+                    </div>
+                    <div className="list-group list-group-flush">
+                        {visibleSearchResults.map((product) => (
+                            <button
+                                key={product}
+                                type="button"
+                                className="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+                                onClick={() => handleTopProductClick(product)}
+                            >
+                                <span>{product}</span>
+                                <i className="bi bi-chevron-right text-muted"></i>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             {/* Top 15 Products Statistics - only show when no product is selected */}
-            {!selectedProduct && !loadingTopProducts && topProducts.length > 0 && (
+            {!selectedProduct && !searchTerm && !loadingTopProducts && topProducts.length > 0 && (
                 <div className="card mb-4">
                     <div className="card-header">
                         <i className="bi bi-bar-chart-fill me-2"></i>
@@ -422,7 +447,7 @@ const ProductsOverview: React.FC = () => {
                 </div>
             )}
 
-            {!selectedProduct && loadingTopProducts && (
+            {!selectedProduct && !searchTerm && loadingTopProducts && (
                 <div className="card mb-4">
                     <div className="card-header">
                         <i className="bi bi-bar-chart-fill me-2"></i>

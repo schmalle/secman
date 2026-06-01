@@ -580,6 +580,7 @@ const AssetManagement: React.FC = () => {
                       <option value="IoT Device">IoT Device</option>
                       <option value="Database">Database</option>
                       <option value="Application">Application</option>
+                      <option value="SaaS">SaaS</option>
                       <option value="Other">Other</option>
                     </select>
                   </div>
