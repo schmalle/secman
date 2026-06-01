@@ -514,6 +514,7 @@ open class CrowdStrikeApiClientImpl(
         filters.forEach { filter ->
             totalProcessed += queryInstalledProductsForFilter(
                 token = token,
+                config = config,
                 filter = filter,
                 limit = limit.coerceIn(1, 1000),
                 batchProcessor = batchProcessor
@@ -531,6 +532,7 @@ open class CrowdStrikeApiClientImpl(
     )
     open fun queryInstalledProductsForFilter(
         token: AuthToken,
+        config: FalconConfigDto,
         filter: String,
         limit: Int,
         batchProcessor: (List<InstalledProductDto>) -> Unit
@@ -543,6 +545,7 @@ open class CrowdStrikeApiClientImpl(
         var page = 0
         val maxRetries = 3
         val retryCounts = mutableMapOf<Int, Int>()
+        var currentToken = token
 
         fun retryInstalledProductsPage(pageNumber: Int, errorType: String, e: Exception): Boolean {
             val currentRetries = retryCounts.getOrDefault(pageNumber, 0)
@@ -580,6 +583,11 @@ open class CrowdStrikeApiClientImpl(
         while (hasMore) {
             val currentPage = page + 1
             try {
+                if (currentToken.isExpiringSoon(bufferSeconds = 180)) {
+                    log.info("CrowdStrike token expiring soon during installed products import, refreshing before page {}", currentPage)
+                    currentToken = getAuthToken(config)
+                }
+
                 val uri = UriBuilder.of("/discover/combined/applications/v1")
                     .queryParam("filter", filter)
                     .queryParam("facet", "host_info")
@@ -592,7 +600,7 @@ open class CrowdStrikeApiClientImpl(
                     .build()
 
                 val request = HttpRequest.GET<Any>(uri.toString())
-                    .header("Authorization", "Bearer ${token.accessToken}")
+                    .header("Authorization", "Bearer ${currentToken.accessToken}")
                     .header("Accept", "application/json")
 
                 val response = httpClient.toBlocking().exchange(request, Map::class.java)
@@ -631,6 +639,12 @@ open class CrowdStrikeApiClientImpl(
                 }
             } catch (e: HttpClientResponseException) {
                 when (e.status.code) {
+                    401 -> {
+                        log.warn("Unauthorized querying installed products page {}, refreshing CrowdStrike token and retrying", currentPage)
+                        authService.clearCache()
+                        currentToken = getAuthToken(config)
+                        continue
+                    }
                     404 -> hasMore = false
                     429 -> {
                         val retryAfter = e.response.headers.get("Retry-After")?.toLongOrNull() ?: 30L
