@@ -1,0 +1,30 @@
+{
+  "cli_version": "0.6.2",
+  "checkpoint_id": "02976294c37d",
+  "session_id": "019e7f97-93f9-7ea0-b0f1-8dfe76ef731c",
+  "strategy": "manual-commit",
+  "created_at": "2026-06-01T19:46:38.096422Z",
+  "branch": "main",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "src/shared/src/main/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClientImpl.kt",
+    "src/shared/src/test/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClientImplInstalledProductsTest.kt"
+  ],
+  "agent": "Codex",
+  "model": "gpt-5.5",
+  "turn_id": "5d314724da44",
+  "checkpoint_transcript_start": 438,
+  "transcript_lines_at_start": 438,
+  "initial_attribution": {
+    "calculated_at": "2026-06-01T19:46:38.061931Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 76,
+    "human_modified": 1,
+    "human_removed": 0,
+    "total_committed": 76,
+    "total_lines_changed": 77,
+    "agent_percentage": 0,
+    "metric_version": 2
+  }
+}
