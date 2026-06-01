@@ -24,7 +24,8 @@ import java.util.concurrent.CompletableFuture
 open class EmailBroadcastService(
     private val emailBroadcastJobRepository: EmailBroadcastJobRepository,
     private val userRepository: UserRepository,
-    private val emailService: EmailService
+    private val emailService: EmailService,
+    private val productBroadcastRecipientResolver: ProductBroadcastRecipientResolver
 ) {
     private val log = LoggerFactory.getLogger(EmailBroadcastService::class.java)
 
@@ -44,6 +45,28 @@ open class EmailBroadcastService(
             createdBy = createdBy,
             createdAt = LocalDateTime.now(),
             targetGroup = targetGroup
+        )
+        return emailBroadcastJobRepository.save(job)
+    }
+
+    @Transactional
+    open fun createProductJob(
+        subject: String,
+        htmlContent: String,
+        createdBy: String,
+        productName: String
+    ): EmailBroadcastJob {
+        val normalizedProduct = productName.trim()
+        val total = productBroadcastRecipientResolver.resolve(normalizedProduct).size
+        val job = EmailBroadcastJob(
+            status = EmailBroadcastStatus.PENDING,
+            subject = subject.trim(),
+            htmlContent = htmlContent,
+            totalRecipients = total,
+            createdBy = createdBy,
+            createdAt = LocalDateTime.now(),
+            targetGroup = EmailBroadcastTargetGroup.PRODUCT_USERS,
+            targetProduct = normalizedProduct
         )
         return emailBroadcastJobRepository.save(job)
     }
@@ -70,7 +93,7 @@ open class EmailBroadcastService(
 
         markProcessing(jobId)
 
-        val recipients = resolveRecipients(job.targetGroup, job.createdBy)
+        val recipients = resolveRecipients(job.targetGroup, job.createdBy, job.targetProduct)
         log.info(
             "Broadcast job {}: dispatching to {} recipients (targetGroup={})",
             jobId, recipients.size, job.targetGroup
@@ -155,6 +178,9 @@ open class EmailBroadcastService(
     fun recipientCount(targetGroup: EmailBroadcastTargetGroup, requester: String): Long =
         resolveRecipients(targetGroup, requester).size.toLong()
 
+    fun productRecipientCount(productName: String): Long =
+        productBroadcastRecipientResolver.resolve(productName.trim()).size.toLong()
+
     /**
      * Single source of truth for "who receives this broadcast?".
      *
@@ -163,7 +189,11 @@ open class EmailBroadcastService(
      * - SELF: just the admin who triggered the broadcast — useful for previewing the rendered
      *   email against a real inbox before sending to the wider audience.
      */
-    internal fun resolveRecipients(targetGroup: EmailBroadcastTargetGroup, requester: String): List<User> {
+    internal fun resolveRecipients(
+        targetGroup: EmailBroadcastTargetGroup,
+        requester: String,
+        targetProduct: String? = null
+    ): List<User> {
         return when (targetGroup) {
             EmailBroadcastTargetGroup.ALL_USERS ->
                 userRepository.findByLastLoginIsNotNull()
@@ -177,6 +207,8 @@ open class EmailBroadcastService(
                 userRepository.findByUsername(requester)
                     .map { listOf(it) }
                     .orElse(emptyList())
+            EmailBroadcastTargetGroup.PRODUCT_USERS ->
+                targetProduct?.let { productBroadcastRecipientResolver.resolve(it) } ?: emptyList()
         }
     }
 

@@ -9,7 +9,8 @@ export type EmailBroadcastTargetGroup =
   | 'ALL_USERS'
   | 'ADMINS_ONLY'
   | 'ADMINS_AND_SECCHAMPIONS'
-  | 'SELF';
+  | 'SELF'
+  | 'PRODUCT_USERS';
 
 export interface EmailBroadcastJob {
   id: number;
@@ -25,12 +26,19 @@ export interface EmailBroadcastJob {
   startedAt: string | null;
   completedAt: string | null;
   targetGroup: EmailBroadcastTargetGroup;
+  targetProduct: string | null;
 }
 
 export interface BroadcastRequest {
   subject: string;
   htmlContent: string;
   targetGroup: EmailBroadcastTargetGroup;
+}
+
+export interface ProductBroadcastRequest {
+  productName: string;
+  subject: string;
+  htmlContent: string;
 }
 
 export async function getRecipientCount(
@@ -45,6 +53,19 @@ export async function getRecipientCount(
 
 export async function createBroadcast(payload: BroadcastRequest): Promise<EmailBroadcastJob> {
   const res = await axios.post<EmailBroadcastJob>(ROOT, payload);
+  return res.data;
+}
+
+export async function getProductRecipientCount(productName: string): Promise<number> {
+  const res = await axios.get<{ count: number; productName: string }>(
+    `${ROOT}/product-recipients`,
+    { params: { productName } },
+  );
+  return res.data.count;
+}
+
+export async function createProductBroadcast(payload: ProductBroadcastRequest): Promise<EmailBroadcastJob> {
+  const res = await axios.post<EmailBroadcastJob>(`${ROOT}/product`, payload);
   return res.data;
 }
 

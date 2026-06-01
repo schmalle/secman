@@ -14,6 +14,7 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import HtmlEditor from './admin/HtmlEditor';
 import {
     getProducts,
     getProductSystems,
@@ -24,6 +25,13 @@ import {
     type ProductSystemDto,
     type TopProductDto
 } from '../services/productService';
+import {
+    createProductBroadcast,
+    getProductRecipientCount,
+    type EmailBroadcastJob
+} from '../services/emailBroadcastService';
+import { getUser } from '../utils/auth';
+import { canNotifyProductUsers } from './productNotifyAccess';
 import { getVisibleProductSearchResults } from './productSearchResults';
 
 const ProductsOverview: React.FC = () => {
@@ -57,6 +65,19 @@ const ProductsOverview: React.FC = () => {
     // Export state
     const [exporting, setExporting] = useState<boolean>(false);
 
+    // Product notification state
+    const [showNotifyModal, setShowNotifyModal] = useState<boolean>(false);
+    const [notifySubject, setNotifySubject] = useState<string>('');
+    const [notifyHtml, setNotifyHtml] = useState<string>('');
+    const [notifyRecipientCount, setNotifyRecipientCount] = useState<number | null>(null);
+    const [loadingNotifyRecipients, setLoadingNotifyRecipients] = useState<boolean>(false);
+    const [sendingNotification, setSendingNotification] = useState<boolean>(false);
+    const [notifyJob, setNotifyJob] = useState<EmailBroadcastJob | null>(null);
+    const [notifyError, setNotifyError] = useState<string | null>(null);
+
+    const user = typeof window !== 'undefined' ? getUser() : null;
+    const canNotifyUsers = canNotifyProductUsers(user?.roles);
+
     /**
      * Debounce search input
      */
@@ -77,36 +98,9 @@ const ProductsOverview: React.FC = () => {
     }, [searchTerm]);
 
     /**
-     * Fetch products when debounced search changes
-     */
-    useEffect(() => {
-        fetchProducts(debouncedSearch);
-    }, [debouncedSearch]);
-
-    /**
-     * Fetch top products on mount
-     */
-    useEffect(() => {
-        fetchTopProducts();
-    }, []);
-
-    /**
-     * Fetch systems when product changes
-     */
-    useEffect(() => {
-        if (selectedProduct) {
-            fetchSystems();
-        } else {
-            setSystems([]);
-            setTotalElements(0);
-            setTotalPages(0);
-        }
-    }, [selectedProduct, currentPage, pageSize]);
-
-    /**
      * Fetch products list with optional search
      */
-    const fetchProducts = async (search?: string) => {
+    const fetchProducts = useCallback(async (search?: string) => {
         setLoadingProducts(true);
         setError(null);
 
@@ -127,12 +121,12 @@ const ProductsOverview: React.FC = () => {
         } finally {
             setLoadingProducts(false);
         }
-    };
+    }, [selectedProduct]);
 
     /**
      * Fetch top products by vulnerability count
      */
-    const fetchTopProducts = async () => {
+    const fetchTopProducts = useCallback(async () => {
         setLoadingTopProducts(true);
 
         try {
@@ -147,12 +141,12 @@ const ProductsOverview: React.FC = () => {
         } finally {
             setLoadingTopProducts(false);
         }
-    };
+    }, []);
 
     /**
      * Fetch systems for selected product
      */
-    const fetchSystems = async () => {
+    const fetchSystems = useCallback(async () => {
         if (!selectedProduct) return;
 
         setLoadingSystems(true);
@@ -173,7 +167,38 @@ const ProductsOverview: React.FC = () => {
         } finally {
             setLoadingSystems(false);
         }
-    };
+    }, [selectedProduct, currentPage, pageSize]);
+
+    /**
+     * Fetch products when debounced search changes
+     */
+    useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        fetchProducts(debouncedSearch);
+    }, [debouncedSearch, fetchProducts]);
+
+    /**
+     * Fetch top products on mount
+     */
+    useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        fetchTopProducts();
+    }, [fetchTopProducts]);
+
+    /**
+     * Fetch systems when product changes
+     */
+    useEffect(() => {
+        if (selectedProduct) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            fetchSystems();
+        } else {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            setSystems([]);
+            setTotalElements(0);
+            setTotalPages(0);
+        }
+    }, [selectedProduct, fetchSystems]);
 
     /**
      * Handle product selection from dropdown
@@ -223,6 +248,57 @@ const ProductsOverview: React.FC = () => {
             setError(err.message || 'Failed to export systems. Please try again.');
         } finally {
             setExporting(false);
+        }
+    };
+
+    const openNotifyModal = async () => {
+        if (!selectedProduct) return;
+
+        setNotifySubject(`Action required for ${selectedProduct}`);
+        setNotifyHtml(`<p>Hello,</p><p>please review the systems assigned to you that are running <strong>${selectedProduct}</strong>.</p>`);
+        setNotifyRecipientCount(null);
+        setNotifyJob(null);
+        setNotifyError(null);
+        setShowNotifyModal(true);
+        setLoadingNotifyRecipients(true);
+
+        try {
+            const count = await getProductRecipientCount(selectedProduct);
+            setNotifyRecipientCount(count);
+        } catch (err: any) {
+            console.error('Failed to load product notification recipients:', err);
+            setNotifyError(err.message || 'Failed to load recipients for this product.');
+        } finally {
+            setLoadingNotifyRecipients(false);
+        }
+    };
+
+    const handleSendProductNotification = async () => {
+        if (!selectedProduct) return;
+
+        const trimmedSubject = notifySubject.trim();
+        const trimmedHtml = notifyHtml.trim();
+        if (!trimmedSubject || !trimmedHtml) {
+            setNotifyError('Subject and message are required.');
+            return;
+        }
+
+        setSendingNotification(true);
+        setNotifyError(null);
+
+        try {
+            const job = await createProductBroadcast({
+                productName: selectedProduct,
+                subject: trimmedSubject,
+                htmlContent: trimmedHtml
+            });
+            setNotifyJob(job);
+            setNotifyRecipientCount(job.totalRecipients);
+        } catch (err: any) {
+            console.error('Failed to send product notification:', err);
+            setNotifyError(err.message || 'Failed to send product notification.');
+        } finally {
+            setSendingNotification(false);
         }
     };
 
@@ -476,6 +552,17 @@ const ProductsOverview: React.FC = () => {
                             <span className="badge bg-primary">
                                 {totalElements} system{totalElements !== 1 ? 's' : ''}
                             </span>
+                            {canNotifyUsers && (
+                                <button
+                                    className="btn btn-sm btn-outline-primary"
+                                    onClick={openNotifyModal}
+                                    disabled={loadingSystems || systems.length === 0}
+                                    title="Notify users for this product"
+                                >
+                                    <i className="bi bi-envelope me-1"></i>
+                                    Notify users
+                                </button>
+                            )}
                             <button
                                 className="btn btn-sm btn-outline-success"
                                 onClick={handleExport}
@@ -610,6 +697,117 @@ const ProductsOverview: React.FC = () => {
                 </div>
             )}
 
+            {showNotifyModal && (
+                <>
+                    <div className="modal d-block" tabIndex={-1} role="dialog" aria-modal="true">
+                        <div className="modal-dialog modal-lg modal-dialog-centered">
+                            <div className="modal-content">
+                                <div className="modal-header">
+                                    <h2 className="modal-title h5">
+                                        <i className="bi bi-envelope me-2"></i>
+                                        Notify product users
+                                    </h2>
+                                    <button
+                                        type="button"
+                                        className="btn-close"
+                                        onClick={() => setShowNotifyModal(false)}
+                                        aria-label="Close"
+                                        disabled={sendingNotification}
+                                    ></button>
+                                </div>
+                                <div className="modal-body">
+                                    <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
+                                        <span className="badge bg-secondary">{selectedProduct}</span>
+                                        {loadingNotifyRecipients ? (
+                                            <span className="text-muted small">
+                                                <span className="spinner-border spinner-border-sm me-1" role="status"></span>
+                                                Loading recipients...
+                                            </span>
+                                        ) : (
+                                            <span className="text-muted small">
+                                                {notifyRecipientCount ?? 0} recipient{notifyRecipientCount === 1 ? '' : 's'}
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {notifyError && (
+                                        <div className="alert alert-danger" role="alert">
+                                            <i className="bi bi-exclamation-triangle me-2"></i>
+                                            {notifyError}
+                                        </div>
+                                    )}
+
+                                    {notifyJob && (
+                                        <div className="alert alert-success" role="alert">
+                                            <i className="bi bi-check-circle me-2"></i>
+                                            Broadcast job #{notifyJob.id} was queued for {notifyJob.totalRecipients} recipient{notifyJob.totalRecipients === 1 ? '' : 's'}.
+                                        </div>
+                                    )}
+
+                                    <div className="mb-3">
+                                        <label htmlFor="productNotifySubject" className="form-label">
+                                            Subject
+                                        </label>
+                                        <input
+                                            id="productNotifySubject"
+                                            type="text"
+                                            className="form-control"
+                                            value={notifySubject}
+                                            onChange={(e) => setNotifySubject(e.target.value)}
+                                            disabled={sendingNotification || Boolean(notifyJob)}
+                                            maxLength={255}
+                                        />
+                                    </div>
+
+                                    <div className="mb-0">
+                                        <label className="form-label">Message</label>
+                                        <HtmlEditor
+                                            value={notifyHtml}
+                                            onChange={setNotifyHtml}
+                                            minHeight={220}
+                                        />
+                                    </div>
+                                </div>
+                                <div className="modal-footer">
+                                    <button
+                                        type="button"
+                                        className="btn btn-outline-secondary"
+                                        onClick={() => setShowNotifyModal(false)}
+                                        disabled={sendingNotification}
+                                    >
+                                        Close
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="btn btn-primary"
+                                        onClick={handleSendProductNotification}
+                                        disabled={
+                                            sendingNotification ||
+                                            loadingNotifyRecipients ||
+                                            Boolean(notifyJob) ||
+                                            notifyRecipientCount === 0
+                                        }
+                                    >
+                                        {sendingNotification ? (
+                                            <>
+                                                <span className="spinner-border spinner-border-sm me-1" role="status"></span>
+                                                Sending...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <i className="bi bi-send me-1"></i>
+                                                Send notification
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="modal-backdrop show"></div>
+                </>
+            )}
+
             {/* Empty state - no products */}
             {!selectedProduct && !loadingProducts && products.length === 0 && !searchTerm && (
                 <div className="alert alert-info" role="alert">
@@ -622,7 +820,7 @@ const ProductsOverview: React.FC = () => {
             {!selectedProduct && !loadingProducts && products.length === 0 && searchTerm && (
                 <div className="alert alert-warning" role="alert">
                     <i className="bi bi-search me-2"></i>
-                    No products found matching "{searchTerm}". Try a different search term.
+                    No products found matching &quot;{searchTerm}&quot;. Try a different search term.
                 </div>
             )}
         </div>

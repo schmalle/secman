@@ -61,7 +61,10 @@ class EmailBroadcastJob(
     @JdbcTypeCode(SqlTypes.VARCHAR)
     @Enumerated(EnumType.STRING)
     @Column(name = "target_group", nullable = false, length = 40)
-    var targetGroup: EmailBroadcastTargetGroup = EmailBroadcastTargetGroup.ALL_USERS
+    var targetGroup: EmailBroadcastTargetGroup = EmailBroadcastTargetGroup.ALL_USERS,
+
+    @Column(name = "target_product", length = 255)
+    var targetProduct: String? = null
 ) {
     fun progressPercent(): Int {
         if (totalRecipients == 0) return 0
@@ -80,5 +83,6 @@ enum class EmailBroadcastTargetGroup {
     ALL_USERS,
     ADMINS_ONLY,
     ADMINS_AND_SECCHAMPIONS,
-    SELF
+    SELF,
+    PRODUCT_USERS
 }
