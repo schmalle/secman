@@ -1,0 +1,5 @@
+[Image #1] secchampions or admins shall be able to manually inform all users with a dedicated product (add a button only for secchampions and admins). Reuse the broadcast email logic, as I really like this.
+
+---
+
+approved
