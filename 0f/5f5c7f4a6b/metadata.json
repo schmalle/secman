@@ -1,0 +1,27 @@
+{
+  "cli_version": "0.6.2",
+  "checkpoint_id": "0f5f5c7f4a6b",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "src/backendng/src/main/kotlin/com/secman/controller/ProductEmailBroadcastController.kt",
+    "src/backendng/src/main/kotlin/com/secman/domain/EmailBroadcastJob.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/EmailBroadcastService.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/ProductBroadcastRecipientResolver.kt",
+    "src/backendng/src/main/resources/db/migration/V232__email_broadcast_product_target.sql",
+    "src/backendng/src/test/kotlin/com/secman/service/ProductBroadcastRecipientResolverTest.kt",
+    "src/frontend/src/components/ProductsOverview.test.ts",
+    "src/frontend/src/components/ProductsOverview.tsx",
+    "src/frontend/src/components/productNotifyAccess.ts",
+    "src/frontend/src/services/emailBroadcastService.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0f/5f5c7f4a6b/0/metadata.json",
+      "transcript": "/0f/5f5c7f4a6b/0/full.jsonl",
+      "content_hash": "/0f/5f5c7f4a6b/0/content_hash.txt",
+      "prompt": ""
+    }
+  ]
+}
