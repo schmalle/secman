@@ -1,0 +1,56 @@
+{
+  "cli_version": "0.6.2",
+  "checkpoint_id": "fef6954f746f",
+  "session_id": "019e8479-e086-7c63-8d43-6acd20578471",
+  "strategy": "manual-commit",
+  "created_at": "2026-06-01T19:10:26.039512Z",
+  "branch": "main",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "src/shared/build.gradle.kts",
+    "src/shared/src/test/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClientImplInstalledProductsTest.kt",
+    "src/shared/src/main/kotlin/com/secman/crowdstrike/client/CrowdStrikeApiClientImpl.kt"
+  ],
+  "agent": "Codex",
+  "model": "gpt-5.5",
+  "turn_id": "c5816fc0256b",
+  "token_usage": {
+    "input_tokens": 356406,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 13827200,
+    "output_tokens": 23029,
+    "api_call_count": 131
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-06-01T19:10:25.980752Z",
+    "agent_lines": 141,
+    "agent_removed": 13,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 2,
+    "total_committed": 141,
+    "total_lines_changed": 158,
+    "agent_percentage": 97.46835443037975,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 89,
+      "user_lines_removed": 2,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "scripts/importproducts.sh": 16,
+        "src/frontend/src/components/AssetManagement.test.ts": 9,
+        "src/frontend/src/components/AssetManagement.tsx": 1,
+        "src/frontend/src/components/ProductsOverview.test.ts": 23,
+        "src/frontend/src/components/ProductsOverview.tsx": 27,
+        "src/frontend/src/components/productSearchResults.ts": 13
+      },
+      "user_removed_per_file": {
+        "src/frontend/src/components/ProductsOverview.tsx": 2
+      }
+    }
+  ]
+}
