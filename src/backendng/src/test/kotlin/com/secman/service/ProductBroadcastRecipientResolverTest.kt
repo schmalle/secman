@@ -1,9 +1,11 @@
 package com.secman.service
 
 import com.secman.domain.Asset
+import com.secman.domain.InstalledProduct
 import com.secman.domain.User
 import com.secman.domain.UserMapping
 import com.secman.repository.AssetRepository
+import com.secman.repository.InstalledProductRepository
 import com.secman.repository.UserMappingRepository
 import com.secman.repository.UserRepository
 import io.mockk.every
@@ -16,10 +18,12 @@ import java.util.Optional
 class ProductBroadcastRecipientResolverTest {
 
     private val assetRepository = mockk<AssetRepository>()
+    private val installedProductRepository = mockk<InstalledProductRepository>()
     private val userRepository = mockk<UserRepository>()
     private val userMappingRepository = mockk<UserMappingRepository>()
     private val resolver = ProductBroadcastRecipientResolver(
         assetRepository = assetRepository,
+        installedProductRepository = installedProductRepository,
         userRepository = userRepository,
         userMappingRepository = userMappingRepository
     )
@@ -41,6 +45,7 @@ class ProductBroadcastRecipientResolverTest {
             ),
             asset(owner = "inactive")
         )
+        every { installedProductRepository.findAssetsByProductName("Access 2016") } returns emptyList()
         every { userRepository.findByUsername("owner") } returns Optional.of(owner)
         every { userRepository.findByUsername("inactive") } returns Optional.of(inactiveOwner)
         every { userMappingRepository.findByAwsAccountId("123456789012") } returns listOf(
@@ -60,6 +65,24 @@ class ProductBroadcastRecipientResolverTest {
                 "domain-user@example.com",
                 "creator@example.com"
             )
+    }
+
+    @Test
+    fun `resolves active users for installed-product search matches`() {
+        val owner = user(10, "installed-owner", "installed-owner@example.com", active = true)
+        val variantOwner = user(11, "variant-owner", "variant-owner@example.com", active = true)
+        val installedAsset = asset(owner = "installed-owner").also { it.id = 99 }
+        val variantAsset = asset(owner = "variant-owner").also { it.id = 100 }
+
+        every { assetRepository.findAssetsByProductForAllNoLimit("7zip") } returns emptyList()
+        every { installedProductRepository.findAssetsByProductName("7zip") } returns listOf(installedAsset, variantAsset)
+        every { userRepository.findByUsername("installed-owner") } returns Optional.of(owner)
+        every { userRepository.findByUsername("variant-owner") } returns Optional.of(variantOwner)
+
+        val recipients = resolver.resolve("7zip")
+
+        assertThat(recipients.map { it.email })
+            .containsExactlyInAnyOrder("installed-owner@example.com", "variant-owner@example.com")
     }
 
     private fun user(id: Long, username: String, email: String, active: Boolean): User =

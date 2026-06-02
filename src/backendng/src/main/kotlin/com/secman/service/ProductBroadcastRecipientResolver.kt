@@ -4,19 +4,26 @@ import com.secman.domain.Asset
 import com.secman.domain.User
 import com.secman.domain.UserMapping
 import com.secman.repository.AssetRepository
+import com.secman.repository.InstalledProductRepository
 import com.secman.repository.UserMappingRepository
 import com.secman.repository.UserRepository
 import jakarta.inject.Singleton
+import jakarta.transaction.Transactional
 
 @Singleton
-class ProductBroadcastRecipientResolver(
+open class ProductBroadcastRecipientResolver(
     private val assetRepository: AssetRepository,
+    private val installedProductRepository: InstalledProductRepository,
     private val userRepository: UserRepository,
     private val userMappingRepository: UserMappingRepository
 ) {
-    fun resolve(productName: String): List<User> {
+    @Transactional
+    open fun resolve(productName: String): List<User> {
         val recipients = linkedMapOf<Long, User>()
-        val assets = assetRepository.findAssetsByProductForAllNoLimit(productName)
+        val assets = (
+            assetRepository.findAssetsByProductForAllNoLimit(productName) +
+                installedProductRepository.findAssetsByProductName(productName)
+            )
 
         assets.forEach { asset ->
             addUserByUsername(asset.owner, recipients)

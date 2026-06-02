@@ -74,9 +74,11 @@ const ProductsOverview: React.FC = () => {
     const [sendingNotification, setSendingNotification] = useState<boolean>(false);
     const [notifyJob, setNotifyJob] = useState<EmailBroadcastJob | null>(null);
     const [notifyError, setNotifyError] = useState<string | null>(null);
+    const [canNotifyUsers, setCanNotifyUsers] = useState<boolean>(false);
 
-    const user = typeof window !== 'undefined' ? getUser() : null;
-    const canNotifyUsers = canNotifyProductUsers(user?.roles);
+    useEffect(() => {
+        setCanNotifyUsers(canNotifyProductUsers(getUser()?.roles));
+    }, []);
 
     /**
      * Debounce search input

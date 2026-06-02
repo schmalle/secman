@@ -1,5 +1,6 @@
 package com.secman.repository
 
+import com.secman.domain.Asset
 import com.secman.domain.InstalledProduct
 import io.micronaut.data.annotation.Query
 import io.micronaut.data.annotation.Repository
@@ -36,6 +37,14 @@ interface InstalledProductRepository : JpaRepository<InstalledProduct, Long> {
         ORDER BY p.name ASC, p.vendor ASC, p.version ASC, p.asset.name ASC
     """)
     fun search(search: String?): List<InstalledProduct>
+
+    @Query("""
+        SELECT DISTINCT asset FROM InstalledProduct p
+        JOIN p.asset asset
+        WHERE LOWER(p.name) LIKE LOWER(CONCAT('%', :productName, '%'))
+        ORDER BY asset.name ASC
+    """)
+    fun findAssetsByProductName(productName: String): List<Asset>
 
     @Query("""
         SELECT p FROM InstalledProduct p

@@ -1,0 +1,18 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import AssetIdRedirect from '../../components/AssetIdRedirect';
+
+const { id } = Astro.params;
+const assetId = Number(id);
+---
+
+<Layout title="Opening asset">
+  {Number.isFinite(assetId) && assetId > 0 ? (
+    <AssetIdRedirect client:load assetId={assetId} />
+  ) : (
+    <div class="container-fluid py-4">
+      <div class="alert alert-danger" role="alert">Invalid asset id.</div>
+      <a href="/assets" class="btn btn-outline-secondary">Back to assets</a>
+    </div>
+  )}
+</Layout>

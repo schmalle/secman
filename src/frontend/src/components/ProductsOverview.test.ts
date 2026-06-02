@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { canNotifyProductUsers } from './productNotifyAccess.ts';
 import { getVisibleProductSearchResults } from './productSearchResults.ts';
@@ -27,4 +29,15 @@ test('allows only admins and secchampions to notify product users', () => {
     assert.equal(canNotifyProductUsers(['ADMIN']), true);
     assert.equal(canNotifyProductUsers(['SECCHAMPION']), true);
     assert.equal(canNotifyProductUsers(['USER', 'VULN']), false);
+});
+
+test('provides a route for asset id links emitted by product tables', () => {
+    assert.equal(existsSync(new URL('../pages/assets/[id].astro', import.meta.url)), true);
+});
+
+test('installed products exposes the product notify action', () => {
+    const source = readFileSync(new URL('./InstalledProducts.tsx', import.meta.url), 'utf8');
+
+    assert.match(source, /Notify users/);
+    assert.match(source, /createProductBroadcast/);
 });
