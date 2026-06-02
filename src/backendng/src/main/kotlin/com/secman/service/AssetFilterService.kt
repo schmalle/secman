@@ -77,6 +77,17 @@ open class AssetFilterService(
             return assetRepository.findAll()
         }
 
+        return getAccessibleAssetsForScopedUser(authentication)
+    }
+
+    fun getScopedAccessibleAssetIds(authentication: Authentication): Set<Long> {
+        if (hasRole(authentication, "ADMIN")) {
+            return assetRepository.findAll().mapNotNull { it.id }.toSet()
+        }
+        return getAccessibleAssetsForScopedUser(authentication).mapNotNull { it.id }.toSet()
+    }
+
+    private fun getAccessibleAssetsForScopedUser(authentication: Authentication): List<Asset> {
         val userId = getUserId(authentication)
         val userEmail = getUserEmail(authentication)
         val username = authentication.name

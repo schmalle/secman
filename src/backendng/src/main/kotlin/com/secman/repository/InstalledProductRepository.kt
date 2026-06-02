@@ -47,6 +47,15 @@ interface InstalledProductRepository : JpaRepository<InstalledProduct, Long> {
     fun findAssetsByProductName(productName: String): List<Asset>
 
     @Query("""
+        SELECT DISTINCT asset FROM InstalledProduct p
+        JOIN p.asset asset
+        WHERE LOWER(p.name) LIKE LOWER(CONCAT('%', :productName, '%'))
+          AND asset.id IN (:assetIds)
+        ORDER BY asset.name ASC
+    """)
+    fun findAssetsByProductNameForAssets(productName: String, assetIds: Set<Long>): List<Asset>
+
+    @Query("""
         SELECT p FROM InstalledProduct p
         WHERE p.asset.id IN (:assetIds)
           AND (:search IS NULL OR :search = ''

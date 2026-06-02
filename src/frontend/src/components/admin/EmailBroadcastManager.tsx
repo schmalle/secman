@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import DOMPurify from 'dompurify';
 import HtmlEditor from './HtmlEditor';
 import {
   createBroadcast,
@@ -53,6 +54,7 @@ export default function EmailBroadcastManager() {
   const [jobs, setJobs] = useState<EmailBroadcastJob[]>([]);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [activeJobId, setActiveJobId] = useState<number | null>(null);
+  const [sanitizedPreviewHtml, setSanitizedPreviewHtml] = useState('');
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const refresh = async (group: EmailBroadcastTargetGroup = targetGroup) => {
@@ -139,6 +141,10 @@ export default function EmailBroadcastManager() {
   };
 
   const activeJob = activeJobId ? jobs.find((j) => j.id === activeJobId) || null : null;
+
+  useEffect(() => {
+    setSanitizedPreviewHtml(DOMPurify.sanitize(html, { USE_PROFILES: { html: true } }));
+  }, [html]);
 
   // Poll the active job for live progress.
   useEffect(() => {
@@ -277,7 +283,7 @@ export default function EmailBroadcastManager() {
                 </div>
                 <div
                   style={{ padding: 24, lineHeight: 1.6, fontSize: 14, color: '#333' }}
-                  dangerouslySetInnerHTML={{ __html: html }}
+                  dangerouslySetInnerHTML={{ __html: sanitizedPreviewHtml }}
                 />
                 <div
                   style={{
