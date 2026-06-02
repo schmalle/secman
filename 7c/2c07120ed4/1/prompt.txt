@@ -1,0 +1,51 @@
+A previous agent produced the plan below to accomplish the user's task. Implement the plan in a fresh context. Treat the plan as the source of user intent, re-read files as needed, and carry the work through implementation and verification.
+
+# Product Security Remediation Plan
+
+## Summary
+
+No confirmed critical issue was found in the inspected product-related code. I found two high-severity issues to remediate first:
+
+1. **High: Product notification recipient resolution can bypass asset scope for secchampions.**  
+   `ProductEmailBroadcastController` allows `ADMIN` and `SECCHAMPION`, but `ProductBroadcastRecipientResolver.resolve()` uses global product asset queries, so a secchampion can trigger recipient counts/sends for assets outside their visible product scope.
+
+2. **High: Broadcast HTML is only sanitized client-side, then stored and sent server-side as raw HTML.**  
+   `HtmlEditor` sanitizes display, but `/api/admin/email-broadcast/product` accepts arbitrary `htmlContent`; `EmailBroadcastService.wrapWithBrand()` injects it directly into outbound email HTML.
+
+## Key Changes
+
+- Update product broadcast APIs to pass `Authentication` into recipient counting and job creation.
+- Resolve product recipients with the same authorization model as product browsing:
+  - `ADMIN`: global product assets.
+  - `SECCHAMPION`: only assets accessible through existing `AssetFilterService` or `AccessibleAssetIdsCache`.
+- Add repository methods for installed-product recipient lookup constrained by accessible asset IDs.
+- Sanitize broadcast HTML on the backend before persisting and sending:
+  - Use Jsoup allowlist sanitization.
+  - Strip scripts, event handlers, unsafe URLs, and tracking-prone unsupported markup.
+  - Reuse the same sanitizer for admin broadcast and product broadcast.
+- Sanitize the admin broadcast live preview before `dangerouslySetInnerHTML`, or replace it with the existing sanitized `RichContent` pattern.
+
+## Tests
+
+- Backend unit tests:
+  - Admin product broadcast counts global recipients.
+  - Secchampion product broadcast excludes recipients from inaccessible assets.
+  - Product broadcast POST stores sanitized HTML.
+  - Unsafe tags/attributes like `<script>`, `onerror`, and `javascript:` links are removed.
+- Backend controller/security tests:
+  - `USER`/`VULN` cannot call product broadcast endpoints.
+  - `SECCHAMPION` can call product broadcast endpoints but only within asset scope.
+- Frontend tests:
+  - Notify button remains role-gated to `ADMIN`/`SECCHAMPION`.
+  - Preview/render path uses sanitized HTML.
+- Required verification:
+  - Targeted backend tests.
+  - Targeted frontend tests.
+  - `/e2ejs`
+  - `/e2evulnexception`
+
+## Assumptions
+
+- Secchampions should not notify users for assets they cannot otherwise see in product views.
+- Admins retain global product notification capability.
+- Rich email formatting remains allowed, but only through a backend-approved HTML allowlist.

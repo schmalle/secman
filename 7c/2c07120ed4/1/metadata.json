@@ -1,0 +1,51 @@
+{
+  "cli_version": "0.6.2",
+  "checkpoint_id": "7c2c07120ed4",
+  "session_id": "019e8812-154b-75b1-88ed-06412aa4e23f",
+  "strategy": "manual-commit",
+  "created_at": "2026-06-02T19:04:39.030968Z",
+  "branch": "product-broadcast-security-fix",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "src/backendng/src/test/kotlin/com/secman/service/ProductBroadcastRecipientResolverTest.kt",
+    "src/backendng/src/test/kotlin/com/secman/service/EmailBroadcastServiceTest.kt",
+    "src/frontend/src/components/ProductsOverview.test.ts",
+    "src/backendng/src/main/kotlin/com/secman/service/AssetFilterService.kt",
+    "src/backendng/src/main/kotlin/com/secman/repository/InstalledProductRepository.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/ProductBroadcastRecipientResolver.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/EmailBroadcastService.kt",
+    "src/backendng/src/main/kotlin/com/secman/controller/ProductEmailBroadcastController.kt",
+    "src/frontend/src/components/admin/EmailBroadcastManager.tsx"
+  ],
+  "agent": "Codex",
+  "model": "gpt-5.5",
+  "turn_id": "f84d85b61492",
+  "token_usage": {
+    "input_tokens": 409325,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 15908480,
+    "output_tokens": 28043,
+    "api_call_count": 163
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-06-02T19:04:38.9951Z",
+    "agent_lines": 255,
+    "agent_removed": 24,
+    "human_added": 108,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 363,
+    "total_lines_changed": 388,
+    "agent_percentage": 71.90721649484536,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
