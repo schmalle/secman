@@ -8,9 +8,11 @@ import com.secman.repository.EmailBroadcastJobRepository
 import com.secman.repository.UserRepository
 import io.micronaut.scheduling.TaskExecutors
 import io.micronaut.scheduling.annotation.ExecuteOn
+import io.micronaut.security.authentication.Authentication
 import jakarta.inject.Singleton
 import jakarta.transaction.Transactional
 import org.jsoup.Jsoup
+import org.jsoup.safety.Safelist
 import org.slf4j.LoggerFactory
 import java.time.LocalDateTime
 import java.util.concurrent.CompletableFuture
@@ -28,6 +30,15 @@ open class EmailBroadcastService(
     private val productBroadcastRecipientResolver: ProductBroadcastRecipientResolver
 ) {
     private val log = LoggerFactory.getLogger(EmailBroadcastService::class.java)
+    private val broadcastHtmlSafelist = Safelist()
+        .addTags(
+            "p", "br", "strong", "b", "em", "i", "u",
+            "h1", "h2", "h3", "h4", "h5", "h6",
+            "ul", "ol", "li", "blockquote", "code", "pre",
+            "table", "thead", "tbody", "tr", "th", "td", "a"
+        )
+        .addAttributes("a", "href", "title")
+        .addProtocols("a", "href", "http", "https", "mailto")
 
     @Transactional
     open fun createJob(
@@ -37,10 +48,11 @@ open class EmailBroadcastService(
         targetGroup: EmailBroadcastTargetGroup
     ): EmailBroadcastJob {
         val total = resolveRecipients(targetGroup, createdBy).size
+        val sanitizedHtml = sanitizeBroadcastHtml(htmlContent)
         val job = EmailBroadcastJob(
             status = EmailBroadcastStatus.PENDING,
             subject = subject.trim(),
-            htmlContent = htmlContent,
+            htmlContent = sanitizedHtml,
             totalRecipients = total,
             createdBy = createdBy,
             createdAt = LocalDateTime.now(),
@@ -54,14 +66,16 @@ open class EmailBroadcastService(
         subject: String,
         htmlContent: String,
         createdBy: String,
-        productName: String
+        productName: String,
+        authentication: Authentication
     ): EmailBroadcastJob {
         val normalizedProduct = productName.trim()
-        val total = productBroadcastRecipientResolver.resolve(normalizedProduct).size
+        val total = productBroadcastRecipientResolver.resolve(normalizedProduct, authentication).size
+        val sanitizedHtml = sanitizeBroadcastHtml(htmlContent)
         val job = EmailBroadcastJob(
             status = EmailBroadcastStatus.PENDING,
             subject = subject.trim(),
-            htmlContent = htmlContent,
+            htmlContent = sanitizedHtml,
             totalRecipients = total,
             createdBy = createdBy,
             createdAt = LocalDateTime.now(),
@@ -77,7 +91,7 @@ open class EmailBroadcastService(
     fun runJobAsync(jobId: Long): CompletableFuture<Void> {
         return CompletableFuture.runAsync {
             try {
-                runJob(jobId)
+                runJob(jobId, productAuthentication = null)
             } catch (e: Exception) {
                 log.error("Email broadcast job {} crashed: {}", jobId, e.message, e)
                 markFailed(jobId, e.message ?: e.javaClass.simpleName)
@@ -85,7 +99,18 @@ open class EmailBroadcastService(
         }
     }
 
-    private fun runJob(jobId: Long) {
+    fun runProductJobAsync(jobId: Long, authentication: Authentication): CompletableFuture<Void> {
+        return CompletableFuture.runAsync {
+            try {
+                runJob(jobId, productAuthentication = authentication)
+            } catch (e: Exception) {
+                log.error("Product email broadcast job {} crashed: {}", jobId, e.message, e)
+                markFailed(jobId, e.message ?: e.javaClass.simpleName)
+            }
+        }
+    }
+
+    private fun runJob(jobId: Long, productAuthentication: Authentication?) {
         val job = emailBroadcastJobRepository.findById(jobId).orElse(null) ?: run {
             log.warn("Broadcast job {} not found", jobId)
             return
@@ -93,7 +118,7 @@ open class EmailBroadcastService(
 
         markProcessing(jobId)
 
-        val recipients = resolveRecipients(job.targetGroup, job.createdBy, job.targetProduct)
+        val recipients = resolveRecipients(job.targetGroup, job.createdBy, job.targetProduct, productAuthentication)
         log.info(
             "Broadcast job {}: dispatching to {} recipients (targetGroup={})",
             jobId, recipients.size, job.targetGroup
@@ -178,8 +203,8 @@ open class EmailBroadcastService(
     fun recipientCount(targetGroup: EmailBroadcastTargetGroup, requester: String): Long =
         resolveRecipients(targetGroup, requester).size.toLong()
 
-    fun productRecipientCount(productName: String): Long =
-        productBroadcastRecipientResolver.resolve(productName.trim()).size.toLong()
+    fun productRecipientCount(productName: String, authentication: Authentication): Long =
+        productBroadcastRecipientResolver.resolve(productName.trim(), authentication).size.toLong()
 
     /**
      * Single source of truth for "who receives this broadcast?".
@@ -192,7 +217,8 @@ open class EmailBroadcastService(
     internal fun resolveRecipients(
         targetGroup: EmailBroadcastTargetGroup,
         requester: String,
-        targetProduct: String? = null
+        targetProduct: String? = null,
+        productAuthentication: Authentication? = null
     ): List<User> {
         return when (targetGroup) {
             EmailBroadcastTargetGroup.ALL_USERS ->
@@ -208,9 +234,16 @@ open class EmailBroadcastService(
                     .map { listOf(it) }
                     .orElse(emptyList())
             EmailBroadcastTargetGroup.PRODUCT_USERS ->
-                targetProduct?.let { productBroadcastRecipientResolver.resolve(it) } ?: emptyList()
+                if (targetProduct != null && productAuthentication != null) {
+                    productBroadcastRecipientResolver.resolve(targetProduct, productAuthentication)
+                } else {
+                    emptyList()
+                }
         }
     }
+
+    internal fun sanitizeBroadcastHtml(html: String): String =
+        Jsoup.clean(html, broadcastHtmlSafelist)
 
     private fun loadLogoInlineImage(): Map<String, Pair<ByteArray, String>> {
         return try {

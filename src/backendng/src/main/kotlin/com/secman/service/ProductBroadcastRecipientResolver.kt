@@ -7,6 +7,7 @@ import com.secman.repository.AssetRepository
 import com.secman.repository.InstalledProductRepository
 import com.secman.repository.UserMappingRepository
 import com.secman.repository.UserRepository
+import io.micronaut.security.authentication.Authentication
 import jakarta.inject.Singleton
 import jakarta.transaction.Transactional
 
@@ -15,15 +16,24 @@ open class ProductBroadcastRecipientResolver(
     private val assetRepository: AssetRepository,
     private val installedProductRepository: InstalledProductRepository,
     private val userRepository: UserRepository,
-    private val userMappingRepository: UserMappingRepository
+    private val userMappingRepository: UserMappingRepository,
+    private val assetFilterService: AssetFilterService
 ) {
     @Transactional
-    open fun resolve(productName: String): List<User> {
+    open fun resolve(productName: String, authentication: Authentication): List<User> {
         val recipients = linkedMapOf<Long, User>()
-        val assets = (
+        val assets = if (authentication.roles.contains("ADMIN")) {
             assetRepository.findAssetsByProductForAllNoLimit(productName) +
                 installedProductRepository.findAssetsByProductName(productName)
-            )
+        } else {
+            val accessibleAssetIds = assetFilterService.getScopedAccessibleAssetIds(authentication)
+            if (accessibleAssetIds.isEmpty()) {
+                emptyList()
+            } else {
+                assetRepository.findAssetsByProductWithAccessControlNoLimit(productName, accessibleAssetIds) +
+                    installedProductRepository.findAssetsByProductNameForAssets(productName, accessibleAssetIds)
+            }
+        }
 
         assets.forEach { asset ->
             addUserByUsername(asset.owner, recipients)

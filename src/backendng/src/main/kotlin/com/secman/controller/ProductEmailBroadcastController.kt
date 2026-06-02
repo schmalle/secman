@@ -28,11 +28,12 @@ open class ProductEmailBroadcastController(
 
     @Get("/product-recipients")
     open fun productRecipientCount(
-        @QueryValue @NotBlank @Size(max = 255) productName: String
+        @QueryValue @NotBlank @Size(max = 255) productName: String,
+        authentication: Authentication
     ): HttpResponse<Map<String, Any>> =
         HttpResponse.ok(
             mapOf(
-                "count" to emailBroadcastService.productRecipientCount(productName),
+                "count" to emailBroadcastService.productRecipientCount(productName, authentication),
                 "productName" to productName
             )
         )
@@ -51,14 +52,15 @@ open class ProductEmailBroadcastController(
             subject = request.subject,
             htmlContent = htmlText,
             createdBy = authentication.name,
-            productName = request.productName
+            productName = request.productName,
+            authentication = authentication
         )
 
         if (job.totalRecipients == 0) {
             log.warn("Product broadcast {} created with 0 recipients for {}", job.id, request.productName)
         }
 
-        emailBroadcastService.runJobAsync(job.id!!)
+        emailBroadcastService.runProductJobAsync(job.id!!, authentication)
         log.info(
             "Product broadcast job {} kicked off by {} for {} recipients and product {}",
             job.id,
