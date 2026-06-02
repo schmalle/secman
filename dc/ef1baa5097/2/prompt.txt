@@ -1,0 +1,17 @@
+[Image #1] fix the root cause for this error
+
+---
+
+[Image #1] pressing on the first asset url is causing a break, please fix this, [Image #2]
+
+---
+
+[Image #1] i am missing the button to notify users
+
+---
+
+[Image #1] i need the notify users button only once (and only for secchamptions and admins)
+
+---
+
+[Image #1] i see thress systems but see in the notify popup 0 recipients, check if this is an error and fix if neeed

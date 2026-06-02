@@ -1,0 +1,65 @@
+{
+  "cli_version": "0.6.2",
+  "checkpoint_id": "dcef1baa5097",
+  "session_id": "019e8479-e086-7c63-8d43-6acd20578471",
+  "strategy": "manual-commit",
+  "created_at": "2026-06-02T03:17:49.157231Z",
+  "branch": "main",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "src/backendng/src/main/kotlin/com/secman/service/ProductBroadcastRecipientResolver.kt",
+    "src/frontend/src/components/AssetIdRedirect.tsx",
+    "src/frontend/src/pages/assets/[id].astro",
+    "src/frontend/src/components/ProductsOverview.test.ts",
+    "src/frontend/src/components/InstalledProducts.tsx",
+    "src/frontend/src/components/ProductsOverview.tsx",
+    "src/backendng/src/main/kotlin/com/secman/repository/InstalledProductRepository.kt",
+    "src/backendng/src/test/kotlin/com/secman/service/ProductBroadcastRecipientResolverTest.kt"
+  ],
+  "agent": "Codex",
+  "model": "gpt-5.5",
+  "turn_id": "a3ee239126eb",
+  "checkpoint_transcript_start": 1157,
+  "transcript_lines_at_start": 1157,
+  "token_usage": {
+    "input_tokens": 698770,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 27890944,
+    "output_tokens": 24178,
+    "api_call_count": 154
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-06-02T03:17:48.926348Z",
+    "agent_lines": 27,
+    "agent_removed": 1,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 11,
+    "total_committed": 27,
+    "total_lines_changed": 39,
+    "agent_percentage": 71.7948717948718,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 310,
+      "user_lines_removed": 11,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "src/backendng/src/main/kotlin/com/secman/service/ProductBroadcastRecipientResolver.kt": 4,
+        "src/frontend/src/components/AssetIdRedirect.tsx": 71,
+        "src/frontend/src/components/InstalledProducts.tsx": 200,
+        "src/frontend/src/components/ProductsOverview.test.ts": 13,
+        "src/frontend/src/components/ProductsOverview.tsx": 4,
+        "src/frontend/src/pages/assets/[id].astro": 18
+      },
+      "user_removed_per_file": {
+        "src/backendng/src/main/kotlin/com/secman/service/ProductBroadcastRecipientResolver.kt": 2,
+        "src/frontend/src/components/InstalledProducts.tsx": 7,
+        "src/frontend/src/components/ProductsOverview.tsx": 2
+      }
+    }
+  ]
+}
