@@ -1,0 +1,36 @@
+{
+  "cli_version": "0.6.2",
+  "checkpoint_id": "dcef1baa5097",
+  "session_id": "019e7f97-93f9-7ea0-b0f1-8dfe76ef731c",
+  "strategy": "manual-commit",
+  "created_at": "2026-06-02T03:17:26.748006Z",
+  "branch": "main",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "src/backendng/src/main/kotlin/com/secman/repository/InstalledProductRepository.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/ProductBroadcastRecipientResolver.kt",
+    "src/backendng/src/test/kotlin/com/secman/service/ProductBroadcastRecipientResolverTest.kt",
+    "src/frontend/src/components/AssetIdRedirect.tsx",
+    "src/frontend/src/components/InstalledProducts.tsx",
+    "src/frontend/src/components/ProductsOverview.test.ts",
+    "src/frontend/src/components/ProductsOverview.tsx",
+    "src/frontend/src/pages/assets/[id].astro"
+  ],
+  "agent": "Codex",
+  "model": "gpt-5.5",
+  "turn_id": "5d314724da44",
+  "checkpoint_transcript_start": 438,
+  "transcript_lines_at_start": 438,
+  "initial_attribution": {
+    "calculated_at": "2026-06-02T03:17:26.715133Z",
+    "agent_lines": 348,
+    "agent_removed": 12,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 348,
+    "total_lines_changed": 360,
+    "agent_percentage": 100,
+    "metric_version": 2
+  }
+}

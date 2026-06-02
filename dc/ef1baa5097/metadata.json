@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.6.2",
+  "checkpoint_id": "dcef1baa5097",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "src/backendng/src/main/kotlin/com/secman/repository/InstalledProductRepository.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/ProductBroadcastRecipientResolver.kt",
+    "src/backendng/src/test/kotlin/com/secman/service/ProductBroadcastRecipientResolverTest.kt",
+    "src/frontend/src/components/AssetIdRedirect.tsx",
+    "src/frontend/src/components/InstalledProducts.tsx",
+    "src/frontend/src/components/ProductsOverview.test.ts",
+    "src/frontend/src/components/ProductsOverview.tsx",
+    "src/frontend/src/pages/assets/[id].astro"
+  ],
+  "sessions": [
+    {
+      "metadata": "/dc/ef1baa5097/0/metadata.json",
+      "transcript": "/dc/ef1baa5097/0/full.jsonl",
+      "content_hash": "/dc/ef1baa5097/0/content_hash.txt",
+      "prompt": ""
+    }
+  ]
+}
