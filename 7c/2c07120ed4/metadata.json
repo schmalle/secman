@@ -1,0 +1,35 @@
+{
+  "cli_version": "0.6.2",
+  "checkpoint_id": "7c2c07120ed4",
+  "strategy": "manual-commit",
+  "branch": "product-broadcast-security-fix",
+  "checkpoints_count": 0,
+  "files_touched": [
+    "src/backendng/src/main/kotlin/com/secman/controller/ProductEmailBroadcastController.kt",
+    "src/backendng/src/main/kotlin/com/secman/repository/InstalledProductRepository.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/AssetFilterService.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/EmailBroadcastService.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/ProductBroadcastRecipientResolver.kt",
+    "src/backendng/src/main/kotlin/com/secman/service/VulnerabilityService.kt",
+    "src/backendng/src/test/kotlin/com/secman/service/EmailBroadcastServiceTest.kt",
+    "src/backendng/src/test/kotlin/com/secman/service/ProductBroadcastRecipientResolverTest.kt",
+    "src/backendng/src/test/kotlin/com/secman/service/VulnerabilityServicePreviewIntegrationTest.kt",
+    "src/frontend/src/components/ProductsOverview.test.ts",
+    "src/frontend/src/components/admin/EmailBroadcastManager.tsx"
+  ],
+  "sessions": [
+    {
+      "metadata": "/7c/2c07120ed4/0/metadata.json",
+      "transcript": "/7c/2c07120ed4/0/full.jsonl",
+      "content_hash": "/7c/2c07120ed4/0/content_hash.txt",
+      "prompt": "/7c/2c07120ed4/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 161508,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 1126144,
+    "output_tokens": 4918,
+    "api_call_count": 15
+  }
+}
