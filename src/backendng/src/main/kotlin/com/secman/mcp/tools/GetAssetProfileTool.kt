@@ -94,6 +94,7 @@ class GetAssetProfileTool(
                     "name" to asset.name,
                     "type" to asset.type,
                     "ip" to asset.ip,
+                    "uri" to asset.uri,
                     "owner" to asset.owner,
                     "description" to asset.description,
                     "groups" to (asset.groups?.split(",")?.map { it.trim() } ?: emptyList<String>()),

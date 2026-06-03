@@ -28,6 +28,7 @@ interface Asset {
   name: string;
   type: string;
   ip?: string;
+  uri?: string;
   owner: string;
   description?: string;
   groups?: string;
@@ -52,6 +53,7 @@ const AssetManagement: React.FC = () => {
     name: '',
     type: '',
     ip: '',
+    uri: '',
     owner: '',
     description: '',
     criticality: undefined,
@@ -363,6 +365,7 @@ const AssetManagement: React.FC = () => {
       name: '',
       type: '',
       ip: '',
+      uri: '',
       owner: '',
       description: '',
       adDomain: '',
@@ -581,6 +584,7 @@ const AssetManagement: React.FC = () => {
                       <option value="Database">Database</option>
                       <option value="Application">Application</option>
                       <option value="SaaS">SaaS</option>
+                      <option value="URI">URI</option>
                       <option value="Other">Other</option>
                     </select>
                   </div>
@@ -595,6 +599,22 @@ const AssetManagement: React.FC = () => {
                       onChange={handleInputChange}
                       placeholder="e.g., 192.168.1.100"
                     />
+                  </div>
+                  <div className="mb-3">
+                    <label htmlFor="uri" className="form-label">URI</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      id="uri"
+                      name="uri"
+                      value={formData.uri || ''}
+                      onChange={handleInputChange}
+                      placeholder="e.g., https://app.example.com or urn:asset:example"
+                      maxLength={2048}
+                    />
+                    <small className="form-text text-muted">
+                      Optional endpoint or application URI; supported schemes: http, https, and urn.
+                    </small>
                   </div>
                   <div className="mb-3">
                     <label htmlFor="owner" className="form-label">Owner *</label>
@@ -843,6 +863,7 @@ const AssetManagement: React.FC = () => {
                       <tr>
                         <th>Name</th>
                         <th>IP Address</th>
+                        <th>URI</th>
                         <th>Instance ID</th>
                         <th>Account ID</th>
                         <th>AD Domain</th>
@@ -854,6 +875,19 @@ const AssetManagement: React.FC = () => {
                         <tr key={asset.id}>
                           <td>{asset.name}</td>
                           <td>{asset.ip || '-'}</td>
+                          <td>
+                            {asset.uri ? (
+                              asset.uri.toLowerCase().startsWith('http://') || asset.uri.toLowerCase().startsWith('https://') ? (
+                                <a href={asset.uri} target="_blank" rel="noreferrer">
+                                  {asset.uri}
+                                </a>
+                              ) : (
+                                asset.uri
+                              )
+                            ) : (
+                              '-'
+                            )}
+                          </td>
                           <td>{asset.cloudInstanceId || '-'}</td>
                           <td>{asset.cloudAccountId || '-'}</td>
                           <td>

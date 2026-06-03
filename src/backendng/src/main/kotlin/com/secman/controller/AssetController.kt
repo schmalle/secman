@@ -34,6 +34,7 @@ import jakarta.validation.Valid
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
 import org.slf4j.LoggerFactory
+import java.net.URI
 
 @Controller("/api/assets")
 @Secured(SecurityRule.IS_AUTHENTICATED)
@@ -65,6 +66,7 @@ open class AssetController(
         @NotBlank @Size(max = 255) val name: String,
         @NotBlank val type: String,
         @Nullable val ip: String? = null,
+        @Nullable @Size(max = 2048) val uri: String? = null,
         @NotBlank @Size(max = 255) val owner: String,
         @Nullable val description: String? = null,
         @Nullable val criticality: Criticality? = null,
@@ -77,6 +79,7 @@ open class AssetController(
         @Nullable val name: String? = null,
         @Nullable val type: String? = null,
         @Nullable val ip: String? = null,
+        @Nullable @Size(max = 2048) val uri: String? = null,
         @Nullable val owner: String? = null,
         @Nullable val description: String? = null,
         @Nullable val workgroupIds: List<Long>? = null,
@@ -91,6 +94,7 @@ open class AssetController(
         @NotBlank val type: String,
         @NotBlank @Size(max = 255) val owner: String,
         @Nullable val ip: String? = null,
+        @Nullable @Size(max = 2048) val uri: String? = null,
         @Nullable val description: String? = null,
         @Nullable val networkZone: NetworkZone? = null,
         @Nullable val tags: Map<String, String>? = null,
@@ -131,6 +135,7 @@ open class AssetController(
         val name: String,
         val type: String,
         val ip: String?,
+        val uri: String?,
         val owner: String,
         val description: String?,
         val lastSeen: String?,
@@ -179,6 +184,7 @@ open class AssetController(
                     name = asset.name,
                     type = asset.type,
                     ip = asset.ip,
+                    uri = asset.uri,
                     owner = asset.owner,
                     description = asset.description,
                     lastSeen = asset.lastSeen?.toString(),
@@ -197,6 +203,17 @@ open class AssetController(
                 )
             }
         }
+    }
+
+    private fun normalizeUri(value: String?): String? {
+        val trimmed = value?.trim()?.takeIf { it.isNotBlank() } ?: return null
+        require(trimmed.length <= 2048) { "URI must not exceed 2048 characters" }
+        val parsed = URI.create(trimmed)
+        val scheme = parsed.scheme?.lowercase()
+        require(!scheme.isNullOrBlank()) { "URI must include a scheme, such as https:// or urn:" }
+        require(scheme in setOf("http", "https", "urn")) { "URI scheme must be http, https, or urn" }
+        require(!(scheme in setOf("http", "https") && parsed.host.isNullOrBlank())) { "HTTP(S) URI must include a host" }
+        return trimmed
     }
 
     /**
@@ -354,6 +371,11 @@ open class AssetController(
             val trimmedName = request.name.trim()
             val trimmedType = request.type.trim()
             val trimmedOwner = request.owner.trim()
+            val normalizedUri = try {
+                normalizeUri(request.uri)
+            } catch (e: IllegalArgumentException) {
+                return HttpResponse.badRequest(ErrorResponse(e.message ?: "Invalid URI"))
+            }
 
             if (trimmedName.isBlank()) {
                 return HttpResponse.badRequest(ErrorResponse("Name cannot be empty"))
@@ -370,6 +392,7 @@ open class AssetController(
                 type = trimmedType,
                 owner = trimmedOwner,
                 ip = request.ip?.trim()?.takeIf { it.isNotBlank() },
+                uri = normalizedUri,
                 description = request.description?.trim()?.takeIf { it.isNotBlank() },
                 networkZone = request.networkZone,
                 tags = request.tags,
@@ -407,6 +430,11 @@ open class AssetController(
             val trimmedName = request.name.trim()
             val trimmedType = request.type.trim()
             val trimmedOwner = request.owner.trim()
+            val normalizedUri = try {
+                normalizeUri(request.uri)
+            } catch (e: IllegalArgumentException) {
+                return HttpResponse.badRequest(ErrorResponse(e.message ?: "Invalid URI"))
+            }
 
             if (trimmedName.isBlank()) {
                 return HttpResponse.badRequest(ErrorResponse("Name cannot be empty"))
@@ -433,6 +461,7 @@ open class AssetController(
                 name = trimmedName,
                 type = trimmedType,
                 ip = request.ip?.trim()?.takeIf { it.isNotBlank() },
+                uri = normalizedUri,
                 owner = trimmedOwner,
                 description = request.description?.trim()?.takeIf { it.isNotBlank() },
                 criticality = request.criticality,
@@ -485,6 +514,14 @@ open class AssetController(
             
             request.ip?.let { newIp ->
                 asset.ip = newIp.trim().takeIf { it.isNotBlank() }
+            }
+
+            request.uri?.let { newUri ->
+                asset.uri = try {
+                    normalizeUri(newUri)
+                } catch (e: IllegalArgumentException) {
+                    return HttpResponse.badRequest(ErrorResponse(e.message ?: "Invalid URI"))
+                }
             }
             
             request.owner?.let { newOwner ->

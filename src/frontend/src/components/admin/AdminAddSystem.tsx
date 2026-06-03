@@ -14,6 +14,7 @@ const AdminAddSystem: React.FC = () => {
     const [assetName, setAssetName] = useState('');
     const [assetType, setAssetType] = useState('SERVER');
     const [assetIp, setAssetIp] = useState('');
+    const [assetUri, setAssetUri] = useState('');
     const [assetOwner, setAssetOwner] = useState('');
     const [assetDescription, setAssetDescription] = useState('');
     const [assetCriticality, setAssetCriticality] = useState('');
@@ -46,6 +47,7 @@ const AdminAddSystem: React.FC = () => {
                 owner: assetOwner.trim(),
             };
             if (assetIp.trim()) body.ip = assetIp.trim();
+            if (assetUri.trim()) body.uri = assetUri.trim();
             if (assetDescription.trim()) body.description = assetDescription.trim();
             if (assetCriticality) body.criticality = assetCriticality;
 
@@ -56,6 +58,7 @@ const AdminAddSystem: React.FC = () => {
                 setAssetName('');
                 setAssetType('SERVER');
                 setAssetIp('');
+                setAssetUri('');
                 setAssetOwner('');
                 setAssetDescription('');
                 setAssetCriticality('');
@@ -163,6 +166,19 @@ const AdminAddSystem: React.FC = () => {
                                     onChange={(e) => setAssetIp(e.target.value)}
                                     placeholder="e.g. 192.168.1.100"
                                 />
+                            </div>
+                            <div className="mb-3">
+                                <label htmlFor="asset-uri" className="form-label">URI</label>
+                                <input
+                                    type="text"
+                                    className="form-control"
+                                    id="asset-uri"
+                                    value={assetUri}
+                                    onChange={(e) => setAssetUri(e.target.value)}
+                                    placeholder="e.g. https://app.example.com or urn:asset:example"
+                                    maxLength={2048}
+                                />
+                                <small className="form-text text-muted">Supported schemes: http, https, and urn.</small>
                             </div>
                             <div className="mb-3">
                                 <label htmlFor="asset-owner" className="form-label">Owner *</label>

@@ -76,4 +76,47 @@ class AssetMergeServiceImportTest {
         assertThat(asset.cloudInstanceId).isEqualTo("i-abc123")
         verify { assetRepository.update(existing) }
     }
+
+    @Test
+    fun `import asset creates asset with uri`() {
+        val savedAsset = slot<Asset>()
+        every { assetRepository.findByNameIgnoreCase("portal") } returns null
+        every { assetRepository.save(capture(savedAsset)) } answers { savedAsset.captured.apply { id = 43L } }
+
+        val (asset, created) = service.importAsset(
+            name = "portal",
+            type = "URI",
+            owner = "App Team",
+            uri = "https://portal.example.com"
+        )
+
+        assertThat(created).isTrue()
+        assertThat(asset.uri).isEqualTo("https://portal.example.com")
+        assertThat(savedAsset.captured.uri).isEqualTo("https://portal.example.com")
+    }
+
+    @Test
+    fun `import asset updates existing uri only when provided`() {
+        val existing = Asset(
+            id = 8L,
+            name = "portal",
+            type = "URI",
+            owner = "Existing Owner",
+            uri = "https://old.example.com"
+        )
+        every { assetRepository.findByNameIgnoreCase("portal") } returns existing
+        every { assetRepository.update(existing) } returns existing
+
+        val (asset, created) = service.importAsset(
+            name = "portal",
+            type = "IGNORED",
+            owner = "Ignored Owner",
+            uri = "https://new.example.com"
+        )
+
+        assertThat(created).isFalse()
+        assertThat(asset.uri).isEqualTo("https://new.example.com")
+        verify { assetRepository.update(existing) }
+    }
+
 }

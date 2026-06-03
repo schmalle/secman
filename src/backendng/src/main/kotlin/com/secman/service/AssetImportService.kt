@@ -189,6 +189,7 @@ open class AssetImportService(
             name = getCellValueAsString(row, headers, "name") ?: "",
             type = getCellValueAsString(row, headers, "type") ?: "",
             ip = getCellValueAsString(row, headers, "ip address"),
+            uri = getCellValueAsString(row, headers, "uri"),
             owner = getCellValueAsString(row, headers, "owner") ?: "",
             description = getCellValueAsString(row, headers, "description"),
             groups = getCellValueAsString(row, headers, "groups"),
