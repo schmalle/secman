@@ -15,8 +15,24 @@ open class InstalledProductListService(
 ) {
     @Transactional(readOnly = true)
     open fun list(authentication: Authentication, search: String?, limit: Int?): InstalledProductListResponse {
-        val effectiveLimit = (limit ?: 500).coerceIn(1, 2000)
         val normalizedSearch = search?.trim().orEmpty()
+        return listMatchingProducts(authentication, normalizedSearch, limit)
+    }
+
+    @Transactional(readOnly = true)
+    open fun listForServer(authentication: Authentication, server: String?, limit: Int?): InstalledProductListResponse {
+        val normalizedServer = server?.trim().orEmpty()
+        require(normalizedServer.isNotEmpty()) { "Server search term is required" }
+        return listMatchingProducts(authentication, normalizedServer, limit, matchServerOnly = true)
+    }
+
+    private fun listMatchingProducts(
+        authentication: Authentication,
+        normalizedSearch: String,
+        limit: Int?,
+        matchServerOnly: Boolean = false
+    ): InstalledProductListResponse {
+        val effectiveLimit = (limit ?: 500).coerceIn(1, 2000)
         val isAdmin = authentication.roles.contains("ADMIN")
         val accessibleAssetIds = if (isAdmin) null else accessibleAssetIdsCache.get(authentication)
 
@@ -29,15 +45,31 @@ open class InstalledProductListService(
         }
 
         val pageable = Pageable.from(0, effectiveLimit)
-        val products = if (accessibleAssetIds == null) {
-            installedProductRepository.searchWithAsset(normalizedSearch, pageable)
+        val products = if (matchServerOnly) {
+            if (accessibleAssetIds == null) {
+                installedProductRepository.searchByServerWithAsset(normalizedSearch, pageable)
+            } else {
+                installedProductRepository.searchByServerForAssetsWithAsset(normalizedSearch, accessibleAssetIds, pageable)
+            }
         } else {
-            installedProductRepository.searchForAssetsWithAsset(normalizedSearch, accessibleAssetIds, pageable)
+            if (accessibleAssetIds == null) {
+                installedProductRepository.searchWithAsset(normalizedSearch, pageable)
+            } else {
+                installedProductRepository.searchForAssetsWithAsset(normalizedSearch, accessibleAssetIds, pageable)
+            }
         }
-        val totalSystems = if (accessibleAssetIds == null) {
-            installedProductRepository.countDistinctAssets(normalizedSearch)
+        val totalSystems = if (matchServerOnly) {
+            if (accessibleAssetIds == null) {
+                installedProductRepository.countDistinctAssetsByServer(normalizedSearch)
+            } else {
+                installedProductRepository.countDistinctAssetsByServerForAssets(normalizedSearch, accessibleAssetIds)
+            }
         } else {
-            installedProductRepository.countDistinctAssetsForAssets(normalizedSearch, accessibleAssetIds)
+            if (accessibleAssetIds == null) {
+                installedProductRepository.countDistinctAssets(normalizedSearch)
+            } else {
+                installedProductRepository.countDistinctAssetsForAssets(normalizedSearch, accessibleAssetIds)
+            }
         }
 
         return InstalledProductListResponse(

@@ -31,3 +31,14 @@ export async function getInstalledProducts(search = '', limit = 500): Promise<In
   }
   return response.json();
 }
+
+export async function getInstalledProductsByServer(server = '', limit = 500): Promise<InstalledProductListResponse> {
+  const params = new URLSearchParams();
+  if (server.trim()) params.append('server', server.trim());
+  params.append('limit', String(limit));
+  const response = await authenticatedGet(`/api/installed-products/by-server?${params.toString()}`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch installed products for server: ${response.status}`);
+  }
+  return response.json();
+}

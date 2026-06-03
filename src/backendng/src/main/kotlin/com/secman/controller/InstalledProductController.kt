@@ -36,6 +36,19 @@ open class InstalledProductController(
         return HttpResponse.ok(installedProductListService.list(authentication, search, limit))
     }
 
+    @Get("/by-server")
+    open fun listByServer(
+        authentication: Authentication,
+        @QueryValue server: String,
+        @Nullable @QueryValue limit: Int?
+    ): HttpResponse<*> {
+        return try {
+            HttpResponse.ok(installedProductListService.listForServer(authentication, server, limit))
+        } catch (e: IllegalArgumentException) {
+            HttpResponse.badRequest(mapOf("error" to (e.message ?: "Invalid request")))
+        }
+    }
+
     @Post("/import")
     @Secured("ADMIN", "VULN")
     open fun importProducts(

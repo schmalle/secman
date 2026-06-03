@@ -40,6 +40,44 @@ interface InstalledProductRepository : JpaRepository<InstalledProduct, Long> {
     fun searchWithAsset(search: String?, pageable: Pageable): List<InstalledProduct>
 
     @Query("""
+        SELECT p FROM InstalledProduct p
+        JOIN FETCH p.asset
+        WHERE (:server IS NULL OR :server = ''
+            OR LOWER(p.asset.name) LIKE LOWER(CONCAT('%', :server, '%'))
+            OR LOWER(COALESCE(p.asset.ip, '')) LIKE LOWER(CONCAT('%', :server, '%')))
+        ORDER BY p.asset.name ASC, p.name ASC, p.vendor ASC, p.version ASC
+    """)
+    fun searchByServerWithAsset(server: String?, pageable: Pageable): List<InstalledProduct>
+
+    @Query("""
+        SELECT p FROM InstalledProduct p
+        JOIN FETCH p.asset
+        WHERE p.asset.id IN (:assetIds)
+          AND (:server IS NULL OR :server = ''
+            OR LOWER(p.asset.name) LIKE LOWER(CONCAT('%', :server, '%'))
+            OR LOWER(COALESCE(p.asset.ip, '')) LIKE LOWER(CONCAT('%', :server, '%')))
+        ORDER BY p.asset.name ASC, p.name ASC, p.vendor ASC, p.version ASC
+    """)
+    fun searchByServerForAssetsWithAsset(server: String?, assetIds: Set<Long>, pageable: Pageable): List<InstalledProduct>
+
+    @Query("""
+        SELECT COUNT(DISTINCT p.asset.id) FROM InstalledProduct p
+        WHERE (:server IS NULL OR :server = ''
+            OR LOWER(p.asset.name) LIKE LOWER(CONCAT('%', :server, '%'))
+            OR LOWER(COALESCE(p.asset.ip, '')) LIKE LOWER(CONCAT('%', :server, '%')))
+    """)
+    fun countDistinctAssetsByServer(server: String?): Long
+
+    @Query("""
+        SELECT COUNT(DISTINCT p.asset.id) FROM InstalledProduct p
+        WHERE p.asset.id IN (:assetIds)
+          AND (:server IS NULL OR :server = ''
+            OR LOWER(p.asset.name) LIKE LOWER(CONCAT('%', :server, '%'))
+            OR LOWER(COALESCE(p.asset.ip, '')) LIKE LOWER(CONCAT('%', :server, '%')))
+    """)
+    fun countDistinctAssetsByServerForAssets(server: String?, assetIds: Set<Long>): Long
+
+    @Query("""
         SELECT DISTINCT asset FROM InstalledProduct p
         JOIN p.asset asset
         WHERE LOWER(p.name) LIKE LOWER(CONCAT('%', :productName, '%'))
