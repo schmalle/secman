@@ -8,7 +8,7 @@
 #   ./scripts/secman query servers --dry-run
 #
 # Prerequisites:
-#   1. Java 21 must be installed and in PATH
+#   1. Java 25 must be installed and in PATH
 #   2. Build the JAR first: ./gradlew :cli:shadowJar
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

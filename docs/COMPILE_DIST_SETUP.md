@@ -61,7 +61,7 @@ operator to be explicit about the SSH user.
 On the **build host** (where you run the script):
 
 - `bash` 4+, `ssh`, `rsync`, `npm` available on `PATH`.
-- A working JDK 21 toolchain (used via `./gradlew`).
+- A working JDK 25 toolchain (used via `./gradlew`).
 - The Gradle wrapper (`./gradlew`) executable in the repo root.
 - Internet access for Gradle and npm dependency resolution (unless caches
   are pre-warmed).

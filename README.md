@@ -20,11 +20,11 @@ Security requirement, vulnerability and risk-assessment platform.
 
 ## Stack
 
-Kotlin 2.3.21 / Java 21 · Micronaut 4.10 · Hibernate JPA · Astro 6.3 + React 19 · Bootstrap 5.3 · MariaDB 11.4 · Gradle 9.5.0 (Kotlin DSL) · Picocli 4.7.7 · AWS SDK v2.
+Kotlin 2.3.21 / Java 25 · Micronaut 4.10 · Hibernate JPA · Astro 6.3 + React 19 · Bootstrap 5.3 · MariaDB 11.4 · Gradle 9.5.0 (Kotlin DSL) · Picocli 4.7.7 · AWS SDK v2.
 
 ## Quick Start (development)
 
-Prereqs: Java 21, Node 20+, MariaDB 11.4+, Git.
+Prereqs: Java 25, Node 20+, MariaDB 11.4+, Git.
 
 ```bash
 git clone https://github.com/schmalle/secman.git && cd secman

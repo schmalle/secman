@@ -42,7 +42,7 @@
 #   so runtime scripts that reference the repository-like tree keep working.
 #
 # PREREQUISITES
-#   Build host : bash, ssh, rsync, npm, JDK 21 toolchain, ./gradlew.
+#   Build host : bash, ssh, rsync, npm, JDK 25 toolchain, ./gradlew.
 #   Each target: sshd reachable on port 22, rsync installed, build host's
 #                public key in ~<user>/.ssh/authorized_keys, write access
 #                to <remote-dir>.

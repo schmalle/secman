@@ -268,8 +268,8 @@ java -jar "$JAR" query servers --severity HIGH,CRITICAL --min-days-open 1 --save
 
 `crontab -e` examples:
 ```cron
-PATH=/usr/bin:/bin:/usr/local/bin:/usr/lib/jvm/java-21-amazon-corretto/bin
-JAVA_HOME=/usr/lib/jvm/java-21-amazon-corretto
+PATH=/usr/bin:/bin:/usr/local/bin:/usr/lib/jvm/java-25-amazon-corretto/bin
+JAVA_HOME=/usr/lib/jvm/java-25-amazon-corretto
 
 0 2 * * *          /opt/secman/bin/cron-query-servers.sh >> /opt/secman/logs/cronjob.log 2>&1
 0 9-17 * * 1-5     /opt/secman/bin/cron-query-servers.sh

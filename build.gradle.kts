@@ -22,6 +22,6 @@ subprojects {
 ext {
     set("kotlinVersion", "2.3.21")
     set("micronautVersion", "4.10.13")
-    set("jvmTarget", "21")
+    set("jvmTarget", "25")
     set("picocliVersion", "4.7.7")
 }
