@@ -37,8 +37,8 @@ dependencies {
     implementation("software.amazon.awssdk:s3")
     
     // Kotlin
-    implementation("org.jetbrains.kotlin:kotlin-reflect:2.3.21")
-    implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.3.21")
+    implementation("org.jetbrains.kotlin:kotlin-reflect:2.4.0")
+    implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.4.0")
     
     // Logging
     runtimeOnly("ch.qos.logback:logback-classic")
@@ -69,12 +69,6 @@ kotlin {
 }
 
 tasks {
-    compileKotlin {
-        compilerOptions {
-            freeCompilerArgs.add("-Xannotation-default-target=param-property")
-        }
-    }
-
     // Enable JUnit 5 platform for tests - Feature 056
     test {
         useJUnitPlatform()

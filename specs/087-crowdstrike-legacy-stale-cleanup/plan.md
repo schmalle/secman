@@ -9,7 +9,7 @@ Extend the CrowdStrike stale-asset cleanup pipeline to find a second, additive c
 
 ## Technical Context
 
-**Language/Version**: Kotlin 2.3.21 / Java 21 (backend); TypeScript with Astro 6.2 + React 19 islands (frontend).
+**Language/Version**: Kotlin 2.4.0 / Java 21 (backend); TypeScript with Astro 6.2 + React 19 islands (frontend).
 **Primary Dependencies**: Micronaut 4.10 (DI, scheduling, security), Hibernate JPA, Micronaut Data, Flyway, Apache POI 5.3 (unused for this feature), Bootstrap 5.3, Axios.
 **Storage**: MariaDB 11.4 in production; H2 in-memory for unit tests; Testcontainers MariaDB 11.4 for integration tests. Both H2 and MariaDB support `COALESCE` in JPQL.
 **Testing**: JUnit 6, Mockk, AssertJ, `@MicronautTest`, Testcontainers (`BaseIntegrationTest` helper). User has explicitly requested unit + integration tests for this feature (see spec FR-001..016 mapped to acceptance scenarios), so test prep is in scope under Constitution Principle IV.

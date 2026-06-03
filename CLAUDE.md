@@ -4,7 +4,7 @@ Security requirement, vulnerability and risk management platform.
 
 ## Stack
 
-- Backend: Kotlin 2.3.21 / Java 21, Micronaut 4.10, Hibernate JPA → `src/backendng/`
+- Backend: Kotlin 2.4.0 / Java 21, Micronaut 4.10, Hibernate JPA → `src/backendng/`
 - Frontend: Astro 6.3 + React 19 islands, Axios, JWT in localStorage → `src/frontend/`
 - CLI: Kotlin + Picocli 4.7.7, AWS SDK v2 → `src/cli/`
 - DB: MariaDB 11.4, Flyway + Hibernate auto-migration

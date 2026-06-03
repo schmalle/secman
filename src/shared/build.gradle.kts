@@ -53,12 +53,6 @@ kotlin {
 }
 
 tasks {
-    compileKotlin {
-        compilerOptions {
-            freeCompilerArgs.add("-Xannotation-default-target=param-property")
-        }
-    }
-    
     test {
         useJUnitPlatform()
     }

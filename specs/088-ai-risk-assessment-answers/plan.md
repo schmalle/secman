@@ -5,7 +5,7 @@
 
 ## Tech stack
 
-- **Backend**: Kotlin 2.3.21 / Java 21, Micronaut 4.10, Hibernate JPA. New code under `src/backendng/src/main/kotlin/com/secman/`.
+- **Backend**: Kotlin 2.4.0 / Java 21, Micronaut 4.10, Hibernate JPA. New code under `src/backendng/src/main/kotlin/com/secman/`.
 - **Frontend**: Astro 6.3 + React 19 islands, Axios, Bootstrap classes. New + extended components under `src/frontend/src/components/`.
 - **DB**: MariaDB 11.4 via Flyway. New migration **V215**.
 - **External**: OpenRouter (`https://openrouter.ai/api/v1`) — already wired in `application.yml` for `TranslationService`. JDK `HttpClient` pattern (not Micronaut `@Client`).
