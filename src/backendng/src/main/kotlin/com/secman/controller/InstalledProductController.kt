@@ -2,10 +2,8 @@ package com.secman.controller
 
 import com.secman.dto.InstalledProductImportRequest
 import com.secman.dto.InstalledProductListResponse
-import com.secman.dto.InstalledProductResponse
-import com.secman.repository.InstalledProductRepository
-import com.secman.service.AccessibleAssetIdsCache
 import com.secman.service.InstalledProductImportService
+import com.secman.service.InstalledProductListService
 import io.micronaut.core.annotation.Nullable
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.annotation.Body
@@ -24,9 +22,8 @@ import org.slf4j.LoggerFactory
 @Secured("ADMIN", "VULN", "SECCHAMPION")
 @ExecuteOn(TaskExecutors.BLOCKING)
 open class InstalledProductController(
-    private val installedProductRepository: InstalledProductRepository,
     private val installedProductImportService: InstalledProductImportService,
-    private val accessibleAssetIdsCache: AccessibleAssetIdsCache
+    private val installedProductListService: InstalledProductListService
 ) {
     private val log = LoggerFactory.getLogger(InstalledProductController::class.java)
 
@@ -36,54 +33,7 @@ open class InstalledProductController(
         @Nullable @QueryValue search: String?,
         @Nullable @QueryValue limit: Int?
     ): HttpResponse<InstalledProductListResponse> {
-        val effectiveLimit = (limit ?: 500).coerceIn(1, 2000)
-        val normalizedSearch = search?.trim().orEmpty()
-        val isAdmin = authentication.roles.contains("ADMIN")
-        val accessibleAssetIds = if (isAdmin) null else accessibleAssetIdsCache.get(authentication)
-
-        if (accessibleAssetIds != null && accessibleAssetIds.isEmpty()) {
-            return HttpResponse.ok(
-                InstalledProductListResponse(
-                    products = emptyList(),
-                    totalProducts = 0,
-                    totalSystems = 0
-                )
-            )
-        }
-
-        val products = if (accessibleAssetIds == null) {
-            installedProductRepository.search(normalizedSearch).take(effectiveLimit)
-        } else {
-            installedProductRepository.searchForAssets(normalizedSearch, accessibleAssetIds).take(effectiveLimit)
-        }
-        val totalSystems = if (accessibleAssetIds == null) {
-            installedProductRepository.countDistinctAssets(normalizedSearch)
-        } else {
-            installedProductRepository.countDistinctAssetsForAssets(normalizedSearch, accessibleAssetIds)
-        }
-
-        return HttpResponse.ok(
-            InstalledProductListResponse(
-                products = products.map { product ->
-                    InstalledProductResponse(
-                        id = requireNotNull(product.id),
-                        assetId = requireNotNull(product.asset.id),
-                        hostname = product.asset.name,
-                        name = product.name,
-                        vendor = product.vendor,
-                        version = product.version,
-                        category = product.category,
-                        installationPath = null,
-                        installedAt = product.installedAt,
-                        lastUsedAt = product.lastUsedAt,
-                        lastUpdatedAt = product.lastUpdatedAt,
-                        importedAt = product.importedAt
-                    )
-                },
-                totalProducts = products.size,
-                totalSystems = totalSystems
-            )
-        )
+        return HttpResponse.ok(installedProductListService.list(authentication, search, limit))
     }
 
     @Post("/import")

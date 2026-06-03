@@ -5,6 +5,7 @@ import com.secman.domain.InstalledProduct
 import io.micronaut.data.annotation.Query
 import io.micronaut.data.annotation.Repository
 import io.micronaut.data.jpa.repository.JpaRepository
+import io.micronaut.data.model.Pageable
 
 @Repository
 interface InstalledProductRepository : JpaRepository<InstalledProduct, Long> {
@@ -36,7 +37,7 @@ interface InstalledProductRepository : JpaRepository<InstalledProduct, Long> {
             OR LOWER(p.asset.name) LIKE LOWER(CONCAT('%', :search, '%')))
         ORDER BY p.name ASC, p.vendor ASC, p.version ASC, p.asset.name ASC
     """)
-    fun search(search: String?): List<InstalledProduct>
+    fun searchWithAsset(search: String?, pageable: Pageable): List<InstalledProduct>
 
     @Query("""
         SELECT DISTINCT asset FROM InstalledProduct p
@@ -57,6 +58,7 @@ interface InstalledProductRepository : JpaRepository<InstalledProduct, Long> {
 
     @Query("""
         SELECT p FROM InstalledProduct p
+        JOIN FETCH p.asset
         WHERE p.asset.id IN (:assetIds)
           AND (:search IS NULL OR :search = ''
             OR LOWER(p.name) LIKE LOWER(CONCAT('%', :search, '%'))
@@ -65,7 +67,7 @@ interface InstalledProductRepository : JpaRepository<InstalledProduct, Long> {
             OR LOWER(p.asset.name) LIKE LOWER(CONCAT('%', :search, '%')))
         ORDER BY p.name ASC, p.vendor ASC, p.version ASC, p.asset.name ASC
     """)
-    fun searchForAssets(search: String?, assetIds: Set<Long>): List<InstalledProduct>
+    fun searchForAssetsWithAsset(search: String?, assetIds: Set<Long>, pageable: Pageable): List<InstalledProduct>
 
     @Query("""
         SELECT COUNT(DISTINCT p.asset.id) FROM InstalledProduct p

@@ -23,13 +23,9 @@ const InstalledProducts: React.FC = () => {
   const [sendingNotification, setSendingNotification] = useState(false);
   const [notifyJob, setNotifyJob] = useState<EmailBroadcastJob | null>(null);
   const [notifyError, setNotifyError] = useState<string | null>(null);
-  const [canNotifyUsers, setCanNotifyUsers] = useState(false);
+  const [canNotifyUsers] = useState(() => canNotifyProductUsers(getUser()?.roles));
 
   const notifyProductName = products.length > 0 ? products[0].name : search.trim();
-
-  useEffect(() => {
-    setCanNotifyUsers(canNotifyProductUsers(getUser()?.roles));
-  }, []);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -144,26 +140,20 @@ const InstalledProducts: React.FC = () => {
             <thead className="table-light">
               <tr>
                 <th>Product</th>
-                <th>Vendor</th>
                 <th>Version</th>
                 <th>System</th>
-                <th>Category</th>
-                <th>Last imported</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={6} className="text-center py-4">Loading installed products...</td></tr>
+                <tr><td colSpan={3} className="text-center py-4">Loading installed products...</td></tr>
               ) : products.length === 0 ? (
-                <tr><td colSpan={6} className="text-center py-4 text-muted">No installed products found.</td></tr>
+                <tr><td colSpan={3} className="text-center py-4 text-muted">No installed products found.</td></tr>
               ) : products.map((product) => (
                 <tr key={product.id}>
                   <td className="fw-semibold">{product.name}</td>
-                  <td>{product.vendor || '—'}</td>
                   <td><code>{product.version || '—'}</code></td>
                   <td><a href={`/assets/${product.assetId}`}>{product.hostname}</a></td>
-                  <td>{product.category || '—'}</td>
-                  <td>{new Date(product.importedAt).toLocaleString()}</td>
                 </tr>
               ))}
             </tbody>

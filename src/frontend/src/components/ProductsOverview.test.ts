@@ -42,6 +42,18 @@ test('installed products exposes the product notify action', () => {
     assert.match(source, /createProductBroadcast/);
 });
 
+test('installed products renders only product, version, and system columns', () => {
+    const source = readFileSync(new URL('./InstalledProducts.tsx', import.meta.url), 'utf8');
+
+    assert.doesNotMatch(source, /<th>Vendor<\/th>/);
+    assert.doesNotMatch(source, /<th>Category<\/th>/);
+    assert.doesNotMatch(source, /<th>Last imported<\/th>/);
+    assert.doesNotMatch(source, /product\.vendor/);
+    assert.doesNotMatch(source, /product\.category/);
+    assert.doesNotMatch(source, /product\.importedAt/);
+    assert.match(source, /colSpan=\{3\}/);
+});
+
 test('admin email broadcast preview sanitizes html before rendering', () => {
     const source = readFileSync(new URL('./admin/EmailBroadcastManager.tsx', import.meta.url), 'utf8');
 
