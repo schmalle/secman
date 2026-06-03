@@ -42,6 +42,16 @@ test('installed products exposes the product notify action', () => {
     assert.match(source, /createProductBroadcast/);
 });
 
+test('installed products supports server-specific product lookup', () => {
+    const componentSource = readFileSync(new URL('./InstalledProducts.tsx', import.meta.url), 'utf8');
+    const serviceSource = readFileSync(new URL('../services/installedProductService.ts', import.meta.url), 'utf8');
+
+    assert.match(componentSource, /Search by server/);
+    assert.match(componentSource, /getInstalledProductsByServer\(serverSearch\)/);
+    assert.match(serviceSource, /getInstalledProductsByServer/);
+    assert.match(serviceSource, /\/api\/installed-products\/by-server/);
+});
+
 test('installed products renders only product, version, and system columns', () => {
     const source = readFileSync(new URL('./InstalledProducts.tsx', import.meta.url), 'utf8');
 
