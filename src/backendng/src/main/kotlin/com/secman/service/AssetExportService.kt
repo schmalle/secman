@@ -150,7 +150,7 @@ class AssetExportService(
     private fun createHeaderRow(sheet: org.apache.poi.ss.usermodel.Sheet, headerStyle: CellStyle, workbook: Workbook) {
         val headerRow = sheet.createRow(0)
         val headers = listOf(
-            "Name", "Type", "IP Address", "Owner", "Description",
+            "Name", "Type", "IP Address", "URI", "Owner", "Description",
             "Groups", "Cloud Account ID", "Cloud Instance ID", "OS Version", "AD Domain",
             "Workgroups", "Created At", "Updated At", "Last Seen"
         )
@@ -191,68 +191,74 @@ class AssetExportService(
             cellStyle = styles.text
         }
 
-        // Owner
+        // URI
         row.createCell(3).apply {
+            setCellValue(ExcelSanitizer.sanitize(dto.uri))
+            cellStyle = styles.text
+        }
+
+        // Owner
+        row.createCell(4).apply {
             setCellValue(ExcelSanitizer.sanitize(dto.owner))
             cellStyle = styles.text
         }
 
         // Description
-        row.createCell(4).apply {
+        row.createCell(5).apply {
             setCellValue(ExcelSanitizer.sanitize(dto.description))
             cellStyle = styles.wrapText
         }
 
         // Groups
-        row.createCell(5).apply {
+        row.createCell(6).apply {
             setCellValue(ExcelSanitizer.sanitize(dto.groups))
             cellStyle = styles.text
         }
 
         // Cloud Account ID
-        row.createCell(6).apply {
+        row.createCell(7).apply {
             setCellValue(ExcelSanitizer.sanitize(dto.cloudAccountId))
             cellStyle = styles.text
         }
 
         // Cloud Instance ID
-        row.createCell(7).apply {
+        row.createCell(8).apply {
             setCellValue(ExcelSanitizer.sanitize(dto.cloudInstanceId))
             cellStyle = styles.text
         }
 
         // OS Version
-        row.createCell(8).apply {
+        row.createCell(9).apply {
             setCellValue(ExcelSanitizer.sanitize(dto.osVersion))
             cellStyle = styles.text
         }
 
         // AD Domain
-        row.createCell(9).apply {
+        row.createCell(10).apply {
             setCellValue(ExcelSanitizer.sanitize(dto.adDomain))
             cellStyle = styles.text
         }
 
         // Workgroups (comma-separated)
-        row.createCell(10).apply {
+        row.createCell(11).apply {
             setCellValue(ExcelSanitizer.sanitize(dto.workgroups))
             cellStyle = styles.text
         }
 
         // Created At
-        row.createCell(11).apply {
+        row.createCell(12).apply {
             setCellValue(dto.createdAt?.format(dateFormatter) ?: "")
             cellStyle = styles.text
         }
 
         // Updated At
-        row.createCell(12).apply {
+        row.createCell(13).apply {
             setCellValue(dto.updatedAt?.format(dateFormatter) ?: "")
             cellStyle = styles.text
         }
 
         // Last Seen
-        row.createCell(13).apply {
+        row.createCell(14).apply {
             setCellValue(dto.lastSeen?.format(dateFormatter) ?: "")
             cellStyle = styles.text
         }
@@ -265,17 +271,18 @@ class AssetExportService(
         sheet.setColumnWidth(0, 6000)  // Name
         sheet.setColumnWidth(1, 4000)  // Type
         sheet.setColumnWidth(2, 4000)  // IP Address
-        sheet.setColumnWidth(3, 5000)  // Owner
-        sheet.setColumnWidth(4, 8000)  // Description
-        sheet.setColumnWidth(5, 5000)  // Groups
-        sheet.setColumnWidth(6, 5000)  // Cloud Account ID
-        sheet.setColumnWidth(7, 5000)  // Cloud Instance ID
-        sheet.setColumnWidth(8, 4000)  // OS Version
-        sheet.setColumnWidth(9, 5000)  // AD Domain
-        sheet.setColumnWidth(10, 6000) // Workgroups
-        sheet.setColumnWidth(11, 5000) // Created At
-        sheet.setColumnWidth(12, 5000) // Updated At
-        sheet.setColumnWidth(13, 5000) // Last Seen
+        sheet.setColumnWidth(3, 9000)  // URI
+        sheet.setColumnWidth(4, 5000)  // Owner
+        sheet.setColumnWidth(5, 8000)  // Description
+        sheet.setColumnWidth(6, 5000)  // Groups
+        sheet.setColumnWidth(7, 5000)  // Cloud Account ID
+        sheet.setColumnWidth(8, 5000)  // Cloud Instance ID
+        sheet.setColumnWidth(9, 4000)  // OS Version
+        sheet.setColumnWidth(10, 5000) // AD Domain
+        sheet.setColumnWidth(11, 6000) // Workgroups
+        sheet.setColumnWidth(12, 5000) // Created At
+        sheet.setColumnWidth(13, 5000) // Updated At
+        sheet.setColumnWidth(14, 5000) // Last Seen
     }
 
     /**

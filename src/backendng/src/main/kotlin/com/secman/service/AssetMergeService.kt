@@ -209,7 +209,7 @@ open class AssetMergeService(
      * Idempotent asset import: find by name (case-insensitive) and merge, or create new.
      *
      * Merge strategy for existing assets:
-     * - ip, description: update if provided
+     * - ip, uri, description: update if provided
      * - cloudAccountId, cloudInstanceId: update if provided
      * - networkZone: update if provided AND current is null or UNKNOWN (never downgrade EXTERNAL/DMZ)
      * - lastSeen: always set to now()
@@ -224,6 +224,7 @@ open class AssetMergeService(
         type: String,
         owner: String,
         ip: String? = null,
+        uri: String? = null,
         description: String? = null,
         networkZone: NetworkZone? = null,
         tags: Map<String, String>? = null,
@@ -234,7 +235,7 @@ open class AssetMergeService(
 
         val (asset, created) = if (existing != null) {
             log.debug("Import upsert: merging into existing asset {} (id={})", existing.name, existing.id)
-            mergeImportData(existing, ip, description, networkZone, cloudAccountId, cloudInstanceId)
+            mergeImportData(existing, ip, uri, description, networkZone, cloudAccountId, cloudInstanceId)
             Pair(existing, false)
         } else {
             log.debug("Import upsert: creating new asset {}", name)
@@ -243,6 +244,7 @@ open class AssetMergeService(
                 type = type,
                 owner = owner,
                 ip = ip,
+                uri = uri,
                 description = description,
                 networkZone = networkZone,
                 cloudAccountId = cloudAccountId,
@@ -264,6 +266,7 @@ open class AssetMergeService(
     private fun mergeImportData(
         asset: Asset,
         newIp: String?,
+        newUri: String?,
         newDescription: String?,
         newNetworkZone: NetworkZone?,
         newCloudAccountId: String?,
@@ -271,6 +274,10 @@ open class AssetMergeService(
     ) {
         if (!newIp.isNullOrBlank() && newIp != asset.ip) {
             asset.ip = newIp
+        }
+
+        if (!newUri.isNullOrBlank() && newUri != asset.uri) {
+            asset.uri = newUri
         }
 
         if (!newDescription.isNullOrBlank()) {

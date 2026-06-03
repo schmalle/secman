@@ -6,6 +6,7 @@ import com.secman.dto.mcp.McpExecutionContext
 import com.secman.repository.AssetRepository
 import jakarta.inject.Inject
 import jakarta.inject.Singleton
+import java.net.URI
 
 /**
  * MCP tool for updating an existing asset's properties.
@@ -66,6 +67,11 @@ class UpdateAssetTool(
                 "type" to "string",
                 "description" to "New IP address"
             ),
+            "uri" to mapOf(
+                "type" to "string",
+                "description" to "New asset URI (http, https, or urn)",
+                "maxLength" to 2048
+            ),
             "description" to mapOf(
                 "type" to "string",
                 "description" to "New asset description"
@@ -82,6 +88,25 @@ class UpdateAssetTool(
         ),
         "required" to listOf("assetId")
     )
+
+    private fun normalizeUri(value: String?): String? {
+        val trimmed = value?.trim()?.takeIf { it.isNotBlank() } ?: return null
+        if (trimmed.length > 2048) {
+            throw IllegalArgumentException("URI must not exceed 2048 characters")
+        }
+        val parsed = URI.create(trimmed)
+        val scheme = parsed.scheme?.lowercase()
+        if (scheme.isNullOrBlank()) {
+            throw IllegalArgumentException("URI must include a scheme, such as https:// or urn:")
+        }
+        if (scheme !in setOf("http", "https", "urn")) {
+            throw IllegalArgumentException("URI scheme must be http, https, or urn")
+        }
+        if (scheme in setOf("http", "https") && parsed.host.isNullOrBlank()) {
+            throw IllegalArgumentException("HTTP(S) URI must include a host")
+        }
+        return trimmed
+    }
 
     override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
         // Require User Delegation for audit trail
@@ -154,6 +179,15 @@ class UpdateAssetTool(
                 updatedFields.add("ip")
             }
 
+            (arguments["uri"] as? String)?.let { newUri ->
+                asset.uri = try {
+                    normalizeUri(newUri)
+                } catch (e: IllegalArgumentException) {
+                    return McpToolResult.error("VALIDATION_ERROR", e.message ?: "Invalid URI")
+                }
+                updatedFields.add("uri")
+            }
+
             (arguments["description"] as? String)?.let { newDescription ->
                 asset.description = newDescription.trim().takeIf { it.isNotBlank() }
                 updatedFields.add("description")
@@ -189,6 +223,7 @@ class UpdateAssetTool(
                 "type" to savedAsset.type,
                 "owner" to savedAsset.owner,
                 "ip" to savedAsset.ip,
+                "uri" to savedAsset.uri,
                 "criticality" to savedAsset.criticality?.name,
                 "adDomain" to savedAsset.adDomain,
                 "updatedFields" to updatedFields,

@@ -52,6 +52,15 @@ data class Asset(
     var ip: String? = null,
 
     /**
+     * Canonical URI for assets that are identified by an addressable endpoint
+     * rather than only a hostname or IP address. Examples include web apps,
+     * SaaS tenants, APIs, and URNs.
+     */
+    @Column(name = "uri", length = 2048)
+    @Size(max = 2048)
+    var uri: String? = null,
+
+    /**
      * Numeric representation of IP address for efficient range queries
      * Feature: 020-i-want-to (IP Address Mapping)
      * Computed from ip field in @PrePersist and @PreUpdate
@@ -377,7 +386,7 @@ data class Asset(
     }
 
     override fun toString(): String {
-        return "Asset(id=$id, name='$name', type='$type', owner='$owner', ip='$ip')"
+        return "Asset(id=$id, name='$name', type='$type', owner='$owner', ip='$ip', uri='$uri')"
     }
 
     override fun equals(other: Any?): Boolean {

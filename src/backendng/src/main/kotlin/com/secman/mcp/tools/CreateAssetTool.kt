@@ -9,6 +9,7 @@ import com.secman.repository.UserRepository
 import com.secman.service.McpAccessibleAssetsCacheInvalidator
 import jakarta.inject.Inject
 import jakarta.inject.Singleton
+import java.net.URI
 
 /**
  * MCP tool for creating a new asset in the inventory.
@@ -24,6 +25,7 @@ import jakarta.inject.Singleton
  * - type (required): Asset type (e.g., "SERVER", "WORKSTATION")
  * - owner (required): Owner username (max 255)
  * - ip (optional): IP address
+ * - uri (optional): Asset URI (http, https, or urn)
  * - description (optional): Asset description
  * - criticality (optional): CRITICAL, HIGH, MEDIUM, LOW, or NA
  * - adDomain (optional): Active Directory domain
@@ -68,6 +70,11 @@ class CreateAssetTool(
                 "type" to "string",
                 "description" to "IP address of the asset"
             ),
+            "uri" to mapOf(
+                "type" to "string",
+                "description" to "URI for endpoint-style assets (http, https, or urn)",
+                "maxLength" to 2048
+            ),
             "description" to mapOf(
                 "type" to "string",
                 "description" to "Asset description"
@@ -88,6 +95,25 @@ class CreateAssetTool(
         ),
         "required" to listOf("name", "type", "owner")
     )
+
+    private fun normalizeUri(value: String?): String? {
+        val trimmed = value?.trim()?.takeIf { it.isNotBlank() } ?: return null
+        if (trimmed.length > 2048) {
+            throw IllegalArgumentException("URI must not exceed 2048 characters")
+        }
+        val parsed = URI.create(trimmed)
+        val scheme = parsed.scheme?.lowercase()
+        if (scheme.isNullOrBlank()) {
+            throw IllegalArgumentException("URI must include a scheme, such as https:// or urn:")
+        }
+        if (scheme !in setOf("http", "https", "urn")) {
+            throw IllegalArgumentException("URI scheme must be http, https, or urn")
+        }
+        if (scheme in setOf("http", "https") && parsed.host.isNullOrBlank()) {
+            throw IllegalArgumentException("HTTP(S) URI must include a host")
+        }
+        return trimmed
+    }
 
     override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
         // Require User Delegation for audit trail
@@ -144,6 +170,11 @@ class CreateAssetTool(
 
         // Extract optional parameters
         val ip = (arguments["ip"] as? String)?.trim()?.takeIf { it.isNotBlank() }
+        val uri = try {
+            normalizeUri(arguments["uri"] as? String)
+        } catch (e: IllegalArgumentException) {
+            return McpToolResult.error("VALIDATION_ERROR", e.message ?: "Invalid URI")
+        }
         val description = (arguments["description"] as? String)?.trim()?.takeIf { it.isNotBlank() }
         val adDomain = (arguments["adDomain"] as? String)?.trim()?.takeIf { it.isNotBlank() }
         val cloudAccountId = (arguments["cloudAccountId"] as? String)?.trim()?.takeIf { it.isNotBlank() }
@@ -159,6 +190,7 @@ class CreateAssetTool(
                 name = assetName,
                 type = assetType,
                 ip = ip,
+                uri = uri,
                 owner = owner,
                 description = description,
                 criticality = criticality,
@@ -181,6 +213,7 @@ class CreateAssetTool(
                 "type" to savedAsset.type,
                 "owner" to savedAsset.owner,
                 "ip" to savedAsset.ip,
+                "uri" to savedAsset.uri,
                 "criticality" to savedAsset.criticality?.name,
                 "adDomain" to savedAsset.adDomain,
                 "cloudAccountId" to savedAsset.cloudAccountId,
