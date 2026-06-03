@@ -1,7 +1,7 @@
 # Secman Backend Container
 # Expects the fat JAR to be pre-built on the host (build-all.sh handles this).
 # This avoids needing 4GB+ RAM inside Docker for the Kotlin/Gradle compilation.
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:25-jre
 
 LABEL maintainer="secman"
 LABEL description="Secman backend (Micronaut/Kotlin)"

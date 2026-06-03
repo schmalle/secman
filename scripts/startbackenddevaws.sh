@@ -63,7 +63,7 @@ command -v aws >/dev/null 2>&1 || { echo "ERROR: aws CLI is required. See docs/A
 command -v jq  >/dev/null 2>&1 || { echo "ERROR: jq is required. See docs/AWS.md.";       exit 1; }
 command -v openssl >/dev/null 2>&1 || { echo "ERROR: openssl is required.";          exit 1; }
 command -v java >/dev/null 2>&1 || {
-  echo "ERROR: java not found. Install via SDKMAN ('sdk install java 21-amzn') or set SDKMAN_DIR."
+  echo "ERROR: java not found. Install via SDKMAN ('sdk install java 25-amzn') or set SDKMAN_DIR."
   exit 1
 }
 

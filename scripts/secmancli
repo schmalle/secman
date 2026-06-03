@@ -17,7 +17,7 @@
 #   ./scripts/secmancli send-notifications --dry-run
 #
 # Prerequisites:
-#   1. Java 21 must be installed and in PATH
+#   1. Java 25 must be installed and in PATH
 #   2. Proton Pass CLI (pass-cli) must be installed and logged in
 #   3. Build the JAR first: ./gradlew :cli:shadowJar
 

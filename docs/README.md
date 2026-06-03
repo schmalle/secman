@@ -16,7 +16,7 @@ Security requirement, vulnerability and risk assessment management tool.
    /*      ───►  Frontend :4321 (Astro/React SSR)
 ```
 
-Stack: Kotlin 2.3.21 / Java 21 · Micronaut 4.10 · Hibernate JPA · Astro 6.3 / React 19 · Bootstrap 5.3 · MariaDB 11.4 · Gradle 9.5.0 · Picocli 4.7.7.
+Stack: Kotlin 2.3.21 / Java 25 · Micronaut 4.10 · Hibernate JPA · Astro 6.3 / React 19 · Bootstrap 5.3 · MariaDB 11.4 · Gradle 9.5.0 · Picocli 4.7.7.
 
 ## Index
 

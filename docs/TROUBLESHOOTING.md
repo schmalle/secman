@@ -56,7 +56,7 @@ SELECT table_name, ROUND(data_length/1024/1024,2) AS mb
 
 | Symptom | Fix |
 |---|---|
-| `Command not found` in cron | add `PATH` and `JAVA_HOME` to crontab (point at `/usr/lib/jvm/java-21-amazon-corretto/bin`) |
+| `Command not found` in cron | add `PATH` and `JAVA_HOME` to crontab (point at `/usr/lib/jvm/java-25-amazon-corretto/bin`) |
 | `Credentials not found` | check format — no spaces around `=` (`FALCON_CLIENT_ID=abc` not `FALCON_CLIENT_ID = abc`); `chmod 600` |
 | CrowdStrike `401 Unauthorized` | verify client/secret + region in `FALCON_BASE_URL` (US-1/US-2/EU-1/GOV); required scopes |
 | Out of memory | `java -Xmx1g -jar secman-cli.jar …` (or in cron wrapper) |

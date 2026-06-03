@@ -81,8 +81,8 @@ is not required.
 curl -s "https://get.sdkman.io" | bash
 source "$HOME/.sdkman/bin/sdkman-init.sh"
 
-# Java 21 (Amazon Corretto build via SDKMAN)
-sdk install java 21-amzn
+# Java 25 (Amazon Corretto build via SDKMAN)
+sdk install java 25-amzn
 
 # Gradle 9.5.0 (project version)
 sdk install gradle 9.5
@@ -99,10 +99,10 @@ in the cron environment.
 ### Java + Gradle via system packages (alternative)
 
 ```bash
-# Java 21 (Corretto)
-sudo dnf install -y java-21-amazon-corretto-devel   # AL2023
-# or, on AL2:
-sudo amazon-linux-extras enable corretto21 && sudo yum install -y java-21-amazon-corretto-devel
+# Java 25 (Corretto)
+sudo dnf install -y java-25-amazon-corretto-devel   # AL2023, if available
+# On AL2 or older distro releases, install an OpenJDK/Corretto 25 package
+# from your Java vendor if the OS repositories do not provide one.
 
 # System Gradle (optional — ./gradlew works as a fallback)
 curl -fsSL https://services.gradle.org/distributions/gradle-9.5-bin.zip -o /tmp/gradle.zip
