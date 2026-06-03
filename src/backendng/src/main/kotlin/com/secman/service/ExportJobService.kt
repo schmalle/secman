@@ -511,6 +511,7 @@ open class ExportJobService(
             system = null,
             exceptionStatus = "not_excepted",
             product = null,
+            cve = null,
             adDomain = null,
             cloudAccountId = null,
             page = page,

@@ -80,6 +80,9 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
   const systemFilterTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [exceptionFilter, setExceptionFilter] = useState<string>("not_excepted");
   const [productFilter, setProductFilter] = useState<string>("");
+  const [cveFilter, setCveFilter] = useState<string>("");
+  const [debouncedCveFilter, setDebouncedCveFilter] = useState<string>("");
+  const cveFilterTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [adDomainFilter, setAdDomainFilter] = useState<string>("");
   const [cloudAccountIdFilter, setCloudAccountIdFilter] = useState<string>("");
 
@@ -111,6 +114,9 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
     return () => {
       if (systemFilterTimeoutRef.current) {
         clearTimeout(systemFilterTimeoutRef.current);
+      }
+      if (cveFilterTimeoutRef.current) {
+        clearTimeout(cveFilterTimeoutRef.current);
       }
     };
   }, []);
@@ -145,6 +151,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
     debouncedSystemFilter,
     exceptionFilter,
     productFilter,
+    debouncedCveFilter,
     adDomainFilter,
     cloudAccountIdFilter,
     currentPage,
@@ -210,7 +217,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
 
       // PERFORMANCE: When only page/sort changes (filters unchanged), pass the known total
       // to skip the expensive COUNT query with NOT EXISTS on 358k+ rows
-      const currentFilterKey = `${severityFilter}|${debouncedSystemFilter}|${exceptionFilter}|${productFilter}|${adDomainFilter}|${cloudAccountIdFilter}`;
+      const currentFilterKey = `${severityFilter}|${debouncedSystemFilter}|${exceptionFilter}|${productFilter}|${debouncedCveFilter}|${adDomainFilter}|${cloudAccountIdFilter}`;
       const filtersUnchanged = currentFilterKey === prevFiltersRef.current;
       const knownTotal = filtersUnchanged && paginatedResponse
         ? paginatedResponse.totalElements
@@ -222,6 +229,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
         debouncedSystemFilter || undefined,
         exceptionFilter || undefined,
         productFilter || undefined,
+        debouncedCveFilter || undefined,
         adDomainFilter || undefined,
         cloudAccountIdFilter || undefined,
         currentPage,
@@ -871,6 +879,30 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
 
       {/* Second row of filters */}
       <div className="row mb-4">
+        <div className="col-md-3">
+          <label htmlFor="cveFilter" className="form-label">
+            <i className="bi bi-search me-2"></i>
+            CVE
+          </label>
+          <input
+            type="search"
+            id="cveFilter"
+            className="form-control"
+            placeholder="Search by CVE, e.g. CVE-2026-1234..."
+            value={cveFilter}
+            onChange={(e) => {
+              const value = e.target.value.trim();
+              setCveFilter(value);
+              if (cveFilterTimeoutRef.current) {
+                clearTimeout(cveFilterTimeoutRef.current);
+              }
+              cveFilterTimeoutRef.current = setTimeout(() => {
+                setDebouncedCveFilter(value);
+                handleFilterChange();
+              }, 300);
+            }}
+          />
+        </div>
         <div className="col-md-3">
           <label htmlFor="adDomainFilter" className="form-label">
             <i className="bi bi-building me-2"></i>
