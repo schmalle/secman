@@ -31,22 +31,22 @@ dependencies {
     implementation("io.micronaut.cache:micronaut-cache-caffeine")
 
     // Database
-    implementation("io.micronaut.data:micronaut-data-hibernate-jpa:4.14.4")
-    implementation("io.micronaut.sql:micronaut-hibernate-jpa:7.0.0")
-    implementation("io.micronaut.sql:micronaut-jdbc-hikari:7.0.0")
+    implementation("io.micronaut.data:micronaut-data-hibernate-jpa:5.0.4")
+    implementation("io.micronaut.sql:micronaut-hibernate-jpa:7.0.1")
+    implementation("io.micronaut.sql:micronaut-jdbc-hikari:7.0.1")
     runtimeOnly("org.mariadb.jdbc:mariadb-java-client:3.5.8")
 
-	implementation("io.micronaut.flyway:micronaut-flyway:7.9.2")
-	runtimeOnly("org.flywaydb:flyway-core:12.6.1")
-	runtimeOnly("org.flywaydb:flyway-mysql:12.6.1")
+	implementation("io.micronaut.flyway:micronaut-flyway:8.0.0")
+	runtimeOnly("org.flywaydb:flyway-core:12.7.0")
+	runtimeOnly("org.flywaydb:flyway-mysql:12.7.0")
 	
     // Security
-    implementation("io.micronaut.security:micronaut-security-jwt:4.18.0")
-    implementation("io.micronaut.security:micronaut-security-oauth2:4.18.0")
+    implementation("io.micronaut.security:micronaut-security-jwt:5.0.0")
+    implementation("io.micronaut.security:micronaut-security-oauth2:5.0.0")
 
     // WebAuthn/Passkey support
-    implementation("com.webauthn4j:webauthn4j-core:0.31.5.RELEASE")
-    implementation("com.webauthn4j:webauthn4j-metadata:0.31.5.RELEASE")
+    implementation("com.webauthn4j:webauthn4j-core:0.31.6.RELEASE")
+    implementation("com.webauthn4j:webauthn4j-metadata:0.31.6.RELEASE")
 
     // Validation
     implementation("io.micronaut.validation:micronaut-validation")
@@ -56,7 +56,7 @@ dependencies {
     implementation("com.googlecode.owasp-java-html-sanitizer:owasp-java-html-sanitizer:20260313.1")
 
     // Email
-    implementation("io.micronaut.email:micronaut-email-javamail:2.11.0")
+    implementation("io.micronaut.email:micronaut-email-javamail:3.0.0")
     implementation("org.eclipse.angus:angus-mail:2.0.5")
 
     // Email templates (Thymeleaf) - Feature 035
@@ -64,7 +64,7 @@ dependencies {
     implementation("org.thymeleaf:thymeleaf:3.1.5.RELEASE")
     
     // Serialization
-    implementation("io.micronaut.serde:micronaut-serde-jackson:2.16.2")
+    implementation("io.micronaut.serde:micronaut-serde-jackson:3.0.0")
     
     // Kotlin
     implementation("org.jetbrains.kotlin:kotlin-reflect:${kotlinVersion}")
@@ -80,7 +80,7 @@ dependencies {
     implementation("io.micronaut.reactor:micronaut-reactor-http-client")
     
     // Logging
-    runtimeOnly("ch.qos.logback:logback-classic:1.5.32")
+    runtimeOnly("ch.qos.logback:logback-classic:1.5.34")
     // Bridge Log4j to Logback (required for Apache POI)
     runtimeOnly("org.apache.logging.log4j:log4j-to-slf4j:2.26.0")
     // Logstash encoder for JSON logging (Feature 046)
@@ -115,11 +115,11 @@ dependencies {
 
     // Test dependencies - Feature 056
     kspTest("io.micronaut:micronaut-inject-java")
-    testImplementation("org.junit.jupiter:junit-jupiter-api:6.0.3")
-    testImplementation("org.junit.jupiter:junit-jupiter-engine:6.0.3")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher:6.0.3")
-    testImplementation("io.micronaut.test:micronaut-test-junit5:4.10.3")
-    testImplementation("io.mockk:mockk:1.14.9")
+    testImplementation("org.junit.jupiter:junit-jupiter-api:6.1.0")
+    testImplementation("org.junit.jupiter:junit-jupiter-engine:6.1.0")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher:6.1.0")
+    testImplementation("io.micronaut.test:micronaut-test-junit5:5.0.1")
+    testImplementation("io.mockk:mockk:1.14.11")
     testImplementation("org.testcontainers:testcontainers:2.0.5")
     testImplementation("org.testcontainers:mariadb:1.21.4")
     testImplementation("org.testcontainers:junit-jupiter:1.21.4")
@@ -131,12 +131,12 @@ application {
 }
 
 java {
-    sourceCompatibility = JavaVersion.toVersion("21")
-    targetCompatibility = JavaVersion.toVersion("21")
+    sourceCompatibility = JavaVersion.toVersion("25")
+    targetCompatibility = JavaVersion.toVersion("25")
 }
 
 kotlin {
-    jvmToolchain(21)
+    jvmToolchain(25)
 }
 
 allOpen {
@@ -164,12 +164,6 @@ micronaut {
 }
 
 
-// Configure Kotlin compiler options
-tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
-    compilerOptions {
-        freeCompilerArgs.add("-Xannotation-default-target=param-property")
-    }
-}
 
 // Configure test task to use JUnit 5 platform - Feature 056
 tasks.test {

@@ -27,31 +27,31 @@ dependencies {
     // Jackson for YAML/JSON
     implementation("com.fasterxml.jackson.core:jackson-databind")
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml")
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.21.3")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.22.0")
     
     // CSV export
     implementation("org.apache.commons:commons-csv:1.14.1")
 
     // AWS SDK for S3 (Feature 065 - S3 User Mapping Import)
-    implementation(platform("software.amazon.awssdk:bom:2.44.5"))
+    implementation(platform("software.amazon.awssdk:bom:2.46.2"))
     implementation("software.amazon.awssdk:s3")
     
     // Kotlin
-    implementation("org.jetbrains.kotlin:kotlin-reflect:2.3.21")
-    implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.3.21")
+    implementation("org.jetbrains.kotlin:kotlin-reflect:2.4.0")
+    implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.4.0")
     
     // Logging
-    runtimeOnly("ch.qos.logback:logback-classic")
-    runtimeOnly("org.yaml:snakeyaml")
+    runtimeOnly("ch.qos.logback:logback-classic:1.5.34")
+    runtimeOnly("org.yaml:snakeyaml:2.6")
     
     // KSP
     ksp("io.micronaut:micronaut-http-validation")
 
     // Test dependencies - Feature 056
-    testImplementation("org.junit.jupiter:junit-jupiter-api:6.0.3")
-    testImplementation("org.junit.jupiter:junit-jupiter-engine:6.0.3")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher:6.0.3")
-    testImplementation("io.mockk:mockk:1.14.9")
+    testImplementation("org.junit.jupiter:junit-jupiter-api:6.1.0")
+    testImplementation("org.junit.jupiter:junit-jupiter-engine:6.1.0")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher:6.1.0")
+    testImplementation("io.mockk:mockk:1.14.11")
     testImplementation("org.assertj:assertj-core:3.27.7")
 }
 
@@ -69,12 +69,6 @@ kotlin {
 }
 
 tasks {
-    compileKotlin {
-        compilerOptions {
-            freeCompilerArgs.add("-Xannotation-default-target=param-property")
-        }
-    }
-
     // Enable JUnit 5 platform for tests - Feature 056
     test {
         useJUnitPlatform()

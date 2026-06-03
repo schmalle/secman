@@ -22,11 +22,7 @@ import ReleaseCreateModal from './ReleaseCreateModal';
 import ReleaseDeleteConfirm from './ReleaseDeleteConfirm';
 import Toast from './Toast';
 
-interface ReleaseListProps {
-    // No props needed - standalone component
-}
-
-const ReleaseList: React.FC<ReleaseListProps> = () => {
+const ReleaseList: React.FC = () => {
     // State
     const [releases, setReleases] = useState<Release[]>([]);
     const [loading, setLoading] = useState(true);

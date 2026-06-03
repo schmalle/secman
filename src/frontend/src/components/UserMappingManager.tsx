@@ -156,21 +156,17 @@ export default function UserMappingManager() {
    * Handle form submit (create or update)
    */
   const handleFormSubmit = async (request: CreateUserMappingRequest) => {
-    try {
-      if (viewMode === 'create') {
-        await createUserMapping(request);
-        showToast('success', 'Mapping created successfully');
-      } else if (viewMode === 'edit' && editingMapping) {
-        await updateUserMapping(editingMapping.id, request);
-        showToast('success', 'Mapping updated successfully');
-      }
-
-      setViewMode('list');
-      setEditingMapping(undefined);
-      await loadMappings();
-    } catch (error) {
-      throw error; // Let the form component handle the error
+    if (viewMode === 'create') {
+      await createUserMapping(request);
+      showToast('success', 'Mapping created successfully');
+    } else if (viewMode === 'edit' && editingMapping) {
+      await updateUserMapping(editingMapping.id, request);
+      showToast('success', 'Mapping updated successfully');
     }
+
+    setViewMode('list');
+    setEditingMapping(undefined);
+    await loadMappings();
   };
 
   /**

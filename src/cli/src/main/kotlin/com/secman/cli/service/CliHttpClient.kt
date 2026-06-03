@@ -138,7 +138,7 @@ class CliHttpClient(
     /**
      * Send a GET request with JWT authentication
      */
-    fun <T> get(url: String, authToken: String, responseType: Class<T>): T? {
+    fun <T : Any> get(url: String, authToken: String, responseType: Class<T>): T? {
         val request = HttpRequest.GET<Any>(url)
             .header("Authorization", "Bearer $authToken")
             .accept(MediaType.APPLICATION_JSON)

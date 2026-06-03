@@ -4,11 +4,11 @@ Security requirement, vulnerability and risk management platform.
 
 ## Stack
 
-- Backend: Kotlin 2.3.21 / Java 21, Micronaut 4.10, Hibernate JPA → `src/backendng/`
-- Frontend: Astro 6.3 + React 19 islands, Axios, JWT in localStorage → `src/frontend/`
+- Backend: Kotlin 2.4.0 / Java 25, Micronaut 5.0, Hibernate JPA → `src/backendng/`
+- Frontend: Astro 6.4 + React 19 islands, Axios, JWT in localStorage → `src/frontend/`
 - CLI: Kotlin + Picocli 4.7.7, AWS SDK v2 → `src/cli/`
 - DB: MariaDB 11.4, Flyway + Hibernate auto-migration
-- Build: Gradle 9.5.0 (Kotlin DSL)
+- Build: Gradle 9.5.1 (Kotlin DSL)
 - MCP: Streamable HTTP / JSON-RPC 2.0. `X-MCP-User-Email` header is **mandatory** on `tools/list` and `tools/call` (only `initialize` and `ping` exempt).
 
 ## Roles (RBAC)

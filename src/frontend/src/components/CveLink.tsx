@@ -27,17 +27,9 @@ const CveLink: React.FC<CveLinkProps> = ({ cveId }) => {
   const linkRef = useRef<HTMLAnchorElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
 
-  if (!cveId) {
-    return <span className="text-muted">-</span>;
-  }
-
-  const isCve = CVE_PATTERN.test(cveId);
-
-  if (!isCve) {
-    return <code>{cveId}</code>;
-  }
-
-  const nvdUrl = `https://nvd.nist.gov/vuln/detail/${cveId}`;
+  const normalizedCveId = cveId ?? '';
+  const isCve = CVE_PATTERN.test(normalizedCveId);
+  const nvdUrl = `https://nvd.nist.gov/vuln/detail/${normalizedCveId}`;
 
   const showPopover = useCallback(async () => {
     setPopoverVisible(true);
@@ -52,10 +44,10 @@ const CveLink: React.FC<CveLinkProps> = ({ cveId }) => {
     if (popoverData) return; // Already loaded
 
     setLoading(true);
-    const result = await lookupCve(cveId);
+    const result = await lookupCve(normalizedCveId);
     setPopoverData(result);
     setLoading(false);
-  }, [cveId, popoverData]);
+  }, [normalizedCveId, popoverData]);
 
   const handleMouseEnter = useCallback(() => {
     if (hideTimerRef.current) {
@@ -96,6 +88,14 @@ const CveLink: React.FC<CveLinkProps> = ({ cveId }) => {
     };
   }, []);
 
+  if (!cveId) {
+    return <span className="text-muted">-</span>;
+  }
+
+  if (!isCve) {
+    return <code>{cveId}</code>;
+  }
+
   const severityColor = (severity: string | null): string => {
     switch (severity?.toUpperCase()) {
       case 'CRITICAL': return '#dc3545';
@@ -123,7 +123,7 @@ const CveLink: React.FC<CveLinkProps> = ({ cveId }) => {
           color: 'var(--bs-link-color, #0d6efd)',
           cursor: 'pointer',
         }}
-        title={`Open ${cveId} on NVD`}
+        title={`Open ${normalizedCveId} on NVD`}
       >
         {cveId}
         <i className="bi bi-box-arrow-up-right ms-1" style={{ fontSize: '0.7em', opacity: 0.6 }}></i>
