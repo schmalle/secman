@@ -85,8 +85,8 @@ Static-review checklist (inspect artifacts only):
 ## High-Level Loop
 
 ```
-1. Start backend   (./scripts/startbackenddev.sh)
-2. Start frontend  (./scripts/startfrontenddev.sh)
+1. Start backend   (./scripts/startbackenddev.sh outside the sandbox)
+2. Start frontend  (./scripts/startfrontenddev.sh outside the sandbox)
 3. Wait for both ports to be bound (8080 / 4321)
 4. Run the driver:
      pass-cli run --env-file ./secmanpp.env -- \
@@ -115,6 +115,12 @@ scripts that source secrets via `pass-cli`. Never hardcode `localhost:8080`
 or `localhost:4321` in tests; the driver and Playwright config already
 respect `BASE_URL` / `SECMAN_BACKEND_URL` / `FRONTEND_URL` / `SECMAN_BASE_URL`.
 
+**Outside-sandbox requirement:** Always start `./scripts/startbackenddev.sh`
+and `./scripts/startfrontenddev.sh` outside the sandbox / with escalated
+permissions. In Codex, run these commands with
+`sandbox_permissions: "require_escalated"`; do not start either dev server
+inside the filesystem sandbox.
+
 | Setting                  | Default                           |
 | ------------------------ | --------------------------------- |
 | Backend start            | `./scripts/startbackenddev.sh`   |
@@ -134,10 +140,12 @@ respect `BASE_URL` / `SECMAN_BACKEND_URL` / `FRONTEND_URL` / `SECMAN_BASE_URL`.
    ```bash
    nohup ./scripts/startbackenddev.sh > .e2e-logs/backend.log 2>&1 &
    ```
+   This start command must be executed outside the sandbox.
 4. Start frontend in background:
    ```bash
    nohup ./scripts/startfrontenddev.sh > .e2e-logs/frontend.log 2>&1 &
    ```
+   This start command must be executed outside the sandbox.
 5. **Wait for liveness via port binding** (not HTTP probes against localhost):
    - Backend: poll `lsof -iTCP:8080 -sTCP:LISTEN -n -P` until non-empty (120s).
    - Frontend: poll `lsof -iTCP:4321 -sTCP:LISTEN -n -P` until non-empty (60s).
@@ -284,6 +292,8 @@ Fix priority: **backend first**, then frontend.
 nohup ./scripts/startbackenddev.sh > .e2e-logs/backend.log 2>&1 &
 nohup ./scripts/startfrontenddev.sh > .e2e-logs/frontend.log 2>&1 &
 ```
+
+Both restart commands must be executed outside the sandbox.
 
 Wait for ports `8080` and `4321` to be bound (same timeouts as Phase 1).
 

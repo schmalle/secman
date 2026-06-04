@@ -73,8 +73,8 @@ Rules:
 ## High-Level Loop
 
 ```
-1. Start backend   (./scripts/startbackenddev.sh)
-2. Start frontend  (./scripts/startfrontenddev.sh)
+1. Start backend   (./scripts/startbackenddev.sh outside the sandbox)
+2. Start frontend  (./scripts/startfrontenddev.sh outside the sandbox)
 3. Wait for both to be healthy (via shared URL, not localhost)
 4. Export SECMAN_BACKEND_URL=https://secman.covestro.net
 5. Run JS error scanner (./tests/js-error-scanner-pp.sh)
@@ -96,6 +96,12 @@ Rules:
 
 **Starting services:**
 
+**Outside-sandbox requirement:** Always start `./scripts/startbackenddev.sh`
+and `./scripts/startfrontenddev.sh` outside the sandbox / with escalated
+permissions. In Codex, run these commands with
+`sandbox_permissions: "require_escalated"`; do not start either dev server
+inside the filesystem sandbox.
+
 1. **Verify hostname mapping** — confirm `secman.covestro.net` resolves to
    `127.0.0.1`:
    ```bash
@@ -113,6 +119,7 @@ Rules:
    ```bash
    nohup ./scripts/startbackenddev.sh > .e2e-logs/backend.log 2>&1 &
    ```
+   This start command must be executed outside the sandbox.
    Record the PID. The backend uses `pass-cli run -- gradle :backendng:clean :backendng:run`
    internally with Proton Pass secret injection.
 
@@ -120,6 +127,7 @@ Rules:
    ```bash
    nohup ./scripts/startfrontenddev.sh > .e2e-logs/frontend.log 2>&1 &
    ```
+   This start command must be executed outside the sandbox.
    Record the PID. The frontend uses `pass-cli run -- npm run dev` internally.
 
 5. **Wait for health checks via the shared URL** — not localhost. The
@@ -239,6 +247,7 @@ After applying fixes (whether backend or frontend):
    ```bash
    nohup ./scripts/startbackenddev.sh > .e2e-logs/backend.log 2>&1 &
    ```
+   This restart command must be executed outside the sandbox.
 3. **Wait for backend health check via the shared URL** —
    poll `https://secman.covestro.net/` until it responds (120s timeout).
    Do not poll `http://localhost:8080` directly; the scanner will not use it.
@@ -296,9 +305,13 @@ error count decreased.
   a valid certificate. If TLS verification fails, fix the cert/proxy rather
   than disabling verification.
 - **Log files** go to `.e2e-logs/` — this directory is gitignored.
-- **Scanner pages list** is hardcoded in `tests/js-error-scanner.mjs` in the
-  `PAGES` array. If the scanner reports a page error, the fix is in the
-  application code, not the scanner.
+- **Scanner pages list** is discovered by `tests/js-error-scanner.mjs` from
+  `src/frontend/src/pages/`, plus static entries. If the scanner reports a
+  page error, the fix is usually in the application code, not the scanner.
+- **Product-related pages must be covered**: verify the discovered route list
+  includes `/products`, `/installed-products`, and product drilldown surfaces
+  such as `/vulnerability-statistics` and asset detail routes linked from
+  product tables when test data makes dynamic routes available.
 - Backend controllers: `src/backendng/src/main/kotlin/com/secman/controller/`
 - Frontend pages: `src/frontend/src/pages/`
 - Frontend components: `src/frontend/src/components/`

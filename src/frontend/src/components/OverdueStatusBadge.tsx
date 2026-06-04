@@ -52,7 +52,7 @@ const OverdueStatusBadge: React.FC<OverdueStatusBadgeProps> = ({
                         : 'This vulnerability exceeds the configured age threshold',
                     ariaLabel: `Overdue status: ${daysOverdue || '?'} days over threshold`
                 };
-            case 'EXCEPTED':
+            case 'EXCEPTED': {
                 const endDate = exceptionEndDate ? new Date(exceptionEndDate).toLocaleDateString() : 'unknown date';
                 return {
                     className: 'badge scand-medium',
@@ -63,6 +63,7 @@ const OverdueStatusBadge: React.FC<OverdueStatusBadgeProps> = ({
                         : `This vulnerability has an active exception until ${endDate}`,
                     ariaLabel: `Excepted status: Exception active until ${endDate}`
                 };
+            }
             case 'OK':
             default:
                 return {

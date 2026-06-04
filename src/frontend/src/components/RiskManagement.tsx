@@ -28,6 +28,9 @@ interface RiskFormData {
   asset_id: number;
 }
 
+const isFetchAbortedByNavigation = (err: unknown): boolean =>
+  err instanceof TypeError && err.message === 'Failed to fetch';
+
 const RiskManagement: React.FC = () => {
   const [risks, setRisks] = useState<Risk[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,6 +65,7 @@ const RiskManagement: React.FC = () => {
         console.error('Failed to fetch assets:', response.status);
       }
     } catch (err) {
+      if (isFetchAbortedByNavigation(err)) return;
       console.error('Failed to fetch assets:', err);
     }
   };

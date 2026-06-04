@@ -80,6 +80,9 @@ interface RiskAssessment {
   updatedAt?: string;
 }
 
+const isFetchAbortedByNavigation = (err: unknown): boolean =>
+  err instanceof TypeError && err.message === 'Failed to fetch';
+
 const RiskAssessmentManagement: React.FC = () => {
   const [assessments, setAssessments] = useState<RiskAssessment[]>([]);
   const [approvedDemands, setApprovedDemands] = useState<Demand[]>([]);
@@ -219,6 +222,7 @@ const RiskAssessmentManagement: React.FC = () => {
         console.error('Failed to fetch assets:', response.status);
       }
     } catch (err) {
+      if (isFetchAbortedByNavigation(err)) return;
       console.error('Failed to fetch assets:', err);
     }
   };

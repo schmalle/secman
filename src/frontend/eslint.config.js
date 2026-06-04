@@ -1,0 +1,108 @@
+import js from "@eslint/js";
+import tsParser from "@typescript-eslint/parser";
+import tsPlugin from "@typescript-eslint/eslint-plugin";
+import reactPlugin from "eslint-plugin-react";
+import reactHooksPlugin from "eslint-plugin-react-hooks";
+
+export default [
+  {
+    ignores: ["dist/**", "node_modules/**", ".astro/**", "playwright-report/**"],
+  },
+  js.configs.recommended,
+  {
+    files: ["**/*.{ts,tsx,js,jsx,mjs}"],
+    languageOptions: {
+      parser: tsParser,
+      ecmaVersion: "latest",
+      sourceType: "module",
+      parserOptions: {
+        ecmaFeatures: {
+          jsx: true,
+        },
+      },
+      globals: {
+        AbortController: "readonly",
+        alert: "readonly",
+        Blob: "readonly",
+        clearInterval: "readonly",
+        clearTimeout: "readonly",
+        confirm: "readonly",
+        console: "readonly",
+        document: "readonly",
+        EventSource: "readonly",
+        fetch: "readonly",
+        File: "readonly",
+        FileReader: "readonly",
+        FormData: "readonly",
+        HTMLDivElement: "readonly",
+        HTMLSelectElement: "readonly",
+        MessageEvent: "readonly",
+        globalThis: "readonly",
+        HTMLElement: "readonly",
+        localStorage: "readonly",
+        location: "readonly",
+        navigator: "readonly",
+        NodeJS: "readonly",
+        process: "readonly",
+        RequestInit: "readonly",
+        Response: "readonly",
+        setInterval: "readonly",
+        setTimeout: "readonly",
+        sessionStorage: "readonly",
+        URL: "readonly",
+        URLSearchParams: "readonly",
+        window: "readonly",
+        atob: "readonly",
+        AuthenticatorAttestationResponse: "readonly",
+        btoa: "readonly",
+        Buffer: "readonly",
+        BufferSource: "readonly",
+        CustomEvent: "readonly",
+        PublicKeyCredential: "readonly",
+        PublicKeyCredentialCreationOptions: "readonly",
+      },
+    },
+    plugins: {
+      "@typescript-eslint": tsPlugin,
+      react: reactPlugin,
+      "react-hooks": reactHooksPlugin,
+    },
+    rules: {
+      ...tsPlugin.configs.recommended.rules,
+      ...reactPlugin.configs.recommended.rules,
+      ...reactHooksPlugin.configs.recommended.rules,
+      "react/react-in-jsx-scope": "off",
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+        },
+      ],
+      "@typescript-eslint/no-explicit-any": "warn",
+      "no-undef": "off",
+      "react/no-unescaped-entities": "off",
+      "react-hooks/rules-of-hooks": "error",
+      "react-hooks/exhaustive-deps": "warn",
+      "react-hooks/config": "off",
+      "react-hooks/error-boundaries": "off",
+      "react-hooks/gating": "off",
+      "react-hooks/globals": "off",
+      "react-hooks/immutability": "off",
+      "react-hooks/incompatible-library": "off",
+      "react-hooks/preserve-manual-memoization": "off",
+      "react-hooks/purity": "off",
+      "react-hooks/refs": "off",
+      "react-hooks/set-state-in-effect": "off",
+      "react-hooks/set-state-in-render": "off",
+      "react-hooks/static-components": "off",
+      "react-hooks/unsupported-syntax": "off",
+      "react-hooks/use-memo": "off",
+    },
+    settings: {
+      react: {
+        version: "detect",
+      },
+    },
+  },
+];

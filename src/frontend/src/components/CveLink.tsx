@@ -18,6 +18,9 @@ interface CveLinkProps {
 const CVE_PATTERN = /^CVE-\d{4}-\d{4,}$/;
 
 const CveLink: React.FC<CveLinkProps> = ({ cveId }) => {
+  const displayCveId = cveId ?? '';
+  const isCve = CVE_PATTERN.test(displayCveId);
+  const nvdUrl = `https://nvd.nist.gov/vuln/detail/${displayCveId}`;
   const [popoverData, setPopoverData] = useState<CveLookupResult | null>(null);
   const [popoverVisible, setPopoverVisible] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -26,18 +29,6 @@ const CveLink: React.FC<CveLinkProps> = ({ cveId }) => {
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const linkRef = useRef<HTMLAnchorElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
-
-  if (!cveId) {
-    return <span className="text-muted">-</span>;
-  }
-
-  const isCve = CVE_PATTERN.test(cveId);
-
-  if (!isCve) {
-    return <code>{cveId}</code>;
-  }
-
-  const nvdUrl = `https://nvd.nist.gov/vuln/detail/${cveId}`;
 
   const showPopover = useCallback(async () => {
     setPopoverVisible(true);
@@ -52,10 +43,10 @@ const CveLink: React.FC<CveLinkProps> = ({ cveId }) => {
     if (popoverData) return; // Already loaded
 
     setLoading(true);
-    const result = await lookupCve(cveId);
+    const result = await lookupCve(displayCveId);
     setPopoverData(result);
     setLoading(false);
-  }, [cveId, popoverData]);
+  }, [displayCveId, popoverData]);
 
   const handleMouseEnter = useCallback(() => {
     if (hideTimerRef.current) {
@@ -106,6 +97,14 @@ const CveLink: React.FC<CveLinkProps> = ({ cveId }) => {
     }
   };
 
+  if (!cveId) {
+    return <span className="text-muted">-</span>;
+  }
+
+  if (!isCve) {
+    return <code>{cveId}</code>;
+  }
+
   return (
     <span style={{ position: 'relative', display: 'inline-block' }}>
       <a
@@ -123,9 +122,9 @@ const CveLink: React.FC<CveLinkProps> = ({ cveId }) => {
           color: 'var(--bs-link-color, #0d6efd)',
           cursor: 'pointer',
         }}
-        title={`Open ${cveId} on NVD`}
+        title={`Open ${displayCveId} on NVD`}
       >
-        {cveId}
+        {displayCveId}
         <i className="bi bi-box-arrow-up-right ms-1" style={{ fontSize: '0.7em', opacity: 0.6 }}></i>
       </a>
 
@@ -164,7 +163,7 @@ const CveLink: React.FC<CveLinkProps> = ({ cveId }) => {
           {!loading && popoverData && (
             <div>
               <div className="d-flex justify-content-between align-items-center mb-2">
-                <strong>{cveId}</strong>
+                <strong>{displayCveId}</strong>
                 {popoverData.severity && (
                   <span
                     className="badge"
