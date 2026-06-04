@@ -57,6 +57,7 @@ const UserManagement = () => {
 
     // State for search, sort, pagination
     const [searchQuery, setSearchQuery] = useState('');
+    const [roleFilter, setRoleFilter] = useState('');
     const [sortField, setSortField] = useState<SortField>('username');
     const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
     const [currentPage, setCurrentPage] = useState(1);
@@ -601,6 +602,12 @@ const UserManagement = () => {
     };
 
 
+    const roleFilterOptions = useMemo(() => {
+        const roles = new Set(AVAILABLE_ROLES);
+        users.forEach(user => (user.roles ?? []).forEach(role => roles.add(role)));
+        return Array.from(roles).sort();
+    }, [users]);
+
     // --- Filtering, Sorting, Pagination ---
     const filteredAndSortedUsers = useMemo(() => {
         let result = [...users];
@@ -614,6 +621,10 @@ const UserManagement = () => {
                 (u.roles ?? []).some(r => r.toLowerCase().includes(q)) ||
                 (u.workgroups ?? []).some(wg => wg.name.toLowerCase().includes(q))
             );
+        }
+
+        if (roleFilter) {
+            result = result.filter(u => (u.roles ?? []).includes(roleFilter));
         }
 
         // Sort
@@ -646,16 +657,16 @@ const UserManagement = () => {
         });
 
         return result;
-    }, [users, searchQuery, sortField, sortDirection]);
+    }, [users, searchQuery, roleFilter, sortField, sortDirection]);
 
     const totalPages = Math.max(1, Math.ceil(filteredAndSortedUsers.length / pageSize));
     const safePage = Math.min(currentPage, totalPages);
     const paginatedUsers = filteredAndSortedUsers.slice((safePage - 1) * pageSize, safePage * pageSize);
 
-    // Reset to page 1 when search changes
+    // Reset to page 1 when filters change
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchQuery, pageSize]);
+    }, [searchQuery, roleFilter, pageSize]);
 
     const handleSort = (field: SortField) => {
         if (sortField === field) {
@@ -1190,6 +1201,25 @@ const UserManagement = () => {
                             </button>
                         )}
                     </div>
+                    <div className="input-group" style={{ maxWidth: '260px' }}>
+                        <span className="input-group-text"><i className="bi bi-shield-check"></i></span>
+                        <select
+                            className="form-select"
+                            aria-label="Filter users by role"
+                            value={roleFilter}
+                            onChange={e => setRoleFilter(e.target.value)}
+                        >
+                            <option value="">All roles</option>
+                            {roleFilterOptions.map(role => (
+                                <option key={role} value={role}>{role}</option>
+                            ))}
+                        </select>
+                        {roleFilter && (
+                            <button className="btn btn-outline-secondary" type="button" onClick={() => setRoleFilter('')} aria-label="Clear role filter">
+                                <i className="bi bi-x-lg"></i>
+                            </button>
+                        )}
+                    </div>
                     <small className="text-muted text-nowrap">
                         {filteredAndSortedUsers.length === users.length
                             ? `${users.length} users`
@@ -1286,8 +1316,8 @@ const UserManagement = () => {
                     ) : (
                         <tr>
                             <td colSpan={6} className="text-center">
-                                {searchQuery
-                                    ? `No users matching "${searchQuery}"`
+                                {searchQuery || roleFilter
+                                    ? `No users matching ${[searchQuery && `"${searchQuery}"`, roleFilter && `role ${roleFilter}`].filter(Boolean).join(' and ')}`
                                     : (error && !error.includes("Access Denied") ? "Could not load users." : "No users found.")}
                             </td>
                         </tr>
