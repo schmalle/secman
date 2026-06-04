@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "secman-webdep"
+version = "0.1.0"
+description = "Discover frontend CSS/JavaScript dependencies from SecMan asset URIs and import them as installed products."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Proprietary" }
+authors = [{ name = "SecMan contributors" }]
+
+[project.scripts]
+secman-webdep = "webdep.cli:main"
+
+[tool.setuptools]
+packages = ["webdep"]
