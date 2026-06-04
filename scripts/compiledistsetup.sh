@@ -69,7 +69,7 @@
 #       deploy@app01.example.com deploy@app02.example.com
 #
 #   ./scripts/compiledistsetup.sh \
-#       alice@10.0.0.10 bob@10.0.0.11 --dest /opt/secman
+#       alice@10.0.0.10 bob@10.0.0.11 --dest /opt/secman/app
 #
 #   ./scripts/compiledistsetup.sh \
 #       ops@stage-a ops@stage-b --dest releases/2026-05-17
@@ -83,7 +83,7 @@ usage() {
 
 # ---- Arg parsing -------------------------------------------------------------
 
-REMOTE_DEST="secman"   # relative to remote $HOME by default
+REMOTE_DEST="/opt/secman/app"   # relative to remote $HOME by default
 TARGETS=()
 
 while [[ $# -gt 0 ]]; do
