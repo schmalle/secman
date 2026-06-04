@@ -310,7 +310,7 @@ const Sidebar = () => {
                                 </li>
                                 <li>
                                     <a href="/products" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                        <i className="bi bi-box-seam me-2"></i> Products
+                                        <i className="bi bi-box-seam me-2"></i> Vulnerable products
                                     </a>
                                 </li>
                                 <li>
