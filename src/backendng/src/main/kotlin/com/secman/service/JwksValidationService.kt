@@ -1,5 +1,6 @@
 package com.secman.service
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.github.benmanes.caffeine.cache.Caffeine
 import io.micronaut.http.HttpRequest
@@ -280,6 +281,7 @@ class JwksValidationService(
 /**
  * JWKS response structure.
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class JwksResponse(
     val keys: List<JwkKey> = emptyList()
 )
@@ -287,6 +289,7 @@ data class JwksResponse(
 /**
  * JWK (JSON Web Key) structure for RSA keys.
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class JwkKey(
     val kty: String = "",    // Key Type (e.g., "RSA")
     val use: String? = null, // Key Use ("sig" for signature, "enc" for encryption)
