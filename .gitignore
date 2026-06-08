@@ -94,3 +94,9 @@ docker/backend/app.jar
 /docs/superpowers/
 *.yml
 .playwright-cli/ChatGPT-Atlas.dmg
+crowdstrike-vulnerability-match-report.json
+crowdstrike-vulnerability-match-report.md
+crowdstrike-vulnerability-match-report-cs-owner-30d.md
+crowdstrike-vulnerability-match-report-cs-owner-30d.json
+crowdstrike-vulnerability-match-report-cs-owner.json
+crowdstrike-vulnerability-match-report-cs-owner.md
