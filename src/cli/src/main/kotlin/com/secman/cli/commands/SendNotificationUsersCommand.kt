@@ -88,6 +88,7 @@ class SendNotificationUsersCommand : Runnable {
 
             val status = result["status"]?.toString() ?: "UNKNOWN"
             val notificationScope = result["notificationScope"]?.toString() ?: "GLOBAL_AWS_OVERDUE"
+            val notificationUserExists = result["notificationUserExists"] as? Boolean
             val awsAccountsAffected = (result["awsAccountsAffected"] as? Number)?.toInt() ?: 0
             val usersNotified = (result["usersNotified"] as? Number)?.toInt() ?: 0
             val emailsSent = (result["emailsSent"] as? Number)?.toInt() ?: 0
@@ -99,6 +100,16 @@ class SendNotificationUsersCommand : Runnable {
             @Suppress("UNCHECKED_CAST")
             val unmappedAccounts = (result["unmappedAccounts"] as? List<String>) ?: emptyList()
             val accountDetails = (result["accountDetails"] as? List<*>) ?: emptyList<Any>()
+
+            // Guardrail: surface a mistyped --notification-user instead of a silent "0".
+            // Exit 2 (distinct from operational failures) so automation can flag bad input.
+            if (notificationUser != null && notificationUserExists == false) {
+                println()
+                println("WARNING: No user account exists with email '$notificationUser'.")
+                println("No notifications were sent. Verify the --notification-user value")
+                println("(use the user's login email, not their username).")
+                System.exit(2)
+            }
 
             println("AWS accounts with overdue vulnerabilities: $awsAccountsAffected")
             println("Notification scope: $notificationScope")

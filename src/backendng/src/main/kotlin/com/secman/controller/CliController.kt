@@ -390,6 +390,7 @@ class CliController(
         val failedRecipients: List<String>,
         val unmappedAccounts: List<String>,
         val thresholdDays: Int,
+        val notificationUserExists: Boolean? = null,
         val accountDetails: List<UserVulnerabilityNotificationService.AwsAccountNotificationDetail>
     )
 
@@ -427,6 +428,7 @@ class CliController(
                 failedRecipients = result.failedRecipients,
                 unmappedAccounts = result.unmappedAccounts,
                 thresholdDays = result.thresholdDays,
+                notificationUserExists = result.notificationUserExists,
                 accountDetails = result.accountDetails
             ))
         } catch (e: Exception) {
