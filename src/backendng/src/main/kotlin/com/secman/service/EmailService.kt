@@ -324,8 +324,8 @@ open class EmailService(
             // Debug properties for troubleshooting
             put("mail.debug", "true")
             put("mail.smtp.connectiontimeout", "10000")
-            put("mail.smtp.timeout", "10000")
-            put("mail.smtp.writetimeout", "10000")
+            put("mail.smtp.timeout", "30000")
+            put("mail.smtp.writetimeout", "30000")
         }
     }
     
