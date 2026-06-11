@@ -13,6 +13,7 @@ object ToolCategories {
         "create_assessment", "update_assessment", "delete_assessment"
     )
     val ADMIN_TOOLS = setOf(
-        "get_system_info", "get_user_activity", "list_users", "send_admin_summary"
+        "get_system_info", "get_user_activity", "list_users", "send_admin_summary",
+        "send_patch_notifications"
     )
 }

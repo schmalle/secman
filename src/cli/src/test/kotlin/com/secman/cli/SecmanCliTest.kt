@@ -86,6 +86,33 @@ class SecmanCliTest {
     }
 
     @Test
+    fun `test help lists send patch notifications command`() {
+        val cli = SecmanCli()
+
+        val (result, output) = captureStdout {
+            cli.execute(arrayOf("help"))
+        }
+
+        assertEquals(0, result)
+        assertTrue(output.contains("send-patch-notifications"))
+    }
+
+    @Test
+    fun `test send patch notifications help command returns 0`() {
+        val cli = SecmanCli()
+
+        val (result, output) = captureStdout {
+            cli.execute(arrayOf("help", "send-patch-notifications"))
+        }
+
+        assertEquals(0, result)
+        assertTrue(output.contains("secman send-patch-notifications"))
+        assertTrue(output.contains("<emailPrefix>"))
+        assertTrue(output.contains("--days"))
+        assertTrue(output.contains("--dry-run"))
+    }
+
+    @Test
     fun `test help lists installed products command`() {
         val cli = SecmanCli()
 

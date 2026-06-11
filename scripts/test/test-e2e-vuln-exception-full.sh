@@ -1078,6 +1078,41 @@ ok "Admin sees sharing rule $AWS_SHARING_RULE_ID via list_aws_account_sharing"
 fi
 
 # =============================================================================
+# Phase 8b: Patch notifications by email first character (send_patch_notifications)
+# =============================================================================
+# Exercises the MCP tool that mirrors CLI `send-patch-notifications`. The test
+# users are e2etestuser{1,2}@e2e.test, so prefix "e" matches them. All calls are
+# dry-run (no email is actually sent) plus two authorization/validation negatives.
+
+if [[ "$UI_ONLY" == "true" ]]; then
+    record_skip "Phase 8b (send_patch_notifications)" "--ui-only"
+else
+    log "=== Phase 8b: send_patch_notifications (MCP, dry-run + negatives) ==="
+
+    # 8b.1 Admin dry-run with the test users' email prefix → must succeed (DRY_RUN).
+    res=$(mcp_call "send_patch_notifications" \
+        '{"emailPrefix":"e","days":1,"dryRun":true}' "$ADMIN_USER_EMAIL")
+    patch_status=$(echo "$res" | jq -r '.status // "MISSING"')
+    patch_prefix=$(echo "$res" | jq -r '.emailPrefix // "MISSING"')
+    [[ "$patch_status" == "DRY_RUN" ]] || fail "send_patch_notifications dry-run: expected status DRY_RUN, got '$patch_status'"
+    [[ "$patch_prefix" == "e" ]] || fail "send_patch_notifications dry-run: expected emailPrefix 'e', got '$patch_prefix'"
+    ok "Admin send_patch_notifications dry-run (prefix='e') returned DRY_RUN"
+
+    # 8b.2 Negative: missing mandatory emailPrefix → error code (INVALID_ARGUMENT or schema).
+    err=$(mcp_call "send_patch_notifications" '{"dryRun":true}' "$ADMIN_USER_EMAIL" --allow-error)
+    err_code=$(echo "$err" | jq -r '.code // empty')
+    [[ -n "$err_code" ]] || fail "send_patch_notifications without emailPrefix was NOT rejected: $err"
+    ok "send_patch_notifications without emailPrefix is rejected (code=$err_code)"
+
+    # 8b.3 Negative: non-admin delegated user → denied (ADMIN_REQUIRED).
+    err=$(mcp_call "send_patch_notifications" \
+        '{"emailPrefix":"e","dryRun":true}' "$USER1_EMAIL" --allow-error)
+    err_code=$(echo "$err" | jq -r '.code // empty')
+    [[ -n "$err_code" ]] || fail "send_patch_notifications as non-admin was NOT denied: $err"
+    ok "send_patch_notifications denied for non-admin user (code=$err_code)"
+fi
+
+# =============================================================================
 # Phase 9 (UI): Playwright
 # =============================================================================
 
