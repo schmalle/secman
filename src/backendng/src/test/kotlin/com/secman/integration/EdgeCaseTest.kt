@@ -16,7 +16,6 @@ import io.micronaut.http.client.annotation.Client
 import jakarta.inject.Inject
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.*
-import org.junit.jupiter.api.condition.EnabledIf
 import java.time.LocalDateTime
 import java.time.temporal.ChronoUnit
 import java.util.concurrent.Callable
@@ -33,7 +32,6 @@ import java.util.concurrent.Executors
  * - CVE normalization
  */
 @DisplayName("Edge Case Tests")
-@EnabledIf("com.secman.testutil.DockerAvailable#isDockerAvailable")
 class EdgeCaseTest : BaseIntegrationTest() {
 
     @Inject

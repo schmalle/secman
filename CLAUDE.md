@@ -145,15 +145,22 @@ Microsoft cached SSO callbacks can land in 100–500ms, before the state-save co
 
 ## Test Infrastructure
 
-JUnit 6, Mockk, Testcontainers (MariaDB 11.4), AssertJ, `@MicronautTest`. Helpers in `src/backendng/src/test/kotlin/com/secman/testutil/`:
-- `BaseIntegrationTest` — singleton MariaDB container, auto-skips when Docker missing.
+JUnit 6, Mockk, AssertJ, `@MicronautTest`. Integration tests run against an **external MariaDB** (no Docker/Testcontainers). Helpers in `src/backendng/src/test/kotlin/com/secman/testutil/`:
+- `BaseIntegrationTest` — base for DB-backed tests; datasource comes from `application-test.yml`.
 - `TestDataFactory` — admin/vuln/regular user, asset, vulnerability builders.
 - `TestAuthHelper` — JWT login → bearer token.
-- `DockerAvailable.isDockerAvailable` — gate via `@EnabledIf`.
+
+Datasource env (set via `pass-cli`; defaults to a local `secman_test`): `TEST_DB_URL`, `TEST_DB_USERNAME`, `TEST_DB_PASSWORD`. Schema is Hibernate `create-drop` (Flyway off in `test`), so **point `TEST_DB_*` only at a disposable test DB — never `DB_CONNECT`** (it would drop tables). Integration tests now run **unconditionally** — they fail (not skip) if no test DB is reachable.
 
 ```kotlin
-@EnabledIf("com.secman.testutil.DockerAvailable#isDockerAvailable")
 class MyIntegrationTest : BaseIntegrationTest() { @Inject lateinit var repo: Repository }
+```
+
+One-time local setup (admin DB user):
+```sql
+CREATE DATABASE IF NOT EXISTS secman_test;
+CREATE USER IF NOT EXISTS 'secman_test'@'localhost' IDENTIFIED BY 'secman_test';
+GRANT ALL PRIVILEGES ON secman_test.* TO 'secman_test'@'localhost';
 ```
 
 ## File Layout

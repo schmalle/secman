@@ -120,9 +120,6 @@ dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:6.1.0")
     testImplementation("io.micronaut.test:micronaut-test-junit5:5.0.1")
     testImplementation("io.mockk:mockk:1.14.11")
-    testImplementation("org.testcontainers:testcontainers:2.0.5")
-    testImplementation("org.testcontainers:mariadb:1.21.4")
-    testImplementation("org.testcontainers:junit-jupiter:1.21.4")
     testImplementation("org.assertj:assertj-core:3.27.7")
 }
 

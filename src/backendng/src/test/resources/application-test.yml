@@ -17,9 +17,15 @@ micronaut:
           access-token:
             expiration: 3600
 
-# Datasource configured dynamically by Testcontainers via @DynamicPropertySource
+# Datasource: external MariaDB (no Docker/Testcontainers).
+# Supply TEST_DB_* via pass-cli when running the suite. The defaults target a local, disposable
+# `secman_test` database. SAFETY: hbm2ddl=create-drop drops the schema each run, so TEST_DB_URL
+# must NEVER point at the dev/production database (DB_CONNECT).
 datasources:
   default:
+    url: ${TEST_DB_URL:jdbc:mariadb://localhost:3306/secman_test}
+    username: ${TEST_DB_USERNAME:secman_test}
+    password: ${TEST_DB_PASSWORD:secman_test}
     driverClassName: org.mariadb.jdbc.Driver
     dialect: MYSQL
 
@@ -42,4 +48,3 @@ logger:
     io.micronaut: WARN
     com.secman: INFO
     org.hibernate: WARN
-    org.testcontainers: WARN

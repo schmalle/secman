@@ -6,12 +6,10 @@ import com.secman.domain.CrowdStrikeCleanupStatus
 import com.secman.repository.AssetRepository
 import com.secman.repository.CrowdStrikeCleanupRunRepository
 import com.secman.testutil.BaseIntegrationTest
-import com.secman.testutil.DockerAvailable
 import jakarta.inject.Inject
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.condition.EnabledIf
 import java.time.LocalDateTime
 
 /**
@@ -26,7 +24,6 @@ import java.time.LocalDateTime
  * These tests use real DB state and a mock cascade-delete service so we can
  * deterministically force PARTIAL outcomes.
  */
-@EnabledIf("com.secman.testutil.DockerAvailable#isDockerAvailable")
 open class CrowdStrikeCleanupAuditServiceIntegrationTest : BaseIntegrationTest() {
 
     @Inject

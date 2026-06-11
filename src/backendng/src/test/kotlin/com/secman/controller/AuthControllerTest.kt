@@ -13,7 +13,6 @@ import io.micronaut.serde.annotation.Serdeable
 import jakarta.inject.Inject
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.*
-import org.junit.jupiter.api.condition.EnabledIf
 
 /**
  * Integration tests for AuthController.
@@ -25,7 +24,6 @@ import org.junit.jupiter.api.condition.EnabledIf
  * - Token validation via status endpoint
  */
 @DisplayName("AuthController Tests")
-@EnabledIf("com.secman.testutil.DockerAvailable#isDockerAvailable")
 class AuthControllerTest : BaseIntegrationTest() {
 
     @Inject

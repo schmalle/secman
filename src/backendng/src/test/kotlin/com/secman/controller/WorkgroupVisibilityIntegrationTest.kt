@@ -18,10 +18,8 @@ import jakarta.inject.Inject
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.condition.EnabledIf
 
 @DisplayName("Workgroup Visibility Integration Tests")
-@EnabledIf("com.secman.testutil.DockerAvailable#isDockerAvailable")
 class WorkgroupVisibilityIntegrationTest : BaseIntegrationTest() {
 
     @Inject

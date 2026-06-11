@@ -18,7 +18,7 @@ See repo-root `CLAUDE.md` for the authoritative rules. Quick reference for agent
 - TS/TSX: 2-space indent, named exports. Import order: std → third-party → local. Shared constants in `frontend/src/utils`.
 
 ## Tests
-- Backend: `*Test.kt` next to the feature; `@MicronautTest` for container-dependent code; Mockk for unit doubles; **Testcontainers MariaDB** (not H2) via `BaseIntegrationTest` for persistence.
+- Backend: `*Test.kt` next to the feature; `@MicronautTest` for DB-backed code; Mockk for unit doubles; persistence tests run against an **external MariaDB** (not H2, no Docker) via `BaseIntegrationTest`. Datasource comes from `TEST_DB_URL`/`TEST_DB_USERNAME`/`TEST_DB_PASSWORD` (set via `pass-cli`; defaults to a local `secman_test`). Schema is Hibernate `create-drop`, so point it only at a disposable test DB — never `DB_CONNECT`.
 - Frontend: Playwright specs grouped by feature in `frontend/tests`; use `data-testid` selectors; document any `test.skip` in the PR.
 - HTTP in tests goes through `SECMAN_HOST` env var (resolved via `pass-cli`). Never hardcode `localhost:8080` / `localhost:4321`.
 

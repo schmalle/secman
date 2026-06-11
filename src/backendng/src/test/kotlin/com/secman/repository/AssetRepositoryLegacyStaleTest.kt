@@ -4,14 +4,12 @@ import com.secman.constants.AssetOwners
 import com.secman.domain.Asset
 import com.secman.domain.User
 import com.secman.testutil.BaseIntegrationTest
-import com.secman.testutil.DockerAvailable
 import jakarta.inject.Inject
 import jakarta.persistence.EntityManager
 import jakarta.transaction.Transactional
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.condition.EnabledIf
 import java.time.LocalDateTime
 
 /**
@@ -28,9 +26,8 @@ import java.time.LocalDateTime
  *
  * These behaviours are NOT testable with mocked repositories — they depend
  * on JPQL semantics being honoured by Hibernate against MariaDB. Hence this
- * is an @MicronautTest with Testcontainers.
+ * is an @MicronautTest against an external MariaDB (see BaseIntegrationTest).
  */
-@EnabledIf("com.secman.testutil.DockerAvailable#isDockerAvailable")
 open class AssetRepositoryLegacyStaleTest : BaseIntegrationTest() {
 
     @Inject

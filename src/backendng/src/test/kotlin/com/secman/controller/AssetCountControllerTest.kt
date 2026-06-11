@@ -15,10 +15,8 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.condition.EnabledIf
 
 @DisplayName("Asset Count Controller Tests")
-@EnabledIf("com.secman.testutil.DockerAvailable#isDockerAvailable")
 class AssetCountControllerTest : BaseIntegrationTest() {
 
     @Inject
