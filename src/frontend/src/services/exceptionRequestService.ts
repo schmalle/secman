@@ -9,6 +9,7 @@
 
 import { authenticatedGet, authenticatedPost, authenticatedDelete } from '../utils/auth';
 import type { ExceptionSubject, ExceptionScope } from './vulnerabilityManagementService';
+import { createReviewExceptionRequestDto } from './exceptionReviewDto';
 
 export type { ExceptionSubject, ExceptionScope };
 
@@ -395,13 +396,6 @@ export async function getPendingCount(): Promise<number> {
 }
 
 /**
- * DTO for review action (approve/reject)
- */
-export interface ReviewExceptionRequestDto {
-  comment?: string;
-}
-
-/**
  * Approve an exception request (ADMIN/SECCHAMPION only)
  *
  * @param id Request ID
@@ -410,7 +404,7 @@ export interface ReviewExceptionRequestDto {
  * @throws Error on 400 (invalid state), 401 (unauthorized), 403 (forbidden), 404 (not found), 409 (concurrent approval), 500 (server error)
  */
 export async function approveRequest(id: number, comment?: string): Promise<VulnerabilityExceptionRequestDto> {
-  const dto: ReviewExceptionRequestDto = comment ? { comment } : {};
+  const dto = createReviewExceptionRequestDto(comment);
   const response = await authenticatedPost(`/api/vulnerability-exception-requests/${id}/approve`, dto);
 
   if (response.ok) {
@@ -457,7 +451,7 @@ export async function approveRequest(id: number, comment?: string): Promise<Vuln
  * @throws Error on 400 (invalid state/comment), 401 (unauthorized), 403 (forbidden), 404 (not found), 409 (concurrent rejection), 500 (server error)
  */
 export async function rejectRequest(id: number, comment: string): Promise<VulnerabilityExceptionRequestDto> {
-  const dto: ReviewExceptionRequestDto = { comment };
+  const dto = createReviewExceptionRequestDto(comment);
   const response = await authenticatedPost(`/api/vulnerability-exception-requests/${id}/reject`, dto);
 
   if (response.ok) {
