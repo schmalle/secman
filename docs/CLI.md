@@ -141,6 +141,30 @@ Existing assets start with `crowdstrike_last_imported_at = NULL` after the schem
 | `--verbose` | false | per-asset detail |
 | `--outdated-only` | false | skip new-vuln notifications |
 
+### `send-patch-notifications` — missing-patch emails by email first character
+
+Notifies users about missing patches (overdue vulnerabilities) in deterministic
+alphabetical batches. The mandatory positional argument is the **first character of
+the email address** (e.g. `a` → every user whose login email starts with `a`).
+Reuses the user-vulnerability-notification pipeline: finds AWS accounts with
+vulnerabilities open longer than `--days`, maps them to users via `UserMapping`, then
+keeps only recipients matching the prefix before sending one consolidated email each.
+Requires `ADMIN`. Mirrored by MCP tool `send_patch_notifications`.
+
+```bash
+./scripts/secman send-patch-notifications a --dry-run
+./scripts/secman send-patch-notifications m --days 60 --verbose
+```
+
+| Argument / Option | Default | Notes |
+|---|---|---|
+| `<emailPrefix>` | — | **required**; first character of the email to notify (e.g. `a`) |
+| `--days <n>` | 30 | missing-patch (vulnerability) age threshold in days |
+| `--dry-run` | false | print planned recipients only |
+| `--verbose` | false | per-recipient delivery status |
+| `--username` / `--password` | env | `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS` |
+| `--backend-url` | env | `SECMAN_HOST` / `SECMAN_BACKEND_URL` |
+
 ### `manage-user-mappings`
 
 Subcommands: `list`, `add-aws`, `add-domain`, `import`, `import-s3`, `download-s3`, `print-s3`, `remove`.

@@ -78,6 +78,8 @@ class McpToolRegistry(
     @Inject private val deleteAssetTool: DeleteAssetTool,
     // Feature: MCP Send Admin Summary Tool
     @Inject private val sendAdminSummaryTool: SendAdminSummaryTool,
+    // Feature: MCP Send Patch Notifications Tool
+    @Inject private val sendPatchNotificationsTool: SendPatchNotificationsTool,
     // Feature: MCP Compare Releases Tool
     @Inject private val compareReleasesTool: CompareReleasesTool,
     // Feature: AWS Account Sharing
@@ -174,6 +176,8 @@ class McpToolRegistry(
             deleteAssetTool,
             // Feature: MCP Send Admin Summary Tool
             sendAdminSummaryTool,
+            // Feature: MCP Send Patch Notifications Tool
+            sendPatchNotificationsTool,
             // Feature: MCP Compare Releases Tool
             compareReleasesTool,
             // Feature: AWS Account Sharing
@@ -443,6 +447,11 @@ class McpToolRegistry(
 
             // Feature: MCP Send Admin Summary Tool (ADMIN only via User Delegation)
             "send_admin_summary" -> {
+                permissions.contains(McpPermission.NOTIFICATIONS_SEND) // ADMIN role checked in tool execute()
+            }
+
+            // Feature: MCP Send Patch Notifications Tool (ADMIN only via User Delegation)
+            "send_patch_notifications" -> {
                 permissions.contains(McpPermission.NOTIFICATIONS_SEND) // ADMIN role checked in tool execute()
             }
 

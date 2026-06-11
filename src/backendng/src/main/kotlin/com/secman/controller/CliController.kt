@@ -375,7 +375,8 @@ class CliController(
         val dryRun: Boolean = false,
         val verbose: Boolean = false,
         val thresholdDays: Int = 30,
-        val notificationUser: String? = null
+        val notificationUser: String? = null,
+        val emailPrefix: String? = null
     )
 
     @Serdeable
@@ -391,6 +392,7 @@ class CliController(
         val unmappedAccounts: List<String>,
         val thresholdDays: Int,
         val notificationUserExists: Boolean? = null,
+        val emailPrefix: String? = null,
         val accountDetails: List<UserVulnerabilityNotificationService.AwsAccountNotificationDetail>
     )
 
@@ -414,7 +416,8 @@ class CliController(
                 thresholdDays = request.thresholdDays,
                 dryRun = request.dryRun,
                 verbose = request.verbose,
-                notificationUser = request.notificationUser
+                notificationUser = request.notificationUser,
+                emailPrefix = request.emailPrefix
             )
 
             HttpResponse.ok(UserVulnNotificationResultDto(
@@ -429,6 +432,7 @@ class CliController(
                 unmappedAccounts = result.unmappedAccounts,
                 thresholdDays = result.thresholdDays,
                 notificationUserExists = result.notificationUserExists,
+                emailPrefix = result.emailPrefix,
                 accountDetails = result.accountDetails
             ))
         } catch (e: Exception) {

@@ -209,6 +209,7 @@ curl -XPOST http://localhost:8080/mcp \
 - **`add_user`** (ADMIN) — `email`*, `password`*, `roles[]` (default `["USER"]`).
 - **`delete_user`** (ADMIN) — `email`*.
 - **`send_admin_summary`** (ADMIN) — same payload as CLI `send-admin-summary`.
+- **`send_patch_notifications`** (ADMIN) — notify users about missing patches (overdue vulnerabilities), filtered by the first character of their email. Args: `emailPrefix`* (e.g. `"a"`), `days` (default `30`), `dryRun` (default `false`). Mirrors CLI `send-patch-notifications`. Requires User Delegation.
 
 ## Programmatic example (Python)
 
