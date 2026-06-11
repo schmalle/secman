@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "entire hooks claude-code post-task"
+            "command": "/Users/flake/.local/bin/entire hooks claude-code post-task"
           }
         ]
       },
@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "entire hooks claude-code post-todo"
+            "command": "/Users/flake/.local/bin/entire hooks claude-code post-todo"
           }
         ]
       }
@@ -26,7 +26,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "entire hooks claude-code pre-task"
+            "command": "/Users/flake/.local/bin/entire hooks claude-code pre-task"
           }
         ]
       }
@@ -37,7 +37,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "entire hooks claude-code session-end"
+            "command": "/Users/flake/.local/bin/entire hooks claude-code session-end"
           }
         ]
       }
@@ -48,7 +48,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "entire hooks claude-code session-start"
+            "command": "/Users/flake/.local/bin/entire hooks claude-code session-start"
           }
         ]
       }
@@ -59,7 +59,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "entire hooks claude-code stop"
+            "command": "/Users/flake/.local/bin/entire hooks claude-code stop"
           }
         ]
       }
@@ -70,7 +70,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "entire hooks claude-code user-prompt-submit"
+            "command": "/Users/flake/.local/bin/entire hooks claude-code user-prompt-submit"
           }
         ]
       }
