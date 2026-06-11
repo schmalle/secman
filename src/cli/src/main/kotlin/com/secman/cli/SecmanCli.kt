@@ -18,6 +18,7 @@ import com.secman.cli.commands.QueryCommand
 import com.secman.cli.commands.SendAdminSummaryCommand
 import com.secman.cli.commands.SendNotificationsCommand
 import com.secman.cli.commands.SendNotificationUsersCommand
+import com.secman.cli.commands.SendPatchNotificationsCommand
 import com.secman.cli.commands.SendApplicationRegisterRemindersCommand
 import com.secman.cli.commands.ServersCommand
 import io.micronaut.configuration.picocli.PicocliRunner
@@ -327,6 +328,14 @@ class SecmanCli {
                 }
                 0
             }
+            args[0] == "send-patch-notifications" -> {
+                // Notify users about missing patches, filtered by the first character of their email
+                val subArgs = args.drop(1).toTypedArray()
+                createCliContext().use { ctx ->
+                    PicocliRunner.run(SendPatchNotificationsCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
             args[0] == "deduplicate-vulnerabilities" -> {
                 // Remove duplicate vulnerability records from the database
                 val subArgs = args.drop(1).toTypedArray()
@@ -411,6 +420,7 @@ class SecmanCli {
                 send-notifications     Send email notifications for outdated assets
                 send-admin-summary     Send system statistics summary email to ADMIN users
                 send-notification-users  Send vulnerability notifications to users by AWS account
+                send-patch-notifications  Notify users about missing patches, filtered by email first character
                 send-application-register-reminders  Send reminders for stale application register quality checks
 
               User & Access Management:
@@ -651,6 +661,35 @@ class SecmanCli {
                   secman send-notification-users --dry-run
                   secman send-notification-users --days 60 --verbose
                   secman send-notification-users --dry-run --days 14
+            """.trimIndent(),
+
+            "send-patch-notifications" to """
+                secman send-patch-notifications - Notify users about missing patches by email first character
+
+                Usage: secman send-patch-notifications <emailPrefix> [options]
+
+                Arguments:
+                  <emailPrefix>            First character of the email address to notify (e.g. 'a'). REQUIRED.
+
+                Options:
+                  --days <number>          Missing-patch (vulnerability) age threshold in days (default: 30)
+                  --dry-run                Preview planned notifications without sending emails
+                  --verbose, -v            Detailed logging (show per-recipient status)
+                  --username <user>        Backend username (or SECMAN_ADMIN_NAME env var)
+                  --password <pass>        Backend password (or SECMAN_ADMIN_PASS env var)
+                  --backend-url <url>      Backend API URL (or SECMAN_HOST / SECMAN_BACKEND_URL env var)
+
+                Description:
+                  Finds AWS accounts with systems having vulnerabilities (missing patches) open
+                  longer than the threshold, maps them to users via UserMapping, then keeps only
+                  recipients whose login email starts with <emailPrefix> before sending each one a
+                  consolidated email. The prefix lets you notify users in alphabetical batches.
+
+                Examples:
+                  secman send-patch-notifications a --dry-run
+                  secman send-patch-notifications a
+                  secman send-patch-notifications m --days 60 --verbose
+                  secman send-patch-notifications s --days 14 --dry-run
             """.trimIndent(),
 
             "manage-user-mappings" to """

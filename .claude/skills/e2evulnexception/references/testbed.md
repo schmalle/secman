@@ -37,6 +37,7 @@ Driver script: `scripts/test/test-e2e-vuln-exception-full.sh`.
 | 6 | MCP exception lifecycle — CANCEL path (user1 creates → user1 cancels) |
 | 7 | MCP authorization negatives: user2 cannot approve, user1 cannot create on user2's asset, missing `X-MCP-User-Email` |
 | 8 | **MCP AWS account sharing** — create `UserMapping`s + AWS-tagged assets, `create_aws_account_sharing` (scoped to one account), verify directional + scoped visibility, add a second mapping/asset to the source user and prove it does **not** leak to the target, `list_aws_account_sharing` as admin |
+| 8b | **MCP patch notifications** — `send_patch_notifications` (mirrors CLI `send-patch-notifications`): admin dry-run with email prefix `e` returns `DRY_RUN` + echoes `emailPrefix`; negatives for missing `emailPrefix` and non-admin delegation |
 | 9 | Web UI (Playwright `tests/e2e/vuln-exception-full.spec.ts`): scoped visibility, my-requests states, approval dashboard, **admin AWS sharing dashboard, `/account-vulns` for user1 and user2 to verify scoped sharing in the UI** |
 | 10 | **Exception import/export/delete-all** — REST `/export`, MCP `delete_all_vulnerability_exceptions`, MCP `list_vulnerability_exceptions`, REST `/import`. 17 steps including non-admin negatives, idempotency, and baseline restore. |
 | (trap) | Post-run cleanup — runs even on failure |

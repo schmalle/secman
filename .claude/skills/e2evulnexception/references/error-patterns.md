@@ -27,5 +27,8 @@ match it against the table below.
 | `10.13 skippedDup != 1`                                   | **backend**  | `existingFingerprints` set logic in service. |
 | `10.14 ... returned 200, expected 403`                    | **backend**  | Role check missing on `/export` endpoint. |
 | `10.15 non-admin was NOT denied`                          | **backend**  | `DeleteAllVulnerabilityExceptionsTool` not enforcing `context.isAdmin`. |
+| `send_patch_notifications dry-run: expected status ...`   | **backend**  | `SendPatchNotificationsTool` / `UserVulnerabilityNotificationService` email-prefix filter or dry-run return. |
+| `send_patch_notifications without emailPrefix was NOT rejected` | **backend** | `SendPatchNotificationsTool` missing required-arg validation, or registry schema `required:["emailPrefix"]` dropped. |
+| `send_patch_notifications as non-admin was NOT denied`    | **backend**  | `SendPatchNotificationsTool` not enforcing `context.isAdmin` / delegation. |
 | `10.17 final count ... expected ...`                      | **backend**  | Baseline restore import skipped rows it shouldn't. Check duplicate detection. |
 | Playwright `exceptions UI shows zero rows`                | **frontend** | `VulnerabilityExceptionsTable` not refreshing after delete-all, or admin-only buttons leaking to non-admins. |
