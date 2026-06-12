@@ -28,6 +28,7 @@ import {
     type PagedResponse
 } from '../services/exceptionRequestService';
 import ExceptionStatusBadge from './ExceptionStatusBadge';
+import ExceptionRequestScopeBadge from './ExceptionRequestScopeBadge';
 import ExceptionRequestDetailModal from './ExceptionRequestDetailModal';
 
 const MyExceptionRequests: React.FC = () => {
@@ -378,17 +379,12 @@ const MyExceptionRequests: React.FC = () => {
                                                         </td>
                                                         <td>{request.assetName || 'N/A'}</td>
                                                         <td>
-                                                            {request.scope === 'ASSET' ? (
-                                                                <span className="badge bg-info text-dark">
-                                                                    <i className="bi bi-bullseye me-1"></i>
-                                                                    Single
-                                                                </span>
-                                                            ) : (
-                                                                <span className="badge bg-primary">
-                                                                    <i className="bi bi-grid-3x3 me-1"></i>
-                                                                    Pattern
-                                                                </span>
-                                                            )}
+                                                            <ExceptionRequestScopeBadge
+                                                                scope={request.scope}
+                                                                scopeValue={request.scopeValue}
+                                                                assetId={request.assetId}
+                                                                assetName={request.assetName}
+                                                            />
                                                         </td>
                                                         <td>
                                                             {new Date(request.createdAt).toLocaleDateString()}

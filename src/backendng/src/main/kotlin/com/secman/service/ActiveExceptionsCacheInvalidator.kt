@@ -1,15 +1,14 @@
 package com.secman.service
 
 import io.micronaut.cache.CacheManager
-import io.micronaut.cache.SyncCache
 import jakarta.inject.Singleton
 import org.slf4j.LoggerFactory
 
 /**
- * Invalidates the `active_exceptions` cache after any write that can change
- * which exceptions are active. Centralised so every write path has a single
- * obvious call to make; prevents the 5-minute TTL from masking freshly
- * approved/rejected/created/deleted/expired exceptions.
+ * Invalidates caches derived from active exceptions after any write that can change
+ * exception coverage. Centralised so every write path has a single obvious call to
+ * make; prevents the TTL from masking freshly approved/rejected/created/deleted/
+ * expired exceptions.
  */
 @Singleton
 class ActiveExceptionsCacheInvalidator(
@@ -18,19 +17,20 @@ class ActiveExceptionsCacheInvalidator(
     private val log = LoggerFactory.getLogger(ActiveExceptionsCacheInvalidator::class.java)
 
     fun invalidate() {
-        try {
-            val cache = cacheManager.getCache(CACHE_NAME)
-            when (cache) {
-                is SyncCache<*> -> cache.invalidateAll()
-                else -> cache.invalidateAll()
+        CACHE_NAMES.forEach { cacheName ->
+            try {
+                val cache = cacheManager.getCache(cacheName)
+                cache.invalidateAll()
+                log.debug("Invalidated cache '{}'", cacheName)
+            } catch (e: Exception) {
+                log.warn("Failed to invalidate cache '{}': {}", cacheName, e.message)
             }
-            log.debug("Invalidated cache '{}'", CACHE_NAME)
-        } catch (e: Exception) {
-            log.warn("Failed to invalidate cache '{}': {}", CACHE_NAME, e.message)
         }
     }
 
     companion object {
         const val CACHE_NAME = "active_exceptions"
+        const val NOT_EXCEPTED_COUNT_CACHE_NAME = "vulnerability_not_excepted_count"
+        private val CACHE_NAMES = listOf(CACHE_NAME, NOT_EXCEPTED_COUNT_CACHE_NAME)
     }
 }

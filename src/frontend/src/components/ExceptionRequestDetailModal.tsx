@@ -18,6 +18,7 @@
 import React, { useState, useEffect } from 'react';
 import { getRequestById, cancelRequest, deleteRequest, type VulnerabilityExceptionRequestDto } from '../services/exceptionRequestService';
 import ExceptionStatusBadge from './ExceptionStatusBadge';
+import ExceptionRequestScopeBadge from './ExceptionRequestScopeBadge';
 
 interface ExceptionRequestDetailModalProps {
     isOpen: boolean;
@@ -216,17 +217,12 @@ const ExceptionRequestDetailModal: React.FC<ExceptionRequestDetailModalProps> = 
                                             <div className="col-md-6 mb-2">
                                                 <strong>Scope:</strong>
                                                 <br />
-                                                {request.scope === 'ASSET' ? (
-                                                    <span className="badge bg-info text-dark">
-                                                        <i className="bi bi-bullseye me-1"></i>
-                                                        Single Vulnerability
-                                                    </span>
-                                                ) : (
-                                                    <span className="badge bg-primary">
-                                                        <i className="bi bi-grid-3x3 me-1"></i>
-                                                        CVE Pattern
-                                                    </span>
-                                                )}
+                                                <ExceptionRequestScopeBadge
+                                                    scope={request.scope}
+                                                    scopeValue={request.scopeValue}
+                                                    assetId={request.assetId}
+                                                    assetName={request.assetName}
+                                                />
                                             </div>
                                             <div className="col-md-6 mb-2">
                                                 <strong>Expiration Date:</strong>

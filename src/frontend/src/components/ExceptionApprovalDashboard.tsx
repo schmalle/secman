@@ -26,7 +26,7 @@ import {
   type PagedResponse,
   type ExceptionStatisticsDto
 } from '../services/exceptionRequestService';
-import ExceptionStatusBadge from './ExceptionStatusBadge';
+import ExceptionRequestScopeBadge from './ExceptionRequestScopeBadge';
 import ApprovalDetailModal from './ApprovalDetailModal';
 import CveLink from './CveLink';
 
@@ -367,23 +367,12 @@ const ExceptionApprovalDashboard: React.FC = () => {
                               <td>{request.assetName}</td>
                               <td>{request.requestedByUsername}</td>
                               <td>
-                                {request.scope === 'ASSET' ? (
-                                  <span
-                                    className="badge bg-info text-dark"
-                                    title={`Approving this exception hides ${request.vulnerabilityCve} on ${request.assetName} only. Other assets reporting this CVE will remain overdue.`}
-                                  >
-                                    <i className="bi bi-bullseye me-1"></i>
-                                    1 asset
-                                  </span>
-                                ) : (
-                                  <span
-                                    className="badge bg-warning text-dark"
-                                    title={`Approving this exception hides ${request.vulnerabilityCve} on EVERY asset that reports it, now and in the future.`}
-                                  >
-                                    <i className="bi bi-grid-3x3 me-1"></i>
-                                    All assets
-                                  </span>
-                                )}
+                                <ExceptionRequestScopeBadge
+                                  scope={request.scope}
+                                  scopeValue={request.scopeValue}
+                                  assetId={request.assetId}
+                                  assetName={request.assetName}
+                                />
                               </td>
                               <td style={{ maxWidth: '300px' }}>
                                 <div
