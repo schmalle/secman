@@ -27,9 +27,16 @@ import {
     type ExceptionRequestStatus,
     type PagedResponse
 } from '../services/exceptionRequestService';
+import type { ExceptionSubject } from '../services/vulnerabilityManagementService';
 import ExceptionStatusBadge from './ExceptionStatusBadge';
 import ExceptionRequestScopeBadge from './ExceptionRequestScopeBadge';
 import ExceptionRequestDetailModal from './ExceptionRequestDetailModal';
+
+const SUBJECT_LABELS: Record<ExceptionSubject, string> = {
+    ALL_VULNS: 'All vulnerabilities',
+    PRODUCT: 'Product',
+    CVE: 'CVE'
+};
 
 const MyExceptionRequests: React.FC = () => {
     // Data states
@@ -353,6 +360,7 @@ const MyExceptionRequests: React.FC = () => {
                                                     <th>Status</th>
                                                     <th>CVE ID</th>
                                                     <th>Asset</th>
+                                                    <th>Subject</th>
                                                     <th>Scope</th>
                                                     <th>Submitted</th>
                                                     <th>Actions</th>
@@ -360,7 +368,7 @@ const MyExceptionRequests: React.FC = () => {
                                             </thead>
                                             <tbody>
                                                 {requests?.content?.map((request) => (
-                                                    <tr key={request.id}>
+                                                    <tr key={request.id} data-testid={`my-exception-request-row-${request.id}`}>
                                                         <td>
                                                             <ExceptionStatusBadge status={request.status} autoApproved={request.autoApproved} />
                                                         </td>
@@ -379,12 +387,31 @@ const MyExceptionRequests: React.FC = () => {
                                                         </td>
                                                         <td>{request.assetName || 'N/A'}</td>
                                                         <td>
+                                                            <span className="badge bg-secondary">
+                                                                {SUBJECT_LABELS[request.subject]}
+                                                            </span>
+                                                            {request.subjectValue && (
+                                                                <>
+                                                                    <br />
+                                                                    <small className="text-muted">
+                                                                        <code>{request.subjectValue}</code>
+                                                                    </small>
+                                                                </>
+                                                            )}
+                                                        </td>
+                                                        <td>
                                                             <ExceptionRequestScopeBadge
                                                                 scope={request.scope}
                                                                 scopeValue={request.scopeValue}
                                                                 assetId={request.assetId}
                                                                 assetName={request.assetName}
                                                             />
+                                                            {request.scopeValue && (
+                                                                <>
+                                                                    <br />
+                                                                    <small className="text-muted">{request.scopeValue}</small>
+                                                                </>
+                                                            )}
                                                         </td>
                                                         <td>
                                                             {new Date(request.createdAt).toLocaleDateString()}
@@ -395,6 +422,7 @@ const MyExceptionRequests: React.FC = () => {
                                                                     className="btn btn-outline-secondary"
                                                                     onClick={() => handleViewDetails(request.id)}
                                                                     title="View details"
+                                                                    data-testid={`my-exception-request-details-${request.id}`}
                                                                 >
                                                                     <i className="bi bi-eye"></i>
                                                                 </button>

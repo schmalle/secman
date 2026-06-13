@@ -1,4 +1,5 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Locator, type Page } from '@playwright/test';
+import fs from 'node:fs';
 
 /**
  * Phase 8 (UI) of the full vulnerability + exception E2E test.
@@ -28,6 +29,7 @@ const required = [
     'E2E_AWS_ACCOUNT_A', 'E2E_AWS_ACCOUNT_B', 'E2E_AWS_ACCOUNT_C',
     'E2E_AWS_ASSET_A_NAME', 'E2E_AWS_ASSET_B_NAME', 'E2E_AWS_ASSET_C_NAME',
     'E2E_AWS_SHARING_RULE_ID',
+    'E2E_EXCEPTION_MATRIX_FILE',
 ] as const;
 
 const missing = required.filter((k) => !process.env[k]);
@@ -60,6 +62,62 @@ const AWS_ASSET_A   = process.env.E2E_AWS_ASSET_A_NAME!;
 const AWS_ASSET_B   = process.env.E2E_AWS_ASSET_B_NAME!;
 const AWS_ASSET_C   = process.env.E2E_AWS_ASSET_C_NAME!;
 const AWS_SHARING_RULE_ID = process.env.E2E_AWS_SHARING_RULE_ID!;
+const MATRIX_FILE = process.env.E2E_EXCEPTION_MATRIX_FILE!;
+
+type ExceptionSubject = 'ALL_VULNS' | 'PRODUCT' | 'CVE';
+type ExceptionScope = 'GLOBAL' | 'IP' | 'ASSET' | 'AWS_ACCOUNT';
+type MatrixAction = 'approve' | 'reject';
+
+interface MatrixCase {
+    key: string;
+    action: MatrixAction;
+    expectedStatus: 'APPROVED' | 'REJECTED';
+    subject: ExceptionSubject;
+    scope: ExceptionScope;
+    subjectValue: string | null;
+    scopeValue: string | null;
+    reasonMarker: string;
+    reason: string;
+    requesterUsername: string;
+    requesterEmail: string;
+    requestId: number;
+    vulnerabilityId: number;
+    cve: string;
+    assetId: number;
+    assetName: string;
+    assetIp: string;
+    awsAccount: string | null;
+    product: string;
+}
+
+interface MatrixFixture {
+    requesterUsername: string;
+    requesterEmail: string;
+    forbidden: { subject: ExceptionSubject; scope: ExceptionScope };
+    cases: MatrixCase[];
+}
+
+const matrixFixture: MatrixFixture = JSON.parse(fs.readFileSync(MATRIX_FILE, 'utf8'));
+const matrixCases = matrixFixture.cases;
+const approveCases = matrixCases.filter((c) => c.action === 'approve');
+const rejectCases = matrixCases.filter((c) => c.action === 'reject');
+
+if (matrixCases.length !== 22 || approveCases.length !== 11 || rejectCases.length !== 11) {
+    throw new Error(`Invalid matrix fixture ${MATRIX_FILE}: expected 22 cases, got ${matrixCases.length}`);
+}
+
+const SUBJECT_LABELS: Record<ExceptionSubject, RegExp> = {
+    ALL_VULNS: /All vulnerabilities/i,
+    PRODUCT: /Product/i,
+    CVE: /^CVE$/i,
+};
+
+const SCOPE_LABELS: Record<ExceptionScope, RegExp> = {
+    GLOBAL: /Globally|All assets|all assets/i,
+    IP: /On IP|IP scope|one IP/i,
+    ASSET: /On Asset|1 asset|one asset/i,
+    AWS_ACCOUNT: /In AWS Account|AWS account/i,
+};
 
 async function login(page: Page, username: string, password: string) {
     await page.goto('/login');
@@ -142,6 +200,17 @@ async function waitForVulnerabilityExceptionsReady(page: Page) {
     );
 }
 
+async function waitForPendingExceptionRequestsReady(page: Page) {
+    await waitForResponseOrVisible(
+        page,
+        (response) =>
+            response.url().includes('/api/vulnerability-exception-requests/pending') &&
+            response.request().method() === 'GET' &&
+            response.ok(),
+        page.locator('main')
+    );
+}
+
 async function waitForAwsAccountSharingReady(page: Page) {
     await waitForResponseOrVisible(
         page,
@@ -155,6 +224,70 @@ async function waitForAwsAccountSharingReady(page: Page) {
 async function logout(page: Page) {
     await page.evaluate(() => localStorage.clear());
     await page.context().clearCookies();
+}
+
+function rowForApproval(page: Page, requestId: number): Locator {
+    return page.getByTestId(`exception-approval-row-${requestId}`);
+}
+
+function rowForMyRequest(page: Page, requestId: number): Locator {
+    return page.getByTestId(`my-exception-request-row-${requestId}`);
+}
+
+async function setSelectToValue(select: Locator, value: string) {
+    await expect(select).toBeVisible();
+    await select.selectOption(value);
+    await expect(select).toHaveValue(value);
+}
+
+async function expectSelectOptionValues(select: Locator, expected: string[]) {
+    await expect.poll(async () =>
+        await select.locator('option').evaluateAll((options) =>
+            options.map((option) => (option as HTMLOptionElement).value)
+        )
+    ).toEqual(expected);
+}
+
+function futureDateTimeLocal(days = 45): string {
+    const date = new Date();
+    date.setDate(date.getDate() + days);
+    return date.toISOString().slice(0, 16);
+}
+
+function requestStatusLabel(status: 'APPROVED' | 'REJECTED'): RegExp {
+    return status === 'APPROVED' ? /APPROVED|Approved|Excepted/ : /REJECTED|Rejected/;
+}
+
+async function setApprovalPageSize(page: Page, size: string) {
+    const pageSize = page.locator('#pageSize');
+    await expect(pageSize).toBeVisible();
+    await pageSize.selectOption(size);
+    await waitForPendingExceptionRequestsReady(page);
+}
+
+async function approveCaseThroughUi(page: Page, item: MatrixCase) {
+    const row = rowForApproval(page, item.requestId);
+    await expect(row).toBeVisible();
+    page.once('dialog', (dialog) => dialog.accept());
+    await page.getByTestId(`exception-approval-quick-approve-${item.requestId}`).click();
+    await expect(row).toHaveCount(0, { timeout: 15_000 });
+}
+
+async function rejectCaseThroughUi(page: Page, item: MatrixCase) {
+    const row = rowForApproval(page, item.requestId);
+    await expect(row).toBeVisible();
+    await page.getByTestId(`exception-approval-quick-reject-${item.requestId}`).click();
+    await expect(page.getByRole('heading', { name: /review exception request/i })).toBeVisible();
+
+    await page.getByRole('button', { name: /^Reject Request$/ }).click();
+    await expect(page.getByText(/Rejection comment is required/i)).toBeVisible();
+
+    await page.locator('#rejectComment').fill(`UI rejection for matrix case ${item.key}`);
+    await page.getByRole('button', { name: /^Reject Request$/ }).click();
+    await expect(page.getByText(/Confirm Rejection/i)).toBeVisible();
+    await page.getByRole('button', { name: /^Confirm Reject$/ }).click();
+    await expect(page.getByRole('heading', { name: /review exception request/i })).toHaveCount(0, { timeout: 15_000 });
+    await expect(row).toHaveCount(0, { timeout: 15_000 });
 }
 
 test.describe.serial('Vulnerability + exception lifecycle (UI)', () => {
@@ -252,11 +385,14 @@ test.describe.serial('Vulnerability + exception lifecycle (UI)', () => {
         await page.goto('/my-exception-requests');
         await page.waitForLoadState('domcontentloaded');
         await waitForMyExceptionRequestsReady(page);
+        await page.locator('#pageSize').selectOption('50');
+        await waitForMyExceptionRequestsReady(page);
 
-        const body = (await page.textContent('body')) ?? '';
         // The approved request references vuln1 / asset1
-        expect(body).toContain(CVE_V1);
-        expect(body).toMatch(/APPROVED|Approved/);
+        const row = rowForMyRequest(page, Number(REQ_APPROVE_ID));
+        await expect(row).toBeVisible();
+        await expect(row).toContainText(CVE_V1);
+        await expect(row).toContainText(requestStatusLabel('APPROVED'));
 
         await logout(page);
     });
@@ -268,45 +404,168 @@ test.describe.serial('Vulnerability + exception lifecycle (UI)', () => {
         await page.waitForLoadState('domcontentloaded');
         await waitForMyExceptionRequestsReady(page);
 
-        const body = (await page.textContent('body')) ?? '';
-        expect(body).toContain(CVE_V2);
-        expect(body).toMatch(/REJECTED|Rejected/);
+        const row = rowForMyRequest(page, Number(REQ_REJECT_ID));
+        await expect(row).toBeVisible();
+        await expect(row).toContainText(CVE_V2);
+        await expect(row).toContainText(/REJECTED|Rejected/);
 
         await logout(page);
     });
 
-    test('admin exception-approvals dashboard shows zero pending after the test reviewed all requests', async ({ page }) => {
-        await login(page, ADMIN.user, ADMIN.pass);
-
-        await page.goto('/exception-approvals');
-        await page.waitForLoadState('domcontentloaded');
-        await page.waitForResponse((response) =>
-            response.url().includes('/api/vulnerability-exception-requests/pending') && response.request().method() === 'GET' && response.ok()
-        );
-        await expect(page.locator('main')).toBeVisible();
-
-        // The dashboard only lists PENDING requests. We approved/rejected/cancelled
-        // every request our test created, so the dashboard should reflect "0 pending"
-        // and the empty-state message. The actual reviewed requests are visible
-        // per-user via /my-exception-requests (covered by previous tests) and as
-        // active exceptions on the next assertion.
-        const body = (await page.textContent('body')) ?? '';
-        expect(body).toMatch(/No pending requests|0\s*$|Awaiting review/);
-
-        await logout(page);
-    });
-
-    test('approved exception appears on the active vulnerability exceptions list', async ({ page }) => {
+    test('direct exception form exposes all valid subject and scope controls', async ({ page }) => {
         await login(page, ADMIN.user, ADMIN.pass);
 
         await page.goto('/vulnerabilities/exceptions');
         await page.waitForLoadState('domcontentloaded');
         await waitForVulnerabilityExceptionsReady(page);
 
+        await page.getByRole('button', { name: /create exception/i }).click();
+        await expect(page.getByRole('heading', { name: /create exception/i })).toBeVisible();
+
+        const subject = page.getByTestId('exception-subject-select');
+        const scope = page.getByTestId('exception-scope-select');
+        await expect.poll(async () => await scope.locator('option').count()).toBeGreaterThan(0);
+
+        await expect(subject.locator('option')).toHaveText([
+            'all vulnerabilities',
+            'vulnerabilities for product',
+            'vulnerabilities matching CVE',
+        ]);
+
+        await setSelectToValue(subject, 'PRODUCT');
+        await expect(page.getByPlaceholder(/Apache HTTP Server/i)).toBeVisible();
+        await expectSelectOptionValues(scope, ['GLOBAL', 'IP', 'ASSET', 'AWS_ACCOUNT']);
+
+        await setSelectToValue(scope, 'IP');
+        await expect(page.getByTestId('exception-ip-input')).toBeVisible();
+
+        await setSelectToValue(scope, 'ASSET');
+        await expect(page.getByTestId('exception-asset-select')).toBeVisible();
+
+        await setSelectToValue(scope, 'AWS_ACCOUNT');
+        await expect(page.getByTestId('exception-aws-account-input')).toBeVisible();
+        await expect(page.getByTestId('exception-aws-account-select')).toBeVisible();
+
+        await setSelectToValue(subject, 'CVE');
+        await expect(page.getByTestId('exception-cve-input')).toBeVisible();
+        await expectSelectOptionValues(scope, ['GLOBAL', 'IP', 'ASSET', 'AWS_ACCOUNT']);
+
+        await setSelectToValue(subject, 'ALL_VULNS');
+        await expectSelectOptionValues(scope, ['IP', 'ASSET', 'AWS_ACCOUNT']);
+        await expect(scope.locator('option[value="GLOBAL"]')).toHaveCount(0);
+
+        await setSelectToValue(scope, 'IP');
+        await page.getByTestId('exception-ip-input').fill(approveCases.find((item) => item.scope === 'IP')!.assetIp);
+        await page.locator('#expirationDate').fill(futureDateTimeLocal());
+        await page.locator('#reason').fill('E2E direct form control validation for all vulnerabilities impact preview before creating anything.');
+        await page.getByRole('button', { name: /preview & create/i }).click();
+        await expect(page.getByRole('heading', { name: /exception impact preview/i })).toBeVisible();
+        await page.locator('.modal-content').filter({ hasText: 'Exception Impact Preview' })
+            .getByRole('button', { name: /^Cancel$/ })
+            .click();
+
+        await logout(page);
+    });
+
+    test('admin approval dashboard shows every matrix request with subject and scope context', async ({ page }) => {
+        await login(page, ADMIN.user, ADMIN.pass);
+
+        await page.goto('/exception-approvals');
+        await page.waitForLoadState('domcontentloaded');
+        await waitForPendingExceptionRequestsReady(page);
+        await setApprovalPageSize(page, '50');
+
+        for (const item of matrixCases) {
+            const row = rowForApproval(page, item.requestId);
+            await expect(row).toBeVisible();
+            await expect(row).toContainText(item.requesterUsername);
+            await expect(row).toContainText(item.reasonMarker);
+            await expect(row).toContainText(SUBJECT_LABELS[item.subject]);
+            await expect(row).toContainText(SCOPE_LABELS[item.scope]);
+            if (item.subjectValue) {
+                await expect(row).toContainText(item.subjectValue);
+            }
+            if (item.scopeValue) {
+                await expect(row).toContainText(item.scopeValue);
+            }
+            if (item.scope === 'ASSET') {
+                await expect(row).toContainText(item.assetName);
+            }
+            await expect(page.getByTestId(`exception-approval-quick-approve-${item.requestId}`)).toBeVisible();
+            await expect(page.getByTestId(`exception-approval-quick-reject-${item.requestId}`)).toBeVisible();
+        }
+
+        await logout(page);
+    });
+
+    test('admin approves and rejects every matrix request through the approval UI', async ({ page }) => {
+        await login(page, ADMIN.user, ADMIN.pass);
+
+        await page.goto('/exception-approvals');
+        await page.waitForLoadState('domcontentloaded');
+        await waitForPendingExceptionRequestsReady(page);
+        await setApprovalPageSize(page, '50');
+
+        for (const item of approveCases) {
+            await approveCaseThroughUi(page, item);
+        }
+        for (const item of rejectCases) {
+            await rejectCaseThroughUi(page, item);
+        }
+
+        await expect(page.getByText(/No pending requests/i)).toBeVisible();
+
+        await logout(page);
+    });
+
+    test('user1 sees final APPROVED and REJECTED matrix states on My Exception Requests', async ({ page }) => {
+        await login(page, USER1.user, USER1.pass);
+
+        await page.goto('/my-exception-requests');
+        await page.waitForLoadState('domcontentloaded');
+        await waitForMyExceptionRequestsReady(page);
+        await page.locator('#pageSize').selectOption('50');
+        await waitForMyExceptionRequestsReady(page);
+
+        for (const item of matrixCases) {
+            const row = rowForMyRequest(page, item.requestId);
+            await expect(row).toBeVisible();
+            await expect(row).toContainText(requestStatusLabel(item.expectedStatus));
+            await expect(row).toContainText(SUBJECT_LABELS[item.subject]);
+            await expect(row).toContainText(SCOPE_LABELS[item.scope]);
+            if (item.subjectValue) {
+                await expect(row).toContainText(item.subjectValue);
+            }
+        }
+
+        await logout(page);
+    });
+
+    test('approved matrix exceptions appear on the active list and rejected matrix requests do not', async ({ page }) => {
+        await login(page, ADMIN.user, ADMIN.pass);
+
+        await page.goto('/vulnerabilities/exceptions');
+        await page.waitForLoadState('domcontentloaded');
+        await waitForVulnerabilityExceptionsReady(page);
+
+        for (const item of approveCases) {
+            await page.locator('#subjectFilter').selectOption(item.subject);
+            await page.locator('#scopeFilter').selectOption(item.scope);
+            const body = (await page.textContent('body')) ?? '';
+            expect(body).toContain(item.reasonMarker);
+        }
+
+        await page.locator('#subjectFilter').selectOption('ALL');
+        await page.locator('#scopeFilter').selectOption('ALL');
+
         const body = (await page.textContent('body')) ?? '';
-        // Only CVE_V1's request was APPROVED, so an active exception exists for it.
-        // CVE_V2's requests were REJECTED and CANCELLED — no exception should be created.
         expect(body).toContain(CVE_V1);
+        for (const item of approveCases) {
+            expect(body).toContain(item.reasonMarker);
+        }
+        for (const item of rejectCases) {
+            expect(body).not.toContain(item.reasonMarker);
+        }
 
         await logout(page);
     });

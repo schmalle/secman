@@ -33,8 +33,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 # shellcheck source=../../tests/lib/secman-test-tls.sh
-source "$(cd "$SCRIPT_DIR/../.." && pwd)/tests/lib/secman-test-tls.sh"
+source "$REPO_ROOT/tests/lib/secman-test-tls.sh"
 
 # =============================================================================
 # Configuration
@@ -94,10 +95,19 @@ AWS_ASSET_C_IP="10.99.1.30"
 # way user2 sees testaws-a is via the sharing rule.
 AWS_ASSET_OWNER_LABEL="awssharing-owner"
 
+# Full subject/scope matrix coverage. The fixture is written by Phase 8c and
+# consumed by Playwright in Phase 9, then re-read by the MCP post-UI assertions.
+MATRIX_ASSET_PREFIX="e2e-matrix-exc"
+MATRIX_CVE_YEAR="2098"
+MATRIX_PRODUCT_PREFIX="E2E Matrix Product"
+MATRIX_AWS_ACCOUNT_BASE=900000000000
+MATRIX_FIXTURE_FILE="$REPO_ROOT/.e2e-logs/vuln-exception-matrix.json"
+
 # Reason text — must be ≥50 chars per CreateExceptionRequestTool
 EXCEPTION_REASON_APPROVE="E2E test scenario: approving an exception while remediation is scheduled in the next maintenance window — automated test"
 EXCEPTION_REASON_REJECT="E2E test scenario: this request is expected to be rejected by the admin to verify the rejection lifecycle path end to end"
 EXCEPTION_REASON_CANCEL="E2E test scenario: the requester will cancel this request to verify the user-driven cancellation lifecycle path"
+EXCEPTION_REASON_MATRIX_PREFIX="E2E TEST MATRIX"
 
 # DB credentials (matches existing test scripts)
 DB_HOST="127.0.0.1"
@@ -354,6 +364,182 @@ db_exec() {
     mariadb -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" -N -e "$1" 2>/dev/null || true
 }
 
+matrix_case_subject_value() {
+    local subject="$1"
+    local cve="$2"
+    local product="$3"
+    case "$subject" in
+        ALL_VULNS) printf '%s' "" ;;
+        PRODUCT) printf '%s' "$product" ;;
+        CVE) printf '%s' "$cve" ;;
+    esac
+}
+
+matrix_scope_value() {
+    local scope="$1"
+    local ip="$2"
+    local aws_account="$3"
+    case "$scope" in
+        IP) printf '%s' "$ip" ;;
+        AWS_ACCOUNT) printf '%s' "$aws_account" ;;
+        *) printf '%s' "" ;;
+    esac
+}
+
+matrix_create_asset_and_vulnerability() {
+    local case_index="$1"
+    local case_key="$2"
+    local asset_name="$3"
+    local ip="$4"
+    local cve="$5"
+    local aws_account="$6"
+    local product="$7"
+
+    local asset_args
+    if [[ -n "$aws_account" ]]; then
+        asset_args=$(jq -nc \
+            --arg n "$asset_name" --arg t "SERVER" --arg o "$USER1_USERNAME" \
+            --arg ip "$ip" --arg ca "$aws_account" --arg key "$case_key" \
+            '{name:$n,type:$t,owner:$o,ip:$ip,cloudAccountId:$ca,description:("E2E exception matrix asset " + $key)}')
+    else
+        asset_args=$(jq -nc \
+            --arg n "$asset_name" --arg t "SERVER" --arg o "$USER1_USERNAME" \
+            --arg ip "$ip" --arg key "$case_key" \
+            '{name:$n,type:$t,owner:$o,ip:$ip,description:("E2E exception matrix asset " + $key)}')
+    fi
+
+    local res asset_id vuln_id
+    res=$(mcp_call "create_asset" "$asset_args" "$ADMIN_USER_EMAIL")
+    asset_id=$(echo "$res" | jq -r '.id')
+    [[ -z "$asset_id" || "$asset_id" == "null" ]] && fail "Matrix $case_key: failed to create asset: $res"
+
+    if [[ -n "$aws_account" ]]; then
+        create_user_mapping "$USER1_EMAIL" "$aws_account" "$USER1_ID" >/dev/null
+    fi
+
+    res=$(mcp_call "add_vulnerability" "$(jq -nc \
+        --arg h "$asset_name" --arg c "$cve" --arg o "$USER1_USERNAME" \
+        '{hostname:$h,cve:$c,criticality:"HIGH",daysOpen:9,owner:$o}')" "$ADMIN_USER_EMAIL")
+    vuln_id=$(echo "$res" | jq -r '.id')
+    [[ -z "$vuln_id" || "$vuln_id" == "null" ]] && fail "Matrix $case_key: failed to create vulnerability: $res"
+
+    # The add_vulnerability MCP tool has no product field; set it directly so
+    # PRODUCT-subject exceptions have a deterministic matching vulnerability.
+    db_exec "
+        UPDATE vulnerability
+           SET vulnerable_product_versions='${product}'
+         WHERE id=${vuln_id};
+    "
+
+    jq -nc \
+        --arg assetId "$asset_id" --arg vulnerabilityId "$vuln_id" \
+        '{assetId:($assetId|tonumber), vulnerabilityId:($vulnerabilityId|tonumber)}'
+}
+
+matrix_append_case() {
+    local case_json="$1"
+    local tmp
+    tmp=$(mktemp)
+    jq --argjson case "$case_json" '.cases += [$case]' "$MATRIX_FIXTURE_FILE" > "$tmp"
+    mv "$tmp" "$MATRIX_FIXTURE_FILE"
+}
+
+matrix_create_request() {
+    local action="$1"
+    local subject="$2"
+    local scope="$3"
+    local case_index="$4"
+    local asset_id="$5"
+    local asset_name="$6"
+    local asset_ip="$7"
+    local vuln_id="$8"
+    local cve="$9"
+    local product="${10}"
+    local aws_account="${11}"
+    local future_date="${12}"
+
+    local action_upper subject_lower scope_lower case_key marker reason
+    action_upper=$(printf '%s' "$action" | tr '[:lower:]' '[:upper:]')
+    subject_lower=$(printf '%s' "$subject" | tr '[:upper:]' '[:lower:]')
+    scope_lower=$(printf '%s' "$scope" | tr '[:upper:]' '[:lower:]')
+    case_key="${action}-${subject_lower}-${scope_lower}"
+    marker="${EXCEPTION_REASON_MATRIX_PREFIX} ${action_upper} ${subject} ${scope} #${case_index}"
+    reason="${marker}: deterministic end-to-end request covering this exception subject and scope combination."
+
+    local subject_value scope_value request_args res request_id status
+    subject_value=$(matrix_case_subject_value "$subject" "$cve" "$product")
+    scope_value=$(matrix_scope_value "$scope" "$asset_ip" "$aws_account")
+
+    request_args=$(jq -nc \
+        --arg vid "$vuln_id" \
+        --arg subject "$subject" \
+        --arg scope "$scope" \
+        --arg subjectValue "$subject_value" \
+        --arg scopeValue "$scope_value" \
+        --arg aid "$asset_id" \
+        --arg reason "$reason" \
+        --arg exp "$future_date" \
+        '{
+            vulnerabilityId:($vid|tonumber),
+            subject:$subject,
+            scope:$scope,
+            reason:$reason,
+            expirationDate:$exp
+        }
+        + (if $subjectValue == "" then {} else {subjectValue:$subjectValue} end)
+        + (if $scopeValue == "" then {} else {scopeValue:$scopeValue} end)
+        + (if $scope == "ASSET" then {assetId:($aid|tonumber)} else {} end)')
+
+    res=$(mcp_call "create_exception_request" "$request_args" "$USER1_EMAIL")
+    request_id=$(echo "$res" | jq -r '.request.id')
+    status=$(echo "$res" | jq -r '.request.status')
+    [[ -z "$request_id" || "$request_id" == "null" ]] && fail "Matrix $case_key: failed to create request: $res"
+    [[ "$status" == "PENDING" ]] || fail "Matrix $case_key: expected PENDING, got $status"
+
+    matrix_append_case "$(jq -nc \
+        --arg key "$case_key" \
+        --arg action "$action" \
+        --arg subject "$subject" \
+        --arg scope "$scope" \
+        --arg subjectValue "$subject_value" \
+        --arg scopeValue "$scope_value" \
+        --arg marker "$marker" \
+        --arg reason "$reason" \
+        --arg requester "$USER1_USERNAME" \
+        --arg requesterEmail "$USER1_EMAIL" \
+        --arg requestId "$request_id" \
+        --arg vulnerabilityId "$vuln_id" \
+        --arg cve "$cve" \
+        --arg assetId "$asset_id" \
+        --arg assetName "$asset_name" \
+        --arg assetIp "$asset_ip" \
+        --arg awsAccount "$aws_account" \
+        --arg product "$product" \
+        '{
+            key:$key,
+            action:$action,
+            expectedStatus:(if $action == "approve" then "APPROVED" else "REJECTED" end),
+            subject:$subject,
+            scope:$scope,
+            subjectValue:(if $subjectValue == "" then null else $subjectValue end),
+            scopeValue:(if $scopeValue == "" then null else $scopeValue end),
+            reasonMarker:$marker,
+            reason:$reason,
+            requesterUsername:$requester,
+            requesterEmail:$requesterEmail,
+            requestId:($requestId|tonumber),
+            vulnerabilityId:($vulnerabilityId|tonumber),
+            cve:$cve,
+            assetId:($assetId|tonumber),
+            assetName:$assetName,
+            assetIp:$assetIp,
+            awsAccount:(if $awsAccount == "" then null else $awsAccount end),
+            product:$product
+        }')"
+
+    ok "Matrix request ${case_key} created (id=${request_id})"
+}
+
 # Cached admin JWT — multiple REST calls share this so we don't round-trip
 # /api/auth/login per call. Cleared by cleanup() to avoid bleeding across runs.
 ADMIN_JWT_CACHE=""
@@ -577,6 +763,161 @@ run_phase_10_exception_import_export() {
 }
 
 # =============================================================================
+# Phase 8c: Full subject/scope matrix for UI approval/rejection
+# =============================================================================
+
+run_phase_8c_exception_matrix_seed() {
+    log "=== Phase 8c: Exception subject/scope matrix seed (MCP) ==="
+
+    mkdir -p "$(dirname "$MATRIX_FIXTURE_FILE")"
+    jq -nc \
+        --arg requester "$USER1_USERNAME" \
+        --arg requesterEmail "$USER1_EMAIL" \
+        --arg forbiddenSubject "ALL_VULNS" \
+        --arg forbiddenScope "GLOBAL" \
+        '{
+            requesterUsername:$requester,
+            requesterEmail:$requesterEmail,
+            forbidden:{subject:$forbiddenSubject, scope:$forbiddenScope},
+            cases:[]
+        }' > "$MATRIX_FIXTURE_FILE"
+
+    local err err_code
+    err=$(mcp_call "create_exception_request" "$(jq -nc \
+        --arg vid "$VULN1_ID" --arg reason "$EXCEPTION_REASON_APPROVE" --arg exp "$future_date" \
+        '{vulnerabilityId:($vid|tonumber), subject:"ALL_VULNS", scope:"GLOBAL",
+          reason:$reason, expirationDate:$exp, validateOnly:true}')" "$USER1_EMAIL" --allow-error)
+    err_code=$(echo "$err" | jq -r '.code // empty')
+    [[ -n "$err_code" ]] || fail "Forbidden ALL_VULNS × GLOBAL validate-only request was NOT rejected"
+    ok "Forbidden ALL_VULNS × GLOBAL rejected via MCP validate-only (code=$err_code)"
+
+    local subjects=("ALL_VULNS" "PRODUCT" "CVE")
+    local scopes=("GLOBAL" "IP" "ASSET" "AWS_ACCOUNT")
+    local action subject scope case_index=0
+
+    for action in approve reject; do
+        for subject in "${subjects[@]}"; do
+            for scope in "${scopes[@]}"; do
+                if [[ "$subject" == "ALL_VULNS" && "$scope" == "GLOBAL" ]]; then
+                    continue
+                fi
+
+                case_index=$((case_index + 1))
+                local subject_lower scope_lower action_lower asset_name ip cve product aws_account case_key ids asset_id vuln_id
+                action_lower="$action"
+                subject_lower=$(printf '%s' "$subject" | tr '[:upper:]' '[:lower:]')
+                scope_lower=$(printf '%s' "$scope" | tr '[:upper:]' '[:lower:]')
+                case_key="${action_lower}-${subject_lower}-${scope_lower}"
+                asset_name="${MATRIX_ASSET_PREFIX}-${case_key}"
+                ip="10.99.2.${case_index}"
+                cve="CVE-${MATRIX_CVE_YEAR}-$((1000 + case_index))"
+                product="${MATRIX_PRODUCT_PREFIX} ${case_index}"
+                aws_account=""
+                if [[ "$scope" == "AWS_ACCOUNT" ]]; then
+                    aws_account="$((MATRIX_AWS_ACCOUNT_BASE + case_index))"
+                fi
+
+                ids=$(matrix_create_asset_and_vulnerability "$case_index" "$case_key" "$asset_name" "$ip" "$cve" "$aws_account" "$product")
+                asset_id=$(echo "$ids" | jq -r '.assetId')
+                vuln_id=$(echo "$ids" | jq -r '.vulnerabilityId')
+                matrix_create_request \
+                    "$action" "$subject" "$scope" "$case_index" \
+                    "$asset_id" "$asset_name" "$ip" "$vuln_id" "$cve" "$product" "$aws_account" "$future_date"
+            done
+        done
+    done
+
+    local matrix_count approve_count reject_count pending_count
+    matrix_count=$(jq '.cases | length' "$MATRIX_FIXTURE_FILE")
+    approve_count=$(jq '[.cases[] | select(.action == "approve")] | length' "$MATRIX_FIXTURE_FILE")
+    reject_count=$(jq '[.cases[] | select(.action == "reject")] | length' "$MATRIX_FIXTURE_FILE")
+    [[ "$matrix_count" == "22" && "$approve_count" == "11" && "$reject_count" == "11" ]] \
+        || fail "Matrix fixture count mismatch total=${matrix_count} approve=${approve_count} reject=${reject_count}"
+
+    res=$(mcp_call "get_pending_exception_requests" '{"page":0,"size":100}' "$ADMIN_USER_EMAIL")
+    pending_count=$(jq -r --slurpfile fixture "$MATRIX_FIXTURE_FILE" '
+        ($fixture[0].cases | map(.requestId)) as $ids
+        | (.requests // .content // . // [])
+        | map(select((.id as $id | $ids | map(tostring) | index($id|tostring)) != null))
+        | length
+    ' <<<"$res")
+    [[ "$pending_count" == "22" ]] || fail "Admin pending list has ${pending_count}/22 matrix requests"
+    ok "Seeded 22 pending matrix requests in $MATRIX_FIXTURE_FILE"
+
+    # Negative: rejection must require a comment.
+    local first_reject_id
+    first_reject_id=$(jq -r '.cases[] | select(.action == "reject") | .requestId' "$MATRIX_FIXTURE_FILE" | head -1)
+    err=$(mcp_call "reject_exception_request" "$(jq -nc --arg id "$first_reject_id" \
+        '{requestId:($id|tonumber)}')" "$ADMIN_USER_EMAIL" --allow-error)
+    err_code=$(echo "$err" | jq -r '.code // empty')
+    [[ -n "$err_code" ]] || fail "Reject without comment was NOT rejected"
+    ok "Reject without comment denied via MCP (code=$err_code)"
+
+    # Negative: user cannot create an AWS-account scoped exception for an account
+    # they cannot access, even when the anchored vulnerability itself is accessible.
+    local inaccessible_account="999999999999"
+    err=$(mcp_call "create_exception_request" "$(jq -nc \
+        --arg vid "$VULN1_ID" --arg cve "$CVE_VULN1" --arg account "$inaccessible_account" \
+        --arg reason "$EXCEPTION_REASON_APPROVE" --arg exp "$future_date" \
+        '{vulnerabilityId:($vid|tonumber), subject:"CVE", scope:"AWS_ACCOUNT",
+          subjectValue:$cve, scopeValue:$account, reason:$reason, expirationDate:$exp}')" \
+        "$USER1_EMAIL" --allow-error)
+    err_code=$(echo "$err" | jq -r '.code // empty')
+    [[ -n "$err_code" ]] || fail "Inaccessible AWS-account exception request was NOT rejected"
+    ok "Inaccessible AWS-account exception request denied via MCP (code=$err_code)"
+}
+
+verify_phase_8c_exception_matrix_after_ui() {
+    [[ -f "$MATRIX_FIXTURE_FILE" ]] || fail "Matrix fixture missing after UI phase: $MATRIX_FIXTURE_FILE"
+    log "=== Phase 9b: Exception matrix post-UI assertions (MCP) ==="
+
+    local ids
+    ids=$(jq -r '.cases[].requestId' "$MATRIX_FIXTURE_FILE")
+    local id expected status res
+    while read -r id; do
+        [[ -z "$id" ]] && continue
+        expected=$(jq -r --arg id "$id" '.cases[] | select(.requestId == ($id|tonumber)) | .expectedStatus' "$MATRIX_FIXTURE_FILE")
+        res=$(mcp_call "get_exception_request" "$(jq -nc --arg id "$id" '{requestId:($id|tonumber)}')" "$ADMIN_USER_EMAIL")
+        status=$(echo "$res" | jq -r '.request.status')
+        [[ "$status" == "$expected" ]] || fail "Matrix request $id expected $expected after UI, got $status"
+    done <<< "$ids"
+    ok "All matrix requests reached expected APPROVED/REJECTED states"
+
+    local approved_markers rejected_markers list_result approved_found rejected_found marker
+    list_result=$(mcp_call "list_vulnerability_exceptions" '{"activeOnly":true,"includeAffectedCount":false}' "$ADMIN_USER_EMAIL")
+
+    approved_markers=$(jq -r '.cases[] | select(.action == "approve") | .reasonMarker' "$MATRIX_FIXTURE_FILE")
+    while read -r marker; do
+        [[ -z "$marker" ]] && continue
+        approved_found=$(echo "$list_result" | jq -r --arg marker "$marker" \
+            '(.exceptions // []) | map(select((.reason // "") | contains($marker))) | length')
+        [[ "$approved_found" == "1" ]] || fail "Approved matrix exception missing active row for marker: $marker"
+    done <<< "$approved_markers"
+
+    rejected_markers=$(jq -r '.cases[] | select(.action == "reject") | .reasonMarker' "$MATRIX_FIXTURE_FILE")
+    while read -r marker; do
+        [[ -z "$marker" ]] && continue
+        rejected_found=$(echo "$list_result" | jq -r --arg marker "$marker" \
+            '(.exceptions // []) | map(select((.reason // "") | contains($marker))) | length')
+        [[ "$rejected_found" == "0" ]] || fail "Rejected matrix request materialized active exception for marker: $marker"
+    done <<< "$rejected_markers"
+
+    local subject scope expected_count actual_count
+    while read -r subject scope expected_count; do
+        actual_count=$(echo "$list_result" | jq -r --arg subject "$subject" --arg scope "$scope" \
+            '(.exceptions // []) | map(select(.subject == $subject and .scope == $scope and ((.reason // "") | contains("E2E TEST MATRIX APPROVE")))) | length')
+        [[ "$actual_count" == "$expected_count" ]] \
+            || fail "Active exception filter mismatch for ${subject}/${scope}: expected ${expected_count}, got ${actual_count}"
+    done < <(jq -r '
+        [.cases[] | select(.action == "approve") | {subject, scope}]
+        | group_by(.subject + "/" + .scope)[]
+        | "\(.[0].subject) \(.[0].scope) \(length)"
+    ' "$MATRIX_FIXTURE_FILE")
+
+    ok "Approved matrix rows exist and rejected matrix rows do not materialize as active exceptions"
+}
+
+# =============================================================================
 # Cleanup (idempotent — safe to run multiple times)
 # =============================================================================
 
@@ -626,12 +967,13 @@ cleanup() {
 
     # 4) Delete test assets via direct SQL (cascades vulnerabilities through FKs).
     # Includes both the original vuln-test assets AND the AWS-sharing test assets
-    # so a failed mid-run leaves no orphans behind.
+    # and matrix assets so a failed mid-run leaves no orphans behind.
     local asset_ids_csv
     asset_ids_csv=$(db_exec "
         SELECT GROUP_CONCAT(id) FROM asset
          WHERE name IN ('${ASSET1_NAME}','${ASSET2_NAME}',
-                        '${AWS_ASSET_A_NAME}','${AWS_ASSET_B_NAME}','${AWS_ASSET_C_NAME}');
+                        '${AWS_ASSET_A_NAME}','${AWS_ASSET_B_NAME}','${AWS_ASSET_C_NAME}')
+            OR name LIKE '${MATRIX_ASSET_PREFIX}-%';
     ")
     if [[ -n "$asset_ids_csv" && "$asset_ids_csv" != "NULL" ]]; then
         # Also wipe any exception requests still tied to these assets (safety)
@@ -642,7 +984,9 @@ cleanup() {
                  WHERE vulnerability_id IN (SELECT id FROM vulnerability WHERE asset_id IN ($asset_ids_csv))
                     OR asset_id IN ($asset_ids_csv)
               );
-            DELETE FROM vulnerability_exception WHERE reason LIKE 'E2E TEST %';
+            DELETE FROM vulnerability_exception
+              WHERE reason LIKE 'E2E TEST %'
+                 OR reason LIKE '${EXCEPTION_REASON_MATRIX_PREFIX} %';
             DELETE FROM vulnerability_exception_request
               WHERE vulnerability_id IN (SELECT id FROM vulnerability WHERE asset_id IN ($asset_ids_csv))
                  OR asset_id IN ($asset_ids_csv);
@@ -663,6 +1007,8 @@ cleanup() {
     if [[ -n "$asset_ids_csv" && "$asset_ids_csv" != "NULL" ]]; then
         db_exec "DELETE FROM outdated_asset_materialized_view WHERE asset_id IN ($asset_ids_csv);"
     fi
+
+    rm -f "$MATRIX_FIXTURE_FILE" 2>/dev/null || true
 
     log_dbg "Cleanup ($phase) done"
 }
@@ -1113,6 +1459,16 @@ else
 fi
 
 # =============================================================================
+# Phase 8c (MCP): Full exception subject/scope matrix seed
+# =============================================================================
+
+if [[ "$UI_ONLY" == "true" ]]; then
+    record_skip "Phase 8c (Exception subject/scope matrix seed)" "--ui-only"
+else
+    run_phase_8c_exception_matrix_seed
+fi
+
+# =============================================================================
 # Phase 9 (UI): Playwright
 # =============================================================================
 
@@ -1157,10 +1513,13 @@ else
     E2E_AWS_ASSET_B_NAME="$AWS_ASSET_B_NAME" \
     E2E_AWS_ASSET_C_NAME="$AWS_ASSET_C_NAME" \
     E2E_AWS_SHARING_RULE_ID="$AWS_SHARING_RULE_ID" \
+    E2E_EXCEPTION_MATRIX_FILE="$MATRIX_FIXTURE_FILE" \
         npx playwright test vuln-exception-full.spec.ts --project=chrome --reporter=list
 
     popd >/dev/null
     ok "UI phase complete"
+
+    verify_phase_8c_exception_matrix_after_ui
 fi
 
 # =============================================================================

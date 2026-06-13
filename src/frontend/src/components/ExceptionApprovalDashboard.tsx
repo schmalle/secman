@@ -26,9 +26,16 @@ import {
   type PagedResponse,
   type ExceptionStatisticsDto
 } from '../services/exceptionRequestService';
+import type { ExceptionSubject } from '../services/vulnerabilityManagementService';
 import ExceptionRequestScopeBadge from './ExceptionRequestScopeBadge';
 import ApprovalDetailModal from './ApprovalDetailModal';
 import CveLink from './CveLink';
+
+const SUBJECT_LABELS: Record<ExceptionSubject, string> = {
+  ALL_VULNS: 'All vulnerabilities',
+  PRODUCT: 'Product',
+  CVE: 'CVE'
+};
 
 const ExceptionApprovalDashboard: React.FC = () => {
   // Data states
@@ -346,6 +353,7 @@ const ExceptionApprovalDashboard: React.FC = () => {
                           <th>CVE ID</th>
                           <th>Asset</th>
                           <th>Requested By</th>
+                          <th>Subject</th>
                           <th>Scope</th>
                           <th>Reason</th>
                           <th>Submitted</th>
@@ -360,12 +368,25 @@ const ExceptionApprovalDashboard: React.FC = () => {
                           const daysPending = Math.floor((now.getTime() - submittedDate.getTime()) / (1000 * 60 * 60 * 24));
 
                           return (
-                            <tr key={request.id}>
+                            <tr key={request.id} data-testid={`exception-approval-row-${request.id}`}>
                               <td>
                                 <CveLink cveId={request.vulnerabilityCve} />
                               </td>
                               <td>{request.assetName}</td>
                               <td>{request.requestedByUsername}</td>
+                              <td>
+                                <span className="badge bg-secondary">
+                                  {SUBJECT_LABELS[request.subject]}
+                                </span>
+                                {request.subjectValue && (
+                                  <>
+                                    <br />
+                                    <small className="text-muted">
+                                      <code>{request.subjectValue}</code>
+                                    </small>
+                                  </>
+                                )}
+                              </td>
                               <td>
                                 <ExceptionRequestScopeBadge
                                   scope={request.scope}
@@ -373,6 +394,12 @@ const ExceptionApprovalDashboard: React.FC = () => {
                                   assetId={request.assetId}
                                   assetName={request.assetName}
                                 />
+                                {request.scopeValue && (
+                                  <>
+                                    <br />
+                                    <small className="text-muted">{request.scopeValue}</small>
+                                  </>
+                                )}
                               </td>
                               <td style={{ maxWidth: '300px' }}>
                                 <div
@@ -401,6 +428,7 @@ const ExceptionApprovalDashboard: React.FC = () => {
                                     className="btn btn-outline-secondary"
                                     onClick={() => handleViewDetails(request.id)}
                                     title="View details"
+                                    data-testid={`exception-approval-details-${request.id}`}
                                   >
                                     <i className="bi bi-eye"></i>
                                   </button>
@@ -409,6 +437,7 @@ const ExceptionApprovalDashboard: React.FC = () => {
                                     onClick={() => handleQuickApprove(request)}
                                     disabled={approvingId === request.id}
                                     title="Quick approve"
+                                    data-testid={`exception-approval-quick-approve-${request.id}`}
                                   >
                                     {approvingId === request.id ? (
                                       <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
@@ -420,6 +449,7 @@ const ExceptionApprovalDashboard: React.FC = () => {
                                     className="btn btn-outline-danger"
                                     onClick={() => handleQuickReject(request)}
                                     title="Reject (requires comment)"
+                                    data-testid={`exception-approval-quick-reject-${request.id}`}
                                   >
                                     <i className="bi bi-x-circle"></i>
                                   </button>

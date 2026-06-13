@@ -137,6 +137,33 @@ python -m webdep.cli \
 `--insecure` disables certificate validation and should not be used for routine
 production automation unless certificate trust cannot be fixed.
 
+## Validating dependencies against npm
+
+By default the tool only identifies dependencies by name and version from the
+page itself. Add `--validate` to confirm each discovered dependency against the
+public npm registry (`https://registry.npmjs.org`) and enrich it with registry
+facts:
+
+```bash
+python -m webdep.cli \
+  --backend-url https://secman.covestro.net \
+  --username automation-webdep \
+  --validate \
+  --dry-run
+```
+
+For every dependency this reports whether the package name exists on npm,
+whether the detected version exists, and the latest published version. Names
+carrying CDN-specific suffixes (for example `lodash.js`) are normalized for the
+lookup only — the stored/imported name is unchanged. Results appear in the
+human-readable summary and, with `--json`, under a `validation` key.
+
+`--validate` is **off by default** and is the only feature that makes outbound
+calls to a third-party host, so the tool stays usable on administration hosts
+without internet access. Validation findings are reported only; they are not
+written to SecMan. Unreachable lookups are recorded per dependency and never
+abort the run.
+
 ## Exit codes
 
 | Code | Meaning |

@@ -14,6 +14,7 @@ from urllib.request import HTTPSHandler, Request, build_opener
 
 from .discovery import WebDependency, discover_dependencies, normalize_uris
 from .secman import SecManClient, SecManClientError
+from .validation import validate_packages
 
 
 @dataclass(frozen=True)
@@ -31,7 +32,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--backend-url",
-        default="https://secman.covestro.net",
+        default="https://secman.schmall.io",
         help="SecMan backend base URL (default: %(default)s).",
     )
     parser.add_argument(
@@ -54,6 +55,13 @@ def build_parser() -> argparse.ArgumentParser:
         default=1000,
         help="Batch size for SecMan installed-product imports (default: %(default)s).",
     )
+    parser.add_argument(
+        "--validate",
+        action="store_true",
+        help="Validate each discovered dependency against the public npm registry "
+        "(registry.npmjs.org): confirm the package exists and report the latest known version. "
+        "Off by default; makes outbound HTTPS calls only when set.",
+    )
     parser.add_argument("--json", action="store_true", help="Print a machine-readable JSON summary instead of human-readable output.")
     return parser
 
@@ -68,6 +76,7 @@ def main(argv: list[str] | None = None) -> int:
         client.login(args.username, password)
         targets = load_targets(client, args.uri_file)
         products, failures = scan_targets(targets, verify_tls=verify_tls, timeout=args.timeout)
+        validation = validate_products(products, verify_tls=verify_tls, timeout=args.timeout) if args.validate else None
         import_response = import_in_batches(
             client,
             products,
@@ -85,6 +94,8 @@ def main(argv: list[str] | None = None) -> int:
         "dryRun": args.dry_run,
         "import": import_response,
     }
+    if validation is not None:
+        summary["validation"] = validation
     if args.json:
         print(json.dumps(summary, indent=2, sort_keys=True))
     else:
@@ -106,9 +117,13 @@ def load_targets(client: SecManClient, uri_file: str | None) -> list[ScanTarget]
     return targets
 
 
-def scan_targets(targets: list[ScanTarget], *, verify_tls: bool, timeout: float) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
+def build_http_opener(verify_tls: bool) -> Any:
     context = ssl.create_default_context() if verify_tls else ssl._create_unverified_context()
-    opener = build_opener(HTTPSHandler(context=context))
+    return build_opener(HTTPSHandler(context=context))
+
+
+def scan_targets(targets: list[ScanTarget], *, verify_tls: bool, timeout: float) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
+    opener = build_http_opener(verify_tls)
     products: list[dict[str, Any]] = []
     failures: list[dict[str, str]] = []
     seen_external_ids: set[str] = set()
@@ -150,6 +165,26 @@ def to_installed_product(target: ScanTarget, dependency: WebDependency) -> dict[
     }
 
 
+def validate_products(products: list[dict[str, Any]], *, verify_tls: bool, timeout: float) -> dict[str, Any]:
+    """Validate discovered products against the npm registry and roll up the results."""
+
+    opener = build_http_opener(verify_tls)
+    pairs = [(product["name"], product.get("version")) for product in products]
+    results = validate_packages(opener, pairs, timeout=timeout)
+
+    findings = [results[(name, version)].as_dict() for name, version in dict.fromkeys(pairs)]
+    confirmed = sum(1 for finding in findings if finding["name_found"])
+    unknown = sum(1 for finding in findings if not finding["name_found"])
+    version_not_found = sum(1 for finding in findings if finding["version_found"] is False)
+    return {
+        "source": "npm",
+        "confirmed": confirmed,
+        "unknownPackages": unknown,
+        "versionNotFound": version_not_found,
+        "findings": findings,
+    }
+
+
 def import_in_batches(client: SecManClient, products: list[dict[str, Any]], *, dry_run: bool, batch_size: int) -> list[dict[str, Any]]:
     if batch_size < 1:
         raise ValueError("--max-products-per-request must be at least 1")
@@ -175,6 +210,22 @@ def print_human_summary(summary: dict[str, Any]) -> None:
     print(f"Targets scanned: {summary['targets']}")
     print(f"Products discovered: {summary['productsDiscovered']}")
     print(f"Dry run: {summary['dryRun']}")
+    validation = summary.get("validation")
+    if validation is not None:
+        print(
+            f"npm validation: {validation['confirmed']} confirmed, "
+            f"{validation['unknownPackages']} unknown, "
+            f"{validation['versionNotFound']} version-not-found"
+        )
+        for finding in validation["findings"]:
+            if not finding["name_found"]:
+                detail = f"error: {finding['error']}" if finding["error"] else "not found on npm"
+                print(f"  - unverified: {finding['name']} ({detail})")
+            elif finding["version_found"] is False:
+                print(
+                    f"  - version mismatch: {finding['name']} {finding['version']} "
+                    f"not on npm (latest {finding['latest_version']})"
+                )
     print("Import responses:")
     for response in summary["import"]:
         print(f"  - {response}")
