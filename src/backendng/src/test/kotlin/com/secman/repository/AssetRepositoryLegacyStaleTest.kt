@@ -4,12 +4,14 @@ import com.secman.constants.AssetOwners
 import com.secman.domain.Asset
 import com.secman.domain.User
 import com.secman.testutil.BaseIntegrationTest
+import io.micronaut.test.extensions.junit5.annotation.MicronautTest
+import io.micronaut.transaction.TransactionOperations
 import jakarta.inject.Inject
-import jakarta.persistence.EntityManager
-import jakarta.transaction.Transactional
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
+import java.sql.Connection
+import java.sql.Timestamp
 import java.time.LocalDateTime
 
 /**
@@ -28,6 +30,7 @@ import java.time.LocalDateTime
  * on JPQL semantics being honoured by Hibernate against MariaDB. Hence this
  * is an @MicronautTest against an external MariaDB (see BaseIntegrationTest).
  */
+@MicronautTest(environments = ["test"], transactional = false)
 open class AssetRepositoryLegacyStaleTest : BaseIntegrationTest() {
 
     @Inject
@@ -37,7 +40,7 @@ open class AssetRepositoryLegacyStaleTest : BaseIntegrationTest() {
     lateinit var userRepository: UserRepository
 
     @Inject
-    lateinit var entityManager: EntityManager
+    lateinit var transactionOperations: TransactionOperations<Connection>
 
     private val cutoff: LocalDateTime = LocalDateTime.of(2026, 4, 8, 0, 0)
 
@@ -105,20 +108,21 @@ open class AssetRepositoryLegacyStaleTest : BaseIntegrationTest() {
     }
 
     @Test
-    @Transactional
-    open fun `COALESCE falls through to updatedAt when lastSeen is null`() {
+    fun `COALESCE falls through to updatedAt when lastSeen is null`() {
         // Build asset with lastSeen=null. Hibernate's @PreUpdate hook would
         // reset updatedAt on any repository.update(), so we bypass it via a
         // native SQL UPDATE.
         val saved = saveLegacy(name = "lastSeen-null-updated-old", lastSeen = null)
         val oldUpdated = cutoff.minusDays(10)
-        entityManager.createNativeQuery(
-            "UPDATE asset SET last_seen = NULL, updated_at = :u WHERE id = :id"
-        ).setParameter("u", oldUpdated)
-            .setParameter("id", saved.id)
-            .executeUpdate()
-        entityManager.flush()
-        entityManager.clear()
+        transactionOperations.executeWrite<Unit> { status ->
+            status.connection.prepareStatement("UPDATE asset SET last_seen = NULL, updated_at = ?, created_at = ? WHERE id = ?").use { ps ->
+                val timestamp = Timestamp.valueOf(oldUpdated)
+                ps.setTimestamp(1, timestamp)
+                ps.setTimestamp(2, timestamp)
+                ps.setLong(3, saved.id!!)
+                ps.executeUpdate()
+            }
+        }
 
         val result = assetRepository.findLegacyCrowdStrikeStale(AssetOwners.CROWDSTRIKE_IMPORT, cutoff)
 

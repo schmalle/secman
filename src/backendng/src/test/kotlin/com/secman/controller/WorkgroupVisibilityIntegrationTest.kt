@@ -1,7 +1,6 @@
 package com.secman.controller
 
 import com.secman.domain.Criticality
-import com.secman.domain.User
 import com.secman.domain.Workgroup
 import com.secman.repository.UserRepository
 import com.secman.repository.WorkgroupRepository
@@ -14,11 +13,15 @@ import io.micronaut.http.HttpStatus
 import io.micronaut.http.client.HttpClient
 import io.micronaut.http.client.annotation.Client
 import io.micronaut.serde.annotation.Serdeable
+import io.micronaut.test.extensions.junit5.annotation.MicronautTest
+import io.micronaut.transaction.TransactionOperations
 import jakarta.inject.Inject
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import java.sql.Connection
 
+@MicronautTest(environments = ["test"], transactional = false)
 @DisplayName("Workgroup Visibility Integration Tests")
 class WorkgroupVisibilityIntegrationTest : BaseIntegrationTest() {
 
@@ -31,6 +34,9 @@ class WorkgroupVisibilityIntegrationTest : BaseIntegrationTest() {
 
     @Inject
     lateinit var workgroupRepository: WorkgroupRepository
+
+    @Inject
+    lateinit var transactionOperations: TransactionOperations<Connection>
 
     @Serdeable
     data class LoginRequest(val username: String, val password: String)
@@ -69,18 +75,18 @@ class WorkgroupVisibilityIntegrationTest : BaseIntegrationTest() {
                 parent = parent
             )
         )
-        val user = userRepository.save(
+        val savedUser = userRepository.save(
             TestDataFactory.createRegularUser(
                 username = "visibility-user-$suffix",
                 email = "visibility-user-$suffix@test.com"
             )
         )
-        assignUserToWorkgroup(user, parent)
+        assignUserToWorkgroup(savedUser.id!!, parent.id!!)
 
-        assertThat(workgroupRepository.countEffectiveWorkgroupsByUserEmail(user.email)).isEqualTo(2)
+        assertThat(workgroupRepository.countEffectiveWorkgroupsByUserEmail(savedUser.email)).isEqualTo(2)
 
         val loginResponse = client.toBlocking().exchange(
-            HttpRequest.POST("/api/auth/login", LoginRequest(user.username, TestDataFactory.DEFAULT_PASSWORD)),
+            HttpRequest.POST("/api/auth/login", LoginRequest(savedUser.username, TestDataFactory.DEFAULT_PASSWORD)),
             AuthResponse::class.java
         )
         val cookie = loginResponse.cookies.get(AuthCookieService.AUTH_COOKIE_NAME)
@@ -109,9 +115,13 @@ class WorkgroupVisibilityIntegrationTest : BaseIntegrationTest() {
         assertThat(status.body()!!.workgroupCount).isEqualTo(2)
     }
 
-    private fun assignUserToWorkgroup(user: User, workgroup: Workgroup) {
-        val managed = userRepository.findByIdWithWorkgroups(user.id!!).orElseThrow()
-        managed.workgroups.add(workgroup)
-        userRepository.update(managed)
+    private fun assignUserToWorkgroup(userId: Long, workgroupId: Long) {
+        transactionOperations.executeWrite<Unit> { status ->
+            status.connection.prepareStatement("INSERT INTO user_workgroups (user_id, workgroup_id) VALUES (?, ?)").use { ps ->
+                ps.setLong(1, userId)
+                ps.setLong(2, workgroupId)
+                ps.executeUpdate()
+            }
+        }
     }
 }

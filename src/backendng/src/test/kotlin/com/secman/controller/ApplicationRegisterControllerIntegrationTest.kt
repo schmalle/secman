@@ -1,11 +1,9 @@
 package com.secman.controller
 
-import com.secman.domain.ApplicationRegister
 import com.secman.domain.User
 import com.secman.dto.ApplicationRegisterDetail
 import com.secman.dto.ApplicationRegisterRequest
 import com.secman.dto.ApplicationRegisterSummary
-import com.secman.repository.ApplicationRegisterRepository
 import com.secman.repository.UserRepository
 import com.secman.testutil.BaseIntegrationTest
 import com.secman.testutil.TestAuthHelper
@@ -31,9 +29,6 @@ class ApplicationRegisterControllerIntegrationTest : BaseIntegrationTest() {
     @Inject
     lateinit var userRepository: UserRepository
 
-    @Inject
-    lateinit var applicationRepository: ApplicationRegisterRepository
-
     private lateinit var regularUser: User
     private lateinit var adminUser: User
 
@@ -46,27 +41,31 @@ class ApplicationRegisterControllerIntegrationTest : BaseIntegrationTest() {
 
     @Test
     fun `authenticated user can list and get applications`() {
-        val application = applicationRepository.save(ApplicationRegister(
-            carId = "CAR-${System.nanoTime()}",
-            name = "Register Read Test",
-            businessOwner = "Business Owner",
-            applicationManager = "Application Manager"
-        ))
+        val adminToken = TestAuthHelper.getAuthToken(client, adminUser.username)
+        val created = client.toBlocking().exchange(
+            TestAuthHelper.authenticatedRequest(
+                HttpMethod.POST,
+                "/api/applications",
+                validRequest(carId = "CAR-${System.nanoTime()}"),
+                adminToken
+            ),
+            ApplicationRegisterDetail::class.java
+        ).body()!!
         val token = TestAuthHelper.getAuthToken(client, regularUser.username)
 
         val listResponse = client.toBlocking().exchange(
-            HttpRequest.GET<Any>("/api/applications?search=Read").bearerAuth(token),
+            HttpRequest.GET<Any>("/api/applications?search=Application").bearerAuth(token),
             Argument.listOf(ApplicationRegisterSummary::class.java)
         )
         val detailResponse = client.toBlocking().exchange(
-            HttpRequest.GET<Any>("/api/applications/${application.id}").bearerAuth(token),
+            HttpRequest.GET<Any>("/api/applications/${created.id}").bearerAuth(token),
             ApplicationRegisterDetail::class.java
         )
 
         assertThat(listResponse.status).isEqualTo(HttpStatus.OK)
-        assertThat(listResponse.body()!!.map { it.id }).contains(application.id)
+        assertThat(listResponse.body()!!.map { it.id }).contains(created.id)
         assertThat(detailResponse.status).isEqualTo(HttpStatus.OK)
-        assertThat(detailResponse.body()!!.carId).isEqualTo(application.carId)
+        assertThat(detailResponse.body()!!.carId).isEqualTo(created.carId)
     }
 
     @Test
