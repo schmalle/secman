@@ -16,12 +16,16 @@ import io.micronaut.http.HttpStatus
 import io.micronaut.http.client.HttpClient
 import io.micronaut.http.client.annotation.Client
 import io.micronaut.data.model.Pageable
+import io.micronaut.test.extensions.junit5.annotation.MicronautTest
+import io.micronaut.transaction.TransactionOperations
 import jakarta.inject.Inject
 import org.hibernate.Hibernate
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import java.sql.Connection
 
+@MicronautTest(environments = ["test"], transactional = false)
 class InstalledProductControllerIntegrationTest : BaseIntegrationTest() {
 
     @Inject
@@ -40,6 +44,9 @@ class InstalledProductControllerIntegrationTest : BaseIntegrationTest() {
     @Inject
     lateinit var installedProductRepository: InstalledProductRepository
 
+    @Inject
+    lateinit var transactionOperations: TransactionOperations<Connection>
+
     private lateinit var vulnUser: User
 
     @BeforeEach
@@ -52,12 +59,11 @@ class InstalledProductControllerIntegrationTest : BaseIntegrationTest() {
     fun `scoped vuln user can list installed products with hostnames`() {
         val suffix = System.nanoTime()
         val workgroup = workgroupRepository.save(Workgroup(name = "Products WG $suffix"))
-        vulnUser.workgroups.add(workgroup)
-        userRepository.update(vulnUser)
 
         val asset = TestDataFactory.createAsset(name = "products-host-$suffix")
-        asset.workgroups.add(workgroup)
         val savedAsset = assetRepository.save(asset)
+        assignUserToWorkgroup(vulnUser.id!!, workgroup.id!!)
+        assignAssetToWorkgroup(savedAsset.id!!, workgroup.id!!)
         val savedProduct = installedProductRepository.save(
             InstalledProduct(
                 asset = savedAsset,
@@ -80,6 +86,26 @@ class InstalledProductControllerIntegrationTest : BaseIntegrationTest() {
         assertThat(product.id).isEqualTo(savedProduct.id)
         assertThat(product.assetId).isEqualTo(savedAsset.id)
         assertThat(product.hostname).isEqualTo(savedAsset.name)
+    }
+
+    private fun assignUserToWorkgroup(userId: Long, workgroupId: Long) {
+        transactionOperations.executeWrite<Unit> { status ->
+            status.connection.prepareStatement("INSERT INTO user_workgroups (user_id, workgroup_id) VALUES (?, ?)").use { ps ->
+                ps.setLong(1, userId)
+                ps.setLong(2, workgroupId)
+                ps.executeUpdate()
+            }
+        }
+    }
+
+    private fun assignAssetToWorkgroup(assetId: Long, workgroupId: Long) {
+        transactionOperations.executeWrite<Unit> { status ->
+            status.connection.prepareStatement("INSERT INTO asset_workgroups (asset_id, workgroup_id) VALUES (?, ?)").use { ps ->
+                ps.setLong(1, assetId)
+                ps.setLong(2, workgroupId)
+                ps.executeUpdate()
+            }
+        }
     }
 
     @Test
