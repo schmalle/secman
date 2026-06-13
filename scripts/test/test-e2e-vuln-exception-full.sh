@@ -874,11 +874,12 @@ verify_phase_8c_exception_matrix_after_ui() {
     local ids
     ids=$(jq -r '.cases[].requestId' "$MATRIX_FIXTURE_FILE")
     local id expected status res
+    res=$(mcp_call "get_my_exception_requests" '{"page":0,"size":100}' "$USER1_EMAIL")
     while read -r id; do
         [[ -z "$id" ]] && continue
         expected=$(jq -r --arg id "$id" '.cases[] | select(.requestId == ($id|tonumber)) | .expectedStatus' "$MATRIX_FIXTURE_FILE")
-        res=$(mcp_call "get_exception_request" "$(jq -nc --arg id "$id" '{requestId:($id|tonumber)}')" "$ADMIN_USER_EMAIL")
-        status=$(echo "$res" | jq -r '.request.status')
+        status=$(echo "$res" | jq -r --arg id "$id" '(.requests // [])[] | select(.id == ($id|tonumber)) | .status')
+        [[ -n "$status" ]] || fail "Matrix request $id missing from requester MCP list after UI"
         [[ "$status" == "$expected" ]] || fail "Matrix request $id expected $expected after UI, got $status"
     done <<< "$ids"
     ok "All matrix requests reached expected APPROVED/REJECTED states"

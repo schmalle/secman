@@ -386,7 +386,7 @@ const MyExceptionRequests: React.FC = () => {
                                                             )}
                                                         </td>
                                                         <td>{request.assetName || 'N/A'}</td>
-                                                        <td>
+                                                        <td data-testid={`my-exception-request-subject-${request.id}`}>
                                                             <span className="badge bg-secondary">
                                                                 {SUBJECT_LABELS[request.subject]}
                                                             </span>
@@ -399,7 +399,7 @@ const MyExceptionRequests: React.FC = () => {
                                                                 </>
                                                             )}
                                                         </td>
-                                                        <td>
+                                                        <td data-testid={`my-exception-request-scope-${request.id}`}>
                                                             <ExceptionRequestScopeBadge
                                                                 scope={request.scope}
                                                                 scopeValue={request.scopeValue}

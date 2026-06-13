@@ -374,7 +374,7 @@ const ExceptionApprovalDashboard: React.FC = () => {
                               </td>
                               <td>{request.assetName}</td>
                               <td>{request.requestedByUsername}</td>
-                              <td>
+                              <td data-testid={`exception-approval-subject-${request.id}`}>
                                 <span className="badge bg-secondary">
                                   {SUBJECT_LABELS[request.subject]}
                                 </span>
@@ -387,7 +387,7 @@ const ExceptionApprovalDashboard: React.FC = () => {
                                   </>
                                 )}
                               </td>
-                              <td>
+                              <td data-testid={`exception-approval-scope-${request.id}`}>
                                 <ExceptionRequestScopeBadge
                                   scope={request.scope}
                                   scopeValue={request.scopeValue}

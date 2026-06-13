@@ -106,17 +106,17 @@ if (matrixCases.length !== 22 || approveCases.length !== 11 || rejectCases.lengt
     throw new Error(`Invalid matrix fixture ${MATRIX_FILE}: expected 22 cases, got ${matrixCases.length}`);
 }
 
-const SUBJECT_LABELS: Record<ExceptionSubject, RegExp> = {
-    ALL_VULNS: /All vulnerabilities/i,
-    PRODUCT: /Product/i,
-    CVE: /^CVE$/i,
+const SUBJECT_BADGE_LABELS: Record<ExceptionSubject, string> = {
+    ALL_VULNS: 'All vulnerabilities',
+    PRODUCT: 'Product',
+    CVE: 'CVE',
 };
 
-const SCOPE_LABELS: Record<ExceptionScope, RegExp> = {
-    GLOBAL: /Globally|All assets|all assets/i,
-    IP: /On IP|IP scope|one IP/i,
-    ASSET: /On Asset|1 asset|one asset/i,
-    AWS_ACCOUNT: /In AWS Account|AWS account/i,
+const SCOPE_BADGE_LABELS: Record<ExceptionScope, string> = {
+    GLOBAL: 'All assets',
+    IP: 'IP scope',
+    ASSET: '1 asset',
+    AWS_ACCOUNT: 'AWS account',
 };
 
 async function login(page: Page, username: string, password: string) {
@@ -135,14 +135,15 @@ async function login(page: Page, username: string, password: string) {
 async function waitForResponseOrVisible(
     page: Page,
     responsePredicate: Parameters<Page['waitForResponse']>[0],
-    visibleLocator: ReturnType<Page['locator']>
+    visibleLocator: ReturnType<Page['locator']>,
+    timeout = 30_000
 ) {
     if (await visibleLocator.isVisible().catch(() => false)) {
         return;
     }
     await Promise.race([
-        page.waitForResponse(responsePredicate),
-        visibleLocator.waitFor({ state: 'visible' }),
+        page.waitForResponse(responsePredicate, { timeout }),
+        visibleLocator.waitFor({ state: 'visible', timeout }),
     ]);
     await expect(visibleLocator).toBeVisible();
 }
@@ -163,7 +164,7 @@ async function waitForCurrentVulnerabilitiesReady(page: Page) {
             !response.url().includes('/api/vulnerabilities/current/system') &&
             response.request().method() === 'GET' &&
             response.ok(),
-        page.locator('table')
+        page.getByRole('button', { name: /request exception/i }).first()
     );
 }
 
@@ -277,16 +278,17 @@ async function rejectCaseThroughUi(page: Page, item: MatrixCase) {
     const row = rowForApproval(page, item.requestId);
     await expect(row).toBeVisible();
     await page.getByTestId(`exception-approval-quick-reject-${item.requestId}`).click();
-    await expect(page.getByRole('heading', { name: /review exception request/i })).toBeVisible();
+    const modal = page.getByRole('dialog', { name: /review exception request/i });
+    await expect(modal).toBeVisible();
 
-    await page.getByRole('button', { name: /^Reject Request$/ }).click();
+    await modal.getByRole('button', { name: /Reject Request/ }).click();
     await expect(page.getByText(/Rejection comment is required/i)).toBeVisible();
 
-    await page.locator('#rejectComment').fill(`UI rejection for matrix case ${item.key}`);
-    await page.getByRole('button', { name: /^Reject Request$/ }).click();
+    await modal.locator('#rejectComment').fill(`UI rejection for matrix case ${item.key}`);
+    await modal.getByRole('button', { name: /Reject Request/ }).click();
     await expect(page.getByText(/Confirm Rejection/i)).toBeVisible();
-    await page.getByRole('button', { name: /^Confirm Reject$/ }).click();
-    await expect(page.getByRole('heading', { name: /review exception request/i })).toHaveCount(0, { timeout: 15_000 });
+    await modal.getByRole('button', { name: /Confirm Reject/ }).click();
+    await expect(modal).toHaveCount(0, { timeout: 15_000 });
     await expect(row).toHaveCount(0, { timeout: 15_000 });
 }
 
@@ -480,8 +482,10 @@ test.describe.serial('Vulnerability + exception lifecycle (UI)', () => {
             await expect(row).toBeVisible();
             await expect(row).toContainText(item.requesterUsername);
             await expect(row).toContainText(item.reasonMarker);
-            await expect(row).toContainText(SUBJECT_LABELS[item.subject]);
-            await expect(row).toContainText(SCOPE_LABELS[item.scope]);
+            await expect(page.getByTestId(`exception-approval-subject-${item.requestId}`).locator('.badge'))
+                .toHaveText(SUBJECT_BADGE_LABELS[item.subject]);
+            await expect(page.getByTestId(`exception-approval-scope-${item.requestId}`).locator('.badge'))
+                .toHaveText(SCOPE_BADGE_LABELS[item.scope]);
             if (item.subjectValue) {
                 await expect(row).toContainText(item.subjectValue);
             }
@@ -513,7 +517,9 @@ test.describe.serial('Vulnerability + exception lifecycle (UI)', () => {
             await rejectCaseThroughUi(page, item);
         }
 
-        await expect(page.getByText(/No pending requests/i)).toBeVisible();
+        for (const item of matrixCases) {
+            await expect(rowForApproval(page, item.requestId)).toHaveCount(0);
+        }
 
         await logout(page);
     });
@@ -531,8 +537,10 @@ test.describe.serial('Vulnerability + exception lifecycle (UI)', () => {
             const row = rowForMyRequest(page, item.requestId);
             await expect(row).toBeVisible();
             await expect(row).toContainText(requestStatusLabel(item.expectedStatus));
-            await expect(row).toContainText(SUBJECT_LABELS[item.subject]);
-            await expect(row).toContainText(SCOPE_LABELS[item.scope]);
+            await expect(page.getByTestId(`my-exception-request-subject-${item.requestId}`).locator('.badge'))
+                .toHaveText(SUBJECT_BADGE_LABELS[item.subject]);
+            await expect(page.getByTestId(`my-exception-request-scope-${item.requestId}`).locator('.badge'))
+                .toHaveText(SCOPE_BADGE_LABELS[item.scope]);
             if (item.subjectValue) {
                 await expect(row).toContainText(item.subjectValue);
             }
@@ -572,6 +580,50 @@ test.describe.serial('Vulnerability + exception lifecycle (UI)', () => {
 
     test('exception request modal allows AWS account scope to be typed or picked', async ({ page }) => {
         await login(page, ADMIN.user, ADMIN.pass);
+
+        const modalCase = rejectCases[0];
+        await page.route('**/api/vulnerabilities/current**', async (route) => {
+            const url = new URL(route.request().url());
+            if (url.pathname !== '/api/vulnerabilities/current') {
+                await route.continue();
+                return;
+            }
+
+            await route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                body: JSON.stringify({
+                    content: [{
+                        id: modalCase.vulnerabilityId,
+                        assetId: modalCase.assetId,
+                        assetName: modalCase.assetName,
+                        assetIp: modalCase.assetIp,
+                        cloudInstanceId: null,
+                        vulnerabilityId: modalCase.cve,
+                        cvssSeverity: 'High',
+                        vulnerableProductVersions: modalCase.product,
+                        daysOpen: '9 days',
+                        scanTimestamp: new Date().toISOString(),
+                        hasException: false,
+                        exceptionReason: null,
+                        ageInDays: 9,
+                        overdueStatus: 'OK',
+                        daysOverdue: null,
+                        exceptionId: null,
+                        exceptionEndDate: null,
+                        exceptionSubject: null,
+                        exceptionScope: null,
+                        exceptionScopesAsset: null,
+                    }],
+                    totalElements: 1,
+                    totalPages: 1,
+                    currentPage: 0,
+                    pageSize: 50,
+                    hasNext: false,
+                    hasPrevious: false,
+                }),
+            });
+        });
 
         await page.goto('/vulnerabilities/current');
         await page.waitForLoadState('domcontentloaded');
