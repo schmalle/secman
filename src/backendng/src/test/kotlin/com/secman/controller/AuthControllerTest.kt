@@ -2,6 +2,7 @@ package com.secman.controller
 
 import com.secman.domain.User
 import com.secman.repository.UserRepository
+import com.secman.service.AuthCookieService
 import com.secman.testutil.BaseIntegrationTest
 import com.secman.testutil.TestDataFactory
 import io.micronaut.http.HttpRequest
@@ -43,8 +44,7 @@ class AuthControllerTest : BaseIntegrationTest() {
         val id: Long,
         val username: String,
         val email: String,
-        val roles: List<String>,
-        val token: String
+        val roles: List<String>
     )
 
     @Serdeable
@@ -82,7 +82,7 @@ class AuthControllerTest : BaseIntegrationTest() {
             // Then: HTTP 200 with valid response
             assertThat(response.status).isEqualTo(HttpStatus.OK)
             val body = response.body()!!
-            assertThat(body.token).isNotBlank()
+            assertThat(response.cookies.get(AuthCookieService.AUTH_COOKIE_NAME)?.value).isNotBlank()
             assertThat(body.username).isEqualTo(testUser.username)
             assertThat(body.email).isEqualTo(testUser.email)
             assertThat(body.roles).contains("ADMIN")
@@ -153,11 +153,12 @@ class AuthControllerTest : BaseIntegrationTest() {
                 HttpRequest.POST("/api/auth/login", loginRequest),
                 LoginResponse::class.java
             )
-            val token = loginResponse.body()!!.token
+            val cookie = loginResponse.cookies.get(AuthCookieService.AUTH_COOKIE_NAME)
+                ?: throw IllegalStateException("Login response did not include ${AuthCookieService.AUTH_COOKIE_NAME} cookie")
 
-            // When: GET status with token
+            // When: GET status with login cookie
             val response = client.toBlocking().exchange(
-                HttpRequest.GET<Any>("/api/auth/status").bearerAuth(token),
+                HttpRequest.GET<Any>("/api/auth/status").cookie(cookie),
                 StatusResponse::class.java
             )
 

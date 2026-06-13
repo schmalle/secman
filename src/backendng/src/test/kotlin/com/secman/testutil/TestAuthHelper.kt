@@ -1,5 +1,6 @@
 package com.secman.testutil
 
+import com.secman.service.AuthCookieService
 import io.micronaut.http.HttpRequest
 import io.micronaut.http.client.HttpClient
 import io.micronaut.http.client.exceptions.HttpClientResponseException
@@ -24,8 +25,7 @@ object TestAuthHelper {
         val id: Long,
         val username: String,
         val email: String,
-        val roles: List<String>,
-        val token: String
+        val roles: List<String>
     )
 
     /**
@@ -48,8 +48,8 @@ object TestAuthHelper {
         )
 
         val response = client.toBlocking().exchange(request, LoginResponse::class.java)
-        return response.body()?.token
-            ?: throw IllegalStateException("Login successful but no token returned")
+        return response.cookies.get(AuthCookieService.AUTH_COOKIE_NAME)?.value
+            ?: throw IllegalStateException("Login successful but no auth cookie returned")
     }
 
     /**

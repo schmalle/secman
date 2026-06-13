@@ -79,6 +79,7 @@ open class CrowdStrikeCleanupAuditService @Inject constructor(
         }
 
         val startedAt = LocalDateTime.now(clock)
+        val totalTrackedAtStart = safeTotalCombined(effectiveIncludeLegacy)
 
         if (maxDeletePercent != null) {
             val brakeOutcome = checkSafetyBrake(days, triggeredBy, startedAt, maxDeletePercent, effectiveIncludeLegacy)
@@ -99,7 +100,7 @@ open class CrowdStrikeCleanupAuditService @Inject constructor(
                 errorCount = 1,
                 legacyCandidateCount = 0,
                 legacyDeletedCount = 0,
-                totalTracked = safeTotalCombined(effectiveIncludeLegacy),
+                totalTracked = totalTrackedAtStart,
                 startedAt = startedAt,
                 errorMessage = e.message?.take(1000) ?: e.javaClass.simpleName
             )
@@ -139,7 +140,7 @@ open class CrowdStrikeCleanupAuditService @Inject constructor(
             errorCount = response.errors.size,
             legacyCandidateCount = response.legacyCandidateCount,
             legacyDeletedCount = response.legacyDeletedCount,
-            totalTracked = safeTotalCombined(effectiveIncludeLegacy),
+            totalTracked = totalTrackedAtStart,
             startedAt = startedAt,
             errorMessage = null
         )

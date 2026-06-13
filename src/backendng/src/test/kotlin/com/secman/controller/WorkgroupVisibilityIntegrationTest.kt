@@ -110,7 +110,8 @@ class WorkgroupVisibilityIntegrationTest : BaseIntegrationTest() {
     }
 
     private fun assignUserToWorkgroup(user: User, workgroup: Workgroup) {
-        user.workgroups.add(workgroup)
-        userRepository.update(user)
+        val managed = userRepository.findByIdWithWorkgroups(user.id!!).orElseThrow()
+        managed.workgroups.add(workgroup)
+        userRepository.update(managed)
     }
 }
