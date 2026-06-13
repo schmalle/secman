@@ -460,8 +460,8 @@ test.describe.serial('Vulnerability + exception lifecycle (UI)', () => {
         await page.locator('#reason').fill('E2E direct form control validation for all vulnerabilities impact preview before creating anything.');
         await page.getByRole('button', { name: /preview & create/i }).click();
         await expect(page.getByRole('heading', { name: /exception impact preview/i })).toBeVisible();
-        await page.locator('.modal-content').filter({ hasText: 'Exception Impact Preview' })
-            .getByRole('button', { name: /^Cancel$/ })
+        await page.locator('.modal[role="dialog"]').filter({ hasText: 'Exception Impact Preview' })
+            .getByRole('button', { name: 'Close' })
             .click();
 
         await logout(page);
