@@ -15,6 +15,12 @@ from urllib.request import HTTPSHandler, Request, build_opener
 from .discovery import WebDependency, discover_dependencies, normalize_uris
 from .secman import SecManClient, SecManClientError
 from .validation import validate_packages
+from .vulnerabilities import (
+    WebComponent,
+    components_from_headers,
+    fetch_exposed_composer_components,
+    find_vulnerabilities,
+)
 
 
 @dataclass(frozen=True)
@@ -62,6 +68,23 @@ def build_parser() -> argparse.ArgumentParser:
         "(registry.npmjs.org): confirm the package exists and report the latest known version. "
         "Off by default; makes outbound HTTPS calls only when set.",
     )
+    parser.add_argument(
+        "--vulnerability-scan",
+        action="store_true",
+        help="Look up discovered JavaScript libraries, exposed PHP Composer packages, PHP runtimes, "
+        "and web server banners in NVD and store matching CVEs in SecMan. Off by default.",
+    )
+    parser.add_argument(
+        "--nvd-base-url",
+        default="https://services.nvd.nist.gov/rest/json/cves/2.0",
+        help="NVD CVE API URL used by --vulnerability-scan (default: %(default)s).",
+    )
+    parser.add_argument(
+        "--max-vulns-per-component",
+        type=int,
+        default=10,
+        help="Maximum NVD findings imported for one detected component (default: %(default)s).",
+    )
     parser.add_argument("--json", action="store_true", help="Print a machine-readable JSON summary instead of human-readable output.")
     return parser
 
@@ -75,8 +98,19 @@ def main(argv: list[str] | None = None) -> int:
     try:
         client.login(args.username, password)
         targets = load_targets(client, args.uri_file)
-        products, failures = scan_targets(targets, verify_tls=verify_tls, timeout=args.timeout)
+        products, failures, components_by_asset = scan_targets(targets, verify_tls=verify_tls, timeout=args.timeout)
         validation = validate_products(products, verify_tls=verify_tls, timeout=args.timeout) if args.validate else None
+        vulnerability_findings = []
+        vulnerability_import = []
+        if args.vulnerability_scan:
+            vulnerability_findings = scan_vulnerabilities(
+                components_by_asset,
+                verify_tls=verify_tls,
+                timeout=args.timeout,
+                nvd_base_url=args.nvd_base_url,
+                max_per_component=args.max_vulns_per_component,
+            )
+            vulnerability_import = import_vulnerabilities(client, vulnerability_findings, dry_run=args.dry_run)
         import_response = import_in_batches(
             client,
             products,
@@ -93,6 +127,9 @@ def main(argv: list[str] | None = None) -> int:
         "failures": failures,
         "dryRun": args.dry_run,
         "import": import_response,
+        "componentsIdentified": sum(len(v) for v in components_by_asset.values()),
+        "vulnerabilitiesDiscovered": len(vulnerability_findings),
+        "vulnerabilityImport": vulnerability_import,
     }
     if validation is not None:
         summary["validation"] = validation
@@ -122,16 +159,21 @@ def build_http_opener(verify_tls: bool) -> Any:
     return build_opener(HTTPSHandler(context=context))
 
 
-def scan_targets(targets: list[ScanTarget], *, verify_tls: bool, timeout: float) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
+def scan_targets(targets: list[ScanTarget], *, verify_tls: bool, timeout: float) -> tuple[list[dict[str, Any]], list[dict[str, str]], dict[str, list[WebComponent]]]:
     opener = build_http_opener(verify_tls)
     products: list[dict[str, Any]] = []
     failures: list[dict[str, str]] = []
     seen_external_ids: set[str] = set()
+    components_by_asset: dict[str, list[WebComponent]] = {}
 
     for target in targets:
         try:
-            html = fetch_root_html(opener, target.uri, timeout=timeout)
+            html, headers = fetch_root_html(opener, target.uri, timeout=timeout)
             dependencies = discover_dependencies(html, target.uri)
+            components = [WebComponent.from_dependency(dependency) for dependency in dependencies]
+            components.extend(components_from_headers(headers))
+            components.extend(fetch_exposed_composer_components(opener, target.uri, timeout=timeout))
+            components_by_asset[target.asset_name] = _dedupe_components(components_by_asset.get(target.asset_name, []) + components)
             for dependency in dependencies:
                 product = to_installed_product(target, dependency)
                 if product["externalId"] in seen_external_ids:
@@ -140,17 +182,17 @@ def scan_targets(targets: list[ScanTarget], *, verify_tls: bool, timeout: float)
                 products.append(product)
         except (HTTPError, URLError, TimeoutError, OSError, UnicodeDecodeError, ValueError) as exc:
             failures.append({"uri": target.uri, "assetName": target.asset_name, "error": str(exc)})
-    return products, failures
+    return products, failures, components_by_asset
 
 
-def fetch_root_html(opener: Any, uri: str, *, timeout: float) -> str:
+def fetch_root_html(opener: Any, uri: str, *, timeout: float) -> tuple[str, Any]:
     request = Request(uri, method="GET", headers={"Accept": "text/html,application/xhtml+xml"})
     with opener.open(request, timeout=timeout) as response:
         content_type = response.headers.get("Content-Type", "")
         if "html" not in content_type.lower() and content_type:
             raise ValueError(f"{uri} did not return HTML (Content-Type: {content_type})")
         charset = response.headers.get_content_charset() or "utf-8"
-        return response.read().decode(charset, errors="replace")
+        return response.read().decode(charset, errors="replace"), response.headers
 
 
 def to_installed_product(target: ScanTarget, dependency: WebDependency) -> dict[str, Any]:
@@ -185,6 +227,61 @@ def validate_products(products: list[dict[str, Any]], *, verify_tls: bool, timeo
     }
 
 
+def scan_vulnerabilities(
+    components_by_asset: dict[str, list[WebComponent]],
+    *,
+    verify_tls: bool,
+    timeout: float,
+    nvd_base_url: str,
+    max_per_component: int,
+) -> list[dict[str, Any]]:
+    if max_per_component < 1:
+        raise ValueError("--max-vulns-per-component must be at least 1")
+    opener = build_http_opener(verify_tls)
+    findings = []
+    for asset_name, components in components_by_asset.items():
+        findings.extend(
+            finding.as_dict()
+            for finding in find_vulnerabilities(
+                opener,
+                asset_name,
+                components,
+                timeout=timeout,
+                nvd_base_url=nvd_base_url,
+                max_per_component=max_per_component,
+            )
+        )
+    return findings
+
+
+def import_vulnerabilities(client: SecManClient, findings: list[dict[str, Any]], *, dry_run: bool) -> list[dict[str, Any]]:
+    responses: list[dict[str, Any]] = []
+    for finding in findings:
+        if dry_run:
+            responses.append({"dryRun": True, "hostname": finding["asset_name"], "cve": finding["cve"], "criticality": finding["severity"]})
+            continue
+        responses.append(
+            client.add_vulnerability(
+                hostname=finding["asset_name"],
+                cve=finding["cve"],
+                criticality=finding["severity"],
+                owner="WEBDEP-IMPORT",
+            )
+        )
+    return responses
+
+
+def _dedupe_components(components: list[WebComponent]) -> list[WebComponent]:
+    seen: set[tuple[str, str | None, str]] = set()
+    result: list[WebComponent] = []
+    for component in components:
+        key = (component.name.lower(), component.version, component.category)
+        if key not in seen:
+            seen.add(key)
+            result.append(component)
+    return result
+
+
 def import_in_batches(client: SecManClient, products: list[dict[str, Any]], *, dry_run: bool, batch_size: int) -> list[dict[str, Any]]:
     if batch_size < 1:
         raise ValueError("--max-products-per-request must be at least 1")
@@ -209,6 +306,8 @@ def import_in_batches(client: SecManClient, products: list[dict[str, Any]], *, d
 def print_human_summary(summary: dict[str, Any]) -> None:
     print(f"Targets scanned: {summary['targets']}")
     print(f"Products discovered: {summary['productsDiscovered']}")
+    print(f"Components identified for vulnerability matching: {summary['componentsIdentified']}")
+    print(f"Vulnerabilities discovered: {summary['vulnerabilitiesDiscovered']}")
     print(f"Dry run: {summary['dryRun']}")
     validation = summary.get("validation")
     if validation is not None:

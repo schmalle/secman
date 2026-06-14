@@ -4,7 +4,10 @@
 web applications registered in SecMan. It reads asset URIs from SecMan's asset
 inventory (or from a plain text file), downloads each root page (`/`), extracts
 referenced CSS and JavaScript resources, and imports those resources into SecMan
-as installed products via `POST /api/installed-products/import`.
+as installed products via `POST /api/installed-products/import`. When enabled,
+it also fingerprints vulnerable JavaScript libraries, PHP Composer libraries,
+PHP runtimes, and web server banners, then stores matching CVEs in SecMan via
+`POST /api/vulnerabilities/cli-add`.
 
 The tool is intentionally implemented with the Python standard library only. It
 can be copied to an administration host and run without installing runtime HTTP
@@ -12,7 +15,7 @@ or HTML parsing packages.
 
 ## What gets discovered
 
-The scanner parses the returned HTML and records:
+The scanner parses the returned HTML and records installed products:
 
 - `<script src="...">` entries as `JavaScript library` products.
 - `<link rel="stylesheet" href="...">` entries as `CSS library` products.
@@ -137,6 +140,46 @@ python -m webdep.cli \
 `--insecure` disables certificate validation and should not be used for routine
 production automation unless certificate trust cannot be fixed.
 
+## Vulnerability matching and SecMan CVE import
+
+Add `--vulnerability-scan` to identify vulnerable components and write the
+matching CVEs to SecMan. The scanner combines four evidence sources:
+
+- JavaScript libraries discovered from `<script src>` and preloaded script URLs.
+- PHP libraries from a publicly exposed `/composer.lock`, if present. Missing or
+  inaccessible Composer lock files are ignored.
+- PHP runtime versions from `X-Powered-By: PHP/...` response headers.
+- Web server products and versions from the `Server` response header.
+
+Each versioned component is queried against NVD CVE API 2.0 with a keyword search
+containing the component name and version. Matching CVEs are upserted into
+SecMan through `/api/vulnerabilities/cli-add` using the scanned asset name as the
+hostname, NVD severity as the criticality, and `WEBDEP-IMPORT` as the owner for
+assets that need to be auto-created. The existing installed-product import still
+runs, so SecMan keeps both the component inventory and the CVE rows.
+
+Example dry run:
+
+```bash
+python -m webdep.cli \
+  --backend-url https://secman.covestro.net \
+  --username automation-webdep \
+  --vulnerability-scan \
+  --dry-run \
+  --json
+```
+
+Remove `--dry-run` to store the CVEs. Use `--max-vulns-per-component` to cap the
+number of NVD results imported for one component (default `10`). `--nvd-base-url`
+is available for tests, mirrors, or controlled gateways.
+
+Vulnerability matching is **off by default** because it performs outbound NVD
+lookups and because public Composer lock files may reveal development packages
+that should ideally not be exposed by the target application. Fixing such
+exposure is recommended independently of the import result. NVD lookup errors
+for one component are skipped and do not abort scanning or installed-product
+import.
+
 ## Validating dependencies against npm
 
 By default the tool only identifies dependencies by name and version from the
@@ -178,6 +221,8 @@ abort the run.
   not crawl deeper pages.
 - Discovery is based on static HTML. Dependencies injected only after JavaScript
   execution are not visible to this tool.
+- Vulnerability matching is evidence-based and best-effort. Review NVD keyword
+  matches for false positives, especially generic server banners or package names.
 - Import calls are batched with `--max-products-per-request` (default `1000`) to
   stay below the backend request limit.
 - Re-running the helper is safe: stable `externalId` values let SecMan update
