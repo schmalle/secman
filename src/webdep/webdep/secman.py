@@ -70,6 +70,14 @@ class SecManClient:
 
         return self._request("POST", "api/installed-products/import", {"products": products, "dryRun": dry_run})
 
+    def add_vulnerability(self, *, hostname: str, cve: str, criticality: str, owner: str | None = None) -> dict[str, Any]:
+        """Store a web dependency CVE through SecMan's CLI vulnerability endpoint."""
+
+        body: dict[str, Any] = {"hostname": hostname, "cve": cve, "criticality": criticality, "daysOpen": 0}
+        if owner is not None:
+            body["owner"] = owner
+        return self._request("POST", "api/vulnerabilities/cli-add", body)
+
     def _request(self, method: str, path: str, body: dict[str, Any] | None = None) -> Any:
         url = urljoin(self.backend_url, path)
         payload = json.dumps(body).encode("utf-8") if body is not None else None

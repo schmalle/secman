@@ -134,3 +134,19 @@ def test_parser_accepts_validate_flag():
 
     default_args = build_parser().parse_args(["--username", "u"])
     assert default_args.validate is False
+
+
+def test_parser_accepts_vulnerability_scan_flags():
+    args = build_parser().parse_args([
+        "--username",
+        "u",
+        "--vulnerability-scan",
+        "--nvd-base-url",
+        "https://nvd.test/cves",
+        "--max-vulns-per-component",
+        "3",
+    ])
+
+    assert args.vulnerability_scan is True
+    assert args.nvd_base_url == "https://nvd.test/cves"
+    assert args.max_vulns_per_component == 3
