@@ -41,7 +41,8 @@ open class MaterializedViewRefreshService(
     private val eventPublisher: ApplicationEventPublisher<RefreshProgressEvent>,
     private val vulnerabilityExceptionService: VulnerabilityExceptionService,  // For checking active exceptions
     private val vulnerabilityStatisticsCacheService: VulnerabilityStatisticsCacheService,
-    private val assetHeatmapService: AssetHeatmapService
+    private val assetHeatmapService: AssetHeatmapService,
+    private val vulnerabilityService: VulnerabilityService
 ) {
     private val log = LoggerFactory.getLogger(MaterializedViewRefreshService::class.java)
 
@@ -272,6 +273,13 @@ open class MaterializedViewRefreshService(
             assetHeatmapService.recalculateHeatmap()
         } catch (e: Exception) {
             log.error("Asset heatmap refresh failed (non-fatal): {}", e.message, e)
+        }
+
+        try {
+            log.info("Warming admin not-excepted vulnerability count cache after materialized view refresh")
+            vulnerabilityService.getCachedNotExceptedCountAdmin()
+        } catch (e: Exception) {
+            log.error("Not-excepted count cache warm failed (non-fatal): {}", e.message, e)
         }
     }
 
