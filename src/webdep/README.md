@@ -46,14 +46,14 @@ Run directly from the repository:
 
 ```bash
 cd src/webdep
-python -m webdep.cli --help
+python3 -m webdep.cli --help
 ```
 
 Optional editable install:
 
 ```bash
 cd src/webdep
-python -m pip install -e .
+python3 -m pip install -e .
 secman-webdep --help
 ```
 
@@ -63,7 +63,7 @@ Scan all HTTP(S) asset URIs visible to the authenticated SecMan user and perform
 an import dry run:
 
 ```bash
-python -m webdep.cli \
+python3 -m webdep.cli \
   --backend-url https://secman.covestro.net \
   --username automation-webdep \
   --dry-run
@@ -73,7 +73,7 @@ If `--password` is omitted, the helper prompts for it without echoing. To run in
 a CI job, pass the password through the environment rather than committing it:
 
 ```bash
-python -m webdep.cli \
+python3 -m webdep.cli \
   --backend-url "$SECMAN_BACKEND_URL" \
   --username "$SECMAN_WEBDEP_USER" \
   --password "$SECMAN_WEBDEP_PASSWORD" \
@@ -84,7 +84,7 @@ python -m webdep.cli \
 To write the discovered products for real, remove `--dry-run`:
 
 ```bash
-python -m webdep.cli \
+python3 -m webdep.cli \
   --backend-url https://secman.covestro.net \
   --username automation-webdep
 ```
@@ -109,7 +109,7 @@ urn:asset:not-scanned
 Run:
 
 ```bash
-python -m webdep.cli \
+python3 -m webdep.cli \
   --backend-url https://secman.covestro.net \
   --username automation-webdep \
   --uri-file uris.txt \
@@ -145,7 +145,7 @@ public npm registry (`https://registry.npmjs.org`) and enrich it with registry
 facts:
 
 ```bash
-python -m webdep.cli \
+python3 -m webdep.cli \
   --backend-url https://secman.covestro.net \
   --username automation-webdep \
   --validate \

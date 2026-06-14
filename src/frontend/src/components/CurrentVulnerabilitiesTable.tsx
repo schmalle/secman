@@ -17,6 +17,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
   getCurrentVulnerabilities,
+  getCurrentVulnerabilityCount,
   cleanupDuplicateVulnerabilities,
   getDistinctProducts,
   getDistinctAdDomains,
@@ -108,6 +109,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
   // Track previous filter values to detect filter-only vs page/sort changes
   // When only page/sort changes, we pass knownTotal to skip the expensive count query
   const prevFiltersRef = useRef<string>("");
+  const countRequestKeyRef = useRef<string>("");
 
   // Cleanup debounce timeout on unmount
   useEffect(() => {
@@ -219,9 +221,11 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
       // to skip the expensive COUNT query with NOT EXISTS on 358k+ rows
       const currentFilterKey = `${severityFilter}|${debouncedSystemFilter}|${exceptionFilter}|${productFilter}|${debouncedCveFilter}|${adDomainFilter}|${cloudAccountIdFilter}`;
       const filtersUnchanged = currentFilterKey === prevFiltersRef.current;
-      const knownTotal = filtersUnchanged && paginatedResponse
+      const knownTotal = filtersUnchanged && paginatedResponse?.totalExact !== false
         ? paginatedResponse.totalElements
         : undefined;
+      const countMode = knownTotal !== undefined ? "exact" : "deferred";
+      const requestKey = `${currentFilterKey}|${pageSize}|${backendSortField || ""}|${effectiveSortOrder}`;
       prevFiltersRef.current = currentFilterKey;
 
       const data = await getCurrentVulnerabilities(
@@ -237,15 +241,54 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
         backendSortField,
         effectiveSortOrder,
         knownTotal,
+        countMode,
       );
       setPaginatedResponse(data);
       setError(null);
+      if (data.totalExact === false) {
+        fetchExactVulnerabilityCount(requestKey, backendSortField, effectiveSortOrder);
+      }
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to fetch vulnerabilities",
       );
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchExactVulnerabilityCount = async (
+    requestKey: string,
+    backendSortField: string | undefined,
+    effectiveSortOrder: "asc" | "desc",
+  ) => {
+    countRequestKeyRef.current = requestKey;
+    try {
+      const count = await getCurrentVulnerabilityCount(
+        severityFilter || undefined,
+        debouncedSystemFilter || undefined,
+        exceptionFilter || undefined,
+        productFilter || undefined,
+        debouncedCveFilter || undefined,
+        adDomainFilter || undefined,
+        cloudAccountIdFilter || undefined,
+        pageSize,
+        backendSortField,
+        effectiveSortOrder,
+      );
+      if (countRequestKeyRef.current !== requestKey) return;
+      setPaginatedResponse((current) => {
+        if (!current) return current;
+        return {
+          ...current,
+          totalElements: count.totalElements,
+          totalPages: count.totalPages,
+          hasNext: current.currentPage < count.totalPages - 1,
+          totalExact: count.exact,
+        };
+      });
+    } catch (err) {
+      console.warn("Failed to fetch exact vulnerability count:", err);
     }
   };
 
@@ -463,10 +506,50 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
   const renderPagination = () => {
     if (!paginatedResponse || paginatedResponse.totalPages <= 1) return null;
 
-    const { currentPage, totalPages, hasPrevious, hasNext, totalElements } =
+    const { currentPage, totalPages, hasPrevious, hasNext, totalElements, totalExact } =
       paginatedResponse;
     const startItem = currentPage * pageSize + 1;
-    const endItem = Math.min((currentPage + 1) * pageSize, totalElements);
+    const endItem = totalExact === false
+      ? currentPage * pageSize + paginatedResponse.content.length
+      : Math.min((currentPage + 1) * pageSize, totalElements);
+    const totalLabel = totalExact === false
+      ? `at least ${totalElements}`
+      : totalElements.toString();
+
+    if (totalExact === false) {
+      return (
+        <div className="d-flex justify-content-between align-items-center mt-4">
+          <div className="text-muted">
+            Showing {startItem} to {endItem} of {totalLabel} vulnerabilities
+          </div>
+          <nav aria-label="Vulnerability pagination">
+            <ul className="pagination mb-0">
+              <li className={`page-item ${!hasPrevious ? "disabled" : ""}`}>
+                <button
+                  className="page-link"
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={!hasPrevious}
+                  aria-label="Previous"
+                >
+                  <span aria-hidden="true">&laquo;</span>
+                </button>
+              </li>
+              <li className={`page-item ${!hasNext ? "disabled" : ""}`}>
+                <button
+                  className="page-link"
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={!hasNext}
+                  aria-label="Next"
+                >
+                  <span aria-hidden="true">&raquo;</span>
+                </button>
+              </li>
+            </ul>
+          </nav>
+          <div className="text-muted">Page {currentPage + 1}</div>
+        </div>
+      );
+    }
 
     // Generate page numbers to show
     const maxPagesToShow = 7;
@@ -486,7 +569,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
     return (
       <div className="d-flex justify-content-between align-items-center mt-4">
         <div className="text-muted">
-          Showing {startItem} to {endItem} of {totalElements} vulnerabilities
+          Showing {startItem} to {endItem} of {totalLabel} vulnerabilities
         </div>
         <nav aria-label="Vulnerability pagination">
           <ul className="pagination mb-0">
