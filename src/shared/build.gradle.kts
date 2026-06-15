@@ -8,6 +8,8 @@ plugins {
 version = "0.1.0"
 group = "com.secman.crowdstrike"
 
+val kotlinVersion = project.properties.get("kotlinVersion")
+
 dependencies {
     // Micronaut Core (HTTP client, no web server)
     implementation("io.micronaut:micronaut-http-client")
@@ -18,18 +20,18 @@ dependencies {
     implementation("io.micronaut:micronaut-retry")
     
     // Kotlin
-    implementation("org.jetbrains.kotlin:kotlin-reflect:\${kotlinVersion}")
-    implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:\${kotlinVersion}")
+    implementation("org.jetbrains.kotlin:kotlin-reflect:${kotlinVersion}")
+    implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:${kotlinVersion}")
     
     // Jackson for JSON
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.22.0")
     
     // Validation
     implementation("io.micronaut.validation:micronaut-validation")
     implementation("jakarta.validation:jakarta.validation-api")
     
     // Logging
-    runtimeOnly("ch.qos.logback:logback-classic")
+    runtimeOnly("ch.qos.logback:logback-classic:1.5.34")
     
     // KSP
     ksp("io.micronaut:micronaut-http-validation")

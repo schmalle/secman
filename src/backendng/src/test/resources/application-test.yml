@@ -23,7 +23,7 @@ micronaut:
 # must NEVER point at the dev/production database (DB_CONNECT).
 datasources:
   default:
-    url: ${TEST_DB_URL:jdbc:mariadb://localhost:3306/secman_test}
+    url: ${TEST_DB_URL:`jdbc:mariadb://localhost:3306/secman_test`}
     username: ${TEST_DB_USERNAME:secman_test}
     password: ${TEST_DB_PASSWORD:secman_test}
     driverClassName: org.mariadb.jdbc.Driver

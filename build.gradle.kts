@@ -6,7 +6,7 @@ plugins {
     id("io.micronaut.application") version "5.0.0" apply false
     id("io.micronaut.library") version "5.0.0" apply false
     id("io.micronaut.aot") version "5.0.0" apply false
-    id("com.gradleup.shadow") version "9.4.1" apply false
+    id("com.gradleup.shadow") version "9.4.2" apply false
 }
 
 subprojects {

@@ -34,19 +34,19 @@ dependencies {
     implementation("io.micronaut.data:micronaut-data-hibernate-jpa:5.0.4")
     implementation("io.micronaut.sql:micronaut-hibernate-jpa:7.0.1")
     implementation("io.micronaut.sql:micronaut-jdbc-hikari:7.0.1")
-    runtimeOnly("org.mariadb.jdbc:mariadb-java-client:3.5.8")
+    runtimeOnly("org.mariadb.jdbc:mariadb-java-client:3.5.9")
 
 	implementation("io.micronaut.flyway:micronaut-flyway:8.0.0")
-	runtimeOnly("org.flywaydb:flyway-core:12.7.0")
-	runtimeOnly("org.flywaydb:flyway-mysql:12.7.0")
+	runtimeOnly("org.flywaydb:flyway-core:12.8.1")
+	runtimeOnly("org.flywaydb:flyway-mysql:12.8.1")
 	
     // Security
     implementation("io.micronaut.security:micronaut-security-jwt:5.0.0")
     implementation("io.micronaut.security:micronaut-security-oauth2:5.0.0")
 
     // WebAuthn/Passkey support
-    implementation("com.webauthn4j:webauthn4j-core:0.31.6.RELEASE")
-    implementation("com.webauthn4j:webauthn4j-metadata:0.31.6.RELEASE")
+    implementation("com.webauthn4j:webauthn4j-core:0.31.7.RELEASE")
+    implementation("com.webauthn4j:webauthn4j-metadata:0.31.7.RELEASE")
 
     // Validation
     implementation("io.micronaut.validation:micronaut-validation")
@@ -92,7 +92,8 @@ dependencies {
     runtimeOnly("org.yaml:snakeyaml:2.6")
     
     // Password encoding
-    implementation("org.springframework.security:spring-security-crypto:7.0.5")
+    implementation("org.springframework.security:spring-security-crypto:7.1.0")
+    implementation("org.springframework:spring-core:7.0.8")
     implementation("commons-logging:commons-logging:1.3.6")
     
     // Document generation (Apache POI)
@@ -171,6 +172,9 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
 // Configure test task to use JUnit 5 platform - Feature 056
 tasks.test {
     useJUnitPlatform()
+    if (System.getenv("MICRONAUT_ENVIRONMENTS").isNullOrBlank()) {
+        environment("MICRONAUT_ENVIRONMENTS", "test")
+    }
 }
 
 tasks.withType<Jar> {
