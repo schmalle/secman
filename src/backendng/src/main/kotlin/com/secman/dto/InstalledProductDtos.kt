@@ -28,6 +28,7 @@ data class InstalledProductResponse(
     val id: Long,
     val assetId: Long,
     val hostname: String,
+    val cloudAccountId: String?,
     val name: String,
     val vendor: String?,
     val version: String?,

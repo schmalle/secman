@@ -52,7 +52,7 @@ test('installed products supports server-specific product lookup', () => {
     assert.match(serviceSource, /\/api\/installed-products\/by-server/);
 });
 
-test('installed products renders only product, version, and system columns', () => {
+test('installed products renders product, version, system, and AWS account columns', () => {
     const source = readFileSync(new URL('./InstalledProducts.tsx', import.meta.url), 'utf8');
 
     assert.doesNotMatch(source, /<th>Vendor<\/th>/);
@@ -61,7 +61,9 @@ test('installed products renders only product, version, and system columns', () 
     assert.doesNotMatch(source, /product\.vendor/);
     assert.doesNotMatch(source, /product\.category/);
     assert.doesNotMatch(source, /product\.importedAt/);
-    assert.match(source, /colSpan=\{3\}/);
+    assert.match(source, /<th>AWS Account ID<\/th>/);
+    assert.match(source, /product\.cloudAccountId/);
+    assert.match(source, /colSpan=\{4\}/);
 });
 
 test('admin email broadcast preview sanitizes html before rendering', () => {

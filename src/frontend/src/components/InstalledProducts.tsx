@@ -166,18 +166,20 @@ const InstalledProducts: React.FC = () => {
                 <th>Product</th>
                 <th>Version</th>
                 <th>System</th>
+                <th>AWS Account ID</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={3} className="text-center py-4">Loading installed products...</td></tr>
+                <tr><td colSpan={4} className="text-center py-4">Loading installed products...</td></tr>
               ) : products.length === 0 ? (
-                <tr><td colSpan={3} className="text-center py-4 text-muted">No installed products found.</td></tr>
+                <tr><td colSpan={4} className="text-center py-4 text-muted">No installed products found.</td></tr>
               ) : products.map((product) => (
                 <tr key={product.id}>
                   <td className="fw-semibold">{product.name}</td>
                   <td><code>{product.version || '—'}</code></td>
                   <td><a href={`/assets/${product.assetId}`}>{product.hostname}</a></td>
+                  <td><code>{product.cloudAccountId || '—'}</code></td>
                 </tr>
               ))}
             </tbody>
