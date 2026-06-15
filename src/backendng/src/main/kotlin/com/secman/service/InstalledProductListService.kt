@@ -78,6 +78,7 @@ open class InstalledProductListService(
                     id = requireNotNull(product.id),
                     assetId = requireNotNull(product.asset.id),
                     hostname = product.asset.name,
+                    cloudAccountId = product.asset.cloudAccountId,
                     name = product.name,
                     vendor = product.vendor,
                     version = product.version,

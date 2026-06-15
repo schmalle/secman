@@ -4,6 +4,7 @@ export interface InstalledProductResponse {
   id: number;
   assetId: number;
   hostname: string;
+  cloudAccountId?: string | null;
   name: string;
   vendor?: string | null;
   version?: string | null;
