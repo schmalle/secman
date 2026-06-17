@@ -165,6 +165,60 @@ Requires `ADMIN`. Mirrored by MCP tool `send_patch_notifications`.
 | `--username` / `--password` | env | `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS` |
 | `--backend-url` | env | `SECMAN_HOST` / `SECMAN_BACKEND_URL` |
 
+### `notify-new-accounts` — new AWS account mapping notifications
+
+Notifies users who have been mapped to one or more new AWS accounts within a
+configurable look-back window (default: **last 24 hours**). A "new account"
+is a `UserMapping` row whose `aws_account_id` is set and whose `created_at`
+timestamp falls inside the window (i.e. it was created via a recent import).
+Users with at least one such mapping receive one consolidated email listing all
+their newly-mapped account IDs.
+
+The **notification body text is read from a local file** supplied via `--file`
+(`-f`). This lets operators customise the message per-deployment (e.g. with
+data-classification instructions, team contacts, or regulatory context) without
+redeploying the application. The list of new account IDs is always appended
+below the custom text.
+
+Requires `ADMIN`. Backend endpoint: `POST /api/cli/new-account-notifications/send`.
+
+```bash
+# Notify users who received new AWS account mappings in the last 24 hours:
+./scripts/secman notify-new-accounts --file /etc/secman/welcome-aws.txt
+
+# Preview planned recipients (dry run):
+./scripts/secman notify-new-accounts --file welcome-aws.txt --dry-run
+
+# 48-hour window with per-recipient detail:
+./scripts/secman notify-new-accounts --file welcome-aws.txt --hours 48 --verbose
+```
+
+| Option | Default | Notes |
+|---|---|---|
+| `-f` / `--file <path>` | — | **required**; path to text file used as the email body |
+| `--hours <n>` | 24 | look-back window in hours |
+| `--dry-run` | false | print planned recipients only, no emails sent |
+| `--verbose` | false | per-recipient delivery status |
+| `--username` / `--password` | env | `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS` |
+| `--backend-url` | env | `SECMAN_HOST` / `SECMAN_BACKEND_URL` |
+
+**Exit codes:** `0` success/dry-run, `1` partial failure or error, `2` invalid arguments.
+
+**Notification file format:** Plain text. Paragraphs are preserved. Example:
+
+```
+Dear SecMan user,
+
+You have been granted access to one or more AWS accounts in our security
+platform. Please log in to SecMan to review your assets and open
+vulnerabilities.
+
+If you have questions, contact your security team.
+```
+
+The rendered email appends the account list below this text (both in HTML and
+plain-text parts).
+
 ### `manage-user-mappings`
 
 Subcommands: `list`, `add-aws`, `add-domain`, `import`, `import-s3`, `download-s3`, `print-s3`, `remove`.

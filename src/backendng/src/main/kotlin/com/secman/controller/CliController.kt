@@ -4,6 +4,7 @@ import com.secman.repository.AssetRepository
 import com.secman.repository.OutdatedAssetMaterializedViewRepository
 import com.secman.repository.UserMappingRepository
 import com.secman.service.AdminSummaryService
+import com.secman.service.NewAccountNotificationService
 import com.secman.service.NotificationService
 import com.secman.service.UserMappingStatisticsService
 import com.secman.service.UserVulnerabilityNotificationService
@@ -39,7 +40,8 @@ class CliController(
     private val adminSummaryService: AdminSummaryService,
     private val userVulnerabilityNotificationService: UserVulnerabilityNotificationService,
     private val userMappingStatisticsService: UserMappingStatisticsService,
-    private val applicationRegisterReminderService: ApplicationRegisterReminderService
+    private val applicationRegisterReminderService: ApplicationRegisterReminderService,
+    private val newAccountNotificationService: NewAccountNotificationService
 ) {
     private val logger = LoggerFactory.getLogger(CliController::class.java)
 
@@ -482,6 +484,77 @@ class CliController(
                 failedRecipients = result.failedRecipients
             )
         )
+    }
+
+    // --- New Account Notification Endpoint ---
+
+    @Serdeable
+    data class SendNewAccountNotificationsRequest(
+        val dryRun: Boolean = false,
+        val verbose: Boolean = false,
+        val hours: Int = 24,
+        val notificationText: String
+    )
+
+    @Serdeable
+    data class NewAccountNotificationResultDto(
+        val status: String,
+        val accountMappingsFound: Int,
+        val usersNotified: Int,
+        val emailsSent: Int,
+        val emailsFailed: Int,
+        val recipients: List<String>,
+        val failedRecipients: List<String>,
+        val hours: Int
+    )
+
+    /**
+     * POST /api/cli/new-account-notifications/send
+     *
+     * Finds UserMapping rows with a non-null aws_account_id created within the last
+     * [hours] hours, groups them by email address, and sends each affected user one
+     * consolidated email. The notification body text is supplied by the caller (read
+     * from a file by the CLI) so operators can customise the message per-deployment.
+     */
+    @Post("/new-account-notifications/send")
+    @Produces(MediaType.APPLICATION_JSON)
+    fun sendNewAccountNotifications(
+        @Body request: SendNewAccountNotificationsRequest,
+        authentication: Authentication
+    ): HttpResponse<NewAccountNotificationResultDto> {
+        logger.info("CLI new-account-notifications requested by user: {} (dryRun={}, hours={})",
+            authentication.name, request.dryRun, request.hours)
+
+        if (request.hours < 1) {
+            logger.warn("Invalid hours value: {}", request.hours)
+            return HttpResponse.badRequest()
+        }
+        if (request.notificationText.isBlank()) {
+            logger.warn("Notification text is blank")
+            return HttpResponse.badRequest()
+        }
+
+        return try {
+            val result = newAccountNotificationService.sendNewAccountNotifications(
+                hours = request.hours,
+                dryRun = request.dryRun,
+                verbose = request.verbose,
+                notificationText = request.notificationText
+            )
+            HttpResponse.ok(NewAccountNotificationResultDto(
+                status = result.status.name,
+                accountMappingsFound = result.accountMappingsFound,
+                usersNotified = result.usersNotified,
+                emailsSent = result.emailsSent,
+                emailsFailed = result.emailsFailed,
+                recipients = result.recipients,
+                failedRecipients = result.failedRecipients,
+                hours = result.hours
+            ))
+        } catch (e: Exception) {
+            logger.error("Error sending new-account notifications", e)
+            HttpResponse.serverError()
+        }
     }
 
 }
