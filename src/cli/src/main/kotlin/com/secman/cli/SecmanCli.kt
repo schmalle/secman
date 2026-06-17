@@ -18,6 +18,7 @@ import com.secman.cli.commands.QueryCommand
 import com.secman.cli.commands.SendAdminSummaryCommand
 import com.secman.cli.commands.SendNotificationsCommand
 import com.secman.cli.commands.SendNotificationUsersCommand
+import com.secman.cli.commands.NotifyNewAccountsCommand
 import com.secman.cli.commands.SendPatchNotificationsCommand
 import com.secman.cli.commands.SendApplicationRegisterRemindersCommand
 import com.secman.cli.commands.ServersCommand
@@ -336,6 +337,14 @@ class SecmanCli {
                 }
                 0
             }
+            args[0] == "notify-new-accounts" -> {
+                // Notify users about new AWS account mappings created within the last N hours
+                val subArgs = args.drop(1).toTypedArray()
+                createCliContext().use { ctx ->
+                    PicocliRunner.run(NotifyNewAccountsCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
             args[0] == "deduplicate-vulnerabilities" -> {
                 // Remove duplicate vulnerability records from the database
                 val subArgs = args.drop(1).toTypedArray()
@@ -422,6 +431,7 @@ class SecmanCli {
                 send-notification-users  Send vulnerability notifications to users by AWS account
                 send-patch-notifications  Notify users about missing patches, filtered by email first character
                 send-application-register-reminders  Send reminders for stale application register quality checks
+                notify-new-accounts    Notify users about new AWS account mappings created in the last N hours
 
               User & Access Management:
                 manage-user-mappings   Manage user mappings for domains and AWS accounts
@@ -1096,6 +1106,52 @@ class SecmanCli {
                   secman port-scan --targets "web-*" --ports "80,443,8080"
                   secman port-scan --nmap-args "-sV -sC -T4 --top-ports 100"
                   secman port-scan --output-dir /tmp/scans --verbose
+            """.trimIndent(),
+
+            "notify-new-accounts" to """
+                secman notify-new-accounts - Notify users about new AWS account mappings
+
+                Usage: secman notify-new-accounts --file <path> [options]
+
+                Requires: ADMIN role
+
+                Description:
+                  Finds UserMapping rows where aws_account_id is set and created_at falls
+                  within the last --hours hours (default: 24). Groups results by email address
+                  and sends each affected user one consolidated notification listing all newly
+                  mapped AWS account IDs. The email body is taken from the file supplied via
+                  --file; the list of account IDs is always appended below the custom text.
+
+                  Typical use-case: run this command after an automated user-mapping import to
+                  inform newly-onboarded users which AWS accounts they now have access to.
+
+                Options:
+                  -f, --file <path>        Path to a text file used as the email body (required)
+                  --hours <n>              Look-back window in hours (default: 24)
+                  --dry-run                Preview planned recipients without sending emails
+                  --verbose, -v            Per-recipient delivery status
+                  --username <user>        Backend username (or SECMAN_ADMIN_NAME env var)
+                  --password <pass>        Backend password (or SECMAN_ADMIN_PASS env var)
+                  --backend-url <url>      Backend API URL (or SECMAN_HOST / SECMAN_BACKEND_URL env var)
+
+                Exit codes:
+                  0  Success (or dry run completed)
+                  1  Partial failure or unexpected error
+                  2  Invalid arguments (missing file, bad hours value, empty file)
+
+                Examples:
+                  # Notify all users who got a new AWS mapping in the last 24 hours:
+                  secman notify-new-accounts --file /etc/secman/welcome-aws.txt
+
+                  # Preview recipients without sending (useful for scheduling scripts):
+                  secman notify-new-accounts --file welcome-aws.txt --dry-run
+
+                  # Use a 48-hour window and show per-recipient status:
+                  secman notify-new-accounts --file welcome-aws.txt --hours 48 --verbose
+
+                  # Custom credentials and backend:
+                  secman notify-new-accounts --file msg.txt --username admin --password secret \
+                    --backend-url https://secman.example.com
             """.trimIndent(),
 
             "environment" to """

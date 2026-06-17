@@ -353,4 +353,19 @@ interface UserMappingRepository : JpaRepository<UserMapping, Long> {
      * "1451-23000: Cannot delete or update a parent row".
      */
     fun deleteByUser_Id(userId: Long): Long
+
+    /**
+     * Find AWS account mappings created on or after [since].
+     *
+     * Used by the notify-new-accounts CLI command to identify users who gained
+     * access to a new AWS account via a recent import within the look-back window.
+     * Status filtering (ACTIVE only) is applied in the service layer.
+     */
+    @Query("""
+        SELECT m FROM UserMapping m
+        WHERE m.awsAccountId IS NOT NULL
+          AND m.createdAt >= :since
+        ORDER BY m.email, m.awsAccountId
+    """)
+    fun findRecentAwsAccountMappings(since: java.time.Instant): List<UserMapping>
 }
