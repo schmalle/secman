@@ -141,14 +141,48 @@ Existing assets start with `crowdstrike_last_imported_at = NULL` after the schem
 | `--verbose` | false | per-asset detail |
 | `--outdated-only` | false | skip new-vuln notifications |
 
+### `send-notification-users` — per-AWS-account vulnerability emails
+
+Finds AWS accounts whose EC2 assets have vulnerabilities open longer than
+`--days` (excluding active exceptions) and sends each recipient one consolidated
+email summarizing their affected accounts.
+
+In the **global** flow (no `--notification-user`, or an ADMIN `--notification-user`)
+the recipients for each affected account are the union of:
+
+1. **AWS account owner(s)** — every `UserMapping` row whose `aws_account_id` matches the account.
+2. **Workgroup members** — every member of any workgroup that contains an EC2 asset in the account (asset → workgroup → users).
+3. **Sharing recipients** — every user granted access to the account via the AWS Account Sharing feature (directional, honoring per-rule account selection).
+
+Emails are deduplicated case-insensitively, so a user who qualifies through more
+than one path is notified only once. An account with no recipients in any of the
+three categories is reported under "Unmapped accounts". A non-ADMIN
+`--notification-user` is scoped to only the accounts that user can access.
+
+```bash
+./scripts/secman send-notification-users --dry-run --verbose
+./scripts/secman send-notification-users --days 60
+./scripts/secman send-notification-users --notification-user user@example.com
+```
+
+| Option | Default | Notes |
+|---|---|---|
+| `--days <n>` | 30 | vulnerability age threshold in days |
+| `--dry-run` | false | print planned recipients only |
+| `--verbose` | false | per-recipient delivery status |
+| `--notification-user <email>` | — | only notify this user (ADMIN ⇒ global, otherwise self-scoped) |
+| `--username` / `--password` | env | `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS` |
+| `--backend-url` | env | `SECMAN_HOST` / `SECMAN_BACKEND_URL` |
+
 ### `send-patch-notifications` — missing-patch emails by email first character
 
 Notifies users about missing patches (overdue vulnerabilities) in deterministic
 alphabetical batches. The mandatory positional argument is the **first character of
 the email address** (e.g. `a` → every user whose login email starts with `a`).
 Reuses the user-vulnerability-notification pipeline: finds AWS accounts with
-vulnerabilities open longer than `--days`, maps them to users via `UserMapping`, then
-keeps only recipients matching the prefix before sending one consolidated email each.
+vulnerabilities open longer than `--days`, resolves the recipients for each account
+(see `send-notification-users` below), then keeps only recipients matching the prefix
+before sending one consolidated email each.
 Requires `ADMIN`. Mirrored by MCP tool `send_patch_notifications`.
 
 ```bash
