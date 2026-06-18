@@ -275,6 +275,14 @@ secman:
   # Cache is refreshed during materialized view refresh (after CLI import)
   statistics-cache:
     enabled: ${STATISTICS_CACHE_ENABLED:true}
+  # Admin/secchampion notifications about new pending exception requests.
+  # "digest" (default) pools new requests into one scheduled email per reviewer so a
+  # burst of N requests does not produce N emails. "immediate" restores the legacy
+  # per-request blast (rollback path). The interval accepts Micronaut durations (15m, 1h, 24h).
+  exception-notifications:
+    mode: ${EXCEPTION_NOTIFICATIONS_MODE:digest}
+    digest:
+      interval: ${EXCEPTION_NOTIFICATIONS_DIGEST_INTERVAL:1h}
   vulnerability:
     # Use patch publication date for calculating days open
     # When true: days_open = scan_timestamp - patch_publication_date

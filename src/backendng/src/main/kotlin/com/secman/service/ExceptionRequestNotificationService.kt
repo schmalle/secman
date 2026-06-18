@@ -141,6 +141,103 @@ open class ExceptionRequestNotificationService(
     )
 
     /**
+     * Immutable snapshot of one request's display fields, resolved on the caller's
+     * transactional thread so the async send lambda never touches LAZY proxies.
+     */
+    private data class DigestRow(
+        val cveId: String,
+        val assetName: String,
+        val requester: String,
+        val submitted: String,
+        val expires: String
+    )
+
+    /**
+     * Send a single consolidated digest email to every ADMIN/SECCHAMPION user summarizing
+     * a batch of new pending exception requests.
+     *
+     * Called by ExceptionRequestDigestScheduler instead of the per-request blast, so that
+     * N new requests in a digest window collapse to one email per reviewer.
+     *
+     * @param requests The un-notified PENDING requests to announce (must be non-empty)
+     * @return CompletableFuture indicating if at least one email was sent successfully
+     */
+    open fun notifyAdminsOfPendingDigest(
+        requests: List<VulnerabilityExceptionRequest>
+    ): CompletableFuture<Boolean> {
+        // Resolve all Hibernate-backed fields on the caller's (transactional) thread so the
+        // async lambda never dereferences LAZY proxies from another thread. See the same
+        // guard in notifyAdminsOfNewRequest.
+        val rows: List<DigestRow> = requests.map { request ->
+            DigestRow(
+                cveId = request.vulnerability?.vulnerabilityId ?: request.cveId ?: "Unknown CVE",
+                assetName = request.vulnerability?.asset?.name ?: "Unknown Asset",
+                requester = request.requestedByUsername,
+                submitted = request.createdAt?.format(DATE_FORMATTER) ?: "Unknown",
+                expires = request.expirationDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+            )
+        }
+        val count = rows.size
+        val subject = "SecMan: $count new exception request${if (count == 1) "" else "s"} awaiting review"
+        val adminRecipients: List<AdminRecipient> = userRepository.findAll()
+            .filter { it.hasRole(User.Role.ADMIN) || it.hasRole(User.Role.SECCHAMPION) }
+            .map { user ->
+                AdminRecipient(
+                    email = user.email,
+                    username = user.username,
+                    htmlContent = generatePendingDigestEmail(rows, user.username),
+                    textContent = generatePendingDigestTextEmail(rows, user.username)
+                )
+            }
+        val inlineImages = loadLogoInlineImage()
+
+        return CompletableFuture.supplyAsync {
+            try {
+                logger.info("Sending pending-request digest for {} request(s) to {} reviewer(s)",
+                    count, adminRecipients.size)
+
+                if (adminRecipients.isEmpty()) {
+                    logger.warn("No ADMIN or SECCHAMPION users found to notify about {} pending request(s)", count)
+                    return@supplyAsync false
+                }
+
+                var successCount = 0
+                var failureCount = 0
+
+                for (recipient in adminRecipients) {
+                    try {
+                        val sent = emailService.sendEmailWithInlineImages(
+                            to = recipient.email,
+                            subject = subject,
+                            textContent = recipient.textContent,
+                            htmlContent = recipient.htmlContent,
+                            inlineImages = inlineImages
+                        ).get() // Block to ensure delivery attempt
+
+                        if (sent) {
+                            successCount++
+                            logger.debug("Sent pending-request digest to {}", recipient.email)
+                        } else {
+                            failureCount++
+                            logger.warn("Failed to send pending-request digest to {}", recipient.email)
+                        }
+                    } catch (e: Exception) {
+                        failureCount++
+                        logger.error("Error sending pending-request digest to {}: {}", recipient.email, e.message)
+                    }
+                }
+
+                logger.info("Pending-request digest sent: {} success, {} failures", successCount, failureCount)
+                return@supplyAsync successCount > 0
+
+            } catch (e: Exception) {
+                logger.error("Failed to send pending-request digest", e)
+                return@supplyAsync false
+            }
+        }
+    }
+
+    /**
      * Notify requester of request approval.
      *
      * Called after approveRequest() completes successfully.
@@ -426,6 +523,136 @@ open class ExceptionRequestNotificationService(
             |
             |--
             |This is an automated notification from SecMan. Please do not reply.
+        """.trimMargin()
+    }
+
+    /** Minimal HTML escaping for dynamic values rendered into the digest table cells. */
+    private fun escapeHtml(value: String): String =
+        value.replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace("\"", "&quot;")
+
+    /**
+     * Generate the HTML digest email summarizing all new pending requests for one reviewer.
+     * One row per request in a compact table, with a single CTA to the approvals dashboard.
+     */
+    private fun generatePendingDigestEmail(rows: List<DigestRow>, recipientName: String): String {
+        val count = rows.size
+        val tableRows = rows.joinToString("\n") { row ->
+            """
+                                <tr>
+                                    <td style="padding:10px 12px;border:1px solid #e2e8f0;font-size:13px;font-family:'SF Mono','Consolas',monospace;color:#1f2933;">${escapeHtml(row.cveId)}</td>
+                                    <td style="padding:10px 12px;border:1px solid #e2e8f0;font-size:13px;color:#1f2933;">${escapeHtml(row.assetName)}</td>
+                                    <td style="padding:10px 12px;border:1px solid #e2e8f0;font-size:13px;color:#1f2933;">${escapeHtml(row.requester)}</td>
+                                    <td style="padding:10px 12px;border:1px solid #e2e8f0;font-size:13px;color:#475569;">${escapeHtml(row.submitted)}</td>
+                                    <td style="padding:10px 12px;border:1px solid #e2e8f0;font-size:13px;color:#475569;">${escapeHtml(row.expires)}</td>
+                                </tr>
+            """.trimIndent()
+        }
+        val plural = if (count == 1) "request" else "requests"
+
+        return """
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <title>New Exception Requests</title>
+</head>
+<body style="margin:0;padding:0;background-color:#eef2f7;font-family:'Segoe UI',Helvetica,Arial,sans-serif;color:#1f2933;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#eef2f7;padding:32px 12px;">
+        <tr>
+            <td align="center">
+                <table role="presentation" width="680" cellpadding="0" cellspacing="0" border="0" style="background-color:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 4px 14px rgba(15,23,42,0.08);max-width:680px;">
+                    <tr>
+                        <td style="background-color:#1a3a6c;background-image:linear-gradient(135deg,#0f2447 0%,#1a3a6c 45%,#b1273a 100%);padding:28px 32px;">
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                                <tr>
+                                    <td valign="middle" style="width:72px;">
+                                        <img src="cid:secman-logo" alt="SecMan" width="60" height="60" style="display:block;border:0;background-color:#ffffff;border-radius:10px;padding:6px;">
+                                    </td>
+                                    <td valign="middle" style="padding-left:18px;">
+                                        <div style="color:#dbe5f5;font-size:12px;letter-spacing:1.4px;text-transform:uppercase;font-weight:600;">SecMan Risk Assessment</div>
+                                        <div style="color:#ffffff;font-size:22px;font-weight:600;margin-top:6px;line-height:1.25;">$count New Exception $plural Awaiting Review</div>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="height:4px;line-height:4px;background-color:#dc3545;">&nbsp;</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:28px 32px 8px 32px;">
+                            <p style="margin:0 0 14px 0;font-size:15px;line-height:1.5;">Hello <strong>$recipientName</strong>,</p>
+                            <p style="margin:0 0 22px 0;font-size:15px;line-height:1.5;color:#475569;">The following <strong>$count</strong> vulnerability exception $plural have been submitted and are awaiting your review.</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:0 32px 8px 32px;">
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
+                                <tr>
+                                    <th align="left" style="padding:10px 12px;background-color:#f7f9fc;border:1px solid #e2e8f0;font-size:11px;text-transform:uppercase;letter-spacing:0.6px;color:#475569;">CVE</th>
+                                    <th align="left" style="padding:10px 12px;background-color:#f7f9fc;border:1px solid #e2e8f0;font-size:11px;text-transform:uppercase;letter-spacing:0.6px;color:#475569;">Asset</th>
+                                    <th align="left" style="padding:10px 12px;background-color:#f7f9fc;border:1px solid #e2e8f0;font-size:11px;text-transform:uppercase;letter-spacing:0.6px;color:#475569;">Requested By</th>
+                                    <th align="left" style="padding:10px 12px;background-color:#f7f9fc;border:1px solid #e2e8f0;font-size:11px;text-transform:uppercase;letter-spacing:0.6px;color:#475569;">Submitted</th>
+                                    <th align="left" style="padding:10px 12px;background-color:#f7f9fc;border:1px solid #e2e8f0;font-size:11px;text-transform:uppercase;letter-spacing:0.6px;color:#475569;">Expires</th>
+                                </tr>
+$tableRows
+                            </table>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td align="center" style="padding:28px 32px 32px 32px;">
+                            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                                <tr>
+                                    <td style="background-color:#1a3a6c;background-image:linear-gradient(135deg,#1a3a6c 0%,#2c5282 100%);border-radius:6px;">
+                                        <a href="${dashboardUrl()}" style="display:inline-block;padding:14px 32px;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;letter-spacing:0.3px;">Review Requests &rarr;</a>
+                                    </td>
+                                </tr>
+                            </table>
+                            <p style="margin:14px 0 0 0;font-size:12px;color:#94a3b8;">Or open: <a href="${dashboardUrl()}" style="color:#1a3a6c;text-decoration:underline;">${dashboardUrl()}</a></p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="background-color:#f7f9fc;padding:18px 32px;text-align:center;border-top:1px solid #e2e8f0;">
+                            <p style="margin:0;font-size:12px;color:#64748b;">This is an automated digest from <strong style="color:#475569;">SecMan</strong>. Please do not reply to this email.</p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
+        """.trimIndent()
+    }
+
+    /**
+     * Plain-text alternative for the pending-request digest (multipart/alternative MIME).
+     */
+    private fun generatePendingDigestTextEmail(rows: List<DigestRow>, recipientName: String): String {
+        val count = rows.size
+        val plural = if (count == 1) "request" else "requests"
+        val lines = rows.joinToString("\n") { row ->
+            "  - ${row.cveId} | ${row.assetName} | by ${row.requester} | submitted ${row.submitted} | expires ${row.expires}"
+        }
+        return """
+            |SecMan — $count New Exception $plural Awaiting Review
+            |====================================================
+            |
+            |Hello $recipientName,
+            |
+            |The following $count vulnerability exception $plural have been submitted and are awaiting your review:
+            |
+            |$lines
+            |
+            |Review the requests:
+            |  ${dashboardUrl()}
+            |
+            |--
+            |This is an automated digest from SecMan. Please do not reply.
         """.trimMargin()
     }
 

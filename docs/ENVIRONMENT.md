@@ -37,6 +37,14 @@ Resolution order (Micronaut): system properties → env vars → `application.ym
 
 Gmail requires an [App Password](https://support.google.com/accounts/answer/185833), not the account password.
 
+### Exception-request reviewer notifications
+| Var | Default | Notes |
+|---|---|---|
+| `EXCEPTION_NOTIFICATIONS_MODE` | `digest` | `digest`: pool new pending requests into one scheduled email per ADMIN/SECCHAMPION reviewer. `immediate`: legacy one-email-per-request blast (rollback). |
+| `EXCEPTION_NOTIFICATIONS_DIGEST_INTERVAL` | `1h` | Digest job interval (Micronaut duration: `15m`, `1h`, `24h`). Ignored in `immediate` mode. |
+
+In `digest` mode a burst of N exception requests produces a single digest per reviewer instead of N emails. Quiet intervals send nothing. Approval/rejection/expiration emails (single recipient) remain immediate.
+
 ### OAuth retry (race tolerance for fast Microsoft SSO)
 | Var | Default |
 |---|---|
@@ -179,6 +187,8 @@ SECMAN_AUTH_COOKIE_SECURE=true
 # MEMORY_LAZY_LOADING=true
 # MEMORY_BATCH_SIZE=1000
 # MEMORY_STREAMING_EXPORTS=true
+# EXCEPTION_NOTIFICATIONS_MODE=digest
+# EXCEPTION_NOTIFICATIONS_DIGEST_INTERVAL=1h
 # OAUTH_STATE_RETRY_MAX_ATTEMPTS=5
 # OAUTH_STATE_RETRY_INITIAL_DELAY=100
 # OAUTH_STATE_RETRY_MAX_DELAY=500
