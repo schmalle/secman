@@ -118,4 +118,39 @@ interface AwsAccountSharingRepository : JpaRepository<AwsAccountSharing, Long> {
         nativeQuery = true
     )
     fun findSharedAwsAccountIdsByTargetUserId(targetUserId: Long): List<String>
+
+    /**
+     * Find the emails of all users who have access to a given AWS account via a
+     * sharing rule — the inverse of [findSharedAwsAccountIdsByTargetUserId].
+     *
+     * Used by the vulnerability notification fan-out so that recipients always
+     * include users who were granted visibility into the account through the
+     * sharing feature (in addition to the account's direct UserMapping owners).
+     *
+     * A sharing row matches the account when one of its source user's mappings
+     * resolves to :awsAccountId AND the rule's per-account selection covers it
+     * (empty selection = share-all, mirroring the access-control query above).
+     */
+    @Query(
+        value = """
+            SELECT DISTINCT u_target.email
+            FROM aws_account_sharing acs
+            JOIN users u_source ON u_source.id = acs.source_user_id
+            JOIN users u_target ON u_target.id = acs.target_user_id
+            JOIN user_mapping um ON um.email = u_source.email AND um.aws_account_id = :awsAccountId
+            WHERE (
+                NOT EXISTS (
+                    SELECT 1 FROM aws_account_sharing_account a
+                    WHERE a.sharing_id = acs.id
+                )
+                OR EXISTS (
+                    SELECT 1 FROM aws_account_sharing_account a
+                    WHERE a.sharing_id = acs.id
+                      AND a.aws_account_id = :awsAccountId
+                )
+            )
+        """,
+        nativeQuery = true
+    )
+    fun findTargetUserEmailsByAwsAccountId(awsAccountId: String): List<String>
 }

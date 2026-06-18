@@ -361,6 +361,17 @@ open class AwsAccountSharingService(
         val user = userRepository.findByEmailIgnoreCase(targetUserEmail).orElse(null) ?: return emptyList()
         return getSharedAwsAccountIds(user.id!!)
     }
+
+    /**
+     * Get the emails of all users who have access to the given AWS account via a
+     * sharing rule — the inverse of [getSharedAwsAccountIds].
+     *
+     * Used by the vulnerability notification fan-out so notifications reach users
+     * who were granted visibility into the account through the sharing feature.
+     */
+    fun getTargetUserEmailsForAwsAccount(awsAccountId: String): List<String> {
+        return awsAccountSharingRepository.findTargetUserEmailsByAwsAccountId(awsAccountId)
+    }
 }
 
 /**
