@@ -3,6 +3,7 @@ package com.secman.service
 import com.secman.domain.ExceptionRequestStatus
 import com.secman.repository.VulnerabilityExceptionRequestRepository
 import io.micronaut.data.model.Pageable
+import io.micronaut.transaction.annotation.Transactional
 import jakarta.inject.Inject
 import jakarta.inject.Singleton
 import org.apache.poi.ss.usermodel.*
@@ -51,6 +52,7 @@ open class ExceptionRequestExportService(
      * @param reviewerId Optional reviewer user ID filter
      * @return ByteArrayOutputStream containing Excel workbook
      */
+    @Transactional(readOnly = true)
     open fun exportToExcel(
         status: ExceptionRequestStatus? = null,
         dateRange: String? = null,
@@ -96,8 +98,14 @@ open class ExceptionRequestExportService(
             return outputStream
 
         } finally {
-            // CRITICAL: Close workbook to clean up temp files
-            workbook.close()
+            try {
+                workbook.close()
+            } catch (e: java.io.IOException) {
+                // SXSSF flushes + closes the temp writer during write(); calling close()
+                // afterward tries to flush again and throws "Stream closed". The workbook
+                // data was already serialized successfully — just suppress the stale-write.
+                logger.debug("SXSSF dispose warning after write (expected): {}", e.message)
+            }
             logger.debug("SXSSFWorkbook closed, temp files cleaned")
         }
     }
