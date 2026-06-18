@@ -259,6 +259,12 @@ const ApprovalDetailModal: React.FC<ApprovalDetailModalProps> = ({
                             assetId={request.assetId}
                             assetName={request.assetName}
                           />
+                          {request.scope === 'AWS_ACCOUNT' && request.scopeValue && (
+                            <div className="mt-1 small text-muted">
+                              <i className="bi bi-cloud me-1"></i>
+                              <strong>AWS Account:</strong> {request.scopeValue}
+                            </div>
+                          )}
                         </div>
                         <div className="mb-2">
                           <strong>Expiration Date:</strong><br />
