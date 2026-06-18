@@ -17,7 +17,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { getRequestById, approveRequest, rejectRequest, type VulnerabilityExceptionRequestDto } from '../services/exceptionRequestService';
+import { getRequestById, getSimilarRequests, approveRequest, rejectRequest, type VulnerabilityExceptionRequestDto } from '../services/exceptionRequestService';
 import ExceptionStatusBadge from './ExceptionStatusBadge';
 import ExceptionRequestScopeBadge from './ExceptionRequestScopeBadge';
 
@@ -40,6 +40,10 @@ const ApprovalDetailModal: React.FC<ApprovalDetailModalProps> = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Similar past requests (historical approval/rejection context)
+  const [similarRequests, setSimilarRequests] = useState<VulnerabilityExceptionRequestDto[]>([]);
+  const [similarLoading, setSimilarLoading] = useState(false);
+
   // Action states
   const [approving, setApproving] = useState(false);
   const [rejecting, setRejecting] = useState(false);
@@ -54,6 +58,7 @@ const ApprovalDetailModal: React.FC<ApprovalDetailModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       fetchRequestDetails();
+      fetchSimilarRequests();
       // Reset states
       setApproveComment('');
       setRejectComment('');
@@ -74,6 +79,20 @@ const ApprovalDetailModal: React.FC<ApprovalDetailModalProps> = ({
       setError(errorMessage);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchSimilarRequests = async () => {
+    try {
+      setSimilarLoading(true);
+      setSimilarRequests([]);
+      const data = await getSimilarRequests(requestId);
+      setSimilarRequests(data);
+    } catch (err) {
+      // Non-fatal: historical context is supplementary, don't block the review.
+      setSimilarRequests([]);
+    } finally {
+      setSimilarLoading(false);
     }
   };
 
@@ -259,6 +278,12 @@ const ApprovalDetailModal: React.FC<ApprovalDetailModalProps> = ({
                             assetId={request.assetId}
                             assetName={request.assetName}
                           />
+                          {request.scope === 'AWS_ACCOUNT' && request.scopeValue && (
+                            <div className="mt-1 small text-muted">
+                              <i className="bi bi-cloud me-1"></i>
+                              <strong>AWS Account:</strong> {request.scopeValue}
+                            </div>
+                          )}
                         </div>
                         <div className="mb-2">
                           <strong>Expiration Date:</strong><br />
@@ -459,6 +484,90 @@ const ApprovalDetailModal: React.FC<ApprovalDetailModalProps> = ({
                         </div>
                       )}
                     </div>
+                  </div>
+
+                  {/* Similar Past Requests - historical approval/rejection context */}
+                  <div className="mt-4 pt-3 border-top">
+                    <h6 className="text-muted mb-3">
+                      <i className="bi bi-clock-history me-2"></i>
+                      Similar Past Requests
+                    </h6>
+
+                    {similarLoading && (
+                      <div className="text-muted small">
+                        <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                        Loading history...
+                      </div>
+                    )}
+
+                    {!similarLoading && similarRequests.length === 0 && (
+                      <p className="text-muted small mb-0" data-testid="similar-requests-empty">
+                        No similar requests (same CVE, product, or asset) have been approved or declined before.
+                      </p>
+                    )}
+
+                    {!similarLoading && similarRequests.length > 0 && (
+                      <>
+                        <p className="small mb-2" data-testid="similar-requests-summary">
+                          <span className="badge bg-success me-2">
+                            {similarRequests.filter((r) => r.status === 'APPROVED').length} approved
+                          </span>
+                          <span className="badge bg-danger me-2">
+                            {similarRequests.filter((r) => r.status === 'REJECTED').length} declined
+                          </span>
+                          <span className="text-muted">
+                            among comparable requests (same CVE, product, or asset).
+                          </span>
+                        </p>
+                        <div className="table-responsive" style={{ maxHeight: '260px', overflowY: 'auto' }}>
+                          <table className="table table-sm table-hover align-middle small mb-0" data-testid="similar-requests-table">
+                            <thead>
+                              <tr>
+                                <th>Decision</th>
+                                <th>CVE</th>
+                                <th>Scope</th>
+                                <th>Requested By</th>
+                                <th>Reviewed By</th>
+                                <th>Reviewed</th>
+                                <th>Comment</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {similarRequests.map((sr) => (
+                                <tr key={sr.id} data-testid={`similar-request-row-${sr.id}`}>
+                                  <td>
+                                    <ExceptionStatusBadge status={sr.status} autoApproved={sr.autoApproved} />
+                                  </td>
+                                  <td><code>{sr.vulnerabilityCve || '—'}</code></td>
+                                  <td>
+                                    <ExceptionRequestScopeBadge
+                                      scope={sr.scope}
+                                      scopeValue={sr.scopeValue}
+                                      assetId={sr.assetId}
+                                      assetName={sr.assetName}
+                                    />
+                                  </td>
+                                  <td>{sr.requestedByUsername}</td>
+                                  <td>{sr.reviewedByUsername || '—'}</td>
+                                  <td>{sr.reviewDate ? new Date(sr.reviewDate).toLocaleDateString() : '—'}</td>
+                                  <td>
+                                    {sr.reviewComment ? (
+                                      <span title={sr.reviewComment}>
+                                        {sr.reviewComment.length > 60
+                                          ? `${sr.reviewComment.slice(0, 60)}…`
+                                          : sr.reviewComment}
+                                      </span>
+                                    ) : (
+                                      <span className="text-muted">—</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </>
               )}

@@ -396,6 +396,44 @@ export async function getPendingCount(): Promise<number> {
 }
 
 /**
+ * Get previously reviewed (APPROVED / REJECTED) requests similar to the given one
+ * (ADMIN/SECCHAMPION only).
+ *
+ * Provides historical context for approvers: how comparable exception requests
+ * (same CVE, product, or asset) were decided in the past.
+ *
+ * @param id Request ID being reviewed
+ * @returns List of similar reviewed requests, newest decision first
+ * @throws Error on 401 (unauthorized), 403 (forbidden), 404 (not found), 500 (server error)
+ */
+export async function getSimilarRequests(id: number): Promise<VulnerabilityExceptionRequestDto[]> {
+  const response = await authenticatedGet(`/api/vulnerability-exception-requests/${id}/similar`);
+
+  if (response.ok) {
+    return await response.json();
+  }
+
+  if (response.status === 401) {
+    throw new Error('Unauthorized. Please login again.');
+  }
+
+  if (response.status === 403) {
+    throw new Error('Access denied. This feature requires ADMIN or SECCHAMPION role.');
+  }
+
+  if (response.status === 404) {
+    throw new Error('Exception request not found.');
+  }
+
+  if (response.status === 500) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to fetch similar exception requests.');
+  }
+
+  throw new Error(`Failed to fetch similar exception requests: ${response.status}`);
+}
+
+/**
  * Approve an exception request (ADMIN/SECCHAMPION only)
  *
  * @param id Request ID
