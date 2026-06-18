@@ -38,11 +38,68 @@ interface ExceptionRequestModalProps {
     onSuccess: () => void;
 }
 
-const SCOPE_OPTIONS: ReadonlyArray<{ value: ExceptionScope; label: string; helperKey: string }> = [
-    { value: 'ASSET',       label: 'on this asset',          helperKey: 'asset' },
-    { value: 'GLOBAL',      label: 'on all assets',          helperKey: 'global' },
-    { value: 'IP',          label: 'on a specific IP',       helperKey: 'ip' },
-    { value: 'AWS_ACCOUNT', label: 'in a specific AWS account', helperKey: 'aws' }
+// UI-level scope modes — the last one maps to subject=ALL_VULNS + scope=AWS_ACCOUNT
+type ScopeMode = 'ASSET' | 'GLOBAL' | 'IP' | 'AWS_ACCOUNT' | 'ALL_VULNS_AWS_ACCOUNT';
+
+interface ScopeModeConfig {
+    mode: ScopeMode;
+    icon: string;
+    title: string;
+    description: (cveId: string | null, assetName: string) => string;
+    warning?: boolean;
+    danger?: boolean;
+    needsAwsInput?: boolean;
+    needsIpInput?: boolean;
+    subject: 'CVE' | 'ALL_VULNS';
+    scope: ExceptionScope;
+}
+
+const SCOPE_MODES: ReadonlyArray<ScopeModeConfig> = [
+    {
+        mode: 'ASSET',
+        icon: 'bi-shield-check',
+        title: 'This asset only',
+        description: (_cve, assetName) => `Only "${assetName}" will be affected.`,
+        subject: 'CVE',
+        scope: 'ASSET',
+    },
+    {
+        mode: 'IP',
+        icon: 'bi-hdd-network',
+        title: 'Specific IP address',
+        description: (cveId) => `${cveId ?? 'This CVE'} on every asset sharing a specific IP.`,
+        needsIpInput: true,
+        subject: 'CVE',
+        scope: 'IP',
+    },
+    {
+        mode: 'AWS_ACCOUNT',
+        icon: 'bi-cloud',
+        title: 'Specific AWS account (this CVE)',
+        description: (cveId) => `${cveId ?? 'This CVE'} on all assets in one AWS account.`,
+        needsAwsInput: true,
+        subject: 'CVE',
+        scope: 'AWS_ACCOUNT',
+    },
+    {
+        mode: 'GLOBAL',
+        icon: 'bi-globe2',
+        title: 'All assets — system-wide',
+        description: (cveId) => `${cveId ?? 'This CVE'} will be masked across every asset in the system.`,
+        warning: true,
+        subject: 'CVE',
+        scope: 'GLOBAL',
+    },
+    {
+        mode: 'ALL_VULNS_AWS_ACCOUNT',
+        icon: 'bi-shield-slash',
+        title: 'All vulnerabilities in an AWS account',
+        description: () => 'Every vulnerability on every asset in one AWS account will be excepted.',
+        danger: true,
+        needsAwsInput: true,
+        subject: 'ALL_VULNS',
+        scope: 'AWS_ACCOUNT',
+    },
 ];
 
 const ExceptionRequestModal: React.FC<ExceptionRequestModalProps> = ({
@@ -56,8 +113,7 @@ const ExceptionRequestModal: React.FC<ExceptionRequestModalProps> = ({
     onClose,
     onSuccess
 }) => {
-    // Subject is always CVE in this modal (vulnerability-anchored flow).
-    const [scope, setScope] = useState<ExceptionScope>('ASSET');
+    const [scopeMode, setScopeMode] = useState<ScopeMode>('ASSET');
     const [scopeValue, setScopeValue] = useState<string>('');
     const [reason, setReason] = useState<string>('');
     const [expirationDate, setExpirationDate] = useState<string>('');
@@ -75,10 +131,13 @@ const ExceptionRequestModal: React.FC<ExceptionRequestModalProps> = ({
     const [awsAccounts, setAwsAccounts] = useState<string[]>([]);
     const [loadingAwsAccounts, setLoadingAwsAccounts] = useState(false);
 
+    const activeModeConfig = SCOPE_MODES.find(m => m.mode === scopeMode)!;
+    const scope: ExceptionScope = activeModeConfig.scope;
+
     // Reset form when modal opens.
     useEffect(() => {
         if (isOpen) {
-            setScope('ASSET');
+            setScopeMode('ASSET');
             setScopeValue('');
             setReason('');
             setExpirationDate('');
@@ -98,9 +157,9 @@ const ExceptionRequestModal: React.FC<ExceptionRequestModalProps> = ({
             .catch(err => console.error('Failed to fetch valid combinations:', err));
     }, [isOpen]);
 
-    // Load AWS accounts when AWS_ACCOUNT scope chosen.
+    // Load AWS accounts when an AWS scope is chosen.
     useEffect(() => {
-        if (!isOpen || scope !== 'AWS_ACCOUNT') return;
+        if (!isOpen || !activeModeConfig.needsAwsInput) return;
         let cancelled = false;
         setLoadingAwsAccounts(true);
         getAccessibleAwsAccounts()
@@ -110,19 +169,18 @@ const ExceptionRequestModal: React.FC<ExceptionRequestModalProps> = ({
             })
             .finally(() => { if (!cancelled) setLoadingAwsAccounts(false); });
         return () => { cancelled = true; };
-    }, [isOpen, scope]);
+    }, [isOpen, scopeMode]);
 
-    // When scope changes, prefill scopeValue with the asset's IP / cloud account
-    // when available — so the modal shows a sensible default.
+    // When scope mode changes, prefill scopeValue with the asset's IP / cloud account.
     useEffect(() => {
-        if (scope === 'IP') {
+        if (activeModeConfig.needsIpInput) {
             setScopeValue(assetIp ?? '');
-        } else if (scope === 'AWS_ACCOUNT') {
+        } else if (activeModeConfig.needsAwsInput) {
             setScopeValue(assetCloudAccountId ?? '');
         } else {
             setScopeValue('');
         }
-    }, [scope, assetIp, assetCloudAccountId]);
+    }, [scopeMode, assetIp, assetCloudAccountId]);
 
     // Escape to close.
     useEffect(() => {
@@ -136,12 +194,12 @@ const ExceptionRequestModal: React.FC<ExceptionRequestModalProps> = ({
         return () => document.removeEventListener('keydown', handleKeyDown);
     }, [isOpen, loading, onClose]);
 
-    // Determine which scopes are allowed for subject=CVE.
-    const allowedScopes: ExceptionScope[] = combos
-        ? combos.allowed
-            .filter(c => c.subject === 'CVE')
-            .map(c => c.scope)
-        : ['GLOBAL', 'IP', 'ASSET', 'AWS_ACCOUNT'];
+    // Determine which scope modes are allowed based on valid combinations from server.
+    const allowedModes: ScopeMode[] = combos
+        ? SCOPE_MODES
+            .filter(m => combos.allowed.some(c => c.subject === m.subject && c.scope === m.scope))
+            .map(m => m.mode)
+        : SCOPE_MODES.map(m => m.mode);
 
     const normalizeAwsAccountInput = (input: string): string =>
         input.replace(/\D/g, '').slice(0, 12);
@@ -198,13 +256,13 @@ const ExceptionRequestModal: React.FC<ExceptionRequestModalProps> = ({
             }
         }
 
-        if (scope === 'ASSET' && !assetId) {
+        if (scopeMode === 'ASSET' && !assetId) {
             errors.scope = 'No asset is associated with this vulnerability — pick a different scope.';
         }
-        if (scope === 'IP' && !scopeValue.trim()) {
+        if (activeModeConfig.needsIpInput && !scopeValue.trim()) {
             errors.scope = 'IP address is required';
         }
-        if (scope === 'AWS_ACCOUNT' && !scopeValue.trim()) {
+        if (activeModeConfig.needsAwsInput && !scopeValue.trim()) {
             errors.scope = 'AWS account is required';
         }
 
@@ -222,11 +280,11 @@ const ExceptionRequestModal: React.FC<ExceptionRequestModalProps> = ({
         try {
             const dto: CreateExceptionRequestDto = {
                 vulnerabilityId,
-                subject: 'CVE',
-                subjectValue: vulnerabilityCveId ?? '',
+                subject: activeModeConfig.subject,
+                subjectValue: activeModeConfig.subject === 'CVE' ? (vulnerabilityCveId ?? '') : null,
                 scope,
-                scopeValue: (scope === 'IP' || scope === 'AWS_ACCOUNT') ? scopeValue.trim() : null,
-                assetId: scope === 'ASSET' ? (assetId ?? null) : null,
+                scopeValue: (activeModeConfig.needsIpInput || activeModeConfig.needsAwsInput) ? scopeValue.trim() : null,
+                assetId: scopeMode === 'ASSET' ? (assetId ?? null) : null,
                 reason: reason.trim(),
                 expirationDate: new Date(expirationDate).toISOString()
             };
@@ -308,119 +366,155 @@ const ExceptionRequestModal: React.FC<ExceptionRequestModalProps> = ({
                                     </div>
                                 </div>
 
-                                {/* Sentence builder: subject is fixed to CVE; scope is selectable. */}
+                                {/* Scope card grid */}
                                 <div className="mb-3">
-                                    <label className="form-label">
+                                    <label className="form-label fw-semibold">
                                         Exception Scope <span className="text-danger">*</span>
                                     </label>
                                     <div className="form-text mb-2">
-                                        Pick where this CVE exception should apply.
+                                        Choose how broadly this exception should apply.
                                     </div>
-                                    <div className="d-flex align-items-center flex-wrap gap-2 mb-2">
-                                        <span className="fs-6 fw-light">Except</span>
-                                        <span className="badge bg-info text-dark">{vulnerabilityCveId ?? ''}</span>
-                                        <select
-                                            className="form-select form-select-sm"
-                                            style={{ width: 'auto' }}
-                                            value={scope}
-                                            onChange={e => setScope(e.target.value as ExceptionScope)}
-                                            disabled={loading}
-                                            aria-label="Exception scope"
-                                        >
-                                            {SCOPE_OPTIONS
-                                                .filter(opt => allowedScopes.includes(opt.value))
-                                                .map(opt => (
-                                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                                ))}
-                                        </select>
-                                        {scope === 'IP' && (
+
+                                    <div className="row g-2 mb-2">
+                                        {SCOPE_MODES.filter(m => allowedModes.includes(m.mode)).map(m => {
+                                            const isSelected = scopeMode === m.mode;
+                                            const isDanger = m.danger;
+                                            const isWarning = m.warning && !isDanger;
+
+                                            let cardBg = isSelected
+                                                ? (isDanger ? '#fff5f5' : isWarning ? '#fffbf0' : '#f0f7ff')
+                                                : '#fff';
+                                            let borderColor = isSelected
+                                                ? (isDanger ? '#dc3545' : isWarning ? '#ffc107' : '#0d6efd')
+                                                : '#dee2e6';
+                                            let iconColor = isDanger ? '#dc3545' : isWarning ? '#856404' : '#0d6efd';
+                                            if (!isSelected && (isDanger || isWarning)) iconColor = '#aaa';
+
+                                            const dividerBefore = m.mode === 'GLOBAL' || m.mode === 'ALL_VULNS_AWS_ACCOUNT';
+
+                                            return (
+                                                <React.Fragment key={m.mode}>
+                                                    {dividerBefore && (
+                                                        <div className="col-12">
+                                                            <div className="d-flex align-items-center gap-2 mt-1">
+                                                                <hr className="flex-grow-1 my-0" />
+                                                                <small className={`text-${m.danger ? 'danger' : 'warning'} fw-semibold text-nowrap`}>
+                                                                    <i className="bi bi-exclamation-triangle me-1" />
+                                                                    Broad scope
+                                                                </small>
+                                                                <hr className="flex-grow-1 my-0" />
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                    <div className="col-12 col-md-6">
+                                                        <button
+                                                            type="button"
+                                                            className="w-100 text-start p-3 rounded-3 border-0"
+                                                            style={{
+                                                                background: cardBg,
+                                                                border: `2px solid ${borderColor}`,
+                                                                outline: isSelected ? `2px solid ${borderColor}` : 'none',
+                                                                cursor: loading ? 'default' : 'pointer',
+                                                                transition: 'all 0.15s ease',
+                                                                boxShadow: isSelected ? `0 0 0 1px ${borderColor}20` : 'none',
+                                                            }}
+                                                            onClick={() => { if (!loading) setScopeMode(m.mode); }}
+                                                            disabled={loading}
+                                                            aria-pressed={isSelected}
+                                                        >
+                                                            <div className="d-flex align-items-start gap-2">
+                                                                <i
+                                                                    className={`bi ${m.icon} fs-5 flex-shrink-0`}
+                                                                    style={{ color: iconColor, marginTop: 1 }}
+                                                                />
+                                                                <div className="min-w-0">
+                                                                    <div className="fw-semibold" style={{ fontSize: '0.875rem', lineHeight: 1.3 }}>
+                                                                        {m.title}
+                                                                        {isSelected && (
+                                                                            <i className="bi bi-check-circle-fill ms-2 text-success" style={{ fontSize: '0.8rem' }} />
+                                                                        )}
+                                                                    </div>
+                                                                    <div className="text-muted" style={{ fontSize: '0.775rem', marginTop: 2 }}>
+                                                                        {m.description(vulnerabilityCveId, assetName)}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </button>
+                                                    </div>
+                                                </React.Fragment>
+                                            );
+                                        })}
+                                    </div>
+
+                                    {/* Input area for IP / AWS account scopes */}
+                                    {activeModeConfig.needsIpInput && (
+                                        <div className="mt-2">
+                                            <label className="form-label form-label-sm" htmlFor="scope-ip-input">IP address</label>
                                             <input
+                                                id="scope-ip-input"
                                                 type="text"
                                                 className="form-control form-control-sm"
-                                                style={{ minWidth: 160 }}
                                                 placeholder="e.g. 10.0.0.1"
                                                 value={scopeValue}
                                                 onChange={e => setScopeValue(e.target.value)}
                                                 disabled={loading}
+                                                style={{ maxWidth: 240 }}
                                             />
-                                        )}
-                                        {scope === 'AWS_ACCOUNT' && (
-                                            <div className="d-flex flex-wrap gap-2 align-items-start" style={{ minWidth: 320 }}>
-                                                <div className="flex-grow-1" style={{ minWidth: 220 }}>
-                                                    <input
-                                                        id="aws-account-request-scope-input"
-                                                        type="text"
-                                                        className="form-control form-control-sm"
-                                                        placeholder="Enter 12-digit AWS account"
-                                                        value={scopeValue}
-                                                        onChange={e => setScopeValue(normalizeAwsAccountInput(e.target.value))}
-                                                        disabled={loading || loadingAwsAccounts}
-                                                        inputMode="numeric"
-                                                        pattern="\d{12}"
-                                                        maxLength={12}
-                                                        list="accessible-aws-account-request-options"
-                                                        autoComplete="off"
-                                                        aria-label="AWS account number"
-                                                    />
-                                                    <datalist id="accessible-aws-account-request-options">
-                                                        {awsAccounts.map(a => (
-                                                            <option key={a} value={a} />
-                                                        ))}
-                                                    </datalist>
-                                                </div>
-                                                <select
-                                                    className="form-select form-select-sm"
-                                                    style={{ width: 'auto', minWidth: 190 }}
+                                        </div>
+                                    )}
+                                    {activeModeConfig.needsAwsInput && (
+                                        <div className="mt-2">
+                                            <label className="form-label form-label-sm" htmlFor="aws-account-request-scope-input">
+                                                AWS account
+                                                {scopeMode === 'ALL_VULNS_AWS_ACCOUNT' && (
+                                                    <span className="badge bg-danger ms-2" style={{ fontSize: '0.7rem' }}>All vulnerabilities</span>
+                                                )}
+                                            </label>
+                                            <div className="d-flex gap-2 flex-wrap align-items-center">
+                                                <input
+                                                    id="aws-account-request-scope-input"
+                                                    type="text"
+                                                    className="form-control form-control-sm"
+                                                    placeholder="12-digit account ID"
                                                     value={scopeValue}
-                                                    onChange={e => setScopeValue(e.target.value)}
+                                                    onChange={e => setScopeValue(normalizeAwsAccountInput(e.target.value))}
                                                     disabled={loading || loadingAwsAccounts}
-                                                    aria-label="Accessible AWS accounts"
-                                                >
-                                                    <option value="">— pick account —</option>
-                                                    {awsAccounts.map(a => (
-                                                        <option key={a} value={a}>{a}</option>
-                                                    ))}
-                                                </select>
-                                                <small className="text-muted w-100">
-                                                    Enter or pick one of your accessible AWS accounts.
-                                                </small>
+                                                    inputMode="numeric"
+                                                    pattern="\d{12}"
+                                                    maxLength={12}
+                                                    list="accessible-aws-account-request-options"
+                                                    autoComplete="off"
+                                                    aria-label="AWS account number"
+                                                    style={{ maxWidth: 200 }}
+                                                />
+                                                <datalist id="accessible-aws-account-request-options">
+                                                    {awsAccounts.map(a => <option key={a} value={a} />)}
+                                                </datalist>
+                                                {awsAccounts.length > 0 && (
+                                                    <select
+                                                        className="form-select form-select-sm"
+                                                        style={{ width: 'auto', minWidth: 180 }}
+                                                        value={scopeValue}
+                                                        onChange={e => setScopeValue(e.target.value)}
+                                                        disabled={loading || loadingAwsAccounts}
+                                                        aria-label="Accessible AWS accounts"
+                                                    >
+                                                        <option value="">— pick account —</option>
+                                                        {awsAccounts.map(a => <option key={a} value={a}>{a}</option>)}
+                                                    </select>
+                                                )}
+                                                {loadingAwsAccounts && (
+                                                    <span className="spinner-border spinner-border-sm text-secondary" role="status" aria-label="Loading accounts" />
+                                                )}
                                             </div>
-                                        )}
-                                    </div>
+                                        </div>
+                                    )}
+
                                     {validationErrors.scope && (
-                                        <div className="alert alert-danger py-2 mb-0">
+                                        <div className="alert alert-danger py-2 mt-2 mb-0">
                                             <small>{validationErrors.scope}</small>
                                         </div>
                                     )}
-                                    <div
-                                        className={`alert ${scope === 'GLOBAL' ? 'alert-warning' : 'alert-info'} mt-2 mb-0 py-2`}
-                                        role="status"
-                                    >
-                                        {scope === 'ASSET' && (
-                                            <>
-                                                <i className="bi bi-info-circle me-1" />
-                                                <strong>Scoped to one asset:</strong> only rows for <code>{assetName}</code> will be affected.
-                                            </>
-                                        )}
-                                        {scope === 'GLOBAL' && (
-                                            <>
-                                                <i className="bi bi-exclamation-triangle me-1" />
-                                                <strong>Broad scope:</strong> this exception will mask {vulnerabilityCveId || 'this CVE'} across <strong>every asset</strong> in the system.
-                                            </>
-                                        )}
-                                        {scope === 'IP' && (
-                                            <>
-                                                <i className="bi bi-info-circle me-1" />
-                                                <strong>Scoped to one IP:</strong> only assets at that IP will be affected.
-                                            </>
-                                        )}
-                                        {scope === 'AWS_ACCOUNT' && (
-                                            <>
-                                                <i className="bi bi-info-circle me-1" />
-                                                <strong>Scoped to one AWS account:</strong> only assets in that account will be affected.
-                                            </>
-                                        )}
-                                    </div>
                                 </div>
 
                                 {/* Reason Field */}
