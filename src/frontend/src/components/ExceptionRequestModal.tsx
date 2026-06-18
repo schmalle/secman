@@ -30,6 +30,7 @@ interface ExceptionRequestModalProps {
     isOpen: boolean;
     vulnerabilityId: number;
     vulnerabilityCveId: string | null;
+    vulnerabilityFirstSeenAt: string | null;
     assetId?: number | null;
     assetIp?: string | null;
     assetCloudAccountId?: string | null;
@@ -45,10 +46,19 @@ const SCOPE_OPTIONS: ReadonlyArray<{ value: ExceptionScope; label: string; helpe
     { value: 'AWS_ACCOUNT', label: 'in a specific AWS account', helperKey: 'aws' }
 ];
 
+const MIN_VULNERABILITY_AGE_DAYS = 5;
+
+function getVulnerabilityAgeDays(firstSeenAt: string | null): number {
+    const anchor = firstSeenAt ? new Date(firstSeenAt) : null;
+    if (!anchor || isNaN(anchor.getTime())) return Number.MAX_SAFE_INTEGER;
+    return Math.floor((Date.now() - anchor.getTime()) / (1000 * 60 * 60 * 24));
+}
+
 const ExceptionRequestModal: React.FC<ExceptionRequestModalProps> = ({
     isOpen,
     vulnerabilityId,
     vulnerabilityCveId,
+    vulnerabilityFirstSeenAt,
     assetId,
     assetIp,
     assetCloudAccountId,
@@ -56,6 +66,8 @@ const ExceptionRequestModal: React.FC<ExceptionRequestModalProps> = ({
     onClose,
     onSuccess
 }) => {
+    const vulnerabilityAgeDays = getVulnerabilityAgeDays(vulnerabilityFirstSeenAt);
+    const isTooNew = vulnerabilityAgeDays < MIN_VULNERABILITY_AGE_DAYS;
     // Subject is always CVE in this modal (vulnerability-anchored flow).
     const [scope, setScope] = useState<ExceptionScope>('ASSET');
     const [scopeValue, setScopeValue] = useState<string>('');
@@ -289,6 +301,19 @@ const ExceptionRequestModal: React.FC<ExceptionRequestModalProps> = ({
                         {/* Body */}
                         <form onSubmit={handleSubmit}>
                             <div className="modal-body">
+                                {/* Age guard — vulnerability must be at least 5 days old */}
+                                {isTooNew && (
+                                    <div className="alert alert-warning d-flex align-items-start" role="alert">
+                                        <i className="bi bi-clock-history me-2 mt-1 flex-shrink-0"></i>
+                                        <div>
+                                            <strong>Exception not available yet.</strong>
+                                            {' '}Exception requests can only be submitted once a vulnerability is at least {MIN_VULNERABILITY_AGE_DAYS} days old.
+                                            {' '}This vulnerability was first seen {vulnerabilityAgeDays} day{vulnerabilityAgeDays === 1 ? '' : 's'} ago.
+                                            {' '}Please try again in {MIN_VULNERABILITY_AGE_DAYS - vulnerabilityAgeDays} more day{MIN_VULNERABILITY_AGE_DAYS - vulnerabilityAgeDays === 1 ? '' : 's'}.
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* Error Alert */}
                                 {error && (
                                     <div className="alert alert-danger" role="alert">
@@ -499,7 +524,7 @@ const ExceptionRequestModal: React.FC<ExceptionRequestModalProps> = ({
                                 <button
                                     type="submit"
                                     className="btn btn-primary"
-                                    disabled={loading}
+                                    disabled={loading || isTooNew}
                                 >
                                     {loading ? (
                                         <>

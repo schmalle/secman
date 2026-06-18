@@ -1232,6 +1232,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
           isOpen={showRequestModal}
           vulnerabilityId={selectedVulnerability.id}
           vulnerabilityCveId={selectedVulnerability.vulnerabilityId}
+          vulnerabilityFirstSeenAt={selectedVulnerability.firstSeenAt ?? selectedVulnerability.scanTimestamp}
           assetId={selectedVulnerability.assetId}
           assetIp={selectedVulnerability.assetIp}
           assetName={selectedVulnerability.assetName}
