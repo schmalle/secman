@@ -10,6 +10,28 @@ SECMAN_BACKEND_URL=https://secman.example.com SECMAN_SSL_INSECURE=true \
   --severity CRITICAL,HIGH --min-days-open 1 --last-seen-days 1 --save
 ```
 
+## Operating system per asset
+
+The `query servers --save` import also captures the operating system of each host
+and stores it on `Asset.osVersion` (column `os_version`). No separate command or
+extra CrowdStrike round-trip is needed — OS is resolved in the same pass as the
+other host metadata (IP, AD domain, cloud account/instance).
+
+- **Source**: the device entity from `/devices/entities/devices/v2`
+  (`os_version`, e.g. `"Windows Server 2019"`; falls back to `platform_name`),
+  with a final fallback to `host_info.os_version` / `host_info.platform` on the
+  vulnerability record. Extraction lives in
+  `CrowdStrikeApiClientImpl.mapResponseToDtos` (shared module) and is carried on
+  `CrowdStrikeVulnerabilityDto.osVersion`.
+- **Wiring**: `ServersCommand` selects the latest-detected non-blank OS per host
+  into `ServerVulnerabilityBatch.osVersion`, which the CLI posts as
+  `osVersion` on each `CrowdStrikeVulnerabilityBatchDto`.
+- **Persistence**: `createNewAsset` sets it on create; `updateAsset` overwrites it
+  when a newer non-blank value differs (existing behaviour — unchanged).
+- **Visibility**: exposed read-only on `GET /api/assets` (`AssetResponse.osVersion`)
+  and shown as the **OS** column in the asset management UI, plus the MCP
+  `get_assets` / `get_asset_profile` tools and the asset Excel export.
+
 ## Installed products import
 
 Installed products are synchronized from CrowdStrike Discover with the separate CLI command `secman installed-products`. This is a software-inventory import, not a vulnerability import, and it intentionally only attaches rows to assets that already exist in SecMan. Run a vulnerability/asset import such as `query servers --save` first when onboarding a new environment.

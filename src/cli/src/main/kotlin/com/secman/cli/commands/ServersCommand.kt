@@ -193,6 +193,10 @@ class ServersCommand {
                                     .filter { !it.cloudInstanceId.isNullOrBlank() }
                                     .maxByOrNull { it.detectedAt }
                                     ?.cloudInstanceId
+                                val latestOsVersion = vulns
+                                    .filter { !it.osVersion.isNullOrBlank() }
+                                    .maxByOrNull { it.detectedAt }
+                                    ?.osVersion
                                 hostname to ServerVulnerabilityBatch(
                                     hostname = hostname,
                                     vulnerabilities = vulns,
@@ -200,7 +204,7 @@ class ServersCommand {
                                     cloudAccountId = firstVuln?.cloudAccountId,
                                     cloudInstanceId = latestCloudInstanceId ?: firstVuln?.cloudInstanceId,
                                     adDomain = firstVuln?.adDomain,
-                                    osVersion = null,
+                                    osVersion = latestOsVersion ?: firstVuln?.osVersion,
                                     ip = firstVuln?.ip
                                 )
                             }.toMap()

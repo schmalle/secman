@@ -127,7 +127,9 @@ open class AssetController(
     /**
      * Response DTO for Asset entity to prevent exposing internal JPA fields.
      * Security finding HI-8: Excludes ipNumeric, vulnerabilities, scanResults,
-     * workgroup details, manualCreator details, scanUploader details, cloudInstanceId, osVersion.
+     * workgroup details, manualCreator details, scanUploader details.
+     * osVersion is intentionally exposed as read-only operational metadata so
+     * operators can see which operating system runs on each asset.
      */
     @Serdeable
     data class AssetResponse(
@@ -144,6 +146,7 @@ open class AssetController(
         val cloudAccountId: String?,
         val cloudInstanceId: String?,
         val adDomain: String?,
+        val osVersion: String? = null,
         val createdAt: String?,
         val workgroups: List<WorkgroupSummary>? = null,
         val networkZone: NetworkZone? = null,
@@ -193,6 +196,7 @@ open class AssetController(
                     cloudAccountId = asset.cloudAccountId,
                     cloudInstanceId = asset.cloudInstanceId,
                     adDomain = asset.adDomain,
+                    osVersion = asset.osVersion,
                     createdAt = asset.createdAt?.toString(),
                     workgroups = workgroupSummaries,
                     networkZone = asset.networkZone,
