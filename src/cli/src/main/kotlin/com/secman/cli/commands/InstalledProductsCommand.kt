@@ -50,8 +50,12 @@ class InstalledProductsCommand {
             var totalImported = 0
             var totalUpdated = 0
             var totalSkipped = 0
+            var totalDeleted = 0
             var totalUnknownSystems = 0
             var batches = 0
+            // One id shared by every batch of this run so the backend can replace each server's
+            // products (delete stale rows) without later batches wiping earlier ones.
+            val importRunId = java.util.UUID.randomUUID().toString()
 
             val total = apiClient.queryInstalledProductsStreaming(
                 deviceType = parsedDeviceType.name,
@@ -64,15 +68,16 @@ class InstalledProductsCommand {
                     val hostCount = products.map { it.hostname.lowercase() }.distinct().size
                     System.out.println("Dry-run batch $batches: ${products.size} product rows across $hostCount CrowdStrike hosts")
                 } else {
-                    val result = storageService.importInstalledProducts(products, dryRun = false, authToken = authToken)
+                    val result = storageService.importInstalledProducts(products, dryRun = false, authToken = authToken, importRunId = importRunId)
                     totalImported += result.productsImported
                     totalUpdated += result.productsUpdated
                     totalSkipped += result.productsSkipped
+                    totalDeleted += result.productsDeleted
                     totalUnknownSystems += result.unknownSystems
                     if (verbose && result.errors.isNotEmpty()) {
                         result.errors.forEach { System.err.println("  - $it") }
                     }
-                    System.out.println("Batch $batches: imported=${result.productsImported}, updated=${result.productsUpdated}, skipped=${result.productsSkipped}, unknown systems=${result.unknownSystems}")
+                    System.out.println("Batch $batches: imported=${result.productsImported}, updated=${result.productsUpdated}, deleted=${result.productsDeleted}, skipped=${result.productsSkipped}, unknown systems=${result.unknownSystems}")
                 }
             }
 
@@ -82,6 +87,7 @@ class InstalledProductsCommand {
             if (!dryRun) {
                 System.out.println("Products imported: $totalImported")
                 System.out.println("Products updated: $totalUpdated")
+                System.out.println("Products deleted (stale removed): $totalDeleted")
                 System.out.println("Products skipped: $totalSkipped")
                 System.out.println("Unknown Secman systems: $totalUnknownSystems")
             } else {

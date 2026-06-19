@@ -88,6 +88,54 @@ class InstalledProductControllerIntegrationTest : BaseIntegrationTest() {
         assertThat(product.hostname).isEqualTo(savedAsset.name)
     }
 
+    @Test
+    fun `re-import with new run id replaces a server's products with a clean snapshot`() {
+        val suffix = System.nanoTime()
+        val asset = assetRepository.save(TestDataFactory.createAsset(name = "replace-host-$suffix"))
+        val hostname = asset.name
+        val token = TestAuthHelper.getAuthToken(client, vulnUser.username)
+
+        // First run: import two products for the server.
+        val first = importProducts(
+            token,
+            importRunId = "run-A-$suffix",
+            products = listOf(
+                mapOf("hostname" to hostname, "name" to "Chrome", "vendor" to "Google"),
+                mapOf("hostname" to hostname, "name" to "Firefox", "vendor" to "Mozilla")
+            )
+        )
+        assertThat((first["productsImported"] as Number).toInt()).isEqualTo(2)
+
+        // Second run: import only one product; the other must be removed for a clean snapshot.
+        val second = importProducts(
+            token,
+            importRunId = "run-B-$suffix",
+            products = listOf(
+                mapOf("hostname" to hostname, "name" to "Chrome", "vendor" to "Google")
+            )
+        )
+        assertThat((second["productsDeleted"] as Number).toInt()).isGreaterThanOrEqualTo(1)
+
+        val remaining = installedProductRepository.searchByServerForAssetsWithAsset(
+            server = hostname,
+            assetIds = setOf(requireNotNull(asset.id)),
+            pageable = Pageable.from(0, 500)
+        )
+        assertThat(remaining).hasSize(1)
+        assertThat(remaining.single().name).isEqualTo("Chrome")
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun importProducts(token: String, importRunId: String, products: List<Map<String, Any?>>): Map<String, Any> {
+        val body = mapOf("products" to products, "dryRun" to false, "importRunId" to importRunId)
+        val response = client.toBlocking().exchange(
+            HttpRequest.POST("/api/installed-products/import", body).bearerAuth(token),
+            Map::class.java
+        )
+        assertThat(response.status).isEqualTo(HttpStatus.OK)
+        return response.body() as Map<String, Any>
+    }
+
     private fun assignUserToWorkgroup(userId: Long, workgroupId: Long) {
         transactionOperations.executeWrite<Unit> { status ->
             status.connection.prepareStatement("INSERT INTO user_workgroups (user_id, workgroup_id) VALUES (?, ?)").use { ps ->

@@ -101,8 +101,10 @@ Import mode requires `SECMAN_ADMIN_NAME` and `SECMAN_ADMIN_PASS`; the authentica
 Backend import semantics:
 
 - Each CLI batch is posted to `/api/installed-products/import`, which accepts at most 5,000 product rows per request.
+- **Clean-state replace:** the import is a per-server snapshot, not a merge. The first time a server appears in a run, its previously imported products are deleted so the result reflects exactly what CrowdStrike currently reports (products uninstalled since the last run are removed). Servers not present in the import are untouched. The summary reports `Products deleted (stale removed)`.
+  - The CLI sends a single `importRunId` (UUID) on every batch of one run. The backend only deletes a server's rows that are **not** stamped with the current run id, so a server whose products span multiple batches is replaced once and later batches never wipe rows an earlier batch in the same run inserted.
 - Rows are matched to an existing asset by case-insensitive hostname; if the CrowdStrike hostname is fully qualified, the short name before the first dot is tried as a fallback.
-- Products are upserted by `(externalId, asset)` when CrowdStrike provides an external ID, otherwise by logical duplicate `(asset, name, vendor, version)`.
+- Within a run, products are upserted by `(externalId, asset)` when CrowdStrike provides an external ID, otherwise by logical duplicate `(asset, name, vendor, version)`.
 - Product names are required. Blank names, unknown systems, and external IDs already assigned to a different asset are skipped and reflected in the summary.
 - Imported fields include CrowdStrike AID, product name, vendor, version, category, installation path, installed timestamp, last-used timestamp, last-updated timestamp, and SecMan import timestamp.
 

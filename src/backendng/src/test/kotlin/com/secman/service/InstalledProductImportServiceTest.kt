@@ -30,6 +30,7 @@ class InstalledProductImportServiceTest {
         val asset = asset(1L, "server01")
         every { assetRepository.findByNameIgnoreCase("server01.example.com") } returns null
         every { assetRepository.findByNameIgnoreCase("server01") } returns asset
+        every { installedProductRepository.deleteByAssetId(1L) } returns 0
         every { installedProductRepository.findByExternalIdAndAssetId("app-1", 1L) } returns null
         every { installedProductRepository.findByExternalId("app-1") } returns null
         every { installedProductRepository.findLogicalDuplicate(1L, "Chrome", "Google", "1.2.3") } returns null
@@ -49,6 +50,80 @@ class InstalledProductImportServiceTest {
     }
 
     @Test
+    fun `replaces existing products for asset by deleting non-run rows when importRunId supplied`() {
+        val asset = asset(1L, "server01")
+        every { assetRepository.findByNameIgnoreCase("server01") } returns asset
+        every { installedProductRepository.deleteByAssetIdAndImportRunIdNot(1L, "run-1") } returns 3
+        every { installedProductRepository.findByExternalIdAndAssetId(any(), any()) } returns null
+        every { installedProductRepository.findByExternalId(any()) } returns null
+        every { installedProductRepository.findLogicalDuplicate(any(), any(), any(), any()) } returns null
+        val saved = slot<InstalledProduct>()
+        every { installedProductRepository.save(capture(saved)) } answers { saved.captured.apply { id = 10L } }
+
+        val result = service.importProducts(
+            listOf(
+                InstalledProductDto(externalId = "app-1", hostname = "server01", name = "Chrome"),
+                InstalledProductDto(externalId = "app-2", hostname = "server01", name = "Firefox")
+            ),
+            dryRun = false,
+            importRunId = "run-1"
+        )
+
+        assertThat(result.productsDeleted).isEqualTo(3)
+        assertThat(result.productsImported).isEqualTo(2)
+        // Stale rows cleared exactly once even though two products target the same asset.
+        verify(exactly = 1) { installedProductRepository.deleteByAssetIdAndImportRunIdNot(1L, "run-1") }
+        verify(exactly = 0) { installedProductRepository.deleteByAssetId(any()) }
+        assertThat(saved.captured.importRunId).isEqualTo("run-1")
+    }
+
+    @Test
+    fun `second batch of same run does not delete rows from first batch`() {
+        val asset = asset(1L, "server01")
+        every { assetRepository.findByNameIgnoreCase("server01") } returns asset
+        // Run id is stable; the backend query only removes rows not stamped with run-1, so the
+        // second call returns 0 (first batch's rows are kept) — proves cross-batch idempotency.
+        every { installedProductRepository.deleteByAssetIdAndImportRunIdNot(1L, "run-1") } returnsMany listOf(2, 0)
+        every { installedProductRepository.findByExternalIdAndAssetId(any(), any()) } returns null
+        every { installedProductRepository.findByExternalId(any()) } returns null
+        every { installedProductRepository.findLogicalDuplicate(any(), any(), any(), any()) } returns null
+        every { installedProductRepository.save(any()) } answers { firstArg<InstalledProduct>().apply { id = 1L } }
+
+        val batch1 = service.importProducts(
+            listOf(InstalledProductDto(externalId = "app-1", hostname = "server01", name = "Chrome")),
+            dryRun = false, importRunId = "run-1"
+        )
+        val batch2 = service.importProducts(
+            listOf(InstalledProductDto(externalId = "app-2", hostname = "server01", name = "Firefox")),
+            dryRun = false, importRunId = "run-1"
+        )
+
+        assertThat(batch1.productsDeleted).isEqualTo(2)
+        assertThat(batch2.productsDeleted).isEqualTo(0)
+        verify(exactly = 0) { installedProductRepository.deleteByAssetId(any()) }
+    }
+
+    @Test
+    fun `falls back to deleting all asset rows when no importRunId supplied`() {
+        val asset = asset(1L, "server01")
+        every { assetRepository.findByNameIgnoreCase("server01") } returns asset
+        every { installedProductRepository.deleteByAssetId(1L) } returns 5
+        every { installedProductRepository.findByExternalIdAndAssetId(any(), any()) } returns null
+        every { installedProductRepository.findByExternalId(any()) } returns null
+        every { installedProductRepository.findLogicalDuplicate(any(), any(), any(), any()) } returns null
+        every { installedProductRepository.save(any()) } answers { firstArg<InstalledProduct>().apply { id = 1L } }
+
+        val result = service.importProducts(
+            listOf(InstalledProductDto(externalId = "app-1", hostname = "server01", name = "Chrome")),
+            dryRun = false
+        )
+
+        assertThat(result.productsDeleted).isEqualTo(5)
+        verify(exactly = 1) { installedProductRepository.deleteByAssetId(1L) }
+        verify(exactly = 0) { installedProductRepository.deleteByAssetIdAndImportRunIdNot(any(), any()) }
+    }
+
+    @Test
     fun `dry run counts known products without saving`() {
         val asset = asset(2L, "workstation01")
         every { assetRepository.findByNameIgnoreCase("workstation01") } returns asset
@@ -62,6 +137,8 @@ class InstalledProductImportServiceTest {
         assertThat(result.productsImported).isEqualTo(1)
         verify(exactly = 0) { installedProductRepository.save(any()) }
         verify(exactly = 0) { installedProductRepository.update(any<InstalledProduct>()) }
+        verify(exactly = 0) { installedProductRepository.deleteByAssetId(any()) }
+        verify(exactly = 0) { installedProductRepository.deleteByAssetIdAndImportRunIdNot(any(), any()) }
     }
 
     @Test
@@ -83,6 +160,7 @@ class InstalledProductImportServiceTest {
         val targetAsset = asset(1L, "server01")
         val otherAsset = asset(2L, "server02")
         every { assetRepository.findByNameIgnoreCase("server01") } returns targetAsset
+        every { installedProductRepository.deleteByAssetId(1L) } returns 0
         every { installedProductRepository.findByExternalIdAndAssetId("app-1", 1L) } returns null
         every { installedProductRepository.findLogicalDuplicate(1L, "Chrome", "Google", "1.2.3") } returns null
         every { installedProductRepository.findByExternalId("app-1") } returns InstalledProduct(
