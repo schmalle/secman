@@ -93,6 +93,8 @@ docker/backend/app.jar
 /docs/superpowers/
 /docs/superpowers/
 *.yml
+# GitHub Actions workflows must be tracked despite the blanket *.yml ignore above
+!.github/workflows/*.yml
 .playwright-cli/ChatGPT-Atlas.dmg
 crowdstrike-vulnerability-match-report.json
 crowdstrike-vulnerability-match-report.md
