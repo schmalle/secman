@@ -23,7 +23,11 @@ open class InstalledProductImportService(
     }
 
     @Transactional
-    open fun importProducts(products: List<InstalledProductDto>, dryRun: Boolean): InstalledProductImportResponse {
+    open fun importProducts(
+        products: List<InstalledProductDto>,
+        dryRun: Boolean,
+        importRunId: String? = null
+    ): InstalledProductImportResponse {
         require(products.size <= MAX_PRODUCTS_PER_REQUEST) {
             "At most $MAX_PRODUCTS_PER_REQUEST products can be imported per request"
         }
@@ -31,9 +35,12 @@ open class InstalledProductImportService(
         var imported = 0
         var updated = 0
         var skipped = 0
+        var deleted = 0
         var unknownSystems = 0
         val errors = mutableListOf<String>()
         val now = LocalDateTime.now()
+        // Assets whose stale products have already been cleared during this request.
+        val clearedAssetIds = mutableSetOf<Long>()
 
         products.forEach { dto ->
             try {
@@ -57,6 +64,18 @@ open class InstalledProductImportService(
                 }
 
                 val assetId = requireNotNull(asset.id)
+
+                // Clean-state replace: the first time we touch an asset in this request, delete its
+                // existing products so the import leaves an exact snapshot. When an importRunId is
+                // supplied, rows already written by this run (possibly in an earlier batch) are kept.
+                if (clearedAssetIds.add(assetId)) {
+                    deleted += if (importRunId != null) {
+                        installedProductRepository.deleteByAssetIdAndImportRunIdNot(assetId, importRunId)
+                    } else {
+                        installedProductRepository.deleteByAssetId(assetId)
+                    }
+                }
+
                 val externalId = normalize(dto.externalId, 255)
                 val vendor = normalize(dto.vendor, 255)
                 val version = normalize(dto.version, 255)
@@ -90,7 +109,8 @@ open class InstalledProductImportService(
                             installedAt = dto.installedAt,
                             lastUsedAt = dto.lastUsedAt,
                             lastUpdatedAt = dto.lastUpdatedAt,
-                            importedAt = now
+                            importedAt = now,
+                            importRunId = importRunId
                         )
                     )
                     imported++
@@ -107,6 +127,7 @@ open class InstalledProductImportService(
                     existing.lastUsedAt = dto.lastUsedAt
                     existing.lastUpdatedAt = dto.lastUpdatedAt
                     existing.importedAt = now
+                    existing.importRunId = importRunId
                     installedProductRepository.update(existing)
                     updated++
                 }
@@ -123,6 +144,7 @@ open class InstalledProductImportService(
             productsImported = imported,
             productsUpdated = updated,
             productsSkipped = skipped,
+            productsDeleted = deleted,
             unknownSystems = unknownSystems,
             dryRun = dryRun,
             errors = errors

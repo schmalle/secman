@@ -21,7 +21,8 @@ import java.time.LocalDateTime
         Index(name = "idx_installed_product_asset", columnList = "asset_id"),
         Index(name = "idx_installed_product_name", columnList = "name"),
         Index(name = "idx_installed_product_vendor", columnList = "vendor"),
-        Index(name = "idx_installed_product_external", columnList = "external_id")
+        Index(name = "idx_installed_product_external", columnList = "external_id"),
+        Index(name = "idx_installed_product_run", columnList = "asset_id, import_run_id")
     ]
 )
 @Serdeable
@@ -66,6 +67,9 @@ data class InstalledProduct(
 
     @Column(name = "imported_at", nullable = false)
     var importedAt: LocalDateTime = LocalDateTime.now(),
+
+    @Column(name = "import_run_id", length = 64)
+    var importRunId: String? = null,
 
     @Column(name = "created_at", nullable = false, updatable = false)
     var createdAt: LocalDateTime? = null,

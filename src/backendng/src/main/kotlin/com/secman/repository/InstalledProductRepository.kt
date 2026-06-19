@@ -18,6 +18,26 @@ interface InstalledProductRepository : JpaRepository<InstalledProduct, Long> {
     """)
     fun findByExternalIdAndAssetId(externalId: String, assetId: Long): InstalledProduct?
 
+    /**
+     * Delete all installed products for an asset that were NOT written by the current import run.
+     * Used by the clean-state (replace) import: removes stale rows (previous runs, or never stamped)
+     * while leaving rows already inserted by this run intact, so multi-batch runs stay idempotent.
+     * Returns the number of rows deleted.
+     */
+    @Query("""
+        DELETE FROM InstalledProduct p
+        WHERE p.asset.id = :assetId
+          AND (p.importRunId IS NULL OR p.importRunId <> :runId)
+    """)
+    fun deleteByAssetIdAndImportRunIdNot(assetId: Long, runId: String): Int
+
+    /**
+     * Delete all installed products for an asset. Fallback for single-shot imports that do not
+     * supply an import run id. Returns the number of rows deleted.
+     */
+    @Query("DELETE FROM InstalledProduct p WHERE p.asset.id = :assetId")
+    fun deleteByAssetId(assetId: Long): Int
+
     @Query("""
         SELECT p FROM InstalledProduct p
         WHERE p.asset.id = :assetId

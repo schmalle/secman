@@ -15,9 +15,13 @@ class InstalledProductStorageService(
     fun importInstalledProducts(
         products: List<InstalledProductDto>,
         dryRun: Boolean,
-        authToken: String?
+        authToken: String?,
+        importRunId: String? = null
     ): InstalledProductStorageResult {
-        val body = mapOf("products" to products, "dryRun" to dryRun)
+        val body = mutableMapOf<String, Any>("products" to products, "dryRun" to dryRun)
+        if (importRunId != null) {
+            body["importRunId"] = importRunId
+        }
         val request = HttpRequest.POST("/api/installed-products/import", body)
             .contentType(io.micronaut.http.MediaType.APPLICATION_JSON)
         if (authToken != null) {
@@ -31,6 +35,7 @@ class InstalledProductStorageService(
             productsImported = (responseBody?.get("productsImported") as? Number)?.toInt() ?: 0,
             productsUpdated = (responseBody?.get("productsUpdated") as? Number)?.toInt() ?: 0,
             productsSkipped = (responseBody?.get("productsSkipped") as? Number)?.toInt() ?: 0,
+            productsDeleted = (responseBody?.get("productsDeleted") as? Number)?.toInt() ?: 0,
             unknownSystems = (responseBody?.get("unknownSystems") as? Number)?.toInt() ?: 0,
             dryRun = responseBody?.get("dryRun") as? Boolean ?: dryRun,
             errors = responseBody?.get("errors") as? List<String> ?: emptyList()
@@ -43,6 +48,7 @@ data class InstalledProductStorageResult(
     val productsImported: Int,
     val productsUpdated: Int,
     val productsSkipped: Int,
+    val productsDeleted: Int,
     val unknownSystems: Int,
     val dryRun: Boolean,
     val errors: List<String>

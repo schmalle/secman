@@ -9,7 +9,12 @@ import java.time.LocalDateTime
 data class InstalledProductImportRequest(
     @field:Valid
     val products: List<InstalledProductDto>,
-    val dryRun: Boolean = false
+    val dryRun: Boolean = false,
+    /**
+     * Identifier shared across all batches of one CLI import run. When present, each server's
+     * existing products are replaced (rows not from this run are deleted) for a clean snapshot.
+     */
+    val importRunId: String? = null
 )
 
 @Serdeable
@@ -18,6 +23,7 @@ data class InstalledProductImportResponse(
     val productsImported: Int,
     val productsUpdated: Int,
     val productsSkipped: Int,
+    val productsDeleted: Int,
     val unknownSystems: Int,
     val dryRun: Boolean,
     val errors: List<String> = emptyList()

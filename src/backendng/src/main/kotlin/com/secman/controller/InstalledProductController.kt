@@ -62,13 +62,14 @@ open class InstalledProductController(
         }
 
         log.info(
-            "Installed products import request: products={}, dryRun={}, user={}",
+            "Installed products import request: products={}, dryRun={}, importRunId={}, user={}",
             request.products.size,
             request.dryRun,
+            request.importRunId,
             authentication.name
         )
         return try {
-            HttpResponse.ok(installedProductImportService.importProducts(request.products, request.dryRun))
+            HttpResponse.ok(installedProductImportService.importProducts(request.products, request.dryRun, request.importRunId))
         } catch (e: IllegalArgumentException) {
             HttpResponse.badRequest(mapOf("error" to (e.message ?: "Invalid request")))
         } catch (e: Exception) {
