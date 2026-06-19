@@ -632,7 +632,8 @@ test.describe.serial('Vulnerability + exception lifecycle (UI)', () => {
         await page.getByRole('button', { name: /request exception/i }).first().click();
         await expect(page.getByRole('heading', { name: /request vulnerability exception/i })).toBeVisible();
 
-        await page.getByLabel('Exception scope').selectOption('AWS_ACCOUNT');
+        // Scope selector is a card grid (not a dropdown). Pick the AWS-account card.
+        await page.getByRole('button', { name: /Specific AWS account \(this CVE\)/i }).click();
 
         const accountInput = page.getByLabel('AWS account number');
         await expect(accountInput).toBeVisible();

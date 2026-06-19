@@ -202,9 +202,13 @@ open class ExceptionRequestExportService(
             cellStyle = normalStyle
         }
 
-        // CVE ID
+        // CVE ID — prefer denormalized cveId (survives FK nullification on reimport),
+        // fall back to live FK traversal for legacy rows before the column existed.
         row.createCell(colNum++).apply {
-            setCellValue(ExcelSanitizer.sanitize(request.vulnerability?.vulnerabilityId ?: "N/A"))
+            val cveDisplay = request.cveId
+                ?: request.vulnerability?.vulnerabilityId
+                ?: "N/A"
+            setCellValue(ExcelSanitizer.sanitize(cveDisplay))
             cellStyle = normalStyle
         }
 

@@ -1049,6 +1049,13 @@ USER2_ID=$(echo "$res" | jq -r '.user.id')
 [[ -z "$USER2_ID" || "$USER2_ID" == "null" ]] && fail "Failed to create $USER2_USERNAME: $res"
 ok "Created user $USER2_USERNAME (id=$USER2_ID)"
 
+# Activate accounts by logging in once. The backend blocks never-logged-in
+# (lastLogin == null) accounts from creating exception requests; a real user
+# always authenticates before using the UI/MCP, so we mirror that here.
+[[ -n "$(get_jwt "$USER1_USERNAME" "$USER1_PASSWORD")" ]] || fail "Could not activate $USER1_USERNAME (login failed)"
+[[ -n "$(get_jwt "$USER2_USERNAME" "$USER2_PASSWORD")" ]] || fail "Could not activate $USER2_USERNAME (login failed)"
+ok "Activated test users via login (lastLogin set)"
+
 # Create assets — owner is a plain string username
 res=$(mcp_call "create_asset" "$(jq -nc \
     --arg n "$ASSET1_NAME" --arg t "SERVER" --arg o "$USER1_USERNAME" --arg ip "$ASSET1_IP" \
