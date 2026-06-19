@@ -867,6 +867,7 @@ const AssetManagement: React.FC = () => {
                         <th>Instance ID</th>
                         <th>Account ID</th>
                         <th>AD Domain</th>
+                        <th>OS</th>
                         <th>Actions</th>
                       </tr>
                     </thead>
@@ -899,6 +900,7 @@ const AssetManagement: React.FC = () => {
                               <span className="text-muted">-</span>
                             )}
                           </td>
+                          <td>{asset.osVersion || '-'}</td>
                           <td>
                             <div className="btn-group" role="group">
                               <button

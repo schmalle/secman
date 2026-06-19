@@ -1778,6 +1778,11 @@ open class CrowdStrikeApiClientImpl(
                 val cloudAccountId = hostInfo?.get("service_provider_account_id")?.toString()
                 val cloudInstanceId = hostInfo?.get("instance_id")?.toString()
 
+                // Extract operating system from host_info; os_version is the detailed
+                // string (e.g. "Windows Server 2019"), platform is a coarse fallback.
+                val osVersion = hostInfo?.get("os_version")?.toString()?.takeIf { it.isNotBlank() }
+                    ?: hostInfo?.get("platform")?.toString()?.takeIf { it.isNotBlank() }
+
                 // Extract CVE object for multiple field access
                 val cveObject = vuln["cve"] as? Map<*, *>
                 val cveId = cveObject?.get("id")?.toString()
@@ -1837,6 +1842,7 @@ open class CrowdStrikeApiClientImpl(
                     hostname = hostname,
                     ip = ip,
                     adDomain = adDomain,  // Feature 043
+                    osVersion = osVersion,
                     cveId = cveId,
                     severity = severity,
                     cvssScore = cvssScore,
@@ -1959,7 +1965,8 @@ open class CrowdStrikeApiClientImpl(
         val ip: String?,
         val adDomain: String?,  // Feature 043: Active Directory domain
         val cloudAccountId: String?,
-        val cloudInstanceId: String?
+        val cloudInstanceId: String?,
+        val osVersion: String?  // Operating system reported by the device entity
     )
 
     private fun resolveDeviceMetadata(
@@ -2041,12 +2048,22 @@ open class CrowdStrikeApiClientImpl(
                         nestedDevice?.get("instance_id")?.toString()
                     )
 
+                    // Operating system: os_version is the detailed string
+                    // (e.g. "Windows Server 2019"); platform_name is a coarse fallback.
+                    val osVersion = firstNonBlank(
+                        device["os_version"]?.toString(),
+                        nestedDevice?.get("os_version")?.toString(),
+                        device["platform_name"]?.toString(),
+                        nestedDevice?.get("platform_name")?.toString()
+                    )
+
                     metadataByDeviceId[deviceId] = DeviceMetadata(
                         hostname = hostname,
                         ip = ip,
                         adDomain = adDomain,
                         cloudAccountId = cloudAccountId,
-                        cloudInstanceId = cloudInstanceId
+                        cloudInstanceId = cloudInstanceId,
+                        osVersion = osVersion
                     )
                 }
             } catch (e: io.micronaut.http.client.exceptions.HttpClientResponseException) {
@@ -2139,6 +2156,14 @@ open class CrowdStrikeApiClientImpl(
                     vuln["instance_id"]?.toString()
                 )
 
+                // Operating system: prefer the resolved device-entity value,
+                // fall back to host_info on the vulnerability record.
+                val osVersion = firstNonBlank(
+                    metadata?.osVersion,
+                    hostInfo?.get("os_version")?.toString(),
+                    hostInfo?.get("platform")?.toString()
+                )
+
                 val cveObject = vuln["cve"] as? Map<*, *>
                 val cveId = cveObject?.get("id")?.toString()
                 val cvssScore = (vuln["score"] as? Number)?.toDouble()
@@ -2186,6 +2211,7 @@ open class CrowdStrikeApiClientImpl(
                     hostname = hostname,
                     ip = ip,
                     adDomain = adDomain,  // Feature 043
+                    osVersion = osVersion,
                     cveId = cveId,
                     severity = severity,
                     cvssScore = cvssScore,
