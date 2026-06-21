@@ -203,23 +203,26 @@ trigger_refresh_and_wait() {
 
     log_verbose "Triggering materialized view refresh as $use_user..."
 
-    # Login to get JWT
+    # Login — JWT is returned only in the HttpOnly secman_auth cookie (never in the
+    # response body), so capture it in a cookie jar and replay it on the next request.
+    local cookie_jar
+    cookie_jar=$(mktemp)
     local login_response
-    login_response=$(curl -s -X POST "${BASE_URL}/api/auth/login" \
+    login_response=$(curl -s -c "$cookie_jar" -X POST "${BASE_URL}/api/auth/login" \
         -H "Content-Type: application/json" \
         -d "{\"username\": \"$use_user\", \"password\": \"$use_pass\"}")
 
-    local token
-    token=$(echo "$login_response" | jq -r '.token // empty')
-
-    if [[ -z "$token" ]]; then
-        warn "Failed to get JWT token for refresh trigger: $login_response"
+    if ! grep -q "secman_auth" "$cookie_jar" 2>/dev/null; then
+        warn "Failed to get auth cookie for refresh trigger: $login_response"
+        rm -f "$cookie_jar"
         return 1
     fi
 
     # Trigger refresh (ignore response due to serialization bug in backend)
-    curl -s -X POST "${BASE_URL}/api/materialized-view-refresh/trigger" \
-        -H "Authorization: Bearer $token" > /dev/null 2>&1
+    curl -s -b "$cookie_jar" -X POST "${BASE_URL}/api/materialized-view-refresh/trigger" \
+        > /dev/null 2>&1
+
+    rm -f "$cookie_jar"
 
     log_verbose "Refresh triggered, waiting for completion..."
 
