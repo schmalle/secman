@@ -456,7 +456,9 @@ log "Step 7: Creating exception request as $TEST_USER_EMAIL..."
 # Calculate expiration date 30 days from now (ISO-8601 format with time)
 expiration_date=$(date -v+30d +"%Y-%m-%dT00:00:00" 2>/dev/null || date -d "+30 days" +"%Y-%m-%dT00:00:00")
 
-result=$(mcp_call "create_exception_request" "{\"vulnerabilityId\": $overdue_vuln_id, \"reason\": \"$EXCEPTION_REASON\", \"expirationDate\": \"$expiration_date\"}" "$TEST_USER_EMAIL")
+# Feature 196 two-axis model: subject (WHAT) + scope (WHERE) are now required.
+# A single-CVE exception that applies everywhere: subject=CVE (value = the CVE), scope=GLOBAL.
+result=$(mcp_call "create_exception_request" "{\"vulnerabilityId\": $overdue_vuln_id, \"subject\": \"CVE\", \"subjectValue\": \"$TEST_CVE_OVERDUE\", \"scope\": \"GLOBAL\", \"reason\": \"$EXCEPTION_REASON\", \"expirationDate\": \"$expiration_date\"}" "$TEST_USER_EMAIL")
 request_id=$(echo "$result" | jq -r '.request.id // .requestId // empty')
 request_status=$(echo "$result" | jq -r '.request.status // .status // empty')
 
@@ -538,7 +540,7 @@ result=$(mcp_call "get_my_exception_requests" '{}' "$TEST_USER_EMAIL")
 log_verbose "My requests after approval: $result"
 
 # Check for APPROVED status
-approved_status=$(echo "$result" | jq -r ".requests[]? | select(.id == \"$request_id\" or .requestId == \"$request_id\") | .status // empty" 2>/dev/null || echo "")
+approved_status=$(echo "$result" | jq -r --argjson rid "$request_id" '.requests[]? | select((.id == $rid) or (.requestId == $rid)) | .status // empty' 2>/dev/null || echo "")
 
 if [[ -z "$approved_status" ]]; then
     # Try alternative parsing
@@ -558,10 +560,16 @@ success "Step 10: User sees APPROVED exception request"
 log "Step 11: Cleaning up test data..."
 
 # Clean up related data first (exception request audit logs, etc.)
+# NOTE: ADMIN/SECCHAMPION requests are auto-approved, which materializes an active
+# vulnerability_exception (a GLOBAL CVE rule). That rule is keyed by CVE string, not by
+# vulnerability row id, so it survives asset/vuln teardown and would suppress the same CVE
+# in the overdue view on the next run. Delete it (scoped strictly to the test CVEs).
 log_verbose "Cleaning up related data for user ID: $user_id"
 mariadb -h 127.0.0.1 -u secman -p"CHANGEME" secman -e "
     DELETE FROM exception_request_audit WHERE actor_user_id = $user_id;
     DELETE FROM vulnerability_exception_request WHERE requested_by_user_id = $user_id OR reviewed_by_user_id = $user_id;
+    DELETE FROM vulnerability_exception_request WHERE subject_value IN ('$TEST_CVE_OVERDUE', '$TEST_CVE_NON_OVERDUE');
+    DELETE FROM vulnerability_exception WHERE subject_value IN ('$TEST_CVE_OVERDUE', '$TEST_CVE_NON_OVERDUE');
 " 2>/dev/null || true
 
 # Delete test user by ID (delegate to admin)
