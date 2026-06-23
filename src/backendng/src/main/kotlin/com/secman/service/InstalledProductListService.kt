@@ -32,7 +32,7 @@ open class InstalledProductListService(
         limit: Int?,
         matchServerOnly: Boolean = false
     ): InstalledProductListResponse {
-        val effectiveLimit = (limit ?: 500).coerceIn(1, 2000)
+        val effectiveLimit = (limit ?: 50_000).coerceIn(1, 50_000)
         val isAdmin = authentication.roles.contains("ADMIN")
         val accessibleAssetIds = if (isAdmin) null else accessibleAssetIdsCache.get(authentication)
 

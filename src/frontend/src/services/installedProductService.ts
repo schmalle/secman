@@ -22,10 +22,9 @@ export interface InstalledProductListResponse {
   totalSystems: number;
 }
 
-export async function getInstalledProducts(search = '', limit = 500): Promise<InstalledProductListResponse> {
+export async function getInstalledProducts(search = ''): Promise<InstalledProductListResponse> {
   const params = new URLSearchParams();
   if (search.trim()) params.append('search', search.trim());
-  params.append('limit', String(limit));
   const response = await authenticatedGet(`/api/installed-products?${params.toString()}`);
   if (!response.ok) {
     throw new Error(`Failed to fetch installed products: ${response.status}`);
@@ -33,10 +32,9 @@ export async function getInstalledProducts(search = '', limit = 500): Promise<In
   return response.json();
 }
 
-export async function getInstalledProductsByServer(server = '', limit = 500): Promise<InstalledProductListResponse> {
+export async function getInstalledProductsByServer(server = ''): Promise<InstalledProductListResponse> {
   const params = new URLSearchParams();
   if (server.trim()) params.append('server', server.trim());
-  params.append('limit', String(limit));
   const response = await authenticatedGet(`/api/installed-products/by-server?${params.toString()}`);
   if (!response.ok) {
     throw new Error(`Failed to fetch installed products for server: ${response.status}`);
