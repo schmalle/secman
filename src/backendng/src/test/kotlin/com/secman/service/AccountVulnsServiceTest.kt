@@ -1,7 +1,6 @@
 package com.secman.service
 
 import com.secman.domain.Asset
-import com.secman.repository.AssetRepository
 import com.secman.repository.CrowdStrikeImportHistoryRepository
 import com.secman.repository.UserMappingRepository
 import com.secman.repository.VulnerabilityRepository
@@ -26,7 +25,7 @@ class AccountVulnsServiceTest {
     lateinit var userMappingRepository: UserMappingRepository
 
     @MockK
-    lateinit var assetRepository: AssetRepository
+    lateinit var assetFilterService: AssetFilterService
 
     @MockK
     lateinit var vulnerabilityRepository: VulnerabilityRepository
@@ -49,7 +48,7 @@ class AccountVulnsServiceTest {
     fun setUp() {
         service = AccountVulnsService(
             userMappingRepository = userMappingRepository,
-            assetRepository = assetRepository,
+            assetFilterService = assetFilterService,
             vulnerabilityRepository = vulnerabilityRepository,
             entityManager = entityManager,
             importHistoryRepository = importHistoryRepository,
@@ -72,7 +71,8 @@ class AccountVulnsServiceTest {
 
         every { userMappingRepository.findDistinctAwsAccountIdByEmail(email) } returns listOf(awsAccountId)
         every { awsAccountSharingService.getSharedAwsAccountIdsByEmail(email) } returns emptyList()
-        every { assetRepository.findByCloudAccountIdIn(listOf(awsAccountId)) } returns listOf(asset)
+        // Unified asset access is now the single source of truth (matches Current Vulns view).
+        every { assetFilterService.getAccessibleAssets(any()) } returns listOf(asset)
         every { entityManager.createNativeQuery(capture(capturedSql)) } returns query
         every { query.setParameter("assetIds", listOf(42L)) } returns query
         every { query.resultList } returns listOf(

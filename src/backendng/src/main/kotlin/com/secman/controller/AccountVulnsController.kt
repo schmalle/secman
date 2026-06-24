@@ -24,8 +24,9 @@ import org.slf4j.LoggerFactory
  * Access Control:
  * - Authentication required (JWT)
  * - Admin users are rejected (403 Forbidden - should use System Vulns)
- * - Non-admin users see assets from their mapped AWS accounts only
- * - AWS account mapping is PRIMARY access control (workgroup restrictions do not apply)
+ * - Non-admin users see the cloud assets they can access via the same unified
+ *   10-point filter as the Current Vulnerabilities view, grouped by AWS account,
+ *   so the two views report reconcilable vulnerability counts
  *
  * Related to: User Story 1 (P1) - View Vulnerabilities for Single AWS Account
  */

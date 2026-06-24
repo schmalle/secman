@@ -4,7 +4,6 @@ import com.secman.dto.AccountGroupDto
 import com.secman.dto.AccountVulnsSummaryDto
 import com.secman.dto.AssetVulnCountDto
 import com.secman.dto.CrowdStrikeImportStatusDto
-import com.secman.repository.AssetRepository
 import com.secman.repository.ExceptionMatchSql
 import com.secman.repository.UserMappingRepository
 import com.secman.repository.VulnerabilityRepository
@@ -25,13 +24,15 @@ import org.slf4j.LoggerFactory
  *
  * Access Control:
  * - Admin users are rejected (should use System Vulns instead)
- * - Non-admin users see assets from their mapped AWS accounts only
- * - AWS account mapping is PRIMARY access control (workgroup restrictions do not apply)
+ * - Non-admin users see the cloud assets they can access via the SAME unified
+ *   10-point filter as the Current Vulnerabilities view (AssetFilterService),
+ *   restricted to assets that carry a cloudAccountId and grouped by account.
+ *   This keeps the two views' vulnerability counts reconcilable for every user.
  */
 @Singleton
 class AccountVulnsService(
     private val userMappingRepository: UserMappingRepository,
-    private val assetRepository: AssetRepository,
+    private val assetFilterService: AssetFilterService,
     private val vulnerabilityRepository: VulnerabilityRepository,
     private val entityManager: EntityManager,
     private val importHistoryRepository: CrowdStrikeImportHistoryRepository,
@@ -185,29 +186,36 @@ class AccountVulnsService(
             throw IllegalStateException("Admin users should use System Vulns view instead")
         }
 
-        // Get user's own AWS account IDs from user_mapping table
+        // Account IDs the user is explicitly mapped to (UserMapping) or has shared
+        // (AwsAccountSharing). Retained so that mapped-but-empty accounts still render
+        // as account groups, matching the historical Account Vulns UX.
         val ownAwsAccountIds = userMappingRepository.findDistinctAwsAccountIdByEmail(userEmail)
-
-        // Get AWS account IDs shared to this user via AwsAccountSharing
         val sharedAwsAccountIds = awsAccountSharingService.getSharedAwsAccountIdsByEmail(userEmail)
 
-        // Combine and deduplicate
-        val awsAccountIds = (ownAwsAccountIds + sharedAwsAccountIds).distinct()
+        // Single source of truth for *which assets this user can see*: the same unified
+        // 10-point filter used by the Current Vulnerabilities view (AssetFilterService).
+        // Restricted to cloud assets since this view is organised by AWS account.
+        // Using the shared filter guarantees the Account view and the Current view count
+        // the same (asset, vulnerability) rows for every access path (workgroup, owner,
+        // AD-domain, scan/manual upload, WorkgroupAwsAccount, sharing), not just direct
+        // AWS account mappings.
+        val assets = assetFilterService.getAccessibleAssets(authentication)
+            .filter { !it.cloudAccountId.isNullOrBlank() }
 
-        // Check if user has any AWS account mappings or shared accounts
+        // Account groups = explicitly mapped/shared accounts (so empty accounts still show)
+        // ∪ accounts that actually contain an accessible cloud asset.
+        val awsAccountIds = (ownAwsAccountIds + sharedAwsAccountIds +
+            assets.mapNotNull { it.cloudAccountId }).distinct()
+
+        // 404 only when the user has neither AWS account mappings/shares nor any
+        // accessible cloud asset to display.
         if (awsAccountIds.isEmpty()) {
-            logger.warn("User {} has no AWS account mappings or shared accounts", userEmail)
+            logger.warn("User {} has no AWS account mappings, shared accounts, or accessible cloud assets", userEmail)
             throw NoSuchElementException("No AWS accounts are mapped or shared with your user account. Please contact your administrator.")
         }
 
-        logger.debug("User {} has access to {} AWS accounts ({} own, {} shared)",
-            userEmail, awsAccountIds.size, ownAwsAccountIds.size, sharedAwsAccountIds.size)
-
-        // Get all assets in user's AWS accounts
-        val assets = assetRepository.findByCloudAccountIdIn(awsAccountIds)
-
-        logger.debug("Found {} assets for user {} (AWS accounts: {})", 
-            assets.size, userEmail, awsAccountIds.joinToString(", "))
+        logger.debug("User {} sees {} cloud assets across {} AWS accounts ({} own-mapped, {} shared)",
+            userEmail, assets.size, awsAccountIds.size, ownAwsAccountIds.size, sharedAwsAccountIds.size)
 
         // Feature 019: Get severity counts for all assets
         val assetIds = assets.mapNotNull { it.id }

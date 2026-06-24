@@ -1049,7 +1049,22 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
         <div className="col-12">
           <div className="card">
             <div className="card-body">
-              <h5 className="card-title">Vulnerabilities ({totalCount})</h5>
+              <h5 className="card-title">
+                Vulnerabilities ({totalCount}
+                {exceptionFilter === "not_excepted" && " not excepted"}
+                {exceptionFilter === "excepted" && " excepted"}
+                {exceptionFilter === "overdue" && " overdue"}
+                {exceptionFilter === "ok" && " ok"}
+                {exceptionFilter === "" && " total, incl. excepted"})
+              </h5>
+              {exceptionFilter === "not_excepted" && (
+                <p className="text-muted small mb-2">
+                  Excepted vulnerabilities are hidden by default. This figure equals the
+                  <strong> Not excepted</strong> count on the Account Vulnerabilities view;
+                  switch <strong>Overdue Status</strong> to <em>All (incl. Excepted)</em> to
+                  see the full total.
+                </p>
+              )}
               {sortedVulnerabilities.length === 0 ? (
                 <p className="text-muted">
                   No vulnerabilities found. Upload vulnerability scan results to

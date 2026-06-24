@@ -69,6 +69,7 @@ const AssetManagement: React.FC = () => {
   const [ipFilter, setIpFilter] = useState<string>('');
   const [ownerFilter, setOwnerFilter] = useState<string>('');
   const [adDomainFilter, setAdDomainFilter] = useState<string>('');
+  const [accountIdFilter, setAccountIdFilter] = useState<string>('');
   const [workgroupFilter, setWorkgroupFilter] = useState<string>('');
 
   // Bulk delete states (Feature 029 - User Story 1)
@@ -427,6 +428,7 @@ const AssetManagement: React.FC = () => {
       // Text filters use partial matching
       const nameMatch = !nameFilter || asset.name.toLowerCase().includes(nameFilter.toLowerCase());
       const ipMatch = !ipFilter || (asset.ip && asset.ip.toLowerCase().includes(ipFilter.toLowerCase()));
+      const accountIdMatch = !accountIdFilter || (asset.cloudAccountId && asset.cloudAccountId.toLowerCase().includes(accountIdFilter.toLowerCase()));
       // Dropdown filters use exact matching
       const ownerMatch = !ownerFilter || asset.owner === ownerFilter;
       const adDomainMatch = !adDomainFilter || asset.adDomain === adDomainFilter;
@@ -434,7 +436,7 @@ const AssetManagement: React.FC = () => {
         asset.workgroups && asset.workgroups.some(wg => wg.name === workgroupFilter)
       );
 
-      return nameMatch && ipMatch && ownerMatch && adDomainMatch && workgroupMatch;
+      return nameMatch && ipMatch && accountIdMatch && ownerMatch && adDomainMatch && workgroupMatch;
     });
   };
 
@@ -823,14 +825,26 @@ const AssetManagement: React.FC = () => {
                     )}
                   </select>
                 </div>
+                <div className="col-md-3">
+                  <label htmlFor="accountIdFilter" className="form-label">Account ID</label>
+                  <input
+                    type="text"
+                    id="accountIdFilter"
+                    className="form-control"
+                    placeholder="Filter by Account ID..."
+                    value={accountIdFilter}
+                    onChange={(e) => setAccountIdFilter(e.target.value)}
+                  />
+                </div>
               </div>
-              {(nameFilter || ipFilter || ownerFilter || adDomainFilter || workgroupFilter) && (
+              {(nameFilter || ipFilter || accountIdFilter || ownerFilter || adDomainFilter || workgroupFilter) && (
                 <div className="mt-2">
                   <button
                     className="btn btn-sm btn-outline-secondary"
                     onClick={() => {
                       setNameFilter('');
                       setIpFilter('');
+                      setAccountIdFilter('');
                       setOwnerFilter('');
                       setAdDomainFilter('');
                       setWorkgroupFilter('');
