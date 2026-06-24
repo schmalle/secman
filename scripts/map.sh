@@ -1,0 +1,51 @@
+#!/bin/bash
+
+export DB_CONNECT="jdbc:mariadb://127.0.0.1:3306/secman?useSsl=true"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+JAR_PATH="$REPO_ROOT/src/cli/build/libs/cli-0.1.0-all.jar"
+
+if [ ! -f "$JAR_PATH" ]; then
+    echo "Error: CLI JAR not found at $JAR_PATH"
+    echo ""
+    echo "Build it first with:"
+    echo "  ./gradlew :cli:shadowJar"
+    exit 1
+fi
+
+export MICRONAUT_ENVIRONMENTS=dev
+export SECMAN_BACKEND_URL="pass://Test/SECMAN//SECMAN_BACKEND_BASE_URL"
+export DB_CONNECT="pass://Test/SECMAN/DB_CONNECT"
+export SECMAN_DEBUG=true
+
+export FALCON_CLIENT_ID="pass://Test/SECMAN/FALCON_CLIENT_ID"
+export FALCON_CLIENT_SECRET="pass://Test/SECMAN/FALCON_CLIENT_SECRET"
+export FALCON_CLOUD_REGION="pass://Test/SECMAN/FALCON_CLOUD_REGION"
+export SECMAN_OPENROUTER_API_KEY="pass://Test/SECMAN/OPENROUTER_API_KEY"
+export SECMAN_ADMIN_NAME="pass://Test/SECMAN/SECMAN_ADMIN_NAME"
+export SECMAN_ADMIN_PASS="pass://Test/SECMAN/SECMAN_ADMIN_PASS"
+export SECMAN_MCP_KEY="pass://Test/SECMAN/SECMAN_MCP_KEY"
+export SECMAN_ADMIN_EMAIL="pass://Test/SECMAN/SECMAN_ADMIN_EMAIL"
+export AWS_ACCESS_KEY_ID="pass://Test/SECMAN/SECMAN_AWS_ACCESS_KEY_ID"
+export AWS_SECRET_ACCESS_KEY="pass://Test/SECMAN/SECMAN_AWS_SECRET_ACCESS_KEY"
+export AWS_SESSION_TOKEN="pass://Test/SECMAN/SECMAN_AWS_ACCESS_TOKEN"
+export SECMAN_BACKEND_URL="pass://Test/SECMAN/SECMAN_BACKEND_BASE_URL"
+export SECMAN_INSECURE="pass://Test/SECMAN/SECMAN_SSL_ACCEPT_ALL"
+
+# import-s3 reads the S3 location from AWS_ACCOUNT_BUCKET_NAME / AWS_ACCOUNT_BUCKET_KEY_NAME
+# when --bucket / --key are not passed as flags (which they must not be — see below).
+export AWS_ACCOUNT_BUCKET_NAME="pass://Test/SECMAN/AWS_ASSET_BUCKET_NAME"
+export AWS_ACCOUNT_BUCKET_KEY_NAME="pass://Test/SECMAN/AWS_ASSET_BUCKET_KEY_NAME"
+
+export AWS_REGION="pass://Test/SECMAN/SECMAN_AWS_REGION"
+
+# IMPORTANT: do NOT pass any pass://-backed value as a CLI flag here (--username,
+# --password, --bucket, --key, etc.). The parent shell expands the $VAR into argv
+# as the literal "pass://..." *before* `pass-cli run --` resolves it. pass-cli
+# only rewrites env vars at exec time, not argv that the shell already
+# substituted, so the jar receives the unresolved "pass://..." string and either
+# fails authentication (401) or fails bucket-name validation. The import-s3 command reads
+# AWS_ACCOUNT_BUCKET_NAME / AWS_ACCOUNT_BUCKET_KEY_NAME / SECMAN_ADMIN_NAME /
+# SECMAN_ADMIN_PASS / SECMAN_INSECURE from the environment directly — pass-cli
+# does resolve those correctly. So intentionally pass NO --bucket/--key here.
+pass-cli run -- java -Xmx4g -Xms2g -jar ./src/cli/build/libs/cli-0.1.0-all.jar manage-user-mappings import-s3
