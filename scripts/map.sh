@@ -34,8 +34,8 @@ export SECMAN_INSECURE="pass://Test/SECMAN/SECMAN_SSL_ACCEPT_ALL"
 
 # import-s3 reads the S3 location from AWS_ACCOUNT_BUCKET_NAME / AWS_ACCOUNT_BUCKET_KEY_NAME
 # when --bucket / --key are not passed as flags (which they must not be — see below).
-export AWS_ACCOUNT_BUCKET_NAME="pass://Test/SECMAN/AWS_ASSET_BUCKET_NAME"
-export AWS_ACCOUNT_BUCKET_KEY_NAME="pass://Test/SECMAN/AWS_ASSET_BUCKET_KEY_NAME"
+export AWS_ACCOUNT_BUCKET_NAME="pass://Test/SECMAN/AWS_ACCOUNT_BUCKET_NAME"
+export AWS_ACCOUNT_BUCKET_KEY_NAME="pass://Test/SECMAN/AWS_ACCOUNT_BUCKET_KEY_NAME"
 
 export AWS_REGION="pass://Test/SECMAN/SECMAN_AWS_REGION"
 
