@@ -46,9 +46,6 @@ open class ExceptionExpirationScheduler(
 ) {
     private val logger = LoggerFactory.getLogger(ExceptionExpirationScheduler::class.java)
 
-    // Track which requests have received reminders to avoid duplicate sends
-    private val remindersSent = mutableSetOf<Long>()
-
     /**
      * Daily job to expire old exception requests.
      *
@@ -143,16 +140,12 @@ open class ExceptionExpirationScheduler(
      *
      * **Process**:
      * 1. Find APPROVED requests with expiration_date between now and now + 7 days
-     * 2. Filter out requests that already received reminders
-     * 3. Send reminder email to requester
-     * 4. Track sent reminders to prevent duplicates
-     *
-     * **Duplicate Prevention**:
-     * - Reminders tracked in-memory (remindersSent set)
-     * - Reset on application restart (acceptable - users get reminder after restart)
-     * - Production alternative: Add "reminder_sent_date" column to database
+     *    whose reminder_sent_at is still NULL
+     * 2. Send reminder email to requester
+     * 3. Persist reminder_sent_at so the email is sent exactly once, even across restarts
      */
     @Scheduled(cron = "0 0 8 * * ?")
+    @Transactional
     open fun sendExpirationReminders() {
         logger.info("Starting daily expiration reminder processing")
 
@@ -160,32 +153,23 @@ open class ExceptionExpirationScheduler(
             val now = LocalDateTime.now()
             val sevenDaysFromNow = now.plusDays(7)
 
-            // Find requests expiring within 7 days
             val expiringRequests = requestRepository.findByStatusAndExpirationDateBetween(
                 ExceptionRequestStatus.APPROVED,
                 now,
                 sevenDaysFromNow
-            )
+            ).filter { it.reminderSentAt == null }
 
-            logger.info("Found {} exception requests expiring within 7 days", expiringRequests.size)
+            logger.info("Found {} exception requests expiring within 7 days without a reminder", expiringRequests.size)
 
             var remindersSentCount = 0
-            var skippedCount = 0
 
             for (request in expiringRequests) {
                 try {
-                    // Skip if reminder already sent for this request
-                    if (remindersSent.contains(request.id)) {
-                        skippedCount++
-                        logger.debug("Skipping reminder for request {} - already sent", request.id)
-                        continue
-                    }
-
-                    // Send reminder notification
                     val sent = notificationService.notifyRequesterOfExpiration(request).get()
 
                     if (sent) {
-                        remindersSent.add(request.id!!)
+                        request.reminderSentAt = LocalDateTime.now()
+                        requestRepository.update(request)
                         remindersSentCount++
 
                         logger.debug("Sent expiration reminder for request {}: CVE={}, asset={}, expiresIn={} days",
@@ -200,14 +184,10 @@ open class ExceptionExpirationScheduler(
 
                 } catch (e: Exception) {
                     logger.error("Failed to send reminder for request {}: {}", request.id, e.message)
-                    // Continue with next request
                 }
             }
 
-            logger.info(
-                "Expiration reminder processing completed: {} reminders sent, {} skipped (already sent)",
-                remindersSentCount, skippedCount
-            )
+            logger.info("Expiration reminder processing completed: {} reminders sent", remindersSentCount)
 
         } catch (e: Exception) {
             logger.error("Failed to process expiration reminders", e)
@@ -261,14 +241,5 @@ open class ExceptionExpirationScheduler(
         return deactivatedCount
     }
 
-    /**
-     * Clear the reminders sent tracking (for testing purposes).
-     *
-     * In production, this would reset on application restart.
-     * For persistent tracking, add "reminder_sent_date" column to database.
-     */
-    open fun clearReminderTracking() {
-        logger.info("Clearing reminder tracking ({} entries)", remindersSent.size)
-        remindersSent.clear()
-    }
+
 }
