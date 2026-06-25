@@ -101,7 +101,10 @@ export default [
     },
     settings: {
       react: {
-        version: "detect",
+        // Pinned explicitly (not "detect"): eslint-plugin-react@7.37.5's
+        // version auto-detection calls context.getFilename(), removed in
+        // ESLint 10. An explicit version skips that broken code path.
+        version: "19.2",
       },
     },
   },
