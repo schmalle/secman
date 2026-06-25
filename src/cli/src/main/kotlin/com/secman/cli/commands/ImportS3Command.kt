@@ -72,17 +72,15 @@ class ImportS3Command(
 
     @Option(
         names = ["--bucket", "-b"],
-        description = ["S3 bucket name"],
-        required = true
+        description = ["S3 bucket name (or set AWS_ACCOUNT_BUCKET_NAME env var)"]
     )
-    lateinit var bucket: String
+    var bucket: String? = null
 
     @Option(
         names = ["--key", "-k"],
-        description = ["S3 object key (path to file in bucket)"],
-        required = true
+        description = ["S3 object key (path to file in bucket) (or set AWS_ACCOUNT_BUCKET_KEY_NAME env var)"]
     )
-    lateinit var key: String
+    var key: String? = null
 
     @Option(
         names = ["--aws-region"],
@@ -163,6 +161,18 @@ class ImportS3Command(
             println("=".repeat(60))
             println()
 
+            // Resolve bucket/key: CLI flag takes priority, then env var (flags rule)
+            val effectiveBucket = bucket
+                ?: System.getenv("AWS_ACCOUNT_BUCKET_NAME")
+                ?: throw IllegalArgumentException(
+                    "S3 bucket required. Use --bucket flag or set AWS_ACCOUNT_BUCKET_NAME environment variable"
+                )
+            val effectiveKey = key
+                ?: System.getenv("AWS_ACCOUNT_BUCKET_KEY_NAME")
+                ?: throw IllegalArgumentException(
+                    "S3 object key required. Use --key flag or set AWS_ACCOUNT_BUCKET_KEY_NAME environment variable"
+                )
+
             // Authenticate with backend
             val backendUrl = parent.getEffectiveBackendUrl()
             val backendUsername = parent.getEffectiveUsername()
@@ -172,7 +182,7 @@ class ImportS3Command(
                 ?: throw IllegalArgumentException("Authentication failed - check username/password")
 
             println("Backend: $backendUrl")
-            println("Source: s3://$bucket/$key")
+            println("Source: s3://$effectiveBucket/$effectiveKey")
             if (awsRegion != null) {
                 println("AWS Region: $awsRegion")
             }
@@ -208,8 +218,8 @@ class ImportS3Command(
             // Download from S3
             println("Downloading from S3...")
             tempFilePath = s3DownloadService.downloadToTempFile(
-                bucket = bucket,
-                key = key,
+                bucket = effectiveBucket,
+                key = effectiveKey,
                 region = awsRegion,
                 profile = awsProfile,
                 accessKeyId = resolvedAccessKeyId,
@@ -277,7 +287,7 @@ class ImportS3Command(
 
             // Feature 085: send statistics email after import (even with partial errors)
             if (sendEmail) {
-                sendStatisticsEmail(backendUrl, token, dryRun, result)
+                sendStatisticsEmail(backendUrl, token, dryRun, result, "s3://$effectiveBucket/$effectiveKey")
             }
 
             // Exit status (T019-T022: cron-friendly exit codes)
@@ -328,9 +338,9 @@ class ImportS3Command(
      * Feature 085: POST to /api/cli/user-mappings/send-statistics-email after
      * a successful import. Reuses the same service method as [ListCommand].
      */
-    private fun sendStatisticsEmail(backendUrl: String, token: String, dryRun: Boolean, importResult: MappingResult) {
+    private fun sendStatisticsEmail(backendUrl: String, token: String, dryRun: Boolean, importResult: MappingResult, source: String) {
         val importSummary: Map<String, Any?> = buildMap {
-            put("source", "s3://$bucket/$key")
+            put("source", source)
             put("totalProcessed", importResult.totalProcessed)
             put("created", importResult.created)
             put("createdPending", importResult.createdPending)

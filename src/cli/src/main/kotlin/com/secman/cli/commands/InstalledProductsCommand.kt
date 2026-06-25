@@ -52,6 +52,7 @@ class InstalledProductsCommand {
             var totalSkipped = 0
             var totalDeleted = 0
             var totalUnknownSystems = 0
+            val unknownSystemSamples = LinkedHashSet<String>()
             var batches = 0
             // One id shared by every batch of this run so the backend can replace each server's
             // products (delete stale rows) without later batches wiping earlier ones.
@@ -74,10 +75,13 @@ class InstalledProductsCommand {
                     totalSkipped += result.productsSkipped
                     totalDeleted += result.productsDeleted
                     totalUnknownSystems += result.unknownSystems
+                    unknownSystemSamples.addAll(result.unknownSystemSamples)
                     if (verbose && result.errors.isNotEmpty()) {
                         result.errors.forEach { System.err.println("  - $it") }
                     }
-                    System.out.println("Batch $batches: imported=${result.productsImported}, updated=${result.productsUpdated}, deleted=${result.productsDeleted}, skipped=${result.productsSkipped}, unknown systems=${result.unknownSystems}")
+                    // "skipped" counts product rows; "unknown systems" counts distinct hosts —
+                    // one unmatched host usually carries several product rows.
+                    System.out.println("Batch $batches: imported=${result.productsImported}, updated=${result.productsUpdated}, deleted=${result.productsDeleted}, skipped rows=${result.productsSkipped}, unknown systems=${result.unknownSystems}")
                 }
             }
 
@@ -88,8 +92,11 @@ class InstalledProductsCommand {
                 System.out.println("Products imported: $totalImported")
                 System.out.println("Products updated: $totalUpdated")
                 System.out.println("Products deleted (stale removed): $totalDeleted")
-                System.out.println("Products skipped: $totalSkipped")
-                System.out.println("Unknown Secman systems: $totalUnknownSystems")
+                System.out.println("Product rows skipped: $totalSkipped")
+                System.out.println("Unknown Secman systems (distinct hosts): $totalUnknownSystems")
+                if (unknownSystemSamples.isNotEmpty()) {
+                    System.out.println("Unknown systems (sample): ${unknownSystemSamples.take(25).joinToString(", ")}")
+                }
             } else {
                 System.out.println("Dry run only; no backend data was changed.")
             }

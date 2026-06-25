@@ -38,7 +38,8 @@ class InstalledProductStorageService(
             productsDeleted = (responseBody?.get("productsDeleted") as? Number)?.toInt() ?: 0,
             unknownSystems = (responseBody?.get("unknownSystems") as? Number)?.toInt() ?: 0,
             dryRun = responseBody?.get("dryRun") as? Boolean ?: dryRun,
-            errors = responseBody?.get("errors") as? List<String> ?: emptyList()
+            errors = responseBody?.get("errors") as? List<String> ?: emptyList(),
+            unknownSystemSamples = responseBody?.get("unknownSystemSamples") as? List<String> ?: emptyList()
         )
     }
 }
@@ -51,5 +52,6 @@ data class InstalledProductStorageResult(
     val productsDeleted: Int,
     val unknownSystems: Int,
     val dryRun: Boolean,
-    val errors: List<String>
+    val errors: List<String>,
+    val unknownSystemSamples: List<String> = emptyList()
 )

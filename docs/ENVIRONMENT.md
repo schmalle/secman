@@ -150,6 +150,8 @@ AWS S3 operations (`asset-match-clear`, `manage-user-mappings import-s3`, `list-
 | `AWS_REGION` | region for S3 operations (SDK chain fallback otherwise) |
 | `AWS_ASSET_BUCKET_NAME` | S3 bucket name for the `asset-match-clear` snapshot JSON |
 | `AWS_ASSET_BUCKET_KEY_NAME` | S3 object key for the `asset-match-clear` snapshot JSON |
+| `AWS_ACCOUNT_BUCKET_NAME` | S3 bucket name for the `manage-user-mappings import-s3` mapping file (fallback when `--bucket` is omitted) |
+| `AWS_ACCOUNT_BUCKET_KEY_NAME` | S3 object key for the `manage-user-mappings import-s3` mapping file (fallback when `--key` is omitted) |
 
 ## Templates
 

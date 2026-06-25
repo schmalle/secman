@@ -580,6 +580,24 @@ open class CrowdStrikeApiClientImpl(
             return true
         }
 
+        // A 404 only legitimately means "no data" on the very first request. Once we hold an
+        // `after` cursor, CrowdStrike has promised more rows, so a 404 there is a transient
+        // error to retry — never a silent end-of-pagination (which would truncate the import
+        // and report a false success). Returns true when the caller should retry (continue).
+        fun handle404(currentPage: Int): Boolean {
+            if (afterToken.isNullOrBlank()) {
+                hasMore = false
+                return false
+            }
+            val cause = CrowdStrikeException("CrowdStrike returned 404 with an active pagination cursor")
+            if (retryInstalledProductsPage(currentPage, "Unexpected 404 mid-pagination", cause)) {
+                return true
+            }
+            throw CrowdStrikeException(
+                "Installed products pagination stopped early at page $currentPage: 404 after $filterProcessed rows with an active cursor (incomplete import)"
+            )
+        }
+
         while (hasMore) {
             val currentPage = page + 1
             try {
@@ -629,7 +647,7 @@ open class CrowdStrikeApiClientImpl(
                         hasMore = !afterToken.isNullOrBlank() && resources.isNotEmpty() && (total == null || filterProcessed < total)
                         log.info("Installed products page {} returned {} rows (total processed: {})", currentPage, products.size, totalProcessed)
                     }
-                    404 -> hasMore = false
+                    404 -> if (handle404(currentPage)) continue
                     429 -> {
                         val retryAfter = response.headers.get("Retry-After")?.toLongOrNull() ?: 30L
                         throw RateLimitException("Rate limit exceeded querying installed products", retryAfter)
@@ -645,7 +663,7 @@ open class CrowdStrikeApiClientImpl(
                         currentToken = getAuthToken(config)
                         continue
                     }
-                    404 -> hasMore = false
+                    404 -> if (handle404(currentPage)) continue
                     429 -> {
                         val retryAfter = e.response.headers.get("Retry-After")?.toLongOrNull() ?: 30L
                         throw RateLimitException("Rate limit exceeded querying installed products", retryAfter, e)
@@ -670,9 +688,17 @@ open class CrowdStrikeApiClientImpl(
                 throw CrowdStrikeException("Channel error querying installed products page $currentPage: ${e.message}", e)
             } catch (e: HttpClientException) {
                 val message = e.message.orEmpty()
-                val isTransient = message.contains("Connection closed", ignoreCase = true) ||
+                // A read-phase network failure (e.g. "Can't assign requested address" /
+                // EADDRNOTAVAIL under sustained paging) surfaces as an HttpClientException
+                // wrapping an IOException, so it never reaches the IOException arm above.
+                // Walk the cause chain so any such transient I/O failure is retried instead
+                // of aborting the whole multi-page run.
+                val hasIoCause = generateSequence(e.cause) { it.cause }.any { it is IOException }
+                val isTransient = hasIoCause ||
+                    message.contains("Connection closed", ignoreCase = true) ||
                     message.contains("Channel closed", ignoreCase = true) ||
                     message.contains("closed before response", ignoreCase = true) ||
+                    message.contains("reading HTTP response", ignoreCase = true) ||
                     message.contains("aggregating", ignoreCase = true)
                 if (isTransient && retryInstalledProductsPage(currentPage, "HTTP client error", e)) {
                     continue

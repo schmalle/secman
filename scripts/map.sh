@@ -48,4 +48,4 @@ export AWS_REGION="pass://Test/SECMAN/SECMAN_AWS_REGION"
 # AWS_ACCOUNT_BUCKET_NAME / AWS_ACCOUNT_BUCKET_KEY_NAME / SECMAN_ADMIN_NAME /
 # SECMAN_ADMIN_PASS / SECMAN_INSECURE from the environment directly — pass-cli
 # does resolve those correctly. So intentionally pass NO --bucket/--key here.
-pass-cli run -- java -Xmx4g -Xms2g -jar ./src/cli/build/libs/cli-0.1.0-all.jar manage-user-mappings import-s3
+pass-cli run -- java -Xmx4g -Xms2g -jar ./src/cli/build/libs/cli-0.1.0-all.jar manage-user-mappings import-s3 "$@"

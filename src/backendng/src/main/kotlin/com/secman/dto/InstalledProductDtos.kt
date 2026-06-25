@@ -26,7 +26,9 @@ data class InstalledProductImportResponse(
     val productsDeleted: Int,
     val unknownSystems: Int,
     val dryRun: Boolean,
-    val errors: List<String> = emptyList()
+    val errors: List<String> = emptyList(),
+    /** Sample of distinct unmatched hostnames (capped), for operator diagnostics. */
+    val unknownSystemSamples: List<String> = emptyList()
 )
 
 @Serdeable

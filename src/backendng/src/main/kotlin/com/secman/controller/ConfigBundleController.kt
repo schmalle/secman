@@ -1,6 +1,6 @@
 package com.secman.controller
 
-import com.fasterxml.jackson.databind.ObjectMapper
+import io.micronaut.serde.ObjectMapper
 import com.secman.dto.*
 import com.secman.service.ConfigBundleService
 import io.micronaut.http.HttpHeaders
@@ -49,9 +49,10 @@ open class ConfigBundleController(
             // Get the bundle from service
             val bundle = configBundleService.exportBundle(authentication)
 
-            // Convert to JSON
-            val jsonBytes = objectMapper.writerWithDefaultPrettyPrinter()
-                .writeValueAsBytes(bundle)
+            // Convert to JSON via Micronaut Serde, which natively serializes the @Serdeable
+            // bundle's java.time fields (e.g. Instant exportedAt) — unlike a raw Jackson
+            // databind ObjectMapper, which lacks the JSR-310 module and fails on Instant.
+            val jsonBytes = objectMapper.writeValueAsBytes(bundle)
 
             // Generate filename with timestamp
             val timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"))
@@ -99,6 +100,7 @@ open class ConfigBundleController(
             // Parse the uploaded file
             val bundleJson = file.inputStream.use { it.readBytes() }
             val bundle = objectMapper.readValue(bundleJson, ConfigBundleDto::class.java)
+                ?: return HttpResponse.badRequest(ErrorResponse("Invalid or empty configuration bundle file"))
 
             // Parse options if provided
             val options = optionsJson?.let {
@@ -161,6 +163,7 @@ open class ConfigBundleController(
             // Parse the uploaded file
             val bundleJson = file.inputStream.use { it.readBytes() }
             val bundle = objectMapper.readValue(bundleJson, ConfigBundleDto::class.java)
+                ?: return HttpResponse.badRequest(ErrorResponse("Invalid or empty configuration bundle file"))
 
             // Validate the bundle
             val validation = configBundleService.validateBundle(bundle)

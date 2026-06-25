@@ -535,6 +535,8 @@ class UserMappingCliService(
                 )
             }
 
+            log.info("Processing ${mappingsData.size} entries")
+
             mappingsData.forEach { mapping ->
                 // Prefer vars["cov:owner"] (real owner email) over top-level "email"
                 @Suppress("UNCHECKED_CAST")
@@ -581,6 +583,8 @@ class UserMappingCliService(
         } catch (e: Exception) {
             throw IllegalArgumentException("Failed to parse JSON file: ${e.message}", e)
         }
+
+        log.info("Parsed ${entries.size} mapping(s) from JSON (${errors.size} parse error(s))")
 
         return ParseResult(entries, errors)
     }

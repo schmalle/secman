@@ -56,7 +56,7 @@ Options: `--bucket -b` (req), `--prefix -p`, `--aws-region`, `--aws-profile`, `-
 ./scripts/secmanng manage-user-mappings import-s3 --bucket my-bucket --key …  --format JSON
 ```
 
-Options: `--bucket -b`, `--key -k` (both req), `--format` (`AUTO|CSV|JSON`, default `AUTO`), `--dry-run`, `--admin-user -u` (or `$SECMAN_ADMIN_EMAIL`), all AWS shared options.
+Options: `--bucket -b` (flag or `AWS_ACCOUNT_BUCKET_NAME` env var), `--key -k` (flag or `AWS_ACCOUNT_BUCKET_KEY_NAME` env var) — flags take priority over the env vars; `--format` (`AUTO|CSV|JSON`, default `AUTO`), `--dry-run`, `--admin-user -u` (or `$SECMAN_ADMIN_EMAIL`), all AWS shared options.
 
 Cron-safe wrapper:
 ```cron

@@ -36,11 +36,31 @@ open class InstalledProductImportService(
         var updated = 0
         var skipped = 0
         var deleted = 0
-        var unknownSystems = 0
         val errors = mutableListOf<String>()
         val now = LocalDateTime.now()
         // Assets whose stale products have already been cleared during this request.
         val clearedAssetIds = mutableSetOf<Long>()
+
+        // Distinct hosts (normalized) we could not resolve. Tracked as sets so the
+        // reported "unknown systems" count reflects hosts, not product rows: a single
+        // unmatched host typically carries many products (avg ~6.5).
+        val unknownHosts = LinkedHashSet<String>()
+        val ambiguousHosts = LinkedHashSet<String>()
+        var unknownRows = 0
+
+        // Resolve hostnames against an in-memory index built once per request. The asset
+        // table and the installed-product feed come from two different CrowdStrike APIs
+        // that may name the same host differently (short vs FQDN), so we match in both
+        // directions. Asset count is small (low thousands); a full scan here is cheap.
+        val allAssets = assetRepository.findAll()
+        val exactByName = HashMap<String, Asset>(allAssets.size * 2)
+        val assetsByShortName = HashMap<String, MutableList<Asset>>()
+        allAssets.forEach { a ->
+            val norm = normHost(a.name) ?: return@forEach
+            exactByName.putIfAbsent(norm, a)
+            val short = norm.substringBefore('.')
+            assetsByShortName.getOrPut(short) { mutableListOf() }.add(a)
+        }
 
         products.forEach { dto ->
             try {
@@ -52,11 +72,20 @@ open class InstalledProductImportService(
                     return@forEach
                 }
 
-                val asset = resolveAsset(hostname)
-                if (asset == null) {
-                    unknownSystems++
-                    skipped++
-                    return@forEach
+                val asset = when (val resolution = resolveAsset(hostname, exactByName, assetsByShortName)) {
+                    is Resolution.Found -> resolution.asset
+                    Resolution.Ambiguous -> {
+                        ambiguousHosts.add(normHost(hostname) ?: "(no hostname)")
+                        unknownRows++
+                        skipped++
+                        return@forEach
+                    }
+                    Resolution.NotFound -> {
+                        unknownHosts.add(normHost(hostname) ?: "(no hostname)")
+                        unknownRows++
+                        skipped++
+                        return@forEach
+                    }
                 }
                 if (dryRun) {
                     imported++
@@ -139,23 +168,70 @@ open class InstalledProductImportService(
             }
         }
 
+        val unknownSamples = (unknownHosts + ambiguousHosts).take(25)
+        if (unknownHosts.isNotEmpty() || ambiguousHosts.isNotEmpty()) {
+            log.warn(
+                "Installed products: {} rows skipped across {} unknown system(s) and {} ambiguous host(s); sample: {}",
+                unknownRows, unknownHosts.size, ambiguousHosts.size, unknownSamples
+            )
+        }
+
         return InstalledProductImportResponse(
             productsProcessed = products.size,
             productsImported = imported,
             productsUpdated = updated,
             productsSkipped = skipped,
             productsDeleted = deleted,
-            unknownSystems = unknownSystems,
+            unknownSystems = unknownHosts.size + ambiguousHosts.size,
             dryRun = dryRun,
-            errors = errors
+            errors = errors,
+            unknownSystemSamples = unknownSamples
         )
     }
 
-    private fun resolveAsset(hostname: String?): Asset? {
-        if (hostname.isNullOrBlank()) return null
-        return assetRepository.findByNameIgnoreCase(hostname)
-            ?: hostname.substringBefore('.').takeIf { it.isNotBlank() && it != hostname }?.let { assetRepository.findByNameIgnoreCase(it) }
+    /** Outcome of resolving a CrowdStrike hostname to a SECMan asset. */
+    private sealed interface Resolution {
+        data class Found(val asset: Asset) : Resolution
+        /** No asset matches the hostname in either direction. */
+        object NotFound : Resolution
+        /** A short name matched multiple FQDN assets — refuse to guess. */
+        object Ambiguous : Resolution
     }
+
+    /**
+     * Match a CrowdStrike hostname to an asset, in both directions, against the
+     * pre-built indices:
+     *   1. exact (case-insensitive) name match
+     *   2. CrowdStrike FQDN → asset short name (strip the CrowdStrike domain)
+     *   3. CrowdStrike short name → asset stored as FQDN (unique short name only)
+     */
+    private fun resolveAsset(
+        hostname: String?,
+        exactByName: Map<String, Asset>,
+        assetsByShortName: Map<String, List<Asset>>
+    ): Resolution {
+        val norm = normHost(hostname) ?: return Resolution.NotFound
+        exactByName[norm]?.let { return Resolution.Found(it) }
+
+        val short = norm.substringBefore('.')
+        if (short != norm) {
+            exactByName[short]?.let { return Resolution.Found(it) }
+        }
+
+        val byShort = assetsByShortName[short].orEmpty()
+        return when (byShort.size) {
+            0 -> Resolution.NotFound
+            1 -> Resolution.Found(byShort.first())
+            else -> Resolution.Ambiguous
+        }
+    }
+
+    /** Normalize a hostname for matching: trim, lowercase, drop a trailing dot. */
+    private fun normHost(value: String?): String? = value
+        ?.trim()
+        ?.lowercase()
+        ?.trimEnd('.')
+        ?.takeIf { it.isNotBlank() }
 
     private fun normalize(value: String?, maxLength: Int): String? = value
         ?.trim()
