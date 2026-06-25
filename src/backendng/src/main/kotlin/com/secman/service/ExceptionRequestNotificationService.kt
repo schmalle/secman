@@ -603,6 +603,189 @@ open class ExceptionRequestNotificationService(
     }
 
     /**
+     * Notify all ADMIN and SECCHAMPION users that an exception has expired.
+     *
+     * Called by the expiration scheduler when an APPROVED request crosses its expiration date.
+     *
+     * @param request The now-expired exception request
+     * @return CompletableFuture indicating if at least one email was sent successfully
+     */
+    open fun notifyAdminsAndSecChampionsOfExpiration(request: VulnerabilityExceptionRequest): CompletableFuture<Boolean> {
+        val requestId = request.id
+        val cveId = request.vulnerability?.vulnerabilityId ?: "Unknown CVE"
+        val assetName = request.vulnerability?.asset?.name ?: "Unknown Asset"
+        val requesterName = request.requestedByUsername
+        val expirationDate = request.expirationDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+        val subject = "Exception Expired: $cveId on $assetName"
+        val recipients: List<AdminRecipient> = userRepository.findAll()
+            .filter { it.hasRole(User.Role.ADMIN) || it.hasRole(User.Role.SECCHAMPION) }
+            .map { user ->
+                AdminRecipient(
+                    email = user.email,
+                    username = user.username,
+                    htmlContent = generateExpirationNoticeEmail(cveId, assetName, requesterName, expirationDate, user.username),
+                    textContent = generateExpirationNoticeTextEmail(cveId, assetName, requesterName, expirationDate, user.username)
+                )
+            }
+        val inlineImages = loadLogoInlineImage()
+
+        return CompletableFuture.supplyAsync {
+            try {
+                logger.info("Sending expiration notices for requestId={}", requestId)
+
+                if (recipients.isEmpty()) {
+                    logger.warn("No ADMIN or SECCHAMPION users found to notify about expiration of request {}", requestId)
+                    return@supplyAsync false
+                }
+
+                var successCount = 0
+                var failureCount = 0
+
+                for (recipient in recipients) {
+                    try {
+                        val future = emailService.sendEmailWithInlineImages(
+                            to = recipient.email,
+                            subject = subject,
+                            textContent = recipient.textContent,
+                            htmlContent = recipient.htmlContent,
+                            inlineImages = inlineImages
+                        )
+                        val sent = future.get()
+                        if (sent) {
+                            successCount++
+                            logger.debug("Sent expiration notice to {}", recipient.email)
+                        } else {
+                            failureCount++
+                            logger.warn("Failed to send expiration notice to {}", recipient.email)
+                        }
+                    } catch (e: Exception) {
+                        failureCount++
+                        logger.error("Error sending expiration notice to {}: {}", recipient.email, e.message)
+                    }
+                }
+
+                logger.info("Expiration notices sent: {} success, {} failures (requestId={})",
+                    successCount, failureCount, requestId)
+
+                return@supplyAsync successCount > 0
+
+            } catch (e: Exception) {
+                logger.error("Failed to send expiration notices for requestId={}", requestId, e)
+                return@supplyAsync false
+            }
+        }
+    }
+
+    private fun generateExpirationNoticeEmail(
+        cveId: String, assetName: String, requesterName: String,
+        expirationDate: String, recipientName: String
+    ): String = """
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <title>Exception Expired</title>
+</head>
+<body style="margin:0;padding:0;background-color:#eef2f7;font-family:'Segoe UI',Helvetica,Arial,sans-serif;color:#1f2933;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#eef2f7;padding:32px 12px;">
+        <tr>
+            <td align="center">
+                <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="background-color:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 4px 14px rgba(15,23,42,0.08);max-width:600px;">
+                    <tr>
+                        <td style="background-color:#1a3a6c;background-image:linear-gradient(135deg,#0f2447 0%,#1a3a6c 45%,#b1273a 100%);padding:28px 32px;">
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                                <tr>
+                                    <td valign="middle" style="width:72px;">
+                                        <img src="cid:secman-logo" alt="SecMan" width="60" height="60" style="display:block;border:0;background-color:#ffffff;border-radius:10px;padding:6px;">
+                                    </td>
+                                    <td valign="middle" style="padding-left:18px;">
+                                        <div style="color:#dbe5f5;font-size:12px;letter-spacing:1.4px;text-transform:uppercase;font-weight:600;">SecMan Risk Assessment</div>
+                                        <div style="color:#ffffff;font-size:22px;font-weight:600;margin-top:6px;line-height:1.25;">Vulnerability Exception Expired</div>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="height:4px;line-height:4px;background-color:#dc3545;">&nbsp;</td>
+                    </tr>
+                    <tr>
+                        <td style="padding:28px 32px 8px 32px;">
+                            <p style="margin:0 0 14px 0;font-size:15px;line-height:1.5;">Hello <strong>$recipientName</strong>,</p>
+                            <p style="margin:0 0 22px 0;font-size:15px;line-height:1.5;color:#475569;">A vulnerability exception has <strong style="color:#dc3545;">expired</strong>. The vulnerability is now active again and will appear in security reports.</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:0 32px 28px 32px;">
+                            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate;border-spacing:0 6px;">
+                                <tr>
+                                    <td style="padding:12px 14px;background-color:#f7f9fc;border:1px solid #e2e8f0;border-radius:6px 0 0 6px;width:38%;font-weight:600;color:#475569;font-size:12px;text-transform:uppercase;letter-spacing:0.6px;">CVE ID</td>
+                                    <td style="padding:12px 14px;background-color:#ffffff;border:1px solid #e2e8f0;border-left:0;border-radius:0 6px 6px 0;color:#1f2933;font-size:14px;font-family:'SF Mono','Consolas',monospace;">$cveId</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:12px 14px;background-color:#f7f9fc;border:1px solid #e2e8f0;border-radius:6px 0 0 6px;font-weight:600;color:#475569;font-size:12px;text-transform:uppercase;letter-spacing:0.6px;">Asset</td>
+                                    <td style="padding:12px 14px;background-color:#ffffff;border:1px solid #e2e8f0;border-left:0;border-radius:0 6px 6px 0;color:#1f2933;font-size:14px;">$assetName</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:12px 14px;background-color:#f7f9fc;border:1px solid #e2e8f0;border-radius:6px 0 0 6px;font-weight:600;color:#475569;font-size:12px;text-transform:uppercase;letter-spacing:0.6px;">Originally Requested By</td>
+                                    <td style="padding:12px 14px;background-color:#ffffff;border:1px solid #e2e8f0;border-left:0;border-radius:0 6px 6px 0;color:#1f2933;font-size:14px;">$requesterName</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:12px 14px;background-color:#f7f9fc;border:1px solid #e2e8f0;border-radius:6px 0 0 6px;font-weight:600;color:#475569;font-size:12px;text-transform:uppercase;letter-spacing:0.6px;">Expired On</td>
+                                    <td style="padding:12px 14px;background-color:#fff5f5;border:1px solid #e2e8f0;border-left:0;border-radius:0 6px 6px 0;color:#dc3545;font-size:14px;font-weight:600;">$expirationDate</td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td align="center" style="padding:4px 32px 32px 32px;">
+                            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                                <tr>
+                                    <td style="background-color:#1a3a6c;background-image:linear-gradient(135deg,#1a3a6c 0%,#2c5282 100%);border-radius:6px;">
+                                        <a href="${dashboardUrl()}" style="display:inline-block;padding:14px 32px;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;letter-spacing:0.3px;">View Exception Dashboard &rarr;</a>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="background-color:#f7f9fc;padding:18px 32px;text-align:center;border-top:1px solid #e2e8f0;">
+                            <p style="margin:0;font-size:12px;color:#64748b;">This is an automated notification from <strong style="color:#475569;">SecMan</strong>. Please do not reply to this email.</p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
+    """.trimIndent()
+
+    private fun generateExpirationNoticeTextEmail(
+        cveId: String, assetName: String, requesterName: String,
+        expirationDate: String, recipientName: String
+    ): String = """
+        |SecMan — Vulnerability Exception Expired
+        |=========================================
+        |
+        |Hello $recipientName,
+        |
+        |A vulnerability exception has expired. The vulnerability is now active again.
+        |
+        |  CVE ID:                  $cveId
+        |  Asset:                   $assetName
+        |  Originally Requested By: $requesterName
+        |  Expired On:              $expirationDate
+        |
+        |View the exception dashboard:
+        |  ${dashboardUrl()}
+        |
+        |--
+        |This is an automated notification from SecMan. Please do not reply.
+    """.trimMargin()
+
+    /**
      * Generate HTML email for expiration reminder (to requester).
      *
      * Template includes:

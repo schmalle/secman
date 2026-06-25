@@ -99,9 +99,10 @@ open class ExceptionExpirationScheduler(
                     val deactivated = deactivateExceptionsForRequest(request)
                     deactivatedCount += deactivated
 
-                    // Send expiration notification (non-blocking)
+                    // Send expiration notifications (non-blocking)
                     try {
                         notificationService.notifyRequesterOfExpiration(request)
+                        notificationService.notifyAdminsAndSecChampionsOfExpiration(request)
                         notificationCount++
                     } catch (e: Exception) {
                         logger.error("Failed to send expiration notification for request {}: {}",
