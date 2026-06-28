@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { WorkgroupResponse } from '../services/workgroupApi';
-import { getWorkgroupChildren, getRootWorkgroups } from '../services/workgroupApi';
+import { getWorkgroupChildren, getRootWorkgroups, isAwsWorkgroup } from '../services/workgroupApi';
 
 /**
  * Workgroup Tree Component
@@ -17,6 +17,8 @@ interface WorkgroupTreeProps {
   onSelectWorkgroup?: (workgroup: WorkgroupResponse) => void;
   onCreateChild?: (parent: WorkgroupResponse) => void;
   selectedWorkgroupId?: number | null;
+  /** When false (default), workgroups named "AWS-…" are hidden. */
+  showAwsWorkgroups?: boolean;
 }
 
 interface TreeNodeProps {
@@ -25,6 +27,7 @@ interface TreeNodeProps {
   onSelectWorkgroup?: (workgroup: WorkgroupResponse) => void;
   onCreateChild?: (parent: WorkgroupResponse) => void;
   selectedWorkgroupId?: number | null;
+  showAwsWorkgroups?: boolean;
 }
 
 const TreeNode: React.FC<TreeNodeProps> = ({
@@ -32,7 +35,8 @@ const TreeNode: React.FC<TreeNodeProps> = ({
   level,
   onSelectWorkgroup,
   onCreateChild,
-  selectedWorkgroupId
+  selectedWorkgroupId,
+  showAwsWorkgroups
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [children, setChildren] = useState<WorkgroupResponse[]>([]);
@@ -150,16 +154,19 @@ const TreeNode: React.FC<TreeNodeProps> = ({
       {/* Children */}
       {isExpanded && children.length > 0 && (
         <div>
-          {children.map((child) => (
-            <TreeNode
-              key={child.id}
-              workgroup={child}
-              level={level + 1}
-              onSelectWorkgroup={onSelectWorkgroup}
-              onCreateChild={onCreateChild}
-              selectedWorkgroupId={selectedWorkgroupId}
-            />
-          ))}
+          {children
+            .filter((child) => showAwsWorkgroups || !isAwsWorkgroup(child.name))
+            .map((child) => (
+              <TreeNode
+                key={child.id}
+                workgroup={child}
+                level={level + 1}
+                onSelectWorkgroup={onSelectWorkgroup}
+                onCreateChild={onCreateChild}
+                selectedWorkgroupId={selectedWorkgroupId}
+                showAwsWorkgroups={showAwsWorkgroups}
+              />
+            ))}
         </div>
       )}
     </div>
@@ -169,7 +176,8 @@ const TreeNode: React.FC<TreeNodeProps> = ({
 const WorkgroupTree: React.FC<WorkgroupTreeProps> = ({
   onSelectWorkgroup,
   onCreateChild,
-  selectedWorkgroupId
+  selectedWorkgroupId,
+  showAwsWorkgroups = false
 }) => {
   const [rootWorkgroups, setRootWorkgroups] = useState<WorkgroupResponse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -218,12 +226,20 @@ const WorkgroupTree: React.FC<WorkgroupTreeProps> = ({
     );
   }
 
-  if (rootWorkgroups.length === 0) {
+  const visibleRoots = rootWorkgroups.filter(
+    (wg) => showAwsWorkgroups || !isAwsWorkgroup(wg.name)
+  );
+
+  if (visibleRoots.length === 0) {
     return (
       <div className="text-center py-5 text-muted">
         <i className="bi bi-folder2-open" style={{ fontSize: '48px' }}></i>
         <p className="mt-3">No workgroups found</p>
-        <p className="small">No visible workgroups are available.</p>
+        <p className="small">
+          {rootWorkgroups.length > 0
+            ? 'AWS- workgroups are hidden. Enable "Show AWS- workgroups" to see them.'
+            : 'No visible workgroups are available.'}
+        </p>
       </div>
     );
   }
@@ -236,7 +252,7 @@ const WorkgroupTree: React.FC<WorkgroupTreeProps> = ({
         </h6>
       </div>
       <div className="tree-content">
-        {rootWorkgroups.map((workgroup) => (
+        {visibleRoots.map((workgroup) => (
           <TreeNode
             key={workgroup.id}
             workgroup={workgroup}
@@ -244,6 +260,7 @@ const WorkgroupTree: React.FC<WorkgroupTreeProps> = ({
             onSelectWorkgroup={onSelectWorkgroup}
             onCreateChild={onCreateChild}
             selectedWorkgroupId={selectedWorkgroupId}
+            showAwsWorkgroups={showAwsWorkgroups}
           />
         ))}
       </div>

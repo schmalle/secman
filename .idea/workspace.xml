@@ -5,7 +5,13 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="94ada8b3-9f4e-473c-9fea-3bc9651b5bdd" name="Changes" comment="test change">
-      <change beforePath="$PROJECT_DIR$/secmanpp.env" beforeDir="false" afterPath="$PROJECT_DIR$/secmanpp.env" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/dataSources.local.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/dataSources.local.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/ENVIRONMENT.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/ENVIRONMENT.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/gradle/wrapper/gradle-wrapper.properties" beforeDir="false" afterPath="$PROJECT_DIR$/gradle/wrapper/gradle-wrapper.properties" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/gradle/wrapper/gradle-wrapper.properties" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/gradle/wrapper/gradle-wrapper.properties" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tests/e2e/vuln-exception-full.spec.ts" beforeDir="false" afterPath="$PROJECT_DIR$/tests/e2e/vuln-exception-full.spec.ts" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -67,12 +73,12 @@
     &quot;assignee&quot;: &quot;schmalle&quot;
   }
 }</component>
-  <component name="GithubPullRequestsUISettings">{
-  &quot;selectedUrlAndAccountId&quot;: {
-    &quot;url&quot;: &quot;git@github.com:schmalle/secman.git&quot;,
-    &quot;accountId&quot;: &quot;656f2107-bfc3-4580-8f63-0a8886402791&quot;
+  <component name="GithubPullRequestsUISettings"><![CDATA[{
+  "selectedUrlAndAccountId": {
+    "url": "git@github.com:schmalle/secman.git",
+    "accountId": "cdeac9ce-5c06-4f60-bbec-d488629280ee"
   }
-}</component>
+}]]></component>
   <component name="GradleScriptDefinitionsStorage" workingDir="$PROJECT_DIR$" gradleHome="$USER_HOME$/.gradle/wrapper/dists/gradle-9.4.0-bin/lcvyxq3t37f6mx9miaydrrgs/gradle-9.4.0" javaHome="$USER_HOME$/.sdkman/candidates/java/current" gradleVersion="9.4.0" />
   <component name="ProjectCodeStyleSettingsMigration">
     <option name="version" value="2" />
@@ -130,7 +136,7 @@
       <recent name="$PROJECT_DIR$/scripts/install" />
     </key>
   </component>
-  <component name="RunManager">
+  <component name="RunManager" selected="Gradle.backendng [build]">
     <configuration name="OAuthServiceTest" type="GradleRunConfiguration" factoryName="Gradle" temporary="true">
       <ExternalSystemSettings>
         <option name="executionName" />
@@ -226,8 +232,8 @@
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-js-predefined-d6986cc7102b-31caf2ab9e3c-JavaScript-PY-261.25134.203" />
-        <option value="bundled-python-sdk-245168a56dbd-c2ffad84badb-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-261.25134.203" />
+        <option value="bundled-jdk-30f59d01ecdd-37e91769500f-intellij.indexing.shared.core-IU-261.25134.95" />
+        <option value="bundled-js-predefined-d6986cc7102b-31caf2ab9e3c-JavaScript-IU-261.25134.95" />
       </set>
     </attachedChunks>
   </component>

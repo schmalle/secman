@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete } from '../utils/auth';
 import WorkgroupAccountsModal from './WorkgroupAccountsModal';
 import WorkgroupDomainsModal from './WorkgroupDomainsModal';
+import { isAwsWorkgroup } from '../services/workgroupApi';
 
 // Extract a useful error message from a non-OK Response. Handles the three
 // shapes we see in this app: our own `{error: "..."}`, Micronaut's default
@@ -76,7 +77,12 @@ const getEffectiveAssignedUserCount = (
 };
 
 
-const WorkgroupManagement: React.FC = () => {
+interface WorkgroupManagementProps {
+  /** When false (default), workgroups named "AWS-…" are hidden from the table. */
+  showAwsWorkgroups?: boolean;
+}
+
+const WorkgroupManagement: React.FC<WorkgroupManagementProps> = ({ showAwsWorkgroups = false }) => {
   const [workgroups, setWorkgroups] = useState<Workgroup[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
@@ -1086,14 +1092,21 @@ const WorkgroupManagement: React.FC = () => {
             </tr>
           </thead>
           <tbody>
-            {workgroups.length === 0 ? (
+            {(() => {
+              const visibleWorkgroups = workgroups.filter(
+                wg => showAwsWorkgroups || !isAwsWorkgroup(wg.name)
+              );
+              const hiddenAwsCount = workgroups.length - visibleWorkgroups.length;
+              return visibleWorkgroups.length === 0 ? (
               <tr>
                 <td colSpan={8} className="text-center text-muted">
-                  No visible workgroups found.
+                  {hiddenAwsCount > 0
+                    ? 'AWS- workgroups are hidden. Enable "Show AWS- workgroups" to see them.'
+                    : 'No visible workgroups found.'}
                 </td>
               </tr>
             ) : (
-              workgroups.map(workgroup => {
+              visibleWorkgroups.map(workgroup => {
                 return (
                   <tr key={workgroup.id}>
                     <td>
@@ -1178,7 +1191,8 @@ const WorkgroupManagement: React.FC = () => {
                 </tr>
                 );
               })
-            )}
+            );
+            })()}
           </tbody>
         </table>
       </div>

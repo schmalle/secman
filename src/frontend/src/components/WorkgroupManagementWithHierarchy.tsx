@@ -32,6 +32,9 @@ const WorkgroupManagementWithHierarchy: React.FC = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [workgroupToDelete, setWorkgroupToDelete] = useState<WorkgroupResponse | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  // AD-imported workgroups (names starting "AWS-") are hidden by default; this
+  // toggle reveals them in both the tree and table views.
+  const [showAwsWorkgroups, setShowAwsWorkgroups] = useState(false);
 
   // Backend POST /api/workgroups/{id}/children is @Secured("ADMIN") (deliberate per
   // commit 265a6c9: "child-create/move remain admin-only"). Mirror that gate in the UI
@@ -80,21 +83,35 @@ const WorkgroupManagementWithHierarchy: React.FC = () => {
           <i className="bi bi-diagram-3 me-2"></i>
           Workgroup Management
         </h2>
-        <div className="btn-group" role="group">
-          <button
-            type="button"
-            className={`btn ${viewMode === 'tree' ? 'btn-primary' : 'btn-outline-primary'}`}
-            onClick={() => setViewMode('tree')}
-          >
-            <i className="bi bi-diagram-3"></i> Tree View
-          </button>
-          <button
-            type="button"
-            className={`btn ${viewMode === 'table' ? 'btn-primary' : 'btn-outline-primary'}`}
-            onClick={() => setViewMode('table')}
-          >
-            <i className="bi bi-table"></i> Table View
-          </button>
+        <div className="d-flex align-items-center gap-3">
+          <div className="form-check form-switch mb-0">
+            <input
+              className="form-check-input"
+              type="checkbox"
+              id="showAwsWorkgroups"
+              checked={showAwsWorkgroups}
+              onChange={(e) => setShowAwsWorkgroups(e.target.checked)}
+            />
+            <label className="form-check-label" htmlFor="showAwsWorkgroups">
+              Show AWS- workgroups
+            </label>
+          </div>
+          <div className="btn-group" role="group">
+            <button
+              type="button"
+              className={`btn ${viewMode === 'tree' ? 'btn-primary' : 'btn-outline-primary'}`}
+              onClick={() => setViewMode('tree')}
+            >
+              <i className="bi bi-diagram-3"></i> Tree View
+            </button>
+            <button
+              type="button"
+              className={`btn ${viewMode === 'table' ? 'btn-primary' : 'btn-outline-primary'}`}
+              onClick={() => setViewMode('table')}
+            >
+              <i className="bi bi-table"></i> Table View
+            </button>
+          </div>
         </div>
       </div>
 
@@ -110,6 +127,7 @@ const WorkgroupManagementWithHierarchy: React.FC = () => {
                   onSelectWorkgroup={handleSelectWorkgroup}
                   onCreateChild={canCreateChild ? handleCreateChild : undefined}
                   selectedWorkgroupId={selectedWorkgroup?.id}
+                  showAwsWorkgroups={showAwsWorkgroups}
                 />
               </div>
             </div>
@@ -258,7 +276,7 @@ const WorkgroupManagementWithHierarchy: React.FC = () => {
           <strong> Table View:</strong> This is the classic flat view of all workgroups. Switch to Tree View to see the hierarchy.
         </div>
       )}
-      {viewMode === 'table' && <WorkgroupManagement />}
+      {viewMode === 'table' && <WorkgroupManagement showAwsWorkgroups={showAwsWorkgroups} />}
 
       {/* Modals */}
       <CreateChildWorkgroupModal

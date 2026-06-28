@@ -108,6 +108,35 @@ Backend import semantics:
 - Product names are required. Blank names, unknown systems, and external IDs already assigned to a different asset are skipped and reflected in the summary.
 - Imported fields include CrowdStrike AID, product name, vendor, version, category, installation path, installed timestamp, last-used timestamp, last-updated timestamp, and SecMan import timestamp.
 
+### `query dependabot-alerts` — GitHub Dependabot alert ingestion
+
+Queries the GitHub REST API for Dependabot alerts (organization-wide or for a single repository) and stores them in secman via `POST /api/dependabot-alerts/import`. Alerts upsert on `(repository, alertNumber)`, so re-runs update state in place. Surfaced read-only in the UI under **Vulnerability Management → Dependabot alerts**.
+
+```bash
+# Print alerts for an org (no write):
+GITHUB_TOKEN=ghp_xxx ./scripts/secman query dependabot-alerts --org my-org
+
+# Store open alerts for an org:
+GITHUB_TOKEN=ghp_xxx ./scripts/secman query dependabot-alerts --org my-org --save
+
+# Single repo, critical only:
+./scripts/secman query dependabot-alerts --repo owner/name --severity critical --state open --save --token ghp_xxx
+```
+
+| Option | Default | Notes |
+|---|---|---|
+| `--org` | — | GitHub org; queries every repo in the org. **Exactly one of `--org`/`--repo` required.** |
+| `--repo` | — | single repository in `owner/name` form |
+| `--token` | `GITHUB_TOKEN` env | GitHub token; needs `security_events` read scope (or `repo` for classic PATs) |
+| `--state` | `open` | `open`, `fixed`, `dismissed`, `auto_dismissed` |
+| `--severity` | all | `low`, `medium`, `high`, `critical` |
+| `--save` | false | POST alerts to the backend (otherwise prints only) |
+| `--dry-run` | false | query + print, never store |
+| `--backend-url` | `http://localhost:8080` | or `SECMAN_BACKEND_URL` / `SECMAN_HOST` |
+| `--verbose` | false | log each GitHub request |
+
+Backend auth (only with `--save`): `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS` (ADMIN or VULN role). GitHub pagination is followed automatically (100/page). See `docs/DEPENDABOT.md` for the full feature and the alert field mapping.
+
 ### `delete-asset-not-seen` — CrowdStrike stale asset cleanup
 
 Deletes assets that have not appeared in a CrowdStrike import for more than N days. Always run `--dry-run` first.

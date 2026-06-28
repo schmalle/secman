@@ -33,6 +33,15 @@ export interface WorkgroupResponse {
 }
 
 /**
+ * True when a workgroup's name marks it as AD-imported (the `adread --import`
+ * tool names workgroups after `AWS-`-prefixed Azure AD groups). Matched
+ * case-insensitively to mirror the Graph-side `AWS-/aws-/Aws-` prefixes.
+ * The workgroup UI hides these by default behind a "Show AWS- workgroups" toggle.
+ */
+export const isAwsWorkgroup = (name: string): boolean =>
+  name.trim().toUpperCase().startsWith('AWS-');
+
+/**
  * Request to create a child workgroup
  * Feature 040: Nested Workgroups (User Story 1)
  */

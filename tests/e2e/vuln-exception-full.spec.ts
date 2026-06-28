@@ -436,7 +436,7 @@ test.describe.serial('Vulnerability + exception lifecycle (UI)', () => {
 
         await setSelectToValue(subject, 'PRODUCT');
         await expect(page.getByPlaceholder(/Apache HTTP Server/i)).toBeVisible();
-        await expectSelectOptionValues(scope, ['GLOBAL', 'IP', 'ASSET', 'AWS_ACCOUNT']);
+        await expectSelectOptionValues(scope, ['GLOBAL', 'IP', 'ASSET', 'AWS_ACCOUNT', 'OS']);
 
         await setSelectToValue(scope, 'IP');
         await expect(page.getByTestId('exception-ip-input')).toBeVisible();
@@ -450,10 +450,10 @@ test.describe.serial('Vulnerability + exception lifecycle (UI)', () => {
 
         await setSelectToValue(subject, 'CVE');
         await expect(page.getByTestId('exception-cve-input')).toBeVisible();
-        await expectSelectOptionValues(scope, ['GLOBAL', 'IP', 'ASSET', 'AWS_ACCOUNT']);
+        await expectSelectOptionValues(scope, ['GLOBAL', 'IP', 'ASSET', 'AWS_ACCOUNT', 'OS']);
 
         await setSelectToValue(subject, 'ALL_VULNS');
-        await expectSelectOptionValues(scope, ['IP', 'ASSET', 'AWS_ACCOUNT']);
+        await expectSelectOptionValues(scope, ['IP', 'ASSET', 'AWS_ACCOUNT', 'OS']);
         await expect(scope.locator('option[value="GLOBAL"]')).toHaveCount(0);
 
         await setSelectToValue(scope, 'IP');

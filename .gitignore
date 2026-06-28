@@ -1,3 +1,5 @@
+src/adread/adread.env.local
+
 # Dependencies
 backendng/bin/
 node_modules/
