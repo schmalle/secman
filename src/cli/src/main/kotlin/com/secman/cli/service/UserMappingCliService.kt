@@ -318,7 +318,9 @@ class UserMappingCliService(
         format: String,
         dryRun: Boolean,
         backendUrl: String,
-        authToken: String
+        authToken: String,
+        notifyNewAccounts: Boolean = false,
+        notifyAddress: String? = null
     ): MappingResult {
         val file = File(filePath)
         if (!file.exists()) {
@@ -360,7 +362,7 @@ class UserMappingCliService(
         }
 
         // Send parsed entries to bulk endpoint
-        val bulkResponse = postBulk(parseResult.entries, dryRun, backendUrl, authToken)
+        val bulkResponse = postBulk(parseResult.entries, dryRun, backendUrl, authToken, notifyNewAccounts, notifyAddress)
 
         // Merge parse errors with backend errors
         val allErrors = parseResult.errors + bulkResponse.errors
@@ -395,7 +397,11 @@ class UserMappingCliService(
             skipped = bulkResponse.skipped,
             errors = allErrors,
             operations = operations,
-            comparison = comparison
+            comparison = comparison,
+            newAccounts = bulkResponse.newAccounts,
+            notificationSent = bulkResponse.notificationSent,
+            notificationRecipient = bulkResponse.notificationRecipient,
+            notificationError = bulkResponse.notificationError
         )
     }
 
@@ -602,7 +608,9 @@ class UserMappingCliService(
         entries: List<Map<String, Any?>>,
         dryRun: Boolean,
         backendUrl: String,
-        authToken: String
+        authToken: String,
+        notifyNewAccounts: Boolean = false,
+        notifyAddress: String? = null
     ): BulkResponse {
         val bodyMap = mapOf(
             "mappings" to entries.map { entry ->
@@ -612,7 +620,9 @@ class UserMappingCliService(
                     (entry["domain"] as? String)?.let { put("domain", it) }
                 }
             },
-            "dryRun" to dryRun
+            "dryRun" to dryRun,
+            "notifyNewAccounts" to notifyNewAccounts,
+            "notifyAddress" to (notifyAddress ?: "")
         )
         val jsonBody = objectMapper.writeValueAsString(bodyMap)
 
@@ -647,13 +657,26 @@ class UserMappingCliService(
 
                     @Suppress("UNCHECKED_CAST")
                     val errorsList = (responseBody["errors"] as? List<String>) ?: emptyList()
+
+                    @Suppress("UNCHECKED_CAST")
+                    val newAccounts = (responseBody["newAccounts"] as? List<Map<String, Any?>>)?.map {
+                        CliNewAccount(
+                            awsAccountId = it["awsAccountId"]?.toString() ?: "",
+                            emails = (it["emails"] as? List<*>)?.map { e -> e.toString() } ?: emptyList()
+                        )
+                    } ?: emptyList()
+
                     return BulkResponse(
                         totalProcessed = (responseBody["totalProcessed"] as? Number)?.toInt() ?: entries.size,
                         created = (responseBody["created"] as? Number)?.toInt() ?: 0,
                         createdPending = (responseBody["createdPending"] as? Number)?.toInt() ?: 0,
                         skipped = (responseBody["skipped"] as? Number)?.toInt() ?: 0,
                         errors = errorsList,
-                        comparison = comparison
+                        comparison = comparison,
+                        newAccounts = newAccounts,
+                        notificationSent = (responseBody["notificationSent"] as? Boolean) ?: false,
+                        notificationRecipient = responseBody["notificationRecipient"]?.toString(),
+                        notificationError = responseBody["notificationError"]?.toString()
                     )
                 }
                 404 -> {
@@ -880,7 +903,11 @@ class UserMappingCliService(
         val createdPending: Int,
         val skipped: Int,
         val errors: List<String>,
-        val comparison: BulkComparisonResponse?
+        val comparison: BulkComparisonResponse?,
+        val newAccounts: List<CliNewAccount> = emptyList(),
+        val notificationSent: Boolean = false,
+        val notificationRecipient: String? = null,
+        val notificationError: String? = null
     )
 
     private data class BulkComparisonResponse(
@@ -928,7 +955,20 @@ data class MappingResult(
     val skipped: Int,
     val errors: List<String>,
     val operations: List<MappingOperationResult>,
-    val comparison: MappingComparisonResult? = null
+    val comparison: MappingComparisonResult? = null,
+    val newAccounts: List<CliNewAccount> = emptyList(),
+    val notificationSent: Boolean = false,
+    val notificationRecipient: String? = null,
+    val notificationError: String? = null
+)
+
+/**
+ * A brand-new (DB-wide) AWS account detected during import, with the user
+ * email(s) it was mapped to in this run.
+ */
+data class CliNewAccount(
+    val awsAccountId: String,
+    val emails: List<String>
 )
 
 /**
