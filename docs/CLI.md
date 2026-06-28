@@ -143,6 +143,22 @@ Existing assets start with `crowdstrike_last_imported_at = NULL` after the schem
 | `--verbose` | false | per-asset detail |
 | `--outdated-only` | false | skip new-vuln notifications |
 
+For each outdated asset (an asset with overdue vulnerabilities), the recipients are
+the deduplicated, case-insensitive union of — keyed on the asset's AWS account
+(`cloud_account_id`):
+
+1. **AWS account owner(s)** — every `UserMapping` row whose `aws_account_id` matches
+   the account (plus, for backward compatibility, the legacy `asset.owner` lookup).
+2. **Workgroup members** — every member of any workgroup that contains an asset in
+   the account (asset → workgroup → users).
+3. **Sharing recipients** — every user granted access to the account via the AWS
+   Account Sharing feature (directional, honoring per-rule account selection).
+
+This mirrors the `send-notification-users` recipient fan-out. Each recipient receives
+one consolidated email covering all outdated assets they can access; an asset is
+notified at most once per day regardless of how many recipients it reaches. An asset
+with no recipients in any category is skipped (logged with `--verbose`).
+
 ### `send-notification-users` — per-AWS-account vulnerability emails
 
 Finds AWS accounts whose EC2 assets have vulnerabilities open longer than

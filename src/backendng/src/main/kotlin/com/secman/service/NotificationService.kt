@@ -43,36 +43,50 @@ class NotificationService(
         logger.info("Processing ${outdatedAssets.size} outdated assets (dry-run: $dryRun)")
 
         val assetsByOwner = aggregateByOwner(outdatedAssets)
-        logger.info("Aggregated into ${assetsByOwner.size} owners")
+        logger.info("Aggregated into ${assetsByOwner.size} recipients")
+
+        // Duplicate-prevention and reminder-level progression are tracked PER ASSET, but a
+        // single asset can now fan out to multiple recipients (owner mapping + workgroup
+        // members + AWS-account-sharing targets). Evaluate "already sent today" and the
+        // reminder level ONCE per distinct asset, up front, before any send updates the
+        // per-asset lastSentAt — otherwise notifying the first recipient would silently
+        // suppress the same asset for every other recipient who shares it.
+        val distinctAssetIds = outdatedAssets.map { it.assetId }.toSet()
+        val levelByAssetId = mutableMapOf<Long, Int>()
+        val eligibleAssetIds = mutableSetOf<Long>()
+        distinctAssetIds.forEach { assetId ->
+            val state = reminderStateService.getOrCreateReminderState(assetId, true)
+            levelByAssetId[assetId] = state?.level ?: 1
+            if (reminderStateService.shouldSendToday(assetId)) {
+                eligibleAssetIds.add(assetId)
+            }
+        }
 
         var emailsSent = 0
         var failures = 0
         val skipped = mutableListOf<String>()
+        // Assets successfully delivered to at least one recipient — marked sent-today once,
+        // after all recipients are processed.
+        val sentAssetIds = mutableSetOf<Long>()
 
         assetsByOwner.forEach { (ownerEmail, assets) ->
             if (ownerEmail.isBlank()) {
-                logger.warn("Skipping assets with blank owner email")
+                logger.warn("Skipping assets with blank recipient email")
                 skipped.add("blank email")
                 return@forEach
             }
 
+            // Only assets not already notified today (across all recipients) are sent.
+            val eligibleAssets = assets.filter { eligibleAssetIds.contains(it.assetId) }
+            if (eligibleAssets.isEmpty()) {
+                logger.info("Skipping $ownerEmail - no assets eligible to send today")
+                skipped.add(ownerEmail)
+                return@forEach
+            }
+
             try {
-                // Determine reminder level for each asset
-                val assetsWithLevels = assets.map { asset ->
-                    val state = reminderStateService.getOrCreateReminderState(asset.assetId, true)
-                    asset to (state?.level ?: 1)
-                }
-
-                // Check if we should send today (duplicate prevention)
-                val firstAsset = assets.first()
-                if (!reminderStateService.shouldSendToday(firstAsset.assetId)) {
-                    logger.info("Skipping $ownerEmail - already notified today")
-                    skipped.add(ownerEmail)
-                    return@forEach
-                }
-
                 // Determine which reminder level to use (use highest level)
-                val maxLevel = assetsWithLevels.maxOf { it.second }
+                val maxLevel = eligibleAssets.maxOf { levelByAssetId[it.assetId] ?: 1 }
                 val notificationType = if (maxLevel == 2) {
                     NotificationType.OUTDATED_LEVEL2
                 } else {
@@ -80,12 +94,10 @@ class NotificationService(
                 }
 
                 if (dryRun) {
-                    logger.info("[DRY-RUN] Would send $notificationType to $ownerEmail for ${assets.size} assets")
+                    logger.info("[DRY-RUN] Would send $notificationType to $ownerEmail for ${eligibleAssets.size} assets")
                 } else {
-                    sendOutdatedReminder(ownerEmail, assets, notificationType)
-                    assets.forEach { asset ->
-                        reminderStateService.updateLastSent(asset.assetId)
-                    }
+                    sendOutdatedReminder(ownerEmail, eligibleAssets, notificationType)
+                    sentAssetIds.addAll(eligibleAssets.map { it.assetId })
                 }
 
                 emailsSent++
@@ -96,14 +108,20 @@ class NotificationService(
                 if (!dryRun) {
                     // Log failure for first asset (representative)
                     notificationLogService.logFailure(
-                        assetId = assets.first().assetId,
-                        assetName = assets.first().assetName,
+                        assetId = eligibleAssets.first().assetId,
+                        assetName = eligibleAssets.first().assetName,
                         ownerEmail = ownerEmail,
                         notificationType = NotificationType.OUTDATED_LEVEL1,
                         errorMessage = e.message ?: "Unknown error"
                     )
                 }
             }
+        }
+
+        // Mark each delivered asset as sent exactly once, regardless of how many
+        // recipients it fanned out to.
+        if (!dryRun) {
+            sentAssetIds.forEach { reminderStateService.updateLastSent(it) }
         }
 
         // Send notifications to users with REPORT role

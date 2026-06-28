@@ -4,6 +4,7 @@ import com.secman.repository.AssetRepository
 import com.secman.repository.OutdatedAssetMaterializedViewRepository
 import com.secman.repository.UserMappingRepository
 import com.secman.service.AdminSummaryService
+import com.secman.service.AwsAccountRecipientResolver
 import com.secman.service.NewAccountNotificationService
 import com.secman.service.NotificationService
 import com.secman.service.UserMappingStatisticsService
@@ -41,7 +42,8 @@ class CliController(
     private val userVulnerabilityNotificationService: UserVulnerabilityNotificationService,
     private val userMappingStatisticsService: UserMappingStatisticsService,
     private val applicationRegisterReminderService: ApplicationRegisterReminderService,
-    private val newAccountNotificationService: NewAccountNotificationService
+    private val newAccountNotificationService: NewAccountNotificationService,
+    private val recipientResolver: AwsAccountRecipientResolver
 ) {
     private val logger = LoggerFactory.getLogger(CliController::class.java)
 
@@ -116,13 +118,23 @@ class CliController(
                 return@forEach
             }
 
-            val userMappings = userMappingRepository.findByAwsAccountId(asset.owner)
-            if (userMappings.isEmpty()) {
-                if (verbose) logger.warn("No email found for AWS account {}, skipping asset {}", asset.owner, asset.name)
-                return@forEach
+            // Resolve the full recipient set for this asset (deduped, case-insensitive):
+            //  - workgroup members + AWS-account-sharing targets + owner mapping, keyed on
+            //    the canonical cloudAccountId (also covers CrowdStrike-imported assets), and
+            //  - the legacy owner-mapping lookup (asset.owner) for backward compatibility.
+            val recipients = mutableSetOf<String>()
+            recipients.addAll(recipientResolver.resolveAwsAccountRecipients(asset.cloudAccountId ?: ""))
+            userMappingRepository.findByAwsAccountId(asset.owner).forEach { mapping ->
+                recipients.add(mapping.email.lowercase())
             }
 
-            val ownerEmail = userMappings.first().email
+            if (recipients.isEmpty()) {
+                if (verbose) logger.warn(
+                    "No recipients found for asset {} (account={}, owner={}), skipping",
+                    asset.name, asset.cloudAccountId, asset.owner
+                )
+                return@forEach
+            }
 
             val severity = when {
                 view.criticalCount > 0 -> "CRITICAL"
@@ -133,22 +145,26 @@ class CliController(
 
             val criticality = asset.getEffectiveCriticality().name
 
-            results.add(
-                NotificationService.OutdatedAssetData(
-                    assetId = view.assetId,
-                    assetName = view.assetName,
-                    assetType = view.assetType,
-                    ownerEmail = ownerEmail,
-                    vulnerabilityCount = view.totalOverdueCount,
-                    oldestVulnDays = view.oldestVulnDays,
-                    oldestVulnId = view.oldestVulnId ?: "unknown",
-                    severity = severity,
-                    criticality = criticality
+            // Emit one row per (recipient, asset). NotificationService groups by recipient
+            // email and sends each recipient a single consolidated email.
+            recipients.forEach { recipientEmail ->
+                results.add(
+                    NotificationService.OutdatedAssetData(
+                        assetId = view.assetId,
+                        assetName = view.assetName,
+                        assetType = view.assetType,
+                        ownerEmail = recipientEmail,
+                        vulnerabilityCount = view.totalOverdueCount,
+                        oldestVulnDays = view.oldestVulnDays,
+                        oldestVulnId = view.oldestVulnId ?: "unknown",
+                        severity = severity,
+                        criticality = criticality
+                    )
                 )
-            )
+            }
         }
 
-        logger.info("Mapped {} outdated assets with owner emails", results.size)
+        logger.info("Mapped {} outdated-asset notifications across recipients", results.size)
         return results
     }
 
