@@ -50,7 +50,15 @@ data class BulkUserMappingEntry(
 @Serdeable
 data class BulkUserMappingRequest(
     val mappings: List<BulkUserMappingEntry>,
-    val dryRun: Boolean = false
+    val dryRun: Boolean = false,
+    val notifyNewAccounts: Boolean = false,
+    val notifyAddress: String? = null
+)
+
+@Serdeable
+data class NewAccountImportInfo(
+    val awsAccountId: String,
+    val emails: List<String>
 )
 
 @Serdeable
@@ -60,7 +68,11 @@ data class BulkUserMappingResponse(
     val createdPending: Int,
     val skipped: Int,
     val errors: List<String>,
-    val comparison: MappingComparisonResponse? = null
+    val comparison: MappingComparisonResponse? = null,
+    val newAccounts: List<NewAccountImportInfo> = emptyList(),
+    val notificationSent: Boolean = false,
+    val notificationRecipient: String? = null,
+    val notificationError: String? = null
 )
 
 @Serdeable
