@@ -373,7 +373,7 @@ Opt-in notification when the import introduces AWS account IDs not previously pr
 - On a non-dry-run import with `--createnotify`, an email is sent to `--notify-address` **only if** the import introduces at least one AWS account ID that is not already present in any mapping in the database (brand-new DB-wide).
 - Email subject: `New AWS accounts imported into SecMan`. Auto-generated body lists each new account ID and the user email(s) it was mapped to.
 - `--dry-run --createnotify` reports which accounts would trigger notification (if any) but sends no email.
-- Notification requires the bulk endpoint (`POST /api/user-mappings/bulk-import`); against an older backend without it, the CLI falls back to per-row creates and no email is sent.
+- Notification requires the bulk endpoint (`POST /api/user-mappings/bulk`); against an older backend without it, the CLI falls back to per-row creates and no email is sent.
 
 **Exit codes:**
 
