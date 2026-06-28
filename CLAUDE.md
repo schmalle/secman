@@ -95,7 +95,10 @@ CrowdStrike monitoring: `src/clinotify/check_crowdstrike_checkin.py` polls `/api
 2. RBAC enforced at controller (`@Secured`) AND in UI.
 3. Schema = Flyway migrations + Hibernate auto-update.
 4. Always write tests. Source of truth for credentials and URLs is `pass-cli`.
-5. **A change is complete only when** `./gradlew build` is clean **AND** `./scripts/startbackenddev.sh` starts cleanly. Compile-clean ≠ runtime-clean (Micronaut bean wiring, Flyway, SessionFactory only check at startup). Stop the backend after verifying.
+5. **A change is complete only when ALL of the following are true:**
+   - `./gradlew build` is clean AND `./scripts/startbackenddev.sh` starts cleanly (compile-clean ≠ runtime-clean — Micronaut bean wiring, Flyway, and SessionFactory only check at startup; stop the backend after verifying).
+   - **Tests extended**: every new behaviour, endpoint, or bug fix has at least one new or updated test covering it. Unit tests for pure logic; integration tests for DB/HTTP paths. No test = no merge.
+   - **Docs updated**: any change to an API endpoint, CLI command, MCP tool, DB schema, env var, RBAC rule, config key, or notable architectural decision must be reflected in the relevant doc under `docs/` (or `CLAUDE.md` if cross-cutting). Doc-only edits that touch nothing in `src/`, `tests/`, or `scripts/` are exempt from the build/E2E gates but must still be accurate.
 6. Tests route HTTP through `SECMAN_HOST` (from `pass-cli`). No hardcoded localhost URLs.
 7. **Mandatory post-change E2E gates** (in addition to build + startup):
    - **`/e2ejs`** must report **0 JS errors** for both admin and normal-user runs against `SECMAN_HOST`. RBAC 403s on role-gated endpoints and documented 404s (e.g., `/api/wg-vulns`, `/api/domain-vulns` for users without mappings) are NOT JS errors. A page that throws or logs `console.error` IS — fix before merge.
