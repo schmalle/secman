@@ -101,7 +101,15 @@ class McpToolRegistry(
     @Inject private val removeWorkgroupAdDomainTool: RemoveWorkgroupAdDomainTool,
     // CrowdStrike import status
     @Inject private val getCrowdStrikeLastImportTool: GetCrowdStrikeLastImportTool,
-    @Inject private val applicationRegisterTool: ApplicationRegisterTool
+    @Inject private val applicationRegisterTool: ApplicationRegisterTool,
+    // CLI parity tools
+    @Inject private val deduplicateVulnerabilitiesTool: DeduplicateVulnerabilitiesTool,
+    @Inject private val deleteAssetNotSeenTool: DeleteAssetNotSeenTool,
+    @Inject private val notifyNewAccountsTool: NotifyNewAccountsTool,
+    @Inject private val sendOutdatedNotificationsTool: SendOutdatedNotificationsTool,
+    @Inject private val sendVulnerabilityNotificationsTool: SendVulnerabilityNotificationsTool,
+    @Inject private val sendApplicationRegisterRemindersTool: SendApplicationRegisterRemindersTool,
+    @Inject private val assetMatchClearTool: AssetMatchClearTool
 ) {
     private val logger = LoggerFactory.getLogger(McpToolRegistry::class.java)
 
@@ -199,7 +207,15 @@ class McpToolRegistry(
             removeWorkgroupAdDomainTool,
             // CrowdStrike import status
             getCrowdStrikeLastImportTool,
-            applicationRegisterTool
+            applicationRegisterTool,
+            // CLI parity tools
+            deduplicateVulnerabilitiesTool,
+            deleteAssetNotSeenTool,
+            notifyNewAccountsTool,
+            sendOutdatedNotificationsTool,
+            sendVulnerabilityNotificationsTool,
+            sendApplicationRegisterRemindersTool,
+            assetMatchClearTool
         ).forEach { tool ->
             toolMap[tool.name] = tool
             logger.debug("Registered MCP tool: {}", tool.name)
@@ -482,6 +498,29 @@ class McpToolRegistry(
             // CrowdStrike import status (ADMIN/VULN role checked in tool execute())
             "get_crowdstrike_last_import" -> {
                 permissions.contains(McpPermission.VULNERABILITIES_READ)
+            }
+
+            // CLI parity tools (ADMIN only via User Delegation)
+            "deduplicate_vulnerabilities" -> {
+                permissions.contains(McpPermission.VULNERABILITIES_READ) // ADMIN role checked in tool execute()
+            }
+            "delete_asset_not_seen" -> {
+                permissions.contains(McpPermission.ASSETS_READ) // ADMIN role checked in tool execute()
+            }
+            "notify_new_accounts" -> {
+                permissions.contains(McpPermission.NOTIFICATIONS_SEND) // ADMIN role checked in tool execute()
+            }
+            "send_outdated_notifications" -> {
+                permissions.contains(McpPermission.NOTIFICATIONS_SEND) // ADMIN role checked in tool execute()
+            }
+            "send_vulnerability_notifications" -> {
+                permissions.contains(McpPermission.NOTIFICATIONS_SEND) // ADMIN role checked in tool execute()
+            }
+            "send_application_register_reminders" -> {
+                permissions.contains(McpPermission.NOTIFICATIONS_SEND) // ADMIN role checked in tool execute()
+            }
+            "asset_match_clear" -> {
+                permissions.contains(McpPermission.ASSETS_READ) // ADMIN role checked in tool execute()
             }
 
             else -> false
