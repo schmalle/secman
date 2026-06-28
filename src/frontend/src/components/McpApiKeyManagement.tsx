@@ -40,32 +40,47 @@ const McpApiKeyManagement: React.FC = () => {
     allowedDelegationDomains: ''
   });
   const [newApiKey, setNewApiKey] = useState<string | null>(null);
+  const [showInactive, setShowInactive] = useState(false);
 
-  const availablePermissions = [
-    'REQUIREMENTS_READ',
-    'REQUIREMENTS_WRITE',
-    'ASSESSMENTS_READ',
-    'ASSESSMENTS_WRITE',
-    'ASSETS_READ',
-    'ASSETS_WRITE',
-    'VULNERABILITIES_READ',
-    'SCANS_READ',
-    'TAGS_READ',
-    'SYSTEM_INFO',
-    'USER_ACTIVITY',
-    'WORKGROUPS_WRITE',  // Feature 074: Workgroup management via MCP
-    'NOTIFICATIONS_SEND'
+  const permissionMeta: Record<string, { label: string; description: string; adminOnly?: boolean }> = {
+    REQUIREMENTS_READ:    { label: 'Read Requirements',      description: 'View and search security requirements' },
+    REQUIREMENTS_WRITE:   { label: 'Write Requirements',     description: 'Create and update security requirements' },
+    REQUIREMENTS_DELETE:  { label: 'Delete Requirements',    description: 'Delete security requirements' },
+    ASSESSMENTS_READ:     { label: 'Read Assessments',       description: 'View risk assessments and results' },
+    ASSESSMENTS_EXECUTE:  { label: 'Execute Assessments',    description: 'Run new risk assessments' },
+    ASSESSMENTS_WRITE:    { label: 'Write Assessments',      description: 'Create and update risk assessments' },
+    FILES_READ:           { label: 'Read Files',             description: 'Download requirement files and attachments' },
+    TAGS_READ:            { label: 'Read Tags',              description: 'View tags and categories' },
+    ASSETS_READ:          { label: 'Read Assets',            description: 'View and search asset inventory' },
+    ASSETS_WRITE:         { label: 'Write Assets',           description: 'Create and update assets in the inventory' },
+    SCANS_READ:           { label: 'Read Scans',             description: 'View scan data and results' },
+    VULNERABILITIES_READ: { label: 'Read Vulnerabilities',   description: 'View vulnerability information' },
+    TRANSLATION_USE:      { label: 'Use Translations',       description: 'Translate requirements to different languages' },
+    SYSTEM_INFO:          { label: 'System Information',     description: 'Access system information and statistics', adminOnly: true },
+    USER_ACTIVITY:        { label: 'User Activity',          description: 'Monitor user activity and sessions', adminOnly: true },
+    AUDIT_READ:           { label: 'Read Audit Logs',        description: 'View MCP server audit logs', adminOnly: true },
+    WORKGROUPS_WRITE:     { label: 'Manage Workgroups',      description: 'Create, delete, and manage workgroup memberships', adminOnly: true },
+    NOTIFICATIONS_SEND:   { label: 'Send Notifications',     description: 'Send admin summary emails and trigger notifications', adminOnly: true },
+  };
+
+  const permissionGroups = [
+    { title: 'Requirements', keys: ['REQUIREMENTS_READ', 'REQUIREMENTS_WRITE', 'REQUIREMENTS_DELETE'] },
+    { title: 'Assessments', keys: ['ASSESSMENTS_READ', 'ASSESSMENTS_EXECUTE', 'ASSESSMENTS_WRITE'] },
+    { title: 'Assets & Scans', keys: ['ASSETS_READ', 'ASSETS_WRITE', 'SCANS_READ', 'VULNERABILITIES_READ'] },
+    { title: 'Files & Tags', keys: ['FILES_READ', 'TAGS_READ', 'TRANSLATION_USE'] },
+    { title: 'Admin Only', keys: ['SYSTEM_INFO', 'USER_ACTIVITY', 'AUDIT_READ', 'WORKGROUPS_WRITE', 'NOTIFICATIONS_SEND'] },
   ];
 
   useEffect(() => {
     fetchApiKeys();
-  }, []);
+  }, [showInactive]);
 
   const fetchApiKeys = async () => {
     try {
       setLoading(true);
       // Authentication is handled via HttpOnly cookie (credentials: 'include')
-      const response = await fetch('/api/mcp/admin/api-keys', {
+      const url = showInactive ? '/api/mcp/admin/api-keys?include_inactive=true' : '/api/mcp/admin/api-keys';
+      const response = await fetch(url, {
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json'
@@ -230,12 +245,24 @@ const McpApiKeyManagement: React.FC = () => {
     <div className="container mt-4">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h2>MCP API Keys</h2>
-        <button
-          className="btn btn-primary"
-          onClick={() => setShowCreateForm(true)}
-        >
-          Create New API Key
-        </button>
+        <div className="d-flex gap-2 align-items-center">
+          <div className="form-check form-switch mb-0">
+            <input
+              className="form-check-input"
+              type="checkbox"
+              id="showInactive"
+              checked={showInactive}
+              onChange={(e) => setShowInactive(e.target.checked)}
+            />
+            <label className="form-check-label" htmlFor="showInactive">Show Inactive</label>
+          </div>
+          <button
+            className="btn btn-primary"
+            onClick={() => setShowCreateForm(true)}
+          >
+            Create New API Key
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -292,24 +319,35 @@ const McpApiKeyManagement: React.FC = () => {
 
                   <div className="mb-3">
                     <label className="form-label">Permissions *</label>
-                    <div className="row">
-                      {availablePermissions.map(permission => (
-                        <div key={permission} className="col-md-6 mb-2">
-                          <div className="form-check">
-                            <input
-                              className="form-check-input"
-                              type="checkbox"
-                              id={permission}
-                              checked={createForm.permissions.includes(permission)}
-                              onChange={(e) => handlePermissionChange(permission, e.target.checked)}
-                            />
-                            <label className="form-check-label" htmlFor={permission}>
-                              {permission.replace(/_/g, ' ')}
-                            </label>
-                          </div>
+                    {permissionGroups.map(group => (
+                      <div key={group.title} className="mb-3">
+                        <div className="text-muted small fw-semibold mb-1">{group.title}</div>
+                        <div className="row">
+                          {group.keys.map(permission => {
+                            const meta = permissionMeta[permission];
+                            return (
+                              <div key={permission} className="col-md-6 mb-2">
+                                <div className="form-check">
+                                  <input
+                                    className="form-check-input"
+                                    type="checkbox"
+                                    id={permission}
+                                    checked={createForm.permissions.includes(permission)}
+                                    onChange={(e) => handlePermissionChange(permission, e.target.checked)}
+                                  />
+                                  <label className="form-check-label" htmlFor={permission} title={meta.description}>
+                                    {meta.label}
+                                    {meta.adminOnly && (
+                                      <span className="badge bg-warning text-dark ms-1" style={{ fontSize: '0.65em' }}>Admin</span>
+                                    )}
+                                  </label>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
-                      ))}
-                    </div>
+                      </div>
+                    ))}
                   </div>
 
                   <div className="mb-3">
@@ -451,7 +489,7 @@ const McpApiKeyManagement: React.FC = () => {
                   <td>
                     {(apiKey.permissions ?? []).map(permission => (
                       <span key={permission} className="badge bg-light text-dark me-1">
-                        {permission.replace(/_/g, ' ')}
+                        {permission}
                       </span>
                     ))}
                   </td>
