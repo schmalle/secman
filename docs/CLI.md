@@ -352,6 +352,37 @@ JSON:
 
 Validation: email `user@domain.tld` 3–255 chars; AWS account exactly 12 digits; domain alphanumeric `.`/`-`. At least one of `awsAccountId`/`domain` per entry. Output summarizes `Created (active|pending)`, `Skipped`, `Errors`.
 
+#### import --createnotify/--notify-address (Feature 086)
+
+Opt-in notification when the import introduces AWS account IDs not previously present in any mapping. Requires `ADMIN`.
+
+```bash
+./scripts/secman manage-user-mappings import \
+  --file mappings.csv \
+  --createnotify \
+  --notify-address ops@corp.com
+```
+
+| Option | Default | Notes |
+|---|---|---|
+| `--createnotify` | false | opt-in; on a non-dry-run import, sends email if new AWS account IDs are introduced |
+| `--notify-address <email>` | — | **required when `--createnotify` is set**; operator recipient email address |
+
+**Behavior:**
+
+- On a non-dry-run import with `--createnotify`, an email is sent to `--notify-address` **only if** the import introduces at least one AWS account ID that is not already present in any mapping in the database (brand-new DB-wide).
+- Email subject: `New AWS accounts imported into SecMan`. Auto-generated body lists each new account ID and the user email(s) it was mapped to.
+- `--dry-run --createnotify` reports which accounts would trigger notification (if any) but sends no email.
+- Notification requires the bulk endpoint (`POST /api/user-mappings/bulk`); against an older backend without it, the CLI falls back to per-row creates and no email is sent.
+
+**Exit codes:**
+
+| Code | Meaning |
+|---|---|
+| 0 | OK (import succeeded, email sent if notification triggered, or dry-run) |
+| 1 | Partial failure (mappings saved, but email send failed) |
+| 2 | Invalid arguments (e.g., `--createnotify` without `--notify-address`; also used for other validation errors) |
+
 #### S3 subcommands
 
 All three `*-s3` commands share AWS options: `--aws-region`, `--aws-profile`, `--aws-access-key-id`, `--aws-secret-access-key`, `--aws-session-token`, `--endpoint-url` (also `AWS_ENDPOINT_URL`, used for S3Mock/MinIO/LocalStack). 10 MB hard size limit. Default credential chain: env → `~/.aws/credentials` → IAM role → SSO.

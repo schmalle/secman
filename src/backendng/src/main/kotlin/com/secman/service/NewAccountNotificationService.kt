@@ -2,6 +2,7 @@ package com.secman.service
 
 import com.secman.domain.ExecutionStatus
 import com.secman.domain.MappingStatus
+import com.secman.dto.NewAccountImportInfo
 import com.secman.repository.UserMappingRepository
 import io.micronaut.serde.annotation.Serdeable
 import jakarta.inject.Singleton
@@ -122,6 +123,58 @@ open class NewAccountNotificationService(
             failedRecipients = failed,
             hours = hours
         )
+    }
+
+    /**
+     * Send a single operator summary email about brand-new AWS accounts created
+     * during a CLI mapping import. Caller (controller) invokes this AFTER the
+     * import transaction commits. Returns true if the email was sent.
+     */
+    fun sendImportNotification(recipient: String, newAccounts: List<NewAccountImportInfo>): Boolean {
+        if (newAccounts.isEmpty()) return false
+        val subject = "New AWS accounts imported into SecMan"
+        val textBody = buildImportTextBody(newAccounts)
+        val htmlBody = buildImportHtmlBody(newAccounts)
+        return try {
+            emailService.sendEmail(recipient, subject, textBody, htmlBody).get()
+        } catch (e: Exception) {
+            logger.error("Failed to send import notification to {}: {}", recipient, e.message, e)
+            false
+        }
+    }
+
+    private fun buildImportTextBody(newAccounts: List<NewAccountImportInfo>): String {
+        val lines = newAccounts.joinToString("\n") { acct ->
+            "  - ${acct.awsAccountId}  ->  ${acct.emails.joinToString(", ")}"
+        }
+        return """
+            |The import created ${newAccounts.size} new AWS account(s):
+            |$lines
+            |
+            |-- SecMan
+        """.trimMargin()
+    }
+
+    private fun buildImportHtmlBody(newAccounts: List<NewAccountImportInfo>): String {
+        val rows = newAccounts.joinToString("") { acct ->
+            "<tr><td style=\"padding:4px 8px;font-family:monospace;\">${escapeHtml(acct.awsAccountId)}</td>" +
+                "<td style=\"padding:4px 8px;\">${escapeHtml(acct.emails.joinToString(", "))}</td></tr>"
+        }
+        return """
+            <!DOCTYPE html>
+            <html>
+            <body style="font-family:Arial,sans-serif;color:#333;max-width:600px;margin:0 auto;padding:20px;">
+              <h2 style="color:#2c3e50;">New AWS accounts imported into SecMan</h2>
+              <p>The import created ${newAccounts.size} new AWS account(s):</p>
+              <table style="border-collapse:collapse;width:100%;margin-top:8px;">
+                <tr><th style="text-align:left;padding:4px 8px;">Account ID</th><th style="text-align:left;padding:4px 8px;">Mapped user(s)</th></tr>
+                $rows
+              </table>
+              <hr style="margin:30px 0;border:none;border-top:1px solid #dee2e6;">
+              <p style="font-size:0.85em;color:#6c757d;">This message was sent by SecMan.</p>
+            </body>
+            </html>
+        """.trimIndent()
     }
 
     private fun buildTextBody(notificationText: String, accounts: List<String>): String {

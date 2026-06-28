@@ -278,9 +278,14 @@ open class UserMappingService(
                     newCount = newKeys.size,
                     unchangedCount = unchangedKeys.size,
                     removedCount = removedKeys.size
-                )
+                ),
+                newAccounts = computeNewAccounts(validEntries)
             )
         }
+
+        // Detect brand-new (DB-wide) AWS accounts BEFORE inserting, so the
+        // existence query reflects pre-import state.
+        val newAccounts = computeNewAccounts(validEntries)
 
         // Non-dry-run: create mappings.
         // Defense in depth: dedupe the *input list itself* on the same key the
@@ -343,8 +348,35 @@ open class UserMappingService(
             createdPending = createdPending,
             skipped = skipped,
             errors = errors,
-            comparison = null
+            comparison = null,
+            newAccounts = newAccounts
         )
+    }
+
+    /**
+     * Compute brand-new (DB-wide) AWS accounts among [validEntries]: account IDs
+     * present on no existing mapping. Returns each new account ID with the
+     * distinct sorted emails it is mapped to within this request. Sorted by id.
+     */
+    private fun computeNewAccounts(validEntries: List<BulkUserMappingEntry>): List<NewAccountImportInfo> {
+        val requestedIds = validEntries
+            .mapNotNull { it.awsAccountId?.trim() }
+            .filter { it.isNotBlank() }
+            .toSet()
+        if (requestedIds.isEmpty()) return emptyList()
+
+        val preexisting = userMappingRepository.findExistingAwsAccountIds(requestedIds).toSet()
+        val newIds = requestedIds - preexisting
+        if (newIds.isEmpty()) return emptyList()
+
+        return newIds.sorted().map { acctId ->
+            val emails = validEntries
+                .filter { it.awsAccountId?.trim() == acctId }
+                .map { it.email.lowercase().trim() }
+                .distinct()
+                .sorted()
+            NewAccountImportInfo(awsAccountId = acctId, emails = emails)
+        }
     }
 
     // Feature 042: Future User Mapping Support
