@@ -14,4 +14,7 @@ test('request scope formatter returns distinct display labels for each scope', (
   assert.equal(formatExceptionRequestScope({ scope: 'IP', scopeValue: '10.10.10.10' }).label, 'IP scope');
   assert.equal(formatExceptionRequestScope({ scope: 'AWS_ACCOUNT', scopeValue: '123456789012' }).label, 'AWS account');
   assert.equal(formatExceptionRequestScope({ scope: 'GLOBAL' }).label, 'All assets');
+  const os = formatExceptionRequestScope({ scope: 'OS', scopeValue: 'Windows Server 2019' });
+  assert.equal(os.label, 'OS scope');
+  assert.equal(os.title, 'OS: Windows Server 2019');
 });

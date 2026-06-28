@@ -9,10 +9,10 @@ package com.secman.repository
  *
  * The outer query MUST alias:
  *   - `v` for vulnerability  (columns referenced: `vulnerability_id`, `vulnerable_product_versions`)
- *   - `a` for asset          (columns referenced: `id`, `ip`, `cloud_account_id`)
+ *   - `a` for asset          (columns referenced: `id`, `ip`, `cloud_account_id`, `os_version`)
  *
  * Subject axis  : ALL_VULNS | PRODUCT | CVE
- * Scope axis    : GLOBAL    | IP      | ASSET | AWS_ACCOUNT
+ * Scope axis    : GLOBAL    | IP      | ASSET | AWS_ACCOUNT | OS
  *
  * If you add a new subject or scope value, update this constant and every site listed
  * below stays in sync automatically (compile-time interpolation):
@@ -38,6 +38,7 @@ object ExceptionMatchSql {
                 OR (e.scope = 'IP' AND e.scope_value = a.ip)
                 OR (e.scope = 'ASSET' AND e.asset_id = a.id)
                 OR (e.scope = 'AWS_ACCOUNT' AND a.cloud_account_id IS NOT NULL AND e.scope_value = a.cloud_account_id)
+                OR (e.scope = 'OS' AND a.os_version IS NOT NULL AND e.scope_value IS NOT NULL AND LOCATE(LOWER(e.scope_value), LOWER(a.os_version)) > 0)
             )
         )
     """

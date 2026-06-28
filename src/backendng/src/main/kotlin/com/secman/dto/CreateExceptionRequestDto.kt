@@ -28,9 +28,9 @@ import java.time.LocalDateTime
  * Validation rules:
  * - vulnerabilityId: Optional. When supplied, must reference an existing vulnerability.
  * - subject: Required (ALL_VULNS, PRODUCT, CVE)
- * - scope: Required (GLOBAL, IP, ASSET, AWS_ACCOUNT)
+ * - scope: Required (GLOBAL, IP, ASSET, AWS_ACCOUNT, OS)
  * - subjectValue: Required for PRODUCT/CVE; must be null for ALL_VULNS
- * - scopeValue: Required for IP/AWS_ACCOUNT; must be null for GLOBAL/ASSET
+ * - scopeValue: Required for IP/AWS_ACCOUNT/OS; must be null for GLOBAL/ASSET
  * - assetId: Required for scope=ASSET; null otherwise
  * - reason: Required, 50-2048 characters, business justification
  * - expirationDate: Required, must be future date
@@ -53,7 +53,7 @@ data class CreateExceptionRequestDto(
     val subject: VulnerabilityException.Subject,
 
     /**
-     * WHERE the exception applies: GLOBAL, IP, ASSET, or AWS_ACCOUNT.
+     * WHERE the exception applies: GLOBAL, IP, ASSET, AWS_ACCOUNT, or OS.
      */
     @field:NotNull(message = "Exception scope is required")
     val scope: VulnerabilityException.Scope,
@@ -66,7 +66,8 @@ data class CreateExceptionRequestDto(
     val subjectValue: String? = null,
 
     /**
-     * Scope value: IP address (scope=IP) or AWS account ID (scope=AWS_ACCOUNT).
+     * Scope value: IP address (scope=IP), AWS account ID (scope=AWS_ACCOUNT), or an
+     * OS-version substring matched case-insensitively against Asset.osVersion (scope=OS).
      * Must be null for scope=GLOBAL or scope=ASSET.
      */
     @field:Size(max = 255)

@@ -45,7 +45,8 @@ const SCOPE_LABELS: Record<ExceptionScope, string> = {
     GLOBAL:      'Globally',
     IP:          'On IP',
     ASSET:       'On Asset',
-    AWS_ACCOUNT: 'In AWS Account'
+    AWS_ACCOUNT: 'In AWS Account',
+    OS:          'On OS'
 };
 
 function getBadgeClass(status: ExceptionRequestStatus): string {

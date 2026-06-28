@@ -51,7 +51,7 @@ open class CreateExceptionRequestTool(
             ),
             "scope" to mapOf(
                 "type" to "string",
-                "enum" to listOf("GLOBAL", "IP", "ASSET", "AWS_ACCOUNT"),
+                "enum" to listOf("GLOBAL", "IP", "ASSET", "AWS_ACCOUNT", "OS"),
                 "description" to "WHERE the exception applies"
             ),
             "subjectValue" to mapOf(
@@ -60,7 +60,7 @@ open class CreateExceptionRequestTool(
             ),
             "scopeValue" to mapOf(
                 "type" to "string",
-                "description" to "IP address (scope=IP) or AWS account ID (scope=AWS_ACCOUNT); null for GLOBAL/ASSET"
+                "description" to "IP address (scope=IP), AWS account ID (scope=AWS_ACCOUNT), or OS-version substring matched case-insensitively against Asset.osVersion (scope=OS); null for GLOBAL/ASSET"
             ),
             "assetId" to mapOf(
                 "type" to "number",
@@ -148,11 +148,11 @@ open class CreateExceptionRequestTool(
 
             // Parse scope (required)
             val scopeStr = arguments["scope"] as? String
-                ?: return McpToolResult.error("VALIDATION_ERROR", "scope is required (GLOBAL, IP, ASSET, AWS_ACCOUNT)")
+                ?: return McpToolResult.error("VALIDATION_ERROR", "scope is required (GLOBAL, IP, ASSET, AWS_ACCOUNT, OS)")
             val scope = try {
                 VulnerabilityException.Scope.valueOf(scopeStr)
             } catch (e: IllegalArgumentException) {
-                return McpToolResult.error("VALIDATION_ERROR", "Invalid scope. Must be GLOBAL, IP, ASSET, or AWS_ACCOUNT")
+                return McpToolResult.error("VALIDATION_ERROR", "Invalid scope. Must be GLOBAL, IP, ASSET, AWS_ACCOUNT, or OS")
             }
 
             val subjectValue = arguments["subjectValue"] as? String
