@@ -6,6 +6,7 @@ import com.secman.cli.commands.AssetMatchClearCommand
 import com.secman.cli.commands.ConfigCommand
 import com.secman.cli.commands.CrowdStrikeLastImportCommand
 import com.secman.cli.commands.DeduplicateVulnerabilitiesCommand
+import com.secman.cli.commands.DependabotAlertsCommand
 import com.secman.cli.commands.DeleteAssetNotSeenCommand
 import com.secman.cli.commands.DeleteAllRequirementsCommand
 import com.secman.cli.commands.ExportRequirementsCommand
@@ -20,6 +21,7 @@ import com.secman.cli.commands.SendNotificationsCommand
 import com.secman.cli.commands.SendNotificationUsersCommand
 import com.secman.cli.commands.NotifyNewAccountsCommand
 import com.secman.cli.commands.SendPatchNotificationsCommand
+import com.secman.cli.commands.SendRepositoryNotificationsCommand
 import com.secman.cli.commands.SendApplicationRegisterRemindersCommand
 import com.secman.cli.commands.ServersCommand
 import io.micronaut.configuration.picocli.PicocliRunner
@@ -345,6 +347,22 @@ class SecmanCli {
                 }
                 0
             }
+            args[0] == "dependabot-alerts" -> {
+                // Import GitHub Dependabot alerts (high/critical) as repository vulnerabilities
+                val subArgs = args.drop(1).toTypedArray()
+                createCliContext().use { ctx ->
+                    PicocliRunner.run(DependabotAlertsCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
+            args[0] == "send-repository-notifications" -> {
+                // Notify users about Dependabot vulnerabilities on their repositories
+                val subArgs = args.drop(1).toTypedArray()
+                createCliContext().use { ctx ->
+                    PicocliRunner.run(SendRepositoryNotificationsCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
             args[0] == "deduplicate-vulnerabilities" -> {
                 // Remove duplicate vulnerability records from the database
                 val subArgs = args.drop(1).toTypedArray()
@@ -432,6 +450,7 @@ class SecmanCli {
                 send-patch-notifications  Notify users about missing patches, filtered by email first character
                 send-application-register-reminders  Send reminders for stale application register quality checks
                 notify-new-accounts    Notify users about new AWS account mappings created in the last N hours
+                send-repository-notifications  Notify users about Dependabot vulnerabilities on their repositories
 
               User & Access Management:
                 manage-user-mappings   Manage user mappings for domains and AWS accounts
@@ -442,6 +461,7 @@ class SecmanCli {
 
               Vulnerabilities:
                 add-vulnerability      Add or update a vulnerability for an asset
+                dependabot-alerts      Import GitHub Dependabot alerts as repository vulnerabilities
                 deduplicate-vulnerabilities  Remove duplicate vulnerability records (ADMIN)
                 delete-asset-not-seen  Delete CrowdStrike assets not imported for N days (ADMIN)
                 asset-match-clear      Delete AWS assets missing from an S3 resource snapshot (ADMIN)
@@ -841,6 +861,55 @@ class SecmanCli {
                   secman add-vulnerability --hostname webserver01 --cve CVE-2024-1234 --criticality HIGH
                   secman add-vulnerability --hostname webserver01 --cve CVE-2024-1234 --criticality HIGH --days-open 30
                   secman add-vulnerability --hostname newserver99 --cve CVE-2023-5678 --criticality CRITICAL --verbose
+            """.trimIndent(),
+
+            "dependabot-alerts" to """
+                secman dependabot-alerts - Import GitHub Dependabot alerts as repository vulnerabilities
+
+                Usage: secman dependabot-alerts [options]
+
+                Pulls open HIGH/CRITICAL Dependabot alerts from GitHub and imports them as
+                vulnerabilities, one REPOSITORY-type asset per repository. Re-importing reflects
+                remediated alerts (transactional replace per repository).
+
+                Options:
+                  --org <name>             GitHub org to scan (repeatable; all its repos)
+                  --repos <owner/repo,...> Comma-separated repositories to scan
+                  --severity <levels>      Severities to import (default: HIGH,CRITICAL)
+                  --state <state>          Alert state to query (default: open)
+                  --github-token <token>   GitHub access token (or set GITHUB_TOKEN env var)
+                  --github-api-url <url>   GitHub API base URL (default: https://api.github.com)
+                  --save                   POST imported alerts to the backend
+                  --dry-run                Fetch and summarize without saving
+                  --verbose                Enable verbose output
+                  --username / --password / --backend-url   Backend credentials (or env vars)
+
+                Examples:
+                  secman dependabot-alerts --org my-org --github-token \$GITHUB_TOKEN --dry-run
+                  secman dependabot-alerts --org my-org --save
+                  secman dependabot-alerts --repos acme/api,acme/web --save --verbose
+            """.trimIndent(),
+
+            "send-repository-notifications" to """
+                secman send-repository-notifications - Notify users about repository vulnerabilities
+
+                Usage: secman send-repository-notifications [options]
+
+                Finds REPOSITORY-type assets with Dependabot vulnerabilities older than the
+                threshold and emails the responsible users (resolved via workgroup membership,
+                plus the asset owner when it is a real user email).
+
+                Options:
+                  --days <num>             Vulnerability age threshold in days (default: 30)
+                  --notification-user <email>  Only notify this user
+                  --email-prefix <prefix>  Only notify users whose email starts with prefix
+                  --dry-run                Preview without sending
+                  --verbose                Per-recipient status
+                  --username / --password / --backend-url   Backend credentials (or env vars)
+
+                Examples:
+                  secman send-repository-notifications --dry-run --verbose
+                  secman send-repository-notifications --days 14
             """.trimIndent(),
 
             "deduplicate-vulnerabilities" to """

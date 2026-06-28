@@ -52,6 +52,27 @@ interface AssetRepository : JpaRepository<Asset, Long> {
     fun findDistinctWorkgroupMemberEmailsByCloudAccountId(cloudAccountId: String): List<String>
 
     /**
+     * Find the distinct emails of all users who are members of a workgroup that
+     * contains the given asset.
+     *
+     * Used by the repository vulnerability notification fan-out (asset → workgroup
+     * → users) — the non-AWS analogue of
+     * [findDistinctWorkgroupMemberEmailsByCloudAccountId], since repository-type
+     * assets have no cloudAccountId.
+     *
+     * @param assetId The asset (repository) identifier
+     * @return Distinct member emails (normalize case at the call site)
+     */
+    @io.micronaut.data.annotation.Query("""
+        SELECT DISTINCT u.email
+        FROM Asset a
+        JOIN a.workgroups w
+        JOIN w.users u
+        WHERE a.id = :assetId
+    """)
+    fun findDistinctWorkgroupMemberEmailsByAssetId(assetId: Long): List<String>
+
+    /**
      * Find all assets accessible to a user using unified access control query
      * Combines all access criteria in a single database round trip:
      * 1. Assets in user's workgroups

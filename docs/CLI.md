@@ -333,6 +333,47 @@ Manual upsert. Auto-creates asset if hostname missing (`type=SERVER`, `owner=CLI
 
 Exit codes: `0` ok, `1` validation/auth error, `2` connection error.
 
+### `dependabot-alerts` — GitHub Dependabot import
+
+Pulls open **HIGH/CRITICAL** Dependabot alerts from GitHub and imports them as vulnerabilities, one **`REPOSITORY`-type** asset per repository (`name=owner/repo`, `uri=repo URL`, `owner="GitHub Dependabot"`, `source=GITHUB_DEPENDABOT`). Re-importing a repository applies the transactional delete-insert replace pattern, so remediated alerts disappear by their absence. The GitHub token is supplied on the CLI (`--github-token` or `GITHUB_TOKEN`) and needs the `security_events`/`repo` scope. Alerts are fetched via `GET /orgs/{org}/dependabot/alerts` and/or `GET /repos/{owner}/{repo}/dependabot/alerts` (cursor-paginated via the `Link` header) and filtered by severity client-side.
+
+```bash
+./scripts/secman dependabot-alerts --org my-org --github-token "$GITHUB_TOKEN" --dry-run --verbose
+./scripts/secman dependabot-alerts --org my-org --save
+./scripts/secman dependabot-alerts --repos acme/api,acme/web --save
+```
+
+| Option | Default | Notes |
+|---|---|---|
+| `--org` | — | GitHub org (repeatable). Pulls alerts across all its repos. |
+| `--repos` | — | Comma-separated `owner/repo` list. |
+| `--severity` | `HIGH,CRITICAL` | Severities to import. |
+| `--state` | `open` | Dependabot alert state to query. |
+| `--github-token` | env `GITHUB_TOKEN` | Required. |
+| `--github-api-url` | `https://api.github.com` | For GHES. |
+| `--save` | false | POST to backend (`POST /api/github/dependabot/import`, ADMIN/VULN). |
+| `--dry-run` | false | Fetch + summarize only. |
+| `--username` / `--password` / `--backend-url` | env | Backend auth (required with `--save`). |
+
+At least one of `--org` / `--repos` is required. Exit `1` on error.
+
+### `send-repository-notifications` — repository (Dependabot) vulnerability emails
+
+The non-AWS counterpart to `send-notification-users`. Finds `REPOSITORY`-type assets with non-excepted vulnerabilities older than `--days` and emails the responsible users. Recipients are resolved by **workgroup membership** of the repository asset (asset → workgroup → users), plus the asset `owner` when it is a real user email. Backend: `POST /api/cli/repository-vulnerability-notifications/send` (ADMIN).
+
+```bash
+./scripts/secman send-repository-notifications --dry-run --verbose
+./scripts/secman send-repository-notifications --days 14
+./scripts/secman send-repository-notifications --notification-user dev@example.com
+```
+
+| Option | Default | Notes |
+|---|---|---|
+| `--days` | 30 | Vulnerability age threshold. |
+| `--notification-user` | — | Only notify this email. |
+| `--email-prefix` | — | Only notify emails starting with prefix. |
+| `--dry-run` / `--verbose` | false | |
+
 ### `manage-workgroups`
 
 Subcommands: `list`, `assign-assets`, `remove-assets`.

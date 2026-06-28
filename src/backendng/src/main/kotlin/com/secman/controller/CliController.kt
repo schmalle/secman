@@ -8,6 +8,7 @@ import com.secman.service.NewAccountNotificationService
 import com.secman.service.NotificationService
 import com.secman.service.UserMappingStatisticsService
 import com.secman.service.UserVulnerabilityNotificationService
+import com.secman.service.RepositoryVulnerabilityNotificationService
 import com.secman.service.ApplicationRegisterReminderService
 import io.micronaut.data.model.Pageable
 import io.micronaut.http.HttpResponse
@@ -41,7 +42,8 @@ class CliController(
     private val userVulnerabilityNotificationService: UserVulnerabilityNotificationService,
     private val userMappingStatisticsService: UserMappingStatisticsService,
     private val applicationRegisterReminderService: ApplicationRegisterReminderService,
-    private val newAccountNotificationService: NewAccountNotificationService
+    private val newAccountNotificationService: NewAccountNotificationService,
+    private val repositoryVulnerabilityNotificationService: RepositoryVulnerabilityNotificationService
 ) {
     private val logger = LoggerFactory.getLogger(CliController::class.java)
 
@@ -439,6 +441,78 @@ class CliController(
             ))
         } catch (e: Exception) {
             logger.error("Error sending user vulnerability notifications", e)
+            HttpResponse.serverError()
+        }
+    }
+
+    // --- Repository (GitHub Dependabot) Vulnerability Notification Endpoint ---
+
+    @Serdeable
+    data class SendRepositoryVulnNotificationsRequest(
+        val dryRun: Boolean = false,
+        val verbose: Boolean = false,
+        val thresholdDays: Int = 30,
+        val notificationUser: String? = null,
+        val emailPrefix: String? = null
+    )
+
+    @Serdeable
+    data class RepositoryVulnNotificationResultDto(
+        val status: String,
+        val repositoriesAffected: Int,
+        val usersNotified: Int,
+        val emailsSent: Int,
+        val emailsFailed: Int,
+        val recipients: List<String>,
+        val failedRecipients: List<String>,
+        val unmappedRepositories: List<String>,
+        val thresholdDays: Int,
+        val notificationUserExists: Boolean? = null,
+        val emailPrefix: String? = null,
+        val repositoryDetails: List<RepositoryVulnerabilityNotificationService.RepoVulnSummary>
+    )
+
+    /**
+     * POST /api/cli/repository-vulnerability-notifications/send
+     *
+     * Finds REPOSITORY-type assets (GitHub repositories) with overdue Dependabot
+     * vulnerabilities, resolves recipients via workgroup membership (+ owner email),
+     * and sends each user one consolidated notification email. The non-AWS analogue
+     * of /user-vulnerability-notifications/send.
+     */
+    @Post("/repository-vulnerability-notifications/send")
+    @Produces(MediaType.APPLICATION_JSON)
+    fun sendRepositoryVulnerabilityNotifications(
+        @Body request: SendRepositoryVulnNotificationsRequest,
+        authentication: Authentication
+    ): HttpResponse<RepositoryVulnNotificationResultDto> {
+        logger.info("CLI repository-vulnerability-notifications requested by user: {} (dryRun={}, thresholdDays={})",
+            authentication.name, request.dryRun, request.thresholdDays)
+
+        return try {
+            val result = repositoryVulnerabilityNotificationService.sendRepositoryVulnerabilityNotifications(
+                thresholdDays = request.thresholdDays,
+                dryRun = request.dryRun,
+                verbose = request.verbose,
+                notificationUser = request.notificationUser,
+                emailPrefix = request.emailPrefix
+            )
+            HttpResponse.ok(RepositoryVulnNotificationResultDto(
+                status = result.status.name,
+                repositoriesAffected = result.repositoriesAffected,
+                usersNotified = result.usersNotified,
+                emailsSent = result.emailsSent,
+                emailsFailed = result.emailsFailed,
+                recipients = result.recipients,
+                failedRecipients = result.failedRecipients,
+                unmappedRepositories = result.unmappedRepositories,
+                thresholdDays = result.thresholdDays,
+                notificationUserExists = result.notificationUserExists,
+                emailPrefix = result.emailPrefix,
+                repositoryDetails = result.repositoryDetails
+            ))
+        } catch (e: Exception) {
+            logger.error("Error sending repository vulnerability notifications", e)
             HttpResponse.serverError()
         }
     }

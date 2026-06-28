@@ -13,4 +13,10 @@ object AssetOwners {
      * (Feature 030, FR-012). Rule B's predicate keys off this exact string.
      */
     const val CROWDSTRIKE_IMPORT = "CrowdStrike Import"
+
+    /**
+     * Set on every repository asset auto-created by
+     * `GitHubDependabotImportService` (Dependabot alert import).
+     */
+    const val GITHUB_IMPORT = "GitHub Dependabot"
 }
