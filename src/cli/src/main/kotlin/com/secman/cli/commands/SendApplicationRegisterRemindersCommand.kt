@@ -22,13 +22,13 @@ class SendApplicationRegisterRemindersCommand : Runnable {
     @Option(names = ["--verbose", "-v"], description = ["Detailed output"])
     var verbose: Boolean = false
 
-    @Option(names = ["--username"])
+    @Option(names = ["--username"], description = ["Backend username (or set SECMAN_ADMIN_NAME env var)"])
     var username: String? = null
 
-    @Option(names = ["--password"])
+    @Option(names = ["--password"], description = ["Backend password (or set SECMAN_ADMIN_PASS env var)"])
     var password: String? = null
 
-    @Option(names = ["--backend-url"])
+    @Option(names = ["--backend-url"], description = ["Backend API URL (or set SECMAN_HOST / SECMAN_BACKEND_URL env var)"])
     var backendUrl: String? = null
 
     @Inject lateinit var cliHttpClient: CliHttpClient

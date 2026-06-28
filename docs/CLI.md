@@ -356,9 +356,191 @@ Subcommands: `list`, `assign-assets`, `remove-assets`.
 
 Wildcards: `*` (any), `?` (single char), `*foo*` (contains).
 
-### Other commands
+### `send-admin-summary` — system statistics email
 
-`send-admin-summary`, `import` (local file), `import-s3`, `config`, `monitor`, `list`, `list-workgroups`, `remove`, `delete-all-requirements`, `deduplicate-vulnerabilities`, `delete-asset-not-seen`, `port-scan`, `send-notification-users`, `add-aws`, `add-domain`, `add-requirement`, `export-requirements`. `./scripts/secman help <cmd>` for details.
+Sends a summary email to all users with the `ADMIN` or `REPORT` role. The email includes total user, asset, and vulnerability counts, the top-10 most-affected servers, and the top-10 most-affected products. Statistics are fetched from `GET /api/cli/admin-summary/statistics` and the email is dispatched via `POST /api/cli/admin-summary/send`. Requires `ADMIN`.
+
+```bash
+./scripts/secman send-admin-summary --dry-run          # preview recipients, no emails sent
+./scripts/secman send-admin-summary --verbose          # show per-recipient delivery status
+```
+
+| Option | Default | Notes |
+|---|---|---|
+| `--dry-run` | false | preview planned recipients and statistics without sending |
+| `--verbose` / `-v` | false | show per-recipient SUCCESS / FAILED status |
+| `--username` / `--password` | env | `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS` |
+| `--backend-url` | env | `SECMAN_HOST` / `SECMAN_BACKEND_URL`, then `http://localhost:8080` |
+
+Exit codes: `0` success or dry-run, `1` partial or total failure.
+
+### `crowdstrike-last-import` — last CrowdStrike import metadata
+
+Displays the timestamp and counters of the most recent CrowdStrike vulnerability import. Reads `GET /api/crowdstrike/servers/import/latest`. Useful in cron health-checks and post-import audits.
+
+```bash
+./scripts/secman crowdstrike-last-import
+./scripts/secman crowdstrike-last-import --format json
+./scripts/secman crowdstrike-last-import --verbose
+```
+
+| Option | Default | Notes |
+|---|---|---|
+| `--format` | `text` | `text` (human-readable table) or `json` (raw API response) |
+| `--insecure` | false | accept self-signed TLS; equivalent to `SECMAN_INSECURE=true` |
+| `--verbose` / `-v` | false | print backend URL and username to stderr before the request |
+| `--username` / `--password` | env | `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS` |
+| `--backend-url` | env | `SECMAN_HOST` / `SECMAN_BACKEND_URL`, then `http://localhost:8080` |
+
+When no import has ever run, outputs `Last CrowdStrike import: never`. Exit code `1` on auth or connection error.
+
+### `add-requirement` — create a security requirement
+
+Creates a single security requirement via `POST /api/requirements`. Requires `ADMIN`.
+
+```bash
+./scripts/secman add-requirement --shortreq "All passwords must be ≥ 12 characters"
+./scripts/secman add-requirement \
+  --shortreq "MFA required for admin access" \
+  --chapter "Authentication" \
+  --norm "ISO 27001" \
+  --details "Use TOTP or hardware tokens" \
+  --motivation "Reduces risk of credential compromise" \
+  --example "Google Authenticator, YubiKey"
+```
+
+| Option | Default | Notes |
+|---|---|---|
+| `--shortreq` / `-s` | **required** | brief requirement text |
+| `--chapter` / `-c` | — | grouping category (e.g. `Authentication`) |
+| `--details` / `-d` | — | extended description |
+| `--motivation` / `-m` | — | rationale for the requirement |
+| `--example` / `-e` | — | sample implementation |
+| `--norm` / `-n` | — | regulatory reference (e.g. `ISO 27001`, `GDPR`) |
+| `--usecase` | — | use-case description |
+| `--verbose` / `-v` | false | print field values before sending |
+| `--username` / `--password` | env | `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS` |
+| `--backend-url` | `http://localhost:8080` | backend API URL |
+
+On success, prints the new requirement's ID. Exit codes: `0` created, `1` validation / auth error.
+
+### `export-requirements` — export requirements to file
+
+Downloads all requirements from the backend and writes them to a local Excel (`.xlsx`) or Word (`.docx`) file. Requires `ADMIN`.
+
+```bash
+./scripts/secman export-requirements --format xlsx
+./scripts/secman export-requirements --format docx --output /reports/reqs.docx
+./scripts/secman export-requirements --format xlsx --output export.xlsx --verbose
+```
+
+| Option | Default | Notes |
+|---|---|---|
+| `--format` / `-f` | **required** | `xlsx` (Excel) or `docx` (Word) |
+| `--output` / `-o` | auto | output path; defaults to `requirements_export_YYYYMMDD_HHmmss.{format}` in the current directory |
+| `--verbose` / `-v` | false | print format, resolved output path, and backend URL |
+| `--username` / `--password` | env | `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS` |
+| `--backend-url` | `http://localhost:8080` | backend API URL |
+
+Exit codes: `0` written, `1` auth / export error, `1` if the output directory does not exist.
+
+### `delete-all-requirements` — permanently delete all requirements
+
+**Destructive.** Deletes every requirement in the database. Cannot be undone. Always pass `--confirm` explicitly — this is a safety guard against accidental invocation. Requires `ADMIN`.
+
+```bash
+./scripts/secman delete-all-requirements --confirm
+./scripts/secman delete-all-requirements --confirm --verbose
+```
+
+| Option | Default | Notes |
+|---|---|---|
+| `--confirm` | **required** | explicit confirmation flag; the command refuses to run without it |
+| `--verbose` / `-v` | false | print backend URL before the request |
+| `--username` / `--password` | env | `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS` |
+| `--backend-url` | `http://localhost:8080` | backend API URL |
+
+Exit codes: `0` deleted, `1` auth or backend error.
+
+### `deduplicate-vulnerabilities` — remove duplicate vulnerability rows
+
+Scans all assets and removes vulnerability records where the same `(CVE ID, product)` pair appears more than once on the same asset. The oldest row (lowest primary key) is kept. Idempotent; safe to run multiple times. Requires `ADMIN`.
+
+```bash
+./scripts/secman deduplicate-vulnerabilities
+./scripts/secman deduplicate-vulnerabilities --verbose    # show per-asset CVE details
+./scripts/secman deduplicate-vulnerabilities --backend-url https://prod:8080
+```
+
+| Option | Default | Notes |
+|---|---|---|
+| `--verbose` / `-v` | false | print per-asset details: asset ID, name, removed count, affected CVEs |
+| `--username` / `--password` | env | `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS` |
+| `--backend-url` | `http://localhost:8080` | backend API URL |
+
+Exit codes: `0` success (prints `No duplicate vulnerabilities found` when clean), `1` backend / auth error, `2` connection error.
+
+### `port-scan` — nmap scan of internet-facing assets
+
+Fetches assets whose `networkZone` is `EXTERNAL` or `DMZ` and that have an IP address, runs `nmap` against each, then uploads the XML results to `POST /api/scan/upload-nmap`. Requires `nmap` on `PATH` (or `--nmap-path`). Requires `ADMIN` role on the backend.
+
+```bash
+./scripts/secman port-scan --dry-run                        # list targets only, no nmap
+./scripts/secman port-scan --targets "web-*" --ports 80,443
+./scripts/secman port-scan --nmap-args "-sV -T3" --output-dir /var/log/secman/scans
+```
+
+| Option | Default | Notes |
+|---|---|---|
+| `--nmap-path` | `nmap` | path to the nmap binary |
+| `--nmap-args` | `-sV -T4` | additional nmap flags passed verbatim |
+| `--ports` / `-p` | nmap default top 1000 | port range, e.g. `80,443` or `1-1024` |
+| `--targets` | all EXTERNAL/DMZ assets | filter asset names by pattern (supports `*`) |
+| `--dry-run` | false | print the nmap commands that would be run without executing them |
+| `--output-dir` | temp dir | directory to save XML result files; created if absent |
+| `--verbose` / `-v` | false | print nmap stderr and per-upload status |
+| `--username` / `--password` | env | `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS` |
+| `--backend-url` | env | `SECMAN_HOST` / `SECMAN_BACKEND_URL`, then `http://localhost:8080` |
+
+Exit codes: `0` all scans uploaded, `1` ≥1 scan failed or upload failed.
+
+Install nmap if missing:
+```bash
+sudo apt install nmap      # Debian/Ubuntu
+brew install nmap          # macOS
+sudo yum install nmap      # RHEL/CentOS
+```
+
+### `send-application-register-reminders` — application register overdue reminders
+
+Notifies responsible users about application register entries that have not been reviewed within a configurable threshold (default: 365 days). Calls `POST /api/cli/application-register/reminders/send`. Requires `ADMIN`.
+
+```bash
+./scripts/secman send-application-register-reminders --dry-run
+./scripts/secman send-application-register-reminders --days 180 --verbose
+```
+
+| Option | Default | Notes |
+|---|---|---|
+| `--days` | 365 | entries not reviewed within this many days are overdue |
+| `--dry-run` | false | preview overdue entries and recipients without sending |
+| `--verbose` / `-v` | false | detailed per-recipient output |
+| `--username` / `--password` | env | `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS` |
+| `--backend-url` | env | `SECMAN_HOST` / `SECMAN_BACKEND_URL`, then `http://localhost:8080` |
+
+### `asset-match-clear` — reconcile AWS assets against S3 snapshot
+
+See `docs/CLI_ASSET_MATCH_CLEAR.md` for the full reference. Quick summary:
+
+Compares `Asset.cloudInstanceId` (case-insensitive) in SecMan against a JSON resource snapshot stored in S3. Deletes SecMan assets whose `cloudInstanceId` is absent from the snapshot, scoped strictly to the `accountId`s present in the snapshot (partial-snapshot safe). A 25% safety brake prevents mass deletion.
+
+```bash
+./scripts/secman asset-match-clear --dry-run                        # preview, no deletions
+./scripts/secman asset-match-clear --bucket my-bucket --key snap.json
+./scripts/secman asset-match-clear --max-delete-percent 0           # disable safety brake
+```
+
+Key options: `--bucket`, `--key`, `--dry-run`, `--strict`, `--check`, `--check-fix`, `--max-delete-percent` (default 25), `--save` (dump snapshot to `/tmp/asset.json`), standard AWS credential flags. Full option table: `docs/CLI_ASSET_MATCH_CLEAR.md`.
 
 ## Cron
 
