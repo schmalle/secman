@@ -66,8 +66,31 @@ class ImportCommand(
     )
     var dryRun: Boolean = false
 
+    @Option(
+        names = ["--createnotify"],
+        description = ["Send an email to --notify-address when the import introduces brand-new AWS account(s)"]
+    )
+    var createnotify: Boolean = false
+
+    @Option(
+        names = ["--notify-address"],
+        description = ["Recipient email for new-account notifications (required when --createnotify is set)"]
+    )
+    var notifyAddress: String? = null
+
     @ParentCommand
     lateinit var parent: ManageUserMappingsCommand
+
+    /**
+     * Validate the notification options. Returns an error message if invalid,
+     * or null if OK. --createnotify requires a non-blank --notify-address.
+     */
+    fun validateNotifyOptions(): String? {
+        if (createnotify && notifyAddress.isNullOrBlank()) {
+            return "--notify-address is required when --createnotify is set"
+        }
+        return null
+    }
 
     override fun run() {
         try {
@@ -75,6 +98,15 @@ class ImportCommand(
             println("Import User Mappings")
             println("=" .repeat(60))
             println()
+
+            validateNotifyOptions()?.let { msg ->
+                System.err.println("❌ Error: $msg")
+                System.exit(2)
+                return
+            }
+            if (!createnotify && !notifyAddress.isNullOrBlank()) {
+                println("⚠️  --notify-address is ignored because --createnotify is not set")
+            }
 
             // Authenticate with backend
             val backendUrl = parent.getEffectiveBackendUrl()
@@ -98,7 +130,9 @@ class ImportCommand(
                 format = format,
                 dryRun = dryRun,
                 backendUrl = backendUrl,
-                authToken = token
+                authToken = token,
+                notifyNewAccounts = createnotify,
+                notifyAddress = notifyAddress
             )
 
             // Display summary
@@ -138,6 +172,29 @@ class ImportCommand(
                 }
             }
 
+            if (createnotify && result.newAccounts.isNotEmpty()) {
+                println()
+                if (dryRun) {
+                    println("Would notify ${notifyAddress} about ${result.newAccounts.size} new AWS account(s):")
+                } else {
+                    println("New AWS account(s) detected (${result.newAccounts.size}):")
+                }
+                result.newAccounts.forEach { acct ->
+                    println("  - ${acct.awsAccountId}  ->  ${acct.emails.joinToString(", ")}")
+                }
+                if (!dryRun) {
+                    when {
+                        result.notificationError != null ->
+                            println("❌ Notification email to ${result.notificationRecipient ?: notifyAddress} failed: ${result.notificationError}")
+                        result.notificationSent ->
+                            println("✅ Notification email sent to ${result.notificationRecipient ?: notifyAddress}")
+                    }
+                }
+            } else if (createnotify && !dryRun) {
+                println()
+                println("No brand-new AWS accounts in this import — no notification sent.")
+            }
+
             if (result.errors.isNotEmpty()) {
                 println("❌ Errors: ${result.errors.size} failure(s)")
                 println()
@@ -161,6 +218,9 @@ class ImportCommand(
                     println("✓ Validation successful (dry-run)")
                 } else {
                     println("✓ Import successful")
+                    if (createnotify && result.notificationError != null) {
+                        System.exit(1)
+                    }
                 }
             }
 
