@@ -28,9 +28,11 @@ import org.slf4j.LoggerFactory
 @Secured(SecurityRule.IS_AUTHENTICATED)
 open class UserMappingController(
     @Inject private val userMappingService: UserMappingService,
-    @Inject private val userMappingRepository: UserMappingRepository
+    @Inject private val userMappingRepository: UserMappingRepository,
+    @Inject private val newAccountNotificationService: com.secman.service.NewAccountNotificationService
 ) {
     private val logger = LoggerFactory.getLogger(UserMappingController::class.java)
+    private val emailRegex = Regex("^[^@]+@[^@]+\\.[^@]+$")
 
     /**
      * POST /api/user-mappings - Create new user mapping
@@ -161,9 +163,37 @@ open class UserMappingController(
     ): HttpResponse<*> {
         logger.info("Bulk create user mappings: entries=${request.mappings.size}, dryRun=${request.dryRun}")
 
+        // Validate notify-address when notification is requested (fail fast → 400)
+        if (request.notifyNewAccounts) {
+            val addr = request.notifyAddress?.trim()
+            if (addr.isNullOrBlank() || !emailRegex.matches(addr)) {
+                return HttpResponse.badRequest(
+                    mapOf(
+                        "error" to "Validation Error",
+                        "message" to "notifyAddress must be a valid email when notifyNewAccounts is true"
+                    )
+                )
+            }
+        }
+
         return try {
             val result = userMappingService.bulkCreateMappings(request)
-            HttpResponse.ok(result)
+
+            // Send the operator email AFTER the transaction has committed, so a
+            // slow/failed send never rolls back the persisted mappings.
+            val finalResult = if (request.notifyNewAccounts && !request.dryRun && result.newAccounts.isNotEmpty()) {
+                val recipient = request.notifyAddress!!.trim()
+                val sent = newAccountNotificationService.sendImportNotification(recipient, result.newAccounts)
+                result.copy(
+                    notificationRecipient = recipient,
+                    notificationSent = sent,
+                    notificationError = if (sent) null else "Email send failed (check email configuration / logs)"
+                )
+            } else {
+                result
+            }
+
+            HttpResponse.ok(finalResult)
         } catch (e: IllegalArgumentException) {
             logger.warn("Bulk create validation failed: ${e.message}")
             HttpResponse.badRequest(
