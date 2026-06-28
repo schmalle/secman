@@ -39,6 +39,13 @@ export function formatExceptionRequestScope(target: ExceptionRequestScopeTarget)
         iconClass: 'bi-cloud',
         badgeClass: 'bg-primary'
       };
+    case 'OS':
+      return {
+        label: 'OS scope',
+        title: target.scopeValue ? `OS: ${target.scopeValue}` : 'OS scope',
+        iconClass: 'bi-pc-display',
+        badgeClass: 'bg-secondary'
+      };
     case 'GLOBAL':
       return {
         label: 'All assets',

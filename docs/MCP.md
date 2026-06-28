@@ -153,7 +153,7 @@ curl -XPOST http://localhost:8080/mcp \
 - **`add_vulnerability`** (ADMIN/VULN, delegation) — `hostname`*, `cve`*, `criticality`*, `daysOpen`, `owner`. Auto-creates asset. Returns `id` (DB PK) and `vulnerabilityId` (CVE).
 
 ### Exception requests (delegation)
-- **`create_exception_request`** — `vulnerabilityId`*, `reason`* (50–2048 chars), `expirationDate`* (ISO-8601 future), `scope` (`SINGLE_VULNERABILITY|CVE_PATTERN`). ADMIN/SECCHAMPION are auto-approved.
+- **`create_exception_request`** — `vulnerabilityId`*, `reason`* (50–2048 chars), `expirationDate`* (ISO-8601 future), two-axis `subject` (`ALL_VULNS|PRODUCT|CVE`) × `scope` (`GLOBAL|IP|ASSET|AWS_ACCOUNT|OS`), `subjectValue` (product pattern / comma-separated CVE list), `scopeValue` (IP, AWS account id, or — for `scope=OS` — an OS-version substring matched case-insensitively against `Asset.osVersion`, suppressing the CVE(s) on every matching asset), `assetId` (for `scope=ASSET`). ADMIN/SECCHAMPION are auto-approved.
 - **`get_my_exception_requests`** — `status`, `page`, `size`.
 - **`get_pending_exception_requests`** (ADMIN/SECCHAMPION) — FIFO sorted.
 - **`approve_exception_request`** (ADMIN/SECCHAMPION) — `requestId`*, `comment` (≤1024).
