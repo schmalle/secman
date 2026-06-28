@@ -32,13 +32,22 @@ interface UserMappingRepository : JpaRepository<UserMapping, Long> {
 
     /**
      * Find all mappings for a specific AWS account
-     * 
+     *
      * Use case: Get all users with access to an AWS account
-     * 
+     *
      * @param awsAccountId AWS account identifier (12-digit string)
      * @return List of mappings for the AWS account
      */
     fun findByAwsAccountId(awsAccountId: String): List<UserMapping>
+
+    /**
+     * Return the subset of [ids] that already appear as awsAccountId on at least
+     * one existing mapping. Used by bulk import to detect brand-new (DB-wide)
+     * AWS accounts. Callers MUST skip this query when [ids] is empty (an empty
+     * IN list is invalid/degenerate).
+     */
+    @Query("SELECT DISTINCT m.awsAccountId FROM UserMapping m WHERE m.awsAccountId IN :ids")
+    fun findExistingAwsAccountIds(ids: Collection<String>): List<String>
 
     /**
      * Find all mappings for a specific domain
