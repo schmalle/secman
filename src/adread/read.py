@@ -14,6 +14,22 @@ CLIENT_SECRET = os.environ["AZURE_CLIENT_SECRET"]
 
 GRAPH_BASE = "https://graph.microsoft.com/v1.0"
 
+# (connect, read) timeouts for every HTTP call so a stalled socket can never hang
+# the run indefinitely.
+HTTP_TIMEOUT = (10, 60)
+
+# Throttle/transient-error retry policy for Graph GETs. Graph throttles aggressively
+# (HTTP 429) and occasionally returns 503/504; we honor Retry-After when present and
+# otherwise back off exponentially.
+RETRY_STATUS = (429, 503, 504)
+MAX_RETRIES = 5
+BACKOFF_BASE_SECONDS = 2
+BACKOFF_CAP_SECONDS = 60
+
+# Re-acquire the Graph token when it is within this many seconds of expiry. A full
+# 2128-group run can outlast a single token's ~60-75 min lifetime.
+TOKEN_REFRESH_SKEW_SECONDS = 300
+
 # Logging is configured from the environment so verbosity can be tuned without
 # code changes. LOG_LEVEL accepts the standard names (DEBUG, INFO, WARNING, ...);
 # set it to DEBUG to see full request/response detail.
@@ -24,71 +40,116 @@ logging.basicConfig(
 log = logging.getLogger("adread")
 
 
-def _redact_headers(headers):
-  """Copy of headers safe for logging (no bearer token / secrets)."""
-  safe = dict(headers)
-  if "Authorization" in safe:
-    safe["Authorization"] = "Bearer <redacted>"
-  return safe
+class GraphTokenProvider:
+  """Acquires and transparently refreshes the app-only Graph access token.
 
+  The client-credentials flow only honors *Application* permissions, so the
+  service principal must hold User.Read.All (Application) for member mail /
+  userPrincipalName to be readable — otherwise Graph returns them as null.
+  """
 
-def get_access_token():
-  log.info("Acquiring access token (tenant=%s, client=%s)", TENANT_ID, CLIENT_ID)
-  start = time.monotonic()
+  def __init__(self):
+    self._credential = ClientSecretCredential(
+      tenant_id=TENANT_ID,
+      client_id=CLIENT_ID,
+      client_secret=CLIENT_SECRET,
+    )
+    self._token = None
+    self._expires_on = 0
 
-  credential = ClientSecretCredential(
-    tenant_id=TENANT_ID,
-    client_id=CLIENT_ID,
-    client_secret=CLIENT_SECRET,
-  )
-
-  token = credential.get_token("https://graph.microsoft.com/.default")
-  elapsed = time.monotonic() - start
-
-  expires_in = token.expires_on - time.time()
-  log.info(
-    "Access token acquired in %.2fs (len=%d, expires in ~%.0fs)",
-    elapsed,
-    len(token.token),
-    expires_in,
-  )
-  log.debug("Token expires_on (epoch): %s", token.expires_on)
-  return token.token
-
-
-def graph_get_all(url, headers):
-  """Read all pages from a Microsoft Graph collection endpoint."""
-  items = []
-  page = 0
-  log.info("Starting paged GET: %s", url)
-  log.debug("Request headers: %s", _redact_headers(headers))
-
-  while url:
-    page += 1
-    log.debug("Fetching page %d: %s", page, url)
+  def _refresh(self):
+    log.info("Acquiring access token (tenant=%s, client=%s)", TENANT_ID, CLIENT_ID)
     start = time.monotonic()
+    token = self._credential.get_token("https://graph.microsoft.com/.default")
+    elapsed = time.monotonic() - start
 
-    response = requests.get(url, headers=headers)
+    self._token = token.token
+    self._expires_on = token.expires_on
+    log.info(
+      "Access token acquired in %.2fs (len=%d, expires in ~%.0fs)",
+      elapsed,
+      len(self._token),
+      self._expires_on - time.time(),
+    )
+    log.debug("Token expires_on (epoch): %s", self._expires_on)
+
+  def token(self):
+    """Return a valid token, refreshing if missing or near expiry."""
+    if self._token is None or self._expires_on - time.time() < TOKEN_REFRESH_SKEW_SECONDS:
+      self._refresh()
+    return self._token
+
+  def headers(self):
+    return {
+      "Authorization": f"Bearer {self.token()}",
+      "Content-Type": "application/json",
+    }
+
+
+def _backoff_seconds(attempt):
+  """Exponential backoff capped at BACKOFF_CAP_SECONDS (attempt starts at 1)."""
+  return min(BACKOFF_BASE_SECONDS * (2 ** (attempt - 1)), BACKOFF_CAP_SECONDS)
+
+
+def _graph_get(session, url, token_provider):
+  """Single Graph GET with throttle/transient-error retries; returns parsed JSON."""
+  for attempt in range(1, MAX_RETRIES + 1):
+    headers = token_provider.headers()
+    start = time.monotonic()
+    try:
+      response = session.get(url, headers=headers, timeout=HTTP_TIMEOUT)
+    except requests.exceptions.RequestException as exc:
+      if attempt == MAX_RETRIES:
+        log.error("Request error for %s after %d attempts: %s", url, attempt, exc)
+        raise
+      sleep = _backoff_seconds(attempt)
+      log.warning(
+        "Request error for %s (%s) — retrying in %.1fs (attempt %d/%d)",
+        url, exc, sleep, attempt, MAX_RETRIES,
+      )
+      time.sleep(sleep)
+      continue
 
     elapsed = time.monotonic() - start
     log.debug(
-      "Page %d responded with HTTP %d in %.2fs (%d bytes)",
-      page,
-      response.status_code,
-      elapsed,
-      len(response.content),
+      "HTTP %d in %.2fs (%d bytes) for %s",
+      response.status_code, elapsed, len(response.content), url,
     )
+
+    if response.status_code in RETRY_STATUS:
+      if attempt == MAX_RETRIES:
+        log.error("Giving up after %d attempts: HTTP %d for %s", attempt, response.status_code, url)
+        response.raise_for_status()
+      retry_after = response.headers.get("Retry-After")
+      sleep = float(retry_after) if retry_after else _backoff_seconds(attempt)
+      log.warning(
+        "Throttled/transient HTTP %d for %s — sleeping %.1fs (attempt %d/%d)",
+        response.status_code, url, sleep, attempt, MAX_RETRIES,
+      )
+      time.sleep(sleep)
+      continue
 
     if not response.ok:
       log.error(
         "Request failed: HTTP %d for %s\nBody: %s",
-        response.status_code,
-        url,
-        response.text,
+        response.status_code, url, response.text,
       )
-    response.raise_for_status()
+      response.raise_for_status()
 
-    data = response.json()
+    return response.json()
+
+
+def graph_get_all(session, url, token_provider):
+  """Read all pages from a Microsoft Graph collection endpoint."""
+  items = []
+  page = 0
+  log.info("Starting paged GET: %s", url)
+
+  while url:
+    page += 1
+    log.debug("Fetching page %d: %s", page, url)
+    data = _graph_get(session, url, token_provider)
+
     page_items = data.get("value", [])
     items.extend(page_items)
     log.info(
@@ -127,6 +188,7 @@ class SecmanClient:
     resp = self._session.post(
       f"{self.base}/api/auth/login",
       json={"username": self._admin_name, "password": self._admin_pass},
+      timeout=HTTP_TIMEOUT,
     )
     if not resp.ok:
       log.error("SECMAN login failed: HTTP %d — %s", resp.status_code, resp.text)
@@ -154,7 +216,7 @@ class SecmanClient:
       log.info("SECMAN login OK — user has ADMIN role")
 
   def _load_workgroup_cache(self):
-    resp = self._session.get(f"{self.base}/api/workgroups")
+    resp = self._session.get(f"{self.base}/api/workgroups", timeout=HTTP_TIMEOUT)
     resp.raise_for_status()
     self._workgroup_cache = {wg["name"].lower(): wg["id"] for wg in resp.json()}
     log.debug("Loaded %d existing workgroups into cache", len(self._workgroup_cache))
@@ -174,6 +236,7 @@ class SecmanClient:
     resp = self._session.post(
       f"{self.base}/api/workgroups",
       json={"name": name, "description": f"Imported from AD group '{name}'"},
+      timeout=HTTP_TIMEOUT,
     )
 
     if resp.status_code == 201:
@@ -225,6 +288,7 @@ class SecmanClient:
     resp = self._session.post(
       f"{self.base}/api/workgroups/{workgroup_id}/users",
       json={"userRefs": user_refs},
+      timeout=HTTP_TIMEOUT,
     )
     if not resp.ok:
       log.error(
@@ -282,12 +346,8 @@ def main():
   log.info("Starting adread run")
   overall_start = time.monotonic()
 
-  access_token = get_access_token()
-
-  headers = {
-    "Authorization": f"Bearer {access_token}",
-    "Content-Type": "application/json",
-  }
+  token_provider = GraphTokenProvider()
+  graph_session = requests.Session()
 
   # Only fetch groups whose displayName starts with "AWS-". Graph's startswith()
   # is case-sensitive, so OR together the common casings to approximate a
@@ -301,7 +361,7 @@ def main():
     f"&$filter={requests.utils.quote(prefix_filter)}"
   )
 
-  groups = graph_get_all(groups_url, headers)
+  groups = graph_get_all(graph_session, groups_url, token_provider)
   log.info("Retrieved %d group(s) with leading 'AWS-'", len(groups))
 
   total_members = 0
@@ -323,21 +383,39 @@ def main():
     members_url = (
       f"{GRAPH_BASE}/groups/{group_id}/members/microsoft.graph.user"
       "?$select=id,mail,userPrincipalName"
+      "&$top=999"
     )
 
-    users = graph_get_all(members_url, headers)
+    try:
+      users = graph_get_all(graph_session, members_url, token_provider)
+    except Exception as exc:
+      log.error("FAILED to read members of group '%s': %s — skipping", group_name, exc)
+      failed_groups.append(group_name)
+      continue
+
     total_members += len(users)
     log.info("Group %s has %d user member(s)", group_name, len(users))
 
     print(f"\nGroup: {group_name} ({group_mail})")
 
     emails = []
+    logged_empty_sample = False
     for user in users:
       email = user.get("mail") or user.get("userPrincipalName")
       log.debug("Member of %s: id=%s email=%s", group_name, user.get("id"), email)
       print(f" {email}")
       if email:
         emails.append(email)
+      elif not logged_empty_sample:
+        # Both mail and userPrincipalName null — almost always means the app-only
+        # token lacks User.Read.All (Application). Log one raw member per group so
+        # the permission state is observable without flooding the output.
+        log.warning(
+          "Member of '%s' has no mail/userPrincipalName (check User.Read.All "
+          "Application permission). Raw object: %s",
+          group_name, user,
+        )
+        logged_empty_sample = True
 
     if secman is not None:
       try:
@@ -364,4 +442,8 @@ def main():
 
 
 if __name__ == "__main__":
-  main()
+  try:
+    main()
+  except KeyboardInterrupt:
+    log.warning("Interrupted by user (Ctrl-C) — exiting")
+    sys.exit(130)
