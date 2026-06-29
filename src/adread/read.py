@@ -173,13 +173,22 @@ class SecmanClient:
 
   MAX_WORKGROUP_NAME_LEN = 100
 
-  def __init__(self, backend_url, admin_name, admin_pass, dry_run=False):
+  def __init__(self, backend_url, admin_name, admin_pass, dry_run=False, verify_tls=True):
     self.base = backend_url.rstrip("/")
     self._admin_name = admin_name
     self._admin_pass = admin_pass
     self.dry_run = dry_run
     self._session = requests.Session()
     self._session.headers.update({"Content-Type": "application/json"})
+    # Allow connecting to backends presenting a self-signed certificate. When
+    # disabled we also silence urllib3's per-request InsecureRequestWarning so
+    # the log isn't flooded across the run.
+    self._session.verify = verify_tls
+    if not verify_tls:
+      requests.packages.urllib3.disable_warnings(
+        requests.packages.urllib3.exceptions.InsecureRequestWarning
+      )
+      log.warning("SECMAN TLS verification DISABLED (accepting self-signed certificates)")
     # Cache of lowercased name → id populated on first ensure_workgroup miss.
     self._workgroup_cache = None
 
@@ -323,6 +332,14 @@ def main():
     action="store_true",
     help="With --import: log what would be created/assigned without writing anything.",
   )
+  parser.add_argument(
+    "--insecure",
+    dest="insecure",
+    action="store_true",
+    default=os.environ.get("SECMAN_INSECURE", "").lower() in ("1", "true", "yes"),
+    help="Skip TLS certificate verification for the SECMAN backend "
+         "(accept self-signed certificates). May also be set via SECMAN_INSECURE=1.",
+  )
   args = parser.parse_args()
 
   if args.dry_run and not args.do_import:
@@ -339,6 +356,7 @@ def main():
       admin_name=os.environ["SECMAN_ADMIN_NAME"],
       admin_pass=os.environ["SECMAN_ADMIN_PASS"],
       dry_run=args.dry_run,
+      verify_tls=not args.insecure,
     )
     if not args.dry_run:
       secman.login()
