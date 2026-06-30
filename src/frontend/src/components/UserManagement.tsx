@@ -75,6 +75,10 @@ const UserManagement = () => {
     });
     const [editUserError, setEditUserError] = useState<string | null>(null);
     const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
+    const [editWorkgroupSearch, setEditWorkgroupSearch] = useState('');
+    // Snapshot of the user's workgroups at modal-open time, used only to pin
+    // already-assigned workgroups to the top; stays fixed while checkboxes are toggled.
+    const [pinnedEditWorkgroupIds, setPinnedEditWorkgroupIds] = useState<number[]>([]);
 
     // State for User Mappings (Feature 017)
     const [mappings, setMappings] = useState<UserMapping[]>([]);
@@ -97,6 +101,20 @@ const UserManagement = () => {
         ipAddress: ''
     });
 
+    // Sorted/filtered workgroup list for the Edit User modal: already-assigned
+    // workgroups stay pinned at the top (per the open-time snapshot), everything
+    // else is alphabetical, and the search box narrows by substring match.
+    const sortedEditWorkgroups = useMemo(() => {
+        const search = editWorkgroupSearch.trim().toLowerCase();
+        return [...workgroups]
+            .filter(wg => !search || wg.name.toLowerCase().includes(search))
+            .sort((a, b) => {
+                const aPinned = pinnedEditWorkgroupIds.includes(a.id);
+                const bPinned = pinnedEditWorkgroupIds.includes(b.id);
+                if (aPinned !== bPinned) return aPinned ? -1 : 1;
+                return a.name.localeCompare(b.name);
+            });
+    }, [workgroups, editWorkgroupSearch, pinnedEditWorkgroupIds]);
 
     useEffect(() => {
         let isMounted = true; // Track if component is mounted
@@ -279,6 +297,8 @@ const UserManagement = () => {
         setEditingMappingId(null);
         setMappingsError(null);
         setMappingsSuccess(null);
+        setEditWorkgroupSearch('');
+        setPinnedEditWorkgroupIds([]);
     };
 
     const handleExportEmails = async () => {
@@ -358,6 +378,8 @@ const UserManagement = () => {
             workgroupIds: user.workgroups?.map(wg => wg.id) || [],
         });
         setEditUserError(null);
+        setEditWorkgroupSearch('');
+        setPinnedEditWorkgroupIds(user.workgroups?.map(wg => wg.id) || []);
 
         // Reset mapping form states to prevent data leaking between users
         setNewMapping({ email: '', awsAccountId: '', domain: '', ipAddress: '' });
@@ -855,10 +877,29 @@ const UserManagement = () => {
                                         </div>
                                     </div>
                                     <div className="mb-3">
-                                        <label className="form-label">Workgroups</label>
-                                        <div>
-                                            {workgroups.length > 0 ? (
-                                                workgroups.map(workgroup => (
+                                        <label className="form-label">
+                                            Workgroups
+                                            {editUser.workgroupIds.length > 0 && (
+                                                <span className="text-muted"> ({editUser.workgroupIds.length} selected)</span>
+                                            )}
+                                        </label>
+                                        {workgroups.length > 0 && (
+                                            <input
+                                                type="text"
+                                                className="form-control form-control-sm mb-2"
+                                                placeholder="Search workgroups..."
+                                                value={editWorkgroupSearch}
+                                                onChange={(e) => setEditWorkgroupSearch(e.target.value)}
+                                                disabled={isSubmittingEdit}
+                                            />
+                                        )}
+                                        <div style={{ maxHeight: '300px', overflowY: 'auto', border: '1px solid #dee2e6', borderRadius: '0.375rem', padding: '0.5rem' }}>
+                                            {workgroups.length === 0 ? (
+                                                <small className="text-muted">No workgroups available</small>
+                                            ) : sortedEditWorkgroups.length === 0 ? (
+                                                <small className="text-muted">No workgroups match "{editWorkgroupSearch}"</small>
+                                            ) : (
+                                                sortedEditWorkgroups.map(workgroup => (
                                                     <div className="form-check" key={workgroup.id}>
                                                         <input
                                                             className="form-check-input"
@@ -874,8 +915,6 @@ const UserManagement = () => {
                                                         </label>
                                                     </div>
                                                 ))
-                                            ) : (
-                                                <small className="text-muted">No workgroups available</small>
                                             )}
                                         </div>
                                     </div>
