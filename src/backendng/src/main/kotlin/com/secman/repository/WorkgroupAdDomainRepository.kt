@@ -23,6 +23,15 @@ interface WorkgroupAdDomainRepository : JpaRepository<WorkgroupAdDomain, Long> {
 
     fun countByWorkgroupId(workgroupId: Long): Long
 
+    /**
+     * Bulk AD-domain counts for every workgroup that has at least one,
+     * as (workgroupId, count) rows. Replaces per-workgroup countByWorkgroupId
+     * calls in the workgroup-list endpoint (avoids N+1). Workgroups with zero
+     * assignments are simply absent — callers default to 0.
+     */
+    @Query("SELECT wad.workgroup.id, COUNT(wad) FROM WorkgroupAdDomain wad GROUP BY wad.workgroup.id")
+    fun countPerWorkgroup(): List<Array<Any>>
+
     @Query("UPDATE WorkgroupAdDomain wad SET wad.createdBy = NULL WHERE wad.createdBy.id = :userId")
     fun nullifyCreatedByForUser(userId: Long): Int
 }

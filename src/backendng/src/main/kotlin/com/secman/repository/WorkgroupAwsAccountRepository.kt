@@ -33,6 +33,15 @@ interface WorkgroupAwsAccountRepository : JpaRepository<WorkgroupAwsAccount, Lon
     fun countByWorkgroupId(workgroupId: Long): Long
 
     /**
+     * Bulk AWS-account counts for every workgroup that has at least one,
+     * as (workgroupId, count) rows. Replaces per-workgroup countByWorkgroupId
+     * calls in the workgroup-list endpoint (avoids N+1). Workgroups with zero
+     * assignments are simply absent — callers default to 0.
+     */
+    @Query("SELECT waa.workgroup.id, COUNT(waa) FROM WorkgroupAwsAccount waa GROUP BY waa.workgroup.id")
+    fun countPerWorkgroup(): List<Array<Any>>
+
+    /**
      * Nullify the createdBy reference when a user is deleted.
      * Preserves the workgroup→AWS-account assignment (the access rule
      * still applies) while detaching the actor for audit history. The

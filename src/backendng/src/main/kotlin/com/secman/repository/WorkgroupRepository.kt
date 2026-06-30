@@ -114,6 +114,30 @@ interface WorkgroupRepository : JpaRepository<Workgroup, Long> {
     """, nativeQuery = true)
     fun countEffectiveWorkgroupsByUserEmail(email: String): Long
 
+    /**
+     * Bulk member counts to replace the per-workgroup `wg.users.size` /
+     * `wg.assets.size` lazy-collection loads in the workgroup-list endpoint
+     * (N+1 fix). Each returns (workgroupId, count) rows; the INNER JOIN means
+     * workgroups with zero members are absent, so callers default the lookup
+     * to 0. Same `List<Array<Any>>` projection shape used elsewhere in the
+     * codebase (see McpToolPermissionRepository).
+     */
+    @io.micronaut.data.annotation.Query("SELECT w.id, COUNT(u) FROM Workgroup w JOIN w.users u GROUP BY w.id")
+    fun countUsersPerWorkgroup(): List<Array<Any>>
+
+    @io.micronaut.data.annotation.Query("SELECT w.id, COUNT(a) FROM Workgroup w JOIN w.assets a GROUP BY w.id")
+    fun countAssetsPerWorkgroup(): List<Array<Any>>
+
+    /**
+     * Lightweight (id, parentId, name) tuples for ALL workgroups, used to build
+     * an in-memory parent map so ancestor/depth computation in the list endpoint
+     * needs no lazy `parent`-chain navigation. LEFT JOIN keeps root workgroups
+     * (null parent) in the result — a path expression like `w.parent.id` would
+     * implicit-inner-join them away.
+     */
+    @io.micronaut.data.annotation.Query("SELECT w.id, p.id, w.name FROM Workgroup w LEFT JOIN w.parent p")
+    fun findAllParentLinks(): List<Array<Any>>
+
     // Feature 040: Nested Workgroups - Hierarchy Query Methods
 
     /**

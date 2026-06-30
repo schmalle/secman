@@ -193,29 +193,69 @@ open class WorkgroupController(
             // Include descendant workgroups so L2 members see their L3 sub-teams.
             workgroupRepository.findEffectiveWorkgroupsByUserEmail(user.email)
         }
+
+        // Performance: build all per-workgroup data with a constant number of
+        // bulk queries instead of the previous N+1 explosion (N×(4+2·depth)+1
+        // queries for 1000+ workgroups). Each lookup below is one query whose
+        // cost is independent of the workgroup count.
+        val userCounts = workgroupRepository.countUsersPerWorkgroup().toCountMap()
+        val assetCounts = workgroupRepository.countAssetsPerWorkgroup().toCountMap()
+        val awsCounts = workgroupAwsAccountRepository.countPerWorkgroup().toCountMap()
+        val adCounts = workgroupAdDomainRepository.countPerWorkgroup().toCountMap()
+        // id -> (parentId, name) for ALL workgroups; powers in-memory ancestor /
+        // depth computation without touching the lazy `parent` association.
+        val links: Map<Long, Pair<Long?, String>> = workgroupRepository.findAllParentLinks()
+            .associate { row ->
+                (row[0] as Number).toLong() to Pair((row[1] as Number?)?.toLong(), row[2] as String)
+            }
+
         val response = workgroups.map { wg ->
-            val ancestors = wg.getAncestors()
+            val id = wg.id!!
             WorkgroupListResponse(
-                id = wg.id!!,
+                id = id,
                 name = wg.name,
                 description = wg.description,
                 criticality = wg.criticality,
-                userCount = wg.users.size,
-                assetCount = wg.assets.size,
-                awsAccountsCount = workgroupAwsAccountRepository.countByWorkgroupId(wg.id!!),
-                adDomainsCount = workgroupAdDomainRepository.countByWorkgroupId(wg.id!!),
+                userCount = (userCounts[id] ?: 0L).toInt(),
+                assetCount = (assetCounts[id] ?: 0L).toInt(),
+                awsAccountsCount = awsCounts[id] ?: 0L,
+                adDomainsCount = adCounts[id] ?: 0L,
                 createdAt = wg.createdAt!!,
                 updatedAt = wg.updatedAt!!,
-                parentId = wg.parent?.id,
-                parentName = wg.parent?.name,
-                depth = wg.calculateDepth(),
-                ancestors = ancestors.map { ancestor ->
-                    BreadcrumbItem(id = ancestor.id!!, name = ancestor.name)
-                }
+                parentId = wg.parent?.id,  // FK id on a lazy proxy — no query
+                parentName = wg.parent?.id?.let { links[it]?.second },
+                depth = depthFromLinks(id, links),
+                ancestors = ancestorsFromLinks(id, links)
             )
         }
         return HttpResponse.ok(response)
     }
+
+    /** Convert a (workgroupId, count) projection into a id->count map. */
+    private fun List<Array<Any>>.toCountMap(): Map<Long, Long> =
+        associate { row -> (row[0] as Number).toLong() to (row[1] as Number).toLong() }
+
+    /**
+     * Ancestors from root down to immediate parent, computed purely from the
+     * in-memory link map (no lazy `parent` navigation). Depth-capped at 10 to
+     * match the safety limit in Workgroup.getAncestors / calculateDepth.
+     */
+    private fun ancestorsFromLinks(startId: Long, links: Map<Long, Pair<Long?, String>>): List<BreadcrumbItem> {
+        val out = ArrayDeque<BreadcrumbItem>()
+        var pid = links[startId]?.first
+        var guard = 0
+        while (pid != null && guard < 10) {
+            val link = links[pid] ?: break
+            out.addFirst(BreadcrumbItem(id = pid, name = link.second))
+            pid = link.first
+            guard++
+        }
+        return out.toList()
+    }
+
+    /** Hierarchy depth (root = 1) computed from the in-memory link map. */
+    private fun depthFromLinks(startId: Long, links: Map<Long, Pair<Long?, String>>): Int =
+        ancestorsFromLinks(startId, links).size + 1
 
     /**
      * Get workgroup details by ID
