@@ -237,7 +237,7 @@ class ServersCommand {
                     start()
                 }
 
-                val totalVulns = try {
+                val streamResult = try {
                     apiClient.queryServersWithFiltersStreaming(
                         deviceType = deviceType,
                         severity = severity,
@@ -258,6 +258,8 @@ class ServersCommand {
                 }
                 // join() establishes happens-before for all counter writes in the consumer.
                 consumerError.get()?.let { throw RuntimeException("Backend storage consumer failed", it) }
+
+                val totalVulns = streamResult.totalVulnerabilities
 
                 if (totalVulns == 0) {
                     System.out.println("No vulnerabilities found matching criteria")
@@ -298,12 +300,18 @@ class ServersCommand {
                         val reconcileResult = storageService.reconcileStaleVulnerabilities(
                             importStartedAt = runStartedAt,
                             severities = severitiesList,
+                            queriedHosts = streamResult.queriedHosts,
                             backendUrl = resolvedBackendUrl,
                             authToken = authToken
                         )
                         System.out.println("\n--- Reconciliation ---")
                         if (reconcileResult != null) {
-                            System.out.println("Stale rows cleared (severities=${severitiesList.joinToString(",")}, cutoff=$runStartedAt): ${reconcileResult.rowsDeleted}")
+                            if (reconcileResult.aborted) {
+                                System.err.println("WARNING: reconcile ABORTED by safety brake — ${reconcileResult.abortReason ?: "run refreshed 0 rows"}.")
+                                System.err.println("No stale rows were deleted. Investigate the import run before trusting query results.")
+                            } else {
+                                System.out.println("Stale rows cleared (severities=${severitiesList.joinToString(",")}, cutoff=$runStartedAt): ${reconcileResult.rowsDeleted}")
+                            }
                         } else {
                             // null return is documented as no-op (empty severities); shouldn't happen here.
                             System.out.println("Reconcile skipped (no severities provided).")

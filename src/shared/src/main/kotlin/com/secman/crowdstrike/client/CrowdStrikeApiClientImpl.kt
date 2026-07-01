@@ -450,7 +450,7 @@ open class CrowdStrikeApiClientImpl(
         lastSeenDays: Int,
         deviceBatchSize: Int,
         batchProcessor: (List<CrowdStrikeVulnerabilityDto>) -> Unit
-    ): Int {
+    ): StreamingImportResult {
         val parsedDeviceType = DeviceType.fromString(deviceType)
         log.info("Streaming query for {} devices: severity={}, minDaysOpen={}", parsedDeviceType.name, severity, minDaysOpen)
 
@@ -460,8 +460,24 @@ open class CrowdStrikeApiClientImpl(
 
         if (serverDeviceIds.isEmpty()) {
             log.info("No {} devices found in CrowdStrike", parsedDeviceType.name)
-            return 0
+            return StreamingImportResult(totalVulnerabilities = 0, queriedHosts = emptySet())
         }
+
+        // Resolve the FULL queried device population (hostname + instance id) up front —
+        // including devices that will return zero matching vulnerabilities. The backend
+        // scopes its stale-reconcile sweep to assets resolved from this set, so a host
+        // outside the --last-seen-days window (not in serverDeviceIds) is never swept, and
+        // a fully-remediated host that returns no vulns this run is still cleaned up.
+        // Best-effort: a device that fails metadata resolution simply isn't in the scope.
+        val queriedHosts = resolveDeviceMetadata(serverDeviceIds, token).values
+            .mapNotNull { md ->
+                val h = md.hostname?.trim()?.takeIf { it.isNotBlank() }
+                val i = md.cloudInstanceId?.trim()?.takeIf { it.isNotBlank() }
+                if (h == null && i == null) null else QueriedHost(hostname = h, instanceId = i)
+            }
+            .toSet()
+        log.info("Resolved {} queried host(s) from {} device id(s) for reconcile scoping",
+            queriedHosts.size, serverDeviceIds.size)
 
         log.info("Found {} {} devices, processing in batches of {}", serverDeviceIds.size, parsedDeviceType.name, deviceBatchSize)
 
@@ -492,7 +508,10 @@ open class CrowdStrikeApiClientImpl(
         log.info("Streaming query completed: {} total vulnerabilities across {} batches",
             totalVulnerabilities, deviceChunks.size)
 
-        return totalVulnerabilities
+        return StreamingImportResult(
+            totalVulnerabilities = totalVulnerabilities,
+            queriedHosts = queriedHosts
+        )
     }
 
 

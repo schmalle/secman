@@ -5,7 +5,9 @@ import com.secman.crowdstrike.dto.FalconConfigDto
 import com.secman.crowdstrike.exception.CrowdStrikeException
 import com.secman.crowdstrike.exception.NotFoundException
 import com.secman.crowdstrike.exception.RateLimitException
+import com.secman.domain.Asset
 import com.secman.domain.FalconConfig
+import com.secman.domain.Vulnerability
 import com.secman.dto.CrowdStrikeQueryResponse
 import com.secman.dto.CrowdStrikeVulnerabilityDto
 import com.secman.repository.AssetRepository
@@ -92,7 +94,7 @@ open class CrowdStrikeQueryService(
                 "Serving vulnerabilities from database: hostname={}, found={}",
                 hostname, dbResponse.vulnerabilities.size
             )
-            return applyFilters(dbResponse, severity, product)
+            return applyExceptions(applyFilters(dbResponse, severity, product))
         }
 
         // Fall through to CrowdStrike API
@@ -112,7 +114,7 @@ open class CrowdStrikeQueryService(
                 hostname, sharedResponse.vulnerabilities.size, filtered.vulnerabilities.size
             )
 
-            return filtered
+            return applyExceptions(filtered)
         } catch (e: NotFoundException) {
             log.warn("Hostname not found: {}", hostname)
             throw CrowdStrikeError.NotFoundError(
@@ -232,7 +234,7 @@ open class CrowdStrikeQueryService(
                 "Serving vulnerabilities from database: instanceId={}, found={}",
                 instanceId, dbResponse.vulnerabilities.size
             )
-            return applyFilters(dbResponse, severity, product)
+            return applyExceptions(applyFilters(dbResponse, severity, product))
         }
 
         // Fall through to CrowdStrike API
@@ -252,7 +254,7 @@ open class CrowdStrikeQueryService(
                 instanceId, sharedResponse.deviceCount, sharedResponse.vulnerabilities.size, filtered.vulnerabilities.size
             )
 
-            return filtered
+            return applyExceptions(filtered)
         } catch (e: NotFoundException) {
             log.warn("Instance ID not found: {}", instanceId)
             throw CrowdStrikeError.NotFoundError(
@@ -294,9 +296,6 @@ open class CrowdStrikeQueryService(
         val vulns = vulnerabilityRepository.findByAssetId(assetId, Pageable.from(page, limit))
         if (vulns.content.isEmpty()) return null
 
-        val activeExceptions = vulnerabilityExceptionRepository
-            .findByExpirationDateIsNullOrExpirationDateGreaterThan(LocalDateTime.now())
-
         val now = LocalDateTime.now()
         // Honest freshness: report when the underlying rows were last touched by an
         // import, not when this query happened. Without this, the "Cached (X min ago)"
@@ -308,12 +307,13 @@ open class CrowdStrikeQueryService(
             .maxOrNull()
             ?: asset.crowdStrikeLastImportedAt
             ?: now
+        // Exception status is filled uniformly by applyExceptions() on the way out, so it
+        // is applied identically to DB-served and live-Falcon responses. Leave it false here.
         return CrowdStrikeQueryResponse(
             hostname = asset.name,
             instanceId = asset.cloudInstanceId,
             cloudAccountId = asset.cloudAccountId,
             vulnerabilities = vulns.content.map { v ->
-                val matchingException = activeExceptions.find { it.matches(v, asset) }
                 // Recompute days from the SLA anchor instead of returning v.daysOpen,
                 // which is the frozen string captured at last import. Without this the
                 // "live" lookup view drifts away from /api/vulnerabilities/current.
@@ -332,12 +332,13 @@ open class CrowdStrikeQueryService(
                     detectedAt = anchor,
                     patchPublicationDate = v.patchPublicationDate,
                     status = "open",
-                    hasException = matchingException != null,
-                    exceptionReason = matchingException?.reason
+                    hasException = false,
+                    exceptionReason = null
                 )
             },
             totalCount = vulns.totalSize.toInt(),
-            queriedAt = dataAsOf
+            queriedAt = dataAsOf,
+            dataSource = "DATABASE"
         )
     }
 
@@ -352,9 +353,6 @@ open class CrowdStrikeQueryService(
         val vulns = vulnerabilityRepository.findByAssetId(assetId, Pageable.from(page, limit))
         if (vulns.content.isEmpty()) return null
 
-        val activeExceptions = vulnerabilityExceptionRepository
-            .findByExpirationDateIsNullOrExpirationDateGreaterThan(LocalDateTime.now())
-
         val now = LocalDateTime.now()
         // Honest freshness: report when the underlying rows were last touched by an
         // import, not when this query happened. Without this, the "Cached (X min ago)"
@@ -366,13 +364,14 @@ open class CrowdStrikeQueryService(
             .maxOrNull()
             ?: asset.crowdStrikeLastImportedAt
             ?: now
+        // Exception status is filled uniformly by applyExceptions() on the way out, so it
+        // is applied identically to DB-served and live-Falcon responses. Leave it false here.
         return CrowdStrikeQueryResponse(
             hostname = asset.name,
             instanceId = asset.cloudInstanceId,
             deviceCount = 1,
             cloudAccountId = asset.cloudAccountId,
             vulnerabilities = vulns.content.map { v ->
-                val matchingException = activeExceptions.find { it.matches(v, asset) }
                 // See queryFromDatabaseByHostname — same recompute to keep the
                 // hostname and instance-id paths consistent.
                 val anchor = v.firstSeenAt ?: v.scanTimestamp
@@ -390,12 +389,13 @@ open class CrowdStrikeQueryService(
                     detectedAt = anchor,
                     patchPublicationDate = v.patchPublicationDate,
                     status = "open",
-                    hasException = matchingException != null,
-                    exceptionReason = matchingException?.reason
+                    hasException = false,
+                    exceptionReason = null
                 )
             },
             totalCount = vulns.totalSize.toInt(),
-            queriedAt = dataAsOf
+            queriedAt = dataAsOf,
+            dataSource = "DATABASE"
         )
     }
 
@@ -442,6 +442,55 @@ open class CrowdStrikeQueryService(
             totalCount = filtered.size
         )
     }
+
+    /**
+     * Apply active vulnerability exceptions to every row of a response — regardless of whether the
+     * rows were served from the local DB cache or a live Falcon call.
+     *
+     * The live-Falcon path (toBackendResponse) has no exception knowledge: the shared client
+     * hardcodes hasException=false. Without this step the System Vulnerabilities lookup silently
+     * dropped all exception status whenever it fell through to the live API (e.g. a host whose
+     * name/instance-id lookup missed, or a duplicate/split asset row with no vulnerabilities).
+     * Computing exceptions here — the single application site for both paths — keeps the DB and
+     * live results from ever diverging again.
+     */
+    private fun applyExceptions(response: CrowdStrikeQueryResponse): CrowdStrikeQueryResponse {
+        if (response.vulnerabilities.isEmpty()) return response
+        val activeExceptions = vulnerabilityExceptionRepository
+            .findByExpirationDateIsNullOrExpirationDateGreaterThan(LocalDateTime.now())
+        if (activeExceptions.isEmpty()) return response
+
+        // Resolve the real asset so ASSET/IP/OS/AWS_ACCOUNT-scoped exceptions still apply on the
+        // live view. Fall back to a transient asset carrying what the response already knows so
+        // GLOBAL-scoped subject exceptions (the common case) still match when the asset is unknown
+        // (a genuinely never-imported host queried live). type/owner are never read by
+        // VulnerabilityException.scopeMatches — placeholders are safe.
+        val asset = response.instanceId?.let { assetRepository.findByCloudInstanceIdIgnoreCase(it) }
+            ?: assetRepository.findByNameIgnoreCase(response.hostname)
+            ?: Asset(
+                name = response.hostname,
+                type = "SERVER",
+                owner = "",
+                ip = response.vulnerabilities.firstOrNull()?.ip,
+                cloudInstanceId = response.instanceId,
+                cloudAccountId = response.cloudAccountId
+            )
+
+        val now = LocalDateTime.now()
+        val mapped = response.vulnerabilities.map { dto ->
+            // Transient row carrying only the fields VulnerabilityException.subjectMatches reads
+            // (vulnerabilityId + vulnerableProductVersions); scopeMatches reads asset fields.
+            val transient = Vulnerability(
+                asset = asset,
+                vulnerabilityId = dto.cveId,
+                vulnerableProductVersions = dto.affectedProduct,
+                scanTimestamp = now
+            )
+            val match = activeExceptions.find { it.matches(transient, asset) }
+            dto.copy(hasException = match != null, exceptionReason = match?.reason)
+        }
+        return response.copy(vulnerabilities = mapped)
+    }
 }
 
 /**
@@ -471,6 +520,9 @@ private fun com.secman.crowdstrike.dto.CrowdStrikeQueryResponse.toBackendRespons
             )
         },
         totalCount = this.totalCount,
-        queriedAt = this.queriedAt
+        queriedAt = this.queriedAt,
+        // toBackendResponse is only ever called on the live-Falcon fallthrough paths
+        // (queryVulnerabilities / queryByInstanceId), so these rows are not persisted.
+        dataSource = "LIVE_API"
     )
 }

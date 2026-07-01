@@ -58,5 +58,16 @@ data class CrowdStrikeQueryResponse(
      * Timestamp when query was executed (ISO 8601)
      */
     @field:NotNull
-    val queriedAt: LocalDateTime
+    val queriedAt: LocalDateTime,
+
+    /**
+     * Where these rows came from:
+     * - `"DATABASE"`  — served from the persisted `vulnerability` table (consistent with
+     *   the Current/Account Vulnerabilities views).
+     * - `"LIVE_API"`  — the asset had no persisted rows, so the service fell through to the
+     *   live CrowdStrike Falcon API. These rows are NOT yet imported and will therefore NOT
+     *   appear in the persisted-table views. Lets the UI label the difference instead of
+     *   silently showing live counts that contradict the other pages.
+     */
+    val dataSource: String = "DATABASE"
 )

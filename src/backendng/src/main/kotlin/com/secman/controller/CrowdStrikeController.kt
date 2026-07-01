@@ -368,16 +368,19 @@ open class CrowdStrikeController(
             request.importStartedAt, java.time.LocalDateTime.now(), request.severities, username
         )
         return try {
-            val deleted = importService.reconcileStaleCrowdStrikeImports(
+            val result = importService.reconcileStaleCrowdStrikeImports(
                 cutoff = request.importStartedAt,
-                severities = request.severities
+                severities = request.severities,
+                queriedHosts = request.queriedHosts ?: emptyList()
             )
             HttpResponse.ok(
                 ReconcileStaleVulnerabilitiesResponse(
-                    rowsDeleted = deleted,
+                    rowsDeleted = result.rowsDeleted,
                     cutoff = request.importStartedAt,
                     severities = request.severities,
-                    owner = AssetOwners.CROWDSTRIKE_IMPORT
+                    owner = AssetOwners.CROWDSTRIKE_IMPORT,
+                    aborted = result.aborted,
+                    abortReason = result.abortReason
                 )
             )
         } catch (e: IllegalArgumentException) {

@@ -17,6 +17,30 @@ data class StreamingSummary(
 )
 
 /**
+ * One device from a streaming import run's Stage-1 queried population. Carries the
+ * identifiers the backend uses to resolve it to persisted assets. Includes hosts that
+ * returned zero matching vulnerabilities — those are exactly the fully-remediated hosts
+ * the stale-reconcile sweep must clean up.
+ */
+data class QueriedHost(
+    val hostname: String?,
+    val instanceId: String?
+)
+
+/**
+ * Result of [CrowdStrikeApiClient.queryServersWithFiltersStreaming]: the total number of
+ * vulnerabilities streamed to the batch processor, plus the FULL set of devices this run
+ * queried (Stage-1 population, including zero-vuln hosts). The caller forwards
+ * [queriedHosts] to the backend so the stale-reconcile sweep is scoped to only the hosts
+ * this run actually touched — a host outside `--last-seen-days` is never in this set and
+ * so is never wiped.
+ */
+data class StreamingImportResult(
+    val totalVulnerabilities: Int,
+    val queriedHosts: Set<QueriedHost>
+)
+
+/**
  * Interface for CrowdStrike Falcon API client
  *
  * Defines contract for querying CrowdStrike Spotlight API for vulnerabilities
@@ -131,7 +155,8 @@ interface CrowdStrikeApiClient {
      * @param lastSeenDays Only include devices seen within N days (0 = all)
      * @param deviceBatchSize Number of device IDs to process per streaming batch
      * @param batchProcessor Callback invoked with each batch of filtered vulnerabilities
-     * @return Total number of vulnerabilities processed across all batches
+     * @return [StreamingImportResult] with the total vulnerability count and the full
+     *         Stage-1 queried device population (including zero-vuln hosts)
      */
     fun queryServersWithFiltersStreaming(
         deviceType: String = "SERVER",
@@ -142,7 +167,7 @@ interface CrowdStrikeApiClient {
         lastSeenDays: Int = 0,
         deviceBatchSize: Int = 200,
         batchProcessor: (List<CrowdStrikeVulnerabilityDto>) -> Unit
-    ): Int
+    ): StreamingImportResult
 
     /**
      * Query servers with filters in streaming batches but only retain summary statistics

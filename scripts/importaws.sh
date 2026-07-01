@@ -31,4 +31,4 @@ exec java -Xmx4g -Xms2g -jar "${CLI_JAR}" \
   --save \
   --username "${SECMAN_ADMIN_NAME}" \
   --password "${SECMAN_ADMIN_PASS}" \
-  --last-seen-days 1
+  --last-seen-days 30

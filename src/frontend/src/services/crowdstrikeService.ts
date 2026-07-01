@@ -39,6 +39,13 @@ export interface CrowdStrikeQueryResponse {
     vulnerabilities: CrowdStrikeVulnerabilityDto[];
     totalCount: number;
     queriedAt: string;
+    /**
+     * "DATABASE" — served from the persisted vulnerability table (matches the
+     * Current/Account Vulnerabilities views).
+     * "LIVE_API" — no persisted rows existed, so these came live from CrowdStrike Falcon
+     * and are NOT yet imported (they will not appear in the persisted-table views).
+     */
+    dataSource?: 'DATABASE' | 'LIVE_API';
 }
 
 /**
