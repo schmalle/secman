@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { formatServerDate } from '../utils/dateUtils';
 import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete } from '../utils/auth';
 
 interface Asset {
@@ -856,7 +857,7 @@ const DemandManagement: React.FC = () => {
                           </td>
                           <td>{demand.requestor?.username || '-'}</td>
                           <td>
-                            {demand.requestedDate ? new Date(demand.requestedDate).toLocaleDateString() : '-'}
+                            {formatServerDate(demand.requestedDate, undefined, '-')}
                           </td>
                           <td>
                             <div className="btn-group-vertical btn-group-sm" role="group">

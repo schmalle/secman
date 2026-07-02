@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { getActiveBanners, type MaintenanceBanner as Banner } from '../services/maintenanceBannerService';
+import { formatServerDateTime } from '../utils/dateUtils';
 
 /**
  * Maintenance Banner Display Component
@@ -69,8 +70,7 @@ export default function MaintenanceBanner() {
    * Example: "Nov 15, 2025, 10:30 AM"
    */
   const formatTime = (isoString: string): string => {
-    const date = new Date(isoString);
-    return date.toLocaleString(undefined, {
+    return formatServerDateTime(isoString, {
       year: 'numeric',
       month: 'short',
       day: 'numeric',

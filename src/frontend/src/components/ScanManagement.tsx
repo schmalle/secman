@@ -1,5 +1,6 @@
 import React, { useState, useEffect, Component } from 'react';
 import { authenticatedGet } from '../utils/auth';
+import { formatServerDateTime } from '../utils/dateUtils';
 
 // Error Boundary Component
 class ErrorBoundary extends Component<
@@ -198,14 +199,7 @@ const ScanManagementContent: React.FC = () => {
 
   const formatDate = (dateString: string | null | undefined): string => {
     if (!dateString) return 'N/A';
-    try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) return 'Invalid Date';
-      return date.toLocaleString();
-    } catch (error) {
-      console.error('Error formatting date:', error);
-      return 'Invalid Date';
-    }
+    return formatServerDateTime(dateString, undefined, 'Invalid Date');
   };
 
   const handlePageChange = (newPage: number) => {

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { csrfPost } from '../utils/csrf';
 import { authenticatedPost, isAdmin } from '../utils/auth';
+import { formatServerDateTime } from '../utils/dateUtils';
 import VulnerabilityImportForm from './VulnerabilityImportForm';
 import UserMappingUpload from './UserMappingUpload';
 import { importAssets, type ImportResult } from '../services/assetService';
@@ -509,7 +510,7 @@ const Import = () => {
                                                 <div className="col-md-6">
                                                     <p className="mb-2"><strong>Scan ID:</strong> {scanSummary.scanId}</p>
                                                     <p className="mb-2"><strong>Filename:</strong> {scanSummary.filename}</p>
-                                                    <p className="mb-2"><strong>Scan Date:</strong> {new Date(scanSummary.scanDate).toLocaleString()}</p>
+                                                    <p className="mb-2"><strong>Scan Date:</strong> {formatServerDateTime(scanSummary.scanDate)}</p>
                                                 </div>
                                                 <div className="col-md-6">
                                                     <p className="mb-2"><strong>Hosts Discovered:</strong> {scanSummary.hostsDiscovered}</p>

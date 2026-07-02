@@ -17,6 +17,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { formatServerDate, formatServerDateTime } from '../utils/dateUtils';
 import { getRequestById, getSimilarRequests, approveRequest, rejectRequest, type VulnerabilityExceptionRequestDto } from '../services/exceptionRequestService';
 import ExceptionStatusBadge from './ExceptionStatusBadge';
 import ExceptionRequestScopeBadge from './ExceptionRequestScopeBadge';
@@ -287,11 +288,11 @@ const ApprovalDetailModal: React.FC<ApprovalDetailModalProps> = ({
                         </div>
                         <div className="mb-2">
                           <strong>Expiration Date:</strong><br />
-                          {new Date(request.expirationDate).toLocaleDateString()}
+                          {formatServerDate(request.expirationDate)}
                         </div>
                         <div className="mb-2">
                           <strong>Submitted:</strong><br />
-                          {new Date(request.createdAt).toLocaleString()}
+                          {formatServerDateTime(request.createdAt)}
                         </div>
                         <div className="mb-2">
                           <strong>Requested By:</strong><br />
@@ -549,7 +550,7 @@ const ApprovalDetailModal: React.FC<ApprovalDetailModalProps> = ({
                                   </td>
                                   <td>{sr.requestedByUsername}</td>
                                   <td>{sr.reviewedByUsername || '—'}</td>
-                                  <td>{sr.reviewDate ? new Date(sr.reviewDate).toLocaleDateString() : '—'}</td>
+                                  <td>{formatServerDate(sr.reviewDate, undefined, '—')}</td>
                                   <td>
                                     {sr.reviewComment ? (
                                       <span title={sr.reviewComment}>

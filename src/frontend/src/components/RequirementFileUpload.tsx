@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { csrfPost, csrfDelete } from '../utils/csrf';
 import { authenticatedFetch } from '../utils/auth';
+import { formatServerDate } from '../utils/dateUtils';
 
 interface RequirementFile {
     id: number;
@@ -274,7 +275,7 @@ const RequirementFileUpload: React.FC<RequirementFileUploadProps> = ({
                                                 <small className="text-muted">
                                                     {formatFileSize(file.size)} • 
                                                     Uploaded by {file.uploadedBy} • 
-                                                    {new Date(file.createdAt).toLocaleDateString()}
+                                                    {formatServerDate(file.createdAt)}
                                                 </small>
                                             </div>
                                         </div>

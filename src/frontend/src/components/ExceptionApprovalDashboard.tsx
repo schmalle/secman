@@ -27,6 +27,7 @@ import {
   type ExceptionStatisticsDto
 } from '../services/exceptionRequestService';
 import type { ExceptionSubject } from '../services/vulnerabilityManagementService';
+import { parseServerDateMs, formatServerDate } from '../utils/dateUtils';
 import ExceptionRequestScopeBadge from './ExceptionRequestScopeBadge';
 import ApprovalDetailModal from './ApprovalDetailModal';
 import CveLink from './CveLink';
@@ -363,9 +364,8 @@ const ExceptionApprovalDashboard: React.FC = () => {
                       </thead>
                       <tbody>
                         {pendingRequests?.content?.map((request) => {
-                          const submittedDate = new Date(request.createdAt);
-                          const now = new Date();
-                          const daysPending = Math.floor((now.getTime() - submittedDate.getTime()) / (1000 * 60 * 60 * 24));
+                          const submittedMs = parseServerDateMs(request.createdAt);
+                          const daysPending = submittedMs == null ? 0 : Math.floor((Date.now() - submittedMs) / (1000 * 60 * 60 * 24));
 
                           return (
                             <tr key={request.id} data-testid={`exception-approval-row-${request.id}`}>
@@ -415,7 +415,7 @@ const ExceptionApprovalDashboard: React.FC = () => {
                                 </div>
                               </td>
                               <td>
-                                {submittedDate.toLocaleDateString()}
+                                {formatServerDate(request.createdAt)}
                               </td>
                               <td>
                                 <span className={`badge ${daysPending > 7 ? 'bg-danger' : daysPending > 3 ? 'bg-warning text-dark' : 'bg-secondary'}`}>

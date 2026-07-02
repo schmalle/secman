@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { formatServerDateTime } from '../utils/dateUtils';
 
 interface ClassificationInput {
   title: string;
@@ -280,7 +281,7 @@ const PublicClassification: React.FC = () => {
                       <dd className="col-sm-7">{result.appliedRuleName || 'Default'}</dd>
 
                       <dt className="col-sm-5">Timestamp:</dt>
-                      <dd className="col-sm-7">{new Date(result.timestamp).toLocaleString()}</dd>
+                      <dd className="col-sm-7">{formatServerDateTime(result.timestamp)}</dd>
                     </dl>
                   </div>
                 </div>

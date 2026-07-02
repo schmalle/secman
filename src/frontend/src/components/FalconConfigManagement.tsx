@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { formatServerDateTime } from '../utils/dateUtils';
 
 interface FalconConfig {
     id: number;
@@ -374,10 +375,10 @@ const FalconConfigManagement = () => {
                                                 </span>
                                             </td>
                                             <td>
-                                                <small>{new Date(config.createdAt).toLocaleString()}</small>
+                                                <small>{formatServerDateTime(config.createdAt)}</small>
                                             </td>
                                             <td>
-                                                <small>{new Date(config.updatedAt).toLocaleString()}</small>
+                                                <small>{formatServerDateTime(config.updatedAt)}</small>
                                             </td>
                                             <td>
                                                 <div className="btn-group btn-group-sm" role="group">

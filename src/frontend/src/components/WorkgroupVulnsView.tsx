@@ -19,6 +19,7 @@ import { getWorkgroupVulns, type WorkgroupVulnsSummary } from '../services/workg
 import AssetVulnTable from './AssetVulnTable';
 import SeverityBadge from './SeverityBadge';
 import { isAdmin } from '../utils/auth';
+import { formatServerDateTime } from '../utils/dateUtils';
 
 const WorkgroupVulnsView: React.FC = () => {
     console.log('[WorkgroupVulnsView] Component mounting...');
@@ -29,18 +30,13 @@ const WorkgroupVulnsView: React.FC = () => {
     const [isAdminRedirect, setIsAdminRedirect] = useState(false);
 
     const formatImportTimestamp = (timestamp: string): string => {
-        const date = new Date(timestamp);
-        if (Number.isNaN(date.getTime())) {
-            return timestamp;
-        }
-
-        return date.toLocaleString(undefined, {
+        return formatServerDateTime(timestamp, {
             year: 'numeric',
             month: 'short',
             day: 'numeric',
             hour: '2-digit',
             minute: '2-digit'
-        });
+        }, timestamp);
     };
 
     useEffect(() => {

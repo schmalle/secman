@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete } from '../utils/auth';
+import { formatServerDateTime } from '../utils/dateUtils';
 
 interface TestEmailAccount {
   id?: number;
@@ -712,10 +713,7 @@ const TestEmailAccountManagement: React.FC = () => {
                             </span>
                           </td>
                           <td>
-                            {account.lastTestedAt
-                              ? new Date(account.lastTestedAt).toLocaleString()
-                              : 'Never'
-                            }
+                            {formatServerDateTime(account.lastTestedAt, undefined, 'Never')}
                           </td>
                           <td>
                             <div className="btn-group-vertical btn-group-sm" role="group">

@@ -22,6 +22,7 @@ import React, { useState, useEffect } from 'react';
 import { getDomainVulns, syncDomainFromCrowdStrike, type DomainVulnsSummary } from '../services/domainVulnsService';
 import SeverityBadge from './SeverityBadge';
 import { isAdmin } from '../utils/auth';
+import { formatServerDateTime } from '../utils/dateUtils';
 
 const DomainVulnsView: React.FC = () => {
     console.log('[DomainVulnsView] Component mounting...');
@@ -34,19 +35,14 @@ const DomainVulnsView: React.FC = () => {
     const [syncError, setSyncError] = useState<string | null>(null);
 
     const formatTimestamp = (timestamp: string): string => {
-        const date = new Date(timestamp);
-        if (Number.isNaN(date.getTime())) {
-            return timestamp;
-        }
-
-        return date.toLocaleString(undefined, {
+        return formatServerDateTime(timestamp, {
             year: 'numeric',
             month: 'short',
             day: 'numeric',
             hour: '2-digit',
             minute: '2-digit',
             second: '2-digit'
-        });
+        }, timestamp);
     };
 
     useEffect(() => {

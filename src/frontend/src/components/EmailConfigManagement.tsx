@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete } from '../utils/auth';
+import { formatServerDate } from '../utils/dateUtils';
 
 type EmailProvider = 'SMTP' | 'AMAZON_SES';
 
@@ -703,7 +704,7 @@ const EmailConfigManagement: React.FC = () => {
                           <td>{config.fromEmail}</td>
                           <td>{config.fromName}</td>
                           <td>
-                            {config.updatedAt ? new Date(config.updatedAt).toLocaleDateString() : '-'}
+                            {formatServerDate(config.updatedAt, undefined, '-')}
                           </td>
                           <td>
                             <div className="btn-group-vertical btn-group-sm" role="group">

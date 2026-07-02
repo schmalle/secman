@@ -21,6 +21,7 @@ import ReleaseStatusActions from './ReleaseStatusActions';
 import ReleaseDeleteConfirm from './ReleaseDeleteConfirm';
 import Toast from './Toast';
 import RichContent from './RichContent';
+import { formatServerDateTime } from '../utils/dateUtils';
 
 interface ReleaseDetailProps {
     releaseId: number;
@@ -117,7 +118,7 @@ const SnapshotDetailModal: React.FC<SnapshotDetailModalProps> = ({ snapshot, isO
 
                                 <dt className="col-sm-3">Snapshot Time:</dt>
                                 <dd className="col-sm-9">
-                                    {new Date(snapshot.snapshotTimestamp).toLocaleString()}
+                                    {formatServerDateTime(snapshot.snapshotTimestamp)}
                                 </dd>
 
                                 <dt className="col-sm-3">Original ID:</dt>
@@ -315,8 +316,7 @@ const ReleaseDetail: React.FC<ReleaseDetailProps> = ({ releaseId }) => {
     // Format date
     function formatDate(dateString: string | null): string {
         if (!dateString) return 'N/A';
-        const date = new Date(dateString);
-        return date.toLocaleString();
+        return formatServerDateTime(dateString);
     }
 
     // Truncate text for table preview. Strips HTML tags so HTML-authored bodies

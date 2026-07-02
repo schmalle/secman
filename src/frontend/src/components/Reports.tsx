@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { authenticatedFetch } from '../utils/auth';
+import { formatServerDate } from '../utils/dateUtils';
 
 interface ReportSummary {
   assessmentSummary: {
@@ -287,8 +288,8 @@ const Reports: React.FC = () => {
                                   </span>
                                 </td>
                                 <td>{assessment.assessor || '-'}</td>
-                                <td>{new Date(assessment.startDate).toLocaleDateString()}</td>
-                                <td>{new Date(assessment.endDate).toLocaleDateString()}</td>
+                                <td>{formatServerDate(assessment.startDate)}</td>
+                                <td>{formatServerDate(assessment.endDate)}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -335,7 +336,7 @@ const Reports: React.FC = () => {
                                 </td>
                                 <td>{risk.owner || '-'}</td>
                                 <td>{risk.severity || '-'}</td>
-                                <td>{risk.deadline ? new Date(risk.deadline).toLocaleDateString() : '-'}</td>
+                                <td>{formatServerDate(risk.deadline, undefined, '-')}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -426,7 +427,7 @@ const Reports: React.FC = () => {
                                 <td>
                                   {risk.deadline ? (
                                     <span className={risk.isOverdue ? 'text-danger fw-bold' : ''}>
-                                      {new Date(risk.deadline).toLocaleDateString()}
+                                      {formatServerDate(risk.deadline)}
                                       {risk.isOverdue && ' (OVERDUE)'}
                                     </span>
                                   ) : '-'}

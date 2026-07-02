@@ -7,14 +7,22 @@
  * Task: T037 [US3-Impl]
  */
 
+import { parseServerDate } from './dateUtils';
+
 /**
  * Calculate cache age in minutes
  *
+ * Parsing goes through `parseServerDate` so the result is identical across browser JS engines
+ * (V8/Edge vs JavaScriptCore/Safari). A raw `new Date(queriedAt)` on a zoneless / microsecond
+ * timestamp diverged by browser, which made the "auto-refresh after 120 min" gate in
+ * CrowdStrikeVulnerabilityLookup fire on Safari but not on Edge.
+ *
  * @param queriedAt ISO 8601 timestamp from backend
- * @returns Age in minutes (rounded down)
+ * @returns Age in minutes (rounded down); 0 if the timestamp is missing/unparseable
  */
 export function calculateCacheAgeMinutes(queriedAt: string): number {
-    const queriedDate = new Date(queriedAt);
+    const queriedDate = parseServerDate(queriedAt);
+    if (!queriedDate) return 0;
     const now = new Date();
     const diffMs = now.getTime() - queriedDate.getTime();
     const diffMinutes = Math.floor(diffMs / 60000); // Convert to minutes and round down

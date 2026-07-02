@@ -3,6 +3,7 @@ import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDel
 import AssessmentPerformance from './AssessmentPerformance';
 import AiPrefillModal from './AiPrefillModal';
 import { getAiFeatureStatus } from '../services/aiSuggestions';
+import { formatServerDate } from '../utils/dateUtils';
 
 interface Asset {
   id: number;
@@ -831,7 +832,7 @@ const RiskAssessmentManagement: React.FC = () => {
                             }
                           </td>
                           <td>
-                            {assessment.createdAt ? new Date(assessment.createdAt).toLocaleDateString() : '-'}
+                            {formatServerDate(assessment.createdAt, undefined, '-')}
                           </td>
                           <td>
                             <div className="btn-group-vertical btn-group-sm" role="group">

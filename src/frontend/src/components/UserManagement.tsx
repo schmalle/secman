@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import type { FormEvent } from 'react';
 import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete } from '../utils/auth';
 import { getUserMappings, createMapping, updateMapping, deleteMapping, type UserMapping, type CreateMappingRequest, type UpdateMappingRequest } from '../api/userMappings';
+import { formatServerDate, formatServerDateTime, parseServerDateMs } from '../utils/dateUtils';
 
 type SortField = 'username' | 'email' | 'roles' | 'lastLogin' | 'workgroups';
 type SortDirection = 'asc' | 'desc';
@@ -663,8 +664,8 @@ const UserManagement = () => {
                     cmp = (a.roles ?? []).join(',').localeCompare((b.roles ?? []).join(','));
                     break;
                 case 'lastLogin': {
-                    const aTime = a.lastLogin ? new Date(a.lastLogin).getTime() : 0;
-                    const bTime = b.lastLogin ? new Date(b.lastLogin).getTime() : 0;
+                    const aTime = parseServerDateMs(a.lastLogin) ?? 0;
+                    const bTime = parseServerDateMs(b.lastLogin) ?? 0;
                     cmp = aTime - bTime;
                     break;
                 }
@@ -1026,7 +1027,7 @@ const UserManagement = () => {
                                                                                 )}
                                                                             </select>
                                                                         </td>
-                                                                        <td>{new Date(mapping.createdAt).toLocaleDateString()}</td>
+                                                                        <td>{formatServerDate(mapping.createdAt)}</td>
                                                                         <td>
                                                                             <button
                                                                                 className="btn btn-sm btn-success me-1"
@@ -1058,7 +1059,7 @@ const UserManagement = () => {
                                                                         <td>{getRangeTypeBadge(mapping.ipRangeType)}</td>
                                                                         <td><small className="text-muted">{formatIpCount(mapping.ipCount)}</small></td>
                                                                         <td>{mapping.domain || '-'}</td>
-                                                                        <td>{new Date(mapping.createdAt).toLocaleDateString()}</td>
+                                                                        <td>{formatServerDate(mapping.createdAt)}</td>
                                                                         <td>
                                                                             <button
                                                                                 className="btn btn-sm btn-primary me-1"
@@ -1311,8 +1312,8 @@ const UserManagement = () => {
                                 <td>{user.roles?.join(', ') || 'N/A'}</td>
                                 <td>
                                     {user.lastLogin ? (
-                                        <span title={new Date(user.lastLogin).toLocaleString()}>
-                                            {new Date(user.lastLogin).toLocaleDateString()}
+                                        <span title={formatServerDateTime(user.lastLogin)}>
+                                            {formatServerDate(user.lastLogin)}
                                         </span>
                                     ) : (
                                         <span className="text-muted">Never</span>

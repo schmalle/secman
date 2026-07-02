@@ -7,6 +7,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { formatServerDate } from '../utils/dateUtils';
 
 const API_BASE = import.meta.env.PUBLIC_API_URL || '';
 
@@ -109,7 +110,7 @@ export const AlignmentResultsPage: React.FC<AlignmentResultsPageProps> = ({ toke
     const formatDate = (dateStr: string | null): string => {
         if (!dateStr) return '—';
         try {
-            return new Date(dateStr).toLocaleDateString('en-US', {
+            return formatServerDate(dateStr, {
                 year: 'numeric',
                 month: 'short',
                 day: 'numeric',

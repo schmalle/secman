@@ -11,6 +11,7 @@ import {
   getAssetComplianceHistory,
   type AssetComplianceHistoryEntry,
 } from '../../services/assetComplianceApi';
+import { formatServerDate } from '../../utils/dateUtils';
 
 interface Props {
   assetId: number;
@@ -38,8 +39,7 @@ const Ec2ComplianceDetail: React.FC<Props> = ({ assetId }) => {
   }, [assetId]);
 
   const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', {
+    return formatServerDate(dateStr, {
       year: 'numeric', month: 'short', day: 'numeric',
       hour: '2-digit', minute: '2-digit',
     });

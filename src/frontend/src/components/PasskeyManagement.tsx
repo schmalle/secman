@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import passkeyService from '../services/passkeyService';
 import type { PasskeyCredentialInfo } from '../services/passkeyService';
+import { formatServerDate } from '../utils/dateUtils';
 
 /**
  * Passkey Management Component
@@ -81,7 +82,7 @@ export default function PasskeyManagement() {
   const formatDate = (dateString: string | null): string => {
     if (!dateString) return 'Never';
     try {
-      return new Date(dateString).toLocaleDateString('en-US', {
+      return formatServerDate(dateString, {
         year: 'numeric',
         month: 'short',
         day: 'numeric',

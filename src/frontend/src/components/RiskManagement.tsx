@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete } from '../utils/auth';
+import { formatServerDate } from '../utils/dateUtils';
 
 interface Risk {
   id: number;
@@ -357,7 +358,7 @@ const RiskManagement: React.FC = () => {
                           <td><span className={`badge ${risk.status === 'OPEN' ? 'bg-danger' : risk.status === 'IN_PROGRESS' ? 'bg-warning' : risk.status === 'MITIGATED' ? 'bg-success' : 'bg-secondary'}`}>{risk.status || 'OPEN'}</span></td>
                           <td>{risk.owner || '-'}</td>
                           <td>{risk.severity || '-'}</td>
-                          <td>{risk.deadline ? new Date(risk.deadline).toLocaleDateString() : '-'}</td>
+                          <td>{formatServerDate(risk.deadline, undefined, '-')}</td>
                           <td>
                             <button onClick={() => handleEdit(risk)} className="btn btn-sm btn-outline-primary me-2">Edit</button>
                             <button onClick={() => handleDelete(risk.id)} className="btn btn-sm btn-outline-danger">Delete</button>

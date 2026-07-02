@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { authenticatedFetch, hasRole } from '../utils/auth';
+import { formatServerDate } from '../utils/dateUtils';
 
 interface Release {
     id: number;
@@ -234,7 +235,7 @@ const ReleaseManagement = () => {
     };
 
     const formatDate = (dateString: string) => {
-        return new Date(dateString).toLocaleDateString('en-US', {
+        return formatServerDate(dateString, {
             year: 'numeric',
             month: 'short',
             day: 'numeric',

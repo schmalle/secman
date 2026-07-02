@@ -9,6 +9,7 @@ import {
   type EmailBroadcastJob,
   type EmailBroadcastTargetGroup,
 } from '../../services/emailBroadcastService';
+import { formatServerDateTime } from '../../utils/dateUtils';
 
 const ACTIVE_STATUSES = new Set<EmailBroadcastJob['status']>(['PENDING', 'PROCESSING']);
 
@@ -323,7 +324,7 @@ export default function EmailBroadcastManager() {
                         {j.subject}
                       </div>
                       <div className="small text-muted">
-                        {j.createdBy} · {new Date(j.createdAt).toLocaleString()}
+                        {j.createdBy} · {formatServerDateTime(j.createdAt)}
                       </div>
                       <div className="small text-muted">
                         Audience: {targetGroupLabel(j.targetGroup ?? 'ALL_USERS')}

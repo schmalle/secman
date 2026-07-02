@@ -395,7 +395,16 @@ datasources:
     connection-timeout: 30000      # 30 seconds - timeout for acquiring connection
     idle-timeout: 1800000          # 30 minutes - extended to match session duration
     max-lifetime: 7200000          # 2 hours - extended for long sessions
-    leak-detection-threshold: 60000 # 60 seconds - detect connection leaks
+    # The async statistics / materialized-view refresh (VulnerabilityStatisticsCacheService,
+    # triggered after a CrowdStrike import) runs full-table analytical aggregates over the
+    # ~644k-row `vulnerability` table — e.g. findMostVulnerableProductsForAll: GROUP BY product
+    # with COUNT(DISTINCT ...) plus a per-row correlated exception NOT EXISTS. At production
+    # volume a single such read legitimately holds one pooled connection for ~60-100s. At the
+    # former 60s threshold this tripped HikariCP's ProxyLeakTask with a false-positive
+    # "Apparent connection leak detected" WARN, even though the connection is returned as soon
+    # as the query completes (no leak). 180s stops the false positive while still catching
+    # genuinely leaked (never-returned) connections.
+    leak-detection-threshold: 180000 # 3 minutes - accommodates slow batch analytics reads
     # Connection validation to prevent stale connections
     connection-test-query: SELECT 1
     validation-timeout: 5000       # 5 seconds - timeout for connection validation

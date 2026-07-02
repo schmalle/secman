@@ -21,6 +21,7 @@ import { canDeleteRelease } from '../utils/permissions';
 import ReleaseCreateModal from './ReleaseCreateModal';
 import ReleaseDeleteConfirm from './ReleaseDeleteConfirm';
 import Toast from './Toast';
+import { formatServerDate } from '../utils/dateUtils';
 
 const ReleaseList: React.FC = () => {
     // State
@@ -331,8 +332,7 @@ const ReleaseList: React.FC = () => {
     // Format date
     function formatDate(dateString: string | null): string {
         if (!dateString) return 'N/A';
-        const date = new Date(dateString);
-        return date.toLocaleDateString();
+        return formatServerDate(dateString);
     }
 
     // Render loading state

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { formatServerDateTime } from '../utils/dateUtils';
 
 interface SessionStats {
   totalActive: number;
@@ -322,7 +323,7 @@ const McpDashboard: React.FC = () => {
                   {recentActivity.map((activity) => (
                     <tr key={activity.id}>
                       <td>
-                        <small>{new Date(activity.timestamp).toLocaleTimeString()}</small>
+                        <small>{formatServerDateTime(activity.timestamp, { timeStyle: 'medium' })}</small>
                       </td>
                       <td>
                         <span className="me-1">{getEventIcon(activity.eventType)}</span>

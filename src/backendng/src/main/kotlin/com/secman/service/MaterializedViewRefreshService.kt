@@ -42,7 +42,8 @@ open class MaterializedViewRefreshService(
     private val vulnerabilityExceptionService: VulnerabilityExceptionService,  // For checking active exceptions
     private val vulnerabilityStatisticsCacheService: VulnerabilityStatisticsCacheService,
     private val assetHeatmapService: AssetHeatmapService,
-    private val vulnerabilityService: VulnerabilityService
+    private val vulnerabilityService: VulnerabilityService,
+    private val exceptionMaterializationService: ExceptionMaterializationService
 ) {
     private val log = LoggerFactory.getLogger(MaterializedViewRefreshService::class.java)
 
@@ -261,6 +262,19 @@ open class MaterializedViewRefreshService(
      * Always runs after import, regardless of whether overdue assets exist.
      */
     private fun refreshDerivedData() {
+        // Full recompute of the materialized `vulnerability.excepted` flag — the drift safety net that
+        // reconciles anything the incremental per-asset/per-exception recomputes missed (e.g. a manual
+        // asset metadata edit that changed IP/OS/AWS-scope coverage). Runs first so the count-cache
+        // warm below reflects fresh flags. ~124s-class; acceptable here because this whole method runs
+        // async off the request path within the existing post-import refresh window.
+        try {
+            log.info("Full excepted-flag recompute (drift safety net) before derived-data refresh")
+            val updated = exceptionMaterializationService.recomputeAllExcepted()
+            log.info("Full excepted-flag recompute updated {} rows", updated)
+        } catch (e: Exception) {
+            log.error("Full excepted-flag recompute failed (non-fatal): {}", e.message, e)
+        }
+
         try {
             log.info("Refreshing vulnerability statistics cache after materialized view refresh")
             vulnerabilityStatisticsCacheService.refreshCache()

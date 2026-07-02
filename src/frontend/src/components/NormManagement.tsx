@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete } from '../utils/auth';
+import { formatServerDate } from '../utils/dateUtils';
 
 interface Norm {
   id: number;
@@ -266,7 +267,7 @@ const NormManagement: React.FC = () => {
                       <td>{norm.name}</td>
                       <td>{norm.version || '-'}</td>
                       <td>{norm.year || '-'}</td>
-                      <td>{new Date(norm.createdAt).toLocaleDateString()}</td>
+                      <td>{formatServerDate(norm.createdAt)}</td>
                       <td>
                         <div className="btn-group" role="group">
                           <button

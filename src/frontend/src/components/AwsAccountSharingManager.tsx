@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { formatServerDateTime } from '../utils/dateUtils';
 import { authenticatedGet, getUser, hasRole } from '../utils/auth';
 import {
     listSharingRules,
@@ -376,7 +377,7 @@ const AwsAccountSharingManager: React.FC = () => {
 
     const formatDate = (dateStr: string) => {
         try {
-            return new Date(dateStr).toLocaleString();
+            return formatServerDateTime(dateStr);
         } catch {
             return dateStr;
         }

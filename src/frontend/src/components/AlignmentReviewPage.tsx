@@ -9,6 +9,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { formatServerDate } from '../utils/dateUtils';
 import {
     alignmentReviewService,
     type ReviewAssessment,
@@ -248,7 +249,7 @@ export const AlignmentReviewPage: React.FC<AlignmentReviewPageProps> = ({ token 
                                         <>
                                             <dt className="col-sm-5">Started At:</dt>
                                             <dd className="col-sm-7">
-                                                {new Date(session.startedAt).toLocaleDateString()}
+                                                {formatServerDate(session.startedAt)}
                                             </dd>
                                         </>
                                     )}

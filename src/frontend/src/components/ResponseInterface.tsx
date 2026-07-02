@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import RequirementFileUpload from './RequirementFileUpload';
+import { formatServerDate } from '../utils/dateUtils';
 
 interface Requirement {
   id: number;
@@ -331,7 +332,7 @@ const ResponseInterface: React.FC<ResponseInterfaceProps> = ({ token }) => {
             </div>
             <div className="col-md-6">
               <p><strong>Respondent:</strong> {assessmentData.respondentEmail}</p>
-              <p><strong>Deadline:</strong> {new Date(assessmentData.expiresAt).toLocaleDateString()}</p>
+              <p><strong>Deadline:</strong> {formatServerDate(assessmentData.expiresAt)}</p>
               <p><strong>Status:</strong> 
                 <span className="badge bg-warning ms-2">{assessmentData.riskAssessment.status}</span>
               </p>

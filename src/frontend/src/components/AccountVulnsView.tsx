@@ -19,6 +19,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { formatServerDateTime, parseServerDateMs } from '../utils/dateUtils';
 import { getAccountVulns, type AccountVulnsSummary } from '../services/accountVulnsService';
 import AssetVulnTable from './AssetVulnTable';
 import ExceptionBreakdownBadges from './ExceptionBreakdownBadges';
@@ -35,27 +36,21 @@ const AccountVulnsView: React.FC = () => {
     const [emptyAccountsExpanded, setEmptyAccountsExpanded] = useState(false);
 
     const formatImportTimestamp = (timestamp: string): string => {
-        const date = new Date(timestamp);
-        if (Number.isNaN(date.getTime())) {
-            return timestamp;
-        }
-
-        return date.toLocaleString(undefined, {
+        return formatServerDateTime(timestamp, {
             year: 'numeric',
             month: 'short',
             day: 'numeric',
             hour: '2-digit',
             minute: '2-digit'
-        });
+        }, timestamp);
     };
 
     const formatDataFreshness = (timestamp: string): { text: string; color: string } => {
-        const date = new Date(timestamp);
-        if (Number.isNaN(date.getTime())) {
+        const ms = parseServerDateMs(timestamp);
+        if (ms == null) {
             return { text: timestamp, color: 'text-muted' };
         }
-        const now = new Date();
-        const diffMs = now.getTime() - date.getTime();
+        const diffMs = Date.now() - ms;
         const diffMins = Math.floor(diffMs / 60000);
         const diffHours = Math.floor(diffMins / 60);
         const diffDays = Math.floor(diffHours / 24);

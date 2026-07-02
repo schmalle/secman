@@ -9,6 +9,7 @@
  */
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { formatServerDate } from '../utils/dateUtils';
 import { lookupCve, type CveLookupResult } from '../services/cveLookupService';
 
 interface CveLinkProps {
@@ -191,7 +192,7 @@ const CveLink: React.FC<CveLinkProps> = ({ cveId }) => {
 
               {popoverData.publishedDate && (
                 <small className="text-muted">
-                  Published: {new Date(popoverData.publishedDate).toLocaleDateString()}
+                  Published: {formatServerDate(popoverData.publishedDate)}
                 </small>
               )}
             </div>

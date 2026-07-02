@@ -20,6 +20,7 @@
  */
 
 import React from 'react';
+import { formatServerDate } from '../utils/dateUtils';
 
 interface OverdueStatusBadgeProps {
     status: 'OK' | 'OVERDUE' | 'EXCEPTED';
@@ -53,7 +54,7 @@ const OverdueStatusBadge: React.FC<OverdueStatusBadgeProps> = ({
                     ariaLabel: `Overdue status: ${daysOverdue || '?'} days over threshold`
                 };
             case 'EXCEPTED': {
-                const endDate = exceptionEndDate ? new Date(exceptionEndDate).toLocaleDateString() : 'unknown date';
+                const endDate = formatServerDate(exceptionEndDate, undefined, 'unknown date');
                 return {
                     className: 'badge scand-medium',
                     icon: '🛡️',
@@ -113,7 +114,7 @@ const OverdueStatusBadge: React.FC<OverdueStatusBadgeProps> = ({
                     {exceptionEndDate && (
                         <div className="mt-1">
                             <i className="bi bi-calendar-event me-1"></i>
-                            Until: {new Date(exceptionEndDate).toLocaleDateString()}
+                            Until: {formatServerDate(exceptionEndDate)}
                         </div>
                     )}
                 </div>

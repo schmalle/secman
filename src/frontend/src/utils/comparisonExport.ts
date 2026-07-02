@@ -15,6 +15,7 @@
  */
 
 import type ExcelJS from 'exceljs';
+import { formatServerDateTime } from './dateUtils';
 
 export interface ReleaseInfo {
     id: number;
@@ -150,12 +151,12 @@ function createSummarySheet(workbook: ExcelJS.Workbook, comparison: ComparisonRe
         { property: 'From Release', value: '' },
         { property: '  Version', value: comparison.fromRelease.version },
         { property: '  Name', value: comparison.fromRelease.name },
-        { property: '  Created', value: new Date(comparison.fromRelease.createdAt).toLocaleString() },
+        { property: '  Created', value: formatServerDateTime(comparison.fromRelease.createdAt) },
         { property: '', value: '' },
         { property: 'To Release', value: '' },
         { property: '  Version', value: comparison.toRelease.version },
         { property: '  Name', value: comparison.toRelease.name },
-        { property: '  Created', value: new Date(comparison.toRelease.createdAt).toLocaleString() },
+        { property: '  Created', value: formatServerDateTime(comparison.toRelease.createdAt) },
         { property: '', value: '' },
         { property: 'Summary', value: '' },
         { property: '  Added Requirements', value: (comparison.added ?? []).length },

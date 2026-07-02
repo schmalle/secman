@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { authenticatedGet } from '../utils/auth';
+import { formatServerDateTime } from '../utils/dateUtils';
 
 interface UseCase {
   id: number;
@@ -258,12 +259,12 @@ const ViewStandard: React.FC<ViewStandardProps> = ({ standardId }) => {
                     
                     <dt className="col-sm-4">Created:</dt>
                     <dd className="col-sm-8">
-                      {standard.createdAt ? new Date(standard.createdAt).toLocaleString() : '-'}
+                      {formatServerDateTime(standard.createdAt, undefined, '-')}
                     </dd>
                     
                     <dt className="col-sm-4">Last Updated:</dt>
                     <dd className="col-sm-8">
-                      {standard.updatedAt ? new Date(standard.updatedAt).toLocaleString() : '-'}
+                      {formatServerDateTime(standard.updatedAt, undefined, '-')}
                     </dd>
 
                     <dt className="col-sm-4">Total Requirements:</dt>

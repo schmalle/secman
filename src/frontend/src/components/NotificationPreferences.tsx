@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getUserPreferences, updateUserPreferences } from '../services/notificationService';
 import type { NotificationPreference } from '../services/notificationService';
+import { formatServerDateTime } from '../utils/dateUtils';
 
 export default function NotificationPreferences() {
   const [preferences, setPreferences] = useState<NotificationPreference | null>(null);
@@ -127,7 +128,7 @@ export default function NotificationPreferences() {
           <div className="mt-3">
             <small className="text-muted">
               Last vulnerability notification sent:{' '}
-              {new Date(preferences.lastVulnNotificationSentAt).toLocaleString()}
+              {formatServerDateTime(preferences.lastVulnNotificationSentAt)}
             </small>
           </div>
         )}

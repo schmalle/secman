@@ -14,11 +14,13 @@ import com.secman.repository.AssetRepository
 import com.secman.repository.FalconConfigRepository
 import com.secman.repository.VulnerabilityExceptionRepository
 import com.secman.repository.VulnerabilityRepository
+import io.micronaut.cache.annotation.CacheInvalidate
 import io.micronaut.cache.annotation.Cacheable
 import io.micronaut.data.model.Pageable
 import jakarta.inject.Singleton
 import org.slf4j.LoggerFactory
 import java.time.LocalDateTime
+import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 
 /**
@@ -286,6 +288,24 @@ open class CrowdStrikeQueryService(
     }
 
     /**
+     * Evict every cached vulnerability-query result.
+     *
+     * Called after a CrowdStrike import persists rows, so a subsequent (non-force)
+     * lookup re-runs `queryVulnerabilities` and serves the freshly persisted
+     * `dataSource="DATABASE"` rows instead of a stale `dataSource="LIVE_API"`
+     * ("not yet imported") response cached before the import.
+     *
+     * Uses `all = true` deliberately: the `@Cacheable` key spans
+     * (hostname, severity, product, limit, page), so an import that changes many
+     * hosts across arbitrary filter/paging permutations cannot be evicted key-by-key
+     * reliably. A full drop of this short-TTL live-lookup cache is correct and cheap.
+     */
+    @CacheInvalidate(value = ["vulnerability_queries"], all = true)
+    open fun invalidateAllCachedQueries() {
+        log.debug("Invalidating all cached vulnerability_queries after import")
+    }
+
+    /**
      * Query vulnerabilities from the local database by hostname.
      * Returns null if no asset or no vulnerabilities found.
      */
@@ -337,7 +357,7 @@ open class CrowdStrikeQueryService(
                 )
             },
             totalCount = vulns.totalSize.toInt(),
-            queriedAt = dataAsOf,
+            queriedAt = dataAsOf.toUtcIsoString(),
             dataSource = "DATABASE"
         )
     }
@@ -394,7 +414,7 @@ open class CrowdStrikeQueryService(
                 )
             },
             totalCount = vulns.totalSize.toInt(),
-            queriedAt = dataAsOf,
+            queriedAt = dataAsOf.toUtcIsoString(),
             dataSource = "DATABASE"
         )
     }
@@ -520,9 +540,19 @@ private fun com.secman.crowdstrike.dto.CrowdStrikeQueryResponse.toBackendRespons
             )
         },
         totalCount = this.totalCount,
-        queriedAt = this.queriedAt,
+        queriedAt = this.queriedAt.toUtcIsoString(),
         // toBackendResponse is only ever called on the live-Falcon fallthrough paths
         // (queryVulnerabilities / queryByInstanceId), so these rows are not persisted.
         dataSource = "LIVE_API"
     )
 }
+
+/**
+ * Render a zoneless [LocalDateTime] (produced in the JVM's default zone, e.g. by
+ * `LocalDateTime.now()` or read from the DB) as an explicit UTC ISO-8601 instant with a
+ * trailing `Z` (e.g. `2026-07-02T04:14:18.246830Z`). This is the wire format for
+ * `CrowdStrikeQueryResponse.queriedAt`; a trailing-`Z` string is parsed identically by every
+ * browser JS engine, unlike a zoneless string which is parsed as browser-local.
+ */
+private fun LocalDateTime.toUtcIsoString(): String =
+    this.atZone(ZoneId.systemDefault()).toInstant().toString()

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { formatServerDate } from '../utils/dateUtils';
 import { getUser } from '../utils/auth';
 import { isAdmin, isSecChampion } from '../utils/permissions';
 import {
@@ -832,7 +833,7 @@ const ApplicationRegister: React.FC = () => {
                         <span className="text-muted">-</span>
                       )}
                     </td>
-                    <td>{application.updatedAt ? new Date(application.updatedAt).toLocaleDateString() : '-'}</td>
+                    <td>{formatServerDate(application.updatedAt, undefined, '-')}</td>
                     <td>
                       <div className="btn-group" role="group">
                         <button

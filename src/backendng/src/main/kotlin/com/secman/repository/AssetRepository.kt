@@ -137,6 +137,18 @@ interface AssetRepository : JpaRepository<Asset, Long> {
 
     fun findByTypeAndOwner(type: String, owner: String): List<Asset>
 
+    // --- Scope -> asset resolution for materialized-exception recompute ---------------------------
+    // Mirror the scope semantics of ExceptionMatchSql.EXCEPTION_MATCH so a bounded recompute touches
+    // precisely the assets an exception's scope covers. Plain derived finders (returning entities);
+    // ExceptionMaterializationService maps to ids. Scope sets are small, so entity load is cheap.
+    // (findByIp already exists above and serves the IP scope.)
+
+    fun findByCloudAccountId(cloudAccountId: String): List<Asset>
+
+    // Case-insensitive substring on os_version — matches EXCEPTION_MATCH's OS clause
+    // LOCATE(LOWER(scope_value), LOWER(a.os_version)) > 0.
+    fun findByOsVersionContainingIgnoreCase(osVersion: String): List<Asset>
+
     /**
      * Find asset by exact name match
      * Used for hostname lookup during vulnerability import

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { authenticatedGet } from '../utils/auth';
+import { formatServerDateTime } from '../utils/dateUtils';
 
 interface Port {
   portNumber: number;
@@ -77,8 +78,7 @@ const PortHistory: React.FC<PortHistoryProps> = ({ assetId, assetName, onClose }
   };
 
   const formatDate = (dateString: string): string => {
-    const date = new Date(dateString);
-    return date.toLocaleString();
+    return formatServerDateTime(dateString);
   };
 
   const getStateBadgeClass = (state: string): string => {

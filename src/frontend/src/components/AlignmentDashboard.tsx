@@ -8,6 +8,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { formatServerDate } from '../utils/dateUtils';
 import {
     releaseService,
     type Release,
@@ -221,8 +222,8 @@ export const AlignmentDashboard: React.FC<AlignmentDashboardProps> = ({ releaseI
                             Status: {session.status}
                         </strong>
                         <span className="ms-3 text-muted">
-                            Started {new Date(session.startedAt).toLocaleDateString()}
-                            {session.completedAt && ` • Completed ${new Date(session.completedAt).toLocaleDateString()}`}
+                            Started {formatServerDate(session.startedAt)}
+                            {session.completedAt && ` • Completed ${formatServerDate(session.completedAt)}`}
                         </span>
                     </div>
                     {isOpen && canManage && (
@@ -392,9 +393,9 @@ export const AlignmentDashboard: React.FC<AlignmentDashboardProps> = ({ releaseI
                                             <td>
                                                 <small className="text-muted">
                                                     {reviewer.completedAt
-                                                        ? `Completed ${new Date(reviewer.completedAt).toLocaleDateString()}`
+                                                        ? `Completed ${formatServerDate(reviewer.completedAt)}`
                                                         : reviewer.startedAt
-                                                        ? `Started ${new Date(reviewer.startedAt).toLocaleDateString()}`
+                                                        ? `Started ${formatServerDate(reviewer.startedAt)}`
                                                         : 'Not started'}
                                                 </small>
                                             </td>

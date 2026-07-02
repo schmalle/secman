@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { parseServerDate, formatServerDateTime } from '../utils/dateUtils';
 
 interface ApiKey {
   id: number;
@@ -211,12 +212,14 @@ const McpApiKeyManagement: React.FC = () => {
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return 'Never';
-    return new Date(dateString).toLocaleString();
+    return formatServerDateTime(dateString, undefined, 'Never');
   };
 
   const isExpired = (expiresAt: string | null) => {
     if (!expiresAt) return false;
-    return new Date(expiresAt) < new Date();
+    // Engine-deterministic parse so Active/Expired doesn't flip between Edge and Safari.
+    const parsed = parseServerDate(expiresAt);
+    return parsed ? parsed.getTime() < Date.now() : false;
   };
 
   const getStatusBadge = (apiKey: ApiKey) => {

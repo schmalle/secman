@@ -24,6 +24,7 @@ import {
 } from '../services/outdatedAssetsApi';
 import { formatDistanceToNow } from 'date-fns';
 import CveLink from './CveLink';
+import { parseServerDate, formatServerDate } from '../utils/dateUtils';
 
 interface OutdatedAssetDetailProps {
   assetId: number;
@@ -146,7 +147,7 @@ const OutdatedAssetDetail: React.FC<OutdatedAssetDetailProps> = ({ assetId }) =>
    */
   const formatDate = (dateStr: string): string => {
     try {
-      return new Date(dateStr).toLocaleDateString();
+      return formatServerDate(dateStr);
     } catch (err) {
       return 'Unknown';
     }
@@ -157,7 +158,7 @@ const OutdatedAssetDetail: React.FC<OutdatedAssetDetailProps> = ({ assetId }) =>
    */
   const formatTimeAgo = (dateStr: string): string => {
     try {
-      return formatDistanceToNow(new Date(dateStr), { addSuffix: true });
+      return formatDistanceToNow(parseServerDate(dateStr) ?? new Date(0), { addSuffix: true });
     } catch (err) {
       return 'Unknown';
     }

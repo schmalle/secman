@@ -7,6 +7,7 @@ import WorkgroupBreadcrumb from './WorkgroupBreadcrumb';
 import WorkgroupManagement from './WorkgroupManagement';
 import type { WorkgroupResponse } from '../services/workgroupApi';
 import { isAdmin } from '../utils/auth';
+import { formatServerDateTime } from '../utils/dateUtils';
 
 /**
  * Enhanced Workgroup Management Component with Hierarchy Support
@@ -222,12 +223,12 @@ const WorkgroupManagementWithHierarchy: React.FC = () => {
 
                       <dt className="col-sm-4">Created</dt>
                       <dd className="col-sm-8">
-                        {new Date(selectedWorkgroup.createdAt).toLocaleString()}
+                        {formatServerDateTime(selectedWorkgroup.createdAt)}
                       </dd>
 
                       <dt className="col-sm-4">Updated</dt>
                       <dd className="col-sm-8">
-                        {new Date(selectedWorkgroup.updatedAt).toLocaleString()}
+                        {formatServerDateTime(selectedWorkgroup.updatedAt)}
                       </dd>
 
                       <dt className="col-sm-4">Version</dt>

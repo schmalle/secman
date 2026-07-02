@@ -3,6 +3,7 @@ import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDel
 import WorkgroupAccountsModal from './WorkgroupAccountsModal';
 import WorkgroupDomainsModal from './WorkgroupDomainsModal';
 import { isAwsWorkgroup } from '../services/workgroupApi';
+import { formatServerDate } from '../utils/dateUtils';
 
 // Extract a useful error message from a non-OK Response. Handles the three
 // shapes we see in this app: our own `{error: "..."}`, Micronaut's default
@@ -1127,7 +1128,7 @@ const WorkgroupManagement: React.FC<WorkgroupManagementProps> = ({ showAwsWorkgr
                     <td>
                       <span className="badge bg-secondary">{workgroup.adDomainsCount ?? 0}</span>
                     </td>
-                    <td>{new Date(workgroup.createdAt).toLocaleDateString()}</td>
+                    <td>{formatServerDate(workgroup.createdAt)}</td>
                   <td>
                     <div className="btn-group btn-group-sm">
                       <button

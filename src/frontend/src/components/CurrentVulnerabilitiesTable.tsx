@@ -15,6 +15,7 @@
  */
 
 import React, { useState, useEffect, useRef } from "react";
+import { formatServerDate } from "../utils/dateUtils";
 import {
   getCurrentVulnerabilities,
   getCurrentVulnerabilityCount,
@@ -1185,7 +1186,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                                     }
                                     if (vuln.exceptionEndDate) {
                                       parts.push(
-                                        `Expires ${new Date(vuln.exceptionEndDate).toLocaleDateString()}`,
+                                        `Expires ${formatServerDate(vuln.exceptionEndDate)}`,
                                       );
                                     }
                                     if (vuln.exceptionReason) {
@@ -1199,9 +1200,7 @@ const CurrentVulnerabilitiesTable: React.FC = () => {
                                   {vuln.exceptionEndDate && (
                                     <span className="ms-1 text-muted">
                                       · until{" "}
-                                      {new Date(
-                                        vuln.exceptionEndDate,
-                                      ).toLocaleDateString()}
+                                      {formatServerDate(vuln.exceptionEndDate)}
                                     </span>
                                   )}
                                 </span>

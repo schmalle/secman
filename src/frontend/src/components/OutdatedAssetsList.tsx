@@ -30,6 +30,7 @@ import {
   type RefreshJob
 } from '../services/outdatedAssetsApi';
 import { formatDistanceToNow } from 'date-fns';
+import { parseServerDate } from '../utils/dateUtils';
 
 const OutdatedAssetsList: React.FC = () => {
   const [assets, setAssets] = useState<OutdatedAsset[]>([]);
@@ -299,7 +300,7 @@ const OutdatedAssetsList: React.FC = () => {
   const formatTimeAgo = (timestamp: string | null): string => {
     if (!timestamp) return 'Never';
     try {
-      return formatDistanceToNow(new Date(timestamp), { addSuffix: true });
+      return formatDistanceToNow(parseServerDate(timestamp) ?? new Date(0), { addSuffix: true });
     } catch (err) {
       return 'Unknown';
     }

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { formatServerDateTime } from '../utils/dateUtils';
 import {
   getAppSettings,
   updateAppSettings,
@@ -268,7 +269,7 @@ const AppSettingsAdmin: React.FC = () => {
               <i className="bi bi-info-circle me-1"></i>
               Last updated by <strong>{settings.updatedBy}</strong>
               {settings.updatedAt && (
-                <> on {new Date(settings.updatedAt).toLocaleString()}</>
+                <> on {formatServerDateTime(settings.updatedAt)}</>
               )}
             </div>
           )}

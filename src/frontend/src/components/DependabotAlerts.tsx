@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { formatServerDate } from '../utils/dateUtils';
 import {
   getDependabotAlerts,
   severityRank,
@@ -190,7 +191,7 @@ const DependabotAlerts: React.FC = () => {
                         <span className="badge bg-light text-dark border">{a.state}</span>
                       </td>
                       <td className="text-nowrap text-muted small">
-                        {a.alertUpdatedAt ? new Date(a.alertUpdatedAt).toLocaleDateString() : '—'}
+                        {formatServerDate(a.alertUpdatedAt, undefined, '—')}
                       </td>
                     </tr>
                   ))

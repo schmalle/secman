@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import type { UserMapping } from '../services/userMappingService';
+import { formatServerDateTime } from '../utils/dateUtils';
 
 interface IpMappingTableProps {
   mappings: UserMapping[];
@@ -77,12 +78,7 @@ export default function IpMappingTable({ mappings, onEdit, onDelete, isLoading =
   // Feature 042: Format appliedAt timestamp
   const formatAppliedAt = (timestamp?: string) => {
     if (!timestamp) return '-';
-    try {
-      const date = new Date(timestamp);
-      return date.toLocaleString();
-    } catch {
-      return timestamp;
-    }
+    return formatServerDateTime(timestamp, undefined, timestamp);
   };
 
   const handleDeleteClick = (mapping: UserMapping) => {

@@ -18,6 +18,7 @@
 import React, { useState, useEffect } from 'react';
 import { getRequestById, cancelRequest, deleteRequest, type VulnerabilityExceptionRequestDto } from '../services/exceptionRequestService';
 import ExceptionStatusBadge from './ExceptionStatusBadge';
+import { formatServerDate, formatServerDateTime } from '../utils/dateUtils';
 import ExceptionRequestScopeBadge from './ExceptionRequestScopeBadge';
 
 interface ExceptionRequestDetailModalProps {
@@ -227,12 +228,12 @@ const ExceptionRequestDetailModal: React.FC<ExceptionRequestDetailModalProps> = 
                                             <div className="col-md-6 mb-2">
                                                 <strong>Expiration Date:</strong>
                                                 <br />
-                                                {new Date(request.expirationDate).toLocaleDateString()}
+                                                {formatServerDate(request.expirationDate)}
                                             </div>
                                             <div className="col-md-6 mb-2">
                                                 <strong>Submitted:</strong>
                                                 <br />
-                                                {new Date(request.createdAt).toLocaleString()}
+                                                {formatServerDateTime(request.createdAt)}
                                             </div>
                                             <div className="col-md-6 mb-2">
                                                 <strong>Requested By:</strong>
@@ -261,7 +262,7 @@ const ExceptionRequestDetailModal: React.FC<ExceptionRequestDetailModalProps> = 
                                                 <div className="col-md-6 mb-2">
                                                     <strong>Review Date:</strong>
                                                     <br />
-                                                    {request.reviewDate ? new Date(request.reviewDate).toLocaleString() : '-'}
+                                                    {formatServerDateTime(request.reviewDate, undefined, '-')}
                                                 </div>
                                             </div>
                                             {request.reviewComment && (
@@ -279,7 +280,7 @@ const ExceptionRequestDetailModal: React.FC<ExceptionRequestDetailModalProps> = 
                                     {request.status === 'CANCELLED' && (
                                         <div className="alert alert-secondary">
                                             <i className="bi bi-info-circle me-2"></i>
-                                            This request was cancelled on {request.updatedAt ? new Date(request.updatedAt).toLocaleString() : 'unknown date'}.
+                                            This request was cancelled on {formatServerDateTime(request.updatedAt, undefined, 'unknown date')}.
                                         </div>
                                     )}
 
@@ -287,7 +288,7 @@ const ExceptionRequestDetailModal: React.FC<ExceptionRequestDetailModalProps> = 
                                     {request.status === 'EXPIRED' && (
                                         <div className="alert alert-warning">
                                             <i className="bi bi-clock me-2"></i>
-                                            This approved exception expired on {new Date(request.expirationDate).toLocaleDateString()}.
+                                            This approved exception expired on {formatServerDate(request.expirationDate)}.
                                         </div>
                                     )}
                                 </>

@@ -28,6 +28,7 @@ import {
     type PagedResponse
 } from '../services/exceptionRequestService';
 import type { ExceptionSubject } from '../services/vulnerabilityManagementService';
+import { formatServerDate } from '../utils/dateUtils';
 import ExceptionStatusBadge from './ExceptionStatusBadge';
 import ExceptionRequestScopeBadge from './ExceptionRequestScopeBadge';
 import ExceptionRequestDetailModal from './ExceptionRequestDetailModal';
@@ -414,7 +415,7 @@ const MyExceptionRequests: React.FC = () => {
                                                             )}
                                                         </td>
                                                         <td>
-                                                            {new Date(request.createdAt).toLocaleDateString()}
+                                                            {formatServerDate(request.createdAt)}
                                                         </td>
                                                         <td>
                                                             <div className="btn-group btn-group-sm" role="group">

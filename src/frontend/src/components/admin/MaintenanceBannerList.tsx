@@ -4,6 +4,7 @@ import {
   deleteBanner,
   type MaintenanceBanner
 } from '../../services/maintenanceBannerService';
+import { formatServerDateTime } from '../../utils/dateUtils';
 
 interface MaintenanceBannerListProps {
   onEdit?: (banner: MaintenanceBanner) => void;
@@ -86,8 +87,7 @@ export default function MaintenanceBannerList({ onEdit, onRefresh }: Maintenance
    * Format ISO-8601 timestamp to local readable format.
    */
   const formatTime = (isoString: string): string => {
-    const date = new Date(isoString);
-    return date.toLocaleString(undefined, {
+    return formatServerDateTime(isoString, {
       year: 'numeric',
       month: 'short',
       day: 'numeric',

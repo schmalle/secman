@@ -3,7 +3,6 @@ package com.secman.dto
 import io.micronaut.serde.annotation.Serdeable
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
-import java.time.LocalDateTime
 
 /**
  * Response DTO for CrowdStrike vulnerability query
@@ -55,10 +54,16 @@ data class CrowdStrikeQueryResponse(
     val totalCount: Int,
 
     /**
-     * Timestamp when query was executed (ISO 8601)
+     * Timestamp when the underlying data was last touched (ISO-8601, UTC, trailing `Z`).
+     *
+     * Emitted as an explicit UTC instant string (e.g. `2026-07-02T04:14:18.246830Z`) rather than a
+     * zoneless `LocalDateTime`, so that `new Date(queriedAt)` on the client parses identically across
+     * browser JS engines (V8/Edge vs JavaScriptCore/Safari). A zoneless value was parsed as
+     * browser-local, making the freshness/auto-refresh math diverge by browser. See
+     * `src/frontend/src/utils/cacheUtils.ts` and `parseServerDate`.
      */
-    @field:NotNull
-    val queriedAt: LocalDateTime,
+    @field:NotBlank
+    val queriedAt: String,
 
     /**
      * Where these rows came from:

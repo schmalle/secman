@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { listNotificationLogs, exportNotificationLogs } from '../services/notificationService';
 import type { NotificationLog, PagedResponse } from '../services/notificationService';
+import { formatServerDateTime } from '../utils/dateUtils';
 
 export default function NotificationLogs() {
   const [logs, setLogs] = useState<NotificationLog[]>([]);
@@ -83,7 +84,7 @@ export default function NotificationLogs() {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString();
+    return formatServerDateTime(dateString);
   };
 
   const getNotificationTypeLabel = (type: string) => {

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { authenticatedGet, getUser, hasRole } from '../utils/auth';
+import { formatServerDate } from '../utils/dateUtils';
 
 type StatItem = {
   label: string;
@@ -28,9 +29,7 @@ const initialState: DashboardState = {
 
 const formatDate = (isoOrNever: string): string => {
   if (isoOrNever === 'never') return 'Never imported';
-  const parsed = new Date(isoOrNever);
-  if (Number.isNaN(parsed.getTime())) return 'Unknown';
-  return parsed.toLocaleDateString();
+  return formatServerDate(isoOrNever, undefined, 'Unknown');
 };
 
 const formatCount = (value: number | null): string => {

@@ -15,6 +15,7 @@ import {
   type AssetComplianceOverview,
   type AssetComplianceSummary,
 } from '../../services/assetComplianceApi';
+import { formatServerDate, parseServerDateMs } from '../../utils/dateUtils';
 
 const Ec2ComplianceDashboard: React.FC = () => {
   const [assets, setAssets] = useState<AssetComplianceOverview[]>([]);
@@ -85,12 +86,13 @@ const Ec2ComplianceDashboard: React.FC = () => {
   };
 
   const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    return formatServerDate(dateStr, { year: 'numeric', month: 'short', day: 'numeric' });
   };
 
   const formatDuration = (dateStr: string) => {
-    const days = Math.floor((Date.now() - new Date(dateStr).getTime()) / (1000 * 60 * 60 * 24));
+    const ms = parseServerDateMs(dateStr);
+    if (ms == null) return '—';
+    const days = Math.floor((Date.now() - ms) / (1000 * 60 * 60 * 24));
     if (days === 0) return 'today';
     if (days === 1) return '1 day';
     return `${days} days`;

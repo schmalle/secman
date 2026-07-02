@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete } from '../utils/auth';
+import { formatServerDate } from '../utils/dateUtils';
 
 interface UseCase {
   id: number;
@@ -309,7 +310,7 @@ const StandardManagement: React.FC = () => {
                             )}
                           </td>
                           <td>
-                            {standard.createdAt ? new Date(standard.createdAt).toLocaleDateString() : '-'}
+                            {formatServerDate(standard.createdAt, undefined, '-')}
                           </td>
                           <td>
                             <a href={`/standards/${standard.id}`} className="btn btn-sm btn-outline-info me-2">View</a>

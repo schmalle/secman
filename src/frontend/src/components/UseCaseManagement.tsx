@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { authenticatedGet, authenticatedPost, authenticatedPut, authenticatedDelete } from '../utils/auth';
+import { formatServerDate } from '../utils/dateUtils';
 
 interface UseCase {
   id: number;
@@ -208,8 +209,8 @@ const UseCaseManagement: React.FC = () => {
                             <span className="badge bg-secondary ms-2">System</span>
                           )}
                         </td>
-                        <td>{new Date(useCase.createdAt).toLocaleDateString()}</td>
-                        <td>{new Date(useCase.updatedAt).toLocaleDateString()}</td>
+                        <td>{formatServerDate(useCase.createdAt)}</td>
+                        <td>{formatServerDate(useCase.updatedAt)}</td>
                         <td>
                           {!useCase.systemProtected && (
                             <>
