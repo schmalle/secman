@@ -191,7 +191,7 @@ class McpToolPermissionService(
             "get_all_assets_detail", "get_asset_scan_results", "get_asset_complete_profile" -> {
                 permissions.contains(McpPermission.ASSETS_READ)
             }
-            "get_all_vulnerabilities_detail", "get_asset_most_vulnerabilities" -> {
+            "get_all_vulnerabilities_detail", "get_asset_most_vulnerabilities", "get_all_accessible_vulnerabilities" -> {
                 permissions.contains(McpPermission.VULNERABILITIES_READ)
             }
             // Feature 060-062: User, Product, and Vulnerability Exception Tools

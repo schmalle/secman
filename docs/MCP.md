@@ -1,6 +1,6 @@
 # MCP Integration
 
-Streamable HTTP / JSON-RPC 2.0 endpoint at `POST /mcp`. 55+ tools spanning requirements, assets, vulnerabilities, scans, releases, workgroups, user mappings, AWS account sharing, and the vulnerability heatmap.
+Streamable HTTP / JSON-RPC 2.0 endpoint at `POST /mcp`. 56+ tools spanning requirements, assets, vulnerabilities, scans, releases, workgroups, user mappings, AWS account sharing, and the vulnerability heatmap.
 
 ## Required headers
 
@@ -114,7 +114,7 @@ curl -XPOST http://localhost:8080/mcp \
 | `REQUIREMENTS_WRITE` | `add_requirement` |
 | `REQUIREMENTS_DELETE` | `delete_all_requirements` (ADMIN) |
 | `ASSETS_READ` | `get_assets`, `get_all_assets_detail`, `get_asset_profile`, `get_asset_complete_profile`, `create_asset`, `update_asset`, `application_register` |
-| `VULNERABILITIES_READ` | `get_vulnerabilities`, `get_all_vulnerabilities_detail`, `get_asset_most_vulnerabilities`, `get_overdue_assets`, `*_exception_request*`, `get_vulnerability_heatmap`, `refresh_vulnerability_heatmap` |
+| `VULNERABILITIES_READ` | `get_vulnerabilities`, `get_all_vulnerabilities_detail`, `get_all_accessible_vulnerabilities`, `get_asset_most_vulnerabilities`, `get_overdue_assets`, `*_exception_request*`, `get_vulnerability_heatmap`, `refresh_vulnerability_heatmap` |
 | `SCANS_READ` | `get_scans`, `get_asset_scan_results`, `search_products` |
 | `USER_ACTIVITY` | `list_users`, `add_user`, `delete_user`, `import_user_mappings`, `list_user_mappings`, `*_aws_account_sharing` |
 | `WORKGROUPS_WRITE` | `create_workgroup`, `delete_workgroup`, `assign_assets_to_workgroup`, `assign_users_to_workgroup`, `add_/remove_workgroup_aws_account`, `add_/remove_workgroup_ad_domain` |
@@ -148,6 +148,7 @@ curl -XPOST http://localhost:8080/mcp \
 ### Vulnerabilities
 - **`get_vulnerabilities`** — `page`, `pageSize`, `cveId`, `severity[]` (`Critical|High|Medium|Low|Info`), `assetId`.
 - **`get_all_vulnerabilities_detail`** — `severity` (`CRITICAL|HIGH|MEDIUM|LOW`), `assetId`, `minDaysOpen`.
+- **`get_all_accessible_vulnerabilities`** — single-call, unpaginated: returns every current vulnerability across every asset the caller can access. `severity[]` (`CRITICAL|HIGH|MEDIUM|LOW`), `includeExcepted` (default false), `limit` (default 5000, max 20000). Response includes `total`/`returned`/`truncated` so callers know if the cap was hit.
 - **`get_asset_most_vulnerabilities`** — `topN` (default 1, max 10).
 - **`get_overdue_assets`** (ADMIN/VULN, delegation) — `page`, `size` (max 100), `minSeverity`, `searchTerm`. Non-admin filtered through unified asset access.
 - **`add_vulnerability`** (ADMIN/VULN, delegation) — `hostname`*, `cve`*, `criticality`*, `daysOpen`, `owner`. Auto-creates asset. Returns `id` (DB PK) and `vulnerabilityId` (CVE).

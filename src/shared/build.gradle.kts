@@ -31,16 +31,16 @@ dependencies {
     implementation("jakarta.validation:jakarta.validation-api")
     
     // Logging
-    runtimeOnly("ch.qos.logback:logback-classic:1.5.34")
+    runtimeOnly("ch.qos.logback:logback-classic:1.5.37")
     
     // KSP
     ksp("io.micronaut:micronaut-http-validation")
     ksp("io.micronaut.validation:micronaut-validation-processor")
     ksp("io.micronaut.serde:micronaut-serde-processor")
 
-    testImplementation("org.junit.jupiter:junit-jupiter-api:6.1.0")
-    testImplementation("org.junit.jupiter:junit-jupiter-engine:6.1.0")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher:6.1.0")
+    testImplementation("org.junit.jupiter:junit-jupiter-api:6.1.1")
+    testImplementation("org.junit.jupiter:junit-jupiter-engine:6.1.1")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher:6.1.1")
     testImplementation("io.mockk:mockk:1.14.11")
     testImplementation("org.assertj:assertj-core:3.27.7")
 }

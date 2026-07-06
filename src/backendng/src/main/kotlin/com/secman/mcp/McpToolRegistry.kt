@@ -23,6 +23,7 @@ class McpToolRegistry(
     @Inject private val getAllAssetsDetailTool: GetAllAssetsDetailTool,
     @Inject private val getAssetScanResultsTool: GetAssetScanResultsTool,
     @Inject private val getAllVulnerabilitiesDetailTool: GetAllVulnerabilitiesDetailTool,
+    @Inject private val getAllAccessibleVulnerabilitiesTool: GetAllAccessibleVulnerabilitiesTool,
     @Inject private val getAssetCompleteProfileTool: GetAssetCompleteProfileTool,
     // Feature 057: MCP Tools for Requirements Management
     @Inject private val exportRequirementsTool: ExportRequirementsTool,
@@ -129,6 +130,7 @@ class McpToolRegistry(
             getAllAssetsDetailTool,
             getAssetScanResultsTool,
             getAllVulnerabilitiesDetailTool,
+            getAllAccessibleVulnerabilitiesTool,
             getAssetCompleteProfileTool,
             // Feature 057: MCP Tools for Requirements Management
             exportRequirementsTool,
@@ -361,6 +363,9 @@ class McpToolRegistry(
                 permissions.contains(McpPermission.SCANS_READ)
             }
             "get_all_vulnerabilities_detail" -> {
+                permissions.contains(McpPermission.VULNERABILITIES_READ)
+            }
+            "get_all_accessible_vulnerabilities" -> {
                 permissions.contains(McpPermission.VULNERABILITIES_READ)
             }
             "get_asset_complete_profile" -> {

@@ -8,10 +8,10 @@ pluginManagement {
         id("org.jetbrains.kotlin.plugin.allopen") version "2.4.0"
         id("org.jetbrains.kotlin.plugin.jpa") version "2.4.0"
         id("com.google.devtools.ksp") version "2.3.9"
-        id("io.micronaut.application") version "5.0.0"
-        id("io.micronaut.library") version "5.0.0"
-        id("io.micronaut.aot") version "5.0.0"
-        id("com.gradleup.shadow") version "9.4.2"
+        id("io.micronaut.application") version "5.0.2"
+        id("io.micronaut.library") version "5.0.2"
+        id("io.micronaut.aot") version "5.0.2"
+        id("com.gradleup.shadow") version "9.5.1"
     }
 }
 
