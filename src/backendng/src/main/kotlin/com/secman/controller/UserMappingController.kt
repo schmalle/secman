@@ -29,7 +29,8 @@ import org.slf4j.LoggerFactory
 open class UserMappingController(
     @Inject private val userMappingService: UserMappingService,
     @Inject private val userMappingRepository: UserMappingRepository,
-    @Inject private val newAccountNotificationService: com.secman.service.NewAccountNotificationService
+    @Inject private val newAccountNotificationService: com.secman.service.NewAccountNotificationService,
+    @Inject private val awsAccountRiskAssessmentService: com.secman.service.AwsAccountRiskAssessmentService
 ) {
     private val logger = LoggerFactory.getLogger(UserMappingController::class.java)
     private val emailRegex = Regex("^[^@]+@[^@]+\\.[^@]+$")
@@ -176,12 +177,29 @@ open class UserMappingController(
             }
         }
 
+        // Validate risk-assessment parameters (fail fast → 400): the use case
+        // must exist and at least one SECCHAMPION user must be available as assessor.
+        if (request.startRiskAssessment) {
+            val riskValidationError = awsAccountRiskAssessmentService.validateStartRequest(
+                request.riskAssessmentUseCase,
+                request.riskAssessmentDeadlineDays
+            )
+            if (riskValidationError != null) {
+                return HttpResponse.badRequest(
+                    mapOf(
+                        "error" to "Validation Error",
+                        "message" to riskValidationError
+                    )
+                )
+            }
+        }
+
         return try {
             val result = userMappingService.bulkCreateMappings(request)
 
             // Send the operator email AFTER the transaction has committed, so a
             // slow/failed send never rolls back the persisted mappings.
-            val finalResult = if (request.notifyNewAccounts && !request.dryRun && result.newAccounts.isNotEmpty()) {
+            var finalResult = if (request.notifyNewAccounts && !request.dryRun && result.newAccounts.isNotEmpty()) {
                 val recipient = request.notifyAddress!!.trim()
                 val sent = newAccountNotificationService.sendImportNotification(recipient, result.newAccounts)
                 result.copy(
@@ -191,6 +209,20 @@ open class UserMappingController(
                 )
             } else {
                 result
+            }
+
+            // Auto-start risk assessments for owners of brand-new AWS accounts,
+            // also AFTER the import committed so a failure here never rolls back
+            // the persisted mappings.
+            if (request.startRiskAssessment && !request.dryRun && result.newAccounts.isNotEmpty()) {
+                val assessments = awsAccountRiskAssessmentService.startAssessmentsForNewAccounts(
+                    newAccounts = result.newAccounts,
+                    useCaseName = request.riskAssessmentUseCase!!.trim(),
+                    deadlineDays = request.riskAssessmentDeadlineDays
+                        ?: com.secman.service.AwsAccountRiskAssessmentService.DEFAULT_DEADLINE_DAYS,
+                    requestorUserId = getUserIdFromAuthenticationOrNull(authentication)
+                )
+                finalResult = finalResult.copy(riskAssessments = assessments)
             }
 
             HttpResponse.ok(finalResult)
@@ -399,6 +431,19 @@ open class UserMappingController(
                     "message" to "Failed to list applied history"
                 )
             )
+        }
+    }
+
+    /**
+     * Like [getUserIdFromAuthentication], but returns null instead of throwing
+     * when the user id cannot be determined (used where a fallback exists).
+     */
+    private fun getUserIdFromAuthenticationOrNull(authentication: Authentication): Long? {
+        return try {
+            getUserIdFromAuthentication(authentication)
+        } catch (e: Exception) {
+            logger.warn("Could not resolve user id from authentication: ${e.message}")
+            null
         }
     }
 

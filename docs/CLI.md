@@ -383,11 +383,56 @@ Opt-in notification when the import introduces AWS account IDs not previously pr
 | 1 | Partial failure (mappings saved, but email send failed) |
 | 2 | Invalid arguments (e.g., `--createnotify` without `--notify-address`; also used for other validation errors) |
 
+#### import --start-risk-assessment (auto risk assessment for new AWS accounts)
+
+Opt-in: for the owner of **every brand-new AWS account** introduced by the
+import (an account ID present in no existing mapping), a risk assessment is
+started automatically. Also available on `import-s3` with identical options.
+Requires `ADMIN`.
+
+```bash
+./scripts/secman manage-user-mappings import \
+  --file mappings.csv \
+  --start-risk-assessment \
+  --risk-usecase "Cloud Onboarding" \
+  --risk-deadline-days 7
+```
+
+| Option | Default | Notes |
+|---|---|---|
+| `--start-risk-assessment` | false | opt-in; one assessment per (new account, mapped owner email) pair |
+| `--risk-usecase <name>` | — | **required when `--start-risk-assessment` is set**; name of an existing use case the assessment is based on (case-insensitive match) |
+| `--risk-deadline-days <n>` | 7 | days from today until the assessment deadline (`endDate`); must be ≥ 1 |
+
+**Behavior:**
+
+- Validation is fail-fast (HTTP 400 → exit 2 before anything is imported): the
+  use case must exist, the deadline must be ≥ 1 day, and at least one user with
+  the **SECCHAMPION** role must exist — the assessor is picked from the
+  SECCHAMPION users (round-robin, so any SECCHAMPION can be the assessor and
+  load spreads evenly).
+- The assessment basis is an asset representing the AWS account (name
+  `AWS Account <id>`, type `AWS_ACCOUNT`, `cloudAccountId` = account ID, owner =
+  the mapped email); it is reused when it already exists, created otherwise.
+- The owner is set as respondent (when a user account with that email exists)
+  and is notified by email that the assessment was started, naming use case,
+  assessor and deadline.
+- **Reminders:** the owner automatically receives reminder emails **2 days and
+  1 day before the deadline** (daily backend job at 08:15; each reminder is
+  sent exactly once, tracked in `aws_account_risk_assessment`; only open
+  assessments with status `STARTED` are reminded).
+- `--dry-run` reports how many assessments would be started but creates nothing.
+- Assessments are started **after** the mapping import commits — a failure
+  while starting an assessment never rolls back imported mappings; per-account
+  failures are listed in the output and exit code 1 is returned.
+
+**Exit codes:** `0` OK / dry-run · `1` mappings saved but ≥ 1 assessment failed to start · `2` invalid arguments (missing/unknown `--risk-usecase`, deadline < 1, no SECCHAMPION user).
+
 #### S3 subcommands
 
 All three `*-s3` commands share AWS options: `--aws-region`, `--aws-profile`, `--aws-access-key-id`, `--aws-secret-access-key`, `--aws-session-token`, `--endpoint-url` (also `AWS_ENDPOINT_URL`, used for S3Mock/MinIO/LocalStack). 10 MB hard size limit. Default credential chain: env → `~/.aws/credentials` → IAM role → SSO.
 
-- **`import-s3`** — download AND POST to backend. Bucket/key from `--bucket`/`--key` or, when omitted, the `AWS_ACCOUNT_BUCKET_NAME` / `AWS_ACCOUNT_BUCKET_KEY_NAME` env vars (flags take priority). Needs `s3:GetObject` (+ `s3:HeadObject` for pre-download size check). Exit codes: `0` ok / `1` partial / `2` fatal S3/config / `3` unexpected. Detailed flags: `docs/S3_USER_MAPPING_IMPORT.md`.
+- **`import-s3`** — download AND POST to backend. Bucket/key from `--bucket`/`--key` or, when omitted, the `AWS_ACCOUNT_BUCKET_NAME` / `AWS_ACCOUNT_BUCKET_KEY_NAME` env vars (flags take priority). Needs `s3:GetObject` (+ `s3:HeadObject` for pre-download size check). Supports `--start-risk-assessment` / `--risk-usecase` / `--risk-deadline-days` exactly like `import` (see above). Exit codes: `0` ok / `1` partial / `2` fatal S3/config / `3` unexpected. Detailed flags: `docs/S3_USER_MAPPING_IMPORT.md`.
 - **`download-s3`** — download only, no backend contact. `--bucket -b`, `--key -k`, `--output -o` required; `--force -f` to overwrite; `--quiet -q` (success/error stays on stderr). Parent dir must exist; verbatim copy.
 - **`print-s3`** — download + parse + print to stdout (temp file deleted). `--type AWS|DOMAIN|ALL` (default `AWS`); `--format TABLE|JSON|CSV`; `--file-format CSV|JSON|AUTO`; `--show-errors` to print parse errors to stderr; `--quiet` suppresses banner+summary (still on stderr). **stdout = mappings only**, safe to pipe through `diff`/`jq`/`awk`.
 
