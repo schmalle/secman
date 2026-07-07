@@ -5,20 +5,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="94ada8b3-9f4e-473c-9fea-3bc9651b5bdd" name="Changes" comment="test change">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/scripts/import.sh" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/import.sh" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/CrowdStrikeController.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/CrowdStrikeController.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/dto/CrowdStrikeQueryResponse.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/dto/CrowdStrikeQueryResponse.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/dto/ReconcileStaleVulnerabilitiesDto.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/dto/ReconcileStaleVulnerabilitiesDto.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/repository/CrowdStrikeImportHistoryRepository.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/repository/CrowdStrikeImportHistoryRepository.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/repository/VulnerabilityRepository.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/repository/VulnerabilityRepository.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeQueryService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeQueryService.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeVulnerabilityImportService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/CrowdStrikeVulnerabilityImportService.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/test/kotlin/com/secman/integration/CrowdStrikeStaleVulnerabilityIntegrationTest.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/test/kotlin/com/secman/integration/CrowdStrikeStaleVulnerabilityIntegrationTest.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/commands/ServersCommand.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/commands/ServersCommand.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/service/VulnerabilityStorageService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/service/VulnerabilityStorageService.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/frontend/src/components/CrowdStrikeVulnerabilityLookup.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/components/CrowdStrikeVulnerabilityLookup.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/frontend/src/services/crowdstrikeService.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/services/crowdstrikeService.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/mcp/test_get_all_accessible_vulnerabilities.py" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/mcp/test_get_all_accessible_vulnerabilities.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -80,12 +67,12 @@
     &quot;assignee&quot;: &quot;schmalle&quot;
   }
 }</component>
-  <component name="GithubPullRequestsUISettings">{
-  &quot;selectedUrlAndAccountId&quot;: {
-    &quot;url&quot;: &quot;git@github.com:schmalle/secman.git&quot;,
-    &quot;accountId&quot;: &quot;cdeac9ce-5c06-4f60-bbec-d488629280ee&quot;
+  <component name="GithubPullRequestsUISettings"><![CDATA[{
+  "selectedUrlAndAccountId": {
+    "url": "git@github.com:schmalle/secman.git",
+    "accountId": "656f2107-bfc3-4580-8f63-0a8886402791"
   }
-}</component>
+}]]></component>
   <component name="GradleScriptDefinitionsStorage" workingDir="$PROJECT_DIR$" gradleHome="$USER_HOME$/.gradle/wrapper/dists/gradle-9.4.0-bin/lcvyxq3t37f6mx9miaydrrgs/gradle-9.4.0" javaHome="$USER_HOME$/.sdkman/candidates/java/current" gradleVersion="9.4.0" />
   <component name="ProjectCodeStyleSettingsMigration">
     <option name="version" value="2" />
@@ -143,7 +130,7 @@
       <recent name="$PROJECT_DIR$/scripts/install" />
     </key>
   </component>
-  <component name="RunManager" selected="Gradle.backendng [build]">
+  <component name="RunManager">
     <configuration name="OAuthServiceTest" type="GradleRunConfiguration" factoryName="Gradle" temporary="true">
       <ExternalSystemSettings>
         <option name="executionName" />
@@ -249,6 +236,7 @@
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
       <option name="DEBUG_JUST_MY_CODE" value="false" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
       <option name="RUN_TOOL" value="" />
       <option name="SCRIPT_NAME" value="" />
       <option name="PARAMETERS" value="" />
@@ -270,6 +258,7 @@
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
       <option name="DEBUG_JUST_MY_CODE" value="false" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
       <option name="RUN_TOOL" value="" />
       <method v="2" />
     </configuration>
@@ -284,6 +273,7 @@
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
       <option name="DEBUG_JUST_MY_CODE" value="false" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
       <option name="RUN_TOOL" value="" />
       <option name="_new_additionalArguments" value="&quot;&quot;" />
       <option name="_new_target" value="&quot;&quot;" />
@@ -301,6 +291,7 @@
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
       <option name="DEBUG_JUST_MY_CODE" value="false" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
       <option name="RUN_TOOL" value="" />
       <option name="SCRIPT_NAME" value="" />
       <option name="CLASS_NAME" value="" />
@@ -311,18 +302,12 @@
       <option name="USE_PATTERN" value="false" />
       <method v="2" />
     </configuration>
-    <recent_temporary>
-      <list>
-        <item itemvalue="Gradle.backendng [build]" />
-        <item itemvalue="Gradle.OAuthServiceTest" />
-      </list>
-    </recent_temporary>
   </component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-jdk-30f59d01ecdd-37e91769500f-intellij.indexing.shared.core-IU-261.25134.95" />
-        <option value="bundled-js-predefined-d6986cc7102b-31caf2ab9e3c-JavaScript-IU-261.25134.95" />
+        <option value="bundled-js-predefined-d6986cc7102b-31caf2ab9e3c-JavaScript-PY-261.26222.68" />
+        <option value="bundled-python-sdk-50341a9f1f9c-c2ffad84badb-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-261.26222.68" />
       </set>
     </attachedChunks>
   </component>
@@ -336,6 +321,7 @@
       <workItem from="1779191672834" duration="7000" />
       <workItem from="1781338422944" duration="434000" />
       <workItem from="1782299928381" duration="24000" />
+      <workItem from="1783366236661" duration="1215000" />
     </task>
     <task id="LOCAL-00001" summary="added source of testdata">
       <option name="closed" value="true" />

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+    #!/usr/bin/env python3
 """
 Smoke test / ad-hoc query tool for the MCP tool `get_all_accessible_vulnerabilities`.
 
