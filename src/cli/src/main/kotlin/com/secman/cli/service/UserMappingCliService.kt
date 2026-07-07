@@ -320,7 +320,10 @@ class UserMappingCliService(
         backendUrl: String,
         authToken: String,
         notifyNewAccounts: Boolean = false,
-        notifyAddress: String? = null
+        notifyAddress: String? = null,
+        startRiskAssessment: Boolean = false,
+        riskUseCase: String? = null,
+        riskDeadlineDays: Int? = null
     ): MappingResult {
         val file = File(filePath)
         if (!file.exists()) {
@@ -362,7 +365,10 @@ class UserMappingCliService(
         }
 
         // Send parsed entries to bulk endpoint
-        val bulkResponse = postBulk(parseResult.entries, dryRun, backendUrl, authToken, notifyNewAccounts, notifyAddress)
+        val bulkResponse = postBulk(
+            parseResult.entries, dryRun, backendUrl, authToken, notifyNewAccounts, notifyAddress,
+            startRiskAssessment, riskUseCase, riskDeadlineDays
+        )
 
         // Merge parse errors with backend errors
         val allErrors = parseResult.errors + bulkResponse.errors
@@ -401,7 +407,8 @@ class UserMappingCliService(
             newAccounts = bulkResponse.newAccounts,
             notificationSent = bulkResponse.notificationSent,
             notificationRecipient = bulkResponse.notificationRecipient,
-            notificationError = bulkResponse.notificationError
+            notificationError = bulkResponse.notificationError,
+            riskAssessments = bulkResponse.riskAssessments
         )
     }
 
@@ -610,20 +617,26 @@ class UserMappingCliService(
         backendUrl: String,
         authToken: String,
         notifyNewAccounts: Boolean = false,
-        notifyAddress: String? = null
+        notifyAddress: String? = null,
+        startRiskAssessment: Boolean = false,
+        riskUseCase: String? = null,
+        riskDeadlineDays: Int? = null
     ): BulkResponse {
-        val bodyMap = mapOf(
-            "mappings" to entries.map { entry ->
+        val bodyMap = buildMap<String, Any> {
+            put("mappings", entries.map { entry ->
                 buildMap<String, Any> {
                     put("email", entry["email"] as String)
                     (entry["awsAccountId"] as? String)?.let { put("awsAccountId", it) }
                     (entry["domain"] as? String)?.let { put("domain", it) }
                 }
-            },
-            "dryRun" to dryRun,
-            "notifyNewAccounts" to notifyNewAccounts,
-            "notifyAddress" to (notifyAddress ?: "")
-        )
+            })
+            put("dryRun", dryRun)
+            put("notifyNewAccounts", notifyNewAccounts)
+            put("notifyAddress", notifyAddress ?: "")
+            put("startRiskAssessment", startRiskAssessment)
+            riskUseCase?.let { put("riskAssessmentUseCase", it) }
+            riskDeadlineDays?.let { put("riskAssessmentDeadlineDays", it) }
+        }
         val jsonBody = objectMapper.writeValueAsString(bodyMap)
 
         try {
@@ -666,6 +679,18 @@ class UserMappingCliService(
                         )
                     } ?: emptyList()
 
+                    @Suppress("UNCHECKED_CAST")
+                    val riskAssessments = (responseBody["riskAssessments"] as? List<Map<String, Any?>>)?.map {
+                        CliAccountRiskAssessment(
+                            awsAccountId = it["awsAccountId"]?.toString() ?: "",
+                            ownerEmail = it["ownerEmail"]?.toString() ?: "",
+                            riskAssessmentId = (it["riskAssessmentId"] as? Number)?.toLong(),
+                            assessor = it["assessor"]?.toString(),
+                            endDate = it["endDate"]?.toString(),
+                            error = it["error"]?.toString()
+                        )
+                    } ?: emptyList()
+
                     return BulkResponse(
                         totalProcessed = (responseBody["totalProcessed"] as? Number)?.toInt() ?: entries.size,
                         created = (responseBody["created"] as? Number)?.toInt() ?: 0,
@@ -676,10 +701,19 @@ class UserMappingCliService(
                         newAccounts = newAccounts,
                         notificationSent = (responseBody["notificationSent"] as? Boolean) ?: false,
                         notificationRecipient = responseBody["notificationRecipient"]?.toString(),
-                        notificationError = responseBody["notificationError"]?.toString()
+                        notificationError = responseBody["notificationError"]?.toString(),
+                        riskAssessments = riskAssessments
                     )
                 }
                 404 -> {
+                    if (startRiskAssessment) {
+                        // The per-row fallback endpoints cannot start risk assessments —
+                        // failing loudly beats silently importing without them.
+                        throw IllegalArgumentException(
+                            "Backend does not support --start-risk-assessment " +
+                                "(bulk endpoint /api/user-mappings/bulk not available)"
+                        )
+                    }
                     log.warn("Bulk endpoint not available (404), falling back to individual operations")
                     return if (dryRun) {
                         dryRunFallback(entries, backendUrl, authToken)
@@ -907,7 +941,8 @@ class UserMappingCliService(
         val newAccounts: List<CliNewAccount> = emptyList(),
         val notificationSent: Boolean = false,
         val notificationRecipient: String? = null,
-        val notificationError: String? = null
+        val notificationError: String? = null,
+        val riskAssessments: List<CliAccountRiskAssessment> = emptyList()
     )
 
     private data class BulkComparisonResponse(
@@ -959,7 +994,8 @@ data class MappingResult(
     val newAccounts: List<CliNewAccount> = emptyList(),
     val notificationSent: Boolean = false,
     val notificationRecipient: String? = null,
-    val notificationError: String? = null
+    val notificationError: String? = null,
+    val riskAssessments: List<CliAccountRiskAssessment> = emptyList()
 )
 
 /**
@@ -969,6 +1005,20 @@ data class MappingResult(
 data class CliNewAccount(
     val awsAccountId: String,
     val emails: List<String>
+)
+
+/**
+ * Outcome of auto-starting a risk assessment for one (new AWS account, owner)
+ * pair (--start-risk-assessment). On success [riskAssessmentId] is set; on a
+ * per-item failure [error] carries the backend message.
+ */
+data class CliAccountRiskAssessment(
+    val awsAccountId: String,
+    val ownerEmail: String,
+    val riskAssessmentId: Long? = null,
+    val assessor: String? = null,
+    val endDate: String? = null,
+    val error: String? = null
 )
 
 /**

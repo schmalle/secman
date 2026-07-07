@@ -131,6 +131,28 @@ class ImportS3Command(
     )
     var dryRun: Boolean = false
 
+    @Option(
+        names = ["--start-risk-assessment"],
+        description = [
+            "Start a risk assessment for the owner of every brand-new AWS account " +
+                "introduced by this import (assessor: a user with SECCHAMPION role)"
+        ]
+    )
+    var startRiskAssessment: Boolean = false
+
+    @Option(
+        names = ["--risk-usecase"],
+        description = ["Name of the use case the risk assessment is based on (required when --start-risk-assessment is set)"]
+    )
+    var riskUseCase: String? = null
+
+    @Option(
+        names = ["--risk-deadline-days"],
+        description = ["Days until the risk assessment deadline (default: \${DEFAULT-VALUE})"],
+        defaultValue = "7"
+    )
+    var riskDeadlineDays: Int = 7
+
     // Feature 085: Email distribution options (same as ListCommand)
     @Option(
         names = ["--send-email"],
@@ -160,6 +182,14 @@ class ImportS3Command(
             println("Import User Mappings from S3")
             println("=".repeat(60))
             println()
+
+            // Validate risk-assessment options (same rules as ImportCommand)
+            if (startRiskAssessment && riskUseCase.isNullOrBlank()) {
+                throw IllegalArgumentException("--risk-usecase is required when --start-risk-assessment is set")
+            }
+            if (startRiskAssessment && riskDeadlineDays < 1) {
+                throw IllegalArgumentException("--risk-deadline-days must be at least 1 (got $riskDeadlineDays)")
+            }
 
             // Resolve bucket/key: CLI flag takes priority, then env var (flags rule)
             val effectiveBucket = bucket
@@ -210,6 +240,9 @@ class ImportS3Command(
             }
 
             println("Format: $format")
+            if (startRiskAssessment) {
+                println("Risk assessment: enabled (use case '$riskUseCase', deadline $riskDeadlineDays day(s))")
+            }
             if (dryRun) {
                 println("Mode: DRY-RUN (validation only, no changes will be made)")
             }
@@ -235,7 +268,10 @@ class ImportS3Command(
                 format = format,
                 dryRun = dryRun,
                 backendUrl = backendUrl,
-                authToken = token
+                authToken = token,
+                startRiskAssessment = startRiskAssessment,
+                riskUseCase = riskUseCase,
+                riskDeadlineDays = if (startRiskAssessment) riskDeadlineDays else null
             )
 
             // Display summary (matching existing ImportCommand format)
@@ -275,6 +311,34 @@ class ImportS3Command(
                 }
             }
 
+            var riskAssessmentFailures = 0
+            if (startRiskAssessment) {
+                println()
+                if (dryRun) {
+                    if (result.newAccounts.isNotEmpty()) {
+                        println("Would start ${result.newAccounts.sumOf { it.emails.size }} risk assessment(s) " +
+                            "for ${result.newAccounts.size} new AWS account(s) " +
+                            "(use case '$riskUseCase', deadline $riskDeadlineDays day(s)).")
+                    } else {
+                        println("No brand-new AWS accounts in this import — no risk assessments would be started.")
+                    }
+                } else if (result.riskAssessments.isNotEmpty()) {
+                    println("Risk assessments (${result.riskAssessments.size}):")
+                    result.riskAssessments.forEach { ra ->
+                        if (ra.error != null) {
+                            riskAssessmentFailures++
+                            println("  FAILED  ${ra.awsAccountId}  ${ra.ownerEmail}: ${ra.error}")
+                        } else {
+                            println("  OK      ${ra.awsAccountId}  ${ra.ownerEmail}  ->  assessment #${ra.riskAssessmentId}" +
+                                (ra.assessor?.let { ", assessor $it" } ?: "") +
+                                (ra.endDate?.let { ", due $it" } ?: ""))
+                        }
+                    }
+                } else {
+                    println("No brand-new AWS accounts in this import — no risk assessments started.")
+                }
+            }
+
             if (result.errors.isNotEmpty()) {
                 println("Errors: ${result.errors.size} failure(s)")
                 println()
@@ -304,6 +368,11 @@ class ImportS3Command(
                     println("Validation successful (dry-run)")
                 } else {
                     println("Import successful")
+                    if (riskAssessmentFailures > 0) {
+                        println("Warning: $riskAssessmentFailures risk assessment(s) could not be started")
+                        // Exit code 1: partial success (mappings saved, assessments failed)
+                        System.exit(1)
+                    }
                 }
                 // Exit code 0: success
             }

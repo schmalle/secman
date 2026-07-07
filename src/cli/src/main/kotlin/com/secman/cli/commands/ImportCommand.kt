@@ -34,6 +34,10 @@ import jakarta.inject.Singleton
  * - Partial success mode (continues on errors)
  * - Duplicate detection
  * - Pending mapping creation for non-existent users
+ * - Optional auto-start of risk assessments for owners of brand-new AWS
+ *   accounts (--start-risk-assessment --risk-usecase <name>
+ *   [--risk-deadline-days <n>, default 7]); the assessor is a user with the
+ *   SECCHAMPION role and owners are reminded 2 days and 1 day before the deadline
  * - Requires ADMIN role
  */
 @Singleton
@@ -78,6 +82,28 @@ class ImportCommand(
     )
     var notifyAddress: String? = null
 
+    @Option(
+        names = ["--start-risk-assessment"],
+        description = [
+            "Start a risk assessment for the owner of every brand-new AWS account " +
+                "introduced by this import (assessor: a user with SECCHAMPION role)"
+        ]
+    )
+    var startRiskAssessment: Boolean = false
+
+    @Option(
+        names = ["--risk-usecase"],
+        description = ["Name of the use case the risk assessment is based on (required when --start-risk-assessment is set)"]
+    )
+    var riskUseCase: String? = null
+
+    @Option(
+        names = ["--risk-deadline-days"],
+        description = ["Days until the risk assessment deadline (default: \${DEFAULT-VALUE})"],
+        defaultValue = "7"
+    )
+    var riskDeadlineDays: Int = 7
+
     @ParentCommand
     lateinit var parent: ManageUserMappingsCommand
 
@@ -88,6 +114,21 @@ class ImportCommand(
     fun validateNotifyOptions(): String? {
         if (createnotify && notifyAddress.isNullOrBlank()) {
             return "--notify-address is required when --createnotify is set"
+        }
+        return null
+    }
+
+    /**
+     * Validate the risk-assessment options. Returns an error message if invalid,
+     * or null if OK. --start-risk-assessment requires a non-blank --risk-usecase
+     * and a deadline of at least 1 day.
+     */
+    fun validateRiskAssessmentOptions(): String? {
+        if (startRiskAssessment && riskUseCase.isNullOrBlank()) {
+            return "--risk-usecase is required when --start-risk-assessment is set"
+        }
+        if (startRiskAssessment && riskDeadlineDays < 1) {
+            return "--risk-deadline-days must be at least 1 (got $riskDeadlineDays)"
         }
         return null
     }
@@ -107,6 +148,14 @@ class ImportCommand(
             if (!createnotify && !notifyAddress.isNullOrBlank()) {
                 println("⚠️  --notify-address is ignored because --createnotify is not set")
             }
+            validateRiskAssessmentOptions()?.let { msg ->
+                System.err.println("❌ Error: $msg")
+                System.exit(2)
+                return
+            }
+            if (!startRiskAssessment && !riskUseCase.isNullOrBlank()) {
+                println("⚠️  --risk-usecase is ignored because --start-risk-assessment is not set")
+            }
 
             // Authenticate with backend
             val backendUrl = parent.getEffectiveBackendUrl()
@@ -119,6 +168,9 @@ class ImportCommand(
             println("Backend: $backendUrl")
             println("File: $filePath")
             println("Format: $format")
+            if (startRiskAssessment) {
+                println("Risk assessment: enabled (use case '$riskUseCase', deadline $riskDeadlineDays day(s))")
+            }
             if (dryRun) {
                 println("Mode: DRY-RUN (validation only, no changes will be made)")
             }
@@ -132,7 +184,10 @@ class ImportCommand(
                 backendUrl = backendUrl,
                 authToken = token,
                 notifyNewAccounts = createnotify,
-                notifyAddress = notifyAddress
+                notifyAddress = notifyAddress,
+                startRiskAssessment = startRiskAssessment,
+                riskUseCase = riskUseCase,
+                riskDeadlineDays = if (startRiskAssessment) riskDeadlineDays else null
             )
 
             // Display summary
@@ -195,6 +250,34 @@ class ImportCommand(
                 println("No brand-new AWS accounts in this import — no notification sent.")
             }
 
+            var riskAssessmentFailures = 0
+            if (startRiskAssessment) {
+                println()
+                if (dryRun) {
+                    if (result.newAccounts.isNotEmpty()) {
+                        println("Would start ${result.newAccounts.sumOf { it.emails.size }} risk assessment(s) " +
+                            "for the ${result.newAccounts.size} new AWS account(s) above " +
+                            "(use case '$riskUseCase', deadline $riskDeadlineDays day(s)).")
+                    } else {
+                        println("No brand-new AWS accounts in this import — no risk assessments would be started.")
+                    }
+                } else if (result.riskAssessments.isNotEmpty()) {
+                    println("Risk assessments (${result.riskAssessments.size}):")
+                    result.riskAssessments.forEach { ra ->
+                        if (ra.error != null) {
+                            riskAssessmentFailures++
+                            println("  ❌ ${ra.awsAccountId}  ${ra.ownerEmail}: ${ra.error}")
+                        } else {
+                            println("  ✅ ${ra.awsAccountId}  ${ra.ownerEmail}  ->  assessment #${ra.riskAssessmentId}" +
+                                (ra.assessor?.let { ", assessor $it" } ?: "") +
+                                (ra.endDate?.let { ", due $it" } ?: ""))
+                        }
+                    }
+                } else {
+                    println("No brand-new AWS accounts in this import — no risk assessments started.")
+                }
+            }
+
             if (result.errors.isNotEmpty()) {
                 println("❌ Errors: ${result.errors.size} failure(s)")
                 println()
@@ -219,6 +302,10 @@ class ImportCommand(
                 } else {
                     println("✓ Import successful")
                     if (createnotify && result.notificationError != null) {
+                        System.exit(1)
+                    }
+                    if (riskAssessmentFailures > 0) {
+                        println("⚠️  $riskAssessmentFailures risk assessment(s) could not be started")
                         System.exit(1)
                     }
                 }

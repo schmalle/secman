@@ -52,13 +52,38 @@ data class BulkUserMappingRequest(
     val mappings: List<BulkUserMappingEntry>,
     val dryRun: Boolean = false,
     val notifyNewAccounts: Boolean = false,
-    val notifyAddress: String? = null
+    val notifyAddress: String? = null,
+    /**
+     * When true, a risk assessment is started for the owner of every
+     * brand-new (DB-wide) AWS account created by this import.
+     * Requires [riskAssessmentUseCase]; deadline defaults to 7 days.
+     */
+    val startRiskAssessment: Boolean = false,
+    /** Name of the use case the auto-started risk assessments are based on. */
+    val riskAssessmentUseCase: String? = null,
+    /** Days from today until the risk assessment deadline (endDate). Default 7. */
+    val riskAssessmentDeadlineDays: Int? = null
 )
 
 @Serdeable
 data class NewAccountImportInfo(
     val awsAccountId: String,
     val emails: List<String>
+)
+
+/**
+ * Outcome of auto-starting a risk assessment for one (new AWS account, owner)
+ * pair during a mapping import. Exactly one of [riskAssessmentId] / [error]
+ * is meaningful: id set on success, error message set on per-item failure.
+ */
+@Serdeable
+data class AccountRiskAssessmentInfo(
+    val awsAccountId: String,
+    val ownerEmail: String,
+    val riskAssessmentId: Long? = null,
+    val assessor: String? = null,
+    val endDate: String? = null,
+    val error: String? = null
 )
 
 @Serdeable
@@ -72,7 +97,9 @@ data class BulkUserMappingResponse(
     val newAccounts: List<NewAccountImportInfo> = emptyList(),
     val notificationSent: Boolean = false,
     val notificationRecipient: String? = null,
-    val notificationError: String? = null
+    val notificationError: String? = null,
+    /** Auto-started risk assessments (one entry per new account/owner pair). */
+    val riskAssessments: List<AccountRiskAssessmentInfo> = emptyList()
 )
 
 @Serdeable
