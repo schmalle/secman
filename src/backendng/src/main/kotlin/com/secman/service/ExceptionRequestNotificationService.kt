@@ -1,8 +1,10 @@
 package com.secman.service
 
 import com.secman.config.AppConfig
+import com.secman.domain.Asset
 import com.secman.domain.User
 import com.secman.domain.VulnerabilityExceptionRequest
+import com.secman.repository.AssetRepository
 import com.secman.repository.UserRepository
 import jakarta.inject.Inject
 import jakarta.inject.Singleton
@@ -33,6 +35,7 @@ import java.util.concurrent.CompletableFuture
 open class ExceptionRequestNotificationService(
     @Inject private val emailService: EmailService,
     @Inject private val userRepository: UserRepository,
+    @Inject private val assetRepository: AssetRepository,
     @Inject private val appConfig: AppConfig
 ) {
     private val logger = LoggerFactory.getLogger(ExceptionRequestNotificationService::class.java)
@@ -57,6 +60,30 @@ open class ExceptionRequestNotificationService(
     }
 
     /**
+     * Resolve the CVE id for display, preferring the denormalized `cveId` column
+     * (set at creation time, e.g. for sweeping rule requests with no linked vulnerability,
+     * and survives CrowdStrike reimport cycles that null out the vulnerability FK) over the
+     * live `vulnerability` association, which may be null in either of those cases.
+     */
+    private fun resolveCveId(request: VulnerabilityExceptionRequest): String =
+        request.cveId ?: request.vulnerability?.vulnerabilityId ?: "Unknown CVE"
+
+    /**
+     * Resolve the asset for display, preferring the live `vulnerability.asset` association
+     * and falling back to a lookup by the denormalized `assetId` column when the
+     * vulnerability link is absent (rule requests, or reimport-nulled FKs).
+     */
+    private fun resolveAsset(request: VulnerabilityExceptionRequest): Asset? =
+        request.vulnerability?.asset
+            ?: request.assetId?.let { assetRepository.findById(it).orElse(null) }
+
+    private fun resolveAssetName(request: VulnerabilityExceptionRequest): String =
+        resolveAsset(request)?.name ?: "Unknown Asset"
+
+    private fun resolveAssetIp(request: VulnerabilityExceptionRequest): String =
+        resolveAsset(request)?.ip ?: "N/A"
+
+    /**
      * Notify all ADMIN and SECCHAMPION users of a new exception request.
      *
      * Called after createRequest() when status is PENDING (not auto-approved).
@@ -70,8 +97,8 @@ open class ExceptionRequestNotificationService(
         // thread concurrently with the caller corrupts the Hibernate session and produces
         // "Illegal pop() with non-matching JdbcValuesSourceProcessingState".
         val requestId = request.id
-        val cveId = request.vulnerability?.vulnerabilityId ?: "Unknown CVE"
-        val assetName = request.vulnerability?.asset?.name ?: "Unknown Asset"
+        val cveId = resolveCveId(request)
+        val assetName = resolveAssetName(request)
         val subject = "New Exception Request: $cveId on $assetName"
         val adminRecipients: List<AdminRecipient> = userRepository.findAll()
             .filter { it.hasRole(User.Role.ADMIN) || it.hasRole(User.Role.SECCHAMPION) }
@@ -153,8 +180,8 @@ open class ExceptionRequestNotificationService(
         // see notifyAdminsOfNewRequest for rationale.
         val requestId = request.id
         val requesterEmail = request.requestedByUser?.email
-        val cveId = request.vulnerability?.vulnerabilityId ?: "Unknown CVE"
-        val assetName = request.vulnerability?.asset?.name ?: "Unknown Asset"
+        val cveId = resolveCveId(request)
+        val assetName = resolveAssetName(request)
         val htmlContent = if (!requesterEmail.isNullOrBlank()) generateApprovalEmail(request) else null
 
         return CompletableFuture.supplyAsync {
@@ -197,8 +224,8 @@ open class ExceptionRequestNotificationService(
         // see notifyAdminsOfNewRequest for rationale.
         val requestId = request.id
         val requesterEmail = request.requestedByUser?.email
-        val cveId = request.vulnerability?.vulnerabilityId ?: "Unknown CVE"
-        val assetName = request.vulnerability?.asset?.name ?: "Unknown Asset"
+        val cveId = resolveCveId(request)
+        val assetName = resolveAssetName(request)
         val htmlContent = if (!requesterEmail.isNullOrBlank()) generateRejectionEmail(request) else null
 
         return CompletableFuture.supplyAsync {
@@ -240,8 +267,8 @@ open class ExceptionRequestNotificationService(
         // see notifyAdminsOfNewRequest for rationale.
         val requestId = request.id
         val requesterEmail = request.requestedByUser?.email
-        val cveId = request.vulnerability?.vulnerabilityId ?: "Unknown CVE"
-        val assetName = request.vulnerability?.asset?.name ?: "Unknown Asset"
+        val cveId = resolveCveId(request)
+        val assetName = resolveAssetName(request)
         val htmlContent = if (!requesterEmail.isNullOrBlank()) generateExpirationReminderEmail(request) else null
 
         return CompletableFuture.supplyAsync {
@@ -284,9 +311,9 @@ open class ExceptionRequestNotificationService(
      * @return HTML email content
      */
     private fun generateNewRequestEmail(request: VulnerabilityExceptionRequest, recipientName: String): String {
-        val cveId = request.vulnerability?.vulnerabilityId ?: "Unknown CVE"
-        val assetName = request.vulnerability?.asset?.name ?: "Unknown Asset"
-        val assetIp = request.vulnerability?.asset?.ip ?: "N/A"
+        val cveId = resolveCveId(request)
+        val assetName = resolveAssetName(request)
+        val assetIp = resolveAssetIp(request)
         val requesterName = request.requestedByUsername
         val reasonSummary = if (request.reason.length > 200) {
             request.reason.substring(0, 200) + "..."
@@ -396,9 +423,9 @@ open class ExceptionRequestNotificationService(
      * multipart/alternative MIME so clients without HTML rendering still get the content.
      */
     private fun generateNewRequestTextEmail(request: VulnerabilityExceptionRequest, recipientName: String): String {
-        val cveId = request.vulnerability?.vulnerabilityId ?: "Unknown CVE"
-        val assetName = request.vulnerability?.asset?.name ?: "Unknown Asset"
-        val assetIp = request.vulnerability?.asset?.ip ?: "N/A"
+        val cveId = resolveCveId(request)
+        val assetName = resolveAssetName(request)
+        val assetIp = resolveAssetIp(request)
         val requesterName = request.requestedByUsername
         val reasonSummary = if (request.reason.length > 200) request.reason.substring(0, 200) + "..." else request.reason
         val submittedDate = request.createdAt?.format(DATE_FORMATTER) ?: "Unknown"
@@ -443,8 +470,8 @@ open class ExceptionRequestNotificationService(
      * @return HTML email content
      */
     private fun generateApprovalEmail(request: VulnerabilityExceptionRequest): String {
-        val cveId = request.vulnerability?.vulnerabilityId ?: "Unknown CVE"
-        val assetName = request.vulnerability?.asset?.name ?: "Unknown Asset"
+        val cveId = resolveCveId(request)
+        val assetName = resolveAssetName(request)
         val reviewerName = request.reviewedByUsername ?: "Unknown Reviewer"
         val reviewDate = request.reviewDate?.format(DATE_FORMATTER) ?: "Unknown"
         val reviewComment = request.reviewComment ?: "(No comment provided)"
@@ -533,8 +560,8 @@ open class ExceptionRequestNotificationService(
      * @return HTML email content
      */
     private fun generateRejectionEmail(request: VulnerabilityExceptionRequest): String {
-        val cveId = request.vulnerability?.vulnerabilityId ?: "Unknown CVE"
-        val assetName = request.vulnerability?.asset?.name ?: "Unknown Asset"
+        val cveId = resolveCveId(request)
+        val assetName = resolveAssetName(request)
         val reviewerName = request.reviewedByUsername ?: "Unknown Reviewer"
         val reviewDate = request.reviewDate?.format(DATE_FORMATTER) ?: "Unknown"
         val reviewComment = request.reviewComment ?: "(No comment provided)"
@@ -612,8 +639,8 @@ open class ExceptionRequestNotificationService(
      */
     open fun notifyAdminsAndSecChampionsOfExpiration(request: VulnerabilityExceptionRequest): CompletableFuture<Boolean> {
         val requestId = request.id
-        val cveId = request.vulnerability?.vulnerabilityId ?: "Unknown CVE"
-        val assetName = request.vulnerability?.asset?.name ?: "Unknown Asset"
+        val cveId = resolveCveId(request)
+        val assetName = resolveAssetName(request)
         val requesterName = request.requestedByUsername
         val expirationDate = request.expirationDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
         val subject = "Exception Expired: $cveId on $assetName"
@@ -797,8 +824,8 @@ open class ExceptionRequestNotificationService(
      * @return HTML email content
      */
     private fun generateExpirationReminderEmail(request: VulnerabilityExceptionRequest): String {
-        val cveId = request.vulnerability?.vulnerabilityId ?: "Unknown CVE"
-        val assetName = request.vulnerability?.asset?.name ?: "Unknown Asset"
+        val cveId = resolveCveId(request)
+        val assetName = resolveAssetName(request)
         val expirationDate = request.expirationDate.format(DateTimeFormatter.ofPattern("MMMM d, yyyy"))
 
         return """
