@@ -6,8 +6,9 @@
  * Feature 196 (two-axis subject × scope):
  *   The modal is anchored to a specific vulnerability and asset, so subject is
  *   pre-filled to CVE with the vulnerability's CVE id. The user picks a scope
- *   (this asset / all assets / specific IP / specific AWS account) using the
- *   same sentence-builder vocabulary as the create-exception form.
+ *   (this asset / all assets / specific IP / specific AWS account / specific
+ *   operating system) using the same sentence-builder vocabulary as the
+ *   create-exception form.
  *
  * Legacy SINGLE_VULNERABILITY/CVE_PATTERN scope is gone; the equivalent rows
  * are now CVE × ASSET (this asset only) and CVE × GLOBAL (all assets).
@@ -39,7 +40,7 @@ interface ExceptionRequestModalProps {
 }
 
 // UI-level scope modes — the last one maps to subject=ALL_VULNS + scope=AWS_ACCOUNT
-type ScopeMode = 'ASSET' | 'GLOBAL' | 'IP' | 'AWS_ACCOUNT' | 'ALL_VULNS_AWS_ACCOUNT';
+type ScopeMode = 'ASSET' | 'GLOBAL' | 'IP' | 'AWS_ACCOUNT' | 'OS' | 'ALL_VULNS_AWS_ACCOUNT';
 
 interface ScopeModeConfig {
     mode: ScopeMode;
@@ -50,6 +51,7 @@ interface ScopeModeConfig {
     danger?: boolean;
     needsAwsInput?: boolean;
     needsIpInput?: boolean;
+    needsOsInput?: boolean;
     subject: 'CVE' | 'ALL_VULNS';
     scope: ExceptionScope;
 }
@@ -80,6 +82,15 @@ const SCOPE_MODES: ReadonlyArray<ScopeModeConfig> = [
         needsAwsInput: true,
         subject: 'CVE',
         scope: 'AWS_ACCOUNT',
+    },
+    {
+        mode: 'OS',
+        icon: 'bi-pc-display',
+        title: 'Specific operating system',
+        description: (cveId) => `${cveId ?? 'This CVE'} on every asset whose OS contains a given text.`,
+        needsOsInput: true,
+        subject: 'CVE',
+        scope: 'OS',
     },
     {
         mode: 'GLOBAL',
@@ -265,6 +276,9 @@ const ExceptionRequestModal: React.FC<ExceptionRequestModalProps> = ({
         if (activeModeConfig.needsAwsInput && !scopeValue.trim()) {
             errors.scope = 'AWS account is required';
         }
+        if (activeModeConfig.needsOsInput && !scopeValue.trim()) {
+            errors.scope = 'Operating system text is required';
+        }
 
         setValidationErrors(errors);
         return Object.keys(errors).length === 0;
@@ -283,7 +297,7 @@ const ExceptionRequestModal: React.FC<ExceptionRequestModalProps> = ({
                 subject: activeModeConfig.subject,
                 subjectValue: activeModeConfig.subject === 'CVE' ? (vulnerabilityCveId ?? '') : null,
                 scope,
-                scopeValue: (activeModeConfig.needsIpInput || activeModeConfig.needsAwsInput) ? scopeValue.trim() : null,
+                scopeValue: (activeModeConfig.needsIpInput || activeModeConfig.needsAwsInput || activeModeConfig.needsOsInput) ? scopeValue.trim() : null,
                 assetId: scopeMode === 'ASSET' ? (assetId ?? null) : null,
                 reason: reason.trim(),
                 expirationDate: new Date(expirationDate).toISOString()
@@ -460,6 +474,24 @@ const ExceptionRequestModal: React.FC<ExceptionRequestModalProps> = ({
                                                 disabled={loading}
                                                 style={{ maxWidth: 240 }}
                                             />
+                                        </div>
+                                    )}
+                                    {activeModeConfig.needsOsInput && (
+                                        <div className="mt-2">
+                                            <label className="form-label form-label-sm" htmlFor="scope-os-input">Operating system</label>
+                                            <input
+                                                id="scope-os-input"
+                                                type="text"
+                                                className="form-control form-control-sm"
+                                                placeholder="e.g. Windows Server 2019"
+                                                value={scopeValue}
+                                                onChange={e => setScopeValue(e.target.value)}
+                                                disabled={loading}
+                                                style={{ maxWidth: 320 }}
+                                            />
+                                            <div className="form-text">
+                                                Matches every asset whose OS contains this text (case-insensitive).
+                                            </div>
                                         </div>
                                     )}
                                     {activeModeConfig.needsAwsInput && (

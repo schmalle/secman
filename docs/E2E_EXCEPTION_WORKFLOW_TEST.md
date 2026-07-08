@@ -21,6 +21,20 @@ Spec: `specs/063-e2e-vuln-exception/`. Validates the full exception lifecycle vi
 | 10 | re-query as user | sees APPROVED |
 | 11 | cleanup user + assets | clean again |
 
+## Exception axes
+
+Exceptions and exception requests use the two-axis model (Feature 196):
+subject ∈ `ALL_VULNS | PRODUCT | CVE` × scope ∈ `GLOBAL | IP | ASSET | AWS_ACCOUNT | OS`.
+`OS` scope matches `Asset.osVersion` by case-insensitive substring (e.g. scope value
+`Windows Server 2019` also matches `Windows Server 2019 Datacenter`), spanning all
+matching assets. The forbidden combination is `ALL_VULNS × GLOBAL`; `ALL_VULNS`
+requires the ADMIN or VULN role.
+
+This script exercises one lifecycle end to end; the full 28-case subject×scope matrix
+(2 actions × (3 subjects × 5 scopes − 1 forbidden)) — including CVE×OS create → approve —
+is covered by `scripts/test/test-e2e-vuln-exception-full.sh` Phase 8c and the Playwright
+UI phase.
+
 ## Prereqs
 
 Backend reachable; `curl http://localhost:8080/health` returns `UP`.

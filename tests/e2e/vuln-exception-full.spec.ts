@@ -65,7 +65,7 @@ const AWS_SHARING_RULE_ID = process.env.E2E_AWS_SHARING_RULE_ID!;
 const MATRIX_FILE = process.env.E2E_EXCEPTION_MATRIX_FILE!;
 
 type ExceptionSubject = 'ALL_VULNS' | 'PRODUCT' | 'CVE';
-type ExceptionScope = 'GLOBAL' | 'IP' | 'ASSET' | 'AWS_ACCOUNT';
+type ExceptionScope = 'GLOBAL' | 'IP' | 'ASSET' | 'AWS_ACCOUNT' | 'OS';
 type MatrixAction = 'approve' | 'reject';
 
 interface MatrixCase {
@@ -102,8 +102,8 @@ const matrixCases = matrixFixture.cases;
 const approveCases = matrixCases.filter((c) => c.action === 'approve');
 const rejectCases = matrixCases.filter((c) => c.action === 'reject');
 
-if (matrixCases.length !== 22 || approveCases.length !== 11 || rejectCases.length !== 11) {
-    throw new Error(`Invalid matrix fixture ${MATRIX_FILE}: expected 22 cases, got ${matrixCases.length}`);
+if (matrixCases.length !== 28 || approveCases.length !== 14 || rejectCases.length !== 14) {
+    throw new Error(`Invalid matrix fixture ${MATRIX_FILE}: expected 28 cases, got ${matrixCases.length}`);
 }
 
 const SUBJECT_BADGE_LABELS: Record<ExceptionSubject, string> = {
@@ -117,6 +117,7 @@ const SCOPE_BADGE_LABELS: Record<ExceptionScope, string> = {
     IP: 'IP scope',
     ASSET: '1 asset',
     AWS_ACCOUNT: 'AWS account',
+    OS: 'OS scope',
 };
 
 async function login(page: Page, username: string, password: string) {
@@ -645,6 +646,14 @@ test.describe.serial('Vulnerability + exception lifecycle (UI)', () => {
         await expect(accountPicker).toContainText(AWS_ACCOUNT_B);
         await accountPicker.selectOption(AWS_ACCOUNT_B);
         await expect(accountInput).toHaveValue(AWS_ACCOUNT_B);
+
+        // OS scope card: free-text OS substring input.
+        await page.getByRole('button', { name: /Specific operating system/i }).click();
+        const osInput = page.locator('#scope-os-input');
+        await expect(osInput).toBeVisible();
+        await expect(osInput).toHaveValue('');
+        await osInput.fill('Windows Server 2019');
+        await expect(osInput).toHaveValue('Windows Server 2019');
 
         await logout(page);
     });
