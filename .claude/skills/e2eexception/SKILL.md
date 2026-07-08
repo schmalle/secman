@@ -26,7 +26,9 @@ an 11-step MCP-based workflow:
 5. Query as user — verify no overdue vulnerabilities
 6. Add 40-day CRITICAL vulnerability (overdue)
 7. Query as user — verify overdue vulnerability exists
-8. User creates exception request
+8. User creates exception request (two-axis subject × scope model; scopes include
+   `OS` = case-insensitive substring match against `Asset.osVersion`, spanning all
+   matching assets — the full subject×scope matrix is covered by /e2evulnexception)
 9. Admin approves exception request (auto-approved if ADMIN)
 10. Verify user sees APPROVED status
 11. Cleanup test data

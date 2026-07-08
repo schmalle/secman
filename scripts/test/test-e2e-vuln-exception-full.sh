@@ -102,6 +102,11 @@ MATRIX_ASSET_PREFIX="e2e-matrix-exc"
 MATRIX_CVE_YEAR="2098"
 MATRIX_PRODUCT_PREFIX="E2E Matrix Product"
 MATRIX_AWS_ACCOUNT_BASE=900000000000
+# OS-scope cases: the asset's os_version and the exception's scope value differ in
+# case AND the scope value is a strict substring, proving the case-insensitive
+# substring match end to end. Per-case unique prefix so an approved ALL_VULNS×OS
+# exception cannot bleed onto other matrix assets.
+MATRIX_OS_PREFIX="E2E-Matrix-OS"
 MATRIX_FIXTURE_FILE="$REPO_ROOT/.e2e-logs/vuln-exception-matrix.json"
 
 # Reason text — must be ≥50 chars per CreateExceptionRequestTool
@@ -382,9 +387,11 @@ matrix_scope_value() {
     local scope="$1"
     local ip="$2"
     local aws_account="$3"
+    local os="$4"
     case "$scope" in
         IP) printf '%s' "$ip" ;;
         AWS_ACCOUNT) printf '%s' "$aws_account" ;;
+        OS) printf '%s' "$os" ;;
         *) printf '%s' "" ;;
     esac
 }
@@ -397,6 +404,7 @@ matrix_create_asset_and_vulnerability() {
     local cve="$5"
     local aws_account="$6"
     local product="$7"
+    local os_version="$8"
 
     local asset_args
     if [[ -n "$aws_account" ]]; then
@@ -418,6 +426,17 @@ matrix_create_asset_and_vulnerability() {
 
     if [[ -n "$aws_account" ]]; then
         create_user_mapping "$USER1_EMAIL" "$aws_account" "$USER1_ID" >/dev/null
+    fi
+
+    # The create_asset MCP tool has no osVersion field; set it directly so
+    # OS-scope exceptions have a deterministic matching asset (same workaround
+    # as vulnerable_product_versions below).
+    if [[ -n "$os_version" ]]; then
+        db_exec "
+            UPDATE asset
+               SET os_version='${os_version}'
+             WHERE id=${asset_id};
+        "
     fi
 
     res=$(mcp_call "add_vulnerability" "$(jq -nc \
@@ -460,6 +479,7 @@ matrix_create_request() {
     local product="${10}"
     local aws_account="${11}"
     local future_date="${12}"
+    local os_scope="${13}"
 
     local action_upper subject_lower scope_lower case_key marker reason
     action_upper=$(printf '%s' "$action" | tr '[:lower:]' '[:upper:]')
@@ -471,7 +491,7 @@ matrix_create_request() {
 
     local subject_value scope_value request_args res request_id status
     subject_value=$(matrix_case_subject_value "$subject" "$cve" "$product")
-    scope_value=$(matrix_scope_value "$scope" "$asset_ip" "$aws_account")
+    scope_value=$(matrix_scope_value "$scope" "$asset_ip" "$aws_account" "$os_scope")
 
     request_args=$(jq -nc \
         --arg vid "$vuln_id" \
@@ -795,7 +815,7 @@ run_phase_8c_exception_matrix_seed() {
     ok "Forbidden ALL_VULNS × GLOBAL rejected via MCP validate-only (code=$err_code)"
 
     local subjects=("ALL_VULNS" "PRODUCT" "CVE")
-    local scopes=("GLOBAL" "IP" "ASSET" "AWS_ACCOUNT")
+    local scopes=("GLOBAL" "IP" "ASSET" "AWS_ACCOUNT" "OS")
     local action subject scope case_index=0
 
     for action in approve reject; do
@@ -819,13 +839,21 @@ run_phase_8c_exception_matrix_seed() {
                 if [[ "$scope" == "AWS_ACCOUNT" ]]; then
                     aws_account="$((MATRIX_AWS_ACCOUNT_BASE + case_index))"
                 fi
+                local os_scope="" asset_os=""
+                if [[ "$scope" == "OS" ]]; then
+                    # Scope value is a strict, case-differing substring of the
+                    # asset's os_version — proves case-insensitive substring
+                    # matching through the real SQL path.
+                    os_scope="${MATRIX_OS_PREFIX}-${case_index} server 2019"
+                    asset_os="${MATRIX_OS_PREFIX}-${case_index} Server 2019 Datacenter"
+                fi
 
-                ids=$(matrix_create_asset_and_vulnerability "$case_index" "$case_key" "$asset_name" "$ip" "$cve" "$aws_account" "$product")
+                ids=$(matrix_create_asset_and_vulnerability "$case_index" "$case_key" "$asset_name" "$ip" "$cve" "$aws_account" "$product" "$asset_os")
                 asset_id=$(echo "$ids" | jq -r '.assetId')
                 vuln_id=$(echo "$ids" | jq -r '.vulnerabilityId')
                 matrix_create_request \
                     "$action" "$subject" "$scope" "$case_index" \
-                    "$asset_id" "$asset_name" "$ip" "$vuln_id" "$cve" "$product" "$aws_account" "$future_date"
+                    "$asset_id" "$asset_name" "$ip" "$vuln_id" "$cve" "$product" "$aws_account" "$future_date" "$os_scope"
             done
         done
     done
@@ -834,7 +862,7 @@ run_phase_8c_exception_matrix_seed() {
     matrix_count=$(jq '.cases | length' "$MATRIX_FIXTURE_FILE")
     approve_count=$(jq '[.cases[] | select(.action == "approve")] | length' "$MATRIX_FIXTURE_FILE")
     reject_count=$(jq '[.cases[] | select(.action == "reject")] | length' "$MATRIX_FIXTURE_FILE")
-    [[ "$matrix_count" == "22" && "$approve_count" == "11" && "$reject_count" == "11" ]] \
+    [[ "$matrix_count" == "28" && "$approve_count" == "14" && "$reject_count" == "14" ]] \
         || fail "Matrix fixture count mismatch total=${matrix_count} approve=${approve_count} reject=${reject_count}"
 
     res=$(mcp_call "get_pending_exception_requests" '{"page":0,"size":100}' "$ADMIN_USER_EMAIL")
@@ -844,8 +872,8 @@ run_phase_8c_exception_matrix_seed() {
         | map(select((.id as $id | $ids | map(tostring) | index($id|tostring)) != null))
         | length
     ' <<<"$res")
-    [[ "$pending_count" == "22" ]] || fail "Admin pending list has ${pending_count}/22 matrix requests"
-    ok "Seeded 22 pending matrix requests in $MATRIX_FIXTURE_FILE"
+    [[ "$pending_count" == "28" ]] || fail "Admin pending list has ${pending_count}/28 matrix requests"
+    ok "Seeded 28 pending matrix requests in $MATRIX_FIXTURE_FILE"
 
     # Negative: rejection must require a comment.
     local first_reject_id
