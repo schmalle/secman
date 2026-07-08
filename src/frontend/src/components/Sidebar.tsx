@@ -366,6 +366,15 @@ const Sidebar = () => {
                                         </a>
                                     </li>
                                 )}
+                                {/* GitHub repos - ADMIN, VULN, or SECCHAMPION (mirrors GET /api/github/repositories) */}
+                                {(userRoles.includes('ADMIN') || userRoles.includes('VULN') || userRoles.includes('SECCHAMPION')) && (
+                                    <li>
+                                        <a href="/github-repos" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary"
+                                            title="GitHub repositories with their open high/critical Dependabot alerts">
+                                            <i className="bi bi-github me-2"></i> GitHub
+                                        </a>
+                                    </li>
+                                )}
                             </ul>
                         )}
                     </li>
@@ -520,6 +529,11 @@ const Sidebar = () => {
                                 <li>
                                     <a href="/admin/falcon-config" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
                                         <i className="bi bi-shield-lock me-2"></i> CrowdStrike Falcon
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="/admin/github-config" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-github me-2"></i> GitHub App
                                     </a>
                                 </li>
                                 <li>

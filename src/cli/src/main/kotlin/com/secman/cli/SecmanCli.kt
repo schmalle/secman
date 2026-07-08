@@ -2,6 +2,7 @@ package com.secman.cli
 
 import com.secman.cli.commands.AddRequirementCommand
 import com.secman.cli.commands.AddVulnerabilityCommand
+import com.secman.cli.commands.AlertGithubRepoOwnersCommand
 import com.secman.cli.commands.AssetMatchClearCommand
 import com.secman.cli.commands.ConfigCommand
 import com.secman.cli.commands.CrowdStrikeLastImportCommand
@@ -9,6 +10,7 @@ import com.secman.cli.commands.DeduplicateVulnerabilitiesCommand
 import com.secman.cli.commands.DeleteAssetNotSeenCommand
 import com.secman.cli.commands.DeleteAllRequirementsCommand
 import com.secman.cli.commands.ExportRequirementsCommand
+import com.secman.cli.commands.ImportGithubReposCommand
 import com.secman.cli.commands.InstalledProductsCommand
 import com.secman.cli.commands.ManageUserMappingsCommand
 import com.secman.cli.commands.ManageWorkgroupsCommand
@@ -405,6 +407,22 @@ class SecmanCli {
                 }
                 0
             }
+            args[0] == "import-github-repos" -> {
+                // Import GitHub repositories via the configured GitHub App (backend-side)
+                val subArgs = args.drop(1).toTypedArray()
+                createCliContext().use { ctx ->
+                    PicocliRunner.run(ImportGithubReposCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
+            args[0] == "alert-github-repo-owners" -> {
+                // Alert repo owners whose high/critical vuln count has not decreased in N days
+                val subArgs = args.drop(1).toTypedArray()
+                createCliContext().use { ctx ->
+                    PicocliRunner.run(AlertGithubRepoOwnersCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
             else -> {
                 System.err.println("ERROR: Unknown command: '${args[0]}'")
 
@@ -461,6 +479,8 @@ class SecmanCli {
 
               GitHub:
                 query dependabot-alerts  Query GitHub Dependabot alerts (org or repo) and store them in secman
+                import-github-repos    Import GitHub repositories via the configured GitHub App (ADMIN)
+                alert-github-repo-owners  Alert repo owners whose high/critical vuln count has not decreased (ADMIN)
 
               Scanning:
                 port-scan              Port-scan internet-facing assets using nmap
@@ -754,6 +774,72 @@ class SecmanCli {
                   secman send-patch-notifications a
                   secman send-patch-notifications m --days 60 --verbose
                   secman send-patch-notifications s --days 14 --dry-run
+            """.trimIndent(),
+
+            "import-github-repos" to """
+                secman import-github-repos - Import GitHub repositories via the configured GitHub App
+
+                Usage: secman import-github-repos [options]
+
+                Options:
+                  --verbose, -v            Detailed logging (list per-repo errors and disabled repos)
+                  --username <user>        Backend username (or SECMAN_ADMIN_NAME env var)
+                  --password <pass>        Backend password (or SECMAN_ADMIN_PASS env var)
+                  --backend-url <url>      Backend API URL (or SECMAN_HOST / SECMAN_BACKEND_URL env var)
+
+                Description:
+                  Triggers the backend to import every repository accessible to the GitHub App
+                  configured under Admin -> GitHub App. For each repository the backend fetches
+                  the open Dependabot alerts, stores the high/critical counts on the repository
+                  record and writes one finding snapshot per run. Those snapshots are the
+                  history that alert-github-repo-owners compares against.
+
+                  The GitHub credentials live in the backend (encrypted); this command needs
+                  only secman ADMIN credentials. Requires an active GitHub App configuration.
+                  Re-runs upsert by the stable GitHub repository id (rename-safe).
+
+                Exit codes:
+                  0  import completed without errors
+                  1  import failed or completed with per-repo errors
+
+                Examples:
+                  secman import-github-repos
+                  secman import-github-repos --verbose
+            """.trimIndent(),
+
+            "alert-github-repo-owners" to """
+                secman alert-github-repo-owners - Alert repo owners about non-decreasing vulnerabilities
+
+                Usage: secman alert-github-repo-owners [options]
+
+                Options:
+                  --days <number>          Comparison window in days (default: 30)
+                  --dry-run                Preview planned alerts without sending emails
+                  --verbose, -v            Detailed logging (show per-recipient status)
+                  --username <user>        Backend username (or SECMAN_ADMIN_NAME env var)
+                  --password <pass>        Backend password (or SECMAN_ADMIN_PASS env var)
+                  --backend-url <url>      Backend API URL (or SECMAN_HOST / SECMAN_BACKEND_URL env var)
+
+                Description:
+                  For every imported GitHub repository, compares the current open high+critical
+                  Dependabot alert count against the newest import snapshot at least --days old.
+                  When the count is still greater than zero and has NOT decreased, the repo's
+                  owner email receives one consolidated alert listing all such repos.
+
+                  Repositories with an active alert exception are skipped (reported as excepted).
+                  Repositories without an owner email are reported as unmapped. Repositories
+                  without a snapshot old enough are reported as skipped (insufficient history).
+                  Run import-github-repos regularly (e.g. daily via cron) to build the history.
+
+                Exit codes:
+                  0  alerts sent (or dry run) without failures
+                  1  alert run failed or some emails failed
+                  2  usage error (e.g. --days < 1)
+
+                Examples:
+                  secman alert-github-repo-owners --dry-run
+                  secman alert-github-repo-owners
+                  secman alert-github-repo-owners --days 60 --verbose
             """.trimIndent(),
 
             "manage-user-mappings" to """

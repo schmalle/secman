@@ -5,6 +5,7 @@ import com.secman.repository.OutdatedAssetMaterializedViewRepository
 import com.secman.repository.UserMappingRepository
 import com.secman.service.AdminSummaryService
 import com.secman.service.AwsAccountRecipientResolver
+import com.secman.service.GithubRepoAlertService
 import com.secman.service.NewAccountNotificationService
 import com.secman.service.NotificationService
 import com.secman.service.UserMappingStatisticsService
@@ -43,7 +44,8 @@ class CliController(
     private val userMappingStatisticsService: UserMappingStatisticsService,
     private val applicationRegisterReminderService: ApplicationRegisterReminderService,
     private val newAccountNotificationService: NewAccountNotificationService,
-    private val recipientResolver: AwsAccountRecipientResolver
+    private val recipientResolver: AwsAccountRecipientResolver,
+    private val githubRepoAlertService: GithubRepoAlertService
 ) {
     private val logger = LoggerFactory.getLogger(CliController::class.java)
 
@@ -570,6 +572,45 @@ class CliController(
         } catch (e: Exception) {
             logger.error("Error sending new-account notifications", e)
             HttpResponse.serverError()
+        }
+    }
+
+    // --- GitHub Repo Alert Endpoints ---
+
+    @Serdeable
+    data class SendGithubRepoAlertsRequest(
+        val dryRun: Boolean = false,
+        val thresholdDays: Int = 30
+    )
+
+    /**
+     * POST /api/cli/github-repo-alerts/send
+     *
+     * Alerts GitHub repo owners whose open high+critical Dependabot alert
+     * count has not decreased over the last thresholdDays days. Backing for
+     * CLI `alert-github-repo-owners` and MCP `send_github_repo_alerts`.
+     */
+    @Post("/github-repo-alerts/send")
+    @Produces(MediaType.APPLICATION_JSON)
+    fun sendGithubRepoAlerts(
+        @Body request: SendGithubRepoAlertsRequest,
+        authentication: Authentication
+    ): HttpResponse<*> {
+        logger.info("CLI github-repo-alerts requested by user: {} (dryRun={}, thresholdDays={})",
+            authentication.name, request.dryRun, request.thresholdDays)
+
+        if (request.thresholdDays < 1) {
+            return HttpResponse.badRequest(mapOf("error" to "thresholdDays must be >= 1"))
+        }
+        return try {
+            val result = githubRepoAlertService.sendGithubRepoAlerts(
+                dryRun = request.dryRun,
+                thresholdDays = request.thresholdDays
+            )
+            HttpResponse.ok(result)
+        } catch (e: Exception) {
+            logger.error("Error sending GitHub repo alerts", e)
+            HttpResponse.serverError(mapOf("error" to (e.message ?: "Alert run failed")))
         }
     }
 

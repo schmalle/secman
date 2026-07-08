@@ -1,0 +1,11 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import GithubConfigManagement from '../../components/GithubConfigManagement';
+---
+
+<Layout title="GitHub App Configuration - Admin">
+  <GithubConfigManagement client:load />
+  <div class="mt-4">
+    <a href="/admin" class="btn btn-secondary">Back to Admin</a>
+  </div>
+</Layout>

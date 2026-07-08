@@ -192,6 +192,21 @@ const AdminPage = () => {
                     <div className="card">
                         <div className="card-body">
                             <h5 className="card-title">
+                                <i className="bi bi-github me-2"></i>
+                                GitHub App
+                            </h5>
+                            <p className="card-text">Configure GitHub App credentials for importing repositories and Dependabot alert counts.</p>
+                            <a href="/admin/github-config" className="btn btn-primary">
+                                Configure GitHub App
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="col-md-4 mb-3">
+                    <div className="card">
+                        <div className="card-body">
+                            <h5 className="card-title">
                                 <i className="bi bi-shield-exclamation me-2"></i>
                                 Vulnerability Settings
                             </h5>

@@ -110,7 +110,10 @@ class McpToolRegistry(
     @Inject private val sendOutdatedNotificationsTool: SendOutdatedNotificationsTool,
     @Inject private val sendVulnerabilityNotificationsTool: SendVulnerabilityNotificationsTool,
     @Inject private val sendApplicationRegisterRemindersTool: SendApplicationRegisterRemindersTool,
-    @Inject private val assetMatchClearTool: AssetMatchClearTool
+    @Inject private val assetMatchClearTool: AssetMatchClearTool,
+    // Feature: GitHub repo vulnerability management
+    @Inject private val importGithubReposTool: ImportGithubReposTool,
+    @Inject private val sendGithubRepoAlertsTool: SendGithubRepoAlertsTool
 ) {
     private val logger = LoggerFactory.getLogger(McpToolRegistry::class.java)
 
@@ -217,7 +220,10 @@ class McpToolRegistry(
             sendOutdatedNotificationsTool,
             sendVulnerabilityNotificationsTool,
             sendApplicationRegisterRemindersTool,
-            assetMatchClearTool
+            assetMatchClearTool,
+            // Feature: GitHub repo vulnerability management
+            importGithubReposTool,
+            sendGithubRepoAlertsTool
         ).forEach { tool ->
             toolMap[tool.name] = tool
             logger.debug("Registered MCP tool: {}", tool.name)
@@ -526,6 +532,14 @@ class McpToolRegistry(
             }
             "asset_match_clear" -> {
                 permissions.contains(McpPermission.ASSETS_READ) // ADMIN role checked in tool execute()
+            }
+
+            // Feature: GitHub repo vulnerability management
+            "import_github_repos" -> {
+                permissions.contains(McpPermission.VULNERABILITIES_READ) // ADMIN/VULN role checked in tool execute()
+            }
+            "send_github_repo_alerts" -> {
+                permissions.contains(McpPermission.NOTIFICATIONS_SEND) // ADMIN role checked in tool execute()
             }
 
             else -> false
