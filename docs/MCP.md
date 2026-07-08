@@ -212,6 +212,10 @@ curl -XPOST http://localhost:8080/mcp \
 - **`send_admin_summary`** (ADMIN) — same payload as CLI `send-admin-summary`.
 - **`send_patch_notifications`** (ADMIN) — notify users about missing patches (overdue vulnerabilities), filtered by the first character of their email. Args: `emailPrefix`* (e.g. `"a"`), `days` (default `30`), `dryRun` (default `false`). Mirrors CLI `send-patch-notifications`. Requires User Delegation.
 
+### GitHub repositories (delegation)
+- **`import_github_repos`** (ADMIN/VULN) — imports every repository accessible via the configured GitHub App, including each repo's open high/critical Dependabot alert counts, and writes one finding snapshot per run (the 30-day history). No arguments. API-key permission: `VULNERABILITIES_READ`. Errors: `NO_GITHUB_CONFIG` when no active GitHub App configuration exists (Admin → GitHub App). Mirrors CLI `import-github-repos`. Requires User Delegation.
+- **`send_github_repo_alerts`** (ADMIN) — alerts GitHub repo owners whose open high+critical count has not decreased over the last `thresholdDays` days (baseline = newest snapshot at least that old; alert when current `> 0` and `>=` baseline). Args: `dryRun` (default `false`), `thresholdDays` (default `30`). Result includes `reposAlerted`, `reposExcepted[]` (active `github_repo_alert_exception`), `unmappedRepos[]` (no `ownerEmail`), `reposSkippedInsufficientHistory[]`, `recipients[]`. API-key permission: `NOTIFICATIONS_SEND`. Mirrors CLI `alert-github-repo-owners`. Requires User Delegation. See `docs/GITHUB_REPOS.md`.
+
 ## Programmatic example (Python)
 
 ```python

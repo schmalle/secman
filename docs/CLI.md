@@ -137,6 +137,45 @@ GITHUB_TOKEN=ghp_xxx ./scripts/secman query dependabot-alerts --org my-org --sav
 
 Backend auth (only with `--save`): `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS` (ADMIN or VULN role). GitHub pagination is followed automatically (100/page). See `docs/DEPENDABOT.md` for the full feature and the alert field mapping.
 
+### `import-github-repos` — GitHub repository import via GitHub App
+
+Triggers the backend to import every repository accessible to the **GitHub App** configured under **Admin → GitHub App** (`POST /api/github/import`). For each repository, the backend fetches the open Dependabot alerts, stores the high/critical counts on the repository record (with `lastImportAt` / `lastHighCriticalFindingAt`) and writes one finding snapshot per run — the history behind `alert-github-repo-owners`. Repos surface in the UI under **Vulnerability Management → GitHub**.
+
+Unlike `query dependabot-alerts`, the GitHub credentials live in the backend (encrypted); this command needs only secman credentials. Re-runs upsert by the stable numeric GitHub repository id (rename-safe). Run it regularly (e.g. daily via cron) to build the 30-day comparison history.
+
+```bash
+./scripts/secman import-github-repos
+./scripts/secman import-github-repos --verbose
+```
+
+| Option | Default | Notes |
+|---|---|---|
+| `--verbose` | false | list per-repo errors and repos with alerts disabled |
+| `--backend-url` | `SECMAN_HOST`, `SECMAN_BACKEND_URL`, then `http://localhost:8080` | backend API URL |
+| `--username` / `--password` | `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS` | ADMIN (the REST endpoint also accepts VULN) |
+
+Exit codes: `0` clean import, `1` failed or completed with per-repo errors (fails when no active GitHub App configuration exists). Repos with Dependabot alerts disabled/inaccessible are recorded with 0/0 counts and listed in the summary — they do not fail the run. See `docs/GITHUB_REPOS.md`.
+
+### `alert-github-repo-owners` — 30-day non-decrease alerting
+
+Alerts GitHub repo owners whose open **high+critical** Dependabot alert count has **not decreased** over the last `--days` days (`POST /api/cli/github-repo-alerts/send`). The baseline is the newest import snapshot at least that old; a repo alerts when its current count is `> 0` and `>=` the baseline. One consolidated email per owner (`ownerEmail` on the repository — editable in the UI).
+
+```bash
+./scripts/secman alert-github-repo-owners --dry-run
+./scripts/secman alert-github-repo-owners
+./scripts/secman alert-github-repo-owners --days 60 --verbose
+```
+
+| Option | Default | Notes |
+|---|---|---|
+| `--days` | 30 | comparison window |
+| `--dry-run` | false | compute + print recipients, send nothing |
+| `--verbose` | false | per-recipient status |
+| `--backend-url` | `SECMAN_HOST`, `SECMAN_BACKEND_URL`, then `http://localhost:8080` | backend API URL |
+| `--username` / `--password` | `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS` | ADMIN role required |
+
+The summary reports three special buckets: **excepted** repos (active `github_repo_alert_exception` — managed in the GitHub view), **unmapped** repos (non-decreasing but no `ownerEmail`), and **skipped** repos (no snapshot ≥ `--days` old yet — run the import regularly). Exit codes: `0` success/dry-run, `1` failure or partial failure, `2` usage error. Pure DB operation — no GitHub access needed. See `docs/GITHUB_REPOS.md`.
+
 ### `delete-asset-not-seen` — CrowdStrike stale asset cleanup
 
 Deletes assets that have not appeared in a CrowdStrike import for more than N days. Always run `--dry-run` first.

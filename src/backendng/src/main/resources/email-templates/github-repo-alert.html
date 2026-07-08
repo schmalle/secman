@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>GitHub Repository Vulnerability Alert</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                line-height: 1.6;
+                color: #333;
+                max-width: 700px;
+                margin: 0 auto;
+                padding: 20px;
+            }
+            .header {
+                background-color: #24292f;
+                color: white;
+                padding: 20px;
+                text-align: center;
+                border-radius: 5px 5px 0 0;
+            }
+            .content {
+                background-color: #f8f9fa;
+                padding: 20px;
+                border-radius: 0 0 5px 5px;
+            }
+            .alert-box {
+                background-color: #fff3cd;
+                border-left: 4px solid #e65100;
+                padding: 15px;
+                margin: 20px 0;
+            }
+            .summary-box {
+                background-color: white;
+                border-radius: 5px;
+                padding: 20px;
+                margin: 20px 0;
+            }
+            .footer {
+                text-align: center;
+                color: #6c757d;
+                font-size: 12px;
+                margin-top: 30px;
+                padding-top: 20px;
+                border-top: 1px solid #ddd;
+            }
+        </style>
+    </head>
+    <body>
+        <img
+            src="cid:secman-logo"
+            alt="SecMan Logo"
+            style="max-width: 180px; margin-bottom: 10px;"
+        />
+        <div class="header">
+            <h1 style="margin: 0;">GitHub Repository Vulnerability Alert</h1>
+            <p style="margin: 5px 0 0;">Vulnerabilities Not Decreasing</p>
+        </div>
+
+        <div class="content">
+            <p>Hello ${userEmail},</p>
+
+            <div class="alert-box">
+                <strong>Attention:</strong> <strong>${repoCount}</strong> of your GitHub
+                repositories still have as many (or more) open <strong>high/critical</strong>
+                vulnerabilities as <strong>${thresholdDays} days</strong> ago.
+            </div>
+
+            <div class="summary-box">
+                <h3 style="margin-top: 0;">Affected Repositories</h3>
+                <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                    <tr style="background-color: #e9ecef;">
+                        <th style="padding: 10px 12px; text-align: left;">Repository</th>
+                        <th style="padding: 10px 12px; text-align: center;">Critical now</th>
+                        <th style="padding: 10px 12px; text-align: center;">High now</th>
+                        <th style="padding: 10px 12px; text-align: center;">Critical then</th>
+                        <th style="padding: 10px 12px; text-align: center;">High then</th>
+                        <th style="padding: 10px 12px; text-align: center;">Baseline date</th>
+                    </tr>
+                    ${repoTableRows}
+                </table>
+            </div>
+
+            <p>
+                Please review the open Dependabot alerts in these repositories and
+                remediate or dismiss them. Vulnerabilities that remain open beyond the
+                acceptable timeframe may pose security and compliance risks.
+            </p>
+
+            <div class="footer">
+                This is an automated notification from the Security Management System.<br />
+                Do not reply to this email.
+            </div>
+        </div>
+    </body>
+</html>

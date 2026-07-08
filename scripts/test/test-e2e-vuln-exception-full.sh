@@ -53,6 +53,7 @@ ADMIN_PASSWORD="$(printf '%s' "${SECMAN_ADMIN_PASS:-}" | tr -d '\r\n')"
 VERBOSE="${VERBOSE:-false}"
 SKIP_UI="${SKIP_UI:-false}"
 RUN_PHASE10="${RUN_PHASE10:-true}"
+RUN_PHASE8D="${RUN_PHASE8D:-true}"
 MCP_ONLY=false
 UI_ONLY=false
 
@@ -173,6 +174,7 @@ Environment:
     SECMAN_ADMIN_PASS     Admin password (required for UI phase)
     SKIP_UI=true          Skip Playwright UI phase
     RUN_PHASE10=false     Skip Phase 10 (import/export/delete-all)
+    RUN_PHASE8D=false     Skip Phase 8d (GitHub repo MCP tools)
     VERBOSE=true          Debug logging
 EOF
     exit 0
@@ -184,6 +186,7 @@ while [[ $# -gt 0 ]]; do
         --verbose|-v) VERBOSE=true; shift ;;
         --skip-ui)    SKIP_UI=true; shift ;;
         --skip-phase10) RUN_PHASE10=false; shift ;;
+        --skip-phase8d) RUN_PHASE8D=false; shift ;;
         --mcp-only) MCP_ONLY=true; shift ;;
         --ui-only) UI_ONLY=true; shift ;;
         *) warn "Unknown option: $1"; shift ;;
@@ -1464,6 +1467,62 @@ else
     err_code=$(echo "$err" | jq -r '.code // empty')
     [[ -n "$err_code" ]] || fail "send_patch_notifications as non-admin was NOT denied: $err"
     ok "send_patch_notifications denied for non-admin user (code=$err_code)"
+fi
+
+# =============================================================================
+# Phase 8d: GitHub repo vulnerability management MCP tools
+# =============================================================================
+# Exercises send_github_repo_alerts (dry-run + non-admin negative) and
+# import_github_repos (non-admin negative + deterministic no-config negative).
+# No GitHub network access is needed: the alert run is a pure DB operation and
+# the import negative only fires when this instance has NO active GitHub App
+# configuration (otherwise it is skipped to avoid a real import mid-test).
+
+if [[ "$UI_ONLY" == "true" ]]; then
+    record_skip "Phase 8d (GitHub repo MCP tools)" "--ui-only"
+elif [[ "$RUN_PHASE8D" != "true" ]]; then
+    record_skip "Phase 8d (GitHub repo MCP tools)" "RUN_PHASE8D=false or --skip-phase8d"
+else
+    log "=== Phase 8d: GitHub repo MCP tools (dry-run + negatives) ==="
+
+    # 8d.1 Admin dry-run → must succeed with status DRY_RUN and send nothing.
+    res=$(mcp_call "send_github_repo_alerts" '{"dryRun":true,"thresholdDays":30}' "$ADMIN_USER_EMAIL")
+    gh_status=$(echo "$res" | jq -r '.status // "MISSING"')
+    gh_sent=$(echo "$res" | jq -r '.emailsSent // "MISSING"')
+    [[ "$gh_status" == "DRY_RUN" ]] || fail "send_github_repo_alerts dry-run: expected status DRY_RUN, got '$gh_status'"
+    [[ "$gh_sent" == "0" ]] || fail "send_github_repo_alerts dry-run: expected emailsSent 0, got '$gh_sent'"
+    ok "Admin send_github_repo_alerts dry-run returned DRY_RUN (0 emails sent)"
+
+    # 8d.2 Negative: invalid thresholdDays → error code.
+    err=$(mcp_call "send_github_repo_alerts" '{"dryRun":true,"thresholdDays":0}' "$ADMIN_USER_EMAIL" --allow-error)
+    err_code=$(echo "$err" | jq -r '.code // empty')
+    [[ -n "$err_code" ]] || fail "send_github_repo_alerts with thresholdDays=0 was NOT rejected: $err"
+    ok "send_github_repo_alerts with thresholdDays=0 is rejected (code=$err_code)"
+
+    # 8d.3 Negative: non-admin delegated user → denied (ADMIN_REQUIRED).
+    err=$(mcp_call "send_github_repo_alerts" '{"dryRun":true}' "$USER1_EMAIL" --allow-error)
+    err_code=$(echo "$err" | jq -r '.code // empty')
+    [[ -n "$err_code" ]] || fail "send_github_repo_alerts as non-admin was NOT denied: $err"
+    ok "send_github_repo_alerts denied for non-admin user (code=$err_code)"
+
+    # 8d.4 Negative: non-admin/non-VULN user cannot import.
+    # Note: e2etestuser1 has the VULN role, so delegate as a plain-user negative is
+    # not possible with the standard testbed — assert the no-config path instead
+    # (below) and rely on the integration tests for the role matrix.
+    admin_jwt=$(get_jwt "$ADMIN_USERNAME" "$ADMIN_PASSWORD")
+    active_code=$(curl -s -o /dev/null -w "%{http_code}" \
+        -H "Authorization: Bearer ${admin_jwt}" "${BASE_URL}/api/github-config/active")
+    if [[ "$active_code" == "404" ]]; then
+        # 8d.5 No active GitHub App config → import must fail with NO_GITHUB_CONFIG.
+        err=$(mcp_call "import_github_repos" '{}' "$ADMIN_USER_EMAIL" --allow-error)
+        err_code=$(echo "$err" | jq -r '.code // empty')
+        err_msg=$(echo "$err" | jq -r '.message // empty')
+        [[ -n "$err_code" ]] || fail "import_github_repos without active config was NOT rejected: $err"
+        echo "$err_msg" | grep -qi "github app" || warn "import_github_repos error message unexpected: $err_msg"
+        ok "import_github_repos without active GitHub App config is rejected (code=$err_code)"
+    else
+        record_skip "Phase 8d.5 (import_github_repos no-config negative)" "an active GitHub App config exists (HTTP $active_code)"
+    fi
 fi
 
 # =============================================================================
