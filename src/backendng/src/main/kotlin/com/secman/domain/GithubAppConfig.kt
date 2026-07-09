@@ -86,7 +86,8 @@ data class GithubAppConfig(
         } else if (!privateKeyPem.contains("PRIVATE KEY")) {
             errors.add("Private key must be a PEM-encoded RSA key (BEGIN [RSA] PRIVATE KEY)")
         }
-        if (installationId != null && installationId.isNotBlank() && !installationId.all { it.isDigit() }) {
+        val installationIdValue = installationId
+        if (installationIdValue != null && installationIdValue.isNotBlank() && !installationIdValue.all { it.isDigit() }) {
             errors.add("Installation ID must be numeric")
         }
         return errors

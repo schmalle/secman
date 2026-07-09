@@ -431,6 +431,21 @@ interface AssetRepository : JpaRepository<Asset, Long> {
     """)
     fun findDistinctCloudAccountIds(): List<String>
 
+    /**
+     * Find distinct OS versions from all assets
+     * Used to populate the operating-system exception scope input
+     *
+     * @return List of distinct OS version strings (non-null, non-empty), ordered alphabetically
+     */
+    @io.micronaut.data.annotation.Query("""
+        SELECT DISTINCT a.osVersion
+        FROM Asset a
+        WHERE a.osVersion IS NOT NULL
+        AND a.osVersion != ''
+        ORDER BY a.osVersion
+    """)
+    fun findDistinctOsVersions(): List<String>
+
     // Database Optimization - Feature: Database Structure Optimization
 
     /**

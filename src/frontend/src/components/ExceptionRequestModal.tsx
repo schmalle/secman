@@ -22,6 +22,7 @@ import {
 import {
     getValidCombinations,
     getAccessibleAwsAccounts,
+    getOsVersions,
     type ExceptionScope,
     type ValidCombinationsResponse
 } from '../services/vulnerabilityManagementService';
@@ -141,6 +142,8 @@ const ExceptionRequestModal: React.FC<ExceptionRequestModalProps> = ({
     const [combos, setCombos] = useState<ValidCombinationsResponse | null>(null);
     const [awsAccounts, setAwsAccounts] = useState<string[]>([]);
     const [loadingAwsAccounts, setLoadingAwsAccounts] = useState(false);
+    const [osVersions, setOsVersions] = useState<string[]>([]);
+    const [loadingOsVersions, setLoadingOsVersions] = useState(false);
 
     const activeModeConfig = SCOPE_MODES.find(m => m.mode === scopeMode)!;
     const scope: ExceptionScope = activeModeConfig.scope;
@@ -179,6 +182,20 @@ const ExceptionRequestModal: React.FC<ExceptionRequestModalProps> = ({
                 console.error('Failed to fetch AWS accounts:', err);
             })
             .finally(() => { if (!cancelled) setLoadingAwsAccounts(false); });
+        return () => { cancelled = true; };
+    }, [isOpen, scopeMode]);
+
+    // Load OS versions when the OS scope is chosen.
+    useEffect(() => {
+        if (!isOpen || !activeModeConfig.needsOsInput) return;
+        let cancelled = false;
+        setLoadingOsVersions(true);
+        getOsVersions()
+            .then(data => { if (!cancelled) setOsVersions(data); })
+            .catch(err => {
+                console.error('Failed to fetch OS versions:', err);
+            })
+            .finally(() => { if (!cancelled) setLoadingOsVersions(false); });
         return () => { cancelled = true; };
     }, [isOpen, scopeMode]);
 
@@ -479,18 +496,41 @@ const ExceptionRequestModal: React.FC<ExceptionRequestModalProps> = ({
                                     {activeModeConfig.needsOsInput && (
                                         <div className="mt-2">
                                             <label className="form-label form-label-sm" htmlFor="scope-os-input">Operating system</label>
-                                            <input
-                                                id="scope-os-input"
-                                                type="text"
-                                                className="form-control form-control-sm"
-                                                placeholder="e.g. Windows Server 2019"
-                                                value={scopeValue}
-                                                onChange={e => setScopeValue(e.target.value)}
-                                                disabled={loading}
-                                                style={{ maxWidth: 320 }}
-                                            />
+                                            <div className="d-flex gap-2 flex-wrap align-items-center">
+                                                <input
+                                                    id="scope-os-input"
+                                                    type="text"
+                                                    className="form-control form-control-sm"
+                                                    placeholder="e.g. Windows Server 2019"
+                                                    value={scopeValue}
+                                                    onChange={e => setScopeValue(e.target.value)}
+                                                    disabled={loading || loadingOsVersions}
+                                                    list="os-version-request-options"
+                                                    autoComplete="off"
+                                                    style={{ maxWidth: 320 }}
+                                                />
+                                                <datalist id="os-version-request-options">
+                                                    {osVersions.map(os => <option key={os} value={os} />)}
+                                                </datalist>
+                                                {osVersions.length > 0 && (
+                                                    <select
+                                                        className="form-select form-select-sm"
+                                                        style={{ width: 'auto', minWidth: 180 }}
+                                                        value={scopeValue}
+                                                        onChange={e => setScopeValue(e.target.value)}
+                                                        disabled={loading || loadingOsVersions}
+                                                        aria-label="Known operating systems"
+                                                    >
+                                                        <option value="">— pick OS —</option>
+                                                        {osVersions.map(os => <option key={os} value={os}>{os}</option>)}
+                                                    </select>
+                                                )}
+                                                {loadingOsVersions && (
+                                                    <span className="spinner-border spinner-border-sm text-secondary" role="status" aria-label="Loading operating systems" />
+                                                )}
+                                            </div>
                                             <div className="form-text">
-                                                Matches every asset whose OS contains this text (case-insensitive).
+                                                Matches every asset whose OS contains this text (case-insensitive). Pick a known value or type your own substring.
                                             </div>
                                         </div>
                                     )}
