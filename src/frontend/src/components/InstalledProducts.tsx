@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import HtmlEditor from './admin/HtmlEditor';
-import { getInstalledProducts, getInstalledProductsByServer, type InstalledProductResponse } from '../services/installedProductService';
+import { getInstalledProducts, getInstalledProductsByServer, getInstalledProductNames, type InstalledProductResponse } from '../services/installedProductService';
 import {
   createProductBroadcast,
   getProductRecipientCount,
@@ -25,6 +25,7 @@ const InstalledProducts: React.FC = () => {
   const [notifyJob, setNotifyJob] = useState<EmailBroadcastJob | null>(null);
   const [notifyError, setNotifyError] = useState<string | null>(null);
   const [canNotifyUsers] = useState(() => canNotifyProductUsers(getUser()?.roles));
+  const [productNames, setProductNames] = useState<string[]>([]);
 
   const notifyProductName = products.length > 0 ? products[0].name : search.trim();
 
@@ -47,6 +48,12 @@ const InstalledProducts: React.FC = () => {
 
     return () => window.clearTimeout(timeout);
   }, [search, serverSearch]);
+
+  useEffect(() => {
+    getInstalledProductNames()
+      .then(setProductNames)
+      .catch((err) => console.error('Failed to load installed product names:', err));
+  }, []);
 
   const openNotifyModal = async (productName: string) => {
     setNotifyProduct(productName);
@@ -133,11 +140,17 @@ const InstalledProducts: React.FC = () => {
                     <input
                       id="installed-product-search"
                       className="form-control"
+                      list="installed-product-name-options"
                       value={search}
                       onChange={(event) => setSearch(event.target.value)}
                       placeholder="e.g. Chrome, Microsoft, server01"
                       disabled={Boolean(serverSearch.trim())}
                     />
+                    <datalist id="installed-product-name-options">
+                      {productNames.map((name) => (
+                        <option key={name} value={name} />
+                      ))}
+                    </datalist>
                     {canNotifyUsers && notifyProductName && (
                       <button
                         type="button"
