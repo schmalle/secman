@@ -4,6 +4,7 @@ import com.secman.domain.InstalledProduct
 import com.secman.domain.User
 import com.secman.domain.Workgroup
 import com.secman.dto.InstalledProductListResponse
+import com.secman.dto.InstalledProductNamesResponse
 import com.secman.repository.AssetRepository
 import com.secman.repository.InstalledProductRepository
 import com.secman.repository.UserRepository
@@ -15,6 +16,7 @@ import io.micronaut.http.HttpRequest
 import io.micronaut.http.HttpStatus
 import io.micronaut.http.client.HttpClient
 import io.micronaut.http.client.annotation.Client
+import io.micronaut.http.client.exceptions.HttpClientResponseException
 import io.micronaut.data.model.Pageable
 import io.micronaut.test.extensions.junit5.annotation.MicronautTest
 import io.micronaut.transaction.TransactionOperations
@@ -23,6 +25,7 @@ import org.hibernate.Hibernate
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import java.sql.Connection
 
 @MicronautTest(environments = ["test"], transactional = false)
@@ -237,5 +240,42 @@ class InstalledProductControllerIntegrationTest : BaseIntegrationTest() {
 
         assertThat(names).contains("IncludedApp-$suffix")
         assertThat(names).doesNotContain("ExcludedApp-$suffix")
+    }
+
+    @Test
+    fun `names endpoint returns scoped distinct product names for vuln user`() {
+        val suffix = System.nanoTime()
+        val workgroup = workgroupRepository.save(Workgroup(name = "Names WG $suffix"))
+        val asset = assetRepository.save(TestDataFactory.createAsset(name = "names-endpoint-host-$suffix"))
+        assignUserToWorkgroup(vulnUser.id!!, workgroup.id!!)
+        assignAssetToWorkgroup(asset.id!!, workgroup.id!!)
+        installedProductRepository.save(
+            InstalledProduct(asset = asset, externalId = "names-endpoint-$suffix", name = "UniqueApp-$suffix")
+        )
+        val token = TestAuthHelper.getAuthToken(client, vulnUser.username)
+
+        val response = client.toBlocking().exchange(
+            HttpRequest.GET<Any>("/api/installed-products/names").bearerAuth(token),
+            InstalledProductNamesResponse::class.java
+        )
+
+        assertThat(response.status).isEqualTo(HttpStatus.OK)
+        assertThat(response.body()!!.names).contains("UniqueApp-$suffix")
+    }
+
+    @Test
+    fun `names endpoint rejects users without required roles`() {
+        val suffix = System.nanoTime()
+        val plainUser = userRepository.save(TestDataFactory.createRegularUser("products-plain-$suffix", "products-plain-$suffix@test.com"))
+        val token = TestAuthHelper.getAuthToken(client, plainUser.username)
+
+        val exception = assertThrows<HttpClientResponseException> {
+            client.toBlocking().exchange(
+                HttpRequest.GET<Any>("/api/installed-products/names").bearerAuth(token),
+                InstalledProductNamesResponse::class.java
+            )
+        }
+
+        assertThat(exception.status).isEqualTo(HttpStatus.FORBIDDEN)
     }
 }

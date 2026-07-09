@@ -54,3 +54,8 @@ data class InstalledProductListResponse(
     val totalProducts: Int,
     val totalSystems: Long
 )
+
+@Serdeable
+data class InstalledProductNamesResponse(
+    val names: List<String>
+)
