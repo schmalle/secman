@@ -210,4 +210,32 @@ class InstalledProductControllerIntegrationTest : BaseIntegrationTest() {
         assertThat(product.asset.id).isEqualTo(asset.id)
         assertThat(product.asset.name).isEqualTo(asset.name)
     }
+
+    @Test
+    fun `repository findDistinctNames returns sorted distinct product names`() {
+        val suffix = System.nanoTime()
+        val asset = assetRepository.save(TestDataFactory.createAsset(name = "names-host-$suffix"))
+        installedProductRepository.save(InstalledProduct(asset = asset, externalId = "names-1-$suffix", name = "Zoom-$suffix"))
+        installedProductRepository.save(InstalledProduct(asset = asset, externalId = "names-2-$suffix", name = "Chrome-$suffix"))
+        installedProductRepository.save(InstalledProduct(asset = asset, externalId = "names-3-$suffix", name = "Chrome-$suffix"))
+
+        val names = installedProductRepository.findDistinctNames(Pageable.from(0, 5000))
+
+        assertThat(names).contains("Chrome-$suffix", "Zoom-$suffix")
+        assertThat(names.count { it == "Chrome-$suffix" }).isEqualTo(1)
+    }
+
+    @Test
+    fun `repository findDistinctNamesForAssets scopes to given asset ids`() {
+        val suffix = System.nanoTime()
+        val includedAsset = assetRepository.save(TestDataFactory.createAsset(name = "included-host-$suffix"))
+        val excludedAsset = assetRepository.save(TestDataFactory.createAsset(name = "excluded-host-$suffix"))
+        installedProductRepository.save(InstalledProduct(asset = includedAsset, externalId = "included-$suffix", name = "IncludedApp-$suffix"))
+        installedProductRepository.save(InstalledProduct(asset = excludedAsset, externalId = "excluded-$suffix", name = "ExcludedApp-$suffix"))
+
+        val names = installedProductRepository.findDistinctNamesForAssets(setOf(requireNotNull(includedAsset.id)), Pageable.from(0, 5000))
+
+        assertThat(names).contains("IncludedApp-$suffix")
+        assertThat(names).doesNotContain("ExcludedApp-$suffix")
+    }
 }

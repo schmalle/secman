@@ -147,4 +147,17 @@ interface InstalledProductRepository : JpaRepository<InstalledProduct, Long> {
             OR LOWER(p.asset.name) LIKE LOWER(CONCAT('%', :search, '%')))
     """)
     fun countDistinctAssetsForAssets(search: String?, assetIds: Set<Long>): Long
+
+    @Query("""
+        SELECT DISTINCT p.name FROM InstalledProduct p
+        ORDER BY p.name ASC
+    """)
+    fun findDistinctNames(pageable: Pageable): List<String>
+
+    @Query("""
+        SELECT DISTINCT p.name FROM InstalledProduct p
+        WHERE p.asset.id IN (:assetIds)
+        ORDER BY p.name ASC
+    """)
+    fun findDistinctNamesForAssets(assetIds: Set<Long>, pageable: Pageable): List<String>
 }
