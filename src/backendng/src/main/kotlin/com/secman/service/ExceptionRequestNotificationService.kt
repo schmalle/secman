@@ -104,20 +104,20 @@ open class ExceptionRequestNotificationService(
     }
 
     /**
-     * Describe WHERE the exception applies for display, covering both single-asset requests
-     * (delegates to resolveAssetName) and rule-type requests (scope=GLOBAL/OS/AWS_ACCOUNT/IP)
-     * where there is no single asset to show.
+     * Describe WHERE the exception applies for display. Switches on `request.scope` first
+     * (mirroring frontend/src/services/exceptionRequestScopeFormatter.ts) so that rule-type
+     * requests (scope=GLOBAL/OS/AWS_ACCOUNT/IP) always show their true, broader applicability
+     * rather than the single asset the request happened to be raised from — a denormalized
+     * assetId is populated for finding-anchored requests regardless of scope, so resolving the
+     * asset name first would silently hide the actual scope.
      */
     private fun describeScope(request: VulnerabilityExceptionRequest): String {
-        val singleAsset = resolveAssetName(request)
-        if (singleAsset != "Unknown Asset") return singleAsset
-
         return when (request.scope) {
             VulnerabilityException.Scope.GLOBAL -> "All Assets (Global)"
             VulnerabilityException.Scope.OS -> "OS: ${request.scopeValue ?: "Unknown"}"
             VulnerabilityException.Scope.AWS_ACCOUNT -> "AWS Account: ${request.scopeValue ?: "Unknown"}"
             VulnerabilityException.Scope.IP -> "IP: ${request.scopeValue ?: "Unknown"}"
-            VulnerabilityException.Scope.ASSET -> "Unknown Asset"
+            VulnerabilityException.Scope.ASSET -> resolveAssetName(request)
         }
     }
 
@@ -350,8 +350,16 @@ open class ExceptionRequestNotificationService(
      */
     private fun generateNewRequestEmail(request: VulnerabilityExceptionRequest, recipientName: String): String {
         val cveId = describeSubject(request)
-        val assetName = describeScope(request)
+        val scopeDescription = describeScope(request)
+        val assetName = resolveAssetName(request)
         val assetIp = resolveAssetIp(request)
+        val originatingAssetRow = if (request.scope != VulnerabilityException.Scope.ASSET && assetName != "Unknown Asset") {
+            """
+                                <tr>
+                                    <td style="padding:12px 14px;background-color:#f7f9fc;border:1px solid #e2e8f0;border-radius:6px 0 0 6px;font-weight:600;color:#475569;font-size:12px;text-transform:uppercase;letter-spacing:0.6px;">Originating Asset</td>
+                                    <td style="padding:12px 14px;background-color:#ffffff;border:1px solid #e2e8f0;border-left:0;border-radius:0 6px 6px 0;color:#1f2933;font-size:14px;">$assetName <span style="color:#64748b;">($assetIp)</span></td>
+                                </tr>"""
+        } else ""
         val requesterName = request.requestedByUsername
         val reasonSummary = if (request.reason.length > 200) {
             request.reason.substring(0, 200) + "..."
@@ -406,9 +414,9 @@ open class ExceptionRequestNotificationService(
                                     <td style="padding:12px 14px;background-color:#ffffff;border:1px solid #e2e8f0;border-left:0;border-radius:0 6px 6px 0;color:#1f2933;font-size:14px;font-family:'SF Mono','Consolas',monospace;">$cveId</td>
                                 </tr>
                                 <tr>
-                                    <td style="padding:12px 14px;background-color:#f7f9fc;border:1px solid #e2e8f0;border-radius:6px 0 0 6px;font-weight:600;color:#475569;font-size:12px;text-transform:uppercase;letter-spacing:0.6px;">Asset</td>
-                                    <td style="padding:12px 14px;background-color:#ffffff;border:1px solid #e2e8f0;border-left:0;border-radius:0 6px 6px 0;color:#1f2933;font-size:14px;">$assetName <span style="color:#64748b;">($assetIp)</span></td>
-                                </tr>
+                                    <td style="padding:12px 14px;background-color:#f7f9fc;border:1px solid #e2e8f0;border-radius:6px 0 0 6px;font-weight:600;color:#475569;font-size:12px;text-transform:uppercase;letter-spacing:0.6px;">Scope</td>
+                                    <td style="padding:12px 14px;background-color:#ffffff;border:1px solid #e2e8f0;border-left:0;border-radius:0 6px 6px 0;color:#1f2933;font-size:14px;">${if (request.scope == VulnerabilityException.Scope.ASSET) "$scopeDescription <span style=\"color:#64748b;\">($assetIp)</span>" else scopeDescription}</td>
+                                </tr>$originatingAssetRow
                                 <tr>
                                     <td style="padding:12px 14px;background-color:#f7f9fc;border:1px solid #e2e8f0;border-radius:6px 0 0 6px;font-weight:600;color:#475569;font-size:12px;text-transform:uppercase;letter-spacing:0.6px;">Requested By</td>
                                     <td style="padding:12px 14px;background-color:#ffffff;border:1px solid #e2e8f0;border-left:0;border-radius:0 6px 6px 0;color:#1f2933;font-size:14px;">$requesterName</td>
@@ -462,8 +470,13 @@ open class ExceptionRequestNotificationService(
      */
     private fun generateNewRequestTextEmail(request: VulnerabilityExceptionRequest, recipientName: String): String {
         val cveId = describeSubject(request)
-        val assetName = describeScope(request)
+        val scopeDescription = describeScope(request)
+        val assetName = resolveAssetName(request)
         val assetIp = resolveAssetIp(request)
+        val scopeLine = if (request.scope == VulnerabilityException.Scope.ASSET) "$scopeDescription ($assetIp)" else scopeDescription
+        val originatingAssetLine = if (request.scope != VulnerabilityException.Scope.ASSET && assetName != "Unknown Asset") {
+            "\n            |  Originating Asset:    $assetName ($assetIp)"
+        } else ""
         val requesterName = request.requestedByUsername
         val reasonSummary = if (request.reason.length > 200) request.reason.substring(0, 200) + "..." else request.reason
         val submittedDate = request.createdAt?.format(DATE_FORMATTER) ?: "Unknown"
@@ -478,7 +491,7 @@ open class ExceptionRequestNotificationService(
             |A new vulnerability exception request has been submitted and is awaiting your review.
             |
             |  CVE ID:               $cveId
-            |  Asset:                $assetName ($assetIp)
+            |  Scope:                $scopeLine$originatingAssetLine
             |  Requested By:         $requesterName
             |  Submitted:            $submittedDate
             |  Requested Expiration: $expirationDate
