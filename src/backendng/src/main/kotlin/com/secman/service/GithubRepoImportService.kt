@@ -1,8 +1,10 @@
 package com.secman.service
 
+import com.secman.domain.GithubRepoDependabotAlert
 import com.secman.domain.GithubRepoFindingSnapshot
 import com.secman.domain.GithubRepository
 import com.secman.repository.GithubAppConfigRepository
+import com.secman.repository.GithubRepoDependabotAlertRepository
 import com.secman.repository.GithubRepoFindingSnapshotRepository
 import com.secman.repository.GithubRepositoryRepository
 import io.micronaut.serde.annotation.Serdeable
@@ -14,8 +16,10 @@ import java.time.Instant
 /**
  * Imports the GitHub App installation's repositories into secman: upserts
  * [GithubRepository] rows (by stable numeric GitHub repo id) with their open
- * Dependabot alert counts and writes one [GithubRepoFindingSnapshot] per repo
- * per run — the history behind the 30-day non-decrease alert.
+ * Dependabot alert counts, writes one [GithubRepoFindingSnapshot] per repo
+ * per run (the history behind the 30-day non-decrease alert), and replaces
+ * each repo's [GithubRepoDependabotAlert] rows with the freshly fetched
+ * per-alert detail (current-state only — delete then reinsert).
  *
  * Triggered by `POST /api/github/import` (CLI `import-github-repos`, MCP
  * `import_github_repos`, or the UI "Import now" button).
@@ -25,6 +29,7 @@ open class GithubRepoImportService(
     private val githubAppConfigRepository: GithubAppConfigRepository,
     private val githubRepositoryRepository: GithubRepositoryRepository,
     private val snapshotRepository: GithubRepoFindingSnapshotRepository,
+    private val alertRepository: GithubRepoDependabotAlertRepository,
     private val githubClient: GithubAppClientService
 ) {
     private val logger = LoggerFactory.getLogger(GithubRepoImportService::class.java)
@@ -90,7 +95,7 @@ open class GithubRepoImportService(
         )
     }
 
-    /** Upsert one repo + its snapshot. Returns true when a new row was created. */
+    /** Upsert one repo + its snapshot + its current alert rows. Returns true when a new repo row was created. */
     @Transactional
     open fun persistRepo(
         repoDto: GithubAppClientService.GithubRepoDto,
@@ -126,6 +131,30 @@ open class GithubRepoImportService(
                 highCount = counts.high
             )
         )
+
+        alertRepository.deleteByGithubRepositoryId(saved.id!!)
+        if (counts.alerts.isNotEmpty()) {
+            alertRepository.saveAll(
+                counts.alerts.map { a ->
+                    GithubRepoDependabotAlert(
+                        githubRepositoryId = saved.id!!,
+                        alertNumber = a.alertNumber,
+                        packageName = a.packageName,
+                        ecosystem = a.ecosystem,
+                        manifestPath = a.manifestPath,
+                        severity = a.severity,
+                        ghsaId = a.ghsaId,
+                        cveId = a.cveId,
+                        summary = a.summary,
+                        vulnerableVersionRange = a.vulnerableVersionRange,
+                        firstPatchedVersion = a.firstPatchedVersion,
+                        htmlUrl = a.htmlUrl,
+                        alertCreatedAt = a.alertCreatedAt,
+                        alertUpdatedAt = a.alertUpdatedAt
+                    )
+                }
+            )
+        }
         return isNew
     }
 }
