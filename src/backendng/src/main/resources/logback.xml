@@ -38,7 +38,10 @@
     </logger>
 
     <!-- SECMAN_LOGGING=NO : Disable all logging -->
-    <if condition='property("SECMAN_LOGGING").equals("NO")'>
+    <condition class="ch.qos.logback.core.boolex.ExpressionPropertyCondition">
+        <expression>propertyEquals("SECMAN_LOGGING", "NO")</expression>
+    </condition>
+    <if>
         <then>
             <logger name="com.secman" level="OFF"/>
             <logger name="io.micronaut" level="OFF"/>
@@ -56,7 +59,10 @@
     </if>
 
     <!-- SECMAN_LOGGING=ALL : Enable all logging (verbose) -->
-    <if condition='property("SECMAN_LOGGING").equals("ALL")'>
+    <condition class="ch.qos.logback.core.boolex.ExpressionPropertyCondition">
+        <expression>propertyEquals("SECMAN_LOGGING", "ALL")</expression>
+    </condition>
+    <if>
         <then>
             <logger name="com.secman" level="TRACE"/>
             <logger name="io.micronaut" level="DEBUG"/>
@@ -74,7 +80,10 @@
     </if>
 
     <!-- SECMAN_LOGGING=ERROR : Only error level logs -->
-    <if condition='property("SECMAN_LOGGING").equals("ERROR")'>
+    <condition class="ch.qos.logback.core.boolex.ExpressionPropertyCondition">
+        <expression>propertyEquals("SECMAN_LOGGING", "ERROR")</expression>
+    </condition>
+    <if>
         <then>
             <logger name="com.secman" level="ERROR"/>
             <logger name="io.micronaut" level="ERROR"/>
@@ -92,7 +101,10 @@
     </if>
 
     <!-- Default: SECMAN_LOGGING not set or other value -->
-    <if condition='!property("SECMAN_LOGGING").equals("NO") &amp;&amp; !property("SECMAN_LOGGING").equals("ALL") &amp;&amp; !property("SECMAN_LOGGING").equals("ERROR")'>
+    <condition class="ch.qos.logback.core.boolex.ExpressionPropertyCondition">
+        <expression>!propertyEquals("SECMAN_LOGGING", "NO") &amp;&amp; !propertyEquals("SECMAN_LOGGING", "ALL") &amp;&amp; !propertyEquals("SECMAN_LOGGING", "ERROR")</expression>
+    </condition>
+    <if>
         <then>
             <logger name="com.secman" level="INFO"/>
             <logger name="io.micronaut" level="WARN"/>
