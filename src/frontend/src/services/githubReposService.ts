@@ -98,3 +98,50 @@ export async function deleteRepoAlertException(id: number): Promise<void> {
     throw new Error(`Failed to delete exception: ${response.status}`);
   }
 }
+
+/** A repo's Dependabot alert row (GET /api/github/repositories/{id}/alerts). */
+export interface GithubRepoAlert {
+  id: number;
+  alertNumber: number;
+  packageName: string;
+  ecosystem: string;
+  manifestPath?: string | null;
+  severity: string;
+  ghsaId?: string | null;
+  cveId?: string | null;
+  summary?: string | null;
+  vulnerableVersionRange?: string | null;
+  firstPatchedVersion?: string | null;
+  htmlUrl?: string | null;
+  alertUpdatedAt?: string | null;
+}
+
+export async function getGithubRepoAlerts(repositoryId: number): Promise<GithubRepoAlert[]> {
+  const response = await authenticatedGet(`/api/github/repositories/${repositoryId}/alerts`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch repository alerts: ${response.status}`);
+  }
+  return response.json();
+}
+
+/** Sort rank for severity (higher = more severe), case-insensitive. */
+export function severityRank(severity: string): number {
+  switch (severity?.toLowerCase()) {
+    case 'critical': return 4;
+    case 'high': return 3;
+    case 'medium': return 2;
+    case 'low': return 1;
+    default: return 0;
+  }
+}
+
+/** Bootstrap badge background class for a severity value. */
+export function severityBadgeClass(severity: string): string {
+  switch (severity?.toLowerCase()) {
+    case 'critical': return 'bg-danger';
+    case 'high': return 'bg-warning text-dark';
+    case 'medium': return 'bg-info text-dark';
+    case 'low': return 'bg-secondary';
+    default: return 'bg-light text-dark';
+  }
+}
