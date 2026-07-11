@@ -56,11 +56,29 @@ open class GithubAppClientService(
     )
 
     @Serdeable
+    data class AlertDto(
+        val alertNumber: Int,
+        val packageName: String,
+        val ecosystem: String,
+        val manifestPath: String?,
+        val severity: String,
+        val ghsaId: String?,
+        val cveId: String?,
+        val summary: String?,
+        val vulnerableVersionRange: String?,
+        val firstPatchedVersion: String?,
+        val htmlUrl: String?,
+        val alertCreatedAt: Instant?,
+        val alertUpdatedAt: Instant?
+    )
+
+    @Serdeable
     data class SeverityCounts(
         val critical: Int = 0,
         val high: Int = 0,
         /** True when Dependabot alerts are disabled/inaccessible for the repo. */
-        val disabled: Boolean = false
+        val disabled: Boolean = false,
+        val alerts: List<AlertDto> = emptyList()
     )
 
     // ------------------------------------------------------------------
@@ -199,13 +217,16 @@ open class GithubAppClientService(
     }
 
     /**
-     * Counts the repo's open Dependabot alerts by severity. 403/404 (alerts
-     * disabled or inaccessible) yields `disabled = true` instead of failing
-     * the whole import run.
+     * Fetches the repo's open Dependabot alerts: counts by severity plus
+     * full per-alert detail (package, CVE/GHSA, vulnerable range, etc.) —
+     * one pass over the same paginated response. 403/404 (alerts disabled
+     * or inaccessible) yields `disabled = true` instead of failing the
+     * whole import run.
      */
     open fun countOpenDependabotAlerts(token: String, owner: String, repo: String): SeverityCounts {
         var critical = 0
         var high = 0
+        val alerts = mutableListOf<AlertDto>()
         var page = 1
         while (true) {
             val response = send(
@@ -225,15 +246,49 @@ open class GithubAppClientService(
             val batch = objectMapper.readTree(response.second)
             if (!batch.isArray || batch.isEmpty) break
             batch.forEach { alert ->
-                when (alert.path("security_advisory").path("severity").asText("").lowercase()) {
+                val severity = alert.path("security_advisory").path("severity").asText("").lowercase()
+                when (severity) {
                     "critical" -> critical++
                     "high" -> high++
                 }
+                alerts.add(parseAlert(alert, severity))
             }
             if (batch.size() < 100) break
             page++
         }
-        return SeverityCounts(critical = critical, high = high)
+        return SeverityCounts(critical = critical, high = high, alerts = alerts)
+    }
+
+    /** Maps one GitHub Dependabot alert JSON node to [AlertDto]. Package-internal so it's unit-testable without HTTP mocking. */
+    internal fun parseAlert(node: JsonNode, severity: String): AlertDto {
+        val dependency = node.path("dependency")
+        val pkg = dependency.path("package")
+        val advisory = node.path("security_advisory")
+        val vuln = node.path("security_vulnerability")
+        return AlertDto(
+            alertNumber = node.path("number").asInt(),
+            packageName = text(pkg.path("name")) ?: "",
+            ecosystem = text(pkg.path("ecosystem")) ?: "",
+            manifestPath = text(dependency.path("manifest_path")),
+            severity = severity,
+            ghsaId = text(advisory.path("ghsa_id")),
+            cveId = text(advisory.path("cve_id")),
+            summary = text(advisory.path("summary")),
+            vulnerableVersionRange = text(vuln.path("vulnerable_version_range")),
+            firstPatchedVersion = text(vuln.path("first_patched_version").path("identifier")),
+            htmlUrl = text(node.path("html_url")),
+            alertCreatedAt = parseInstant(node.path("created_at")),
+            alertUpdatedAt = parseInstant(node.path("updated_at"))
+        )
+    }
+
+    /** Text value of a node, or null when missing/JSON null (avoids the literal "null" string). */
+    private fun text(n: JsonNode): String? = if (n.isMissingNode || n.isNull) null else n.asText()
+
+    /** Parses an ISO-8601 instant node, or null when missing/blank/unparsable. */
+    private fun parseInstant(n: JsonNode): Instant? {
+        val value = text(n) ?: return null
+        return try { Instant.parse(value) } catch (e: Exception) { null }
     }
 
     /** Credential check for the admin UI: builds a JWT and lists installations. */
