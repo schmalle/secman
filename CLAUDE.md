@@ -18,8 +18,11 @@ Security requirement, vulnerability and risk management platform.
 ## Tooling Conventions (canonical, do not deviate)
 
 - **Scripts**: `./scripts/` only.
+- **Skills**: `.claude/skills/` is the canonical, leading skill set for Claude Code sessions in this repo — authoritative over `.agents/skills/` (parallel copies maintained for Codex). On any divergence between the two trees, `.claude/skills/` wins. **Whenever a `.claude/skills/*/SKILL.md` file is edited, the matching `.agents/skills/*/SKILL.md` file must be updated in the same change** so the two never drift — translate Claude-specific mechanics to their Codex equivalent (e.g. Bash tool `dangerouslyDisableSandbox: true` ↔ `sandbox_permissions: "require_escalated"`) rather than copying verbatim. If a `.claude/skills/` entry has no `.agents/skills/` counterpart, flag it instead of silently creating one. When only asked to update "skills" without a harness specified, update `.claude/skills/` first, then port to `.agents/skills/`.
 - **Secrets**: `pass-cli` (Proton Pass) only. Never hardcode secrets.
-- **Backend dev start**: `./scripts/startbackenddev.sh` (sources `pass-cli` env, runs Micronaut). Do not call `./gradlew run` directly.
+- **Backend dev start**: always `./scripts/startbackenddev.sh` (sources `pass-cli` env, runs Micronaut). Never call `./gradlew run` directly.
+- **Frontend dev start**: always `./scripts/startfrontenddev.sh` (sources `pass-cli` env, runs `npm run dev`). Never call `npm run dev` directly.
+- Both dev-start scripts require `pass-cli` and must be run **outside any sandbox** (e.g. Bash tool `dangerouslyDisableSandbox: true`, or escalated/unsandboxed permissions in other harnesses) — a sandboxed shell cannot reach `pass-cli` to source secrets, so the process fails to start cleanly.
 - **Host URL in tests**: read `SECMAN_HOST` from `pass-cli`. Never hardcode `http://localhost:8080` or `http://localhost:4321`.
 
 ## Key Entities
@@ -70,10 +73,10 @@ MCP tool families mirror these (delegation required): `list_/create_/delete_rele
 ```bash
 # Backend
 ./gradlew build                            # build + tests
-./scripts/startbackenddev.sh              # canonical dev start (pass-cli wraps gradle run)
+./scripts/startbackenddev.sh              # canonical dev start (pass-cli wraps gradle run); run outside any sandbox
 
 # Frontend
-cd src/frontend && npm run dev             # port 4321
+./scripts/startfrontenddev.sh             # canonical dev start (pass-cli wraps npm run dev), port 4321; run outside any sandbox
 
 # CLI
 ./gradlew :cli:shadowJar                   # build once

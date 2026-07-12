@@ -10,6 +10,14 @@ context: fork
 ---
 # E2E Vulnerability Exception Workflow — Iterative Fix Loop
 
+> **Sync policy**: This file mirrors `.claude/skills/e2eexception/SKILL.md`,
+> which is the **leading, authoritative** copy for this repo (see
+> `CLAUDE.md` §"Tooling Conventions"). Whenever the Claude Code version
+> changes, port the same change here, translating Claude-specific mechanics
+> to their Codex equivalent (e.g. Bash tool `dangerouslyDisableSandbox: true`
+> ↔ `sandbox_permissions: "require_escalated"`). Never let this file diverge
+> ahead of the Claude Code version.
+
 You are an orchestration agent that brings up a full-stack environment, executes
 the vulnerability exception workflow E2E test, and **iteratively fixes every failure**
 until the test passes or you've exhausted the retry budget.
@@ -37,8 +45,8 @@ for direct database operations (cleanup, view truncation, ID lookups).
 ## High-Level Loop
 
 ```
-1. Start backend   (scripts/startbackenddev.sh)
-2. Start frontend  (scripts/startfrontenddev.sh)
+1. Start backend   (scripts/startbackenddev.sh outside the sandbox)
+2. Start frontend  (scripts/startfrontenddev.sh outside the sandbox)
 3. Wait for both to be healthy
 4. Run E2E exception workflow test
 5. IF all green -> done, report success
@@ -62,6 +70,12 @@ running. This ensures a clean state for each attempt.
 
 **Starting services:**
 
+**Outside-sandbox requirement:** Always start `./scripts/startbackenddev.sh`
+and `./scripts/startfrontenddev.sh` outside the sandbox / with escalated
+permissions. In Codex, run these commands with
+`sandbox_permissions: "require_escalated"`; do not start either dev server
+inside the filesystem sandbox.
+
 1. **Create log directory** `.e2e-logs/` if it doesn't exist.
 
 2. **Check for port conflicts** — run `lsof -i :8080` and `lsof -i :4321`. If ports
@@ -71,12 +85,14 @@ running. This ensures a clean state for each attempt.
    ```bash
    nohup ./scripts/startbackenddev.sh > .e2e-logs/backend.log 2>&1 &
    ```
+   This start command must be executed outside the sandbox.
    Record the PID so you can kill it later.
 
 4. **Start frontend** in background:
    ```bash
    nohup ./scripts/startfrontenddev.sh > .e2e-logs/frontend.log 2>&1 &
    ```
+   This start command must be executed outside the sandbox.
    Record the PID.
 
 5. **Wait for health checks**:
@@ -172,7 +188,13 @@ Fix in priority order: **backend errors first**, then frontend.
 
 #### Step 3c: Restart Both Services
 
-After fixing, restart **both** services:
+If the fix touched any file under `src/frontend/`, first verify the build is
+clean: `cd src/frontend && npm ci && npm run build` must exit 0. This catches
+TypeScript errors, missing imports, and broken Astro/React components that a
+running dev server alone won't surface.
+
+After fixing (and the frontend build check above, if applicable), restart
+**both** services. These start commands must be executed outside the sandbox:
 
 ```bash
 # Start backend

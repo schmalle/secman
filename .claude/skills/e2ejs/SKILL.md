@@ -76,8 +76,8 @@ Rules:
 ## High-Level Loop
 
 ```
-1. Start backend   (./scripts/startbackenddev.sh)
-2. Start frontend  (./scripts/startfrontenddev.sh)
+1. Start backend   (./scripts/startbackenddev.sh outside the sandbox)
+2. Start frontend  (./scripts/startfrontenddev.sh outside the sandbox)
 3. Wait for both to be healthy (via shared URL, not localhost)
 4. Export SECMAN_BACKEND_URL=https://secman.covestro.net
 5. Run JS error scanner (./tests/js-error-scanner-pp.sh)
@@ -99,6 +99,12 @@ Rules:
 
 **Starting services:**
 
+**Outside-sandbox requirement:** Always start `./scripts/startbackenddev.sh`
+and `./scripts/startfrontenddev.sh` outside the sandbox / with escalated
+permissions (e.g. Bash tool `dangerouslyDisableSandbox: true`). Both scripts
+source secrets via `pass-cli`, which a sandboxed shell cannot reach — do not
+start either dev server inside the filesystem sandbox.
+
 1. **Verify hostname mapping** — confirm `secman.covestro.net` resolves to
    `127.0.0.1`:
    ```bash
@@ -116,6 +122,7 @@ Rules:
    ```bash
    nohup ./scripts/startbackenddev.sh > .e2e-logs/backend.log 2>&1 &
    ```
+   This start command must be executed outside the sandbox.
    Record the PID. The backend uses `pass-cli run -- gradle :backendng:clean :backendng:run`
    internally with Proton Pass secret injection.
 
@@ -123,6 +130,7 @@ Rules:
    ```bash
    nohup ./scripts/startfrontenddev.sh > .e2e-logs/frontend.log 2>&1 &
    ```
+   This start command must be executed outside the sandbox.
    Record the PID. The frontend uses `pass-cli run -- npm run dev` internally.
 
 5. **Wait for health checks via the shared URL** — not localhost. The
@@ -241,7 +249,7 @@ After applying fixes (whether backend or frontend):
    ./scripts/stopbackenddev.sh
    ```
    Never call `kill` or `lsof | xargs kill` inline — always go through the script.
-2. **Restart backend**:
+2. **Restart backend** (outside the sandbox):
    ```bash
    nohup ./scripts/startbackenddev.sh > .e2e-logs/backend.log 2>&1 &
    ```
@@ -250,6 +258,11 @@ After applying fixes (whether backend or frontend):
    Do not poll `http://localhost:8080` directly; the scanner will not use it.
 4. Frontend hot-reloads via Vite through the proxy — no restart needed,
    but wait 3 seconds for changes to propagate.
+5. **After any frontend file edit**, before re-running the scanner, verify the
+   build is clean: `cd src/frontend && npm ci && npm run build` must exit 0.
+   Vite's hot-reload only proves the page didn't crash at runtime — it does
+   not catch TypeScript errors, missing imports, or broken Astro/React
+   components the way a full build does.
 
 #### 3d. Re-run and Verify
 

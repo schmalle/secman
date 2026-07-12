@@ -25,8 +25,8 @@ The E2E test (`tests/e2e/admin-asset-vuln.spec.ts`) performs:
 ## High-Level Loop
 
 ```
-1. Start backend   (./scripts/startbackenddev.sh)
-2. Start frontend  (./scripts/startfrontenddev.sh)
+1. Start backend   (./scripts/startbackenddev.sh outside the sandbox)
+2. Start frontend  (./scripts/startfrontenddev.sh outside the sandbox)
 3. Wait for both to be healthy
 4. Run E2E test
 5. IF all green → done, report success
@@ -57,6 +57,12 @@ timeouts may still come from `e2e-runner.config.json`.
 | `frontend.healthTimeout` | `60` (seconds)                    |
 
 **Starting services:**
+
+**Outside-sandbox requirement:** Always start `./scripts/startbackenddev.sh`
+and `./scripts/startfrontenddev.sh` outside the sandbox / with escalated
+permissions (e.g. Bash tool `dangerouslyDisableSandbox: true`). Both scripts
+source secrets via `pass-cli`, which a sandboxed shell cannot reach — do not
+start either dev server inside the filesystem sandbox.
 
 - Start each service in a **background process** using `bash` with `nohup` or `&`,
   redirecting stdout/stderr to log files under `.e2e-logs/`.
@@ -111,11 +117,15 @@ Fix in priority order: **backend errors first**, then frontend.
 
 #### Restart Rules
 
-- `backend` → run `./scripts/stopbackenddev.sh`, then `./scripts/startbackenddev.sh`,
-  wait for health check. Never `kill` inline.
-- `frontend` → Astro/Vite hot-reloads. Wait 3 seconds, then proceed. If a full
-  restart is required, use `./scripts/stopfrontenddev.sh` then
-  `./scripts/startfrontenddev.sh`.
+- `backend` → run `./scripts/stopbackenddev.sh`, then `./scripts/startbackenddev.sh`
+  (outside the sandbox), wait for health check. Never `kill` inline.
+- `frontend` → before relying on hot-reload or a restart, verify the build is
+  clean: `cd src/frontend && npm ci && npm run build` must exit 0. This catches
+  TypeScript errors, missing imports, and broken Astro/React components that
+  Vite's dev server won't surface. Then Astro/Vite hot-reloads — wait 3
+  seconds and proceed. If a full restart is required, use
+  `./scripts/stopfrontenddev.sh` then `./scripts/startfrontenddev.sh`
+  (outside the sandbox).
 - `test` → no service restart needed.
 
 #### Guard Rails

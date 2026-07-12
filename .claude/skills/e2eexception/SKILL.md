@@ -39,8 +39,8 @@ for direct database operations (cleanup, view truncation, ID lookups).
 ## High-Level Loop
 
 ```
-1. Start backend   (scripts/startbackenddev.sh)
-2. Start frontend  (scripts/startfrontenddev.sh)
+1. Start backend   (scripts/startbackenddev.sh outside the sandbox)
+2. Start frontend  (scripts/startfrontenddev.sh outside the sandbox)
 3. Wait for both to be healthy
 4. Run E2E exception workflow test
 5. IF all green -> done, report success
@@ -64,18 +64,24 @@ running. This ensures a clean state for each attempt.
 
 **Starting services:**
 
+**Outside-sandbox requirement:** Always start `./scripts/startbackenddev.sh`
+and `./scripts/startfrontenddev.sh` outside the sandbox / with escalated
+permissions (e.g. Bash tool `dangerouslyDisableSandbox: true`). Both scripts
+source secrets via `pass-cli`, which a sandboxed shell cannot reach — do not
+start either dev server inside the filesystem sandbox.
+
 1. **Create log directory** `.e2e-logs/` if it doesn't exist.
 
 2. **Check for port conflicts** — run `lsof -i :8080` and `lsof -i :4321`. If ports
    are in use, kill the existing processes before starting.
 
-3. **Start backend** in background:
+3. **Start backend** in background (outside the sandbox):
    ```bash
    nohup ./scripts/startbackenddev.sh > .e2e-logs/backend.log 2>&1 &
    ```
    Record the PID so you can kill it later.
 
-4. **Start frontend** in background:
+4. **Start frontend** in background (outside the sandbox):
    ```bash
    nohup ./scripts/startfrontenddev.sh > .e2e-logs/frontend.log 2>&1 &
    ```
@@ -174,7 +180,13 @@ Fix in priority order: **backend errors first**, then frontend.
 
 #### Step 3c: Restart Both Services
 
-After fixing, restart **both** services:
+If the fix touched any file under `src/frontend/`, first verify the build is
+clean: `cd src/frontend && npm ci && npm run build` must exit 0 before
+restarting. This catches TypeScript errors, missing imports, and broken
+Astro/React components that a running dev server alone won't surface.
+
+After fixing (and the frontend build check above, if applicable), restart
+**both** services (outside the sandbox):
 
 ```bash
 # Start backend

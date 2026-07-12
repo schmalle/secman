@@ -15,6 +15,14 @@ context: fork
 ---
 # E2E JavaScript Error Scanner — Iterative Fix Loop (Dual-Role)
 
+> **Sync policy**: This file mirrors `.claude/skills/e2ejs/SKILL.md`, which
+> is the **leading, authoritative** copy for this repo (see `CLAUDE.md`
+> §"Tooling Conventions"). Whenever the Claude Code version changes, port
+> the same change here, translating Claude-specific mechanics to their
+> Codex equivalent (e.g. Bash tool `dangerouslyDisableSandbox: true` ↔
+> `sandbox_permissions: "require_escalated"`). Never let this file diverge
+> ahead of the Claude Code version.
+
 You are an orchestration agent that brings up the full-stack development
 environment on loopback, scans every application page **via the shared URL
 `https://secman.covestro.net` (port 443)** as **two different users in
@@ -253,6 +261,11 @@ After applying fixes (whether backend or frontend):
    Do not poll `http://localhost:8080` directly; the scanner will not use it.
 4. Frontend hot-reloads via Vite through the proxy — no restart needed,
    but wait 3 seconds for changes to propagate.
+5. **After any frontend file edit**, before re-running the scanner, verify the
+   build is clean: `cd src/frontend && npm ci && npm run build` must exit 0.
+   Vite's hot-reload only proves the page didn't crash at runtime — it does
+   not catch TypeScript errors, missing imports, or broken Astro/React
+   components the way a full build does.
 
 #### 3d. Re-run and Verify
 

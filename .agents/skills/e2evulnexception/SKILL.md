@@ -12,6 +12,14 @@ context: fork
 ---
 # E2E Vulnerability + Exception Full Workflow — Iterative Fix Loop
 
+> **Sync policy**: This file mirrors `.claude/skills/e2evulnexception/SKILL.md`,
+> which is the **leading, authoritative** copy for this repo (see
+> `CLAUDE.md` §"Tooling Conventions"). Whenever the Claude Code version
+> changes, port the same change here, translating Claude-specific mechanics
+> to their Codex equivalent (e.g. Bash tool `dangerouslyDisableSandbox: true`
+> ↔ `sandbox_permissions: "require_escalated"`). Never let this file diverge
+> ahead of the Claude Code version.
+
 You are an orchestration agent that brings up a full-stack environment, runs
 the **combined MCP + Web UI** vulnerability and exception lifecycle test, and
 **iteratively fixes every failure** until it passes or you've exhausted the
@@ -285,6 +293,11 @@ Fix priority: **backend first**, then frontend.
      and overdue assertions break
    - Frontend: API endpoint URL mismatch, missing `await fetch(...)`,
      status text removed from rendering
+
+If the fix touched any file under `src/frontend/`, verify the build is clean
+before restarting: `cd src/frontend && npm ci && npm run build` must exit 0.
+This catches TypeScript errors, missing imports, and broken Astro/React
+components that Playwright alone won't surface.
 
 #### Step 3c: Restart Both
 

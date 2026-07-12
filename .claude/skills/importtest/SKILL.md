@@ -36,8 +36,8 @@ the harness for catching and repairing them.
 
 ```
 1. Verify / build CLI jar
-2. Start backend  (./scripts/startbackenddev.sh)
-3. Start frontend (./scripts/startfrontenddev.sh)
+2. Start backend  (./scripts/startbackenddev.sh outside the sandbox)
+3. Start frontend (./scripts/startfrontenddev.sh outside the sandbox)
 4. Wait for both healthy (port-bind check)
 5. Record backend-log offset (byte position) → IMPORT_START_OFFSET
 6. Run ./scripts/import.sh, capture stdout + exit code → .e2e-logs/import-run-<N>.log
@@ -93,6 +93,12 @@ secrets and configure the JVM.
 | `frontend.healthTimeout` | `60` (seconds)                    |
 
 **Starting services:**
+
+**Outside-sandbox requirement:** Always start `./scripts/startbackenddev.sh`
+and `./scripts/startfrontenddev.sh` outside the sandbox / with escalated
+permissions (e.g. Bash tool `dangerouslyDisableSandbox: true`). Both scripts
+source secrets via `pass-cli`, which a sandboxed shell cannot reach — do not
+start either dev server inside the filesystem sandbox.
 
 - Start each service in a background process via `nohup ... &`,
   redirecting stdout/stderr to log files under `.e2e-logs/`.
@@ -209,9 +215,9 @@ warning — consult it before any fix that touches the entity mapping.
 #### Restart Rules
 
 - **Backend code change** → run `./scripts/stopbackenddev.sh`, then
-  `./scripts/startbackenddev.sh`, wait for port-bind, **then reset the
-  backend log offset** (the file is recreated on restart, so
-  `IMPORT_START_OFFSET` becomes 0 again).
+  `./scripts/startbackenddev.sh` (outside the sandbox), wait for
+  port-bind, **then reset the backend log offset** (the file is recreated
+  on restart, so `IMPORT_START_OFFSET` becomes 0 again).
 - **CLI code change** → rebuild the jar (`./gradlew :cli:shadowJar`),
   then rerun `import.sh`. Backend stays up.
 - **Flyway migration / schema change** → backend restart will replay
@@ -219,7 +225,9 @@ warning — consult it before any fix that touches the entity mapping.
   ensure the new V<n>__*.sql applies cleanly.
 - **application.yml** → backend restart required.
 - **Frontend** → not involved in the import path, but if a fix
-  inadvertently touches it, Astro/Vite hot-reloads in ~3s.
+  inadvertently touches it, first verify the build is clean:
+  `cd src/frontend && npm ci && npm run build` must exit 0. Then
+  Astro/Vite hot-reloads in ~3s.
 
 Never raw-`kill` services. The stop scripts handle PID files and
 graceful shutdown.

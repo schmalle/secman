@@ -23,8 +23,8 @@ load them only when a specific phase needs them.
 
 ```
 0. Kill anything listening on 8080 / 4321 (via stop scripts, never `kill`).
-1. Start backend  (./scripts/startbackenddev.sh)
-2. Start frontend (./scripts/startfrontenddev.sh)
+1. Start backend  (./scripts/startbackenddev.sh outside the sandbox)
+2. Start frontend (./scripts/startfrontenddev.sh outside the sandbox)
 3. Wait for both ports to be BOUND (port binding, not HTTP)
 4. Run driver:
      pass-cli run --env-file ./secmanpp.env -- \
@@ -50,12 +50,18 @@ This skill is pinned to Proton Pass. Never hardcode `localhost:8080` /
 | Frontend start        | `./scripts/startfrontenddev.sh`    |
 | Frontend port wait    | `lsof -iTCP:4321 -sTCP:LISTEN -n -P`, 60s  |
 
+**Outside-sandbox requirement:** Always start `./scripts/startbackenddev.sh`
+and `./scripts/startfrontenddev.sh` outside the sandbox / with escalated
+permissions (e.g. Bash tool `dangerouslyDisableSandbox: true`). Both scripts
+source secrets via `pass-cli`, which a sandboxed shell cannot reach — do not
+start either dev server inside the filesystem sandbox.
+
 Steps:
 
 1. `mkdir -p .e2e-logs`
 2. Check ports 8080 / 4321; if occupied, run the canonical stop scripts.
-3. `nohup ./scripts/startbackenddev.sh > .e2e-logs/backend.log 2>&1 &`
-4. `nohup ./scripts/startfrontenddev.sh > .e2e-logs/frontend.log 2>&1 &`
+3. `nohup ./scripts/startbackenddev.sh > .e2e-logs/backend.log 2>&1 &` (outside the sandbox)
+4. `nohup ./scripts/startfrontenddev.sh > .e2e-logs/frontend.log 2>&1 &` (outside the sandbox)
 5. Poll `lsof` until both ports bind (exit as soon as bound — don't sleep the full window).
 6. If `tests/e2e/node_modules` is missing: `(cd tests/e2e && npm install)`.
 
@@ -104,7 +110,12 @@ migrations) read `references/key-files.md`. It also lists common fix categories.
 
 Apply a **minimal** fix. Don't refactor adjacent code.
 
-### 3c. Restart both
+If the fix touched any file under `src/frontend/`, verify the build is clean
+before restarting: `cd src/frontend && npm ci && npm run build` must exit 0.
+This catches TypeScript errors, missing imports, and broken Astro/React
+components that Playwright alone won't surface.
+
+### 3c. Restart both (outside the sandbox)
 ```bash
 nohup ./scripts/startbackenddev.sh > .e2e-logs/backend.log 2>&1 &
 nohup ./scripts/startfrontenddev.sh > .e2e-logs/frontend.log 2>&1 &
