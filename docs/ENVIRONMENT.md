@@ -153,13 +153,6 @@ AWS S3 operations (`asset-match-clear`, `manage-user-mappings import-s3`, `list-
 | `AWS_ACCOUNT_BUCKET_NAME` | S3 bucket name for the `manage-user-mappings import-s3` mapping file (fallback when `--bucket` is omitted) |
 | `AWS_ACCOUNT_BUCKET_KEY_NAME` | S3 object key for the `manage-user-mappings import-s3` mapping file (fallback when `--key` is omitted) |
 
-GitHub Dependabot ingestion (`query dependabot-alerts`):
-| Var | Notes |
-|---|---|
-| `GITHUB_TOKEN` | GitHub token used to read Dependabot alerts (or pass `--token`); needs `security_events` read scope (`repo` for classic PATs) |
-| `SECMAN_ADMIN_NAME`, `SECMAN_ADMIN_PASS` | required with `--save` (ADMIN or VULN role) |
-| `SECMAN_BACKEND_URL` | secman backend, default `http://localhost:8080` |
-
 ## adread (Azure AD → workgroup import)
 
 `src/adread/read.py` — see `docs/ADREAD.md` for full usage.

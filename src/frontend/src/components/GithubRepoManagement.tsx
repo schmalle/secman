@@ -6,7 +6,11 @@ import {
   triggerGithubImport,
   createRepoAlertException,
   deleteRepoAlertException,
+  getGithubRepoAlerts,
+  severityRank,
+  severityBadgeClass,
   type GithubRepo,
+  type GithubRepoAlert,
 } from '../services/githubReposService';
 import { hasVulnAccess, hasRole } from '../utils/auth';
 
@@ -38,6 +42,12 @@ const GithubRepoManagement: React.FC = () => {
   const [exceptionExpiry, setExceptionExpiry] = useState('');
   const [savingException, setSavingException] = useState(false);
 
+  // Per-repo alert expansion
+  const [expandedRepoId, setExpandedRepoId] = useState<number | null>(null);
+  const [alertsByRepo, setAlertsByRepo] = useState<Record<number, GithubRepoAlert[]>>({});
+  const [loadingAlerts, setLoadingAlerts] = useState(false);
+  const [alertsError, setAlertsError] = useState<string | null>(null);
+
   const canManage = hasRole(['ADMIN', 'VULN']);
 
   const loadRepos = () => {
@@ -48,6 +58,23 @@ const GithubRepoManagement: React.FC = () => {
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load repositories'))
       .finally(() => setLoading(false));
+  };
+
+  const toggleExpand = (repo: GithubRepo) => {
+    if (expandedRepoId === repo.id) {
+      setExpandedRepoId(null);
+      return;
+    }
+    setExpandedRepoId(repo.id);
+    setAlertsError(null);
+    if (alertsByRepo[repo.id]) return;
+    setLoadingAlerts(true);
+    getGithubRepoAlerts(repo.id)
+      .then((data) => {
+        setAlertsByRepo((prev) => ({ ...prev, [repo.id]: data }));
+      })
+      .catch((err) => setAlertsError(err instanceof Error ? err.message : 'Failed to load alerts'))
+      .finally(() => setLoadingAlerts(false));
   };
 
   useEffect(() => {
@@ -240,6 +267,7 @@ const GithubRepoManagement: React.FC = () => {
             <table className="table table-striped table-hover align-middle">
               <thead>
                 <tr>
+                  <th style={{ width: '2.5rem' }}></th>
                   <th>Repository</th>
                   <th>Owner</th>
                   <th className="text-center">Critical</th>
@@ -254,133 +282,210 @@ const GithubRepoManagement: React.FC = () => {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={canManage ? 9 : 8} className="text-center py-4">
+                    <td colSpan={canManage ? 10 : 9} className="text-center py-4">
                       <span className="spinner-border spinner-border-sm me-2"></span>
                       Loading repositories...
                     </td>
                   </tr>
                 ) : filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={canManage ? 9 : 8} className="text-center py-4 text-muted">
+                    <td colSpan={canManage ? 10 : 9} className="text-center py-4 text-muted">
                       No GitHub repositories imported yet.
                       {canManage && ' Configure the GitHub App under Admin → GitHub App and press "Import now".'}
                     </td>
                   </tr>
                 ) : (
                   filtered.map((r) => (
-                    <tr key={r.id}>
-                      <td className="fw-semibold">
-                        {r.htmlUrl ? (
-                          <a href={r.htmlUrl} target="_blank" rel="noopener noreferrer">
-                            {r.name}
-                          </a>
-                        ) : (
-                          r.name
-                        )}
-                        {r.archived && (
-                          <span className="badge bg-secondary ms-2" title="Archived on GitHub">
-                            archived
-                          </span>
-                        )}
-                      </td>
-                      <td className="text-nowrap">{r.owner}</td>
-                      <td className="text-center">
-                        <span className={`badge ${r.criticalCount > 0 ? 'bg-danger' : 'bg-light text-dark border'}`}>
-                          {r.criticalCount}
-                        </span>
-                      </td>
-                      <td className="text-center">
-                        <span className={`badge ${r.highCount > 0 ? 'bg-warning text-dark' : 'bg-light text-dark border'}`}>
-                          {r.highCount}
-                        </span>
-                      </td>
-                      <td className="text-nowrap text-muted small">
-                        {formatServerDate(r.lastImportAt, undefined, '—')}
-                      </td>
-                      <td className="text-nowrap text-muted small">
-                        {formatServerDate(r.lastHighCriticalFindingAt, undefined, '—')}
-                      </td>
-                      <td>
-                        {editingRepoId === r.id ? (
-                          <div className="input-group input-group-sm" style={{ minWidth: '220px' }}>
-                            <input
-                              type="email"
-                              className="form-control"
-                              value={emailDraft}
-                              placeholder="owner@example.com"
-                              onChange={(e) => setEmailDraft(e.target.value)}
-                              disabled={savingEmail}
-                            />
-                            <button
-                              className="btn btn-success"
-                              onClick={() => saveEmail(r)}
-                              disabled={savingEmail}
-                              title="Save"
-                            >
-                              <i className="bi bi-check-lg"></i>
-                            </button>
-                            <button
-                              className="btn btn-outline-secondary"
-                              onClick={() => setEditingRepoId(null)}
-                              disabled={savingEmail}
-                              title="Cancel"
-                            >
-                              <i className="bi bi-x-lg"></i>
-                            </button>
-                          </div>
-                        ) : (
-                          <>
-                            {r.ownerEmail || <span className="text-muted">unmapped</span>}
-                            {canManage && (
-                              <button
-                                className="btn btn-link btn-sm p-0 ms-2"
-                                onClick={() => startEmailEdit(r)}
-                                title="Edit owner email"
-                              >
-                                <i className="bi bi-pencil"></i>
-                              </button>
-                            )}
-                          </>
-                        )}
-                      </td>
-                      <td>
-                        {r.activeException ? (
-                          <span
-                            className="badge bg-info text-dark"
-                            title={`${r.activeException.reason} (by ${r.activeException.createdBy})`}
+                    <React.Fragment key={r.id}>
+                      <tr>
+                        <td>
+                          <button
+                            className="btn btn-link btn-sm p-0"
+                            onClick={() => toggleExpand(r)}
+                            title={expandedRepoId === r.id ? 'Collapse alerts' : 'Show alerts'}
                           >
-                            Excepted
-                            {r.activeException.expirationDate &&
-                              ` until ${formatServerDate(r.activeException.expirationDate, undefined, '')}`}
-                          </span>
-                        ) : (
-                          <span className="text-muted">—</span>
-                        )}
-                      </td>
-                      {canManage && (
-                        <td className="text-nowrap">
-                          {r.activeException ? (
-                            <button
-                              className="btn btn-outline-danger btn-sm"
-                              onClick={() => removeException(r)}
-                              title="Remove alert exception"
-                            >
-                              <i className="bi bi-x-circle me-1"></i>
-                              Remove exception
-                            </button>
+                            <i className={`bi bi-chevron-${expandedRepoId === r.id ? 'down' : 'right'}`}></i>
+                          </button>
+                        </td>
+                        <td className="fw-semibold">
+                          {r.htmlUrl ? (
+                            <a href={r.htmlUrl} target="_blank" rel="noopener noreferrer">
+                              {r.name}
+                            </a>
                           ) : (
-                            <button
-                              className="btn btn-outline-secondary btn-sm"
-                              onClick={() => openExceptionModal(r)}
-                              title="Except this repository from the 30-day alert"
-                            >
-                              <i className="bi bi-shield-slash me-1"></i>
-                              Except
-                            </button>
+                            r.name
+                          )}
+                          {r.archived && (
+                            <span className="badge bg-secondary ms-2" title="Archived on GitHub">
+                              archived
+                            </span>
                           )}
                         </td>
+                        <td className="text-nowrap">{r.owner}</td>
+                        <td className="text-center">
+                          <span className={`badge ${r.criticalCount > 0 ? 'bg-danger' : 'bg-light text-dark border'}`}>
+                            {r.criticalCount}
+                          </span>
+                        </td>
+                        <td className="text-center">
+                          <span className={`badge ${r.highCount > 0 ? 'bg-warning text-dark' : 'bg-light text-dark border'}`}>
+                            {r.highCount}
+                          </span>
+                        </td>
+                        <td className="text-nowrap text-muted small">
+                          {formatServerDate(r.lastImportAt, undefined, '—')}
+                        </td>
+                        <td className="text-nowrap text-muted small">
+                          {formatServerDate(r.lastHighCriticalFindingAt, undefined, '—')}
+                        </td>
+                        <td>
+                          {editingRepoId === r.id ? (
+                            <div className="input-group input-group-sm" style={{ minWidth: '220px' }}>
+                              <input
+                                type="email"
+                                className="form-control"
+                                value={emailDraft}
+                                placeholder="owner@example.com"
+                                onChange={(e) => setEmailDraft(e.target.value)}
+                                disabled={savingEmail}
+                              />
+                              <button
+                                className="btn btn-success"
+                                onClick={() => saveEmail(r)}
+                                disabled={savingEmail}
+                                title="Save"
+                              >
+                                <i className="bi bi-check-lg"></i>
+                              </button>
+                              <button
+                                className="btn btn-outline-secondary"
+                                onClick={() => setEditingRepoId(null)}
+                                disabled={savingEmail}
+                                title="Cancel"
+                              >
+                                <i className="bi bi-x-lg"></i>
+                              </button>
+                            </div>
+                          ) : (
+                            <>
+                              {r.ownerEmail || <span className="text-muted">unmapped</span>}
+                              {canManage && (
+                                <button
+                                  className="btn btn-link btn-sm p-0 ms-2"
+                                  onClick={() => startEmailEdit(r)}
+                                  title="Edit owner email"
+                                >
+                                  <i className="bi bi-pencil"></i>
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </td>
+                        <td>
+                          {r.activeException ? (
+                            <span
+                              className="badge bg-info text-dark"
+                              title={`${r.activeException.reason} (by ${r.activeException.createdBy})`}
+                            >
+                              Excepted
+                              {r.activeException.expirationDate &&
+                                ` until ${formatServerDate(r.activeException.expirationDate, undefined, '')}`}
+                            </span>
+                          ) : (
+                            <span className="text-muted">—</span>
+                          )}
+                        </td>
+                        {canManage && (
+                          <td className="text-nowrap">
+                            {r.activeException ? (
+                              <button
+                                className="btn btn-outline-danger btn-sm"
+                                onClick={() => removeException(r)}
+                                title="Remove alert exception"
+                              >
+                                <i className="bi bi-x-circle me-1"></i>
+                                Remove exception
+                              </button>
+                            ) : (
+                              <button
+                                className="btn btn-outline-secondary btn-sm"
+                                onClick={() => openExceptionModal(r)}
+                                title="Except this repository from the 30-day alert"
+                              >
+                                <i className="bi bi-shield-slash me-1"></i>
+                                Except
+                              </button>
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                      {expandedRepoId === r.id && (
+                        <tr>
+                          <td></td>
+                          <td colSpan={canManage ? 9 : 8} className="bg-light">
+                            {loadingAlerts && !alertsByRepo[r.id] ? (
+                              <div className="py-2">
+                                <span className="spinner-border spinner-border-sm me-2"></span>
+                                Loading alerts...
+                              </div>
+                            ) : alertsError ? (
+                              <div className="text-danger py-2">{alertsError}</div>
+                            ) : (alertsByRepo[r.id] ?? []).length === 0 ? (
+                              <div className="text-muted py-2">No open Dependabot alerts for this repository.</div>
+                            ) : (
+                              <table className="table table-sm table-borderless mb-0">
+                                <thead>
+                                  <tr className="text-muted small">
+                                    <th>Severity</th>
+                                    <th>Package</th>
+                                    <th>Ecosystem</th>
+                                    <th>Advisory</th>
+                                    <th>Vulnerable range</th>
+                                    <th>Patched</th>
+                                    <th>Updated</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {[...(alertsByRepo[r.id] ?? [])]
+                                    .sort((x, y) => severityRank(y.severity) - severityRank(x.severity))
+                                    .map((a) => (
+                                      <tr key={a.id}>
+                                        <td>
+                                          <span className={`badge ${severityBadgeClass(a.severity)}`}>
+                                            {a.severity?.toUpperCase()}
+                                          </span>
+                                        </td>
+                                        <td className="fw-semibold">
+                                          {a.packageName}
+                                          {a.manifestPath && (
+                                            <div className="text-muted small">{a.manifestPath}</div>
+                                          )}
+                                        </td>
+                                        <td>{a.ecosystem}</td>
+                                        <td>
+                                          {a.htmlUrl ? (
+                                            <a href={a.htmlUrl} target="_blank" rel="noopener noreferrer">
+                                              {a.cveId || a.ghsaId || 'advisory'}
+                                            </a>
+                                          ) : (
+                                            a.cveId || a.ghsaId || '—'
+                                          )}
+                                          {a.summary && <div className="text-muted small">{a.summary}</div>}
+                                        </td>
+                                        <td className="text-nowrap">{a.vulnerableVersionRange || '—'}</td>
+                                        <td className="text-nowrap">{a.firstPatchedVersion || '—'}</td>
+                                        <td className="text-nowrap text-muted small">
+                                          {formatServerDate(a.alertUpdatedAt, undefined, '—')}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                </tbody>
+                              </table>
+                            )}
+                          </td>
+                        </tr>
                       )}
-                    </tr>
+                    </React.Fragment>
                   ))
                 )}
               </tbody>

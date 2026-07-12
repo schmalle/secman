@@ -2,6 +2,7 @@ package com.secman.controller
 
 import com.secman.domain.GithubRepoAlertException
 import com.secman.repository.GithubRepoAlertExceptionRepository
+import com.secman.repository.GithubRepoDependabotAlertRepository
 import com.secman.repository.GithubRepositoryRepository
 import com.secman.service.GithubRepoImportService
 import io.micronaut.core.annotation.Nullable
@@ -36,7 +37,8 @@ import java.time.Instant
 open class GithubRepositoryController(
     private val githubRepositoryRepository: GithubRepositoryRepository,
     private val exceptionRepository: GithubRepoAlertExceptionRepository,
-    private val importService: GithubRepoImportService
+    private val importService: GithubRepoImportService,
+    private val alertRepository: GithubRepoDependabotAlertRepository
 ) {
     private val log = LoggerFactory.getLogger(GithubRepositoryController::class.java)
 
@@ -64,6 +66,23 @@ open class GithubRepositoryController(
         val lastHighCriticalFindingAt: Instant?,
         val archived: Boolean,
         val activeException: ActiveExceptionDto?
+    )
+
+    @Serdeable
+    data class GithubRepoAlertDto(
+        val id: Long,
+        val alertNumber: Int,
+        val packageName: String,
+        val ecosystem: String,
+        val manifestPath: String?,
+        val severity: String,
+        val ghsaId: String?,
+        val cveId: String?,
+        val summary: String?,
+        val vulnerableVersionRange: String?,
+        val firstPatchedVersion: String?,
+        val htmlUrl: String?,
+        val alertUpdatedAt: Instant?
     )
 
     @Serdeable
@@ -115,6 +134,33 @@ open class GithubRepositoryController(
             )
         }
         return HttpResponse.ok(repos)
+    }
+
+    @Get("/repositories/{id}/alerts")
+    @Secured("ADMIN", "VULN", "SECCHAMPION")
+    @Transactional(readOnly = true)
+    open fun listRepositoryAlerts(id: Long): HttpResponse<*> {
+        if (githubRepositoryRepository.findById(id).isEmpty) {
+            return HttpResponse.notFound(ErrorResponse("Repository not found"))
+        }
+        val alerts = alertRepository.findByGithubRepositoryId(id).map {
+            GithubRepoAlertDto(
+                id = it.id!!,
+                alertNumber = it.alertNumber,
+                packageName = it.packageName,
+                ecosystem = it.ecosystem,
+                manifestPath = it.manifestPath,
+                severity = it.severity,
+                ghsaId = it.ghsaId,
+                cveId = it.cveId,
+                summary = it.summary,
+                vulnerableVersionRange = it.vulnerableVersionRange,
+                firstPatchedVersion = it.firstPatchedVersion,
+                htmlUrl = it.htmlUrl,
+                alertUpdatedAt = it.alertUpdatedAt
+            )
+        }
+        return HttpResponse.ok(alerts)
     }
 
     @Put("/repositories/{id}/owner-email")

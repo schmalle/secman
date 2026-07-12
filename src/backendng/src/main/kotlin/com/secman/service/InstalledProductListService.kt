@@ -26,6 +26,23 @@ open class InstalledProductListService(
         return listMatchingProducts(authentication, normalizedServer, limit, matchServerOnly = true)
     }
 
+    @Transactional(readOnly = true)
+    open fun listDistinctNames(authentication: Authentication): List<String> {
+        val isAdmin = authentication.roles.contains("ADMIN")
+        val accessibleAssetIds = if (isAdmin) null else accessibleAssetIdsCache.get(authentication)
+
+        if (accessibleAssetIds != null && accessibleAssetIds.isEmpty()) {
+            return emptyList()
+        }
+
+        val pageable = Pageable.from(0, MAX_DISTINCT_NAMES)
+        return if (accessibleAssetIds == null) {
+            installedProductRepository.findDistinctNames(pageable)
+        } else {
+            installedProductRepository.findDistinctNamesForAssets(accessibleAssetIds, pageable)
+        }
+    }
+
     private fun listMatchingProducts(
         authentication: Authentication,
         normalizedSearch: String,
@@ -93,5 +110,9 @@ open class InstalledProductListService(
             totalProducts = products.size,
             totalSystems = totalSystems
         )
+    }
+
+    companion object {
+        const val MAX_DISTINCT_NAMES = 5_000
     }
 }

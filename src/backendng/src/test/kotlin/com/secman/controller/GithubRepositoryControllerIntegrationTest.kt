@@ -1,10 +1,12 @@
 package com.secman.controller
 
 import com.secman.domain.GithubRepoAlertException
+import com.secman.domain.GithubRepoDependabotAlert
 import com.secman.domain.GithubRepoFindingSnapshot
 import com.secman.domain.GithubRepository
 import com.secman.domain.User
 import com.secman.repository.GithubRepoAlertExceptionRepository
+import com.secman.repository.GithubRepoDependabotAlertRepository
 import com.secman.repository.GithubRepoFindingSnapshotRepository
 import com.secman.repository.GithubRepositoryRepository
 import com.secman.repository.UserRepository
@@ -19,6 +21,7 @@ import io.micronaut.http.client.exceptions.HttpClientResponseException
 import io.micronaut.test.extensions.junit5.annotation.MicronautTest
 import jakarta.inject.Inject
 import org.assertj.core.api.Assertions.assertThat
+import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.time.Instant
@@ -50,6 +53,9 @@ class GithubRepositoryControllerIntegrationTest : BaseIntegrationTest() {
 
     @Inject
     lateinit var exceptionRepository: GithubRepoAlertExceptionRepository
+
+    @Inject
+    lateinit var alertRepository: GithubRepoDependabotAlertRepository
 
     private lateinit var adminUser: User
     private lateinit var vulnUser: User
@@ -105,6 +111,52 @@ class GithubRepositoryControllerIntegrationTest : BaseIntegrationTest() {
             )
         }
         assertThat(ex.status).isEqualTo(HttpStatus.FORBIDDEN)
+    }
+
+    @Test
+    fun `lists a repository's alerts for SECCHAMPION, denies regular user, 404s for unknown id`() {
+        val repo = seedRepo(critical = 1, high = 0)
+        alertRepository.save(
+            GithubRepoDependabotAlert(
+                githubRepositoryId = repo.id!!,
+                alertNumber = 1,
+                packageName = "lodash",
+                ecosystem = "npm",
+                severity = "critical",
+                cveId = "CVE-2024-1"
+            )
+        )
+
+        val champToken = TestAuthHelper.getAuthToken(client, champUser.username)
+        val response = client.toBlocking().exchange(
+            HttpRequest.GET<Any>("/api/github/repositories/${repo.id}/alerts")
+                .header("Authorization", "Bearer $champToken"),
+            Array<Any>::class.java
+        )
+        assertThat(response.status).isEqualTo(HttpStatus.OK)
+        assertThat(response.body()).hasSize(1)
+        @Suppress("UNCHECKED_CAST")
+        val alert = response.body()!![0] as Map<String, Any?>
+        assertThat(alert["packageName"]).isEqualTo("lodash")
+
+        val regularToken = TestAuthHelper.getAuthToken(client, regularUser.username)
+        assertThatThrownBy {
+            client.toBlocking().exchange(
+                HttpRequest.GET<Any>("/api/github/repositories/${repo.id}/alerts")
+                    .header("Authorization", "Bearer $regularToken"),
+                String::class.java
+            )
+        }.isInstanceOf(HttpClientResponseException::class.java)
+            .satisfies({ e -> assertThat((e as HttpClientResponseException).status).isEqualTo(HttpStatus.FORBIDDEN) })
+
+        assertThatThrownBy {
+            client.toBlocking().exchange(
+                HttpRequest.GET<Any>("/api/github/repositories/999999999/alerts")
+                    .header("Authorization", "Bearer $champToken"),
+                String::class.java
+            )
+        }.isInstanceOf(HttpClientResponseException::class.java)
+            .satisfies({ e -> assertThat((e as HttpClientResponseException).status).isEqualTo(HttpStatus.NOT_FOUND) })
     }
 
     @Test

@@ -81,4 +81,37 @@ class InstalledProductListServiceTest {
         name = name,
         version = version
     )
+
+    @Test
+    fun `listDistinctNames returns all names unscoped for admins`() {
+        val authentication = Authentication.build("admin", listOf("ADMIN"))
+        every { installedProductRepository.findDistinctNames(any<Pageable>()) } returns listOf("Chrome", "Firefox")
+
+        val result = service.listDistinctNames(authentication)
+
+        assertThat(result).containsExactly("Chrome", "Firefox")
+        verify(exactly = 0) { accessibleAssetIdsCache.get(any()) }
+    }
+
+    @Test
+    fun `listDistinctNames scopes to accessible assets for non-admins`() {
+        val authentication = Authentication.build("champion", listOf("SECCHAMPION"))
+        every { accessibleAssetIdsCache.get(authentication) } returns setOf(7L)
+        every { installedProductRepository.findDistinctNamesForAssets(setOf(7L), any<Pageable>()) } returns listOf("OpenJDK")
+
+        val result = service.listDistinctNames(authentication)
+
+        assertThat(result).containsExactly("OpenJDK")
+    }
+
+    @Test
+    fun `listDistinctNames returns empty list when non-admin has no accessible assets`() {
+        val authentication = Authentication.build("champion", listOf("SECCHAMPION"))
+        every { accessibleAssetIdsCache.get(authentication) } returns emptySet()
+
+        val result = service.listDistinctNames(authentication)
+
+        assertThat(result).isEmpty()
+        verify(exactly = 0) { installedProductRepository.findDistinctNamesForAssets(any(), any()) }
+    }
 }

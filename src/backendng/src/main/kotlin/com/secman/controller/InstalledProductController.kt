@@ -2,6 +2,7 @@ package com.secman.controller
 
 import com.secman.dto.InstalledProductImportRequest
 import com.secman.dto.InstalledProductListResponse
+import com.secman.dto.InstalledProductNamesResponse
 import com.secman.service.InstalledProductImportService
 import com.secman.service.InstalledProductListService
 import io.micronaut.core.annotation.Nullable
@@ -47,6 +48,11 @@ open class InstalledProductController(
         } catch (e: IllegalArgumentException) {
             HttpResponse.badRequest(mapOf("error" to (e.message ?: "Invalid request")))
         }
+    }
+
+    @Get("/names")
+    open fun listNames(authentication: Authentication): HttpResponse<InstalledProductNamesResponse> {
+        return HttpResponse.ok(InstalledProductNamesResponse(installedProductListService.listDistinctNames(authentication)))
     }
 
     @Post("/import")
