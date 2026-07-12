@@ -108,40 +108,11 @@ Backend import semantics:
 - Product names are required. Blank names, unknown systems, and external IDs already assigned to a different asset are skipped and reflected in the summary.
 - Imported fields include CrowdStrike AID, product name, vendor, version, category, installation path, installed timestamp, last-used timestamp, last-updated timestamp, and SecMan import timestamp.
 
-### `query dependabot-alerts` — GitHub Dependabot alert ingestion
-
-Queries the GitHub REST API for Dependabot alerts (organization-wide or for a single repository) and stores them in secman via `POST /api/dependabot-alerts/import`. Alerts upsert on `(repository, alertNumber)`, so re-runs update state in place. Surfaced read-only in the UI under **Vulnerability Management → Dependabot alerts**.
-
-```bash
-# Print alerts for an org (no write):
-GITHUB_TOKEN=ghp_xxx ./scripts/secman query dependabot-alerts --org my-org
-
-# Store open alerts for an org:
-GITHUB_TOKEN=ghp_xxx ./scripts/secman query dependabot-alerts --org my-org --save
-
-# Single repo, critical only:
-./scripts/secman query dependabot-alerts --repo owner/name --severity critical --state open --save --token ghp_xxx
-```
-
-| Option | Default | Notes |
-|---|---|---|
-| `--org` | — | GitHub org; queries every repo in the org. **Exactly one of `--org`/`--repo` required.** |
-| `--repo` | — | single repository in `owner/name` form |
-| `--token` | `GITHUB_TOKEN` env | GitHub token; needs `security_events` read scope (or `repo` for classic PATs) |
-| `--state` | `open` | `open`, `fixed`, `dismissed`, `auto_dismissed` |
-| `--severity` | all | `low`, `medium`, `high`, `critical` |
-| `--save` | false | POST alerts to the backend (otherwise prints only) |
-| `--dry-run` | false | query + print, never store |
-| `--backend-url` | `http://localhost:8080` | or `SECMAN_BACKEND_URL` / `SECMAN_HOST` |
-| `--verbose` | false | log each GitHub request |
-
-Backend auth (only with `--save`): `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS` (ADMIN or VULN role). GitHub pagination is followed automatically (100/page). See `docs/DEPENDABOT.md` for the full feature and the alert field mapping.
-
 ### `import-github-repos` — GitHub repository import via GitHub App
 
 Triggers the backend to import every repository accessible to the **GitHub App** configured under **Admin → GitHub App** (`POST /api/github/import`). For each repository, the backend fetches the open Dependabot alerts, stores the high/critical counts on the repository record (with `lastImportAt` / `lastHighCriticalFindingAt`) and writes one finding snapshot per run — the history behind `alert-github-repo-owners`. Repos surface in the UI under **Vulnerability Management → GitHub**.
 
-Unlike `query dependabot-alerts`, the GitHub credentials live in the backend (encrypted); this command needs only secman credentials. Re-runs upsert by the stable numeric GitHub repository id (rename-safe). Run it regularly (e.g. daily via cron) to build the 30-day comparison history.
+GitHub credentials live in the backend (encrypted GitHub App key, configured under Admin → GitHub App); this command needs only secman credentials. Re-runs upsert by the stable numeric GitHub repository id (rename-safe). Run it regularly (e.g. daily via cron) to build the 30-day comparison history. Each import also replaces every repo's per-alert detail (package, CVE/GHSA, vulnerable range, patched version) — see `docs/GITHUB_REPOS.md`.
 
 ```bash
 ./scripts/secman import-github-repos

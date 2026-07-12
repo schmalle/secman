@@ -2,7 +2,7 @@
 
 secman can inventory all GitHub repositories accessible via a **GitHub App**, track each repo's open **high/critical Dependabot alerts** over time, and **alert repo owners whose counts have not decreased in 30 days** — with per-repo exceptions.
 
-Unlike [Dependabot alert ingestion](DEPENDABOT.md) (CLI-pull with a PAT), the GitHub calls here happen **server-side** using GitHub App credentials stored (encrypted) in secman. The CLI and MCP tools only trigger backend operations.
+The GitHub calls happen **server-side** using GitHub App credentials stored (encrypted) in secman — no personal access token management. The CLI and MCP tools only trigger backend operations.
 
 ## Architecture
 
@@ -35,7 +35,7 @@ MCP send_github_repo_alerts ──┘     │  (pure DB — compares current cou
 
 Only one configuration can be active at a time. The private key is encrypted at rest (`EncryptedStringConverter`) and every API response masks it as `***HIDDEN***`.
 
-## Data model (V238)
+## Data model (V238, V239)
 
 | Table | Purpose | Key fields |
 |---|---|---|
@@ -43,10 +43,12 @@ Only one configuration can be active at a time. The private key is encrypted at 
 | `github_repository` | Repo inventory | `github_repo_id` (unique, rename-safe upsert key), `full_name` (unique), `owner`, `owner_email?`, `critical_count`, `high_count`, `last_import_at`, `last_high_critical_finding_at`, `archived` |
 | `github_repo_finding_snapshot` | Per-import count history | FK → repo (cascade), `snapshot_at`, `critical_count`, `high_count` |
 | `github_repo_alert_exception` | Alerting exceptions | FK → repo (cascade), `reason`, `expiration_date?` (null = permanent), `created_by`, `created_at` |
+| `github_repo_dependabot_alert` (V239) | Current open per-alert detail | FK → repo (cascade), `alert_number`, `package_name`, `ecosystem`, `manifest_path?`, `severity`, `ghsa_id?`, `cve_id?`, `summary?`, `vulnerable_version_range?`, `first_patched_version?`, `html_url?`, `alert_created_at?`, `alert_updated_at?` |
 
 - `last_import_at` — stamped on every import.
 - `last_high_critical_finding_at` — stamped on an import **iff** the repo had ≥1 open high/critical alert at that moment.
 - One snapshot row per repo per import run is the history that makes the 30-day comparison possible.
+- `github_repo_dependabot_alert` is **current-state only**: on every import, a repo's rows are deleted and reinserted from the freshly fetched `state=open` alert list (same delete-by-asset + reinsert pattern as the CrowdStrike vulnerability import — no history table, no retention job). V239 also drops the standalone `dependabot_alert` table it supersedes.
 
 ## The 30-day non-decrease rule
 
@@ -62,7 +64,7 @@ The alert run reads only the secman DB — no GitHub round-trip — so it is fas
 
 ## UI
 
-- **Vulnerability Management → GitHub** (`/github-repos`), visible to ADMIN, VULN, SECCHAMPION. Columns: repository (link), owner, **critical**, **high**, last import, last high/critical finding, owner email (inline edit — ADMIN/VULN), exception badge. Toolbar: **Import now** (ADMIN/VULN). Per-row: create/remove an alert exception (reason + optional expiry) — ADMIN/VULN.
+- **Vulnerability Management → GitHub** (`/github-repos`), visible to ADMIN, VULN, SECCHAMPION. Columns: repository (link), owner, **critical**, **high**, last import, last high/critical finding, owner email (inline edit — ADMIN/VULN), exception badge. Toolbar: **Import now** (ADMIN/VULN). Per-row: create/remove an alert exception (reason + optional expiry) — ADMIN/VULN; expand (chevron) to show that repo's open Dependabot alerts — severity, package/ecosystem, CVE/GHSA advisory link, vulnerable range, patched version, last updated.
 - **Admin → GitHub App** (`/admin/github-config`), ADMIN only: credential CRUD, activate, test connection.
 
 ## REST API
@@ -71,6 +73,7 @@ The alert run reads only the secman DB — no GitHub round-trip — so it is fas
 |---|---|---|---|
 | `/api/github-config[/{id}]`, `/active`, `/{id}/activate`, `/{id}/test` | CRUD/POST | ADMIN | GitHub App credentials (key always masked) |
 | `/api/github/repositories` | GET | ADMIN, VULN, SECCHAMPION | Repo list incl. counts + active exception |
+| `/api/github/repositories/{id}/alerts` | GET | ADMIN, VULN, SECCHAMPION | A repository's current open Dependabot alerts |
 | `/api/github/repositories/{id}/owner-email` | PUT | ADMIN, VULN | Set/clear the alert recipient (`{"ownerEmail": "x@y.z"}`, blank/null clears) |
 | `/api/github/import` | POST | ADMIN, VULN | Run the GitHub App import |
 | `/api/github/repo-alert-exceptions[/{id}]` | GET / POST / DELETE | read: +SECCHAMPION; write: ADMIN, VULN | Alerting exceptions |
@@ -124,7 +127,7 @@ Future work: an in-backend scheduler (following `scheduler/AwsAccountRiskAssessm
 
 ## Files
 
-- Entities: `src/backendng/.../domain/GithubAppConfig.kt`, `GithubRepository.kt`, `GithubRepoFindingSnapshot.kt`, `GithubRepoAlertException.kt` (+ Flyway `V238__github_repos.sql`)
+- Entities: `src/backendng/.../domain/GithubAppConfig.kt`, `GithubRepository.kt`, `GithubRepoFindingSnapshot.kt`, `GithubRepoAlertException.kt`, `GithubRepoDependabotAlert.kt` (+ Flyway `V238__github_repos.sql`, `V239__github_repo_dependabot_alerts.sql`)
 - Services: `GithubAppClientService.kt` (App JWT via `util/PemUtils.kt`, installation token, repo/alert queries), `GithubRepoImportService.kt`, `GithubRepoAlertService.kt`
 - Controllers: `GithubConfigController.kt`, `GithubRepositoryController.kt`, `CliController.kt` (`/github-repo-alerts/send`)
 - MCP: `mcp/tools/ImportGithubReposTool.kt`, `SendGithubRepoAlertsTool.kt` (registered in `McpToolRegistry.kt`)

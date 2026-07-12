@@ -1,9 +1,11 @@
 package com.secman.service
 
 import com.secman.domain.GithubAppConfig
+import com.secman.domain.GithubRepoDependabotAlert
 import com.secman.domain.GithubRepoFindingSnapshot
 import com.secman.domain.GithubRepository
 import com.secman.repository.GithubAppConfigRepository
+import com.secman.repository.GithubRepoDependabotAlertRepository
 import com.secman.repository.GithubRepoFindingSnapshotRepository
 import com.secman.repository.GithubRepositoryRepository
 import io.mockk.every
@@ -14,6 +16,7 @@ import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import java.time.Instant
 import java.util.Optional
 
 class GithubRepoImportServiceTest {
@@ -21,6 +24,7 @@ class GithubRepoImportServiceTest {
     private lateinit var configRepository: GithubAppConfigRepository
     private lateinit var repoRepository: GithubRepositoryRepository
     private lateinit var snapshotRepository: GithubRepoFindingSnapshotRepository
+    private lateinit var alertRepository: GithubRepoDependabotAlertRepository
     private lateinit var client: GithubAppClientService
     private lateinit var service: GithubRepoImportService
 
@@ -31,8 +35,9 @@ class GithubRepoImportServiceTest {
         configRepository = mockk()
         repoRepository = mockk()
         snapshotRepository = mockk()
+        alertRepository = mockk()
         client = mockk()
-        service = GithubRepoImportService(configRepository, repoRepository, snapshotRepository, client)
+        service = GithubRepoImportService(configRepository, repoRepository, snapshotRepository, alertRepository, client)
 
         every { configRepository.findActiveConfig() } returns Optional.of(config)
         every { client.getInstallationToken(config) } returns "token"
@@ -43,6 +48,7 @@ class GithubRepoImportServiceTest {
             firstArg<GithubRepository>().also { it.id = it.id ?: it.githubRepoId }
         }
         every { repoRepository.update(any<GithubRepository>()) } answers { firstArg() }
+        every { alertRepository.deleteByGithubRepositoryId(any()) } returns 0
     }
 
     private fun repoDto(id: Long, fullName: String = "org/repo$id") =
@@ -146,5 +152,49 @@ class GithubRepoImportServiceTest {
         assertThat(result.reposNew).isEqualTo(1)
         assertThat(result.errors).hasSize(1)
         assertThat(result.errors[0]).contains("org/bad")
+    }
+
+    @Test
+    fun `replaces alert rows on each import`() {
+        val alertDto = GithubAppClientService.AlertDto(
+            alertNumber = 3,
+            packageName = "lodash",
+            ecosystem = "npm",
+            manifestPath = "package.json",
+            severity = "critical",
+            ghsaId = "GHSA-xxxx",
+            cveId = "CVE-2024-1",
+            summary = "desc",
+            vulnerableVersionRange = "< 4.17.21",
+            firstPatchedVersion = "4.17.21",
+            htmlUrl = "https://github.com/org/repo7/security/dependabot/3",
+            alertCreatedAt = Instant.parse("2026-01-01T00:00:00Z"),
+            alertUpdatedAt = Instant.parse("2026-01-02T00:00:00Z")
+        )
+        val savedAlerts = slot<List<GithubRepoDependabotAlert>>()
+        every { alertRepository.saveAll(capture(savedAlerts)) } answers { firstArg() }
+        every { client.listInstallationRepositories("token") } returns listOf(repoDto(7))
+        every { client.countOpenDependabotAlerts("token", "org", "repo7") } returns
+            GithubAppClientService.SeverityCounts(critical = 1, high = 0, alerts = listOf(alertDto))
+
+        service.importRepositories()
+
+        verify { alertRepository.deleteByGithubRepositoryId(7) }
+        assertThat(savedAlerts.captured).hasSize(1)
+        assertThat(savedAlerts.captured[0].githubRepositoryId).isEqualTo(7)
+        assertThat(savedAlerts.captured[0].packageName).isEqualTo("lodash")
+        assertThat(savedAlerts.captured[0].cveId).isEqualTo("CVE-2024-1")
+    }
+
+    @Test
+    fun `deletes stale alert rows even when the repo now has none`() {
+        every { client.listInstallationRepositories("token") } returns listOf(repoDto(7))
+        every { client.countOpenDependabotAlerts("token", "org", "repo7") } returns
+            GithubAppClientService.SeverityCounts(critical = 0, high = 0, alerts = emptyList())
+
+        service.importRepositories()
+
+        verify { alertRepository.deleteByGithubRepositoryId(7) }
+        verify(exactly = 0) { alertRepository.saveAll(any<Iterable<GithubRepoDependabotAlert>>()) }
     }
 }
