@@ -35,6 +35,8 @@ MCP send_github_repo_alerts ──┘     │  (pure DB — compares current cou
 
 Only one configuration can be active at a time. The private key is encrypted at rest (`EncryptedStringConverter`) and every API response masks it as `***HIDDEN***`.
 
+**Client ID / Client secret are not needed.** The App's settings page also shows a Client ID and a "Client secrets" section — those are a separate credential pair for the *user-to-server* OAuth flow (signing users in through the App; see [GitHub's docs](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/identifying-and-authorizing-users-for-github-apps)) and are unrelated to this integration, which only [authenticates as the App itself](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/authenticating-as-a-github-app) (App ID + private key → signed JWT → installation access token). The client secret is a plain opaque bearer string, not a cryptographic key — do not paste it into the private key field.
+
 ## Data model (V238, V239)
 
 | Table | Purpose | Key fields |

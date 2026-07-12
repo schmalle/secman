@@ -460,7 +460,7 @@ const GithubConfigManagement = () => {
                         <li><strong>Metadata</strong> — Read-only (list repositories)</li>
                         <li><strong>Dependabot alerts</strong> — Read-only (count open alerts)</li>
                     </ul>
-                    <div className="alert alert-warning">
+                    <div className="alert alert-warning mb-0">
                         <i className="bi bi-shield-exclamation me-2"></i>
                         <strong>Security Note:</strong> The private key is encrypted at rest in the database
                         and never returned by the API.

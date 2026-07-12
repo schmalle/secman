@@ -54,16 +54,15 @@ class ImportGithubReposCommand : Runnable {
             val authToken = cliHttpClient.authenticate(effectiveUsername, effectivePassword, effectiveUrl)
                 ?: throw RuntimeException("Authentication failed. Check credentials.")
 
-            val result = cliHttpClient.postMap(
+            val (status, result) = cliHttpClient.postMapWithStatus(
                 "$effectiveUrl/api/github/import",
                 emptyMap<String, Any>(),
                 authToken
-            ) ?: throw RuntimeException("Import failed - no response from server")
+            )
 
-            (result["error"] as? String)?.let { error ->
-                System.err.println("Error: $error")
-                System.exit(1)
-                return
+            if (status !in 200..299 || result == null) {
+                val error = result?.get("error")?.toString() ?: "Backend returned HTTP $status"
+                throw RuntimeException(error)
             }
 
             val discovered = (result["reposDiscovered"] as? Number)?.toInt() ?: 0

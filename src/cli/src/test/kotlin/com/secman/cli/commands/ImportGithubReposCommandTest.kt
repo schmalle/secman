@@ -22,8 +22,8 @@ class ImportGithubReposCommandTest {
             cliHttpClient.authenticate("admin", "secret", "https://secman.example.test")
         } returns "token"
         every {
-            cliHttpClient.postMap("https://secman.example.test/api/github/import", any(), "token")
-        } returns mapOf(
+            cliHttpClient.postMapWithStatus("https://secman.example.test/api/github/import", any(), "token")
+        } returns (200 to mapOf(
             "reposDiscovered" to 3,
             "reposNew" to 1,
             "reposUpdated" to 2,
@@ -32,12 +32,12 @@ class ImportGithubReposCommandTest {
             "reposWithAlertsDisabled" to listOf("org/legacy"),
             "errors" to emptyList<String>(),
             "importedAt" to "2026-07-08T00:00:00Z"
-        )
+        ))
 
         command.run()
 
         verify(exactly = 1) {
-            cliHttpClient.postMap("https://secman.example.test/api/github/import", any(), "token")
+            cliHttpClient.postMapWithStatus("https://secman.example.test/api/github/import", any(), "token")
         }
     }
 
@@ -52,17 +52,17 @@ class ImportGithubReposCommandTest {
         }
 
         every { cliHttpClient.authenticate(any(), any(), any()) } returns "token"
-        every { cliHttpClient.postMap(any(), any(), any()) } returns mapOf(
+        every { cliHttpClient.postMapWithStatus(any(), any(), any()) } returns (200 to mapOf(
             "reposDiscovered" to 0, "reposNew" to 0, "reposUpdated" to 0,
             "totalCritical" to 0, "totalHigh" to 0,
             "reposWithAlertsDisabled" to emptyList<String>(),
             "errors" to emptyList<String>()
-        )
+        ))
 
         command.run()
 
         verify {
-            cliHttpClient.postMap("https://secman.example.test/api/github/import", any(), "token")
+            cliHttpClient.postMapWithStatus("https://secman.example.test/api/github/import", any(), "token")
         }
     }
 }
