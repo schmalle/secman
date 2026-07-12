@@ -24,7 +24,6 @@ import com.secman.cli.commands.NotifyNewAccountsCommand
 import com.secman.cli.commands.SendPatchNotificationsCommand
 import com.secman.cli.commands.SendApplicationRegisterRemindersCommand
 import com.secman.cli.commands.ServersCommand
-import com.secman.cli.commands.DependabotAlertsCommand
 import io.micronaut.configuration.picocli.PicocliRunner
 import io.micronaut.context.ApplicationContext
 import org.slf4j.LoggerFactory
@@ -52,7 +51,6 @@ class SecmanCli {
             args[0] == "help" -> {
                 when {
                     args.size > 2 && args[1] == "query" && args[2] == "servers" -> showCommandHelp("query-servers")
-                    args.size > 2 && args[1] == "query" && args[2] == "dependabot-alerts" -> showCommandHelp("query-dependabot-alerts")
                     args.size > 2 && args[1] == "manage-user-mappings" && args[2] == "s3" -> showCommandHelp("manage-user-mappings-s3")
                     args.size > 1 -> showCommandHelp(args[1])
                     else -> showHelp()
@@ -92,26 +90,6 @@ class SecmanCli {
                     i++
                 }
                 command.execute()
-            }
-            args[0] == "query" && args.size > 1 && args[1] == "dependabot-alerts" && args.any { it == "--help" || it == "-h" } -> showCommandHelp("query-dependabot-alerts")
-            args[0] == "query" && args.size > 1 && args[1] == "dependabot-alerts" -> {
-                val cmd = DependabotAlertsCommand()
-                var i = 2
-                while (i < args.size) {
-                    when {
-                        args[i] == "--org" && i + 1 < args.size -> { cmd.org = args[i + 1]; i++ }
-                        args[i] == "--repo" && i + 1 < args.size -> { cmd.repo = args[i + 1]; i++ }
-                        args[i] == "--token" && i + 1 < args.size -> { cmd.token = args[i + 1]; i++ }
-                        args[i] == "--state" && i + 1 < args.size -> { cmd.state = args[i + 1]; i++ }
-                        args[i] == "--severity" && i + 1 < args.size -> { cmd.severity = args[i + 1]; i++ }
-                        args[i] == "--backend-url" && i + 1 < args.size -> { cmd.backendUrl = args[i + 1]; i++ }
-                        args[i] == "--save" -> cmd.save = true
-                        args[i] == "--dry-run" -> cmd.dryRun = true
-                        args[i] == "--verbose" -> cmd.verbose = true
-                    }
-                    i++
-                }
-                cmd.execute()
             }
             args[0] == "query" && args.size > 1 && args[1] == "servers" -> {
                 val serversCommand = ServersCommand()
@@ -478,7 +456,6 @@ class SecmanCli {
                 manage-workgroups      Manage workgroup asset assignments (list, assign, remove)
 
               GitHub:
-                query dependabot-alerts  Query GitHub Dependabot alerts (org or repo) and store them in secman
                 import-github-repos    Import GitHub repositories via the configured GitHub App (ADMIN)
                 alert-github-repo-owners  Alert repo owners whose high/critical vuln count has not decreased (ADMIN)
 
@@ -535,38 +512,9 @@ class SecmanCli {
             "env" to "environment",
             "vars" to "environment",
             "s3" to "manage-user-mappings-s3",
-            "dependabot-alerts" to "query-dependabot-alerts",
-            "dependabot" to "query-dependabot-alerts",
         )
 
         private val commandHelpTexts = mapOf(
-            "query-dependabot-alerts" to """
-                secman query dependabot-alerts - Query GitHub Dependabot alerts and store them in secman
-
-                Usage: secman query dependabot-alerts (--org <org> | --repo <owner/name>) [options]
-
-                Scope (exactly one required):
-                  --org <org>              Query all repositories in a GitHub organization
-                  --repo <owner/name>      Query a single repository
-
-                Options:
-                  --token <token>          GitHub token (or set GITHUB_TOKEN env var). Needs
-                                           'security_events' read scope (repo scope for classic PATs).
-                  --state <state>          Filter by alert state: open|fixed|dismissed|auto_dismissed (default: open)
-                  --severity <level>       Filter by severity: low|medium|high|critical
-                  --backend-url <url>      secman backend URL (or SECMAN_BACKEND_URL / SECMAN_HOST)
-                  --save                   Store alerts in secman via POST /api/dependabot-alerts/import
-                  --dry-run                Query and print only; never store
-                  --verbose                Enable verbose logging
-
-                Backend auth (only with --save): SECMAN_ADMIN_NAME and SECMAN_ADMIN_PASS.
-
-                Examples:
-                  secman query dependabot-alerts --org my-org
-                  GITHUB_TOKEN=ghp_xxx secman query dependabot-alerts --org my-org --save
-                  secman query dependabot-alerts --repo owner/name --state open --severity critical --save
-            """.trimIndent(),
-
             "query" to """
                 secman query - Query CrowdStrike vulnerabilities for a single host
 
