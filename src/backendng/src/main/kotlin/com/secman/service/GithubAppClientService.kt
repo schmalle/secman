@@ -123,13 +123,13 @@ open class GithubAppClientService(
         val response = send(
             request("POST", "/app/installations/$installationId/access_tokens", jwt)
         )
-        if (response.first !in 200..299) {
+        if (response.status !in 200..299) {
             throw GithubApiException(
-                "Failed to create installation token (HTTP ${response.first}): ${truncate(response.second)}",
-                response.first
+                "Failed to create installation token (HTTP ${response.status}): ${truncate(response.body)}",
+                response.status
             )
         }
-        val node = objectMapper.readTree(response.second)
+        val node = objectMapper.readTree(response.body)
         val token = node.path("token").asText("")
         if (token.isBlank()) {
             throw GithubApiException("Installation token response contained no token")
@@ -146,13 +146,13 @@ open class GithubAppClientService(
         var page = 1
         while (true) {
             val response = send(request("GET", "/app/installations?per_page=100&page=$page", appJwt))
-            if (response.first !in 200..299) {
+            if (response.status !in 200..299) {
                 throw GithubApiException(
-                    "Failed to list App installations (HTTP ${response.first}): ${truncate(response.second)}",
-                    response.first
+                    "Failed to list App installations (HTTP ${response.status}): ${truncate(response.body)}",
+                    response.status
                 )
             }
-            val batch = objectMapper.readTree(response.second)
+            val batch = objectMapper.readTree(response.body)
             if (!batch.isArray || batch.isEmpty) break
             batch.forEach { installations.add(it) }
             if (batch.size() < 100) break
@@ -190,13 +190,13 @@ open class GithubAppClientService(
         var page = 1
         while (true) {
             val response = send(request("GET", "/installation/repositories?per_page=100&page=$page", token))
-            if (response.first !in 200..299) {
+            if (response.status !in 200..299) {
                 throw GithubApiException(
-                    "Failed to list installation repositories (HTTP ${response.first}): ${truncate(response.second)}",
-                    response.first
+                    "Failed to list installation repositories (HTTP ${response.status}): ${truncate(response.body)}",
+                    response.status
                 )
             }
-            val batch = objectMapper.readTree(response.second).path("repositories")
+            val batch = objectMapper.readTree(response.body).path("repositories")
             if (!batch.isArray || batch.isEmpty) break
             batch.forEach { repo ->
                 repos.add(
@@ -222,28 +222,29 @@ open class GithubAppClientService(
      * one pass over the same paginated response. 403/404 (alerts disabled
      * or inaccessible) yields `disabled = true` instead of failing the
      * whole import run.
+     *
+     * Unlike the other list endpoints, GitHub rejects `page` on this one
+     * ("Pagination using the `page` parameter is not supported") — it only
+     * supports cursor pagination via the `Link: rel="next"` response header.
      */
     open fun countOpenDependabotAlerts(token: String, owner: String, repo: String): SeverityCounts {
         var critical = 0
         var high = 0
         val alerts = mutableListOf<AlertDto>()
-        var page = 1
-        while (true) {
-            val response = send(
-                request("GET", "/repos/$owner/$repo/dependabot/alerts?state=open&per_page=100&page=$page", token),
-                retryOnRateLimit = true
-            )
+        var url: String? = "$apiBaseUrl/repos/$owner/$repo/dependabot/alerts?state=open&per_page=100"
+        while (url != null) {
+            val response = send(requestUrl("GET", url, token), retryOnRateLimit = true)
             when {
-                response.first == 403 || response.first == 404 -> {
-                    log.debug("Dependabot alerts unavailable for {}/{} (HTTP {})", owner, repo, response.first)
+                response.status == 403 || response.status == 404 -> {
+                    log.debug("Dependabot alerts unavailable for {}/{} (HTTP {})", owner, repo, response.status)
                     return SeverityCounts(disabled = true)
                 }
-                response.first !in 200..299 -> throw GithubApiException(
-                    "Failed to list Dependabot alerts for $owner/$repo (HTTP ${response.first}): ${truncate(response.second)}",
-                    response.first
+                response.status !in 200..299 -> throw GithubApiException(
+                    "Failed to list Dependabot alerts for $owner/$repo (HTTP ${response.status}): ${truncate(response.body)}",
+                    response.status
                 )
             }
-            val batch = objectMapper.readTree(response.second)
+            val batch = objectMapper.readTree(response.body)
             if (!batch.isArray || batch.isEmpty) break
             batch.forEach { alert ->
                 val severity = alert.path("security_advisory").path("severity").asText("").lowercase()
@@ -253,8 +254,7 @@ open class GithubAppClientService(
                 }
                 alerts.add(parseAlert(alert, severity))
             }
-            if (batch.size() < 100) break
-            page++
+            url = response.nextLink
         }
         return SeverityCounts(critical = critical, high = high, alerts = alerts)
     }
@@ -303,9 +303,12 @@ open class GithubAppClientService(
     // HTTP plumbing
     // ------------------------------------------------------------------
 
-    private fun request(method: String, path: String, bearer: String): JdkHttpRequest {
+    private fun request(method: String, path: String, bearer: String): JdkHttpRequest =
+        requestUrl(method, "$apiBaseUrl$path", bearer)
+
+    private fun requestUrl(method: String, url: String, bearer: String): JdkHttpRequest {
         return JdkHttpRequest.newBuilder()
-            .uri(URI.create("$apiBaseUrl$path"))
+            .uri(URI.create(url))
             .timeout(Duration.ofSeconds(30))
             .header("Accept", "application/vnd.github+json")
             .header("X-GitHub-Api-Version", "2022-11-28")
@@ -314,8 +317,10 @@ open class GithubAppClientService(
             .build()
     }
 
-    /** Returns (statusCode, body). One bounded retry on secondary rate limits. */
-    private fun send(request: JdkHttpRequest, retryOnRateLimit: Boolean = false): Pair<Int, String> {
+    private data class GithubResponse(val status: Int, val body: String, val nextLink: String?)
+
+    /** One bounded retry on secondary rate limits. [GithubResponse.nextLink] is the `Link: rel="next"` URL, if any. */
+    private fun send(request: JdkHttpRequest, retryOnRateLimit: Boolean = false): GithubResponse {
         val response = try {
             httpClient.send(request, BodyHandlers.ofString())
         } catch (e: Exception) {
@@ -332,9 +337,20 @@ open class GithubAppClientService(
             } catch (e: Exception) {
                 throw GithubApiException("GitHub API retry failed: ${e.message}", cause = e)
             }
-            return retried.statusCode() to retried.body()
+            return GithubResponse(retried.statusCode(), retried.body(), nextLinkOf(retried))
         }
-        return response.statusCode() to response.body()
+        return GithubResponse(response.statusCode(), response.body(), nextLinkOf(response))
+    }
+
+    /** Parses the `Link` response header's `rel="next"` URL (RFC 8288), e.g. `<url>; rel="next", <url>; rel="prev"`. */
+    private fun nextLinkOf(response: java.net.http.HttpResponse<String>): String? {
+        val link = response.headers().firstValue("Link").orElse(null) ?: return null
+        return link.split(",").firstNotNullOfOrNull { part ->
+            val segments = part.split(";").map { it.trim() }
+            val url = segments.firstOrNull()?.removePrefix("<")?.removeSuffix(">")
+            val isNext = segments.drop(1).any { it.replace(" ", "") == "rel=\"next\"" }
+            url?.takeIf { isNext }
+        }
     }
 
     private fun base64Url(bytes: ByteArray): String =

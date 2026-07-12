@@ -300,7 +300,11 @@ const GithubConfigManagement = () => {
                                 <small className="form-text text-muted">
                                     {editingConfig
                                         ? 'Current key is hidden. Paste a new PEM key to replace it.'
-                                        : 'The .pem private key downloaded from the GitHub App (PKCS#1 or PKCS#8).'}
+                                        : "Generate under your GitHub App's settings → scroll to Private keys " +
+                                          '(below Client secrets, above Danger Zone) → Generate a private key ' +
+                                          '— this downloads the .pem file to paste here. Not the Client ID / ' +
+                                          'Client secret shown further up that page; those support a separate ' +
+                                          "interactive sign-in flow this integration doesn't use."}
                                 </small>
                             </div>
 
