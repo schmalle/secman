@@ -580,7 +580,9 @@ class CliController(
     @Serdeable
     data class SendGithubRepoAlertsRequest(
         val dryRun: Boolean = false,
-        val thresholdDays: Int = 30
+        val thresholdDays: Int = 30,
+        val force: Boolean = false,
+        val onlyEmail: String? = null
     )
 
     /**
@@ -589,6 +591,10 @@ class CliController(
      * Alerts GitHub repo owners whose open high+critical Dependabot alert
      * count has not decreased over the last thresholdDays days. Backing for
      * CLI `alert-github-repo-owners` and MCP `send_github_repo_alerts`.
+     *
+     * `force` bypasses the non-decrease comparison and alerts every eligible
+     * owner with open high+critical alerts regardless of trend. `onlyEmail`
+     * restricts the run to repos owned by that address (case-insensitive).
      */
     @Post("/github-repo-alerts/send")
     @Produces(MediaType.APPLICATION_JSON)
@@ -596,8 +602,8 @@ class CliController(
         @Body request: SendGithubRepoAlertsRequest,
         authentication: Authentication
     ): HttpResponse<*> {
-        logger.info("CLI github-repo-alerts requested by user: {} (dryRun={}, thresholdDays={})",
-            authentication.name, request.dryRun, request.thresholdDays)
+        logger.info("CLI github-repo-alerts requested by user: {} (dryRun={}, thresholdDays={}, force={}, onlyEmail={})",
+            authentication.name, request.dryRun, request.thresholdDays, request.force, request.onlyEmail)
 
         if (request.thresholdDays < 1) {
             return HttpResponse.badRequest(mapOf("error" to "thresholdDays must be >= 1"))
@@ -605,7 +611,9 @@ class CliController(
         return try {
             val result = githubRepoAlertService.sendGithubRepoAlerts(
                 dryRun = request.dryRun,
-                thresholdDays = request.thresholdDays
+                thresholdDays = request.thresholdDays,
+                force = request.force,
+                onlyEmail = request.onlyEmail
             )
             HttpResponse.ok(result)
         } catch (e: Exception) {

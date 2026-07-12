@@ -135,17 +135,21 @@ Alerts GitHub repo owners whose open **high+critical** Dependabot alert count ha
 ./scripts/secman alert-github-repo-owners --dry-run
 ./scripts/secman alert-github-repo-owners
 ./scripts/secman alert-github-repo-owners --days 60 --verbose
+./scripts/secman alert-github-repo-owners --force
+./scripts/secman alert-github-repo-owners --only-email owner@example.com
 ```
 
 | Option | Default | Notes |
 |---|---|---|
 | `--days` | 30 | comparison window |
 | `--dry-run` | false | compute + print recipients, send nothing |
+| `--force` | false | alert every eligible owner with open high/critical alerts, bypassing the non-decrease comparison (also alerts repos with no baseline snapshot yet, skipping the "skipped" bucket for them) |
+| `--only-email` | (all owners) | restrict the run to repos owned by this email address (case-insensitive) |
 | `--verbose` | false | per-recipient status |
 | `--backend-url` | `SECMAN_HOST`, `SECMAN_BACKEND_URL`, then `http://localhost:8080` | backend API URL |
 | `--username` / `--password` | `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS` | ADMIN role required |
 
-The summary reports three special buckets: **excepted** repos (active `github_repo_alert_exception` — managed in the GitHub view), **unmapped** repos (non-decreasing but no `ownerEmail`), and **skipped** repos (no snapshot ≥ `--days` old yet — run the import regularly). Exit codes: `0` success/dry-run, `1` failure or partial failure, `2` usage error. Pure DB operation — no GitHub access needed. See `docs/GITHUB_REPOS.md`.
+The summary reports three special buckets: **excepted** repos (active `github_repo_alert_exception` — managed in the GitHub view), **unmapped** repos (non-decreasing but no `ownerEmail`), and **skipped** repos (no snapshot ≥ `--days` old yet — run the import regularly; suppressed by `--force`). Exit codes: `0` success/dry-run, `1` failure or partial failure, `2` usage error. Pure DB operation — no GitHub access needed. See `docs/GITHUB_REPOS.md`.
 
 ### `delete-asset-not-seen` — CrowdStrike stale asset cleanup
 

@@ -79,7 +79,7 @@ The alert run reads only the secman DB — no GitHub round-trip — so it is fas
 | `/api/github/repositories/{id}/owner-email` | PUT | ADMIN, VULN | Set/clear the alert recipient (`{"ownerEmail": "x@y.z"}`, blank/null clears) |
 | `/api/github/import` | POST | ADMIN, VULN | Run the GitHub App import |
 | `/api/github/repo-alert-exceptions[/{id}]` | GET / POST / DELETE | read: +SECCHAMPION; write: ADMIN, VULN | Alerting exceptions |
-| `/api/cli/github-repo-alerts/send` | POST | ADMIN | Run the 30-day alert (`{"dryRun": bool, "thresholdDays": int}`) |
+| `/api/cli/github-repo-alerts/send` | POST | ADMIN | Run the 30-day alert (`{"dryRun": bool, "thresholdDays": int, "force": bool, "onlyEmail": string?}`) |
 
 Import response: `{reposDiscovered, reposNew, reposUpdated, totalCritical, totalHigh, reposWithAlertsDisabled[], errors[], importedAt}`. Repos with Dependabot alerts disabled/inaccessible are recorded with 0/0 and listed — they do not fail the run.
 
@@ -101,6 +101,12 @@ See `docs/CLI.md` for the full option tables.
 
 # Custom window:
 ./scripts/secman alert-github-repo-owners --days 60
+
+# Force-alert every eligible owner, regardless of trend (also covers repos with no baseline yet):
+./scripts/secman alert-github-repo-owners --force
+
+# Only notify one owner (e.g. to test the email without spamming everyone):
+./scripts/secman alert-github-repo-owners --only-email owner@example.com
 ```
 
 Both authenticate with `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS` against `SECMAN_HOST` (ADMIN required; import also accepts VULN via the REST endpoint). Exit codes: 0 success, 1 failure/partial failure, 2 usage error.
@@ -110,7 +116,7 @@ Both authenticate with `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS` against `SECMAN
 See `docs/MCP.md`. Both require **User Delegation** (`X-MCP-User-Email`).
 
 - `import_github_repos` — no arguments. Delegated user must be ADMIN or VULN; API key needs `VULNERABILITIES_READ`. Errors: `NO_GITHUB_CONFIG` when no active configuration exists.
-- `send_github_repo_alerts` — `{dryRun?: boolean, thresholdDays?: number}` (defaults false / 30). Delegated user must be ADMIN; API key needs `NOTIFICATIONS_SEND`.
+- `send_github_repo_alerts` — `{dryRun?: boolean, thresholdDays?: number, force?: boolean, onlyEmail?: string}` (defaults false / 30 / false / all owners). Delegated user must be ADMIN; API key needs `NOTIFICATIONS_SEND`.
 
 ## Email
 

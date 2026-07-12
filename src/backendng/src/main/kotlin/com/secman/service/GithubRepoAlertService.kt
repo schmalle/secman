@@ -45,9 +45,9 @@ open class GithubRepoAlertService(
         val ownerEmail: String?,
         val currentCritical: Int,
         val currentHigh: Int,
-        val baselineCritical: Int,
-        val baselineHigh: Int,
-        val baselineDate: Instant
+        val baselineCritical: Int?,
+        val baselineHigh: Int?,
+        val baselineDate: Instant?
     )
 
     @Serdeable
@@ -66,12 +66,18 @@ open class GithubRepoAlertService(
         val alertedRepos: List<AlertedRepo>
     )
 
-    open fun sendGithubRepoAlerts(dryRun: Boolean = false, thresholdDays: Int = 30): AlertResult {
+    open fun sendGithubRepoAlerts(
+        dryRun: Boolean = false,
+        thresholdDays: Int = 30,
+        force: Boolean = false,
+        onlyEmail: String? = null
+    ): AlertResult {
         require(thresholdDays >= 1) { "thresholdDays must be >= 1" }
         val now = Instant.now()
         val cutoff = now.minus(thresholdDays.toLong(), ChronoUnit.DAYS)
 
         val repos = githubRepositoryRepository.findAll()
+            .let { all -> if (onlyEmail != null) all.filter { it.ownerEmail.equals(onlyEmail, ignoreCase = true) } else all }
         val excepted = mutableListOf<String>()
         val skippedInsufficientHistory = mutableListOf<String>()
         val unmapped = mutableListOf<String>()
@@ -88,12 +94,15 @@ open class GithubRepoAlertService(
             val baseline = snapshotRepository
                 .findFirstByGithubRepositoryIdAndSnapshotAtLessThanEqualOrderBySnapshotAtDesc(repo.id!!, cutoff)
                 .orElse(null)
-            if (baseline == null) {
-                skippedInsufficientHistory.add(repo.fullName)
-                continue
-            }
-            if (current < baseline.criticalCount + baseline.highCount) {
-                continue // improving — no alert
+
+            if (!force) {
+                if (baseline == null) {
+                    skippedInsufficientHistory.add(repo.fullName)
+                    continue
+                }
+                if (current < baseline.criticalCount + baseline.highCount) {
+                    continue // improving — no alert
+                }
             }
 
             val detail = AlertedRepo(
@@ -102,9 +111,9 @@ open class GithubRepoAlertService(
                 ownerEmail = repo.ownerEmail,
                 currentCritical = repo.criticalCount,
                 currentHigh = repo.highCount,
-                baselineCritical = baseline.criticalCount,
-                baselineHigh = baseline.highCount,
-                baselineDate = baseline.snapshotAt
+                baselineCritical = baseline?.criticalCount,
+                baselineHigh = baseline?.highCount,
+                baselineDate = baseline?.snapshotAt
             )
             if (repo.ownerEmail.isNullOrBlank()) {
                 unmapped.add(repo.fullName)
@@ -190,9 +199,9 @@ open class GithubRepoAlertService(
                 <td>$name</td>
                 <td style="text-align:center;">${r.currentCritical}</td>
                 <td style="text-align:center;">${r.currentHigh}</td>
-                <td style="text-align:center;">${r.baselineCritical}</td>
-                <td style="text-align:center;">${r.baselineHigh}</td>
-                <td style="text-align:center;">${dateFormat.format(r.baselineDate)}</td>
+                <td style="text-align:center;">${r.baselineCritical ?: "N/A"}</td>
+                <td style="text-align:center;">${r.baselineHigh ?: "N/A"}</td>
+                <td style="text-align:center;">${r.baselineDate?.let { dateFormat.format(it) } ?: "N/A"}</td>
             </tr>"""
         }
         return template
@@ -208,8 +217,12 @@ open class GithubRepoAlertService(
             ?: throw IllegalStateException("github-repo-alert.txt template not found")
 
         val rows = repos.joinToString("\n") { r ->
-            "- ${r.fullName}: now ${r.currentCritical} critical / ${r.currentHigh} high " +
-                "(was ${r.baselineCritical} critical / ${r.baselineHigh} high on ${dateFormat.format(r.baselineDate)})" +
+            val baselineText = if (r.baselineDate != null) {
+                "(was ${r.baselineCritical} critical / ${r.baselineHigh} high on ${dateFormat.format(r.baselineDate)})"
+            } else {
+                "(no baseline snapshot yet - forced alert)"
+            }
+            "- ${r.fullName}: now ${r.currentCritical} critical / ${r.currentHigh} high $baselineText" +
                 (r.htmlUrl?.let { "\n  $it" } ?: "")
         }
         return template

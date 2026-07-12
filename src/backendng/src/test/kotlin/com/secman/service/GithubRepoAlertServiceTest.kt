@@ -223,6 +223,55 @@ class GithubRepoAlertServiceTest {
     }
 
     @Test
+    fun `force alerts even when count decreased`() {
+        val r = repo(1, critical = 1, high = 1)
+        every { repoRepository.findAll() } returns listOf(r)
+        stubBaseline(1, baseline(1, critical = 3, high = 3))
+
+        val result = service.sendGithubRepoAlerts(dryRun = false, force = true)
+
+        assertThat(result.reposAlerted).isEqualTo(1)
+        assertThat(result.emailsSent).isEqualTo(1)
+    }
+
+    @Test
+    fun `force alerts repos with no baseline snapshot yet`() {
+        val r = repo(1, critical = 2, high = 0)
+        every { repoRepository.findAll() } returns listOf(r)
+        stubBaseline(1, null)
+
+        val result = service.sendGithubRepoAlerts(dryRun = false, force = true)
+
+        assertThat(result.reposAlerted).isEqualTo(1)
+        assertThat(result.reposSkippedInsufficientHistory).isEmpty()
+    }
+
+    @Test
+    fun `force does not alert repos with zero current count`() {
+        val r = repo(1, critical = 0, high = 0)
+        every { repoRepository.findAll() } returns listOf(r)
+
+        val result = service.sendGithubRepoAlerts(dryRun = false, force = true)
+
+        assertThat(result.reposAlerted).isEqualTo(0)
+    }
+
+    @Test
+    fun `onlyEmail restricts alerts to the matching owner`() {
+        val r1 = repo(1, fullName = "org/a", critical = 1, high = 0, ownerEmail = "target@example.com")
+        val r2 = repo(2, fullName = "org/b", critical = 1, high = 0, ownerEmail = "other@example.com")
+        every { repoRepository.findAll() } returns listOf(r1, r2)
+        stubBaseline(1, baseline(1, critical = 1, high = 0))
+        stubBaseline(2, baseline(2, critical = 1, high = 0))
+
+        val result = service.sendGithubRepoAlerts(dryRun = false, onlyEmail = "TARGET@example.com")
+
+        assertThat(result.reposAlerted).isEqualTo(1)
+        assertThat(result.recipients).containsExactly("target@example.com")
+        verify(exactly = 1) { emailService.sendEmailWithInlineImages(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
     fun `partial failure when some emails succeed`() {
         val r1 = repo(1, fullName = "org/a", critical = 1, high = 0, ownerEmail = "good@example.com")
         val r2 = repo(2, fullName = "org/b", critical = 1, high = 0, ownerEmail = "bad@example.com")

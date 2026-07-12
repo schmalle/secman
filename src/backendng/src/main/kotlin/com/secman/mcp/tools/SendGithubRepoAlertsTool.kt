@@ -35,6 +35,14 @@ class SendGithubRepoAlertsTool(
                 "type" to "number",
                 "description" to "Comparison window in days. Default: 30",
                 "minimum" to 1
+            ),
+            "force" to mapOf(
+                "type" to "boolean",
+                "description" to "If true, alerts every eligible owner with open high/critical alerts regardless of whether the count has decreased. Default: false"
+            ),
+            "onlyEmail" to mapOf(
+                "type" to "string",
+                "description" to "If set, restricts the run to repos owned by this email address (case-insensitive)"
             )
         ),
         "required" to emptyList<String>()
@@ -57,12 +65,19 @@ class SendGithubRepoAlertsTool(
 
         val dryRun = arguments["dryRun"] as? Boolean ?: false
         val thresholdDays = (arguments["thresholdDays"] as? Number)?.toInt() ?: 30
+        val force = arguments["force"] as? Boolean ?: false
+        val onlyEmail = arguments["onlyEmail"] as? String
         if (thresholdDays < 1) {
             return McpToolResult.error("INVALID_ARGUMENT", "thresholdDays must be >= 1")
         }
 
         return try {
-            val result = alertService.sendGithubRepoAlerts(dryRun = dryRun, thresholdDays = thresholdDays)
+            val result = alertService.sendGithubRepoAlerts(
+                dryRun = dryRun,
+                thresholdDays = thresholdDays,
+                force = force,
+                onlyEmail = onlyEmail
+            )
             McpToolResult.success(
                 mapOf(
                     "success" to true,

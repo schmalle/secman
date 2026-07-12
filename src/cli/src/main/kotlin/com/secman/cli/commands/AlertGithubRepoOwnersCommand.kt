@@ -30,6 +30,12 @@ class AlertGithubRepoOwnersCommand : Runnable {
     @Option(names = ["--days"], description = ["Comparison window in days (default: 30)"])
     var thresholdDays: Int = 30
 
+    @Option(names = ["--force"], description = ["Alert every repo owner with open high/critical alerts, even if the count has not increased"])
+    var force: Boolean = false
+
+    @Option(names = ["--only-email"], description = ["Only notify the repo owner with this email address (case-insensitive)"])
+    var onlyEmail: String? = null
+
     @Option(names = ["--verbose", "-v"], description = ["Detailed logging (show per-recipient status)"])
     var verbose: Boolean = false
 
@@ -64,6 +70,14 @@ class AlertGithubRepoOwnersCommand : Runnable {
                 println("DRY-RUN MODE: No emails will be sent")
                 println()
             }
+            if (force) {
+                println("FORCE MODE: Alerting all eligible owners regardless of trend")
+                println()
+            }
+            if (onlyEmail != null) {
+                println("Restricting to owner email: $onlyEmail")
+                println()
+            }
             println("Comparison window:  $thresholdDays days")
             println()
 
@@ -76,7 +90,9 @@ class AlertGithubRepoOwnersCommand : Runnable {
 
             val requestBody = mapOf(
                 "dryRun" to dryRun,
-                "thresholdDays" to thresholdDays
+                "thresholdDays" to thresholdDays,
+                "force" to force,
+                "onlyEmail" to onlyEmail
             )
 
             val result = cliHttpClient.postMap(
