@@ -358,14 +358,6 @@ const Sidebar = () => {
                                         </a>
                                     </li>
                                 )}
-                                {/* Dependabot alerts - ADMIN, VULN, or SECCHAMPION (mirrors GET /api/dependabot-alerts) */}
-                                {(userRoles.includes('ADMIN') || userRoles.includes('VULN') || userRoles.includes('SECCHAMPION')) && (
-                                    <li>
-                                        <a href="/dependabot-alerts" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                            <i className="bi bi-github me-2"></i> Dependabot alerts
-                                        </a>
-                                    </li>
-                                )}
                                 {/* GitHub repos - ADMIN, VULN, or SECCHAMPION (mirrors GET /api/github/repositories) */}
                                 {(userRoles.includes('ADMIN') || userRoles.includes('VULN') || userRoles.includes('SECCHAMPION')) && (
                                     <li>
