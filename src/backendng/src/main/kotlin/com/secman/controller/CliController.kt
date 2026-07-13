@@ -396,7 +396,8 @@ class CliController(
         val verbose: Boolean = false,
         val thresholdDays: Int = 30,
         val notificationUser: String? = null,
-        val emailPrefix: String? = null
+        val emailPrefix: String? = null,
+        val notAll: Boolean = false
     )
 
     @Serdeable
@@ -437,7 +438,8 @@ class CliController(
                 dryRun = request.dryRun,
                 verbose = request.verbose,
                 notificationUser = request.notificationUser,
-                emailPrefix = request.emailPrefix
+                emailPrefix = request.emailPrefix,
+                notAll = request.notAll
             )
 
             HttpResponse.ok(UserVulnNotificationResultDto(

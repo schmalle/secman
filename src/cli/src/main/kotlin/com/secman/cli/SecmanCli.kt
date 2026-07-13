@@ -692,6 +692,11 @@ class SecmanCli {
                   --dry-run                Preview planned notifications without sending emails
                   --verbose, -v            Detailed logging (show per-recipient status)
                   --days <number>          Vulnerability age threshold in days (default: 30)
+                  --notification-user <email>  Only notify this specific user email (skip all others)
+                  --notall                 With --notification-user for an ADMIN/SECCHAMPION: restrict to AWS
+                                           accounts backing assets the user owns (manual creator, scan uploader,
+                                           or owner), belongs to via workgroup, or has via AWS account sharing —
+                                           instead of the full global view those roles get by default
 
                 Description:
                   Identifies AWS accounts with systems having vulnerabilities open longer than
@@ -703,6 +708,7 @@ class SecmanCli {
                   secman send-notification-users --dry-run
                   secman send-notification-users --days 60 --verbose
                   secman send-notification-users --dry-run --days 14
+                  secman send-notification-users --notification-user admin@example.com --notall
             """.trimIndent(),
 
             "send-patch-notifications" to """

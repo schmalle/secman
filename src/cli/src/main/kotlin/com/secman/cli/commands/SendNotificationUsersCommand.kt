@@ -31,6 +31,9 @@ class SendNotificationUsersCommand : Runnable {
     @Option(names = ["--notification-user"], description = ["Only notify this specific user email (skip all others)"])
     var notificationUser: String? = null
 
+    @Option(names = ["--notall"], description = ["With --notification-user for an ADMIN/SECCHAMPION: restrict to AWS accounts backing assets the user owns (manual creator, scan uploader, or owner), belongs to via workgroup, or has via AWS account sharing — instead of the full global view"])
+    var notAll: Boolean = false
+
     @Option(names = ["--username"], description = ["Backend username (or set SECMAN_ADMIN_NAME env var)"])
     var username: String? = null
 
@@ -62,6 +65,9 @@ class SendNotificationUsersCommand : Runnable {
             if (notificationUser != null) {
                 println("Notification user filter: $notificationUser")
             }
+            if (notAll) {
+                println("--notall: restricting to owned/workgroup/shared AWS accounts only")
+            }
             println()
 
             val effectiveUrl = getEffectiveBackendUrl()
@@ -78,6 +84,9 @@ class SendNotificationUsersCommand : Runnable {
             )
             if (notificationUser != null) {
                 requestBody["notificationUser"] = notificationUser!!
+            }
+            if (notAll) {
+                requestBody["notAll"] = true
             }
 
             val result = cliHttpClient.postMap(

@@ -242,10 +242,18 @@ than one path is notified only once. An account with no recipients in any of the
 three categories is reported under "Unmapped accounts". A non-ADMIN
 `--notification-user` is scoped to only the accounts that user can access.
 
+`--notall` forces a `--notification-user` run into a restricted scope regardless of
+role: instead of the ADMIN global-bypass view (or the narrower UserMapping+sharing
+view every other role, including SECCHAMPION, gets by default), the run is limited
+to only the AWS accounts backing assets the user directly owns (manual creator,
+scan uploader, or `owner` field), belongs to via workgroup membership, or has been
+granted via AWS account sharing. Has no effect without `--notification-user`.
+
 ```bash
 ./scripts/secman send-notification-users --dry-run --verbose
 ./scripts/secman send-notification-users --days 60
 ./scripts/secman send-notification-users --notification-user user@example.com
+./scripts/secman send-notification-users --notification-user admin@example.com --notall
 ```
 
 | Option | Default | Notes |
@@ -254,6 +262,7 @@ three categories is reported under "Unmapped accounts". A non-ADMIN
 | `--dry-run` | false | print planned recipients only |
 | `--verbose` | false | per-recipient delivery status |
 | `--notification-user <email>` | — | only notify this user (ADMIN ⇒ global, otherwise self-scoped) |
+| `--notall` | false | with `--notification-user`, force the owned/workgroup/shared-only restriction regardless of role (chiefly for ADMIN/SECCHAMPION) |
 | `--username` / `--password` | env | `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS` |
 | `--backend-url` | env | `SECMAN_HOST` / `SECMAN_BACKEND_URL` |
 

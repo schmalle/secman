@@ -52,6 +52,39 @@ interface AssetRepository : JpaRepository<Asset, Long> {
     fun findDistinctWorkgroupMemberEmailsByCloudAccountId(cloudAccountId: String): List<String>
 
     /**
+     * Find the distinct AWS cloud account IDs of assets the given user owns directly —
+     * via workgroup membership, manual creation, scan upload, or the asset's `owner` field.
+     * Deliberately narrower than [findAccessibleAssets]: it excludes direct AWS/AD
+     * UserMapping and workgroup-assigned-account/domain access, since it backs the
+     * `--notall` restriction on the vulnerability-notification fan-out, which limits
+     * an ADMIN/SECCHAMPION `--notification-user` run to accounts the user is directly
+     * tied to (ownership, workgroup, or AWS account sharing — sharing is applied
+     * separately at the call site).
+     *
+     * @param userId The user's ID (for workgroup, creator, uploader checks)
+     * @param username The user's username (for owner-based access)
+     * @return Distinct non-blank cloud account IDs
+     */
+    @io.micronaut.data.annotation.Query(
+        value = """
+            SELECT DISTINCT a.cloud_account_id FROM asset a
+            WHERE a.cloud_account_id IS NOT NULL AND a.cloud_account_id != ''
+              AND (
+                  a.id IN (
+                      SELECT aw.asset_id FROM asset_workgroups aw
+                      JOIN user_workgroups uw ON aw.workgroup_id = uw.workgroup_id
+                      WHERE uw.user_id = :userId
+                  )
+                  OR a.manual_creator_id = :userId
+                  OR a.scan_uploader_id = :userId
+                  OR a.owner = :username
+              )
+        """,
+        nativeQuery = true
+    )
+    fun findDistinctCloudAccountIdsByOwnershipOrWorkgroup(userId: Long, username: String): List<String>
+
+    /**
      * Find all assets accessible to a user using unified access control query
      * Combines all access criteria in a single database round trip:
      * 1. Assets in user's workgroups
