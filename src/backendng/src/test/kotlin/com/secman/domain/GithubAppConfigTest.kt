@@ -49,5 +49,20 @@ class GithubAppConfigTest {
         assertThat(config.copy(installationId = "x1").validate()).anySatisfy {
             assertThat(it).contains("Installation ID must be numeric")
         }
+        assertThat(config.copy(apiBaseUrl = "ghe.example.com/api/v3").validate()).anySatisfy {
+            assertThat(it).contains("API base URL must start with http")
+        }
+    }
+
+    @Test
+    fun `effectiveApiBaseUrl falls back to public GitHub when unset`() {
+        assertThat(config.effectiveApiBaseUrl()).isEqualTo("https://api.github.com")
+        assertThat(config.copy(apiBaseUrl = "").effectiveApiBaseUrl()).isEqualTo("https://api.github.com")
+    }
+
+    @Test
+    fun `effectiveApiBaseUrl trims whitespace and a trailing slash for GHE tenants`() {
+        val ghe = config.copy(apiBaseUrl = " https://ghe.corp.example.com/api/v3/ ")
+        assertThat(ghe.effectiveApiBaseUrl()).isEqualTo("https://ghe.corp.example.com/api/v3")
     }
 }

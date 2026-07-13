@@ -34,7 +34,8 @@ open class GithubConfigController(
         @NotBlank val appId: String,
         @NotBlank val privateKeyPem: String,
         @Nullable val installationId: String? = null,
-        @Nullable val organization: String? = null
+        @Nullable val organization: String? = null,
+        @Nullable val apiBaseUrl: String? = null
     )
 
     @Serdeable
@@ -43,6 +44,7 @@ open class GithubConfigController(
         @Nullable val privateKeyPem: String? = null,
         @Nullable val installationId: String? = null,
         @Nullable val organization: String? = null,
+        @Nullable val apiBaseUrl: String? = null,
         @Nullable val isActive: Boolean? = null
     )
 
@@ -107,6 +109,7 @@ open class GithubConfigController(
                 privateKeyPem = request.privateKeyPem,
                 installationId = request.installationId?.trim()?.takeIf { it.isNotBlank() },
                 organization = request.organization?.trim()?.takeIf { it.isNotBlank() },
+                apiBaseUrl = request.apiBaseUrl?.trim()?.takeIf { it.isNotBlank() },
                 isActive = true
             )
             val validationErrors = newConfig.validate()
@@ -155,6 +158,11 @@ open class GithubConfigController(
             if (request.organization != null) {
                 updatedConfig = updatedConfig.copy(
                     organization = request.organization.trim().takeIf { it.isNotBlank() }
+                )
+            }
+            if (request.apiBaseUrl != null) {
+                updatedConfig = updatedConfig.copy(
+                    apiBaseUrl = request.apiBaseUrl.trim().takeIf { it.isNotBlank() }
                 )
             }
 

@@ -114,7 +114,7 @@ class CliController(
         val results = mutableListOf<NotificationService.OutdatedAssetData>()
 
         outdatedView.content.forEach { view ->
-            val asset = assetRepository.findById(view.assetId).orElse(null)
+            val asset = assetRepository.findByIdWithWorkgroups(view.assetId).orElse(null)
             if (asset == null) {
                 if (verbose) logger.warn("Asset {} not found, skipping", view.assetId)
                 return@forEach

@@ -516,6 +516,33 @@ class GithubRepositoryControllerIntegrationTest : BaseIntegrationTest() {
     }
 
     @Test
+    fun `owner email discovery is denied to SECCHAMPION and regular users`() {
+        val champToken = TestAuthHelper.getAuthToken(client, champUser.username)
+        val champEx = org.junit.jupiter.api.assertThrows<HttpClientResponseException> {
+            client.toBlocking().exchange(
+                HttpRequest.POST(
+                    "/api/github/owner-email-mappings/discover",
+                    mapOf("dryRun" to true)
+                ).bearerAuth(champToken),
+                String::class.java
+            )
+        }
+        assertThat(champEx.status).isEqualTo(HttpStatus.FORBIDDEN)
+
+        val regularToken = TestAuthHelper.getAuthToken(client, regularUser.username)
+        val regularEx = org.junit.jupiter.api.assertThrows<HttpClientResponseException> {
+            client.toBlocking().exchange(
+                HttpRequest.POST(
+                    "/api/github/owner-email-mappings/discover",
+                    mapOf("dryRun" to true)
+                ).bearerAuth(regularToken),
+                String::class.java
+            )
+        }
+        assertThat(regularEx.status).isEqualTo(HttpStatus.FORBIDDEN)
+    }
+
+    @Test
     fun `owner email mapping 404s for unknown id`() {
         val vulnToken = TestAuthHelper.getAuthToken(client, vulnUser.username)
         val ex = org.junit.jupiter.api.assertThrows<HttpClientResponseException> {

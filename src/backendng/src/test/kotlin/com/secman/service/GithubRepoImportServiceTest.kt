@@ -77,8 +77,8 @@ class GithubRepoImportServiceTest {
 
     @Test
     fun `creates new repo with counts and snapshot`() {
-        every { client.listInstallationRepositories("token") } returns listOf(repoDto(7))
-        every { client.countOpenDependabotAlerts("token", "org", "repo7") } returns
+        every { client.listInstallationRepositories("token", "https://api.github.com") } returns listOf(repoDto(7))
+        every { client.countOpenDependabotAlerts("token", "org", "repo7", "https://api.github.com") } returns
             GithubAppClientService.SeverityCounts(critical = 2, high = 5)
 
         val result = service.importRepositories()
@@ -110,8 +110,8 @@ class GithubRepoImportServiceTest {
             lastHighCriticalFindingAt = null
         )
         every { repoRepository.findByGithubRepoId(7) } returns Optional.of(existing)
-        every { client.listInstallationRepositories("token") } returns listOf(repoDto(7))
-        every { client.countOpenDependabotAlerts("token", "org", "repo7") } returns
+        every { client.listInstallationRepositories("token", "https://api.github.com") } returns listOf(repoDto(7))
+        every { client.countOpenDependabotAlerts("token", "org", "repo7", "https://api.github.com") } returns
             GithubAppClientService.SeverityCounts(critical = 0, high = 0)
 
         val result = service.importRepositories()
@@ -129,8 +129,8 @@ class GithubRepoImportServiceTest {
 
     @Test
     fun `repo with alerts disabled is recorded with zero counts and listed`() {
-        every { client.listInstallationRepositories("token") } returns listOf(repoDto(7))
-        every { client.countOpenDependabotAlerts("token", "org", "repo7") } returns
+        every { client.listInstallationRepositories("token", "https://api.github.com") } returns listOf(repoDto(7))
+        every { client.countOpenDependabotAlerts("token", "org", "repo7", "https://api.github.com") } returns
             GithubAppClientService.SeverityCounts(disabled = true)
 
         val result = service.importRepositories()
@@ -145,10 +145,10 @@ class GithubRepoImportServiceTest {
 
     @Test
     fun `per-repo error does not abort the run`() {
-        every { client.listInstallationRepositories("token") } returns listOf(repoDto(1, "org/bad"), repoDto(2, "org/good"))
-        every { client.countOpenDependabotAlerts("token", "org", "bad") } throws
+        every { client.listInstallationRepositories("token", "https://api.github.com") } returns listOf(repoDto(1, "org/bad"), repoDto(2, "org/good"))
+        every { client.countOpenDependabotAlerts("token", "org", "bad", "https://api.github.com") } throws
             GithubAppClientService.GithubApiException("boom", 500)
-        every { client.countOpenDependabotAlerts("token", "org", "good") } returns
+        every { client.countOpenDependabotAlerts("token", "org", "good", "https://api.github.com") } returns
             GithubAppClientService.SeverityCounts(critical = 1, high = 0)
 
         val result = service.importRepositories()
@@ -178,8 +178,8 @@ class GithubRepoImportServiceTest {
         )
         val savedAlerts = slot<List<GithubRepoDependabotAlert>>()
         every { alertRepository.saveAll(capture(savedAlerts)) } answers { firstArg() }
-        every { client.listInstallationRepositories("token") } returns listOf(repoDto(7))
-        every { client.countOpenDependabotAlerts("token", "org", "repo7") } returns
+        every { client.listInstallationRepositories("token", "https://api.github.com") } returns listOf(repoDto(7))
+        every { client.countOpenDependabotAlerts("token", "org", "repo7", "https://api.github.com") } returns
             GithubAppClientService.SeverityCounts(critical = 1, high = 0, alerts = listOf(alertDto))
 
         service.importRepositories()
@@ -193,8 +193,8 @@ class GithubRepoImportServiceTest {
 
     @Test
     fun `deletes stale alert rows even when the repo now has none`() {
-        every { client.listInstallationRepositories("token") } returns listOf(repoDto(7))
-        every { client.countOpenDependabotAlerts("token", "org", "repo7") } returns
+        every { client.listInstallationRepositories("token", "https://api.github.com") } returns listOf(repoDto(7))
+        every { client.countOpenDependabotAlerts("token", "org", "repo7", "https://api.github.com") } returns
             GithubAppClientService.SeverityCounts(critical = 0, high = 0, alerts = emptyList())
 
         service.importRepositories()
@@ -205,8 +205,8 @@ class GithubRepoImportServiceTest {
 
     @Test
     fun `auto-fills ownerEmail from mapping for new repo with blank ownerEmail`() {
-        every { client.listInstallationRepositories("token") } returns listOf(repoDto(7))
-        every { client.countOpenDependabotAlerts("token", "org", "repo7") } returns
+        every { client.listInstallationRepositories("token", "https://api.github.com") } returns listOf(repoDto(7))
+        every { client.countOpenDependabotAlerts("token", "org", "repo7", "https://api.github.com") } returns
             GithubAppClientService.SeverityCounts(critical = 0, high = 0)
         every { ownerEmailMappingRepository.findByOwnerIgnoreCase("org") } returns
             Optional.of(GithubOwnerEmailMapping(id = 1, owner = "org", email = "org-default@example.com", createdBy = "admin"))
@@ -220,8 +220,8 @@ class GithubRepoImportServiceTest {
 
     @Test
     fun `new repo without a mapping stays unmapped`() {
-        every { client.listInstallationRepositories("token") } returns listOf(repoDto(7))
-        every { client.countOpenDependabotAlerts("token", "org", "repo7") } returns
+        every { client.listInstallationRepositories("token", "https://api.github.com") } returns listOf(repoDto(7))
+        every { client.countOpenDependabotAlerts("token", "org", "repo7", "https://api.github.com") } returns
             GithubAppClientService.SeverityCounts(critical = 0, high = 0)
 
         service.importRepositories()
@@ -238,8 +238,8 @@ class GithubRepoImportServiceTest {
             ownerEmail = "manual@example.com"
         )
         every { repoRepository.findByGithubRepoId(7) } returns Optional.of(existing)
-        every { client.listInstallationRepositories("token") } returns listOf(repoDto(7))
-        every { client.countOpenDependabotAlerts("token", "org", "repo7") } returns
+        every { client.listInstallationRepositories("token", "https://api.github.com") } returns listOf(repoDto(7))
+        every { client.countOpenDependabotAlerts("token", "org", "repo7", "https://api.github.com") } returns
             GithubAppClientService.SeverityCounts(critical = 0, high = 0)
         every { ownerEmailMappingRepository.findByOwnerIgnoreCase("org") } returns
             Optional.of(GithubOwnerEmailMapping(id = 1, owner = "org", email = "org-default@example.com", createdBy = "admin"))
@@ -259,8 +259,8 @@ class GithubRepoImportServiceTest {
             ownerEmail = "org-default@example.com"
         )
         every { repoRepository.findByGithubRepoId(7) } returns Optional.of(existing)
-        every { client.listInstallationRepositories("token") } returns listOf(repoDto(7))
-        every { client.countOpenDependabotAlerts("token", "org", "repo7") } returns
+        every { client.listInstallationRepositories("token", "https://api.github.com") } returns listOf(repoDto(7))
+        every { client.countOpenDependabotAlerts("token", "org", "repo7", "https://api.github.com") } returns
             GithubAppClientService.SeverityCounts(critical = 0, high = 0)
 
         service.importRepositories()

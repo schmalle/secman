@@ -86,7 +86,7 @@ class SendOutdatedNotificationsTool(
 
         val results = mutableListOf<NotificationService.OutdatedAssetData>()
         for (view in page.content) {
-            val asset = assetRepository.findById(view.assetId).orElse(null) ?: continue
+            val asset = assetRepository.findByIdWithWorkgroups(view.assetId).orElse(null) ?: continue
             val mappings = userMappingRepository.findByAwsAccountId(asset.owner)
             if (mappings.isEmpty()) continue
             val ownerEmail = mappings.first().email

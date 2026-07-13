@@ -5,6 +5,7 @@ import com.secman.repository.GithubRepoAlertExceptionRepository
 import com.secman.repository.GithubRepoDependabotAlertRepository
 import com.secman.repository.GithubRepositoryRepository
 import com.secman.service.CSVGithubOwnerEmailMappingParser
+import com.secman.service.GithubOwnerEmailDiscoveryService
 import com.secman.service.GithubOwnerEmailMappingService
 import com.secman.service.GithubRepoImportService
 import io.micronaut.core.annotation.Nullable
@@ -60,7 +61,8 @@ open class GithubRepositoryController(
     private val importService: GithubRepoImportService,
     private val alertRepository: GithubRepoDependabotAlertRepository,
     private val ownerEmailMappingService: GithubOwnerEmailMappingService,
-    private val ownerEmailMappingCsvParser: CSVGithubOwnerEmailMappingParser
+    private val ownerEmailMappingCsvParser: CSVGithubOwnerEmailMappingParser,
+    private val ownerEmailDiscoveryService: GithubOwnerEmailDiscoveryService
 ) {
     private val log = LoggerFactory.getLogger(GithubRepositoryController::class.java)
 
@@ -137,6 +139,9 @@ open class GithubRepositoryController(
 
     @Serdeable
     data class UpdateOwnerEmailMappingRequest(@NotBlank val email: String)
+
+    @Serdeable
+    data class DiscoverOwnerEmailMappingsRequest(val dryRun: Boolean = false)
 
     @Serdeable
     data class CreateExceptionRequest(
@@ -418,6 +423,23 @@ open class GithubRepositoryController(
             HttpResponse.noContent<Any>()
         } catch (e: GithubOwnerEmailMappingService.NotFoundException) {
             HttpResponse.notFound(ErrorResponse(e.message ?: "Mapping not found"))
+        }
+    }
+
+    @Post("/owner-email-mappings/discover")
+    @Secured("ADMIN", "VULN")
+    open fun discoverOwnerEmailMappings(
+        @Body request: DiscoverOwnerEmailMappingsRequest,
+        authentication: Authentication
+    ): HttpResponse<*> {
+        log.info("GitHub owner email discovery triggered by {} (dryRun={})", authentication.name, request.dryRun)
+        return try {
+            HttpResponse.ok(ownerEmailDiscoveryService.discover(request.dryRun, authentication.name))
+        } catch (e: IllegalStateException) {
+            HttpResponse.badRequest(ErrorResponse(e.message ?: "No active GitHub App configuration"))
+        } catch (e: Exception) {
+            log.error("GitHub owner email discovery failed", e)
+            HttpResponse.serverError(ErrorResponse(e.message ?: "Discovery failed"))
         }
     }
 

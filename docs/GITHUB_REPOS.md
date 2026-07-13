@@ -35,13 +35,15 @@ MCP send_github_repo_alerts ──┘     │  (pure DB — compares current cou
 
 Only one configuration can be active at a time. The private key is encrypted at rest (`EncryptedStringConverter`) and every API response masks it as `***HIDDEN***`.
 
+**GitHub Enterprise Server (corporate tenants)**: set `API Base URL` to your GHES REST API root, e.g. `https://ghe.corp.example.com/api/v3` (note the `/api/v3` suffix — GHES doesn't serve the API at the bare hostname the way github.com does). Leave it empty for public github.com. Every GitHub API call the App client makes — import, alerts, and owner-email discovery — uses this URL.
+
 **Client ID / Client secret are not needed.** The App's settings page also shows a Client ID and a "Client secrets" section — those are a separate credential pair for the *user-to-server* OAuth flow (signing users in through the App; see [GitHub's docs](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/identifying-and-authorizing-users-for-github-apps)) and are unrelated to this integration, which only [authenticates as the App itself](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/authenticating-as-a-github-app) (App ID + private key → signed JWT → installation access token). The client secret is a plain opaque bearer string, not a cryptographic key — do not paste it into the private key field.
 
-## Data model (V238, V239)
+## Data model (V238, V239, V241)
 
 | Table | Purpose | Key fields |
 |---|---|---|
-| `github_app_config` | App credentials | `app_id`, `private_key_pem` (encrypted), `installation_id?`, `organization?`, `is_active` |
+| `github_app_config` | App credentials | `app_id`, `private_key_pem` (encrypted), `installation_id?`, `organization?`, `api_base_url?` (V241 — GHES REST root, e.g. `https://ghe.corp.example.com/api/v3`; blank/null = public github.com), `is_active` |
 | `github_repository` | Repo inventory | `github_repo_id` (unique, rename-safe upsert key), `full_name` (unique), `owner`, `owner_email?`, `critical_count`, `high_count`, `last_import_at`, `last_high_critical_finding_at`, `archived` |
 | `github_repo_finding_snapshot` | Per-import count history | FK → repo (cascade), `snapshot_at`, `critical_count`, `high_count` |
 | `github_repo_alert_exception` | Alerting exceptions | FK → repo (cascade), `reason`, `expiration_date?` (null = permanent), `created_by`, `created_at` |
@@ -74,6 +76,17 @@ The alert run reads only the secman DB — no GitHub round-trip — so it is fas
 - Deleting a mapping does **not** un-set any `ownerEmail` it already filled.
 - Managed in the UI under **Vulnerability Management → GitHub → Owner email mappings** tab (ADMIN/VULN create/edit/delete; ADMIN/VULN/SECCHAMPION view), or in bulk via CSV upload (`owner,email` columns) — same tab, or `POST /api/github/owner-email-mappings/upload-csv`.
 
+### Auto-discovery (best-effort, opt-in)
+
+The mapping table above is otherwise entirely manual. `GithubOwnerEmailDiscoveryService` adds an **explicitly-triggered** complement: for every already-imported repo with **no `ownerEmail` set**, it calls `GET /users/{owner}` — the same endpoint for both org and user accounts — and reads the account's **public email**, if any. Most GitHub accounts don't expose one (orgs have none by default; user emails are usually private), so this is genuinely best-effort, not a replacement for the manual/CSV workflow.
+
+- **Scope**: only repos already imported into secman (never calls GitHub's repo-listing API), grouped by owner, and only owners that don't already have a mapping.
+- **On a hit**: creates a `github_owner_email_mapping` row exactly as the manual/CSV path does — same validation, same immediate backfill of matching repos.
+- **On a miss** (404, or an account with no public email): the owner is reported, not retried automatically — set it manually or via CSV if you have another source for that address.
+- **Dry-run**: preview discovered owner → email pairs without writing anything.
+- **Import is unaffected**: `import-github-repos` still never calls GitHub for emails — discovery is a separate, explicit action, run via CLI (`manage-github-owner-mappings discover`) or MCP (`discover_github_owner_email_mappings`).
+- Works against GitHub Enterprise Server tenants via the App config's `API Base URL` (see GitHub App setup, above).
+
 ## UI
 
 - **Vulnerability Management → GitHub** (`/github-repos`), visible to ADMIN, VULN, SECCHAMPION, with two tabs:
@@ -93,11 +106,14 @@ The alert run reads only the secman DB — no GitHub round-trip — so it is fas
 | `/api/github/repo-alert-exceptions[/{id}]` | GET / POST / DELETE | read: +SECCHAMPION; write: ADMIN, VULN | Alerting exceptions |
 | `/api/github/owner-email-mappings[/{id}]` | GET / POST / PUT / DELETE | read: +SECCHAMPION; write: ADMIN, VULN | Owner → default email mappings; create/update backfills blank repo `ownerEmail`s for that owner |
 | `/api/github/owner-email-mappings/upload-csv` | POST (multipart) | ADMIN, VULN | Bulk-create mappings from a CSV of `owner,email` rows |
+| `/api/github/owner-email-mappings/discover` | POST | ADMIN, VULN | Auto-discover owner emails via the GitHub API (`{"dryRun": bool}`) |
 | `/api/cli/github-repo-alerts/send` | POST | ADMIN | Run the 30-day alert (`{"dryRun": bool, "thresholdDays": int, "force": bool, "onlyEmail": string?}`) |
 
 Import response: `{reposDiscovered, reposNew, reposUpdated, totalCritical, totalHigh, reposWithAlertsDisabled[], errors[], importedAt}`. Repos with Dependabot alerts disabled/inaccessible are recorded with 0/0 and listed — they do not fail the run.
 
 Alert response: `{status: SUCCESS|DRY_RUN|PARTIAL_FAILURE|FAILURE, thresholdDays, reposEvaluated, reposAlerted, reposExcepted[], reposSkippedInsufficientHistory[], unmappedRepos[], emailsSent, emailsFailed, recipients[], failedRecipients[], alertedRepos[]}`.
+
+Discovery response: `{status: SUCCESS|DRY_RUN|PARTIAL_FAILURE|FAILURE, ownersEvaluated, ownersDiscovered, discoveredMappings: [{owner, email, repoCount}], ownersSkippedNoPublicEmail[], errors[]}`.
 
 ## CLI
 
@@ -127,6 +143,10 @@ See `docs/CLI.md` for the full option tables.
 ./scripts/secman manage-github-owner-mappings list
 ./scripts/secman manage-github-owner-mappings remove --owner acme-corp
 ./scripts/secman manage-github-owner-mappings import --file mappings.csv
+
+# Auto-discover owner emails via the GitHub API (preview, then run):
+./scripts/secman manage-github-owner-mappings discover --dry-run
+./scripts/secman manage-github-owner-mappings discover
 ```
 
 Both authenticate with `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS` against `SECMAN_HOST` (ADMIN required; import also accepts VULN via the REST endpoint). Exit codes: 0 success, 1 failure/partial failure, 2 usage error.
@@ -140,6 +160,7 @@ See `docs/MCP.md`. All require **User Delegation** (`X-MCP-User-Email`).
 - `list_github_owner_email_mappings` — no arguments. Delegated user must be ADMIN, VULN, or SECCHAMPION; API key needs `VULNERABILITIES_READ`.
 - `create_github_owner_email_mapping` — `{owner: string, email: string}`. Delegated user must be ADMIN or VULN; API key needs `VULNERABILITIES_READ`. Backfills blank repo `ownerEmail`s for that owner.
 - `delete_github_owner_email_mapping` — `{id: number}`. Delegated user must be ADMIN or VULN; API key needs `VULNERABILITIES_READ`.
+- `discover_github_owner_email_mappings` — `{dryRun?: boolean}` (default false). Delegated user must be ADMIN or VULN; API key needs `VULNERABILITIES_READ`. Errors: `NO_GITHUB_CONFIG` when no active configuration exists.
 
 ## Email
 
@@ -158,10 +179,10 @@ Future work: an in-backend scheduler (following `scheduler/AwsAccountRiskAssessm
 
 ## Files
 
-- Entities: `src/backendng/.../domain/GithubAppConfig.kt`, `GithubRepository.kt`, `GithubRepoFindingSnapshot.kt`, `GithubRepoAlertException.kt`, `GithubRepoDependabotAlert.kt`, `GithubOwnerEmailMapping.kt` (+ Flyway `V238__github_repos.sql`, `V239__github_repo_dependabot_alerts.sql`, `V240__github_owner_email_mapping.sql`)
-- Services: `GithubAppClientService.kt` (App JWT via `util/PemUtils.kt`, installation token, repo/alert queries), `GithubRepoImportService.kt`, `GithubRepoAlertService.kt`, `GithubOwnerEmailMappingService.kt`, `CSVGithubOwnerEmailMappingParser.kt`
-- Controllers: `GithubConfigController.kt`, `GithubRepositoryController.kt` (also owns `/owner-email-mappings`), `CliController.kt` (`/github-repo-alerts/send`)
-- MCP: `mcp/tools/ImportGithubReposTool.kt`, `SendGithubRepoAlertsTool.kt`, `ListGithubOwnerEmailMappingsTool.kt`, `CreateGithubOwnerEmailMappingTool.kt`, `DeleteGithubOwnerEmailMappingTool.kt` (registered in `McpToolRegistry.kt`)
-- CLI: `src/cli/.../commands/ImportGithubReposCommand.kt`, `AlertGithubRepoOwnersCommand.kt`, `ManageGithubOwnerMappingsCommand.kt` + `AddGithubOwnerMappingCommand.kt`, `ListGithubOwnerMappingsCommand.kt`, `RemoveGithubOwnerMappingCommand.kt`, `ImportGithubOwnerMappingsCommand.kt`
+- Entities: `src/backendng/.../domain/GithubAppConfig.kt` (`apiBaseUrl`, `effectiveApiBaseUrl()`), `GithubRepository.kt`, `GithubRepoFindingSnapshot.kt`, `GithubRepoAlertException.kt`, `GithubRepoDependabotAlert.kt`, `GithubOwnerEmailMapping.kt` (+ Flyway `V238__github_repos.sql`, `V239__github_repo_dependabot_alerts.sql`, `V240__github_owner_email_mapping.sql`, `V241__github_app_config_api_base_url.sql`)
+- Services: `GithubAppClientService.kt` (App JWT via `util/PemUtils.kt`, installation token, repo/alert queries, `fetchPublicEmail`, per-config `apiBaseUrl`), `GithubRepoImportService.kt`, `GithubRepoAlertService.kt`, `GithubOwnerEmailMappingService.kt`, `GithubOwnerEmailDiscoveryService.kt`, `CSVGithubOwnerEmailMappingParser.kt`
+- Controllers: `GithubConfigController.kt`, `GithubRepositoryController.kt` (also owns `/owner-email-mappings`, incl. `/discover`), `CliController.kt` (`/github-repo-alerts/send`)
+- MCP: `mcp/tools/ImportGithubReposTool.kt`, `SendGithubRepoAlertsTool.kt`, `ListGithubOwnerEmailMappingsTool.kt`, `CreateGithubOwnerEmailMappingTool.kt`, `DeleteGithubOwnerEmailMappingTool.kt`, `DiscoverGithubOwnerEmailMappingsTool.kt` (registered in `McpToolRegistry.kt`)
+- CLI: `src/cli/.../commands/ImportGithubReposCommand.kt`, `AlertGithubRepoOwnersCommand.kt`, `ManageGithubOwnerMappingsCommand.kt` + `AddGithubOwnerMappingCommand.kt`, `ListGithubOwnerMappingsCommand.kt`, `RemoveGithubOwnerMappingCommand.kt`, `ImportGithubOwnerMappingsCommand.kt`, `DiscoverGithubOwnerMappingsCommand.kt`
 - UI: `pages/github-repos.astro` + `components/GithubRepoTabs.tsx` (tab shell), `GithubRepoManagement.tsx`, `GithubOwnerEmailMappings.tsx`, `pages/admin/github-config.astro` + `components/GithubConfigManagement.tsx`, `services/githubReposService.ts`
 - E2E: Phase 8d in `scripts/test/test-e2e-vuln-exception-full.sh`

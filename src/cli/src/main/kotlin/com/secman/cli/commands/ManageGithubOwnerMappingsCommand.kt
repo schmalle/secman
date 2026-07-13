@@ -16,6 +16,7 @@ import jakarta.inject.Singleton
  *   ./scripts/secman manage-github-owner-mappings list
  *   ./scripts/secman manage-github-owner-mappings remove --owner acme-corp
  *   ./scripts/secman manage-github-owner-mappings import --file mappings.csv
+ *   ./scripts/secman manage-github-owner-mappings discover --dry-run
  *
  * Authentication:
  *   Requires ADMIN or VULN role and backend credentials via CLI flags or
@@ -33,7 +34,8 @@ import jakarta.inject.Singleton
         AddGithubOwnerMappingCommand::class,
         ListGithubOwnerMappingsCommand::class,
         RemoveGithubOwnerMappingCommand::class,
-        ImportGithubOwnerMappingsCommand::class
+        ImportGithubOwnerMappingsCommand::class,
+        DiscoverGithubOwnerMappingsCommand::class
     ]
 )
 class ManageGithubOwnerMappingsCommand : Runnable {

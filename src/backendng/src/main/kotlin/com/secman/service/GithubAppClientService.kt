@@ -116,12 +116,13 @@ open class GithubAppClientService(
             }
         }
 
+        val apiBaseUrl = config.effectiveApiBaseUrl()
         val jwt = buildAppJwt(config)
         val installationId = config.installationId?.takeIf { it.isNotBlank() }
-            ?: resolveInstallationId(jwt, config.organization)
+            ?: resolveInstallationId(jwt, config.organization, apiBaseUrl)
 
         val response = send(
-            request("POST", "/app/installations/$installationId/access_tokens", jwt)
+            request("POST", "/app/installations/$installationId/access_tokens", jwt, apiBaseUrl)
         )
         if (response.status !in 200..299) {
             throw GithubApiException(
@@ -141,11 +142,11 @@ open class GithubAppClientService(
     }
 
     /** Lists App installations and picks the one matching [organization] (or the single one). */
-    internal fun resolveInstallationId(appJwt: String, organization: String?): String {
+    internal fun resolveInstallationId(appJwt: String, organization: String?, apiBaseUrl: String = this.apiBaseUrl): String {
         val installations = mutableListOf<JsonNode>()
         var page = 1
         while (true) {
-            val response = send(request("GET", "/app/installations?per_page=100&page=$page", appJwt))
+            val response = send(request("GET", "/app/installations?per_page=100&page=$page", appJwt, apiBaseUrl))
             if (response.status !in 200..299) {
                 throw GithubApiException(
                     "Failed to list App installations (HTTP ${response.status}): ${truncate(response.body)}",
@@ -185,11 +186,11 @@ open class GithubAppClientService(
     // Repositories + Dependabot alert counts
     // ------------------------------------------------------------------
 
-    open fun listInstallationRepositories(token: String): List<GithubRepoDto> {
+    open fun listInstallationRepositories(token: String, apiBaseUrl: String = this.apiBaseUrl): List<GithubRepoDto> {
         val repos = mutableListOf<GithubRepoDto>()
         var page = 1
         while (true) {
-            val response = send(request("GET", "/installation/repositories?per_page=100&page=$page", token))
+            val response = send(request("GET", "/installation/repositories?per_page=100&page=$page", token, apiBaseUrl))
             if (response.status !in 200..299) {
                 throw GithubApiException(
                     "Failed to list installation repositories (HTTP ${response.status}): ${truncate(response.body)}",
@@ -227,7 +228,12 @@ open class GithubAppClientService(
      * ("Pagination using the `page` parameter is not supported") — it only
      * supports cursor pagination via the `Link: rel="next"` response header.
      */
-    open fun countOpenDependabotAlerts(token: String, owner: String, repo: String): SeverityCounts {
+    open fun countOpenDependabotAlerts(
+        token: String,
+        owner: String,
+        repo: String,
+        apiBaseUrl: String = this.apiBaseUrl
+    ): SeverityCounts {
         var critical = 0
         var high = 0
         val alerts = mutableListOf<AlertDto>()
@@ -293,17 +299,43 @@ open class GithubAppClientService(
 
     /** Credential check for the admin UI: builds a JWT and lists installations. */
     open fun testConnection(config: GithubAppConfig): String {
+        val apiBaseUrl = config.effectiveApiBaseUrl()
         val jwt = buildAppJwt(config)
         val installationId = config.installationId?.takeIf { it.isNotBlank() }
-            ?: resolveInstallationId(jwt, config.organization)
+            ?: resolveInstallationId(jwt, config.organization, apiBaseUrl)
         return "OK — App ${config.appId}, installation $installationId"
+    }
+
+    // ------------------------------------------------------------------
+    // Owner email discovery
+    // ------------------------------------------------------------------
+
+    /**
+     * Best-effort lookup of an owner's (org or user login) public email via
+     * `GET /users/{owner}`, which works for both account types. Returns null
+     * when the account doesn't exist (404) or has no public email set —
+     * most GitHub accounts fall in the latter category.
+     */
+    open fun fetchPublicEmail(token: String, owner: String, apiBaseUrl: String = this.apiBaseUrl): String? {
+        val response = send(request("GET", "/users/$owner", token, apiBaseUrl))
+        if (response.status == 404) {
+            return null
+        }
+        if (response.status !in 200..299) {
+            throw GithubApiException(
+                "Failed to fetch GitHub profile for '$owner' (HTTP ${response.status}): ${truncate(response.body)}",
+                response.status
+            )
+        }
+        val node = objectMapper.readTree(response.body)
+        return text(node.path("email"))?.takeIf { it.isNotBlank() }
     }
 
     // ------------------------------------------------------------------
     // HTTP plumbing
     // ------------------------------------------------------------------
 
-    private fun request(method: String, path: String, bearer: String): JdkHttpRequest =
+    private fun request(method: String, path: String, bearer: String, apiBaseUrl: String = this.apiBaseUrl): JdkHttpRequest =
         requestUrl(method, "$apiBaseUrl$path", bearer)
 
     private fun requestUrl(method: String, url: String, bearer: String): JdkHttpRequest {

@@ -84,7 +84,7 @@ class SendNotificationUsersCommand : Runnable {
                 "$effectiveUrl/api/cli/user-vulnerability-notifications/send",
                 requestBody,
                 authToken
-            ) ?: throw RuntimeException("Failed to send user vulnerability notifications - no response from server")
+            ) ?: throw RuntimeException("Failed to send user vulnerability notifications - request failed (see log line above for the actual cause, e.g. a response-size limit)")
 
             val status = result["status"]?.toString() ?: "UNKNOWN"
             val notificationScope = result["notificationScope"]?.toString() ?: "GLOBAL_AWS_OVERDUE"
@@ -127,7 +127,9 @@ class SendNotificationUsersCommand : Runnable {
                 }
             }
 
-            printAccountDetails(accountDetails)
+            if (verbose) {
+                printAccountDetails(accountDetails)
+            }
 
             if (unmappedAccounts.isNotEmpty()) {
                 println()

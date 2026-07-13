@@ -39,6 +39,10 @@ data class GithubAppConfig(
     @Column(name = "organization", length = 255)
     val organization: String? = null,
 
+    /** REST API root for GitHub Enterprise Server tenants, e.g. "https://ghe.corp.example.com/api/v3". Null/blank = public GitHub. */
+    @Column(name = "api_base_url", length = 512)
+    val apiBaseUrl: String? = null,
+
     @Column(name = "is_active", nullable = false)
     val isActive: Boolean = true,
 
@@ -52,7 +56,12 @@ data class GithubAppConfig(
 ) {
     companion object {
         const val PRIVATE_KEY_MASK = "***HIDDEN***"
+        const val PUBLIC_API_BASE_URL = "https://api.github.com"
     }
+
+    /** Resolved REST API root: the configured tenant URL (trimmed, no trailing slash) or public GitHub. */
+    fun effectiveApiBaseUrl(): String =
+        apiBaseUrl?.trim()?.trimEnd('/')?.takeIf { it.isNotBlank() } ?: PUBLIC_API_BASE_URL
 
     /** Copy with the private key masked for API responses. */
     fun toSafeResponse(): GithubAppConfig {
@@ -90,10 +99,16 @@ data class GithubAppConfig(
         if (installationIdValue != null && installationIdValue.isNotBlank() && !installationIdValue.all { it.isDigit() }) {
             errors.add("Installation ID must be numeric")
         }
+        val apiBaseUrlValue = apiBaseUrl
+        if (apiBaseUrlValue != null && apiBaseUrlValue.isNotBlank() &&
+            !(apiBaseUrlValue.startsWith("http://") || apiBaseUrlValue.startsWith("https://"))
+        ) {
+            errors.add("API base URL must start with http:// or https://")
+        }
         return errors
     }
 
     override fun toString(): String {
-        return "GithubAppConfig(id=$id, appId='$appId', installationId=$installationId, organization=$organization, isActive=$isActive)"
+        return "GithubAppConfig(id=$id, appId='$appId', installationId=$installationId, organization=$organization, apiBaseUrl=$apiBaseUrl, isActive=$isActive)"
     }
 }

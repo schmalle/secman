@@ -57,8 +57,9 @@ open class GithubRepoImportService(
             IllegalStateException("No active GitHub App configuration — configure one under Admin → GitHub App")
         }
 
+        val apiBaseUrl = config.effectiveApiBaseUrl()
         val token = githubClient.getInstallationToken(config)
-        val discovered = githubClient.listInstallationRepositories(token)
+        val discovered = githubClient.listInstallationRepositories(token, apiBaseUrl)
         logger.info("GitHub import: discovered {} repositories", discovered.size)
 
         val now = Instant.now()
@@ -71,7 +72,7 @@ open class GithubRepoImportService(
 
         for (repoDto in discovered) {
             try {
-                val counts = githubClient.countOpenDependabotAlerts(token, repoDto.owner, repoDto.name)
+                val counts = githubClient.countOpenDependabotAlerts(token, repoDto.owner, repoDto.name, apiBaseUrl)
                 if (counts.disabled) {
                     alertsDisabled.add(repoDto.fullName)
                 }

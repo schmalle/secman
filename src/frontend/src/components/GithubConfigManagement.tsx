@@ -8,6 +8,7 @@ interface GithubAppConfig {
     privateKeyPem: string;
     installationId?: string | null;
     organization?: string | null;
+    apiBaseUrl?: string | null;
     isActive: boolean;
     createdAt: string;
     updatedAt: string;
@@ -15,7 +16,7 @@ interface GithubAppConfig {
 
 const HIDDEN = '***HIDDEN***';
 
-const emptyForm = { appId: '', privateKeyPem: '', installationId: '', organization: '' };
+const emptyForm = { appId: '', privateKeyPem: '', installationId: '', organization: '', apiBaseUrl: '' };
 
 /**
  * Admin → GitHub App: manage the GitHub App credentials used to import
@@ -98,7 +99,8 @@ const GithubConfigManagement = () => {
                 appId: formData.appId,
                 privateKeyPem: formData.privateKeyPem,
                 installationId: formData.installationId || null,
-                organization: formData.organization || null
+                organization: formData.organization || null,
+                apiBaseUrl: formData.apiBaseUrl || null
             });
             setSuccess('GitHub App configuration created successfully');
             setShowCreateForm(false);
@@ -118,7 +120,8 @@ const GithubConfigManagement = () => {
             const updateData: any = {
                 appId: formData.appId,
                 installationId: formData.installationId,
-                organization: formData.organization
+                organization: formData.organization,
+                apiBaseUrl: formData.apiBaseUrl
             };
             // Only send the key when the admin actually entered a new one
             if (formData.privateKeyPem && formData.privateKeyPem !== HIDDEN) {
@@ -185,7 +188,8 @@ const GithubConfigManagement = () => {
             appId: config.appId,
             privateKeyPem: config.privateKeyPem,
             installationId: config.installationId ?? '',
-            organization: config.organization ?? ''
+            organization: config.organization ?? '',
+            apiBaseUrl: config.apiBaseUrl ?? ''
         });
         setShowCreateForm(false);
     };
@@ -338,6 +342,21 @@ const GithubConfigManagement = () => {
                                 </small>
                             </div>
 
+                            <div className="mb-3">
+                                <label htmlFor="apiBaseUrl" className="form-label">API Base URL</label>
+                                <input
+                                    type="text"
+                                    className="form-control"
+                                    id="apiBaseUrl"
+                                    value={formData.apiBaseUrl}
+                                    onChange={(e) => setFormData({ ...formData, apiBaseUrl: e.target.value })}
+                                    placeholder="Optional — e.g. https://ghe.corp.example.com/api/v3"
+                                />
+                                <small className="form-text text-muted">
+                                    Optional. Only needed for GitHub Enterprise Server (a corporate tenant) — leave empty for public github.com.
+                                </small>
+                            </div>
+
                             <div className="d-flex gap-2">
                                 <button type="submit" className="btn btn-primary">
                                     <i className="bi bi-save me-2"></i>
@@ -378,6 +397,7 @@ const GithubConfigManagement = () => {
                                         <th>App ID</th>
                                         <th>Installation</th>
                                         <th>Organization</th>
+                                        <th>API Base URL</th>
                                         <th>Created</th>
                                         <th>Updated</th>
                                         <th>Actions</th>
@@ -396,6 +416,7 @@ const GithubConfigManagement = () => {
                                             <td><code>{config.appId}</code></td>
                                             <td>{config.installationId || <span className="text-muted">auto</span>}</td>
                                             <td>{config.organization || <span className="text-muted">—</span>}</td>
+                                            <td>{config.apiBaseUrl || <span className="text-muted">github.com</span>}</td>
                                             <td><small>{formatServerDateTime(config.createdAt)}</small></td>
                                             <td><small>{formatServerDateTime(config.updatedAt)}</small></td>
                                             <td>

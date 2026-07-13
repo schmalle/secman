@@ -129,4 +129,62 @@ class GithubAppClientServiceTest {
             server.stop(0)
         }
     }
+
+    @Test
+    fun `fetchPublicEmail returns the profile email when set`() {
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/users/acme-corp") { exchange ->
+            val body = """{"login":"acme-corp","type":"Organization","email":"security@acme-corp.example.com"}"""
+                .toByteArray()
+            exchange.sendResponseHeaders(200, body.size.toLong())
+            exchange.responseBody.use { it.write(body) }
+        }
+        server.start()
+        try {
+            val email = client.fetchPublicEmail(
+                "token", "acme-corp", apiBaseUrl = "http://127.0.0.1:${server.address.port}"
+            )
+            assertThat(email).isEqualTo("security@acme-corp.example.com")
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun `fetchPublicEmail returns null when the profile has no public email`() {
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/users/some-user") { exchange ->
+            val body = """{"login":"some-user","type":"User","email":null}""".toByteArray()
+            exchange.sendResponseHeaders(200, body.size.toLong())
+            exchange.responseBody.use { it.write(body) }
+        }
+        server.start()
+        try {
+            val email = client.fetchPublicEmail(
+                "token", "some-user", apiBaseUrl = "http://127.0.0.1:${server.address.port}"
+            )
+            assertThat(email).isNull()
+        } finally {
+            server.stop(0)
+        }
+    }
+
+    @Test
+    fun `fetchPublicEmail returns null when the account does not exist`() {
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/users/ghost") { exchange ->
+            val body = """{"message":"Not Found"}""".toByteArray()
+            exchange.sendResponseHeaders(404, body.size.toLong())
+            exchange.responseBody.use { it.write(body) }
+        }
+        server.start()
+        try {
+            val email = client.fetchPublicEmail(
+                "token", "ghost", apiBaseUrl = "http://127.0.0.1:${server.address.port}"
+            )
+            assertThat(email).isNull()
+        } finally {
+            server.stop(0)
+        }
+    }
 }

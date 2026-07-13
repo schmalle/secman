@@ -22,6 +22,14 @@ micronaut:
       number-of-threads: 8
   server:
     port: 8080
+    # Netty closes connections with no read/write activity after idle-timeout — including
+    # connections whose request is still being processed synchronously (nothing is written
+    # until the response starts). Long-running CLI endpoints such as
+    # /api/cli/user-vulnerability-notifications/send take minutes (heavy overdue-vuln
+    # queries + sequential email sending in one request), so the default 5m would reset
+    # the connection mid-request. Kept above the CLI client's 900s read-timeout so the
+    # client always times out first with a clean error instead of a connection reset.
+    idle-timeout: 16m
     max-request-size: 100MB  # Increased from 20MB for large vulnerability batch imports
     multipart:
       max-file-size: 100MB   # Increased from 20MB for large file uploads

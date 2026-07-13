@@ -160,6 +160,7 @@ Maps a GitHub owner (org/user login) to a default notification email, so every r
 ./scripts/secman manage-github-owner-mappings list
 ./scripts/secman manage-github-owner-mappings remove --owner acme-corp
 ./scripts/secman manage-github-owner-mappings import --file mappings.csv
+./scripts/secman manage-github-owner-mappings discover --dry-run
 ```
 
 | Subcommand | Options | Notes |
@@ -168,6 +169,7 @@ Maps a GitHub owner (org/user login) to a default notification email, so every r
 | `list` | — | table: id, owner, email, repo count, created by |
 | `remove` | `--owner` (required) | looks up the mapping id by owner, then deletes it |
 | `import` | `--file`/`-f` (required) | CSV with `owner,email` columns; one `add`-equivalent call per row, reports imported/skipped/errors |
+| `discover` | `--dry-run` | best-effort auto-discovery via the GitHub API (`GET /users/{owner}` public email) for repos with no `ownerEmail`; only touches owners without an existing mapping; `--dry-run` previews without creating mappings |
 
 `--username` / `--password` / `--backend-url` (or `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS` / `SECMAN_HOST`) apply to all subcommands; ADMIN or VULN role required.
 

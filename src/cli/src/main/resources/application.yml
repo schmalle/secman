@@ -3,10 +3,15 @@ micronaut:
     name: secman-cli
   http:
     client:
-      # Increase timeouts for long-running CrowdStrike API queries
-      read-timeout: 120s       # 2 minutes read timeout (was default 10s)
+      # Long read timeout: several CLI commands hit synchronous long-running backend
+      # endpoints. send-notification-users alone needs ~2 min for the overdue-account
+      # queries on production data (measured: dry-run --verbose completed at ~113s and
+      # the old 120s timeout fired first), and a real run additionally sends all emails
+      # inside the same request. HTTP errors (4xx/5xx) still fail fast — this only
+      # governs how long we wait for a backend that is genuinely still working.
+      read-timeout: 900s       # 15 minutes (was 120s, originally default 10s)
       connect-timeout: 30s     # 30 seconds connection timeout
-      max-content-length: 104857600  # 100MB - matches backend max-request-size
+      max-content-length: 536870912  # 512MB - headroom for large --verbose responses (e.g. send-notification-users)
       ssl:
         insecure-trust-all-certificates: ${secman.ssl.insecure:false}
       pool:

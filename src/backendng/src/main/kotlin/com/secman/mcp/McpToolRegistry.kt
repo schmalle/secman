@@ -117,7 +117,8 @@ class McpToolRegistry(
     // Feature: GitHub owner email mapping
     @Inject private val listGithubOwnerEmailMappingsTool: ListGithubOwnerEmailMappingsTool,
     @Inject private val createGithubOwnerEmailMappingTool: CreateGithubOwnerEmailMappingTool,
-    @Inject private val deleteGithubOwnerEmailMappingTool: DeleteGithubOwnerEmailMappingTool
+    @Inject private val deleteGithubOwnerEmailMappingTool: DeleteGithubOwnerEmailMappingTool,
+    @Inject private val discoverGithubOwnerEmailMappingsTool: DiscoverGithubOwnerEmailMappingsTool
 ) {
     private val logger = LoggerFactory.getLogger(McpToolRegistry::class.java)
 
@@ -231,7 +232,8 @@ class McpToolRegistry(
             // Feature: GitHub owner email mapping
             listGithubOwnerEmailMappingsTool,
             createGithubOwnerEmailMappingTool,
-            deleteGithubOwnerEmailMappingTool
+            deleteGithubOwnerEmailMappingTool,
+            discoverGithubOwnerEmailMappingsTool
         ).forEach { tool ->
             toolMap[tool.name] = tool
             logger.debug("Registered MCP tool: {}", tool.name)
@@ -555,6 +557,9 @@ class McpToolRegistry(
                 permissions.contains(McpPermission.VULNERABILITIES_READ) // Role checked in tool execute()
             }
             "create_github_owner_email_mapping", "delete_github_owner_email_mapping" -> {
+                permissions.contains(McpPermission.VULNERABILITIES_READ) // ADMIN/VULN role checked in tool execute()
+            }
+            "discover_github_owner_email_mappings" -> {
                 permissions.contains(McpPermission.VULNERABILITIES_READ) // ADMIN/VULN role checked in tool execute()
             }
 

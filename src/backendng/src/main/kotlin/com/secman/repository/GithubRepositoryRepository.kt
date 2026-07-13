@@ -31,6 +31,9 @@ interface GithubRepositoryRepository : JpaRepository<GithubRepository, Long> {
 
     fun countByOwnerIgnoreCase(owner: String): Long
 
+    /** Repos with no notification email set yet — candidates for owner-email auto-discovery. */
+    fun findByOwnerEmailIsNull(): List<GithubRepository>
+
     @Query("SELECT COALESCE(SUM(r.criticalCount), 0) FROM GithubRepository r")
     fun sumCriticalCount(): Long
 
