@@ -8,4 +8,6 @@ import io.micronaut.data.jpa.repository.JpaRepository
 interface GithubRepoAlertExceptionRepository : JpaRepository<GithubRepoAlertException, Long> {
 
     fun findByGithubRepositoryId(githubRepositoryId: Long): List<GithubRepoAlertException>
+
+    fun findByGithubRepositoryIdIn(githubRepositoryIds: List<Long>): List<GithubRepoAlertException>
 }

@@ -52,5 +52,7 @@ export async function getInstalledProductNames(): Promise<string[]> {
     throw new Error(`Failed to fetch installed product names: ${response.status}`);
   }
   const data: InstalledProductNamesResponse = await response.json();
-  return data.names;
+  // Empty lists are omitted entirely from the JSON body by the backend
+  // serializer, so `names` can be undefined here (not just []).
+  return data.names ?? [];
 }

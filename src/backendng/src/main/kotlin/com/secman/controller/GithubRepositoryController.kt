@@ -6,6 +6,8 @@ import com.secman.repository.GithubRepoDependabotAlertRepository
 import com.secman.repository.GithubRepositoryRepository
 import com.secman.service.GithubRepoImportService
 import io.micronaut.core.annotation.Nullable
+import io.micronaut.data.model.Pageable
+import io.micronaut.data.model.Sort
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.annotation.*
 import io.micronaut.scheduling.TaskExecutors
@@ -24,7 +26,12 @@ import java.time.Instant
  * GitHub repository inventory (Feature: GitHub repo vulnerability management).
  *
  * - `GET /api/github/repositories` — the Vulnerability Management → GitHub
- *   view. ADMIN/VULN/SECCHAMPION (mirrors Dependabot alerts).
+ *   view, paginated (`page`/`size`/`sort` query params) with optional
+ *   `search` across full name/owner/owner email. ADMIN/VULN/SECCHAMPION
+ *   (mirrors Dependabot alerts).
+ * - `GET /api/github/repositories/summary` — critical/high/total counts
+ *   across all repositories, independent of pagination/search.
+ *   ADMIN/VULN/SECCHAMPION.
  * - `PUT /api/github/repositories/{id}/owner-email` — maintain the alert
  *   recipient. ADMIN/VULN.
  * - `POST /api/github/import` — run the GitHub App import. ADMIN/VULN.
@@ -69,6 +76,13 @@ open class GithubRepositoryController(
     )
 
     @Serdeable
+    data class GithubRepositorySummaryDto(
+        val criticalTotal: Long,
+        val highTotal: Long,
+        val totalCount: Long
+    )
+
+    @Serdeable
     data class GithubRepoAlertDto(
         val id: Long,
         val alertNumber: Int,
@@ -103,12 +117,37 @@ open class GithubRepositoryController(
     @Get("/repositories")
     @Secured("ADMIN", "VULN", "SECCHAMPION")
     @Transactional(readOnly = true)
-    open fun listRepositories(): HttpResponse<List<GithubRepositoryDto>> {
+    open fun listRepositories(
+        @Nullable @QueryValue search: String?,
+        pageable: Pageable
+    ): HttpResponse<Map<String, Any>> {
         val now = Instant.now()
-        val repos = githubRepositoryRepository.listOrderByFullName().map { repo ->
-            val activeException = exceptionRepository.findByGithubRepositoryId(repo.id!!)
-                .filter { it.isActive(now) }
-                .maxByOrNull { it.createdAt }
+        val term = search?.trim()?.takeIf { it.isNotBlank() }
+
+        val size = pageable.size.let { if (it <= 0) 50 else it.coerceAtMost(200) }
+        val sort = if (pageable.sort.isSorted) pageable.sort else Sort.of(
+            Sort.Order.desc("criticalCount"),
+            Sort.Order.desc("highCount"),
+            Sort.Order.asc("fullName")
+        )
+        val effectivePageable = Pageable.from(pageable.number, size, sort)
+
+        val page = if (term != null) {
+            githubRepositoryRepository.findByFullNameContainingIgnoreCaseOrOwnerContainingIgnoreCaseOrOwnerEmailContainingIgnoreCase(
+                term, term, term, effectivePageable
+            )
+        } else {
+            githubRepositoryRepository.findAll(effectivePageable)
+        }
+
+        val exceptionsByRepo = exceptionRepository
+            .findByGithubRepositoryIdIn(page.content.map { it.id!! })
+            .groupBy { it.githubRepositoryId }
+
+        val dtos = page.content.map { repo ->
+            val activeException = exceptionsByRepo[repo.id!!]
+                ?.filter { it.isActive(now) }
+                ?.maxByOrNull { it.createdAt }
             GithubRepositoryDto(
                 id = repo.id!!,
                 githubRepoId = repo.githubRepoId,
@@ -133,7 +172,29 @@ open class GithubRepositoryController(
                 }
             )
         }
-        return HttpResponse.ok(repos)
+
+        return HttpResponse.ok(
+            mapOf(
+                "content" to dtos,
+                "totalElements" to page.totalSize,
+                "totalPages" to page.totalPages,
+                "size" to page.size,
+                "number" to page.pageNumber
+            )
+        )
+    }
+
+    @Get("/repositories/summary")
+    @Secured("ADMIN", "VULN", "SECCHAMPION")
+    @Transactional(readOnly = true)
+    open fun repositoriesSummary(): HttpResponse<GithubRepositorySummaryDto> {
+        return HttpResponse.ok(
+            GithubRepositorySummaryDto(
+                criticalTotal = githubRepositoryRepository.sumCriticalCount(),
+                highTotal = githubRepositoryRepository.sumHighCount(),
+                totalCount = githubRepositoryRepository.count()
+            )
+        )
     }
 
     @Get("/repositories/{id}/alerts")

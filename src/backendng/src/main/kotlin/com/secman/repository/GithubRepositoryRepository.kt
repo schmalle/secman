@@ -1,8 +1,11 @@
 package com.secman.repository
 
 import com.secman.domain.GithubRepository
+import io.micronaut.data.annotation.Query
 import io.micronaut.data.annotation.Repository
 import io.micronaut.data.jpa.repository.JpaRepository
+import io.micronaut.data.model.Page
+import io.micronaut.data.model.Pageable
 import java.util.Optional
 
 /**
@@ -17,5 +20,16 @@ interface GithubRepositoryRepository : JpaRepository<GithubRepository, Long> {
 
     fun findByFullName(fullName: String): Optional<GithubRepository>
 
-    fun listOrderByFullName(): List<GithubRepository>
+    fun findByFullNameContainingIgnoreCaseOrOwnerContainingIgnoreCaseOrOwnerEmailContainingIgnoreCase(
+        fullName: String,
+        owner: String,
+        ownerEmail: String,
+        pageable: Pageable
+    ): Page<GithubRepository>
+
+    @Query("SELECT COALESCE(SUM(r.criticalCount), 0) FROM GithubRepository r")
+    fun sumCriticalCount(): Long
+
+    @Query("SELECT COALESCE(SUM(r.highCount), 0) FROM GithubRepository r")
+    fun sumHighCount(): Long
 }

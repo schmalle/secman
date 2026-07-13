@@ -73,13 +73,17 @@ class GithubRepositoryControllerIntegrationTest : BaseIntegrationTest() {
 
     private fun seedRepo(critical: Int = 0, high: Int = 0, ownerEmail: String? = null): GithubRepository {
         val suffix = System.nanoTime()
+        return seedRepoNamed("repo-$suffix", critical, high, ownerEmail)
+    }
+
+    private fun seedRepoNamed(name: String, critical: Int = 0, high: Int = 0, ownerEmail: String? = null): GithubRepository {
         return githubRepositoryRepository.save(
             GithubRepository(
-                githubRepoId = suffix,
-                name = "repo-$suffix",
+                githubRepoId = System.nanoTime(),
+                name = name,
                 owner = "test-org",
-                fullName = "test-org/repo-$suffix",
-                htmlUrl = "https://github.com/test-org/repo-$suffix",
+                fullName = "test-org/$name",
+                htmlUrl = "https://github.com/test-org/$name",
                 ownerEmail = ownerEmail,
                 criticalCount = critical,
                 highCount = high,
@@ -94,19 +98,91 @@ class GithubRepositoryControllerIntegrationTest : BaseIntegrationTest() {
 
         val champToken = TestAuthHelper.getAuthToken(client, champUser.username)
         val response = client.toBlocking().exchange(
-            HttpRequest.GET<Any>("/api/github/repositories").bearerAuth(champToken),
-            Array<GithubRepositoryController.GithubRepositoryDto>::class.java
+            HttpRequest.GET<Any>("/api/github/repositories?search=${repo.fullName}").bearerAuth(champToken),
+            Map::class.java
         )
         assertThat(response.status).isEqualTo(HttpStatus.OK)
-        val row = response.body()!!.first { it.id == repo.id }
-        assertThat(row.criticalCount).isEqualTo(3)
-        assertThat(row.highCount).isEqualTo(1)
-        assertThat(row.activeException).isNull()
+        @Suppress("UNCHECKED_CAST")
+        val content = response.body()!!["content"] as List<Map<String, Any?>>
+        val row = content.first { (it["id"] as Number).toLong() == repo.id }
+        assertThat((row["criticalCount"] as Number).toInt()).isEqualTo(3)
+        assertThat((row["highCount"] as Number).toInt()).isEqualTo(1)
+        assertThat(row["activeException"]).isNull()
 
         val userToken = TestAuthHelper.getAuthToken(client, regularUser.username)
         val ex = org.junit.jupiter.api.assertThrows<HttpClientResponseException> {
             client.toBlocking().exchange(
                 HttpRequest.GET<Any>("/api/github/repositories").bearerAuth(userToken),
+                String::class.java
+            )
+        }
+        assertThat(ex.status).isEqualTo(HttpStatus.FORBIDDEN)
+    }
+
+    @Test
+    fun `paginates and defaults to critical desc, high desc, name asc sort`() {
+        val marker = "pg-${System.nanoTime()}"
+        val repoA = seedRepoNamed("$marker-a", critical = 5, high = 2)
+        val repoB = seedRepoNamed("$marker-b", critical = 2, high = 9)
+        val repoC = seedRepoNamed("$marker-c", critical = 2, high = 1)
+        val repoD = seedRepoNamed("$marker-d", critical = 0, high = 1)
+
+        val adminToken = TestAuthHelper.getAuthToken(client, adminUser.username)
+
+        val page0 = client.toBlocking().exchange(
+            HttpRequest.GET<Any>("/api/github/repositories?search=$marker&page=0&size=2").bearerAuth(adminToken),
+            Map::class.java
+        ).body()!!
+        @Suppress("UNCHECKED_CAST")
+        val content0 = page0["content"] as List<Map<String, Any?>>
+        assertThat(content0.map { it["fullName"] }).containsExactly(repoA.fullName, repoB.fullName)
+        assertThat((page0["totalElements"] as Number).toLong()).isEqualTo(4)
+        assertThat((page0["totalPages"] as Number).toInt()).isEqualTo(2)
+        assertThat((page0["number"] as Number).toInt()).isEqualTo(0)
+
+        val page1 = client.toBlocking().exchange(
+            HttpRequest.GET<Any>("/api/github/repositories?search=$marker&page=1&size=2").bearerAuth(adminToken),
+            Map::class.java
+        ).body()!!
+        @Suppress("UNCHECKED_CAST")
+        val content1 = page1["content"] as List<Map<String, Any?>>
+        assertThat(content1.map { it["fullName"] }).containsExactly(repoC.fullName, repoD.fullName)
+
+        val searchOne = client.toBlocking().exchange(
+            HttpRequest.GET<Any>("/api/github/repositories?search=$marker-c").bearerAuth(adminToken),
+            Map::class.java
+        ).body()!!
+        @Suppress("UNCHECKED_CAST")
+        val contentSearch = searchOne["content"] as List<Map<String, Any?>>
+        assertThat(contentSearch.map { it["fullName"] }).containsExactly(repoC.fullName)
+    }
+
+    @Test
+    fun `summary totals cover all repositories and are denied to regular users`() {
+        val adminToken = TestAuthHelper.getAuthToken(client, adminUser.username)
+
+        val before = client.toBlocking().exchange(
+            HttpRequest.GET<Any>("/api/github/repositories/summary").bearerAuth(adminToken),
+            Map::class.java
+        ).body()!!
+        val criticalBefore = (before["criticalTotal"] as Number).toLong()
+        val highBefore = (before["highTotal"] as Number).toLong()
+        val countBefore = (before["totalCount"] as Number).toLong()
+
+        seedRepo(critical = 7, high = 3)
+
+        val after = client.toBlocking().exchange(
+            HttpRequest.GET<Any>("/api/github/repositories/summary").bearerAuth(adminToken),
+            Map::class.java
+        ).body()!!
+        assertThat((after["criticalTotal"] as Number).toLong()).isEqualTo(criticalBefore + 7)
+        assertThat((after["highTotal"] as Number).toLong()).isEqualTo(highBefore + 3)
+        assertThat((after["totalCount"] as Number).toLong()).isEqualTo(countBefore + 1)
+
+        val userToken = TestAuthHelper.getAuthToken(client, regularUser.username)
+        val ex = org.junit.jupiter.api.assertThrows<HttpClientResponseException> {
+            client.toBlocking().exchange(
+                HttpRequest.GET<Any>("/api/github/repositories/summary").bearerAuth(userToken),
                 String::class.java
             )
         }
@@ -217,12 +293,16 @@ class GithubRepositoryControllerIntegrationTest : BaseIntegrationTest() {
         assertThat(created.body()!!.createdBy).isEqualTo(adminUser.username)
 
         val listResponse = client.toBlocking().exchange(
-            HttpRequest.GET<Any>("/api/github/repositories").bearerAuth(adminToken),
-            Array<GithubRepositoryController.GithubRepositoryDto>::class.java
+            HttpRequest.GET<Any>("/api/github/repositories?search=${repo.fullName}").bearerAuth(adminToken),
+            Map::class.java
         )
-        val row = listResponse.body()!!.first { it.id == repo.id }
-        assertThat(row.activeException).isNotNull()
-        assertThat(row.activeException!!.reason).isEqualTo("accepted risk for integration test")
+        @Suppress("UNCHECKED_CAST")
+        val content = listResponse.body()!!["content"] as List<Map<String, Any?>>
+        val row = content.first { (it["id"] as Number).toLong() == repo.id }
+        assertThat(row["activeException"]).isNotNull()
+        @Suppress("UNCHECKED_CAST")
+        val activeException = row["activeException"] as Map<String, Any?>
+        assertThat(activeException["reason"]).isEqualTo("accepted risk for integration test")
 
         val deleted = client.toBlocking().exchange(
             HttpRequest.DELETE<Any>("/api/github/repo-alert-exceptions/$exceptionId").bearerAuth(adminToken),

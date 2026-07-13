@@ -54,10 +54,39 @@ export interface GithubRepoAlertException {
   createdAt: string;
 }
 
-export async function getGithubRepositories(): Promise<GithubRepo[]> {
-  const response = await authenticatedGet('/api/github/repositories');
+/** Paged envelope shared with OutdatedAssetController-style endpoints. */
+export interface PagedGithubRepos {
+  content: GithubRepo[];
+  totalElements: number;
+  totalPages: number;
+  size: number;
+  number: number;
+}
+
+export interface GithubRepoTotals {
+  criticalTotal: number;
+  highTotal: number;
+  totalCount: number;
+}
+
+export async function getGithubRepositories(
+  page: number,
+  size: number,
+  search?: string
+): Promise<PagedGithubRepos> {
+  const params = new URLSearchParams({ page: String(page), size: String(size) });
+  if (search) params.set('search', search);
+  const response = await authenticatedGet(`/api/github/repositories?${params.toString()}`);
   if (!response.ok) {
     throw new Error(`Failed to fetch GitHub repositories: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function getGithubRepositoriesSummary(): Promise<GithubRepoTotals> {
+  const response = await authenticatedGet('/api/github/repositories/summary');
+  if (!response.ok) {
+    throw new Error(`Failed to fetch GitHub repository totals: ${response.status}`);
   }
   return response.json();
 }

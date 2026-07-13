@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { formatServerDate } from '../utils/dateUtils';
 import {
   getGithubRepositories,
+  getGithubRepositoriesSummary,
   updateOwnerEmail,
   triggerGithubImport,
   createRepoAlertException,
@@ -13,6 +14,9 @@ import {
   type GithubRepoAlert,
 } from '../services/githubReposService';
 import { hasVulnAccess, hasRole } from '../utils/auth';
+import Pagination from './Pagination';
+
+const PAGE_SIZE = 50;
 
 /**
  * Vulnerability Management → GitHub: repositories accessible via the
@@ -28,8 +32,17 @@ const GithubRepoManagement: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
   const [importing, setImporting] = useState(false);
+
+  // Server-side pagination + search (repositories accessible via the App can
+  // number in the thousands, so the full set is never fetched at once).
+  const [page, setPage] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [totals, setTotals] = useState({ critical: 0, high: 0 });
 
   // Inline owner-email editing
   const [editingRepoId, setEditingRepoId] = useState<number | null>(null);
@@ -48,16 +61,34 @@ const GithubRepoManagement: React.FC = () => {
   const [loadingAlerts, setLoadingAlerts] = useState(false);
   const [alertsError, setAlertsError] = useState<string | null>(null);
 
-  const canManage = hasRole(['ADMIN', 'VULN']);
+  // canManage gates the "Import now" button and other management affordances.
+  // It must start false and only be set client-side (in the effect below) —
+  // hasRole() reads from sessionStorage, which is unavailable during SSR, so
+  // computing it synchronously here would render differently on the server
+  // (always false) than on the client (true for ADMIN/VULN), causing a React
+  // hydration mismatch.
+  const [canManage, setCanManage] = useState(false);
+  const hasAccess = hasVulnAccess();
 
-  const loadRepos = () => {
-    getGithubRepositories()
+  const loadRepos = (targetPage: number, term: string) => {
+    setLoading(true);
+    getGithubRepositories(targetPage, PAGE_SIZE, term || undefined)
       .then((data) => {
-        setRepos(data);
+        setRepos(data.content);
+        setTotalElements(data.totalElements);
+        setTotalPages(data.totalPages);
         setError(null);
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load repositories'))
       .finally(() => setLoading(false));
+  };
+
+  const loadSummary = () => {
+    getGithubRepositoriesSummary()
+      .then((data) => setTotals({ critical: data.criticalTotal, high: data.highTotal }))
+      .catch(() => {
+        // Header stat is best-effort; list load failures are already surfaced above.
+      });
   };
 
   const toggleExpand = (repo: GithubRepo) => {
@@ -78,40 +109,41 @@ const GithubRepoManagement: React.FC = () => {
   };
 
   useEffect(() => {
-    if (!hasVulnAccess()) {
+    setCanManage(hasRole(['ADMIN', 'VULN']));
+    if (!hasAccess) {
       setError('You do not have permission to view GitHub repositories.');
       setLoading(false);
       return;
     }
-    loadRepos();
+    loadSummary();
   }, []);
 
-  const filtered = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    return repos
-      .filter((r) => {
-        if (!term) return true;
-        return (
-          r.fullName.toLowerCase().includes(term) ||
-          r.owner.toLowerCase().includes(term) ||
-          (r.ownerEmail ?? '').toLowerCase().includes(term)
-        );
-      })
-      .sort(
-        (x, y) =>
-          y.criticalCount - x.criticalCount ||
-          y.highCount - x.highCount ||
-          x.fullName.localeCompare(y.fullName)
-      );
-  }, [repos, search]);
+  useEffect(() => {
+    if (!hasAccess) return;
+    loadRepos(page, debouncedSearch);
+  }, [page, debouncedSearch]);
 
-  const totals = useMemo(
-    () => ({
-      critical: repos.reduce((sum, r) => sum + r.criticalCount, 0),
-      high: repos.reduce((sum, r) => sum + r.highCount, 0),
-    }),
-    [repos]
-  );
+  useEffect(() => {
+    return () => {
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    };
+  }, []);
+
+  const handleSearchChange = (value: string) => {
+    setSearch(value);
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    searchTimeoutRef.current = setTimeout(() => {
+      setPage(0);
+      setDebouncedSearch(value);
+    }, 300);
+  };
+
+  const clearSearch = () => {
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    setSearch('');
+    setDebouncedSearch('');
+    setPage(0);
+  };
 
   const handleImport = async () => {
     setImporting(true);
@@ -124,7 +156,8 @@ const GithubRepoManagement: React.FC = () => {
           `${result.reposUpdated} updated), ${result.totalCritical} critical / ${result.totalHigh} high open alerts` +
           (result.errors.length > 0 ? ` — ${result.errors.length} errors` : '')
       );
-      loadRepos();
+      loadRepos(page, debouncedSearch);
+      loadSummary();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Import failed');
     } finally {
@@ -142,7 +175,7 @@ const GithubRepoManagement: React.FC = () => {
     try {
       await updateOwnerEmail(repo.id, emailDraft.trim() || null);
       setEditingRepoId(null);
-      loadRepos();
+      loadRepos(page, debouncedSearch);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update owner email');
     } finally {
@@ -166,7 +199,7 @@ const GithubRepoManagement: React.FC = () => {
         expirationDate: exceptionExpiry ? new Date(exceptionExpiry).toISOString() : null,
       });
       setExceptionRepo(null);
-      loadRepos();
+      loadRepos(page, debouncedSearch);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create exception');
     } finally {
@@ -178,7 +211,7 @@ const GithubRepoManagement: React.FC = () => {
     if (!repo.activeException) return;
     try {
       await deleteRepoAlertException(repo.activeException.id);
-      loadRepos();
+      loadRepos(page, debouncedSearch);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete exception');
     }
@@ -249,10 +282,10 @@ const GithubRepoManagement: React.FC = () => {
               className="form-control"
               placeholder="Search repository, owner, or email..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
             />
             {search && (
-              <button className="btn btn-outline-secondary" type="button" onClick={() => setSearch('')} title="Clear">
+              <button className="btn btn-outline-secondary" type="button" onClick={clearSearch} title="Clear">
                 <i className="bi bi-x-lg"></i>
               </button>
             )}
@@ -262,7 +295,7 @@ const GithubRepoManagement: React.FC = () => {
 
       <div className="card">
         <div className="card-body">
-          <h5 className="card-title">Repositories ({filtered.length})</h5>
+          <h5 className="card-title">Repositories ({totalElements})</h5>
           <div className="table-responsive">
             <table className="table table-striped table-hover align-middle">
               <thead>
@@ -287,15 +320,21 @@ const GithubRepoManagement: React.FC = () => {
                       Loading repositories...
                     </td>
                   </tr>
-                ) : filtered.length === 0 ? (
+                ) : repos.length === 0 ? (
                   <tr>
                     <td colSpan={canManage ? 10 : 9} className="text-center py-4 text-muted">
-                      No GitHub repositories imported yet.
-                      {canManage && ' Configure the GitHub App under Admin → GitHub App and press "Import now".'}
+                      {debouncedSearch ? (
+                        'No repositories match your search.'
+                      ) : (
+                        <>
+                          No GitHub repositories imported yet.
+                          {canManage && ' Configure the GitHub App under Admin → GitHub App and press "Import now".'}
+                        </>
+                      )}
                     </td>
                   </tr>
                 ) : (
-                  filtered.map((r) => (
+                  repos.map((r) => (
                     <React.Fragment key={r.id}>
                       <tr>
                         <td>
@@ -491,6 +530,13 @@ const GithubRepoManagement: React.FC = () => {
               </tbody>
             </table>
           </div>
+          <Pagination
+            currentPage={page}
+            totalPages={totalPages}
+            totalElements={totalElements}
+            pageSize={PAGE_SIZE}
+            onPageChange={setPage}
+          />
         </div>
       </div>
 
