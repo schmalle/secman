@@ -114,4 +114,42 @@ interface OutdatedAssetMaterializedViewRepository : JpaRepository<OutdatedAssetM
      * Spec reference: data-model.md (refresh process)
      */
     override fun deleteAll()
+
+    /**
+     * Single-row aggregate over the view for a set of accessible asset IDs.
+     *
+     * Powers the user todo dashboard's "overdue patching" card with one query
+     * instead of streaming view rows and counting in memory. The caller passes
+     * IDs from AssetFilterService, so the ID filter IS the auth boundary here.
+     *
+     * CAST AS SIGNED keeps the projection Long-typed (MariaDB SUM(INT) is DECIMAL).
+     */
+    @Query(
+        value = """
+            SELECT CAST(COUNT(*) AS SIGNED) AS assetCount,
+                   CAST(COALESCE(SUM(v.critical_count), 0) AS SIGNED) AS criticalCount,
+                   CAST(COALESCE(SUM(v.high_count), 0) AS SIGNED) AS highCount,
+                   CAST(COALESCE(MAX(v.oldest_vuln_days), 0) AS SIGNED) AS oldestVulnDays
+            FROM outdated_asset_materialized_view v
+            WHERE v.asset_id IN :assetIds
+        """,
+        nativeQuery = true
+    )
+    fun aggregateOverdueForAssets(assetIds: Set<Long>): com.secman.repository.projection.OverdueAssetAggregateRow
+
+    /**
+     * Unscoped variant of [aggregateOverdueForAssets] for ADMIN/SECCHAMPION callers,
+     * avoiding an IN clause over the full asset-ID universe.
+     */
+    @Query(
+        value = """
+            SELECT CAST(COUNT(*) AS SIGNED) AS assetCount,
+                   CAST(COALESCE(SUM(v.critical_count), 0) AS SIGNED) AS criticalCount,
+                   CAST(COALESCE(SUM(v.high_count), 0) AS SIGNED) AS highCount,
+                   CAST(COALESCE(MAX(v.oldest_vuln_days), 0) AS SIGNED) AS oldestVulnDays
+            FROM outdated_asset_materialized_view v
+        """,
+        nativeQuery = true
+    )
+    fun aggregateOverdueForAll(): com.secman.repository.projection.OverdueAssetAggregateRow
 }

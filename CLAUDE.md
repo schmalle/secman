@@ -63,6 +63,7 @@ Authoritative filter: `AssetFilterService.getAccessibleAssets()`. SQL pre-filter
 | Identity Providers | `GET/POST/PUT/DELETE /api/identity-providers[/{id}[/test]]` | ADMIN |
 | Maintenance Banners | `GET /api/maintenance-banners/active` (PUBLIC); `GET/POST/PUT/DELETE /api/maintenance-banners[/{id}]` (ADMIN) | mixed |
 | User Profile | `GET /api/users/profile`, `PUT .../change-password` (LOCAL only), `GET/PUT .../mfa-{status,toggle}` | auth |
+| User Dashboard | `GET /api/user-dashboard` (aggregated personal todos, single round-trip) | auth |
 | Notifications | `GET/PUT /api/notification-preferences`; `GET /api/notification-logs`; `.../export` (ADMIN) | mixed |
 | CLI | `POST /api/vulnerabilities/cli-add` (ADMIN/VULN; auto-creates asset) | ADMIN/VULN |
 
@@ -192,6 +193,8 @@ Triggered by `/e2eexception`, `/admin-asset-e2e`, `/e2ejs`, `/e2evulnexception` 
 *Last updated: 2026-05-15*
 
 ## Recent Changes
+
+- **Role-based home dashboard** — after login, users **without** ADMIN or SECCHAMPION get a personal "My Tasks" dashboard on `/` instead of the platform statistics view (ADMIN/SECCHAMPION keep `HomeStatisticsDashboard`; switch in `HomeDashboard.tsx`, mount-gated to stay hydration-safe). Backend: one aggregated `GET /api/user-dashboard` (IS_AUTHENTICATED, `UserDashboardController`/`UserDashboardService`) returns accessible-asset count, open vuln severity counts (reuses `findSeverityDistributionForAssets`, exception-filtered), an overdue-patching summary (new single-row native aggregates `aggregateOverdueForAssets`/`aggregateOverdueForAll` on the outdated-asset materialized view — accessible-ID filter is the auth boundary), the user's own exception-request counts (`getUserRequestSummary`), open risk assessments where the user is the **respondent** (soonest deadline first, capped at 10, `/respond/{token}` link when a valid unused `AssessmentToken` exists), and view flags (AWS account / workgroup / domain vulns) for quick links. Accessible-asset IDs resolve once per request via `AccessibleAssetIdsCache`; ADMIN/SECCHAMPION callers get unscoped query variants so no giant IN clause is ever built. Frontend: `UserTodoDashboard.tsx` renders the whole page from that one response (KPI tiles, "Action required" list, "Waiting on others", "Your views"). Unit coverage: `UserDashboardServiceTest`.
 
 - **GitHub / Dependabot Alerts consolidation** — the standalone Vulnerability Management → "Dependabot alerts" page is retired; its one unique capability (raw per-alert detail: package, CVE/GHSA, vulnerable range, patched version) is folded into the "GitHub" view (`/github-repos`) as expandable per-repo rows. `GithubRepoImportService` now also persists `GithubRepoDependabotAlert` rows (new `github_repo_dependabot_alert` table, V239) — current-state only, deleted and reinserted per repo on every import (same pattern as the CrowdStrike vulnerability import). New endpoint `GET /api/github/repositories/{id}/alerts` (ADMIN/VULN/SECCHAMPION). Removed: the `dependabot_alert` table (dropped by V239), `DependabotAlertController`/`Service`/`Repository`/entity, the CLI `query dependabot-alerts` command (PAT-based GitHub auth is no longer used anywhere — GitHub App auth is now the sole ingestion path), and the "Dependabot alerts" sidebar entry. Docs: `docs/GITHUB_REPOS.md` (`docs/DEPENDABOT.md` removed).
 
