@@ -4,6 +4,7 @@ import com.secman.domain.GithubRepoDependabotAlert
 import com.secman.domain.GithubRepoFindingSnapshot
 import com.secman.domain.GithubRepository
 import com.secman.repository.GithubAppConfigRepository
+import com.secman.repository.GithubOwnerEmailMappingRepository
 import com.secman.repository.GithubRepoDependabotAlertRepository
 import com.secman.repository.GithubRepoFindingSnapshotRepository
 import com.secman.repository.GithubRepositoryRepository
@@ -23,6 +24,10 @@ import java.time.Instant
  *
  * Triggered by `POST /api/github/import` (CLI `import-github-repos`, MCP
  * `import_github_repos`, or the UI "Import now" button).
+ *
+ * When a repo's `ownerEmail` is blank, it is auto-filled from
+ * [GithubOwnerEmailMappingRepository] (owner login -> default email); a
+ * manually-set or previously auto-filled value is never overwritten.
  */
 @Singleton
 open class GithubRepoImportService(
@@ -30,7 +35,8 @@ open class GithubRepoImportService(
     private val githubRepositoryRepository: GithubRepositoryRepository,
     private val snapshotRepository: GithubRepoFindingSnapshotRepository,
     private val alertRepository: GithubRepoDependabotAlertRepository,
-    private val githubClient: GithubAppClientService
+    private val githubClient: GithubAppClientService,
+    private val ownerEmailMappingRepository: GithubOwnerEmailMappingRepository
 ) {
     private val logger = LoggerFactory.getLogger(GithubRepoImportService::class.java)
 
@@ -114,7 +120,13 @@ open class GithubRepoImportService(
         repo.fullName = repoDto.fullName
         repo.htmlUrl = repoDto.htmlUrl
         repo.archived = repoDto.archived
-        // ownerEmail is user-maintained — never touched by the import
+        // ownerEmail is user-maintained; only auto-filled from
+        // github_owner_email_mapping when currently blank — never overwrites a
+        // manually-set or previously auto-filled value.
+        if (repo.ownerEmail.isNullOrBlank()) {
+            ownerEmailMappingRepository.findByOwnerIgnoreCase(repoDto.owner)
+                .ifPresent { repo.ownerEmail = it.email }
+        }
         repo.criticalCount = counts.critical
         repo.highCount = counts.high
         repo.lastImportAt = now

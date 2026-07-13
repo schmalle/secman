@@ -46,6 +46,7 @@ Only one configuration can be active at a time. The private key is encrypted at 
 | `github_repo_finding_snapshot` | Per-import count history | FK → repo (cascade), `snapshot_at`, `critical_count`, `high_count` |
 | `github_repo_alert_exception` | Alerting exceptions | FK → repo (cascade), `reason`, `expiration_date?` (null = permanent), `created_by`, `created_at` |
 | `github_repo_dependabot_alert` (V239) | Current open per-alert detail | FK → repo (cascade), `alert_number`, `package_name`, `ecosystem`, `manifest_path?`, `severity`, `ghsa_id?`, `cve_id?`, `summary?`, `vulnerable_version_range?`, `first_patched_version?`, `html_url?`, `alert_created_at?`, `alert_updated_at?` |
+| `github_owner_email_mapping` (V240) | Default owner → email | `owner` (unique), `email`, `created_by`, `created_at`, `updated_at` |
 
 - `last_import_at` — stamped on every import.
 - `last_high_critical_finding_at` — stamped on an import **iff** the repo had ≥1 open high/critical alert at that moment.
@@ -60,13 +61,24 @@ For each repository, the alert run:
 2. Skips silently when the current `criticalCount + highCount` is **0**.
 3. Picks the **baseline**: the newest snapshot with `snapshot_at ≤ now − thresholdDays` (default 30). No such snapshot → the repo is **skipped and reported** in `reposSkippedInsufficientHistory` (prevents false alerts during the first month — keep importing daily and it will age in).
 4. **Alerts** when `current ≥ baseline` (not decreased), grouped into **one email per `ownerEmail`** listing all of that owner's non-decreasing repos with current-vs-baseline counts.
-5. Repos that qualify but have **no `ownerEmail`** are reported in `unmappedRepos` — set the email in the UI (or via `PUT /api/github/repositories/{id}/owner-email`).
+5. Repos that qualify but have **no `ownerEmail`** are reported in `unmappedRepos` — set the email in the UI (or via `PUT /api/github/repositories/{id}/owner-email`), or map the owner once (see below) so every repo under it gets covered.
 
 The alert run reads only the secman DB — no GitHub round-trip — so it is fast and works even when GitHub is unreachable. Run the **import regularly** (e.g. daily cron) to build accurate history.
 
+## Owner email mappings (bulk `ownerEmail` coverage)
+
+`github_repository.owner` (the GitHub org/user login, auto-populated on import) is unrelated to `ownerEmail` (the alert recipient, purely manual) — mapping one to the other by hand, repo by repo, doesn't scale when many repos share the same owner. `github_owner_email_mapping` closes that gap: map an **owner login → default email once**, and every repo under that owner picks it up.
+
+- **Auto-fill on import**: `GithubRepoImportService.persistRepo()` fills a repo's `ownerEmail` from this table **only when it is currently blank** — a manually-set (via the per-repo field) or previously auto-filled value is never overwritten. GitHub itself is never queried for emails — its API doesn't reliably expose them (orgs have none; user emails are usually private) — this is a secman-only mapping.
+- **Immediate backfill**: creating or updating a mapping also backfills every *existing* repo under that owner whose `ownerEmail` is currently blank, in the same request — you don't have to wait for the next import.
+- Deleting a mapping does **not** un-set any `ownerEmail` it already filled.
+- Managed in the UI under **Vulnerability Management → GitHub → Owner email mappings** tab (ADMIN/VULN create/edit/delete; ADMIN/VULN/SECCHAMPION view), or in bulk via CSV upload (`owner,email` columns) — same tab, or `POST /api/github/owner-email-mappings/upload-csv`.
+
 ## UI
 
-- **Vulnerability Management → GitHub** (`/github-repos`), visible to ADMIN, VULN, SECCHAMPION. Columns: repository (link), owner, **critical**, **high**, last import, last high/critical finding, owner email (inline edit — ADMIN/VULN), exception badge. Toolbar: **Import now** (ADMIN/VULN). Per-row: create/remove an alert exception (reason + optional expiry) — ADMIN/VULN; expand (chevron) to show that repo's open Dependabot alerts — severity, package/ecosystem, CVE/GHSA advisory link, vulnerable range, patched version, last updated.
+- **Vulnerability Management → GitHub** (`/github-repos`), visible to ADMIN, VULN, SECCHAMPION, with two tabs:
+  - **Repositories**: repository (link), owner, **critical**, **high**, last import, last high/critical finding, owner email (inline edit — ADMIN/VULN), exception badge. Toolbar: **Import now** (ADMIN/VULN). Per-row: create/remove an alert exception (reason + optional expiry) — ADMIN/VULN; expand (chevron) to show that repo's open Dependabot alerts — severity, package/ecosystem, CVE/GHSA advisory link, vulnerable range, patched version, last updated.
+  - **Owner email mappings**: owner, default email (inline edit — ADMIN/VULN), repo count, created by, updated. Add-row form + CSV upload (ADMIN/VULN).
 - **Admin → GitHub App** (`/admin/github-config`), ADMIN only: credential CRUD, activate, test connection.
 
 ## REST API
@@ -79,6 +91,8 @@ The alert run reads only the secman DB — no GitHub round-trip — so it is fas
 | `/api/github/repositories/{id}/owner-email` | PUT | ADMIN, VULN | Set/clear the alert recipient (`{"ownerEmail": "x@y.z"}`, blank/null clears) |
 | `/api/github/import` | POST | ADMIN, VULN | Run the GitHub App import |
 | `/api/github/repo-alert-exceptions[/{id}]` | GET / POST / DELETE | read: +SECCHAMPION; write: ADMIN, VULN | Alerting exceptions |
+| `/api/github/owner-email-mappings[/{id}]` | GET / POST / PUT / DELETE | read: +SECCHAMPION; write: ADMIN, VULN | Owner → default email mappings; create/update backfills blank repo `ownerEmail`s for that owner |
+| `/api/github/owner-email-mappings/upload-csv` | POST (multipart) | ADMIN, VULN | Bulk-create mappings from a CSV of `owner,email` rows |
 | `/api/cli/github-repo-alerts/send` | POST | ADMIN | Run the 30-day alert (`{"dryRun": bool, "thresholdDays": int, "force": bool, "onlyEmail": string?}`) |
 
 Import response: `{reposDiscovered, reposNew, reposUpdated, totalCritical, totalHigh, reposWithAlertsDisabled[], errors[], importedAt}`. Repos with Dependabot alerts disabled/inaccessible are recorded with 0/0 and listed — they do not fail the run.
@@ -107,16 +121,25 @@ See `docs/CLI.md` for the full option tables.
 
 # Only notify one owner (e.g. to test the email without spamming everyone):
 ./scripts/secman alert-github-repo-owners --only-email owner@example.com
+
+# Manage owner -> default email mappings:
+./scripts/secman manage-github-owner-mappings add --owner acme-corp --email security@acme-corp.example.com
+./scripts/secman manage-github-owner-mappings list
+./scripts/secman manage-github-owner-mappings remove --owner acme-corp
+./scripts/secman manage-github-owner-mappings import --file mappings.csv
 ```
 
 Both authenticate with `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS` against `SECMAN_HOST` (ADMIN required; import also accepts VULN via the REST endpoint). Exit codes: 0 success, 1 failure/partial failure, 2 usage error.
 
 ## MCP tools
 
-See `docs/MCP.md`. Both require **User Delegation** (`X-MCP-User-Email`).
+See `docs/MCP.md`. All require **User Delegation** (`X-MCP-User-Email`).
 
 - `import_github_repos` — no arguments. Delegated user must be ADMIN or VULN; API key needs `VULNERABILITIES_READ`. Errors: `NO_GITHUB_CONFIG` when no active configuration exists.
 - `send_github_repo_alerts` — `{dryRun?: boolean, thresholdDays?: number, force?: boolean, onlyEmail?: string}` (defaults false / 30 / false / all owners). Delegated user must be ADMIN; API key needs `NOTIFICATIONS_SEND`.
+- `list_github_owner_email_mappings` — no arguments. Delegated user must be ADMIN, VULN, or SECCHAMPION; API key needs `VULNERABILITIES_READ`.
+- `create_github_owner_email_mapping` — `{owner: string, email: string}`. Delegated user must be ADMIN or VULN; API key needs `VULNERABILITIES_READ`. Backfills blank repo `ownerEmail`s for that owner.
+- `delete_github_owner_email_mapping` — `{id: number}`. Delegated user must be ADMIN or VULN; API key needs `VULNERABILITIES_READ`.
 
 ## Email
 
@@ -135,10 +158,10 @@ Future work: an in-backend scheduler (following `scheduler/AwsAccountRiskAssessm
 
 ## Files
 
-- Entities: `src/backendng/.../domain/GithubAppConfig.kt`, `GithubRepository.kt`, `GithubRepoFindingSnapshot.kt`, `GithubRepoAlertException.kt`, `GithubRepoDependabotAlert.kt` (+ Flyway `V238__github_repos.sql`, `V239__github_repo_dependabot_alerts.sql`)
-- Services: `GithubAppClientService.kt` (App JWT via `util/PemUtils.kt`, installation token, repo/alert queries), `GithubRepoImportService.kt`, `GithubRepoAlertService.kt`
-- Controllers: `GithubConfigController.kt`, `GithubRepositoryController.kt`, `CliController.kt` (`/github-repo-alerts/send`)
-- MCP: `mcp/tools/ImportGithubReposTool.kt`, `SendGithubRepoAlertsTool.kt` (registered in `McpToolRegistry.kt`)
-- CLI: `src/cli/.../commands/ImportGithubReposCommand.kt`, `AlertGithubRepoOwnersCommand.kt`
-- UI: `pages/github-repos.astro` + `components/GithubRepoManagement.tsx`, `pages/admin/github-config.astro` + `components/GithubConfigManagement.tsx`, `services/githubReposService.ts`
+- Entities: `src/backendng/.../domain/GithubAppConfig.kt`, `GithubRepository.kt`, `GithubRepoFindingSnapshot.kt`, `GithubRepoAlertException.kt`, `GithubRepoDependabotAlert.kt`, `GithubOwnerEmailMapping.kt` (+ Flyway `V238__github_repos.sql`, `V239__github_repo_dependabot_alerts.sql`, `V240__github_owner_email_mapping.sql`)
+- Services: `GithubAppClientService.kt` (App JWT via `util/PemUtils.kt`, installation token, repo/alert queries), `GithubRepoImportService.kt`, `GithubRepoAlertService.kt`, `GithubOwnerEmailMappingService.kt`, `CSVGithubOwnerEmailMappingParser.kt`
+- Controllers: `GithubConfigController.kt`, `GithubRepositoryController.kt` (also owns `/owner-email-mappings`), `CliController.kt` (`/github-repo-alerts/send`)
+- MCP: `mcp/tools/ImportGithubReposTool.kt`, `SendGithubRepoAlertsTool.kt`, `ListGithubOwnerEmailMappingsTool.kt`, `CreateGithubOwnerEmailMappingTool.kt`, `DeleteGithubOwnerEmailMappingTool.kt` (registered in `McpToolRegistry.kt`)
+- CLI: `src/cli/.../commands/ImportGithubReposCommand.kt`, `AlertGithubRepoOwnersCommand.kt`, `ManageGithubOwnerMappingsCommand.kt` + `AddGithubOwnerMappingCommand.kt`, `ListGithubOwnerMappingsCommand.kt`, `RemoveGithubOwnerMappingCommand.kt`, `ImportGithubOwnerMappingsCommand.kt`
+- UI: `pages/github-repos.astro` + `components/GithubRepoTabs.tsx` (tab shell), `GithubRepoManagement.tsx`, `GithubOwnerEmailMappings.tsx`, `pages/admin/github-config.astro` + `components/GithubConfigManagement.tsx`, `services/githubReposService.ts`
 - E2E: Phase 8d in `scripts/test/test-e2e-vuln-exception-full.sh`

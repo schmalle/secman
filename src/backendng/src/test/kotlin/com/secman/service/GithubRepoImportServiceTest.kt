@@ -1,10 +1,12 @@
 package com.secman.service
 
 import com.secman.domain.GithubAppConfig
+import com.secman.domain.GithubOwnerEmailMapping
 import com.secman.domain.GithubRepoDependabotAlert
 import com.secman.domain.GithubRepoFindingSnapshot
 import com.secman.domain.GithubRepository
 import com.secman.repository.GithubAppConfigRepository
+import com.secman.repository.GithubOwnerEmailMappingRepository
 import com.secman.repository.GithubRepoDependabotAlertRepository
 import com.secman.repository.GithubRepoFindingSnapshotRepository
 import com.secman.repository.GithubRepositoryRepository
@@ -26,6 +28,7 @@ class GithubRepoImportServiceTest {
     private lateinit var snapshotRepository: GithubRepoFindingSnapshotRepository
     private lateinit var alertRepository: GithubRepoDependabotAlertRepository
     private lateinit var client: GithubAppClientService
+    private lateinit var ownerEmailMappingRepository: GithubOwnerEmailMappingRepository
     private lateinit var service: GithubRepoImportService
 
     private val config = GithubAppConfig(id = 1, appId = "12345", privateKeyPem = "pem")
@@ -37,7 +40,8 @@ class GithubRepoImportServiceTest {
         snapshotRepository = mockk()
         alertRepository = mockk()
         client = mockk()
-        service = GithubRepoImportService(configRepository, repoRepository, snapshotRepository, alertRepository, client)
+        ownerEmailMappingRepository = mockk()
+        service = GithubRepoImportService(configRepository, repoRepository, snapshotRepository, alertRepository, client, ownerEmailMappingRepository)
 
         every { configRepository.findActiveConfig() } returns Optional.of(config)
         every { client.getInstallationToken(config) } returns "token"
@@ -49,6 +53,7 @@ class GithubRepoImportServiceTest {
         }
         every { repoRepository.update(any<GithubRepository>()) } answers { firstArg() }
         every { alertRepository.deleteByGithubRepositoryId(any()) } returns 0
+        every { ownerEmailMappingRepository.findByOwnerIgnoreCase(any()) } returns Optional.empty()
     }
 
     private fun repoDto(id: Long, fullName: String = "org/repo$id") =
@@ -196,5 +201,73 @@ class GithubRepoImportServiceTest {
 
         verify { alertRepository.deleteByGithubRepositoryId(7) }
         verify(exactly = 0) { alertRepository.saveAll(any<Iterable<GithubRepoDependabotAlert>>()) }
+    }
+
+    @Test
+    fun `auto-fills ownerEmail from mapping for new repo with blank ownerEmail`() {
+        every { client.listInstallationRepositories("token") } returns listOf(repoDto(7))
+        every { client.countOpenDependabotAlerts("token", "org", "repo7") } returns
+            GithubAppClientService.SeverityCounts(critical = 0, high = 0)
+        every { ownerEmailMappingRepository.findByOwnerIgnoreCase("org") } returns
+            Optional.of(GithubOwnerEmailMapping(id = 1, owner = "org", email = "org-default@example.com", createdBy = "admin"))
+
+        service.importRepositories()
+
+        val savedRepo = slot<GithubRepository>()
+        verify { repoRepository.save(capture(savedRepo)) }
+        assertThat(savedRepo.captured.ownerEmail).isEqualTo("org-default@example.com")
+    }
+
+    @Test
+    fun `new repo without a mapping stays unmapped`() {
+        every { client.listInstallationRepositories("token") } returns listOf(repoDto(7))
+        every { client.countOpenDependabotAlerts("token", "org", "repo7") } returns
+            GithubAppClientService.SeverityCounts(critical = 0, high = 0)
+
+        service.importRepositories()
+
+        val savedRepo = slot<GithubRepository>()
+        verify { repoRepository.save(capture(savedRepo)) }
+        assertThat(savedRepo.captured.ownerEmail).isNull()
+    }
+
+    @Test
+    fun `re-import does not overwrite a manually-set ownerEmail even when a mapping now exists`() {
+        val existing = GithubRepository(
+            id = 42, githubRepoId = 7, name = "repo7", owner = "org", fullName = "org/repo7",
+            ownerEmail = "manual@example.com"
+        )
+        every { repoRepository.findByGithubRepoId(7) } returns Optional.of(existing)
+        every { client.listInstallationRepositories("token") } returns listOf(repoDto(7))
+        every { client.countOpenDependabotAlerts("token", "org", "repo7") } returns
+            GithubAppClientService.SeverityCounts(critical = 0, high = 0)
+        every { ownerEmailMappingRepository.findByOwnerIgnoreCase("org") } returns
+            Optional.of(GithubOwnerEmailMapping(id = 1, owner = "org", email = "org-default@example.com", createdBy = "admin"))
+
+        service.importRepositories()
+
+        val updated = slot<GithubRepository>()
+        verify { repoRepository.update(capture(updated)) }
+        assertThat(updated.captured.ownerEmail).isEqualTo("manual@example.com")
+        verify(exactly = 0) { ownerEmailMappingRepository.findByOwnerIgnoreCase(any()) }
+    }
+
+    @Test
+    fun `re-import does not re-touch a previously auto-filled ownerEmail`() {
+        val existing = GithubRepository(
+            id = 42, githubRepoId = 7, name = "repo7", owner = "org", fullName = "org/repo7",
+            ownerEmail = "org-default@example.com"
+        )
+        every { repoRepository.findByGithubRepoId(7) } returns Optional.of(existing)
+        every { client.listInstallationRepositories("token") } returns listOf(repoDto(7))
+        every { client.countOpenDependabotAlerts("token", "org", "repo7") } returns
+            GithubAppClientService.SeverityCounts(critical = 0, high = 0)
+
+        service.importRepositories()
+
+        val updated = slot<GithubRepository>()
+        verify { repoRepository.update(capture(updated)) }
+        assertThat(updated.captured.ownerEmail).isEqualTo("org-default@example.com")
+        verify(exactly = 0) { ownerEmailMappingRepository.findByOwnerIgnoreCase(any()) }
     }
 }

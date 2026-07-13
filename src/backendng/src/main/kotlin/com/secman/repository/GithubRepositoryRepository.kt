@@ -27,6 +27,10 @@ interface GithubRepositoryRepository : JpaRepository<GithubRepository, Long> {
         pageable: Pageable
     ): Page<GithubRepository>
 
+    fun findByOwnerIgnoreCase(owner: String): List<GithubRepository>
+
+    fun countByOwnerIgnoreCase(owner: String): Long
+
     @Query("SELECT COALESCE(SUM(r.criticalCount), 0) FROM GithubRepository r")
     fun sumCriticalCount(): Long
 

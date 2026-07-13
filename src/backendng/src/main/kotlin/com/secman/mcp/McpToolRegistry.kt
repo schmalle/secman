@@ -113,7 +113,11 @@ class McpToolRegistry(
     @Inject private val assetMatchClearTool: AssetMatchClearTool,
     // Feature: GitHub repo vulnerability management
     @Inject private val importGithubReposTool: ImportGithubReposTool,
-    @Inject private val sendGithubRepoAlertsTool: SendGithubRepoAlertsTool
+    @Inject private val sendGithubRepoAlertsTool: SendGithubRepoAlertsTool,
+    // Feature: GitHub owner email mapping
+    @Inject private val listGithubOwnerEmailMappingsTool: ListGithubOwnerEmailMappingsTool,
+    @Inject private val createGithubOwnerEmailMappingTool: CreateGithubOwnerEmailMappingTool,
+    @Inject private val deleteGithubOwnerEmailMappingTool: DeleteGithubOwnerEmailMappingTool
 ) {
     private val logger = LoggerFactory.getLogger(McpToolRegistry::class.java)
 
@@ -223,7 +227,11 @@ class McpToolRegistry(
             assetMatchClearTool,
             // Feature: GitHub repo vulnerability management
             importGithubReposTool,
-            sendGithubRepoAlertsTool
+            sendGithubRepoAlertsTool,
+            // Feature: GitHub owner email mapping
+            listGithubOwnerEmailMappingsTool,
+            createGithubOwnerEmailMappingTool,
+            deleteGithubOwnerEmailMappingTool
         ).forEach { tool ->
             toolMap[tool.name] = tool
             logger.debug("Registered MCP tool: {}", tool.name)
@@ -540,6 +548,14 @@ class McpToolRegistry(
             }
             "send_github_repo_alerts" -> {
                 permissions.contains(McpPermission.NOTIFICATIONS_SEND) // ADMIN role checked in tool execute()
+            }
+
+            // Feature: GitHub owner email mapping
+            "list_github_owner_email_mappings" -> {
+                permissions.contains(McpPermission.VULNERABILITIES_READ) // Role checked in tool execute()
+            }
+            "create_github_owner_email_mapping", "delete_github_owner_email_mapping" -> {
+                permissions.contains(McpPermission.VULNERABILITIES_READ) // ADMIN/VULN role checked in tool execute()
             }
 
             else -> false

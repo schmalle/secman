@@ -33,6 +33,7 @@ import java.time.temporal.ChronoUnit
  * - GET  /api/github/repositories                (ADMIN/VULN/SECCHAMPION)
  * - PUT  /api/github/repositories/{id}/owner-email (ADMIN/VULN)
  * - POST/DELETE /api/github/repo-alert-exceptions (ADMIN/VULN)
+ * - GET/POST/PUT/DELETE /api/github/owner-email-mappings (ADMIN/VULN/SECCHAMPION read; ADMIN/VULN write)
  * - POST /api/cli/github-repo-alerts/send        (ADMIN)
  */
 @MicronautTest(environments = ["test"], transactional = false)
@@ -406,5 +407,126 @@ class GithubRepositoryControllerIntegrationTest : BaseIntegrationTest() {
             )
         }
         assertThat(ex.status).isEqualTo(HttpStatus.FORBIDDEN)
+    }
+
+    @Test
+    fun `VULN creates an owner email mapping, backfills blank repos, SECCHAMPION cannot write`() {
+        val owner = "owner-mapping-org-${System.nanoTime()}"
+        val blankRepo = seedRepoNamed("bf-${System.nanoTime()}-a", ownerEmail = null).also {
+            it.owner = owner
+            githubRepositoryRepository.update(it)
+        }
+        val manualRepo = seedRepoNamed("bf-${System.nanoTime()}-b", ownerEmail = "manual@example.com").also {
+            it.owner = owner
+            githubRepositoryRepository.update(it)
+        }
+
+        val vulnToken = TestAuthHelper.getAuthToken(client, vulnUser.username)
+        val created = client.toBlocking().exchange(
+            HttpRequest.POST(
+                "/api/github/owner-email-mappings",
+                mapOf("owner" to owner, "email" to "Default@Example.COM")
+            ).bearerAuth(vulnToken),
+            Map::class.java
+        )
+        assertThat(created.status).isEqualTo(HttpStatus.CREATED)
+        val body = created.body()!!
+        assertThat(body["email"]).isEqualTo("default@example.com")
+        assertThat((body["repoCount"] as Number).toLong()).isEqualTo(2)
+        val mappingId = (body["id"] as Number).toLong()
+
+        assertThat(githubRepositoryRepository.findById(blankRepo.id!!).get().ownerEmail).isEqualTo("default@example.com")
+        assertThat(githubRepositoryRepository.findById(manualRepo.id!!).get().ownerEmail).isEqualTo("manual@example.com")
+
+        // Duplicate owner rejected
+        val dupEx = org.junit.jupiter.api.assertThrows<HttpClientResponseException> {
+            client.toBlocking().exchange(
+                HttpRequest.POST(
+                    "/api/github/owner-email-mappings",
+                    mapOf("owner" to owner, "email" to "other@example.com")
+                ).bearerAuth(vulnToken),
+                String::class.java
+            )
+        }
+        assertThat(dupEx.status).isEqualTo(HttpStatus.CONFLICT)
+
+        // Invalid email rejected
+        val invalidEx = org.junit.jupiter.api.assertThrows<HttpClientResponseException> {
+            client.toBlocking().exchange(
+                HttpRequest.POST(
+                    "/api/github/owner-email-mappings",
+                    mapOf("owner" to "another-${System.nanoTime()}", "email" to "not-an-email")
+                ).bearerAuth(vulnToken),
+                String::class.java
+            )
+        }
+        assertThat(invalidEx.status).isEqualTo(HttpStatus.BAD_REQUEST)
+
+        // SECCHAMPION can read (list) but cannot write
+        val champToken = TestAuthHelper.getAuthToken(client, champUser.username)
+        val list = client.toBlocking().exchange(
+            HttpRequest.GET<Any>("/api/github/owner-email-mappings").bearerAuth(champToken),
+            Array<Any>::class.java
+        )
+        assertThat(list.status).isEqualTo(HttpStatus.OK)
+
+        val champWriteEx = org.junit.jupiter.api.assertThrows<HttpClientResponseException> {
+            client.toBlocking().exchange(
+                HttpRequest.PUT(
+                    "/api/github/owner-email-mappings/$mappingId",
+                    mapOf("email" to "x@y.zz")
+                ).bearerAuth(champToken),
+                String::class.java
+            )
+        }
+        assertThat(champWriteEx.status).isEqualTo(HttpStatus.FORBIDDEN)
+
+        // VULN can update
+        val updated = client.toBlocking().exchange(
+            HttpRequest.PUT(
+                "/api/github/owner-email-mappings/$mappingId",
+                mapOf("email" to "updated@example.com")
+            ).bearerAuth(vulnToken),
+            Map::class.java
+        )
+        assertThat(updated.status).isEqualTo(HttpStatus.OK)
+        assertThat(updated.body()!!["email"]).isEqualTo("updated@example.com")
+
+        // Manual repo still untouched after update backfill re-run
+        assertThat(githubRepositoryRepository.findById(manualRepo.id!!).get().ownerEmail).isEqualTo("manual@example.com")
+
+        // VULN can delete; regular user denied entirely
+        val regularToken = TestAuthHelper.getAuthToken(client, regularUser.username)
+        val regularEx = org.junit.jupiter.api.assertThrows<HttpClientResponseException> {
+            client.toBlocking().exchange(
+                HttpRequest.GET<Any>("/api/github/owner-email-mappings").bearerAuth(regularToken),
+                String::class.java
+            )
+        }
+        assertThat(regularEx.status).isEqualTo(HttpStatus.FORBIDDEN)
+
+        val deleted = client.toBlocking().exchange(
+            HttpRequest.DELETE<Any>("/api/github/owner-email-mappings/$mappingId").bearerAuth(vulnToken),
+            String::class.java
+        )
+        assertThat(deleted.status).isEqualTo(HttpStatus.NO_CONTENT)
+
+        // Deleting the mapping does not un-set the already-backfilled repo email
+        assertThat(githubRepositoryRepository.findById(blankRepo.id!!).get().ownerEmail).isEqualTo("updated@example.com")
+    }
+
+    @Test
+    fun `owner email mapping 404s for unknown id`() {
+        val vulnToken = TestAuthHelper.getAuthToken(client, vulnUser.username)
+        val ex = org.junit.jupiter.api.assertThrows<HttpClientResponseException> {
+            client.toBlocking().exchange(
+                HttpRequest.PUT(
+                    "/api/github/owner-email-mappings/999999999",
+                    mapOf("email" to "x@y.zz")
+                ).bearerAuth(vulnToken),
+                String::class.java
+            )
+        }
+        assertThat(ex.status).isEqualTo(HttpStatus.NOT_FOUND)
     }
 }

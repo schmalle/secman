@@ -4,12 +4,17 @@ import com.secman.domain.GithubRepoAlertException
 import com.secman.repository.GithubRepoAlertExceptionRepository
 import com.secman.repository.GithubRepoDependabotAlertRepository
 import com.secman.repository.GithubRepositoryRepository
+import com.secman.service.CSVGithubOwnerEmailMappingParser
+import com.secman.service.GithubOwnerEmailMappingService
 import com.secman.service.GithubRepoImportService
 import io.micronaut.core.annotation.Nullable
 import io.micronaut.data.model.Pageable
 import io.micronaut.data.model.Sort
 import io.micronaut.http.HttpResponse
+import io.micronaut.http.HttpStatus
+import io.micronaut.http.MediaType
 import io.micronaut.http.annotation.*
+import io.micronaut.http.multipart.CompletedFileUpload
 import io.micronaut.scheduling.TaskExecutors
 import io.micronaut.scheduling.annotation.ExecuteOn
 import io.micronaut.security.annotation.Secured
@@ -20,6 +25,9 @@ import io.micronaut.transaction.annotation.Transactional
 import jakarta.validation.Valid
 import jakarta.validation.constraints.NotBlank
 import org.slf4j.LoggerFactory
+import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.attribute.PosixFilePermissions
 import java.time.Instant
 
 /**
@@ -37,6 +45,11 @@ import java.time.Instant
  * - `POST /api/github/import` — run the GitHub App import. ADMIN/VULN.
  * - `GET|POST|DELETE /api/github/repo-alert-exceptions` — exceptions from the
  *   30-day non-decrease alerting. Read: ADMIN/VULN/SECCHAMPION; write: ADMIN/VULN.
+ * - `GET|POST|PUT|DELETE /api/github/owner-email-mappings` — default owner
+ *   (org/user login) -> email mappings, auto-filling `ownerEmail` for repos
+ *   that don't have one set. Read: ADMIN/VULN/SECCHAMPION; write: ADMIN/VULN.
+ * - `POST /api/github/owner-email-mappings/upload-csv` — bulk-create the
+ *   above from a CSV of `owner,email` rows. ADMIN/VULN.
  */
 @Controller("/api/github")
 @Secured(SecurityRule.IS_AUTHENTICATED)
@@ -45,9 +58,15 @@ open class GithubRepositoryController(
     private val githubRepositoryRepository: GithubRepositoryRepository,
     private val exceptionRepository: GithubRepoAlertExceptionRepository,
     private val importService: GithubRepoImportService,
-    private val alertRepository: GithubRepoDependabotAlertRepository
+    private val alertRepository: GithubRepoDependabotAlertRepository,
+    private val ownerEmailMappingService: GithubOwnerEmailMappingService,
+    private val ownerEmailMappingCsvParser: CSVGithubOwnerEmailMappingParser
 ) {
     private val log = LoggerFactory.getLogger(GithubRepositoryController::class.java)
+
+    companion object {
+        private const val MAX_MAPPING_CSV_SIZE = 10 * 1024 * 1024L // 10MB
+    }
 
     @Serdeable
     data class ActiveExceptionDto(
@@ -101,6 +120,23 @@ open class GithubRepositoryController(
 
     @Serdeable
     data class UpdateOwnerEmailRequest(@Nullable val ownerEmail: String? = null)
+
+    @Serdeable
+    data class GithubOwnerEmailMappingDto(
+        val id: Long,
+        val owner: String,
+        val email: String,
+        val repoCount: Long,
+        val createdBy: String,
+        val createdAt: Instant,
+        val updatedAt: Instant
+    )
+
+    @Serdeable
+    data class CreateOwnerEmailMappingRequest(@NotBlank val owner: String, @NotBlank val email: String)
+
+    @Serdeable
+    data class UpdateOwnerEmailMappingRequest(@NotBlank val email: String)
 
     @Serdeable
     data class CreateExceptionRequest(
@@ -303,5 +339,127 @@ open class GithubRepositoryController(
         exceptionRepository.delete(exception)
         log.info("GitHub repo alert exception {} deleted by {}", id, authentication.name)
         return HttpResponse.noContent<Any>()
+    }
+
+    @Get("/owner-email-mappings")
+    @Secured("ADMIN", "VULN", "SECCHAMPION")
+    open fun listOwnerEmailMappings(): HttpResponse<List<GithubOwnerEmailMappingDto>> {
+        val dtos = ownerEmailMappingService.list().map { m ->
+            GithubOwnerEmailMappingDto(
+                id = m.id!!,
+                owner = m.owner,
+                email = m.email,
+                repoCount = ownerEmailMappingService.repoCountFor(m.owner),
+                createdBy = m.createdBy,
+                createdAt = m.createdAt,
+                updatedAt = m.updatedAt
+            )
+        }
+        return HttpResponse.ok(dtos)
+    }
+
+    @Post("/owner-email-mappings")
+    @Secured("ADMIN", "VULN")
+    open fun createOwnerEmailMapping(
+        @Valid @Body request: CreateOwnerEmailMappingRequest,
+        authentication: Authentication
+    ): HttpResponse<*> {
+        return try {
+            val mapping = ownerEmailMappingService.create(request.owner, request.email, authentication.name)
+            HttpResponse.created(
+                GithubOwnerEmailMappingDto(
+                    id = mapping.id!!,
+                    owner = mapping.owner,
+                    email = mapping.email,
+                    repoCount = ownerEmailMappingService.repoCountFor(mapping.owner),
+                    createdBy = mapping.createdBy,
+                    createdAt = mapping.createdAt,
+                    updatedAt = mapping.updatedAt
+                )
+            )
+        } catch (e: GithubOwnerEmailMappingService.DuplicateOwnerException) {
+            HttpResponse.status<ErrorResponse>(HttpStatus.CONFLICT).body(ErrorResponse(e.message ?: "Duplicate owner"))
+        } catch (e: GithubOwnerEmailMappingService.InvalidEmailException) {
+            HttpResponse.badRequest(ErrorResponse(e.message ?: "Invalid email address"))
+        }
+    }
+
+    @Put("/owner-email-mappings/{id}")
+    @Secured("ADMIN", "VULN")
+    open fun updateOwnerEmailMapping(
+        id: Long,
+        @Valid @Body request: UpdateOwnerEmailMappingRequest
+    ): HttpResponse<*> {
+        return try {
+            val mapping = ownerEmailMappingService.update(id, request.email)
+            HttpResponse.ok(
+                GithubOwnerEmailMappingDto(
+                    id = mapping.id!!,
+                    owner = mapping.owner,
+                    email = mapping.email,
+                    repoCount = ownerEmailMappingService.repoCountFor(mapping.owner),
+                    createdBy = mapping.createdBy,
+                    createdAt = mapping.createdAt,
+                    updatedAt = mapping.updatedAt
+                )
+            )
+        } catch (e: GithubOwnerEmailMappingService.NotFoundException) {
+            HttpResponse.notFound(ErrorResponse(e.message ?: "Mapping not found"))
+        } catch (e: GithubOwnerEmailMappingService.InvalidEmailException) {
+            HttpResponse.badRequest(ErrorResponse(e.message ?: "Invalid email address"))
+        }
+    }
+
+    @Delete("/owner-email-mappings/{id}")
+    @Secured("ADMIN", "VULN")
+    open fun deleteOwnerEmailMapping(id: Long): HttpResponse<*> {
+        return try {
+            ownerEmailMappingService.delete(id)
+            HttpResponse.noContent<Any>()
+        } catch (e: GithubOwnerEmailMappingService.NotFoundException) {
+            HttpResponse.notFound(ErrorResponse(e.message ?: "Mapping not found"))
+        }
+    }
+
+    @Post("/owner-email-mappings/upload-csv")
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    @Secured("ADMIN", "VULN")
+    open fun uploadOwnerEmailMappingsCsv(
+        @Part csvFile: CompletedFileUpload,
+        authentication: Authentication
+    ): HttpResponse<*> {
+        return try {
+            if (csvFile.size > MAX_MAPPING_CSV_SIZE) {
+                return HttpResponse.status<ErrorResponse>(HttpStatus.REQUEST_ENTITY_TOO_LARGE)
+                    .body(ErrorResponse("File size exceeds maximum limit of ${MAX_MAPPING_CSV_SIZE / 1024 / 1024}MB"))
+            }
+            val filename = csvFile.filename.orEmpty()
+            if (!filename.lowercase().endsWith(".csv")) {
+                return HttpResponse.badRequest(ErrorResponse("Only .csv files are supported"))
+            }
+            if (csvFile.size == 0L) {
+                return HttpResponse.badRequest(ErrorResponse("Empty file uploaded"))
+            }
+
+            val tempPath = try {
+                val attrs = PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------"))
+                Files.createTempFile("gh_owner_email_csv_", ".csv", attrs)
+            } catch (e: UnsupportedOperationException) {
+                Files.createTempFile("gh_owner_email_csv_", ".csv")
+            }
+            try {
+                csvFile.inputStream.use { input ->
+                    Files.newOutputStream(tempPath).use { output -> input.copyTo(output) }
+                }
+                val result = ownerEmailMappingCsvParser.parse(tempPath.toFile(), authentication.name)
+                HttpResponse.ok(result)
+            } finally {
+                Files.deleteIfExists(tempPath)
+            }
+        } catch (e: IllegalArgumentException) {
+            HttpResponse.badRequest(ErrorResponse(e.message ?: "Invalid CSV format"))
+        } catch (e: IOException) {
+            HttpResponse.status<ErrorResponse>(HttpStatus.INTERNAL_SERVER_ERROR).body(ErrorResponse("Failed to read CSV file"))
+        }
     }
 }

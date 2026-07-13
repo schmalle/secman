@@ -153,6 +153,78 @@ export async function getGithubRepoAlerts(repositoryId: number): Promise<GithubR
   return response.json();
 }
 
+/** Owner -> default email mapping row (GET /api/github/owner-email-mappings). */
+export interface GithubOwnerEmailMapping {
+  id: number;
+  owner: string;
+  email: string;
+  repoCount: number;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GithubOwnerEmailMappingCsvResult {
+  imported: number;
+  skipped: number;
+  errors: { line: number; reason: string; value?: string | null }[];
+}
+
+export async function getOwnerEmailMappings(): Promise<GithubOwnerEmailMapping[]> {
+  const response = await authenticatedGet('/api/github/owner-email-mappings');
+  if (!response.ok) {
+    throw new Error(`Failed to fetch GitHub owner email mappings: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function createOwnerEmailMapping(owner: string, email: string): Promise<GithubOwnerEmailMapping> {
+  const response = await authenticatedPost('/api/github/owner-email-mappings', { owner, email });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.error || `Failed to create mapping: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function updateOwnerEmailMapping(id: number, email: string): Promise<GithubOwnerEmailMapping> {
+  const response = await authenticatedPut(`/api/github/owner-email-mappings/${id}`, { email });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.error || `Failed to update mapping: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function deleteOwnerEmailMapping(id: number): Promise<void> {
+  const response = await authenticatedDelete(`/api/github/owner-email-mappings/${id}`);
+  if (!response.ok && response.status !== 204) {
+    throw new Error(`Failed to delete mapping: ${response.status}`);
+  }
+}
+
+export async function uploadOwnerEmailMappingsCsv(file: File): Promise<GithubOwnerEmailMappingCsvResult> {
+  if (!file.name.toLowerCase().endsWith('.csv')) {
+    throw new Error('File must be a CSV file (.csv extension)');
+  }
+  if (file.size > 10 * 1024 * 1024) {
+    throw new Error('File size must not exceed 10 MB');
+  }
+  if (file.size === 0) {
+    throw new Error('File is empty');
+  }
+
+  const formData = new FormData();
+  formData.append('csvFile', file);
+
+  const response = await authenticatedPost('/api/github/owner-email-mappings/upload-csv', formData);
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({ error: 'Upload failed' }));
+    throw new Error(body?.error || `Upload failed with status ${response.status}`);
+  }
+  return response.json();
+}
+
 /** Sort rank for severity (higher = more severe), case-insensitive. */
 export function severityRank(severity: string): number {
   switch (severity?.toLowerCase()) {

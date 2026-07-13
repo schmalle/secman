@@ -12,6 +12,7 @@ import com.secman.cli.commands.DeleteAllRequirementsCommand
 import com.secman.cli.commands.ExportRequirementsCommand
 import com.secman.cli.commands.ImportGithubReposCommand
 import com.secman.cli.commands.InstalledProductsCommand
+import com.secman.cli.commands.ManageGithubOwnerMappingsCommand
 import com.secman.cli.commands.ManageUserMappingsCommand
 import com.secman.cli.commands.ManageWorkgroupsCommand
 import com.secman.cli.commands.MonitorCommand
@@ -393,6 +394,14 @@ class SecmanCli {
                 }
                 0
             }
+            args[0] == "manage-github-owner-mappings" -> {
+                // Manage GitHub owner (org/user login) to default email mappings
+                val subArgs = args.drop(1).toTypedArray()
+                createCliContext().use { ctx ->
+                    PicocliRunner.run(ManageGithubOwnerMappingsCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
             args[0] == "alert-github-repo-owners" -> {
                 // Alert repo owners whose high/critical vuln count has not decreased in N days
                 val subArgs = args.drop(1).toTypedArray()
@@ -458,6 +467,7 @@ class SecmanCli {
               GitHub:
                 import-github-repos    Import GitHub repositories via the configured GitHub App (ADMIN)
                 alert-github-repo-owners  Alert repo owners whose high/critical vuln count has not decreased (ADMIN)
+                manage-github-owner-mappings  Manage GitHub owner (org/user login) to default email mappings
 
               Scanning:
                 port-scan              Port-scan internet-facing assets using nmap

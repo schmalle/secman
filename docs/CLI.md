@@ -151,6 +151,26 @@ Alerts GitHub repo owners whose open **high+critical** Dependabot alert count ha
 
 The summary reports three special buckets: **excepted** repos (active `github_repo_alert_exception` — managed in the GitHub view), **unmapped** repos (non-decreasing but no `ownerEmail`), and **skipped** repos (no snapshot ≥ `--days` old yet — run the import regularly; suppressed by `--force`). Exit codes: `0` success/dry-run, `1` failure or partial failure, `2` usage error. Pure DB operation — no GitHub access needed. See `docs/GITHUB_REPOS.md`.
 
+### `manage-github-owner-mappings` — GitHub owner → default email mappings
+
+Maps a GitHub owner (org/user login) to a default notification email, so every repository under that owner picks up an `ownerEmail` without editing each repo individually. Creating or updating a mapping immediately backfills existing repos under that owner whose `ownerEmail` is currently blank; a manually-set or previously auto-filled value is never overwritten. See `docs/GITHUB_REPOS.md`.
+
+```bash
+./scripts/secman manage-github-owner-mappings add --owner acme-corp --email security@acme-corp.example.com
+./scripts/secman manage-github-owner-mappings list
+./scripts/secman manage-github-owner-mappings remove --owner acme-corp
+./scripts/secman manage-github-owner-mappings import --file mappings.csv
+```
+
+| Subcommand | Options | Notes |
+|---|---|---|
+| `add` | `--owner`, `--email` (both required) | 409 if the owner is already mapped |
+| `list` | — | table: id, owner, email, repo count, created by |
+| `remove` | `--owner` (required) | looks up the mapping id by owner, then deletes it |
+| `import` | `--file`/`-f` (required) | CSV with `owner,email` columns; one `add`-equivalent call per row, reports imported/skipped/errors |
+
+`--username` / `--password` / `--backend-url` (or `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS` / `SECMAN_HOST`) apply to all subcommands; ADMIN or VULN role required.
+
 ### `delete-asset-not-seen` — CrowdStrike stale asset cleanup
 
 Deletes assets that have not appeared in a CrowdStrike import for more than N days. Always run `--dry-run` first.
