@@ -31,6 +31,7 @@ import {
 } from '../services/outdatedAssetsApi';
 import { formatDistanceToNow } from 'date-fns';
 import { parseServerDate } from '../utils/dateUtils';
+import { isAdmin } from '../utils/auth';
 
 const OutdatedAssetsList: React.FC = () => {
   const [assets, setAssets] = useState<OutdatedAsset[]>([]);
@@ -358,23 +359,25 @@ const OutdatedAssetsList: React.FC = () => {
             <i className="bi bi-arrow-clockwise me-1"></i>
             Reload
           </button>
-          <button
-            className="btn btn-primary"
-            onClick={handleManualRefresh}
-            disabled={loading || refreshing}
-          >
-            {refreshing ? (
-              <>
-                <span className="spinner-border spinner-border-sm me-1"></span>
-                Refreshing...
-              </>
-            ) : (
-              <>
-                <i className="bi bi-database me-1"></i>
-                Manual Refresh
-              </>
-            )}
-          </button>
+          {isAdmin() && (
+            <button
+              className="btn btn-primary"
+              onClick={handleManualRefresh}
+              disabled={loading || refreshing}
+            >
+              {refreshing ? (
+                <>
+                  <span className="spinner-border spinner-border-sm me-1"></span>
+                  Refreshing...
+                </>
+              ) : (
+                <>
+                  <i className="bi bi-database me-1"></i>
+                  Manual Refresh
+                </>
+              )}
+            </button>
+          )}
         </div>
       </div>
 
