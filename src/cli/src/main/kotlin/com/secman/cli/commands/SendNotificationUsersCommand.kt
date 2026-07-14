@@ -31,7 +31,7 @@ class SendNotificationUsersCommand : Runnable {
     @Option(names = ["--notification-user"], description = ["Only notify this specific user email (skip all others)"])
     var notificationUser: String? = null
 
-    @Option(names = ["--notall"], description = ["Requires --notification-user; for an ADMIN/SECCHAMPION: restrict to AWS accounts backing assets the user owns (manual creator, scan uploader, or owner), belongs to via workgroup, or has via AWS account sharing — instead of the full global view"])
+    @Option(names = ["--notall"], description = ["Restrict recipients to AWS accounts backing assets they own (manual creator, scan uploader, or owner), reach via workgroup, or have via AWS account sharing. With --notification-user: limits that user's run (overrides the ADMIN/SECCHAMPION global view). Without: notifies all users, each only about their own accounts (direct account mappings ignored)"])
     var notAll: Boolean = false
 
     @Option(names = ["--username"], description = ["Backend username (or set SECMAN_ADMIN_NAME env var)"])
@@ -50,17 +50,6 @@ class SendNotificationUsersCommand : Runnable {
     lateinit var cliHttpClient: CliHttpClient
 
     override fun run() {
-        // Fail fast: --notall without --notification-user would otherwise fall back to the
-        // full global fan-out on the backend — the opposite of the requested restriction.
-        // System.exit(2) instead of ParameterException: SecmanCli invokes this command via
-        // PicocliRunner.run and always returns 0, so picocli's usage-error exit code would
-        // be swallowed (same reason the unknown-user guardrail below exits directly).
-        if (notAll && notificationUser.isNullOrBlank()) {
-            System.err.println("Error: --notall requires --notification-user")
-            spec.commandLine().usage(System.err)
-            System.exit(2)
-        }
-
         try {
             println("=".repeat(60))
             println("SecMan User Vulnerability Notifications")
@@ -77,7 +66,11 @@ class SendNotificationUsersCommand : Runnable {
                 println("Notification user filter: $notificationUser")
             }
             if (notAll) {
-                println("--notall: restricting to owned/workgroup/shared AWS accounts only")
+                if (notificationUser != null) {
+                    println("--notall: restricting to owned/workgroup/shared AWS accounts only")
+                } else {
+                    println("--notall: all users notified, but each only about accounts they own, reach via workgroup, or have via sharing (direct account mappings ignored)")
+                }
             }
             println()
 

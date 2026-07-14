@@ -52,6 +52,28 @@ interface AssetRepository : JpaRepository<Asset, Long> {
     fun findDistinctWorkgroupMemberEmailsByCloudAccountId(cloudAccountId: String): List<String>
 
     /**
+     * Find the distinct emails of users directly tied to an asset in the given cloud
+     * (AWS) account by ownership: manual creator, scan uploader, or the asset's
+     * `owner` field matching their username.
+     *
+     * Used by the `--notall` global restricted notification fan-out, which replaces
+     * the direct-UserMapping recipient path with asset ownership (the per-account
+     * inverse of [findDistinctCloudAccountIdsByOwnershipOrWorkgroup]'s ownership legs).
+     *
+     * @param cloudAccountId The AWS account identifier
+     * @return Distinct lower/mixed-case user emails (normalize at the call site)
+     */
+    @io.micronaut.data.annotation.Query(
+        value = """
+            SELECT DISTINCT u.email FROM users u
+            JOIN asset a ON (a.manual_creator_id = u.id OR a.scan_uploader_id = u.id OR a.owner = u.username)
+            WHERE a.cloud_account_id = :cloudAccountId
+        """,
+        nativeQuery = true
+    )
+    fun findDistinctAssetOwnershipEmailsByCloudAccountId(cloudAccountId: String): List<String>
+
+    /**
      * Find the distinct AWS cloud account IDs of assets the given user owns directly —
      * via workgroup membership, manual creation, scan upload, or the asset's `owner` field.
      * Deliberately narrower than [findAccessibleAssets]: it excludes direct AWS/AD

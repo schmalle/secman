@@ -52,4 +52,34 @@ open class AwsAccountRecipientResolver(
 
         return recipients
     }
+
+    /**
+     * Restricted variant of [resolveAwsAccountRecipients] backing the `--notall`
+     * global fan-out: the direct-UserMapping path (1) is replaced by asset
+     * ownership, so a user — regardless of role — is only notified about accounts
+     * backing assets they own (manual creator, scan uploader, or `owner` field),
+     * reach via a workgroup, or were granted via AWS account sharing.
+     */
+    open fun resolveRestrictedAwsAccountRecipients(awsAccountId: String): Set<String> {
+        if (awsAccountId.isBlank()) return emptySet()
+
+        val recipients = mutableSetOf<String>()
+
+        // 1. Users owning an asset in this account (manual creator, scan uploader, owner field)
+        assetRepository.findDistinctAssetOwnershipEmailsByCloudAccountId(awsAccountId).forEach { email ->
+            recipients.add(email.lowercase())
+        }
+
+        // 2. Members of workgroups that contain an asset in this account
+        assetRepository.findDistinctWorkgroupMemberEmailsByCloudAccountId(awsAccountId).forEach { email ->
+            recipients.add(email.lowercase())
+        }
+
+        // 3. Users with access to the account via the sharing feature
+        awsAccountSharingService.getTargetUserEmailsForAwsAccount(awsAccountId).forEach { email ->
+            recipients.add(email.lowercase())
+        }
+
+        return recipients
+    }
 }
