@@ -31,7 +31,7 @@ class SendNotificationUsersCommand : Runnable {
     @Option(names = ["--notification-user"], description = ["Only notify this specific user email (skip all others)"])
     var notificationUser: String? = null
 
-    @Option(names = ["--notall"], description = ["With --notification-user for an ADMIN/SECCHAMPION: restrict to AWS accounts backing assets the user owns (manual creator, scan uploader, or owner), belongs to via workgroup, or has via AWS account sharing — instead of the full global view"])
+    @Option(names = ["--notall"], description = ["With --notification-user for an ADMIN/SECCHAMPION: restrict to AWS accounts backing assets the user owns (manual creator, scan uploader, or owner), belongs to via workgroup, has via a direct AWS UserMapping or workgroup-assigned account, or has via AWS account sharing — instead of the full global view"])
     var notAll: Boolean = false
 
     @Option(names = ["--username"], description = ["Backend username (or set SECMAN_ADMIN_NAME env var)"])
@@ -66,7 +66,7 @@ class SendNotificationUsersCommand : Runnable {
                 println("Notification user filter: $notificationUser")
             }
             if (notAll) {
-                println("--notall: restricting to owned/workgroup/shared AWS accounts only")
+                println("--notall: restricting to owned/mapped/workgroup/shared AWS accounts only")
             }
             println()
 

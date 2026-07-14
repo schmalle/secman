@@ -246,8 +246,9 @@ three categories is reported under "Unmapped accounts". A non-ADMIN
 role: instead of the ADMIN global-bypass view (or the narrower UserMapping+sharing
 view every other role, including SECCHAMPION, gets by default), the run is limited
 to only the AWS accounts backing assets the user directly owns (manual creator,
-scan uploader, or `owner` field), belongs to via workgroup membership, or has been
-granted via AWS account sharing. Has no effect without `--notification-user`.
+scan uploader, or `owner` field), belongs to via workgroup membership, has via a
+direct AWS UserMapping or a workgroup-assigned AWS account, or has been granted via
+AWS account sharing. Has no effect without `--notification-user`.
 
 ```bash
 ./scripts/secman send-notification-users --dry-run --verbose
@@ -262,7 +263,7 @@ granted via AWS account sharing. Has no effect without `--notification-user`.
 | `--dry-run` | false | print planned recipients only |
 | `--verbose` | false | per-recipient delivery status |
 | `--notification-user <email>` | — | only notify this user (ADMIN ⇒ global, otherwise self-scoped) |
-| `--notall` | false | with `--notification-user`, force the owned/workgroup/shared-only restriction regardless of role (chiefly for ADMIN/SECCHAMPION) |
+| `--notall` | false | with `--notification-user`, force the owned/mapped/workgroup/shared-only restriction regardless of role (chiefly for ADMIN/SECCHAMPION) |
 | `--username` / `--password` | env | `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS` |
 | `--backend-url` | env | `SECMAN_HOST` / `SECMAN_BACKEND_URL` |
 
