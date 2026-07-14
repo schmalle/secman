@@ -457,6 +457,9 @@ class CliController(
                 emailPrefix = result.emailPrefix,
                 accountDetails = result.accountDetails
             ))
+        } catch (e: IllegalArgumentException) {
+            logger.warn("Rejected user vulnerability notification request: {}", e.message)
+            HttpResponse.badRequest()
         } catch (e: Exception) {
             logger.error("Error sending user vulnerability notifications", e)
             HttpResponse.serverError()

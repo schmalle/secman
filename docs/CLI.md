@@ -247,7 +247,10 @@ role: instead of the ADMIN global-bypass view (or the narrower UserMapping+shari
 view every other role, including SECCHAMPION, gets by default), the run is limited
 to only the AWS accounts backing assets the user directly owns (manual creator,
 scan uploader, or `owner` field), belongs to via workgroup membership, or has been
-granted via AWS account sharing. Has no effect without `--notification-user`.
+granted via AWS account sharing. `--notall` without `--notification-user` is
+rejected (exit 2) — silently falling back to the global fan-out would be the
+opposite of the requested restriction. The backend enforces the same rule (HTTP
+400), as does the MCP tool (`INVALID_ARGUMENT`).
 
 ```bash
 ./scripts/secman send-notification-users --dry-run --verbose
@@ -262,7 +265,7 @@ granted via AWS account sharing. Has no effect without `--notification-user`.
 | `--dry-run` | false | print planned recipients only |
 | `--verbose` | false | per-recipient delivery status |
 | `--notification-user <email>` | — | only notify this user (ADMIN ⇒ global, otherwise self-scoped) |
-| `--notall` | false | with `--notification-user`, force the owned/workgroup/shared-only restriction regardless of role (chiefly for ADMIN/SECCHAMPION) |
+| `--notall` | false | with `--notification-user` (mandatory, else exit 2), force the owned/workgroup/shared-only restriction regardless of role (chiefly for ADMIN/SECCHAMPION) |
 | `--username` / `--password` | env | `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS` |
 | `--backend-url` | env | `SECMAN_HOST` / `SECMAN_BACKEND_URL` |
 
