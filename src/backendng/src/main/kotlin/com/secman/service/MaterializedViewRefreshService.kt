@@ -43,7 +43,8 @@ open class MaterializedViewRefreshService(
     private val vulnerabilityStatisticsCacheService: VulnerabilityStatisticsCacheService,
     private val assetHeatmapService: AssetHeatmapService,
     private val vulnerabilityService: VulnerabilityService,
-    private val exceptionMaterializationService: ExceptionMaterializationService
+    private val exceptionMaterializationService: ExceptionMaterializationService,
+    private val awsCleanServerKpiService: AwsCleanServerKpiService
 ) {
     private val log = LoggerFactory.getLogger(MaterializedViewRefreshService::class.java)
 
@@ -294,6 +295,13 @@ open class MaterializedViewRefreshService(
             vulnerabilityService.getCachedNotExceptedCountAdmin()
         } catch (e: Exception) {
             log.error("Not-excepted count cache warm failed (non-fatal): {}", e.message, e)
+        }
+
+        try {
+            log.info("Recalculating AWS clean-server KPI after materialized view refresh")
+            awsCleanServerKpiService.recalculate()
+        } catch (e: Exception) {
+            log.error("AWS clean-server KPI recalculation failed (non-fatal): {}", e.message, e)
         }
     }
 

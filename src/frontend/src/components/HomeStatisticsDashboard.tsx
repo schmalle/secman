@@ -9,6 +9,13 @@ type StatItem = {
   icon: string;
 };
 
+type AwsCleanServerKpi = {
+  available: boolean;
+  percentage: number | null;
+  totalAwsServers: number | null;
+  cleanAwsServers: number | null;
+};
+
 type DashboardState = {
   assets: number | null;
   users: number | null;
@@ -16,6 +23,7 @@ type DashboardState = {
   runningAssessments: number | null;
   releases: number | null;
   lastCrowdStrikeCheckin: string | null;
+  awsCleanServerKpi: AwsCleanServerKpi | null;
 };
 
 const initialState: DashboardState = {
@@ -24,7 +32,13 @@ const initialState: DashboardState = {
   activeUsers: null,
   runningAssessments: null,
   releases: null,
-  lastCrowdStrikeCheckin: null
+  lastCrowdStrikeCheckin: null,
+  awsCleanServerKpi: null
+};
+
+const formatAwsCleanServerKpi = (kpi: AwsCleanServerKpi | null): string => {
+  if (!kpi || !kpi.available || kpi.percentage == null) return 'Not available';
+  return `${kpi.percentage}%`;
 };
 
 const formatDate = (isoOrNever: string): string => {
@@ -41,10 +55,12 @@ const HomeStatisticsDashboard: React.FC = () => {
   const [stats, setStats] = useState<DashboardState>(initialState);
   const [userName, setUserName] = useState('there');
   const [isAdmin, setIsAdmin] = useState(false);
+  const [showAwsCleanServerKpi, setShowAwsCleanServerKpi] = useState(false);
 
   useEffect(() => {
     setUserName(getUser()?.username ?? 'there');
     setIsAdmin(hasRole('ADMIN'));
+    setShowAwsCleanServerKpi(hasRole(['ADMIN', 'SECCHAMPION']));
 
     const load = async () => {
       const next: DashboardState = { ...initialState };
@@ -90,6 +106,17 @@ const HomeStatisticsDashboard: React.FC = () => {
         }
       } catch (error) {
         console.warn('Failed to load CrowdStrike check-in statistics:', error);
+      }
+
+      if (hasRole(['ADMIN', 'SECCHAMPION'])) {
+        try {
+          const kpiResp = await authenticatedGet('/api/dashboard/aws-clean-server-kpi');
+          if (kpiResp.ok) {
+            next.awsCleanServerKpi = await kpiResp.json();
+          }
+        } catch (error) {
+          console.warn('Failed to load AWS clean-server KPI:', error);
+        }
       }
 
       if (hasRole('ADMIN')) {
@@ -138,6 +165,15 @@ const HomeStatisticsDashboard: React.FC = () => {
       value: formatCount(stats.activeUsers),
       subtitle: 'Authenticated activity in last 15 minutes',
       icon: 'bi-person-check'
+    });
+  }
+
+  if (showAwsCleanServerKpi) {
+    cards.push({
+      label: 'AWS Servers Without Old Vulnerabilities',
+      value: formatAwsCleanServerKpi(stats.awsCleanServerKpi),
+      subtitle: 'Share of AWS servers with no vulnerability older than 30 days',
+      icon: 'bi-cloud-check'
     });
   }
 
