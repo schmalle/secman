@@ -150,10 +150,13 @@ const UserTodoDashboard: React.FC = () => {
     );
   }
 
-  const { vulnerabilities, overdue, exceptionRequests, riskAssessments, views } = data;
+  const { vulnerabilities, overdue, exceptionRequests, riskAssessments = [], views } = data;
   const vulnLink = primaryVulnLink(views);
 
   const overdueAction = overdue.assetCount > 0;
+  // lastCalculatedAt === null means the outdated-asset view has never been
+  // calculated (or a refresh was interrupted) — a zero count is not a clean SLA.
+  const overdueDataAvailable = overdue.lastCalculatedAt !== null;
   const criticalAction = vulnerabilities.critical > 0;
   const hasActions = overdueAction || criticalAction || riskAssessments.length > 0;
 
@@ -207,12 +210,14 @@ const UserTodoDashboard: React.FC = () => {
                 <i className={`bi bi-alarm fs-4 ${overdueAction ? 'text-danger' : 'text-primary'}`} aria-hidden="true"></i>
               </div>
               <p className={`fw-bold mb-2 ${overdueAction ? 'text-danger' : ''}`} style={{ fontSize: '1.75rem', lineHeight: 1.2 }}>
-                {formatCount(overdue.assetCount)}
+                {overdueDataAvailable ? formatCount(overdue.assetCount) : '—'}
               </p>
               <p className="text-muted mb-0">
                 {overdueAction
                   ? `Assets past their SLA — oldest finding is ${formatCount(overdue.oldestVulnDays)} days old`
-                  : 'No assets past their remediation SLA'}
+                  : overdueDataAvailable
+                    ? 'No assets past their remediation SLA'
+                    : 'Not available yet — overdue data has not been calculated'}
               </p>
             </div>
           </article>

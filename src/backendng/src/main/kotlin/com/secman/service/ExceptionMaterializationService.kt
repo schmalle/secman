@@ -89,7 +89,7 @@ open class ExceptionMaterializationService(
     /**
      * Hourly safety net for exception EXPIRY, which fires no CRUD event: an expired exception stops
      * matching, so its rows must flip back to visible. Only currently-suppressed rows can be affected,
-     * so this is cheap. (Full drift correction is the post-import [recomputeAllExcepted] safety net.)
+     * so this is cheap. (Full drift correction is the daily [recomputeAllExceptedScheduled] safety net.)
      */
     @Scheduled(fixedDelay = "1h", initialDelay = "15m")
     @Transactional
@@ -103,6 +103,27 @@ open class ExceptionMaterializationService(
     }
 
     /**
+     * Daily full-table recompute of `excepted` — the drift safety net for edge cases the
+     * incremental per-CRUD and hourly expiry paths miss (e.g. a manual asset metadata edit
+     * that changed IP/OS/AWS-scope coverage). Previously invoked synchronously from every
+     * materialized-view refresh (~124s-class, on every manual click and CrowdStrike import);
+     * moved to its own off-peak schedule since drift here is rare, not something the fast,
+     * latency-sensitive refresh path needs to re-verify on every run. Calls the repository
+     * directly rather than through a same-class wrapper — Micronaut's compile-time-AOP
+     * `@Transactional` interceptor is not guaranteed to apply to same-class self-invocation.
+     */
+    @Scheduled(cron = "0 0 3 * * ?")
+    @Transactional
+    open fun recomputeAllExceptedScheduled() {
+        try {
+            val updated = vulnerabilityRepository.recomputeExceptedAll()
+            if (updated > 0) log.info("Scheduled full excepted-flag recompute updated {} rows", updated)
+        } catch (e: Exception) {
+            log.error("Scheduled full excepted-flag recompute failed (non-fatal): {}", e.message, e)
+        }
+    }
+
+    /**
      * Recompute `excepted` for a single asset's rows — called by importers after they replace an
      * asset's vulnerability set (transactional delete+insert). Bounded and fast (rides
      * idx_vulnerability_asset_scan). Caller must have flushed the new rows to the DB first, since the
@@ -111,14 +132,6 @@ open class ExceptionMaterializationService(
     @Transactional
     open fun recomputeForAsset(assetId: Long): Long =
         vulnerabilityRepository.recomputeExceptedForAssets(listOf(assetId))
-
-    /**
-     * Full-table recompute — the drift safety net invoked from the post-import refresh lifecycle
-     * (off the request path). Synchronous here because the caller already runs async and expects to
-     * hold a connection for the batch window. ~124s-class.
-     */
-    @Transactional
-    open fun recomputeAllExcepted(): Long = vulnerabilityRepository.recomputeExceptedAll()
 
     /**
      * Resolve the assets an exception scope covers, mirroring ExceptionMatchSql.EXCEPTION_MATCH.

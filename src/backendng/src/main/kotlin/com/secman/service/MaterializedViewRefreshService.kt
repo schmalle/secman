@@ -39,11 +39,9 @@ open class MaterializedViewRefreshService(
     private val vulnerabilityRepository: VulnerabilityRepository,
     private val vulnerabilityConfigService: VulnerabilityConfigService,
     private val eventPublisher: ApplicationEventPublisher<RefreshProgressEvent>,
-    private val vulnerabilityExceptionService: VulnerabilityExceptionService,  // For checking active exceptions
     private val vulnerabilityStatisticsCacheService: VulnerabilityStatisticsCacheService,
     private val assetHeatmapService: AssetHeatmapService,
     private val vulnerabilityService: VulnerabilityService,
-    private val exceptionMaterializationService: ExceptionMaterializationService,
     private val awsCleanServerKpiService: AwsCleanServerKpiService
 ) {
     private val log = LoggerFactory.getLogger(MaterializedViewRefreshService::class.java)
@@ -153,25 +151,30 @@ open class MaterializedViewRefreshService(
         val thresholdDays = vulnerabilityConfigService.getReminderOneDays()
         log.info("Executing refresh with threshold: {} days", thresholdDays)
 
-        // Step 1: Clear old materialized view data in separate short transaction
-        log.debug("Deleting old materialized view data")
-        clearMaterializedView()
-
-        // Step 2: Load ALL overdue vulnerabilities in ONE query (Fix 3 - eliminates N+1 pattern)
+        // Step 1: Load ALL overdue vulnerabilities in ONE query (Fix 3 - eliminates N+1 pattern).
+        // Loaded using whichever threshold is more inclusive of this refresh's own reminderOneDays
+        // window and the AWS clean-server KPI's fixed 30-day window (a smaller day-count means an
+        // earlier date, a superset), so refreshDerivedData() can reuse this same result instead of
+        // re-querying + re-loading the whole overdue-vulnerability set a second time.
         val thresholdDate = LocalDateTime.now().minusDays(thresholdDays.toLong())
+        val loadThresholdDate = LocalDateTime.now()
+            .minusDays(minOf(thresholdDays.toLong(), AwsCleanServerKpiService.VULN_AGE_THRESHOLD_DAYS))
         log.debug("Fetching all vulnerabilities older than {} (threshold: {} days)", thresholdDate, thresholdDays)
 
-        val allOverdueVulnerabilities = vulnerabilityRepository.findOverdueVulnerabilitiesWithAssets(thresholdDate)
+        val allOverdueVulnerabilities = vulnerabilityRepository.findOverdueVulnerabilitiesWithAssets(loadThresholdDate)
         log.info("Loaded {} overdue vulnerabilities in single query", allOverdueVulnerabilities.size)
 
-        // Step 3: Group vulnerabilities by asset and filter exceptions
-        val vulnerabilitiesByAsset = allOverdueVulnerabilities.groupBy { it.asset }
+        // Step 2: Group vulnerabilities by asset and filter exceptions.
+        // `excepted` is already materialized on the entity (kept fresh by ExceptionMaterializationService
+        // on every exception create/update/delete plus an hourly expiry sweep) — no per-row DB call needed.
+        val vulnerabilitiesByAsset = allOverdueVulnerabilities
+            .asSequence()
+            .filter { (it.firstSeenAt ?: it.scanTimestamp) < thresholdDate }
+            .groupBy { it.asset }
 
         // Filter to assets with at least one non-excepted overdue vulnerability
         val assetsWithOverdueVulns = vulnerabilitiesByAsset.mapNotNull { (asset, vulns) ->
-            val nonExceptedVulns = vulns.filter { vuln ->
-                !vulnerabilityExceptionService.isVulnerabilityExcepted(vuln, asset)
-            }
+            val nonExceptedVulns = vulns.filter { vuln -> !vuln.excepted }
             if (nonExceptedVulns.isNotEmpty()) {
                 asset to nonExceptedVulns
             } else {
@@ -184,26 +187,14 @@ open class MaterializedViewRefreshService(
 
         log.info("Found {} assets with overdue vulnerabilities (after exception filtering)", assetsWithOverdueVulns.size)
 
-        if (assetsWithOverdueVulns.isEmpty()) {
-            job.markCompleted()
-            updateJob(job)
-
-            // Always refresh statistics cache and heatmap, even when no overdue assets
-            refreshDerivedData()
-
-            publishProgressEvent(job, "Refresh completed: no outdated assets")
-            return
-        }
-
-        // Step 4: Process in batches with progress updates (each batch in separate transaction)
+        // Step 3: Build the complete new snapshot in memory, with progress updates.
+        // No database write happens until the snapshot is fully computed.
         val assetEntries = assetsWithOverdueVulns.entries.toList()
+        val materializedRecords = mutableListOf<OutdatedAssetMaterializedView>()
         assetEntries.chunked(BATCH_SIZE).forEachIndexed { batchIndex, batch ->
-            val materializedRecords = batch.map { (asset, overdueVulns) ->
+            batch.mapTo(materializedRecords) { (asset, overdueVulns) ->
                 createMaterializedRecordFromVulns(asset, overdueVulns)
             }
-
-            // Save batch in separate transaction
-            saveMaterializedRecordsBatch(materializedRecords)
 
             // Update progress
             val processed = ((batchIndex + 1) * BATCH_SIZE).coerceAtMost(assetsWithOverdueVulns.size)
@@ -216,38 +207,41 @@ open class MaterializedViewRefreshService(
             log.debug("Processed batch {}: {} assets", batchIndex + 1, processed)
         }
 
+        // Step 4: Atomically replace the previous snapshot. Readers (user dashboard
+        // "Overdue Patching", Outdated Assets page) always see either the old complete
+        // snapshot or the new one — never an empty or partial view. A crash before
+        // this point leaves the previous snapshot intact. The write phase is small
+        // (one row per outdated asset), so a single transaction is cheap; only the
+        // read/compute phase above must stay outside a transaction.
+        swapMaterializedView(materializedRecords)
+
         // Step 5: Mark job as completed
         job.markCompleted()
         updateJob(job)
 
         // Step 6 & 7: Refresh derived data (statistics cache + heatmap)
-        refreshDerivedData()
+        refreshDerivedData(allOverdueVulnerabilities)
 
         // Publish completion event
-        publishProgressEvent(job, "Refresh completed successfully")
+        publishProgressEvent(job,
+            if (materializedRecords.isEmpty()) "Refresh completed: no outdated assets"
+            else "Refresh completed successfully")
 
         log.info("Refresh completed: jobId={}, assetsProcessed={}, durationMs={}",
             job.id, job.assetsProcessed, job.durationMs)
     }
 
     /**
-     * Clear materialized view data in a separate short transaction
-     *
-     * This ensures the DELETE doesn't hold locks during the entire refresh process
+     * Replace the whole materialized view with the freshly computed snapshot in one
+     * transaction, so concurrent readers never observe a cleared-but-not-yet-rebuilt
+     * view (the cause of the dashboard's false "0 overdue assets").
      */
     @Transactional
-    open fun clearMaterializedView() {
+    open fun swapMaterializedView(records: List<OutdatedAssetMaterializedView>) {
         outdatedAssetRepository.deleteAll()
-    }
-
-    /**
-     * Save batch of materialized records in a separate transaction
-     *
-     * Each batch commits independently to avoid long-running transactions
-     */
-    @Transactional
-    open fun saveMaterializedRecordsBatch(records: List<OutdatedAssetMaterializedView>) {
-        outdatedAssetRepository.saveAll(records)
+        if (records.isNotEmpty()) {
+            outdatedAssetRepository.saveAll(records)
+        }
     }
 
     /**
@@ -261,21 +255,16 @@ open class MaterializedViewRefreshService(
     /**
      * Refresh derived data that piggybacks on the materialized view refresh lifecycle.
      * Always runs after import, regardless of whether overdue assets exist.
+     *
+     * The full-table `excepted` drift-safety-net recompute previously ran here on every single
+     * refresh (~124s-class). It's now a daily scheduled job
+     * (ExceptionMaterializationService.recomputeAllExceptedScheduled) instead, since the incremental
+     * per-CRUD recompute and hourly expiry sweep already keep `excepted` fresh for the common case.
+     *
+     * @param preloadedOverdueVulnerabilities the vulnerability set already loaded by executeRefresh(),
+     *   reused here so the AWS clean-server KPI step doesn't re-query and re-load the same table.
      */
-    private fun refreshDerivedData() {
-        // Full recompute of the materialized `vulnerability.excepted` flag — the drift safety net that
-        // reconciles anything the incremental per-asset/per-exception recomputes missed (e.g. a manual
-        // asset metadata edit that changed IP/OS/AWS-scope coverage). Runs first so the count-cache
-        // warm below reflects fresh flags. ~124s-class; acceptable here because this whole method runs
-        // async off the request path within the existing post-import refresh window.
-        try {
-            log.info("Full excepted-flag recompute (drift safety net) before derived-data refresh")
-            val updated = exceptionMaterializationService.recomputeAllExcepted()
-            log.info("Full excepted-flag recompute updated {} rows", updated)
-        } catch (e: Exception) {
-            log.error("Full excepted-flag recompute failed (non-fatal): {}", e.message, e)
-        }
-
+    private fun refreshDerivedData(preloadedOverdueVulnerabilities: List<com.secman.domain.Vulnerability>) {
         try {
             log.info("Refreshing vulnerability statistics cache after materialized view refresh")
             vulnerabilityStatisticsCacheService.refreshCache()
@@ -299,7 +288,7 @@ open class MaterializedViewRefreshService(
 
         try {
             log.info("Recalculating AWS clean-server KPI after materialized view refresh")
-            awsCleanServerKpiService.recalculate()
+            awsCleanServerKpiService.recalculate(preloadedOverdueVulnerabilities)
         } catch (e: Exception) {
             log.error("AWS clean-server KPI recalculation failed (non-fatal): {}", e.message, e)
         }
@@ -332,13 +321,15 @@ open class MaterializedViewRefreshService(
         val mediumCount = overdueVulns.count { it.cvssSeverity?.equals("MEDIUM", ignoreCase = true) == true }
         val lowCount = overdueVulns.count { it.cvssSeverity?.equals("LOW", ignoreCase = true) == true }
 
-        // Find oldest vulnerability
+        // Find oldest vulnerability. Anchor on firstSeenAt (falls back to scanTimestamp
+        // for legacy rows) to match VulnerabilityService.calculateOverdueStatus — scanTimestamp
+        // alone gets refreshed on every re-import and would understate the true SLA age.
         val now = LocalDateTime.now()
         val oldestVuln = overdueVulns.maxByOrNull { vuln ->
-            ChronoUnit.DAYS.between(vuln.scanTimestamp, now)
+            ChronoUnit.DAYS.between(vuln.firstSeenAt ?: vuln.scanTimestamp, now)
         }
         val oldestVulnDays = oldestVuln?.let {
-            ChronoUnit.DAYS.between(it.scanTimestamp, now).toInt()
+            ChronoUnit.DAYS.between(it.firstSeenAt ?: it.scanTimestamp, now).toInt()
         } ?: 0
 
         // Get workgroup IDs (denormalized for performance) - already loaded via JOIN FETCH

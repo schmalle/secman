@@ -1,6 +1,7 @@
 package com.secman.service
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.secman.domain.Vulnerability
 import com.secman.domain.VulnerabilityStatisticsCache
 import com.secman.dto.AwsCleanServerKpiCacheData
 import com.secman.dto.AwsCleanServerKpiResponse
@@ -33,7 +34,6 @@ import java.time.LocalDateTime
 open class AwsCleanServerKpiService(
     private val assetRepository: AssetRepository,
     private val vulnerabilityRepository: VulnerabilityRepository,
-    private val vulnerabilityExceptionService: VulnerabilityExceptionService,
     private val cacheRepository: VulnerabilityStatisticsCacheRepository,
     private val objectMapper: ObjectMapper
 ) {
@@ -55,8 +55,13 @@ open class AwsCleanServerKpiService(
     /**
      * Recalculate the KPI and upsert it into the cache. Never throws — failures
      * are logged and the previous cached value (if any) is left in place.
+     *
+     * @param preloadedVulnerabilities when the caller (MaterializedViewRefreshService) already
+     *   loaded a superset of this KPI's 30-day window in the same refresh cycle, it passes that
+     *   list here to avoid a second full-table load. The 30-day filter below is always applied
+     *   in memory, whether the source is this preloaded (wider) set or a freshly queried one.
      */
-    fun recalculate() {
+    fun recalculate(preloadedVulnerabilities: List<Vulnerability>? = null) {
         val start = System.currentTimeMillis()
         try {
             val totalAwsServers = assetRepository.countAllAwsAssetsWithInstanceId()
@@ -65,10 +70,12 @@ open class AwsCleanServerKpiService(
                 emptySet()
             } else {
                 val thresholdDate = LocalDateTime.now().minusDays(VULN_AGE_THRESHOLD_DAYS)
-                vulnerabilityRepository.findOverdueVulnerabilitiesWithAssets(thresholdDate)
-                    .asSequence()
+                val source = preloadedVulnerabilities
+                    ?: vulnerabilityRepository.findOverdueVulnerabilitiesWithAssets(thresholdDate)
+                source.asSequence()
+                    .filter { (it.firstSeenAt ?: it.scanTimestamp) < thresholdDate }
                     .filter { !it.asset.cloudInstanceId.isNullOrBlank() }
-                    .filter { !vulnerabilityExceptionService.isVulnerabilityExcepted(it, it.asset) }
+                    .filter { !it.excepted }
                     .mapNotNull { it.asset.id }
                     .toSet()
             }

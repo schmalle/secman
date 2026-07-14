@@ -5,31 +5,11 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="94ada8b3-9f4e-473c-9fea-3bc9651b5bdd" name="Changes" comment="test change">
-      <change beforePath="$PROJECT_DIR$/.idea/dataSources.local.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/dataSources.local.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/CLI.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/CLI.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/GITHUB_REPOS.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/GITHUB_REPOS.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/MCP.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/MCP.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/CliController.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/CliController.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/GithubConfigController.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/GithubConfigController.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/GithubRepositoryController.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/GithubRepositoryController.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/domain/GithubAppConfig.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/domain/GithubAppConfig.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/mcp/McpToolRegistry.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/mcp/McpToolRegistry.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/mcp/tools/SendOutdatedNotificationsTool.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/mcp/tools/SendOutdatedNotificationsTool.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/repository/GithubRepositoryRepository.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/repository/GithubRepositoryRepository.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/GithubAppClientService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/GithubAppClientService.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/GithubRepoImportService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/GithubRepoImportService.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/dto/UserDashboardDto.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/dto/UserDashboardDto.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/MaterializedViewRefreshService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/MaterializedViewRefreshService.kt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/UserVulnerabilityNotificationService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/UserVulnerabilityNotificationService.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/resources/application.yml" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/resources/application.yml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/test/kotlin/com/secman/controller/GithubRepositoryControllerIntegrationTest.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/test/kotlin/com/secman/controller/GithubRepositoryControllerIntegrationTest.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/test/kotlin/com/secman/domain/GithubAppConfigTest.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/test/kotlin/com/secman/domain/GithubAppConfigTest.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/test/kotlin/com/secman/service/GithubAppClientServiceTest.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/test/kotlin/com/secman/service/GithubAppClientServiceTest.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/test/kotlin/com/secman/service/GithubRepoImportServiceTest.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/test/kotlin/com/secman/service/GithubRepoImportServiceTest.kt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/backendng/src/test/kotlin/com/secman/service/UserVulnerabilityNotificationServiceTest.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/test/kotlin/com/secman/service/UserVulnerabilityNotificationServiceTest.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/commands/ManageGithubOwnerMappingsCommand.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/commands/ManageGithubOwnerMappingsCommand.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/commands/SendNotificationUsersCommand.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/cli/src/main/kotlin/com/secman/cli/commands/SendNotificationUsersCommand.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/cli/src/main/resources/application.yml" beforeDir="false" afterPath="$PROJECT_DIR$/src/cli/src/main/resources/application.yml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/frontend/src/components/GithubConfigManagement.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/components/GithubConfigManagement.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/frontend/src/components/UserTodoDashboard.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/frontend/src/components/UserTodoDashboard.tsx" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

@@ -21,7 +21,6 @@ class AwsCleanServerKpiServiceTest {
 
     private lateinit var assetRepository: AssetRepository
     private lateinit var vulnerabilityRepository: VulnerabilityRepository
-    private lateinit var vulnerabilityExceptionService: VulnerabilityExceptionService
     private lateinit var cacheRepository: VulnerabilityStatisticsCacheRepository
     private lateinit var service: AwsCleanServerKpiService
 
@@ -29,12 +28,10 @@ class AwsCleanServerKpiServiceTest {
     fun setUp() {
         assetRepository = mockk()
         vulnerabilityRepository = mockk()
-        vulnerabilityExceptionService = mockk()
         cacheRepository = mockk()
         service = AwsCleanServerKpiService(
             assetRepository,
             vulnerabilityRepository,
-            vulnerabilityExceptionService,
             cacheRepository,
             jacksonObjectMapper()
         )
@@ -90,14 +87,12 @@ class AwsCleanServerKpiServiceTest {
         val nonAwsAsset = Asset(id = 3, name = "on-prem", type = "SERVER", owner = "owner")
 
         val dirtyVuln = overdueVuln(dirty)
-        val exceptedVuln = overdueVuln(excepted)
+        val exceptedVuln = overdueVuln(excepted).apply { this.excepted = true }
         val nonAwsVuln = overdueVuln(nonAwsAsset)
 
         every { assetRepository.countAllAwsAssetsWithInstanceId() } returns 3L
         every { vulnerabilityRepository.findOverdueVulnerabilitiesWithAssets(any()) } returns
             listOf(dirtyVuln, exceptedVuln, nonAwsVuln)
-        every { vulnerabilityExceptionService.isVulnerabilityExcepted(dirtyVuln, dirty) } returns false
-        every { vulnerabilityExceptionService.isVulnerabilityExcepted(exceptedVuln, excepted) } returns true
 
         val cacheSlot = slot<VulnerabilityStatisticsCache>()
         every { cacheRepository.findByCacheKey(AwsCleanServerKpiService.CACHE_KEY) } returns Optional.empty()
@@ -109,7 +104,23 @@ class AwsCleanServerKpiServiceTest {
         assertThat(cacheSlot.captured.cachedJson).contains("\"totalAwsServers\":3")
         assertThat(cacheSlot.captured.cachedJson).contains("\"cleanAwsServers\":2")
         assertThat(cacheSlot.captured.cachedJson).contains("\"percentage\":66.7")
-        verify(exactly = 0) { vulnerabilityExceptionService.isVulnerabilityExcepted(nonAwsVuln, nonAwsAsset) }
+    }
+
+    @Test
+    fun `recalculate reuses a preloaded vulnerability list instead of querying`() {
+        val dirty = awsAsset(1)
+        val dirtyVuln = overdueVuln(dirty)
+
+        every { assetRepository.countAllAwsAssetsWithInstanceId() } returns 1L
+
+        val cacheSlot = slot<VulnerabilityStatisticsCache>()
+        every { cacheRepository.findByCacheKey(AwsCleanServerKpiService.CACHE_KEY) } returns Optional.empty()
+        every { cacheRepository.save(capture(cacheSlot)) } answers { cacheSlot.captured }
+
+        service.recalculate(preloadedVulnerabilities = listOf(dirtyVuln))
+
+        assertThat(cacheSlot.captured.cachedJson).contains("\"cleanAwsServers\":0")
+        verify(exactly = 0) { vulnerabilityRepository.findOverdueVulnerabilitiesWithAssets(any()) }
     }
 
     @Test
