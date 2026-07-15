@@ -308,6 +308,9 @@ export interface RefreshProgressEvent {
  */
 export async function triggerRefresh(): Promise<RefreshJob> {
   const response = await authenticatedPost('/api/materialized-view-refresh/trigger', {});
+  if (!response.ok) {
+    throw new Error(`Failed to trigger refresh: ${response.status}`);
+  }
   return await response.json();
 }
 
@@ -321,6 +324,9 @@ export async function getRefreshStatus(): Promise<RefreshJob | null> {
     const response = await authenticatedGet('/api/materialized-view-refresh/status');
     if (response.status === 204) {
       return null;
+    }
+    if (!response.ok) {
+      throw new Error(`Failed to fetch refresh status: ${response.status}`);
     }
     return await response.json();
   } catch (error: any) {
@@ -339,5 +345,8 @@ export async function getRefreshStatus(): Promise<RefreshJob | null> {
  */
 export async function getRefreshHistory(): Promise<RefreshJob[]> {
   const response = await authenticatedGet('/api/materialized-view-refresh/history');
+  if (!response.ok) {
+    throw new Error(`Failed to fetch refresh history: ${response.status}`);
+  }
   return await response.json();
 }

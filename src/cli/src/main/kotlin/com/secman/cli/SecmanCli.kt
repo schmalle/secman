@@ -693,12 +693,13 @@ class SecmanCli {
                   --verbose, -v            Detailed logging (show per-recipient status)
                   --days <number>          Vulnerability age threshold in days (default: 30)
                   --notification-user <email>  Only notify this specific user email (skip all others)
-                  --notall                 Restrict recipients to AWS accounts backing assets they own (manual
-                                           creator, scan uploader, or owner), reach via workgroup, or have via
-                                           AWS account sharing. With --notification-user: limits that user's
-                                           run (overrides the ADMIN/SECCHAMPION global view). Without: notifies
-                                           ALL users, but each only about their own accounts — direct account
-                                           mappings are ignored for recipient resolution
+                  --notall                 Restrict recipients to AWS accounts within their own access set
+                                           (owned assets via manual creator/scan uploader/owner, workgroup
+                                           asset membership, direct AWS UserMapping, workgroup-assigned
+                                           accounts, AWS account sharing). With --notification-user: limits
+                                           that user's run (overrides the ADMIN/SECCHAMPION global view).
+                                           Without: notifies ALL users, each only about accounts in their
+                                           own access set
 
                 Description:
                   Identifies AWS accounts with systems having vulnerabilities open longer than

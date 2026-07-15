@@ -1,5 +1,6 @@
 package com.secman.dto
 
+import com.fasterxml.jackson.annotation.JsonInclude
 import io.micronaut.serde.annotation.Serdeable
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -26,7 +27,12 @@ data class UserDashboardResponse(
     /** The user's own exception requests, by status */
     val exceptionRequests: ExceptionRequestSummaryDto,
 
-    /** Open risk assessments where the user is the respondent, soonest deadline first */
+    /**
+     * Open risk assessments where the user is the respondent, soonest deadline first.
+     * Serde's default NON_EMPTY inclusion would drop the empty list from the JSON,
+     * but the frontend requires the key to always be present.
+     */
+    @JsonInclude(JsonInclude.Include.ALWAYS)
     val riskAssessments: List<RiskAssessmentTodoDto>,
 
     /** Which per-user vulnerability views have data for this user (drives quick links) */

@@ -2,6 +2,7 @@ package com.secman.service
 
 import com.secman.repository.AssetRepository
 import com.secman.repository.UserMappingRepository
+import com.secman.repository.WorkgroupAwsAccountRepository
 import jakarta.inject.Singleton
 
 /**
@@ -24,7 +25,8 @@ import jakarta.inject.Singleton
 open class AwsAccountRecipientResolver(
     private val userMappingRepository: UserMappingRepository,
     private val assetRepository: AssetRepository,
-    private val awsAccountSharingService: AwsAccountSharingService
+    private val awsAccountSharingService: AwsAccountSharingService,
+    private val workgroupAwsAccountRepository: WorkgroupAwsAccountRepository
 ) {
     /**
      * @param awsAccountId the AWS account id (asset.cloudAccountId). Blank input
@@ -54,11 +56,19 @@ open class AwsAccountRecipientResolver(
     }
 
     /**
-     * Restricted variant of [resolveAwsAccountRecipients] backing the `--notall`
-     * global fan-out: the direct-UserMapping path (1) is replaced by asset
-     * ownership, so a user — regardless of role — is only notified about accounts
-     * backing assets they own (manual creator, scan uploader, or `owner` field),
-     * reach via a workgroup, or were granted via AWS account sharing.
+     * `--notall` variant of [resolveAwsAccountRecipients] backing the global
+     * restricted fan-out: recipients are the users whose `--notall` access set
+     * contains this account — the per-account inverse of
+     * `UserVulnerabilityNotificationService.getRestrictedAwsAccountIds`. Mirrors
+     * every AWS-account access path in `AssetFilterService.getAccessibleAssets`
+     * except AD-domain-only access (no `cloudAccountId`):
+     *
+     * 1. Users owning an asset in the account (manual creator, scan uploader,
+     *    or the asset's `owner` field matching their username).
+     * 2. Members of any workgroup that contains an asset in the account.
+     * 3. The AWS account owner(s) — direct UserMapping rows for the account.
+     * 4. Members of any workgroup the account is assigned to (WorkgroupAwsAccount).
+     * 5. Users granted access via the AWS sharing feature.
      */
     open fun resolveRestrictedAwsAccountRecipients(awsAccountId: String): Set<String> {
         if (awsAccountId.isBlank()) return emptySet()
@@ -75,7 +85,17 @@ open class AwsAccountRecipientResolver(
             recipients.add(email.lowercase())
         }
 
-        // 3. Users with access to the account via the sharing feature
+        // 3. AWS account owner(s) via direct UserMapping
+        userMappingRepository.findByAwsAccountId(awsAccountId).forEach { mapping ->
+            recipients.add(mapping.email.lowercase())
+        }
+
+        // 4. Members of workgroups this account is assigned to (WorkgroupAwsAccount)
+        workgroupAwsAccountRepository.findDistinctMemberEmailsByAwsAccountId(awsAccountId).forEach { email ->
+            recipients.add(email.lowercase())
+        }
+
+        // 5. Users with access to the account via the sharing feature
         awsAccountSharingService.getTargetUserEmailsForAwsAccount(awsAccountId).forEach { email ->
             recipients.add(email.lowercase())
         }

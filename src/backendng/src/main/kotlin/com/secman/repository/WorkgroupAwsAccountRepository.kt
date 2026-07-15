@@ -12,6 +12,14 @@ interface WorkgroupAwsAccountRepository : JpaRepository<WorkgroupAwsAccount, Lon
     @Query("SELECT DISTINCT waa.awsAccountId FROM WorkgroupAwsAccount waa WHERE EXISTS (SELECT 1 FROM waa.workgroup w JOIN w.users u WHERE u.id = :userId)")
     fun findDistinctAwsAccountIdsByUserId(userId: Long): List<String>
 
+    /**
+     * Distinct emails of all members of any workgroup that has the given AWS
+     * account assigned — the per-account inverse of [findDistinctAwsAccountIdsByUserId].
+     * Used by the `--notall` global restricted notification fan-out.
+     */
+    @Query("SELECT DISTINCT u.email FROM WorkgroupAwsAccount waa JOIN waa.workgroup w JOIN w.users u WHERE waa.awsAccountId = :awsAccountId")
+    fun findDistinctMemberEmailsByAwsAccountId(awsAccountId: String): List<String>
+
     // LEFT JOIN FETCH on createdBy: nullable since V206 (the creator may have
     // been deleted; see ON DELETE SET NULL on fk_wg_aws_created_by). An INNER
     // JOIN FETCH would silently hide assignments whose creator was removed.

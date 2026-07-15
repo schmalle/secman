@@ -56,9 +56,9 @@ interface AssetRepository : JpaRepository<Asset, Long> {
      * (AWS) account by ownership: manual creator, scan uploader, or the asset's
      * `owner` field matching their username.
      *
-     * Used by the `--notall` global restricted notification fan-out, which replaces
-     * the direct-UserMapping recipient path with asset ownership (the per-account
-     * inverse of [findDistinctCloudAccountIdsByOwnershipOrWorkgroup]'s ownership legs).
+     * Used by the `--notall` global restricted notification fan-out as the
+     * asset-ownership recipient path (the per-account inverse of
+     * [findDistinctCloudAccountIdsByOwnershipOrWorkgroup]'s ownership legs).
      *
      * @param cloudAccountId The AWS account identifier
      * @return Distinct lower/mixed-case user emails (normalize at the call site)
@@ -77,11 +77,13 @@ interface AssetRepository : JpaRepository<Asset, Long> {
      * Find the distinct AWS cloud account IDs of assets the given user owns directly —
      * via workgroup membership, manual creation, scan upload, or the asset's `owner` field.
      * Deliberately narrower than [findAccessibleAssets]: it excludes direct AWS/AD
-     * UserMapping and workgroup-assigned-account/domain access, since it backs the
-     * `--notall` restriction on the vulnerability-notification fan-out, which limits
-     * an ADMIN/SECCHAMPION `--notification-user` run to accounts the user is directly
-     * tied to (ownership, workgroup, or AWS account sharing — sharing is applied
-     * separately at the call site).
+     * UserMapping and workgroup-assigned-account/domain access. It backs one part of
+     * the `--notall` restriction on the vulnerability-notification fan-out
+     * (`UserVulnerabilityNotificationService.getRestrictedAwsAccountIds`), which
+     * unions this ownership/workgroup-asset result with direct UserMapping,
+     * workgroup-assigned-account, and AWS account sharing at the call site to cover
+     * every AWS-account access path an ADMIN/SECCHAMPION `--notification-user` run
+     * can be restricted to.
      *
      * @param userId The user's ID (for workgroup, creator, uploader checks)
      * @param username The user's username (for owner-based access)

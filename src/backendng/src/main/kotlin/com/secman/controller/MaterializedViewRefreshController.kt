@@ -11,6 +11,7 @@ import io.micronaut.http.annotation.Post
 import io.micronaut.http.sse.Event
 import io.micronaut.security.annotation.Secured
 import io.micronaut.security.authentication.Authentication
+import io.micronaut.security.rules.SecurityRule
 import org.reactivestreams.Publisher
 import org.slf4j.LoggerFactory
 import reactor.core.publisher.Flux
@@ -30,7 +31,7 @@ import java.time.Duration
  * Spec reference: spec.md FR-014, FR-015, FR-017
  */
 @Controller("/api/materialized-view-refresh")
-@Secured("ADMIN")  // Only ADMIN can trigger refreshes
+@Secured(SecurityRule.IS_AUTHENTICATED)
 class MaterializedViewRefreshController(
     private val refreshService: MaterializedViewRefreshService
 ) {
@@ -53,6 +54,7 @@ class MaterializedViewRefreshController(
      * Spec reference: FR-014
      */
     @Post("/trigger")
+    @Secured("ADMIN")
     fun triggerRefresh(authentication: Authentication): HttpResponse<MaterializedViewRefreshJob> {
         val username = authentication.name
 
@@ -70,7 +72,7 @@ class MaterializedViewRefreshController(
      * Streams RefreshProgressEvent objects as they occur during refresh
      * Clients can listen to this stream to show live progress indicators
      *
-     * Access: ADMIN only
+     * Access: ADMIN, VULN
      *
      * Response: text/event-stream with RefreshProgressEvent objects
      *
@@ -78,6 +80,7 @@ class MaterializedViewRefreshController(
      * Spec reference: FR-015
      */
     @Get(value = "/progress", produces = [MediaType.TEXT_EVENT_STREAM])
+    @Secured("ADMIN", "VULN")
     fun streamProgress(): Publisher<Event<RefreshProgressEvent>> {
         // Create SSE event stream from Flux
         return refreshService.getProgressStream()
@@ -99,17 +102,18 @@ class MaterializedViewRefreshController(
      *
      * Get current refresh job status (if any job is running)
      *
-     * Access: ADMIN only
+     * Access: ADMIN, VULN
      *
      * Response:
      * - 200 OK: Current job details
      * - 204 No Content: No refresh currently running
-     * - 403 Forbidden: User lacks ADMIN role
+     * - 403 Forbidden: User lacks ADMIN/VULN role
      *
      * Task: T054-T055
      * Spec reference: FR-017
      */
     @Get("/status")
+    @Secured("ADMIN", "VULN")
     fun getRefreshStatus(): HttpResponse<MaterializedViewRefreshJob> {
         val runningJob = refreshService.getCurrentRunningJob()
 
@@ -125,16 +129,17 @@ class MaterializedViewRefreshController(
      *
      * Get recent refresh job history (last 10 jobs)
      *
-     * Access: ADMIN only
+     * Access: ADMIN, VULN
      *
      * Response:
      * - 200 OK: List of recent refresh jobs
-     * - 403 Forbidden: User lacks ADMIN role
+     * - 403 Forbidden: User lacks ADMIN/VULN role
      *
      * Task: T056-T057
      * Spec reference: FR-016
      */
     @Get("/history")
+    @Secured("ADMIN", "VULN")
     fun getRefreshHistory(): HttpResponse<List<MaterializedViewRefreshJob>> {
         val history = refreshService.getRecentJobs(limit = 10)
 
