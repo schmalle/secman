@@ -291,20 +291,21 @@ const Import = () => {
     };
 
     return (
-        <div className="container-fluid mt-4">
-            <div className="row justify-content-center">
-                <div className="col-lg-8">
-                    <div className="card shadow-sm border-0">
-                        <div className="card-header bg-gradient text-white" style={{background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'}}>
-                            <h3 className="card-title mb-0">
-                                <i className="bi bi-cloud-upload me-2"></i>
-                                Import Data
-                            </h3>
-                            <p className="mb-0 mt-1 opacity-75">Upload files to import data into the system</p>
-                        </div>
-                        <div className="card-body p-0">
+        <div className="container-fluid p-4">
+            <div className="row">
+                <div className="col-12">
+                    <div className="d-flex justify-content-between align-items-center mb-4">
+                        <h2>Import Data</h2>
+                    </div>
+                </div>
+            </div>
+
+            <div className="row">
+                <div className="col-12">
+                    <div className="card">
+                        <div className="card-body">
                             {/* Import Type Tabs */}
-                            <ul className="nav nav-tabs px-4 pt-3" role="tablist">
+                            <ul className="nav nav-tabs mb-4" role="tablist">
                                 <li className="nav-item" role="presentation">
                                     <button
                                         className={`nav-link ${importType === 'requirements' ? 'active' : ''}`}
@@ -371,7 +372,7 @@ const Import = () => {
                                 )}
                             </ul>
 
-                            <div className="p-5">
+                            <div>
                             {/* Vulnerabilities Tab Content */}
                             {importType === 'vulnerabilities' && (
                                 <VulnerabilityImportForm />
