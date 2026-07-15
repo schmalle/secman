@@ -59,6 +59,11 @@ const OutdatedAssetsList: React.FC = () => {
   // Export state
   const [exporting, setExporting] = useState<boolean>(false);
 
+  // isAdmin() reads sessionStorage, which doesn't exist during Astro's
+  // pre-render, so the admin-only Manual Refresh button is gated behind
+  // this post-mount flag to avoid a hydration mismatch.
+  const [mounted, setMounted] = useState<boolean>(false);
+
   /**
    * Fetch outdated assets from API
    */
@@ -318,6 +323,11 @@ const OutdatedAssetsList: React.FC = () => {
     fetchAdDomains();
   }, []);
 
+  // Mark mounted (client-only) so the isAdmin() check below runs post-hydration
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   // Cleanup poll interval on unmount
   useEffect(() => {
     return () => {
@@ -359,7 +369,7 @@ const OutdatedAssetsList: React.FC = () => {
             <i className="bi bi-arrow-clockwise me-1"></i>
             Reload
           </button>
-          {isAdmin() && (
+          {mounted && isAdmin() && (
             <button
               className="btn btn-primary"
               onClick={handleManualRefresh}

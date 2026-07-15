@@ -4,6 +4,8 @@ import com.secman.domain.VulnerabilityException.Scope
 import com.secman.repository.AssetRepository
 import com.secman.repository.VulnerabilityRepository
 import io.micronaut.scheduling.annotation.Scheduled
+import jakarta.inject.Inject
+import jakarta.inject.Provider
 import jakarta.inject.Singleton
 import jakarta.transaction.Transactional
 import org.slf4j.LoggerFactory
@@ -35,6 +37,13 @@ open class ExceptionMaterializationService(
     private val asyncExceptionRecompute: AsyncExceptionRecompute,
 ) {
     private val log = LoggerFactory.getLogger(ExceptionMaterializationService::class.java)
+
+    /**
+     * Provider for self-reference so [DeadlockRetry] in [recomputeAllExceptedScheduled] gets a
+     * fresh `@Transactional` transaction per attempt, via the AOP proxy.
+     */
+    @Inject
+    private lateinit var selfProvider: Provider<ExceptionMaterializationService>
 
     /** An exception's coverage WIDENED (create, or the new side of an update). May hide more rows. */
     @Transactional
@@ -113,15 +122,22 @@ open class ExceptionMaterializationService(
      * `@Transactional` interceptor is not guaranteed to apply to same-class self-invocation.
      */
     @Scheduled(cron = "0 0 3 * * ?")
-    @Transactional
     open fun recomputeAllExceptedScheduled() {
         try {
-            val updated = vulnerabilityRepository.recomputeExceptedAll()
+            val updated = DeadlockRetry.withRetry("daily full excepted recompute") {
+                selfProvider.get().recomputeAllExceptedOnce()
+            }
             if (updated > 0) log.info("Scheduled full excepted-flag recompute updated {} rows", updated)
         } catch (e: Exception) {
             log.error("Scheduled full excepted-flag recompute failed (non-fatal): {}", e.message, e)
         }
     }
+
+    // REQUIRES_NEW for the same reason as AsyncExceptionRecompute.recomputeAllOnce(): must always
+    // be a genuinely fresh, independent transaction per DeadlockRetry attempt, never joined to any
+    // ambient caller transaction (default REQUIRED propagation would do that).
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    open fun recomputeAllExceptedOnce(): Long = vulnerabilityRepository.recomputeExceptedAll()
 
     /**
      * Recompute `excepted` for a single asset's rows — called by importers after they replace an

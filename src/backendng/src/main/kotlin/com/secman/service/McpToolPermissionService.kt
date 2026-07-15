@@ -240,6 +240,24 @@ class McpToolPermissionService(
             "list_aws_account_sharing", "create_aws_account_sharing", "delete_aws_account_sharing" -> {
                 permissions.contains(McpPermission.USER_ACTIVITY)
             }
+            // Feature: GitHub repo vulnerability management — mirrors McpToolRegistry.kt's
+            // permission mapping for these tools. Missing here previously, which caused the
+            // fallback else->false to deny every delegated call regardless of role/permission.
+            "import_github_repos" -> {
+                permissions.contains(McpPermission.VULNERABILITIES_READ) // ADMIN/VULN role checked in tool execute()
+            }
+            "send_github_repo_alerts" -> {
+                permissions.contains(McpPermission.NOTIFICATIONS_SEND) // ADMIN role checked in tool execute()
+            }
+            "list_github_owner_email_mappings" -> {
+                permissions.contains(McpPermission.VULNERABILITIES_READ) // Role checked in tool execute()
+            }
+            "create_github_owner_email_mapping", "delete_github_owner_email_mapping" -> {
+                permissions.contains(McpPermission.VULNERABILITIES_READ) // ADMIN/VULN role checked in tool execute()
+            }
+            "discover_github_owner_email_mappings" -> {
+                permissions.contains(McpPermission.VULNERABILITIES_READ) // ADMIN/VULN role checked in tool execute()
+            }
             else -> false
         }
     }
