@@ -41,15 +41,28 @@ open class AssetComplianceTrackingService(
      */
     open fun trackComplianceAfterImport(assetId: Long, source: String) {
         try {
+            // EC2 Compliance Tracking is scoped to AWS/EC2 assets only (same population
+            // definition as AwsCleanServerKpiService: AssetRepository.countAllAwsAssetsWithInstanceId).
+            // Non-AWS assets and synthetic AWS_ACCOUNT placeholder assets are skipped entirely.
+            val asset = assetRepository.findById(assetId).orElse(null)
+            if (asset?.cloudInstanceId.isNullOrBlank()) {
+                return
+            }
+
             val thresholdDays = vulnerabilityConfigService.getReminderOneDays()
             val thresholdDate = LocalDateTime.now().minusDays(thresholdDays.toLong())
 
-            // Count overdue vulnerabilities for this asset using a lightweight query
+            // Count overdue vulnerabilities for this asset using a lightweight query.
+            // Ages off firstSeenAt (the SLA anchor preserved across re-imports), falling back
+            // to scanTimestamp, and excludes vulnerabilities under an active exception —
+            // matching AwsCleanServerKpiService.recalculate()'s logic.
             val overdueResult = entityManager.createQuery(
                 """
-                SELECT COUNT(v), MIN(v.scanTimestamp)
+                SELECT COUNT(v), MIN(COALESCE(v.firstSeenAt, v.scanTimestamp))
                 FROM Vulnerability v
-                WHERE v.asset.id = :assetId AND v.scanTimestamp < :thresholdDate
+                WHERE v.asset.id = :assetId
+                  AND v.excepted = false
+                  AND COALESCE(v.firstSeenAt, v.scanTimestamp) < :thresholdDate
                 """.trimIndent()
             )
                 .setParameter("assetId", assetId)
@@ -99,7 +112,7 @@ open class AssetComplianceTrackingService(
     open fun recalculateAllStatuses(source: String): Int {
         log.info("Starting bulk compliance status recalculation")
         val existingAssetIds = complianceHistoryRepository.findDistinctAssetIds().toSet()
-        val allAssetIds = assetRepository.findAllIds()
+        val allAssetIds = assetRepository.findAllAwsAssetsWithInstanceId().mapNotNull { it.id }
         val newAssetIds = allAssetIds.filter { it !in existingAssetIds }
 
         log.info("Found {} assets without compliance history (out of {} total)", newAssetIds.size, allAssetIds.size)
@@ -141,6 +154,7 @@ open class AssetComplianceTrackingService(
             WHERE h.changed_at = (
                 SELECT MAX(h2.changed_at) FROM asset_compliance_history h2 WHERE h2.asset_id = h.asset_id
             )
+            AND a.cloud_instance_id IS NOT NULL AND a.cloud_instance_id <> ''
             AND (:searchTerm IS NULL OR LOWER(a.name) LIKE LOWER(CONCAT('%', :searchTerm, '%')))
             AND (:statusFilter IS NULL OR h.status = :statusFilter)
             """.trimIndent()
@@ -158,6 +172,7 @@ open class AssetComplianceTrackingService(
             WHERE h.changed_at = (
                 SELECT MAX(h2.changed_at) FROM asset_compliance_history h2 WHERE h2.asset_id = h.asset_id
             )
+            AND a.cloud_instance_id IS NOT NULL AND a.cloud_instance_id <> ''
             AND (:searchTerm IS NULL OR LOWER(a.name) LIKE LOWER(CONCAT('%', :searchTerm, '%')))
             AND (:statusFilter IS NULL OR h.status = :statusFilter)
             ORDER BY h.changed_at DESC
@@ -230,10 +245,13 @@ open class AssetComplianceTrackingService(
         val compliantCount = complianceHistoryRepository.countByLatestStatus(ComplianceStatus.COMPLIANT)
         val nonCompliantCount = complianceHistoryRepository.countByLatestStatus(ComplianceStatus.NON_COMPLIANT)
         val trackedAssets = compliantCount + nonCompliantCount
-        val totalAssets = assetRepository.count()
+        val totalAssets = assetRepository.countAllAwsAssetsWithInstanceId()
         val neverAssessed = totalAssets - trackedAssets
-        val compliancePercentage = if (trackedAssets > 0) {
-            (compliantCount.toDouble() / trackedAssets * 100).let { Math.round(it * 10) / 10.0 }
+        // Percentage over totalAssets (not just tracked assets) so it agrees with the
+        // "Total Assets" tile — a never-assessed asset counts against compliance rather
+        // than being silently excluded from the denominator.
+        val compliancePercentage = if (totalAssets > 0) {
+            (compliantCount.toDouble() / totalAssets * 100).let { Math.round(it * 10) / 10.0 }
         } else 0.0
 
         return AssetComplianceSummaryDto(

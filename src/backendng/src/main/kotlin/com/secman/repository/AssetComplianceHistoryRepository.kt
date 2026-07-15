@@ -42,6 +42,10 @@ interface AssetComplianceHistoryRepository : JpaRepository<AssetComplianceHistor
         AND h.changedAt = (
             SELECT MAX(h2.changedAt) FROM AssetComplianceHistory h2 WHERE h2.assetId = h.assetId
         )
+        AND EXISTS (
+            SELECT 1 FROM Asset a WHERE a.id = h.assetId
+            AND a.cloudInstanceId IS NOT NULL AND a.cloudInstanceId <> ''
+        )
         """
     )
     fun countByLatestStatus(status: ComplianceStatus): Long

@@ -103,7 +103,7 @@ const Ec2ComplianceDashboard: React.FC = () => {
       {/* Summary Cards */}
       {summary && (
         <div className="row mb-4">
-          <div className="col-md-3 mb-3">
+          <div className="col-lg-2 col-md-4 col-6 mb-3">
             <div className="card text-center">
               <div className="card-body">
                 <h6 className="card-subtitle mb-2 text-muted">Total Assets</h6>
@@ -111,7 +111,7 @@ const Ec2ComplianceDashboard: React.FC = () => {
               </div>
             </div>
           </div>
-          <div className="col-md-3 mb-3">
+          <div className="col-lg-2 col-md-4 col-6 mb-3">
             <div className="card text-center border-success">
               <div className="card-body">
                 <h6 className="card-subtitle mb-2 text-success">Compliant</h6>
@@ -119,7 +119,7 @@ const Ec2ComplianceDashboard: React.FC = () => {
               </div>
             </div>
           </div>
-          <div className="col-md-3 mb-3">
+          <div className="col-lg-2 col-md-4 col-6 mb-3">
             <div className="card text-center border-danger">
               <div className="card-body">
                 <h6 className="card-subtitle mb-2 text-danger">Non-Compliant</h6>
@@ -127,7 +127,15 @@ const Ec2ComplianceDashboard: React.FC = () => {
               </div>
             </div>
           </div>
-          <div className="col-md-3 mb-3">
+          <div className="col-lg-2 col-md-4 col-6 mb-3">
+            <div className="card text-center border-secondary">
+              <div className="card-body">
+                <h6 className="card-subtitle mb-2 text-muted">Never Assessed</h6>
+                <h3 className="card-title mb-0">{summary.neverAssessedCount}</h3>
+              </div>
+            </div>
+          </div>
+          <div className="col-lg-2 col-md-4 col-6 mb-3">
             <div className="card text-center">
               <div className="card-body">
                 <h6 className="card-subtitle mb-2 text-muted">Compliance %</h6>
