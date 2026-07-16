@@ -680,7 +680,7 @@ sudo yum install nmap      # RHEL/CentOS
 
 ### `send-application-register-reminders` — application register overdue reminders
 
-Notifies responsible users about application register entries that have not been reviewed within a configurable threshold (default: 365 days). Calls `POST /api/cli/application-register/reminders/send`. Requires `ADMIN`.
+Emails each overdue application register entry's business owner and application manager when `Last quality check` is older than the threshold (or unset). Default threshold: 365 days. Calls `POST /api/cli/application-register/reminders/send`. Requires `ADMIN`.
 
 ```bash
 ./scripts/secman send-application-register-reminders --dry-run

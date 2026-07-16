@@ -52,5 +52,22 @@ class SendApplicationRegisterRemindersCommand : Runnable {
         println("Recipients: ${result["recipientCount"]}")
         println("Emails sent: ${result["emailsSent"]}")
         println("Emails failed: ${result["emailsFailed"]}")
+
+        if (verbose) {
+            @Suppress("UNCHECKED_CAST")
+            val recipients = result["recipients"] as? List<String> ?: emptyList()
+            @Suppress("UNCHECKED_CAST")
+            val failedRecipients = result["failedRecipients"] as? List<String> ?: emptyList()
+            if (recipients.isNotEmpty()) {
+                println()
+                println(if (dryRun) "Would notify:" else "Notified:")
+                recipients.forEach { println("  - $it") }
+            }
+            if (failedRecipients.isNotEmpty()) {
+                println()
+                println("Failed to notify:")
+                failedRecipients.forEach { println("  - $it") }
+            }
+        }
     }
 }
