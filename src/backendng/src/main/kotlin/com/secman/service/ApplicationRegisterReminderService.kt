@@ -51,9 +51,6 @@ class ApplicationRegisterReminderService(
             }
             val ok = emailService.sendEmail(recipient, subject, bodyText, renderHtmlBody(bodyText)).get()
             if (ok) sent += recipient else failed += recipient
-            if (verbose) {
-                // no-op, method kept for parity with other send services
-            }
         }
 
         val status = when {

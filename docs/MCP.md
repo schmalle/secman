@@ -211,6 +211,7 @@ curl -XPOST http://localhost:8080/mcp \
 - **`delete_user`** (ADMIN) — `email`*.
 - **`send_admin_summary`** (ADMIN) — same payload as CLI `send-admin-summary`.
 - **`send_patch_notifications`** (ADMIN) — notify users about missing patches (overdue vulnerabilities), filtered by the first character of their email. Args: `emailPrefix`* (e.g. `"a"`), `days` (default `30`), `dryRun` (default `false`). Mirrors CLI `send-patch-notifications`. Requires User Delegation.
+- **`send_application_register_reminders`** (ADMIN) — emails each application register entry's business owner and application manager when `lastQualityCheck` is older than `days` (or unset). Args: `days` (default `365`, min `1`), `dryRun` (default `false` — preview overdue entries and recipients without sending). Result includes `status` (`SUCCESS`/`DRY_RUN`/`PARTIAL_FAILURE`/`FAILURE`), `entriesOverdue`, `recipientCount`, `emailsSent`, `emailsFailed`, `recipients[]`, `failedRecipients[]`. API-key permission: `NOTIFICATIONS_SEND`. Mirrors CLI `send-application-register-reminders`. Requires User Delegation.
 
 ### GitHub repositories (delegation)
 - **`import_github_repos`** (ADMIN/VULN) — imports every repository accessible via the configured GitHub App, including each repo's open high/critical Dependabot alert counts, and writes one finding snapshot per run (the 30-day history). No arguments. API-key permission: `VULNERABILITIES_READ`. Errors: `NO_GITHUB_CONFIG` when no active GitHub App configuration exists (Admin → GitHub App). Mirrors CLI `import-github-repos`. Requires User Delegation.
