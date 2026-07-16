@@ -3,6 +3,7 @@ import { formatServerDate } from '../utils/dateUtils';
 import { getUser } from '../utils/auth';
 import { isAdmin, isSecChampion } from '../utils/permissions';
 import {
+  checkGithubUrl,
   createApplication,
   deleteApplication,
   getApplication,
@@ -68,6 +69,8 @@ const emptyForm: ApplicationRegisterSaveRequest = {
   incidentAssignmentGroup: '',
   notes: '',
   cmdbWorkspaceUrl: '',
+  githubRepositoryUrl: '',
+  awsAccountIds: [],
 };
 
 const tabs: Array<{ key: TabKey; label: string; icon: string }> = [
@@ -85,6 +88,7 @@ const fieldGroups: Record<Exclude<TabKey, 'relations'>, Array<{ name: keyof Appl
     { name: 'applicationTechnology', label: 'Application technology', options: ['SAAS', 'Other'] },
     { name: 'applicationArchitecture', label: 'Application architecture', options: ['Legacy', 'Container'] },
     { name: 'backupRecoveryUrl', label: 'Backup and recovery URL' },
+    { name: 'cmdbWorkspaceUrl', label: 'CMDB workspace URL' },
   ],
   organization: [
     { name: 'incidentAssignmentGroup', label: 'Incident management group' },
@@ -104,7 +108,11 @@ const toForm = (application: ApplicationRegisterDetail): ApplicationRegisterSave
   const form = { ...emptyForm };
   Object.keys(form).forEach((key) => {
     const typedKey = key as keyof ApplicationRegisterSaveRequest;
-    form[typedKey] = (application[typedKey] ?? '') as never;
+    if (typedKey === 'awsAccountIds') {
+      form.awsAccountIds = application.awsAccountIds ?? [];
+    } else {
+      form[typedKey] = (application[typedKey] ?? '') as never;
+    }
   });
   return form;
 };
@@ -130,6 +138,9 @@ const ApplicationRegister: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<ReturnType<typeof getUser>>(null);
+  const [githubCheckStatus, setGithubCheckStatus] = useState<'idle' | 'checking' | 'reachable' | 'unreachable'>('idle');
+  const [githubCheckMessage, setGithubCheckMessage] = useState<string>('');
+  const [awsAccountInput, setAwsAccountInput] = useState('');
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
   const user = currentUser;
@@ -230,6 +241,9 @@ const ApplicationRegister: React.FC = () => {
       setShowForm(true);
       setError(null);
       setSuccess(null);
+      setGithubCheckStatus('idle');
+      setGithubCheckMessage('');
+      setAwsAccountInput('');
       window.setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 0);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load application');
@@ -249,6 +263,44 @@ const ApplicationRegister: React.FC = () => {
     setShowForm(true);
     setError(null);
     setSuccess(null);
+    setGithubCheckStatus('idle');
+    setGithubCheckMessage('');
+    setAwsAccountInput('');
+  };
+
+  const runGithubCheck = async () => {
+    const url = (formData.githubRepositoryUrl ?? '').trim();
+    if (!url) return;
+    setGithubCheckStatus('checking');
+    setGithubCheckMessage('');
+    try {
+      const result = await checkGithubUrl(url);
+      if (result.reachable) {
+        setGithubCheckStatus('reachable');
+        setGithubCheckMessage(`Reachable (HTTP ${result.statusCode})`);
+      } else {
+        setGithubCheckStatus('unreachable');
+        setGithubCheckMessage(result.reason ?? `HTTP ${result.statusCode}`);
+      }
+    } catch {
+      setGithubCheckStatus('unreachable');
+      setGithubCheckMessage('Check failed');
+    }
+  };
+
+  const addAwsAccount = () => {
+    const id = awsAccountInput.trim();
+    if (!id) return;
+    const current = formData.awsAccountIds ?? [];
+    if (!current.includes(id)) {
+      updateField('awsAccountIds', [...current, id]);
+    }
+    setAwsAccountInput('');
+  };
+
+  const removeAwsAccount = (accountId: string) => {
+    const current = formData.awsAccountIds ?? [];
+    updateField('awsAccountIds', current.filter((a) => a !== accountId));
   };
 
   const cancelForm = () => {
@@ -260,9 +312,12 @@ const ApplicationRegister: React.FC = () => {
     setShowForm(false);
     setError(null);
     setSuccess(null);
+    setGithubCheckStatus('idle');
+    setGithubCheckMessage('');
+    setAwsAccountInput('');
   };
 
-  const updateField = (name: keyof ApplicationRegisterSaveRequest, value: string) => {
+  const updateField = (name: keyof ApplicationRegisterSaveRequest, value: string | string[]) => {
     setFormData((current) => ({ ...current, [name]: value }));
   };
 
@@ -692,6 +747,86 @@ const ApplicationRegister: React.FC = () => {
                 ) : (
                   <div className="row g-3">
                     {activeTab === 'operation' ? renderOperationFields() : fieldGroups[activeTab].map(renderField)}
+                    {activeTab === 'technical' && (
+                      <>
+                        <div className="col-12">
+                          <label className="form-label small fw-semibold text-secondary">GitHub Repository URL</label>
+                          <div className="input-group input-group-sm">
+                            <input
+                              className="form-control"
+                              type="url"
+                              placeholder="https://github.com/org/repo"
+                              value={formData.githubRepositoryUrl ?? ''}
+                              disabled={isReadOnly}
+                              onChange={(event) => {
+                                updateField('githubRepositoryUrl', event.target.value);
+                                setGithubCheckStatus('idle');
+                                setGithubCheckMessage('');
+                              }}
+                            />
+                            {!isReadOnly && (
+                              <button
+                                type="button"
+                                className="btn btn-outline-secondary"
+                                disabled={!formData.githubRepositoryUrl?.trim() || githubCheckStatus === 'checking'}
+                                onClick={() => void runGithubCheck()}
+                              >
+                                {githubCheckStatus === 'checking' ? (
+                                  <><span className="spinner-border spinner-border-sm me-1"></span>Checking...</>
+                                ) : (
+                                  <><i className="bi bi-link-45deg me-1"></i>Check</>
+                                )}
+                              </button>
+                            )}
+                          </div>
+                          {githubCheckStatus === 'reachable' && (
+                            <div className="text-success small mt-1"><i className="bi bi-check-circle me-1"></i>{githubCheckMessage}</div>
+                          )}
+                          {githubCheckStatus === 'unreachable' && (
+                            <div className="text-danger small mt-1"><i className="bi bi-x-circle me-1"></i>Unreachable: {githubCheckMessage}</div>
+                          )}
+                        </div>
+                        <div className="col-12">
+                          <label className="form-label small fw-semibold text-secondary">AWS Account IDs</label>
+                          {!isReadOnly && (
+                            <div className="input-group input-group-sm mb-2">
+                              <input
+                                className="form-control"
+                                type="text"
+                                placeholder="123456789012"
+                                value={awsAccountInput}
+                                onChange={(event) => setAwsAccountInput(event.target.value)}
+                                onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addAwsAccount(); } }}
+                              />
+                              <button type="button" className="btn btn-outline-primary" onClick={addAwsAccount} disabled={!awsAccountInput.trim()}>
+                                <i className="bi bi-plus"></i> Add
+                              </button>
+                            </div>
+                          )}
+                          {(formData.awsAccountIds ?? []).length === 0 ? (
+                            <div className="text-secondary small">No AWS accounts linked.</div>
+                          ) : (
+                            <div className="d-flex flex-wrap gap-2">
+                              {(formData.awsAccountIds ?? []).map((accountId) => (
+                                <span key={accountId} className="badge bg-light text-dark border d-flex align-items-center gap-1 px-2 py-1">
+                                  <i className="bi bi-cloud"></i>
+                                  {accountId}
+                                  {!isReadOnly && (
+                                    <button
+                                      type="button"
+                                      className="btn-close btn-close-sm ms-1"
+                                      style={{ fontSize: '0.6rem' }}
+                                      aria-label="Remove"
+                                      onClick={() => removeAwsAccount(accountId)}
+                                    />
+                                  )}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
               </div>

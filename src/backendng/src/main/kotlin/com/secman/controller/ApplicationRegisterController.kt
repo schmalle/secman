@@ -20,6 +20,8 @@ import io.micronaut.scheduling.annotation.ExecuteOn
 import io.micronaut.security.annotation.Secured
 import io.micronaut.security.authentication.Authentication
 import io.micronaut.security.rules.SecurityRule
+import java.net.HttpURLConnection
+import java.net.URI
 import java.time.LocalDate
 
 @Controller("/api/applications")
@@ -97,6 +99,35 @@ open class ApplicationRegisterController(
             HttpResponse.notFound()
         } catch (e: IllegalArgumentException) {
             HttpResponse.badRequest(mapOf("error" to e.message))
+        }
+    }
+
+    @Get("/check-github-url")
+    @Secured(SecurityRule.IS_AUTHENTICATED)
+    @ExecuteOn(TaskExecutors.BLOCKING)
+    open fun checkGithubUrl(@QueryValue url: String): HttpResponse<Map<String, Any>> {
+        val trimmed = url.trim()
+        if (trimmed.isBlank()) {
+            return HttpResponse.badRequest(mapOf("error" to "URL is required"))
+        }
+        return try {
+            val uri = URI.create(trimmed)
+            if (uri.scheme != "https" && uri.scheme != "http") {
+                return HttpResponse.ok(mapOf("reachable" to false, "reason" to "URL must use http or https"))
+            }
+            val connection = uri.toURL().openConnection() as HttpURLConnection
+            connection.requestMethod = "HEAD"
+            connection.connectTimeout = 5000
+            connection.readTimeout = 5000
+            connection.instanceFollowRedirects = true
+            connection.setRequestProperty("User-Agent", "SecMan/1.0")
+            val status = connection.responseCode
+            connection.disconnect()
+            HttpResponse.ok(mapOf("reachable" to (status in 200..399), "statusCode" to status))
+        } catch (e: IllegalArgumentException) {
+            HttpResponse.ok(mapOf("reachable" to false, "reason" to "Invalid URL format"))
+        } catch (e: Exception) {
+            HttpResponse.ok(mapOf("reachable" to false, "reason" to (e.message ?: "Unreachable")))
         }
     }
 

@@ -100,6 +100,12 @@ data class ApplicationRegister(
     @Column(name = "cmdb_workspace_url", columnDefinition = "TEXT")
     var cmdbWorkspaceUrl: String? = null,
 
+    @Column(name = "github_repository_url", columnDefinition = "TEXT")
+    var githubRepositoryUrl: String? = null,
+
+    @Column(name = "aws_account_ids", columnDefinition = "TEXT")
+    var awsAccountIds: String? = null,
+
     @Column(name = "created_at", updatable = false)
     var createdAt: LocalDateTime? = null,
 

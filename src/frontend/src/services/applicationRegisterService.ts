@@ -34,6 +34,8 @@ export interface ApplicationRegisterDetail extends ApplicationRegisterSummary {
   incidentAssignmentGroup?: string | null;
   notes?: string | null;
   cmdbWorkspaceUrl?: string | null;
+  githubRepositoryUrl?: string | null;
+  awsAccountIds?: string[];
   createdAt?: string | null;
   createdBy?: string | null;
   updatedBy?: string | null;
@@ -60,6 +62,7 @@ const optionalApplicationFields: Array<keyof ApplicationRegisterSaveRequest> = [
   'incidentAssignmentGroup',
   'notes',
   'cmdbWorkspaceUrl',
+  'githubRepositoryUrl',
 ];
 
 function sanitizeRequest(request: ApplicationRegisterSaveRequest): ApplicationRegisterSaveRequest {
@@ -105,6 +108,11 @@ export async function deleteApplication(id: number): Promise<void> {
     const body = await response.json().catch(() => ({}));
     throw new Error(body.error || body.message || `Failed to delete application: ${response.status}`);
   }
+}
+
+export async function checkGithubUrl(url: string): Promise<{ reachable: boolean; statusCode?: number; reason?: string }> {
+  const params = new URLSearchParams({ url });
+  return parseOrThrow(await authenticatedGet(`/api/applications/check-github-url?${params.toString()}`), 'Failed to check URL');
 }
 
 export async function replaceApplicationAssets(id: number, assetIds: number[]): Promise<ApplicationRegisterDetail> {
