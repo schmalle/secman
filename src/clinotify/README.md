@@ -9,6 +9,82 @@ because they only consume the public CrowdStrike-checkin endpoint.
 
 ## Scripts
 
+### `check_backend_health.py`
+
+Polls `GET /health` (a public, unauthenticated endpoint that probes the
+database with a bounded `SELECT 1`) and restarts the `secman-backend`
+systemd service when the database connection is lost — the failure mode
+that caused a production incident where the backend silently stopped
+working and never recovered on its own.
+
+To avoid restarting on a single transient blip, a restart only fires after
+`--fail-threshold` consecutive failed probes (default: 2). To avoid restart
+storms while the database itself stays down for a longer stretch —
+restarting the backend can't fix a dead database — a restart is suppressed
+for `--restart-cooldown-minutes` after it last fired (default: 15); failures
+are still logged and alerted during the cooldown. Small JSON state
+(consecutive-failure count, last-restart timestamp) persists between runs at
+`--state-file` (default `/var/tmp/secman-backend-monitor.json`), since each
+invocation is a single cron tick.
+
+#### Requirements
+
+* Python 3.9+
+* Stdlib only — no `pip install` needed
+* Network access to the secman host (and `api.telegram.org` if alerting)
+* Permission to run `systemctl restart secman-backend` without a password
+  prompt (see the sudoers snippet in `docs/DEPLOYMENT.md`)
+* A Telegram bot token and chat id (optional — restarts still happen
+  without alerting if unset)
+
+#### Usage
+
+```
+check_backend_health.py --url URL
+                        [--service-name NAME] [--fail-threshold N]
+                        [--restart-cooldown-minutes N] [--state-file PATH]
+                        [--telegram-bot-token TOKEN] [--telegram-chat-id CHAT_ID]
+                        [--insecure] [--timeout SECS] [--dry-run] [--verbose]
+```
+
+| Flag                          | Description                                                       |
+|-------------------------------|---------------------------------------------------------------------|
+| `--url`                       | Base URL of the secman instance (e.g. `https://secman.example.com`). |
+| `--service-name`               | systemd service to restart on failure (default: `secman-backend`).  |
+| `--fail-threshold`             | Consecutive failed probes required before restarting (default: 2).  |
+| `--restart-cooldown-minutes`   | Minimum minutes between restarts (default: 15).                     |
+| `--state-file`                 | Path to persist failure count / last-restart time.                  |
+| `--telegram-bot-token`         | Bot token. Defaults to `$TELEGRAM_BOT_TOKEN`.                        |
+| `--telegram-chat-id`           | Chat id. Defaults to `$TELEGRAM_CHAT_ID`.                            |
+| `--insecure`                   | Disable TLS verification on the secman call (self-signed certs).    |
+| `--timeout`                    | HTTP timeout in seconds (default: 10).                               |
+| `--dry-run`                    | Log/alert as usual but skip the actual `systemctl restart`.         |
+| `--verbose` / `-v`             | Print diagnostic info to stdout.                                    |
+
+#### Exit codes
+
+| Code | Meaning                                                          |
+|------|-------------------------------------------------------------------|
+| `0`  | OK — probe succeeded, or failed but still below `--fail-threshold` |
+| `1`  | Transport / parse error, or the restart itself failed              |
+| `2`  | Invalid arguments                                                  |
+| `3`  | Alert fired (restart triggered, or DOWN and still in cooldown)     |
+
+#### Example
+
+Cron, checked every 2 minutes, alerting via Telegram:
+```cron
+*/2 * * * * TELEGRAM_BOT_TOKEN=... TELEGRAM_CHAT_ID=... \
+  /opt/secman/src/clinotify/check_backend_health.py \
+  --url https://secman.example.com --fail-threshold 2 --restart-cooldown-minutes 15 \
+  >> /var/log/secman-backend-monitor.log 2>&1
+```
+
+Dry run (verify behavior without touching systemd):
+```bash
+./check_backend_health.py --url https://secman.example.com --dry-run --verbose
+```
+
 ### `check_crowdstrike_checkin.py`
 
 Polls `GET /api/crowdstrike/last-checkin` (a public, unauthenticated

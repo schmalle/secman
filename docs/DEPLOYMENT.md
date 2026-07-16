@@ -275,20 +275,34 @@ Required: change default admin password; unique `JWT_SECRET`/`SECMAN_ENCRYPTION_
 ## Monitor
 
 ```bash
-curl http://localhost:8080/health      # {"status":"UP",...}
+curl http://localhost:8080/health      # {"status":"UP","checks":{"database":"UP"},...} or 503 DOWN
 curl http://localhost:4321/
 sudo journalctl -u secman-backend  -f
 sudo journalctl -u secman-frontend -f
 sudo tail -f /var/log/nginx/secman-api-{access,error}.log
 ```
 
-Watchdog `/opt/secman/bin/monitor.sh`:
+`/health` actually probes the database (bounded ~3s `SELECT 1`, independent of HikariCP's own 30s connection-timeout) and returns HTTP 503 with `checks.database: "DOWN"` when the DB is unreachable — this is what caught a production incident where the backend silently lost its DB connection and never recovered on its own.
+
+Frontend-only watchdog `/opt/secman/bin/monitor.sh` (unchanged, still handles the frontend; the backend DB-outage case is handled by the dedicated script below):
 ```bash
 #!/usr/bin/env bash
-curl -sf http://localhost:8080/health >/dev/null || { logger -t secman-monitor "backend down";  systemctl restart secman-backend;  }
-curl -sf http://localhost:4321/        >/dev/null || { logger -t secman-monitor "frontend down"; systemctl restart secman-frontend; }
+curl -sf http://localhost:4321/ >/dev/null || { logger -t secman-monitor "frontend down"; systemctl restart secman-frontend; }
 ```
 `*/5 * * * * /opt/secman/bin/monitor.sh`
+
+Backend DB-loss watchdog (`check_backend_health.py`, stdlib-only Python; restarts `secman-backend` only after `--fail-threshold` consecutive failed probes, and suppresses repeat restarts for `--restart-cooldown-minutes` while the DB itself stays down, alerting via Telegram either way):
+```cron
+*/2 * * * * TELEGRAM_BOT_TOKEN=… TELEGRAM_CHAT_ID=… \
+  /opt/secman/src/clinotify/check_backend_health.py \
+  --url https://secman.example.com --fail-threshold 2 --restart-cooldown-minutes 15 \
+  >> /var/log/secman-backend-monitor.log 2>&1
+```
+Requires the cron user to restart the service without a password prompt, e.g. `/etc/sudoers.d/secman-monitor`:
+```
+secman ALL=(root) NOPASSWD: /usr/bin/systemctl restart secman-backend
+```
+and invoke the script with `sudo` in the cron line if the cron user isn't root. State (consecutive-failure count, last-restart timestamp) persists at `--state-file` (default `/var/tmp/secman-backend-monitor.json`). Test safely with `--dry-run` (logs/alerts as usual, skips the actual `systemctl restart`).
 
 CrowdStrike checkin freshness alert (Telegram, stdlib-only Python):
 ```cron
