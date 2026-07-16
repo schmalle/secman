@@ -592,9 +592,8 @@ const ApplicationRegister: React.FC = () => {
                     onChange={(event) => updateField('criticality', event.target.value)}
                   >
                     <option value="">Select Criticality</option>
-                    <option value="LOW">LOW</option>
-                    <option value="MEDIUM">MEDIUM</option>
-                    <option value="HIGH">HIGH</option>
+                    <option value="YES">YES</option>
+                    <option value="NO">NO</option>
                   </select>
                 </div>
                 <div className="col-md-3">
