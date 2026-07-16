@@ -116,7 +116,9 @@ open class ApplicationRegisterService(
             backupRecoveryUrl = request.backupRecoveryUrl.clean(),
             incidentAssignmentGroup = request.incidentAssignmentGroup.clean(),
             notes = request.notes.clean(),
-            cmdbWorkspaceUrl = request.cmdbWorkspaceUrl.clean()
+            cmdbWorkspaceUrl = request.cmdbWorkspaceUrl.clean(),
+            githubRepositoryUrl = request.githubRepositoryUrl.clean(),
+            awsAccountIds = request.awsAccountIds.map { it.trim() }.filter { it.isNotBlank() }
         )
     }
 
@@ -140,6 +142,8 @@ open class ApplicationRegisterService(
         application.incidentAssignmentGroup = request.incidentAssignmentGroup
         application.notes = request.notes
         application.cmdbWorkspaceUrl = request.cmdbWorkspaceUrl
+        application.githubRepositoryUrl = request.githubRepositoryUrl
+        application.awsAccountIds = if (request.awsAccountIds.isEmpty()) null else request.awsAccountIds.joinToString(",")
     }
 
     private fun allocateCarId(): String {

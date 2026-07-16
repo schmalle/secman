@@ -27,7 +27,9 @@ data class ApplicationRegisterRequest(
     val backupRecoveryUrl: String? = null,
     val incidentAssignmentGroup: String? = null,
     val notes: String? = null,
-    val cmdbWorkspaceUrl: String? = null
+    val cmdbWorkspaceUrl: String? = null,
+    val githubRepositoryUrl: String? = null,
+    val awsAccountIds: List<String> = emptyList()
 )
 
 @Serdeable
@@ -101,6 +103,8 @@ data class ApplicationRegisterDetail(
     val incidentAssignmentGroup: String?,
     val notes: String?,
     val cmdbWorkspaceUrl: String?,
+    val githubRepositoryUrl: String?,
+    val awsAccountIds: List<String>,
     val createdAt: LocalDateTime?,
     val updatedAt: LocalDateTime?,
     val createdBy: String?,
@@ -131,6 +135,8 @@ data class ApplicationRegisterDetail(
                 incidentAssignmentGroup = application.incidentAssignmentGroup,
                 notes = application.notes,
                 cmdbWorkspaceUrl = application.cmdbWorkspaceUrl,
+                githubRepositoryUrl = application.githubRepositoryUrl,
+                awsAccountIds = application.awsAccountIds?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList(),
                 createdAt = application.createdAt,
                 updatedAt = application.updatedAt,
                 createdBy = application.createdBy,
