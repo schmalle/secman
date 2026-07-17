@@ -14,6 +14,8 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
+import jakarta.persistence.EntityManager
+import jakarta.persistence.LockModeType
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.BeforeEach
@@ -29,6 +31,7 @@ class GithubRepoImportServiceTest {
     private lateinit var alertRepository: GithubRepoDependabotAlertRepository
     private lateinit var client: GithubAppClientService
     private lateinit var ownerEmailMappingRepository: GithubOwnerEmailMappingRepository
+    private lateinit var entityManager: EntityManager
     private lateinit var service: GithubRepoImportService
 
     private val config = GithubAppConfig(id = 1, appId = "12345", privateKeyPem = "pem")
@@ -41,7 +44,10 @@ class GithubRepoImportServiceTest {
         alertRepository = mockk()
         client = mockk()
         ownerEmailMappingRepository = mockk()
-        service = GithubRepoImportService(configRepository, repoRepository, snapshotRepository, alertRepository, client, ownerEmailMappingRepository)
+        entityManager = mockk()
+        service = GithubRepoImportService(configRepository, repoRepository, snapshotRepository, alertRepository, client, ownerEmailMappingRepository, entityManager)
+        // Production gets the AOP self-proxy injected; the plain instance suffices in unit tests.
+        service.selfProvider = jakarta.inject.Provider { service }
 
         every { configRepository.findActiveConfig() } returns Optional.of(config)
         every { client.getInstallationToken(config) } returns "token"
@@ -110,6 +116,7 @@ class GithubRepoImportServiceTest {
             lastHighCriticalFindingAt = null
         )
         every { repoRepository.findByGithubRepoId(7) } returns Optional.of(existing)
+        every { entityManager.find(GithubRepository::class.java, 42L, LockModeType.PESSIMISTIC_WRITE) } returns existing
         every { client.listInstallationRepositories("token", "https://api.github.com") } returns listOf(repoDto(7))
         every { client.countOpenDependabotAlerts("token", "org", "repo7", "https://api.github.com") } returns
             GithubAppClientService.SeverityCounts(critical = 0, high = 0)
@@ -238,6 +245,7 @@ class GithubRepoImportServiceTest {
             ownerEmail = "manual@example.com"
         )
         every { repoRepository.findByGithubRepoId(7) } returns Optional.of(existing)
+        every { entityManager.find(GithubRepository::class.java, 42L, LockModeType.PESSIMISTIC_WRITE) } returns existing
         every { client.listInstallationRepositories("token", "https://api.github.com") } returns listOf(repoDto(7))
         every { client.countOpenDependabotAlerts("token", "org", "repo7", "https://api.github.com") } returns
             GithubAppClientService.SeverityCounts(critical = 0, high = 0)
@@ -259,6 +267,7 @@ class GithubRepoImportServiceTest {
             ownerEmail = "org-default@example.com"
         )
         every { repoRepository.findByGithubRepoId(7) } returns Optional.of(existing)
+        every { entityManager.find(GithubRepository::class.java, 42L, LockModeType.PESSIMISTIC_WRITE) } returns existing
         every { client.listInstallationRepositories("token", "https://api.github.com") } returns listOf(repoDto(7))
         every { client.countOpenDependabotAlerts("token", "org", "repo7", "https://api.github.com") } returns
             GithubAppClientService.SeverityCounts(critical = 0, high = 0)

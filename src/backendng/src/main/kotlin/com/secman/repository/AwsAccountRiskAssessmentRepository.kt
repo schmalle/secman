@@ -28,4 +28,39 @@ interface AwsAccountRiskAssessmentRepository : JpaRepository<AwsAccountRiskAsses
         """
     )
     fun findPendingDeadlineReminders(today: LocalDate, windowEnd: LocalDate): List<AwsAccountRiskAssessment>
+
+    /**
+     * Atomically claim the 1-day deadline reminder (claim-before-send). Also stamps the
+     * 2-day slot when still unset, collapsing a missed 2-day reminder into this send.
+     * Returns 1 only for the winning caller - overlapping scheduler runs get 0 and must
+     * not email.
+     */
+    @Query(
+        """
+        UPDATE AwsAccountRiskAssessment t
+        SET t.reminderOneDaySentAt = :now,
+            t.reminderTwoDaysSentAt = COALESCE(t.reminderTwoDaysSentAt, :now)
+        WHERE t.id = :id AND t.reminderOneDaySentAt IS NULL
+        """
+    )
+    fun claimOneDayReminder(id: Long, now: java.time.LocalDateTime): Int
+
+    /** Atomically claim the 2-day deadline reminder. See [claimOneDayReminder]. */
+    @Query("UPDATE AwsAccountRiskAssessment t SET t.reminderTwoDaysSentAt = :now WHERE t.id = :id AND t.reminderTwoDaysSentAt IS NULL")
+    fun claimTwoDayReminder(id: Long, now: java.time.LocalDateTime): Int
+
+    /** Best-effort claim release when the reminder email failed after a successful claim. */
+    @Query(
+        """
+        UPDATE AwsAccountRiskAssessment t
+        SET t.reminderOneDaySentAt = NULL,
+            t.reminderTwoDaysSentAt = CASE WHEN t.reminderTwoDaysSentAt = :claimedAt THEN NULL ELSE t.reminderTwoDaysSentAt END
+        WHERE t.id = :id AND t.reminderOneDaySentAt = :claimedAt
+        """
+    )
+    fun releaseOneDayReminderClaim(id: Long, claimedAt: java.time.LocalDateTime): Int
+
+    /** Best-effort claim release for the 2-day reminder. */
+    @Query("UPDATE AwsAccountRiskAssessment t SET t.reminderTwoDaysSentAt = NULL WHERE t.id = :id AND t.reminderTwoDaysSentAt = :claimedAt")
+    fun releaseTwoDayReminderClaim(id: Long, claimedAt: java.time.LocalDateTime): Int
 }

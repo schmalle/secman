@@ -31,6 +31,14 @@ interface MaterializedViewRefreshJobRepository : JpaRepository<MaterializedViewR
     fun findRunningJob(): Optional<MaterializedViewRefreshJob>
 
     /**
+     * All RUNNING jobs, oldest id first. Used by the post-insert duplicate-trigger
+     * re-check in triggerAsyncRefresh: when two concurrent triggers both insert a
+     * RUNNING job, the lowest id wins and younger duplicates mark themselves failed.
+     */
+    @Query("SELECT j FROM MaterializedViewRefreshJob j WHERE j.status = 'RUNNING' ORDER BY j.id ASC")
+    fun findRunningJobs(): List<MaterializedViewRefreshJob>
+
+    /**
      * Count jobs by status (for metrics)
      *
      * Task: T008

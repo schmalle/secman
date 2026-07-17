@@ -182,6 +182,17 @@ open class AiSuggestionJobService(
         val originalName = Thread.currentThread().name
         Thread.currentThread().name = "ai-job-$jobId"
         try {
+            // Post-commit concurrency-cap recheck. startJob's guards are count-then-insert:
+            // two concurrent starts for the same assessment (or N starts against the global
+            // cap) can all pass them before any insert is visible. Now that this job's row
+            // is committed, rank it against all committed active jobs and self-fail losers
+            // BEFORE any paid LLM call is made.
+            val lostReason = checkStartRace(jobId)
+            if (lostReason != null) {
+                log.warn("AI job {} lost the start race ({}) — failing it before any AI call", jobId, lostReason)
+                markFailed(jobId, "Rejected at start: $lostReason")
+                return
+            }
             markRunning(jobId)
             val ctx = buildContext(assessmentId)
             val flag = cancelFlags[jobId] ?: AtomicBoolean(false)
@@ -241,9 +252,40 @@ open class AiSuggestionJobService(
     open fun loadRequirement(id: Long): Requirement? =
         requirementRepository.findById(id).orElse(null)
 
+    /**
+     * Post-commit start-race verification for a freshly inserted job. Returns null when the
+     * job may proceed, or a reason string when it lost against concurrent committed jobs.
+     * Deterministic: the lowest active job id per assessment wins, and globally only the
+     * oldest [AiRiskAssessmentConfig.maxConcurrentJobsGlobal] active jobs proceed.
+     */
+    @Transactional(TxType.REQUIRES_NEW)
+    open fun checkStartRace(jobId: Long): String? {
+        val j = aiJobRepository.findById(jobId).orElse(null) ?: return "job row missing"
+        if (j.status.isTerminal()) return null // cancelled before start — background loop exits via flag
+        val activeStatuses = listOf(AiSuggestionJobStatus.QUEUED, AiSuggestionJobStatus.RUNNING)
+
+        val perAssessment = aiJobRepository.findByRiskAssessmentIdAndStatusIn(j.riskAssessmentId, activeStatuses)
+        val assessmentWinner = perAssessment.minByOrNull { it.id!! }
+        if (assessmentWinner != null && assessmentWinner.id != jobId) {
+            return "another AI job (id=${assessmentWinner.id}) is already active for assessment ${j.riskAssessmentId}"
+        }
+
+        val activeGlobal = aiJobRepository.findByStatusIn(activeStatuses).sortedBy { it.id }
+        val rank = activeGlobal.indexOfFirst { it.id == jobId }
+        if (rank >= config.maxConcurrentJobsGlobal) {
+            return "global AI-job concurrency limit (${config.maxConcurrentJobsGlobal}) exceeded (rank ${rank + 1})"
+        }
+        return null
+    }
+
     @Transactional(TxType.REQUIRES_NEW)
     open fun markRunning(jobId: Long) {
         val j = aiJobRepository.findById(jobId).orElse(null) ?: return
+        // Status guard: don't resurrect a job that was cancelled/reclaimed while QUEUED.
+        if (j.status != AiSuggestionJobStatus.QUEUED) {
+            log.warn("Skipping RUNNING transition for AI job {} - current status is {}", jobId, j.status)
+            return
+        }
         j.status = AiSuggestionJobStatus.RUNNING
         j.startedAt = LocalDateTime.now()
         j.lastHeartbeatAt = LocalDateTime.now()
@@ -253,6 +295,12 @@ open class AiSuggestionJobService(
     @Transactional(TxType.REQUIRES_NEW)
     open fun markFailed(jobId: Long, errorMessage: String) {
         val j = aiJobRepository.findById(jobId).orElse(null) ?: return
+        // Terminal guard: the watchdog (reclaimStaleJobs) and the owning worker race here -
+        // never overwrite COMPLETED/CANCELLED with FAILED.
+        if (j.status.isTerminal()) {
+            log.warn("Skipping FAILED transition for AI job {} - already terminal ({})", jobId, j.status)
+            return
+        }
         j.status = AiSuggestionJobStatus.FAILED
         j.errorMessage = errorMessage
         j.finishedAt = LocalDateTime.now()
@@ -263,6 +311,8 @@ open class AiSuggestionJobService(
     @Transactional(TxType.REQUIRES_NEW)
     open fun incrementFailed(jobId: Long, errorMessage: String? = null) {
         val j = aiJobRepository.findById(jobId).orElse(null) ?: return
+        // Terminal guard: a cancelled/reclaimed job's counters must not keep moving.
+        if (j.status.isTerminal()) return
         j.failedCount++
         j.lastHeartbeatAt = LocalDateTime.now()
         if (errorMessage != null && j.errorMessage.isNullOrBlank()) j.errorMessage = errorMessage
@@ -297,6 +347,17 @@ open class AiSuggestionJobService(
         userId: Long,
         result: SuggestionResult
     ) {
+        // Terminal guard: an in-flight requirement can complete after cancelJob or the
+        // watchdog marked the job terminal. Persisting the suggestion/Response and bumping
+        // cost/counters then would mutate a terminal job (and write AI answers the user
+        // explicitly cancelled) - drop the result instead.
+        val jobAtStart = aiJobRepository.findById(jobId).orElse(null)
+        if (jobAtStart == null || jobAtStart.status.isTerminal()) {
+            log.warn("Dropping AI result for requirement {} - job {} is {}", requirementId, jobId,
+                jobAtStart?.status ?: "missing")
+            return
+        }
+
         // 1) supersede any prior APPLIED row for this (assessment, requirement)
         aiSuggestionRepository.markAppliedAsSuperseded(assessmentId, requirementId)
 
@@ -377,6 +438,13 @@ open class AiSuggestionJobService(
         requirementId: Long,
         errorMessage: String
     ) {
+        // Terminal guard - see applySuccess.
+        val jobAtStart = aiJobRepository.findById(jobId).orElse(null)
+        if (jobAtStart == null || jobAtStart.status.isTerminal()) {
+            log.warn("Dropping AI failure record for requirement {} - job {} is {}", requirementId, jobId,
+                jobAtStart?.status ?: "missing")
+            return
+        }
         aiSuggestionRepository.save(AiAnswerSuggestion(
             jobId = jobId,
             riskAssessmentId = assessmentId,

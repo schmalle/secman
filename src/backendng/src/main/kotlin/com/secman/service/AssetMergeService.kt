@@ -61,7 +61,16 @@ open class AssetMergeService(
             mergeAssetData(existingAsset.get(), ip, groups, cloudAccountId, cloudInstanceId, osVersion, adDomain)
         } else {
             log.debug("Creating new asset for hostname: {}", hostname)
-            createAsset(hostname, ip, groups, cloudAccountId, cloudInstanceId, osVersion, adDomain)
+            // Best-effort duplicate mitigation: find-then-create is racy (asset.name has no DB
+            // unique constraint yet - see docs/RACE_CONDITIONS.md). If a concurrent importer
+            // created the asset between the check and the save, merge into the winner's row.
+            try {
+                createAsset(hostname, ip, groups, cloudAccountId, cloudInstanceId, osVersion, adDomain)
+            } catch (e: Exception) {
+                val winner = assetRepository.findByName(hostname).orElseThrow { e }
+                log.info("Concurrent import created asset '{}' first - merging into id={}", hostname, winner.id)
+                mergeAssetData(winner, ip, groups, cloudAccountId, cloudInstanceId, osVersion, adDomain)
+            }
         }
     }
 

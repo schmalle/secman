@@ -175,10 +175,33 @@ open class AssetMatchClearService(
 
         val errors = mutableListOf<AssetMatchClearErrorDto>()
         var deletedCount = 0
+        var revalidationSkips = 0
         val operationId = java.util.UUID.randomUUID().toString()
 
         candidates.forEach { candidate ->
             try {
+                // Re-verify the stale-candidate predicate immediately before deleting. The
+                // candidate list is a snapshot from the scan above; a concurrent import can
+                // re-match the asset (change its cloudInstanceId to one present in the
+                // snapshot, or move it to an uncovered account) between the scan and this
+                // delete - deleting from the stale list would then destroy a live asset.
+                val current = assetRepository.findById(candidate.assetId).orElse(null)
+                val currentInstance = current?.cloudInstanceId?.trim()?.lowercase()
+                val currentAccount = current?.cloudAccountId?.trim()
+                val stillStale = current != null &&
+                    !currentInstance.isNullOrEmpty() &&
+                    currentInstance !in normalizedResources &&
+                    (strict || currentAccount in normalizedAccounts)
+                if (!stillStale) {
+                    revalidationSkips++
+                    log.info(
+                        "Skipping asset {} ({}): no longer matches the stale predicate at delete time " +
+                            "(concurrently re-imported or moved)",
+                        candidate.assetId, candidate.name
+                    )
+                    return@forEach
+                }
+
                 assetCascadeDeleteService.deleteAsset(
                     assetId = candidate.assetId,
                     username = username,
@@ -208,9 +231,9 @@ open class AssetMatchClearService(
         }
 
         log.info(
-            "asset_match_clear_run dryRun=false user={} snapshotAccounts={} snapshotResources={} scoped={} candidates={} deleted={} errors={} status={}",
+            "asset_match_clear_run dryRun=false user={} snapshotAccounts={} snapshotResources={} scoped={} candidates={} deleted={} revalidationSkips={} errors={} status={}",
             username, normalizedAccounts.size, normalizedResources.size,
-            scopedAssets.size, candidates.size, deletedCount, errors.size, status
+            scopedAssets.size, candidates.size, deletedCount, revalidationSkips, errors.size, status
         )
 
         return AssetMatchClearResponse(
@@ -224,7 +247,7 @@ open class AssetMatchClearService(
             uncoveredAccounts = uncoveredAccounts,
             candidateCount = candidates.size,
             deletedCount = deletedCount,
-            skippedCount = errors.size,
+            skippedCount = errors.size + revalidationSkips,
             candidates = candidates,
             errors = errors,
             status = status,

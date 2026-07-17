@@ -155,6 +155,27 @@ open class AwsAccountRiskAssessmentService(
         val today = LocalDate.now()
         val endDate = today.plusDays(deadlineDays.toLong())
 
+        // Idempotency guard: re-running an import (or two overlapping imports) must not
+        // create a second assessment + tracking row + reminder stream for the same
+        // (account, owner) while one is still open. No DB unique constraint is used here
+        // because a NEW assessment for the same pair is legitimate once the previous one
+        // is completed; only concurrent/repeated creation of OPEN ones is a defect.
+        val existingOpen = trackingRepository.findByAwsAccountId(awsAccountId)
+            .filter { it.ownerEmail.equals(ownerEmail, ignoreCase = true) }
+            .firstOrNull { it.riskAssessment.status == "STARTED" }
+        if (existingOpen != null) {
+            log.info(
+                "Skipping risk assessment creation for AWS account {} / owner {}: open assessment {} already tracked",
+                awsAccountId, ownerEmail, existingOpen.riskAssessment.id
+            )
+            return AccountRiskAssessmentInfo(
+                awsAccountId = awsAccountId,
+                ownerEmail = ownerEmail,
+                riskAssessmentId = existingOpen.riskAssessment.id,
+                error = "Skipped: an open risk assessment (id=${existingOpen.riskAssessment.id}) already exists for this account/owner"
+            )
+        }
+
         val asset = findOrCreateAccountAsset(awsAccountId, ownerEmail)
         val ownerUser = userRepository.findByEmailIgnoreCase(ownerEmail).orElse(null)
 
@@ -216,16 +237,23 @@ open class AwsAccountRiskAssessmentService(
         val existing = assetRepository.findByName(assetName).orElse(null)
         if (existing != null) return existing
 
-        return assetRepository.save(
-            Asset(
-                name = assetName,
-                type = ACCOUNT_ASSET_TYPE,
-                owner = ownerEmail,
-                description = "Automatically created for the risk assessment of AWS account " +
-                    "$awsAccountId (user-mapping import)",
-                cloudAccountId = awsAccountId
+        // Best-effort duplicate mitigation: find-then-save is racy (asset.name has no DB
+        // unique constraint yet - see docs/RACE_CONDITIONS.md), so if a concurrent import
+        // created the asset between the check and the save, fall back to the winner's row.
+        return try {
+            assetRepository.save(
+                Asset(
+                    name = assetName,
+                    type = ACCOUNT_ASSET_TYPE,
+                    owner = ownerEmail,
+                    description = "Automatically created for the risk assessment of AWS account " +
+                        "$awsAccountId (user-mapping import)",
+                    cloudAccountId = awsAccountId
+                )
             )
-        )
+        } catch (e: Exception) {
+            assetRepository.findByName(assetName).orElseThrow { e }
+        }
     }
 
     // --- Deadline reminders -------------------------------------------------
@@ -236,14 +264,21 @@ open class AwsAccountRiskAssessmentService(
      * [com.secman.scheduler.AwsAccountRiskAssessmentReminderScheduler];
      * [today] is injectable for tests.
      *
-     * Idempotent across restarts: each reminder is stamped on the tracking row
-     * after a successful send. If the 2-day reminder was missed (e.g. downtime),
-     * the 1-day pass sends a single catch-up reminder and stamps both.
-     * Only open assessments (status STARTED) are reminded.
+     * Idempotent across restarts AND across concurrent runs: each reminder slot is
+     * claimed via an atomic guarded UPDATE (claim-before-send) committed per row, so
+     * overlapping scheduler runs (multi-instance deploys, a run overlapping a slow
+     * previous one) can never double-send. If the 2-day reminder was missed (e.g.
+     * downtime), the 1-day claim stamps both slots and a single catch-up reminder is
+     * sent. When a send fails after a successful claim, the claim is released
+     * (best-effort) so the next run retries. Only open assessments (status STARTED)
+     * are reminded.
+     *
+     * Deliberately NOT @Transactional: the claims must commit per row to be visible
+     * to concurrent runs, and a method-wide transaction rolling back after emails
+     * went out would un-stamp already-sent reminders.
      *
      * @return number of reminder emails sent
      */
-    @Transactional
     open fun processDeadlineReminders(today: LocalDate = LocalDate.now()): Int {
         val pending = trackingRepository.findPendingDeadlineReminders(today, today.plusDays(2))
         if (pending.isEmpty()) return 0
@@ -253,27 +288,23 @@ open class AwsAccountRiskAssessmentService(
             val endDate = tracking.riskAssessment.endDate
             val daysLeft = ChronoUnit.DAYS.between(today, endDate)
             try {
-                when {
-                    daysLeft <= 1 && tracking.reminderOneDaySentAt == null -> {
-                        if (sendReminder(tracking, daysLeft, endDate)) {
-                            val now = LocalDateTime.now()
-                            tracking.reminderOneDaySentAt = now
-                            // Collapse a missed 2-day reminder into this send —
-                            // two reminder mails in the same run would be noise.
-                            if (tracking.reminderTwoDaysSentAt == null) {
-                                tracking.reminderTwoDaysSentAt = now
-                            }
-                            trackingRepository.update(tracking)
-                            sent++
-                        }
-                    }
-                    daysLeft == 2L && tracking.reminderTwoDaysSentAt == null -> {
-                        if (sendReminder(tracking, daysLeft, endDate)) {
-                            tracking.reminderTwoDaysSentAt = LocalDateTime.now()
-                            trackingRepository.update(tracking)
-                            sent++
-                        }
-                    }
+                val claimedAt = LocalDateTime.now()
+                val isOneDaySlot = daysLeft <= 1 && tracking.reminderOneDaySentAt == null
+                val isTwoDaySlot = !isOneDaySlot && daysLeft == 2L && tracking.reminderTwoDaysSentAt == null
+
+                val claimed = when {
+                    isOneDaySlot -> trackingRepository.claimOneDayReminder(tracking.id!!, claimedAt) == 1
+                    isTwoDaySlot -> trackingRepository.claimTwoDayReminder(tracking.id!!, claimedAt) == 1
+                    else -> false
+                }
+                if (!claimed) continue
+
+                if (sendReminder(tracking, daysLeft, endDate)) {
+                    sent++
+                } else {
+                    log.warn("Deadline reminder send failed for tracking {} - releasing claim for retry", tracking.id)
+                    if (isOneDaySlot) trackingRepository.releaseOneDayReminderClaim(tracking.id!!, claimedAt)
+                    else trackingRepository.releaseTwoDayReminderClaim(tracking.id!!, claimedAt)
                 }
             } catch (e: Exception) {
                 log.error("Failed to send deadline reminder for tracking {} (assessment {}): {}",

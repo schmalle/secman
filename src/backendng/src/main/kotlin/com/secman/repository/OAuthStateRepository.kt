@@ -15,7 +15,13 @@ interface OAuthStateRepository : JpaRepository<OAuthState, Long> {
     @Query("DELETE FROM OAuthState o WHERE o.expiresAt < :now")
     fun deleteExpiredStates(now: LocalDateTime = LocalDateTime.now())
 
-    fun deleteByStateToken(stateToken: String)
+    /**
+     * Deletes the state row and reports how many rows were removed. The count makes the
+     * delete usable as an atomic single-use claim: exactly one of two concurrent callbacks
+     * carrying the same state gets 1, the other gets 0.
+     */
+    @Query("DELETE FROM OAuthState o WHERE o.stateToken = :stateToken")
+    fun deleteByStateToken(stateToken: String): Int
 
     /**
      * Count active states for a provider (for observability/debugging)

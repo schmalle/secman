@@ -66,4 +66,9 @@ interface ExportJobRepository : JpaRepository<ExportJob, String> {
      * Find all jobs with a specific status
      */
     fun findByStatus(status: ExportJobStatus): List<ExportJob>
+
+    /**
+     * Find all jobs in any of the given statuses (post-insert concurrency-cap recheck)
+     */
+    fun findByStatusIn(statuses: List<ExportJobStatus>): List<ExportJob>
 }

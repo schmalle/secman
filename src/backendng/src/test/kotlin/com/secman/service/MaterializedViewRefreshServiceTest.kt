@@ -58,6 +58,9 @@ class MaterializedViewRefreshServiceTest {
             vulnerabilityService,
             awsCleanServerKpiService
         )
+        // In production Micronaut injects the AOP self-proxy; in unit tests the plain
+        // instance is fine (no transactionality to assert here).
+        service.selfProvider = jakarta.inject.Provider { service }
     }
 
     private fun overdueVulnerability(): Vulnerability {

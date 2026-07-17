@@ -167,6 +167,15 @@ open class OAuthController(
             logger.info("OAuth state validated: providerId={}, createdAt={}, expiresAt={}",
                 oauthState.providerId, oauthState.createdAt, oauthState.expiresAt)
 
+            // Atomically consume the single-use state BEFORE processing. Of two concurrent
+            // callbacks with the same state (double-submit, provider retry) exactly one wins
+            // this claim; the loser is rejected here instead of racing through token
+            // exchange and user provisioning.
+            if (!oauthService.claimOAuthState(state)) {
+                logger.error("OAuth state already consumed by a concurrent callback (first 10 chars: {})", state.take(10) + "...")
+                return HttpResponse.redirect<Any>(URI.create("$frontendBaseUrl/login?error=oauth_state_mismatch"))
+            }
+
             // Process OAuth callback with the already-validated state
             val result = oauthService.handleCallback(oauthState, code)
 
@@ -227,6 +236,14 @@ open class OAuthController(
             }
 
             val oauthState = stateOpt.get()
+
+            // Atomic single-use claim - see the redirect callback above.
+            if (!oauthService.claimOAuthState(callbackRequest.state)) {
+                logger.error("OAuth state already consumed by a concurrent callback (first 10 chars: {})",
+                    callbackRequest.state.take(10) + "...")
+                return HttpResponse.badRequest(ErrorResponse("Invalid or expired state parameter. Please try again."))
+            }
+
             val result = oauthService.handleCallback(oauthState, callbackRequest.code)
             
             when (result) {

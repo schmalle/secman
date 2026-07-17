@@ -420,30 +420,43 @@ open class UserMappingService(
     open fun applyFutureUserMapping(user: User): Int {
         var appliedCount = 0
 
-        // Find future user mappings (case-insensitive email match, no user reference, not yet applied)
-        val futureMappings = userMappingRepository.findByEmail(user.email)
-            .filter { it.user == null && it.appliedAt == null }
-
-        if (futureMappings.isEmpty()) {
-            log.debug("No future user mappings found for email: ${user.email}")
+        // Re-load the user inside this transaction instead of trusting the detached instance
+        // from the event. The @Async listener races the publisher: if a (future) transactional
+        // caller publishes UserCreatedEvent before its own commit, the user row is not yet
+        // visible here (READ COMMITTED) — linking mappings to the detached instance would then
+        // either violate the FK or point at a row that may still be rolled back. Skipping is
+        // safe: the mapping stays unapplied and is picked up on the next relevant event.
+        val managedUser = user.id?.let { userRepository.findById(it).orElse(null) }
+        if (managedUser == null) {
+            log.warn("applyFutureUserMapping: user id=${user.id} email=${user.email} not visible yet " +
+                "(publisher transaction not committed?) - skipping mapping application")
             return 0
         }
 
-        log.info("Found ${futureMappings.size} future user mapping(s) for email: ${user.email}")
+        // Find future user mappings (case-insensitive email match, no user reference, not yet applied)
+        val futureMappings = userMappingRepository.findByEmail(managedUser.email)
+            .filter { it.user == null && it.appliedAt == null }
+
+        if (futureMappings.isEmpty()) {
+            log.debug("No future user mappings found for email: ${managedUser.email}")
+            return 0
+        }
+
+        log.info("Found ${futureMappings.size} future user mapping(s) for email: ${managedUser.email}")
 
         for (futureMapping in futureMappings) {
             // Check for conflicting pre-existing mapping (mapping with user reference for same composite key)
             val hasConflict = if (futureMapping.ipAddress != null) {
                 userMappingRepository.existsByEmailAndIpAddressAndDomain(
-                    user.email, futureMapping.ipAddress, futureMapping.domain
+                    managedUser.email, futureMapping.ipAddress, futureMapping.domain
                 ) && userMappingRepository.findByEmailAndIpAddressAndDomain(
-                    user.email, futureMapping.ipAddress, futureMapping.domain
+                    managedUser.email, futureMapping.ipAddress, futureMapping.domain
                 ).map { it.user != null }.orElse(false)
             } else {
                 userMappingRepository.existsByEmailAndAwsAccountIdAndDomain(
-                    user.email, futureMapping.awsAccountId, futureMapping.domain
+                    managedUser.email, futureMapping.awsAccountId, futureMapping.domain
                 ) && userMappingRepository.findByEmailAndAwsAccountIdAndDomain(
-                    user.email, futureMapping.awsAccountId, futureMapping.domain
+                    managedUser.email, futureMapping.awsAccountId, futureMapping.domain
                 ).map { it.user != null }.orElse(false)
             }
 
@@ -456,15 +469,15 @@ open class UserMappingService(
             }
 
             // Apply the future mapping to the user
-            futureMapping.user = user
+            futureMapping.user = managedUser
             futureMapping.appliedAt = Instant.now()
             userMappingRepository.update(futureMapping)
 
-            log.info("Applied future user mapping id=${futureMapping.id} to user ${user.email}")
+            log.info("Applied future user mapping id=${futureMapping.id} to user ${managedUser.email}")
             appliedCount++
         }
 
-        log.info("Applied $appliedCount future user mapping(s) to user ${user.email}")
+        log.info("Applied $appliedCount future user mapping(s) to user ${managedUser.email}")
         return appliedCount
     }
 

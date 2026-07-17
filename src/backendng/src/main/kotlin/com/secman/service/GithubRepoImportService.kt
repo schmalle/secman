@@ -10,6 +10,8 @@ import com.secman.repository.GithubRepoFindingSnapshotRepository
 import com.secman.repository.GithubRepositoryRepository
 import io.micronaut.serde.annotation.Serdeable
 import jakarta.inject.Singleton
+import jakarta.persistence.EntityManager
+import jakarta.persistence.LockModeType
 import jakarta.transaction.Transactional
 import org.slf4j.LoggerFactory
 import java.time.Instant
@@ -36,9 +38,19 @@ open class GithubRepoImportService(
     private val snapshotRepository: GithubRepoFindingSnapshotRepository,
     private val alertRepository: GithubRepoDependabotAlertRepository,
     private val githubClient: GithubAppClientService,
-    private val ownerEmailMappingRepository: GithubOwnerEmailMappingRepository
+    private val ownerEmailMappingRepository: GithubOwnerEmailMappingRepository,
+    private val entityManager: EntityManager
 ) {
     private val logger = LoggerFactory.getLogger(GithubRepoImportService::class.java)
+
+    /**
+     * Provider for self-reference so persistRepo's @Transactional applies on the internal
+     * call (AOP proxy bypass fix, same as CrowdStrikeVulnerabilityImportService / Feature 053).
+     * Without it the per-repo snapshot insert, alert delete and alert reinsert each commit
+     * separately - a crash or concurrent import can leave a repo with no or duplicated alerts.
+     */
+    @jakarta.inject.Inject
+    internal lateinit var selfProvider: jakarta.inject.Provider<GithubRepoImportService>
 
     @Serdeable
     data class ImportResult(
@@ -78,7 +90,11 @@ open class GithubRepoImportService(
                 }
                 totalCritical += counts.critical
                 totalHigh += counts.high
-                val wasNew = persistRepo(repoDto, counts, now)
+                // Via the self proxy so @Transactional applies; deadlock-retried because the
+                // per-repo transaction takes a PESSIMISTIC_WRITE lock on the repo row.
+                val wasNew = DeadlockRetry.withRetry("github-import ${repoDto.fullName}") {
+                    selfProvider.get().persistRepo(repoDto, counts, now)
+                }
                 if (wasNew) created++ else updated++
             } catch (e: Exception) {
                 logger.warn("GitHub import: failed for {}: {}", repoDto.fullName, e.message)
@@ -109,9 +125,19 @@ open class GithubRepoImportService(
         counts: GithubAppClientService.SeverityCounts,
         now: Instant
     ): Boolean {
-        val existing = githubRepositoryRepository.findByGithubRepoId(repoDto.repoId)
+        val resolved = githubRepositoryRepository.findByGithubRepoId(repoDto.repoId)
             .or { githubRepositoryRepository.findByFullName(repoDto.fullName) }
             .orElse(null)
+
+        // Serialize concurrent imports of the same repo (CLI + UI "Import now" can overlap):
+        // a PESSIMISTIC_WRITE row lock makes the snapshot insert + alert delete + alert
+        // reinsert below mutually exclusive per repo. Without it, interleaved delete/insert
+        // pairs from two runs produce duplicated alert rows. New repos can't be locked
+        // (no row yet) - there the unique constraints on github_repo_id / full_name make
+        // the second concurrent creator fail instead of duplicating.
+        val existing = resolved?.id?.let {
+            entityManager.find(GithubRepository::class.java, it, LockModeType.PESSIMISTIC_WRITE)
+        }
 
         val isNew = existing == null
         val repo = existing ?: GithubRepository()
