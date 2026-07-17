@@ -73,7 +73,7 @@ open class ExportJobService(
      * CrowdStrikeVulnerabilityImportService, Feature 053).
      */
     @jakarta.inject.Inject
-    internal lateinit var selfProvider: jakarta.inject.Provider<ExportJobService>
+    private lateinit var selfProvider: jakarta.inject.Provider<ExportJobService>
 
     companion object {
         // Lifecycle stage labels persisted to ExportJob.currentStage so the UI can

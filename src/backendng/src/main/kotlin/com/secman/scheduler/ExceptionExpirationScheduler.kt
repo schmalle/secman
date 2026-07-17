@@ -52,7 +52,7 @@ open class ExceptionExpirationScheduler(
      * self-invocation - same pattern as CrowdStrikeVulnerabilityImportService).
      */
     @Inject
-    internal lateinit var selfProvider: jakarta.inject.Provider<ExceptionExpirationScheduler>
+    private lateinit var selfProvider: jakarta.inject.Provider<ExceptionExpirationScheduler>
 
     /**
      * Claim the APPROVED→EXPIRED transition in an independently committed transaction.

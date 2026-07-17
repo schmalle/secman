@@ -50,7 +50,7 @@ open class GithubRepoImportService(
      * separately - a crash or concurrent import can leave a repo with no or duplicated alerts.
      */
     @jakarta.inject.Inject
-    internal lateinit var selfProvider: jakarta.inject.Provider<GithubRepoImportService>
+    private lateinit var selfProvider: jakarta.inject.Provider<GithubRepoImportService>
 
     @Serdeable
     data class ImportResult(

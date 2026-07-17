@@ -54,7 +54,7 @@ open class MaterializedViewRefreshService(
      * observe an empty half-swapped view.
      */
     @jakarta.inject.Inject
-    internal lateinit var selfProvider: jakarta.inject.Provider<MaterializedViewRefreshService>
+    private lateinit var selfProvider: jakarta.inject.Provider<MaterializedViewRefreshService>
 
     // SSE sink for broadcasting refresh progress to all connected clients
     // Many().multicast() allows multiple subscribers
