@@ -9,7 +9,6 @@ import com.secman.service.VulnerabilityExceptionRequestService
 import com.secman.service.VulnerabilityExceptionService
 import jakarta.inject.Inject
 import jakarta.inject.Singleton
-import jakarta.transaction.Transactional
 import java.time.LocalDateTime
 import java.time.format.DateTimeParseException
 
@@ -85,7 +84,6 @@ open class CreateExceptionRequestTool(
         )
     )
 
-    @Transactional
     override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
         // FR-006: Require User Delegation
         if (!context.hasDelegation()) {
