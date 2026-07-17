@@ -86,7 +86,6 @@ const fieldGroups: Record<Exclude<TabKey, 'relations'>, Array<{ name: keyof Appl
   operation: [],
   technical: [
     { name: 'applicationTechnology', label: 'Application technology', options: ['SAAS', 'Other'] },
-    { name: 'applicationArchitecture', label: 'Application architecture', options: ['Legacy', 'Container'] },
     { name: 'backupRecoveryUrl', label: 'Backup and recovery URL' },
     { name: 'cmdbWorkspaceUrl', label: 'CMDB workspace URL' },
   ],
