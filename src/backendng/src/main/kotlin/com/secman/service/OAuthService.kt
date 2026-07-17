@@ -642,10 +642,37 @@ open class OAuthService(
     }
 
     /**
+     * Atomically consume a single-use OAuth state. Deletes the row in an independently
+     * committed transaction and returns true only for the caller that actually removed it.
+     *
+     * This is the state-side half of double-callback protection: two concurrent callbacks
+     * carrying the same state (browser double-submit, provider retry) both pass the read-only
+     * [findStateByValueWithRetry] lookup, but exactly one wins this claim. Previously the
+     * state was only deleted at the END of handleCallback, so during the whole token-exchange
+     * window it stayed reusable and only the IdP's single-use authorization code prevented a
+     * duplicate login/user-creation flow on secman's side.
+     */
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    open fun claimOAuthState(stateToken: String): Boolean {
+        return try {
+            val deleted = oauthStateRepository.deleteByStateToken(stateToken)
+            if (deleted == 0) {
+                logger.warn("OAuth state {}... already consumed by a concurrent callback", stateToken.take(10))
+            }
+            deleted > 0
+        } catch (e: Exception) {
+            logger.error("Failed to claim OAuth state {}...: {}", stateToken.take(10), e.message)
+            false
+        }
+    }
+
+    /**
      * Delete OAuth state token quietly in its own transaction.
      *
      * Commits independently so state cleanup never interferes with the main flow.
      * Non-fatal: orphaned states are cleaned up by the scheduled job every 5 minutes.
+     * With the up-front [claimOAuthState] in the controller these calls are usually
+     * 0-row no-ops, kept as belt-and-braces cleanup on every exit path.
      */
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     open fun deleteOAuthStateQuietly(stateToken: String) {
@@ -966,6 +993,16 @@ open class OAuthService(
 
             UserCreationResult(user = savedUser, isNewUser = true)
         } catch (e: jakarta.persistence.PersistenceException) {
+            // Two near-simultaneous first logins for the same new email can both pass the
+            // findByEmailIgnoreCase check and both attempt the insert; the loser hits the
+            // unique constraint on username/email. Instead of failing that login, re-fetch:
+            // the winner's committed user is the account this login belongs to.
+            val concurrentlyCreated = userRepository.findByEmailIgnoreCase(email).orElse(null)
+            if (concurrentlyCreated != null) {
+                logger.warn("OAuth user creation lost a concurrent-provisioning race for email={} - " +
+                    "reusing user id={} created by the winner", email, concurrentlyCreated.id)
+                return UserCreationResult(user = concurrentlyCreated, isNewUser = false)
+            }
             logger.error("Database error creating OAuth user (email={}, username={}): {} - {}",
                 email, username, e.javaClass.simpleName, e.message, e)
             null

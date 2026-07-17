@@ -2,7 +2,6 @@ package com.secman.service
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.secman.domain.Vulnerability
-import com.secman.domain.VulnerabilityStatisticsCache
 import com.secman.dto.AwsCleanServerKpiCacheData
 import com.secman.dto.AwsCleanServerKpiResponse
 import com.secman.repository.AssetRepository
@@ -130,22 +129,8 @@ open class AwsCleanServerKpiService(
 
     @Transactional
     open fun upsertCache(json: String, durationMs: Long) {
-        val existing = cacheRepository.findByCacheKey(CACHE_KEY)
-        if (existing.isPresent) {
-            val entry = existing.get()
-            entry.cachedJson = json
-            entry.lastRefreshedAt = LocalDateTime.now()
-            entry.refreshDurationMs = durationMs
-            cacheRepository.update(entry)
-        } else {
-            cacheRepository.save(
-                VulnerabilityStatisticsCache(
-                    cacheKey = CACHE_KEY,
-                    cachedJson = json,
-                    lastRefreshedAt = LocalDateTime.now(),
-                    refreshDurationMs = durationMs
-                )
-            )
-        }
+        // Atomic native upsert on the cache_key unique index - see
+        // VulnerabilityStatisticsCacheRepository.upsertByCacheKey for the race this closes.
+        cacheRepository.upsertByCacheKey(CACHE_KEY, json, LocalDateTime.now(), durationMs)
     }
 }

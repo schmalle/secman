@@ -67,6 +67,14 @@ open class ExportJobService(
     private val log = LoggerFactory.getLogger(ExportJobService::class.java)
     private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
 
+    /**
+     * Provider for self-reference so internal calls to @Transactional(REQUIRES_NEW) members
+     * (createJobRow, markJobAsFailed) go through the AOP proxy (same pattern as
+     * CrowdStrikeVulnerabilityImportService, Feature 053).
+     */
+    @jakarta.inject.Inject
+    internal lateinit var selfProvider: jakarta.inject.Provider<ExportJobService>
+
     companion object {
         // Lifecycle stage labels persisted to ExportJob.currentStage so the UI can
         // surface "Counting rows...", "Writing file...", etc. instead of a bare %.
@@ -100,7 +108,6 @@ open class ExportJobService(
      * @return Created job DTO
      * @throws IllegalStateException if rate limits exceeded
      */
-    @Transactional
     open fun startExport(authentication: Authentication, exportType: ExportType = ExportType.VULNERABILITIES): ExportJobDto {
         val username = authentication.name
         log.info("Starting export job for user: {}, type: {}", username, exportType)
@@ -111,6 +118,9 @@ open class ExportJobService(
         // Auto-reset zombie jobs that got stuck (e.g., server restart during processing)
         autoResetStaleJobs(username, exportType, runningStatuses)
 
+        // Fast pre-checks. These are advisory only: two concurrent requests can both pass
+        // them before either insert is visible (READ COMMITTED). The authoritative check is
+        // the post-insert recheck below.
         val userRunningJobs = exportJobRepository.countByUsernameAndExportTypeAndStatusIn(username, exportType, runningStatuses)
         if (userRunningJobs >= maxConcurrentPerUser) {
             log.warn("User {} already has {} running {} export(s), max allowed: {}", username, userRunningJobs, exportType, maxConcurrentPerUser)
@@ -123,19 +133,25 @@ open class ExportJobService(
             throw IllegalStateException("Server is busy with exports. Please try again in a few minutes.")
         }
 
-        // Create job
+        // Create + commit the job row (REQUIRES_NEW via the self proxy), then re-verify the
+        // caps against committed state. Insert-then-recheck makes the limits enforceable:
+        // when N requests race past the pre-checks, every one of them now sees all N
+        // committed PENDING rows and only the jobs ranked within the cap (oldest first,
+        // id as tie-break) survive; the rest fail themselves deterministically.
         val jobId = UUID.randomUUID().toString()
-        val job = ExportJob(
-            id = jobId,
-            username = username,
-            status = ExportJobStatus.PENDING,
-            exportType = exportType
-        )
+        val savedJob = selfProvider.get().createJobRow(jobId, username, exportType)
 
-        val savedJob = exportJobRepository.save(job)
-        // Force immediate flush to avoid MariaDB JDBC driver batching bug
-        // (IndexOutOfBoundsException in handleStandardResults)
-        entityManager.flush()
+        val overCapReason = checkCapsAfterInsert(savedJob, exportType, runningStatuses)
+        if (overCapReason != null) {
+            log.warn("Export job {} lost the concurrency-cap race ({}), failing it", jobId, overCapReason)
+            selfProvider.get().markJobAsFailed(jobId, "Rejected at start: $overCapReason")
+            throw IllegalStateException(
+                if (overCapReason.startsWith("per-user"))
+                    "You already have a ${exportType.name.lowercase()} export in progress. Please wait for it to complete."
+                else
+                    "Server is busy with exports. Please try again in a few minutes."
+            )
+        }
         log.info("Created export job: {}", jobId)
 
         // Start async processing using ExecutorService
@@ -155,6 +171,50 @@ open class ExportJobService(
         }
 
         return ExportJobDto.fromEntity(savedJob)
+    }
+
+    /**
+     * Insert the new job row in its own committed transaction so the cap recheck
+     * (and concurrent requests' rechecks) can see it.
+     */
+    @Transactional(TxType.REQUIRES_NEW)
+    open fun createJobRow(jobId: String, username: String, exportType: ExportType): ExportJob {
+        val job = ExportJob(
+            id = jobId,
+            username = username,
+            status = ExportJobStatus.PENDING,
+            exportType = exportType
+        )
+        val savedJob = exportJobRepository.save(job)
+        // Force immediate flush to avoid MariaDB JDBC driver batching bug
+        // (IndexOutOfBoundsException in handleStandardResults)
+        entityManager.flush()
+        return savedJob
+    }
+
+    /**
+     * Post-insert cap verification. Returns null when [ownJob] is within both caps, or a
+     * short reason string when it must be rejected. Ranking is (createdAt, id) ascending,
+     * so under a race exactly the oldest `cap` jobs survive on every contender's view of
+     * committed state - deterministic, no livelock where all racers self-reject.
+     */
+    private fun checkCapsAfterInsert(ownJob: ExportJob, exportType: ExportType, runningStatuses: List<ExportJobStatus>): String? {
+        val comparator = compareBy<ExportJob>({ it.createdAt }, { it.id })
+
+        val userJobs = exportJobRepository.findByUsernameAndStatusIn(ownJob.username, runningStatuses)
+            .filter { it.exportType == exportType }
+            .sortedWith(comparator)
+        val userRank = userJobs.indexOfFirst { it.id == ownJob.id }
+        if (userRank >= maxConcurrentPerUser) {
+            return "per-user cap exceeded (rank ${userRank + 1} of max $maxConcurrentPerUser)"
+        }
+
+        val globalJobs = exportJobRepository.findByStatusIn(runningStatuses).sortedWith(comparator)
+        val globalRank = globalJobs.indexOfFirst { it.id == ownJob.id }
+        if (globalRank >= maxConcurrentGlobal) {
+            return "global cap exceeded (rank ${globalRank + 1} of max $maxConcurrentGlobal)"
+        }
+        return null
     }
 
     /**
@@ -400,6 +460,12 @@ open class ExportJobService(
     @Transactional(TxType.REQUIRES_NEW)
     open fun markJobAsProcessing(jobId: String) {
         val job = exportJobRepository.findById(jobId).orElse(null) ?: return
+        // Status guard: never resurrect a job that a concurrent actor (cancel endpoint,
+        // stale-job auto-reset) already moved to a terminal state.
+        if (job.status != ExportJobStatus.PENDING) {
+            log.warn("Skipping PROCESSING transition for job {} - current status is {}", jobId, job.status)
+            return
+        }
         job.status = ExportJobStatus.PROCESSING
         job.startedAt = LocalDateTime.now()
         exportJobRepository.update(job)
@@ -440,6 +506,15 @@ open class ExportJobService(
     @Transactional(TxType.REQUIRES_NEW)
     open fun markJobAsCompleted(jobId: String, filePath: String, fileName: String, fileSizeBytes: Long, totalItems: Long) {
         val job = exportJobRepository.findById(jobId).orElse(null) ?: return
+        // Status guard: a job that was auto-reset to FAILED (stale heartbeat) or CANCELLED
+        // while this worker was still writing the file must stay terminal - blindly setting
+        // COMPLETED here resurrected FAILED jobs and produced FAILED->COMPLETED flip-flops.
+        if (job.status != ExportJobStatus.PENDING && job.status != ExportJobStatus.PROCESSING) {
+            log.warn("Skipping COMPLETED transition for job {} - already terminal ({}); deleting orphaned file {}",
+                jobId, job.status, filePath)
+            runCatching { java.io.File(filePath).delete() }
+            return
+        }
         job.status = ExportJobStatus.COMPLETED
         job.completedAt = LocalDateTime.now()
         job.filePath = filePath
@@ -455,6 +530,11 @@ open class ExportJobService(
     @Transactional(TxType.REQUIRES_NEW)
     open fun markJobAsFailed(jobId: String, errorMessage: String) {
         val job = exportJobRepository.findById(jobId).orElse(null) ?: return
+        // Status guard: don't overwrite COMPLETED/CANCELLED/EXPIRED set by a concurrent actor.
+        if (job.status != ExportJobStatus.PENDING && job.status != ExportJobStatus.PROCESSING) {
+            log.warn("Skipping FAILED transition for job {} - already terminal ({})", jobId, job.status)
+            return
+        }
         job.status = ExportJobStatus.FAILED
         job.completedAt = LocalDateTime.now()
         job.errorMessage = errorMessage

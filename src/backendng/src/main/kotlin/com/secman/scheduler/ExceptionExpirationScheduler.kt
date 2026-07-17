@@ -47,6 +47,37 @@ open class ExceptionExpirationScheduler(
     private val logger = LoggerFactory.getLogger(ExceptionExpirationScheduler::class.java)
 
     /**
+     * Self proxy so the claim helpers below run in REQUIRES_NEW transactions even though
+     * they are invoked from within this class (Micronaut AOP is bypassed on direct
+     * self-invocation - same pattern as CrowdStrikeVulnerabilityImportService).
+     */
+    @Inject
+    internal lateinit var selfProvider: jakarta.inject.Provider<ExceptionExpirationScheduler>
+
+    /**
+     * Claim the APPROVED→EXPIRED transition in an independently committed transaction.
+     * Committing per claim (instead of at the end of the whole scheduler run) makes the
+     * claim immediately visible to an overlapping run on another instance, and keeps the
+     * row lock held only for this short transaction rather than across email sending.
+     */
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    open fun claimExpirationNewTx(requestId: Long, now: LocalDateTime): Boolean =
+        requestRepository.claimStatusTransition(
+            requestId, ExceptionRequestStatus.APPROVED, ExceptionRequestStatus.EXPIRED, now
+        ) == 1
+
+    /** Claim the expiration reminder in an independently committed transaction. */
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    open fun claimReminderNewTx(requestId: Long, now: LocalDateTime): Boolean =
+        requestRepository.claimReminder(requestId, now) == 1
+
+    /** Release a reminder claim (best-effort) in an independently committed transaction. */
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    open fun releaseReminderClaimNewTx(requestId: Long, claimedAt: LocalDateTime) {
+        requestRepository.releaseReminderClaim(requestId, claimedAt)
+    }
+
+    /**
      * Daily job to expire old exception requests.
      *
      * **Schedule**: Every day at midnight (00:00:00)
@@ -59,7 +90,14 @@ open class ExceptionExpirationScheduler(
      * 4. Send expiration notification to requester
      * 5. Log audit event
      *
-     * **Transactional**: Ensures all updates succeed or roll back together
+     * **Concurrency**: each request is claimed via an atomic guarded UPDATE
+     * (APPROVED→EXPIRED) in its own REQUIRES_NEW transaction (committed per
+     * request), so overlapping runs (a second app instance at midnight, or a
+     * run overlapping a slow previous one) process each request's side effects
+     * (deactivation, emails, audit row) exactly once. The outer @Transactional
+     * remains for the Hibernate session (lazy vulnerability/asset access) —
+     * the loaded entities are intentionally never mutated here, since the claim
+     * bumps the row's @Version and a dirty flush at commit would collide with it.
      */
     @Scheduled(cron = "0 0 0 * * ?")
     @Transactional
@@ -81,9 +119,16 @@ open class ExceptionExpirationScheduler(
 
             for (request in expiredRequests) {
                 try {
-                    // Update request status to EXPIRED
-                    request.status = ExceptionRequestStatus.EXPIRED
-                    requestRepository.update(request)
+                    // Atomically claim the APPROVED→EXPIRED transition (REQUIRES_NEW, commits
+                    // immediately); a concurrent run that already expired this request gets a
+                    // 0-row no-op and skips all side effects. NOTE: the in-memory entity is
+                    // deliberately NOT mutated - the claim already bumped the row's @Version,
+                    // so a dirty flush at outer-transaction commit would throw an optimistic-
+                    // lock failure and roll back the deactivations below.
+                    if (!selfProvider.get().claimExpirationNewTx(request.id!!, now)) {
+                        logger.debug("Request {} already expired by a concurrent run - skipping", request.id)
+                        continue
+                    }
                     expiredCount++
 
                     logger.debug("Expired request {}: subject={}, scope={}, CVE={}, asset={}, expirationDate={}",
@@ -142,8 +187,15 @@ open class ExceptionExpirationScheduler(
      * **Process**:
      * 1. Find APPROVED requests with expiration_date between now and now + 7 days
      *    whose reminder_sent_at is still NULL
-     * 2. Send reminder email to requester
-     * 3. Persist reminder_sent_at so the email is sent exactly once, even across restarts
+     * 2. Atomically claim the reminder (guarded UPDATE on reminder_sent_at IS NULL),
+     *    then send the email - claim-before-send means overlapping runs (second app
+     *    instance, overlapping schedule) can never double-send
+     * 3. If the send fails after a successful claim, the claim is released (best-effort)
+     *    so the next run retries; a lost release skips the reminder rather than
+     *    duplicating it
+     *
+     * Outer @Transactional only provides the Hibernate session for lazy access;
+     * claims commit independently via REQUIRES_NEW and entities are never mutated.
      */
     @Scheduled(cron = "0 0 8 * * ?")
     @Transactional
@@ -166,13 +218,21 @@ open class ExceptionExpirationScheduler(
 
             for (request in expiringRequests) {
                 try {
-                    val sent = notificationService.notifyRequesterOfExpiration(request).get()
+                    val claimedAt = LocalDateTime.now()
+                    if (!selfProvider.get().claimReminderNewTx(request.id!!, claimedAt)) {
+                        logger.debug("Reminder for request {} already claimed by a concurrent run - skipping", request.id)
+                        continue
+                    }
+
+                    val sent = try {
+                        notificationService.notifyRequesterOfExpiration(request).get()
+                    } catch (e: Exception) {
+                        logger.error("Reminder send threw for request {}: {}", request.id, e.message)
+                        false
+                    }
 
                     if (sent) {
-                        request.reminderSentAt = LocalDateTime.now()
-                        requestRepository.update(request)
                         remindersSentCount++
-
                         logger.debug("Sent expiration reminder for request {}: CVE={}, asset={}, expiresIn={} days",
                             request.id,
                             request.vulnerability?.vulnerabilityId,
@@ -180,7 +240,8 @@ open class ExceptionExpirationScheduler(
                             java.time.temporal.ChronoUnit.DAYS.between(now.toLocalDate(), request.expirationDate.toLocalDate())
                         )
                     } else {
-                        logger.warn("Failed to send expiration reminder for request {}", request.id)
+                        logger.warn("Failed to send expiration reminder for request {} - releasing claim for retry", request.id)
+                        selfProvider.get().releaseReminderClaimNewTx(request.id!!, claimedAt)
                     }
 
                 } catch (e: Exception) {

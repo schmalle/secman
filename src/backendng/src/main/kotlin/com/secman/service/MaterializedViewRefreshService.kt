@@ -46,6 +46,16 @@ open class MaterializedViewRefreshService(
 ) {
     private val log = LoggerFactory.getLogger(MaterializedViewRefreshService::class.java)
 
+    /**
+     * Provider for self-reference so @Transactional/@Async apply on internal method calls
+     * (same AOP-proxy-bypass fix as CrowdStrikeVulnerabilityImportService, Feature 053).
+     * Without this, executeRefresh() invoking swapMaterializedView() on `this` bypasses the
+     * proxy and the delete+insert swap runs as two separate transactions — readers can then
+     * observe an empty half-swapped view.
+     */
+    @jakarta.inject.Inject
+    internal lateinit var selfProvider: jakarta.inject.Provider<MaterializedViewRefreshService>
+
     // SSE sink for broadcasting refresh progress to all connected clients
     // Many().multicast() allows multiple subscribers
     private val progressSink: Sinks.Many<RefreshProgressEvent> = Sinks.many().multicast().onBackpressureBuffer()
@@ -102,8 +112,21 @@ open class MaterializedViewRefreshService(
         )
         val savedJob = refreshJobRepository.save(job)
 
-        // Execute refresh asynchronously
-        executeRefreshAsync(savedJob.id!!)
+        // Re-check after insert: the running-job read above is not atomic with the save, so
+        // two concurrent triggers can both pass it and both insert a RUNNING job. The job with
+        // the lowest id wins; any younger duplicate marks itself failed and defers to the winner,
+        // guaranteeing at most one live refresh (and one atomic view swap) at a time.
+        val oldestRunning = refreshJobRepository.findRunningJobs().firstOrNull()
+        if (oldestRunning != null && oldestRunning.id != savedJob.id) {
+            log.info("Concurrent refresh trigger lost the race - deferring to running job: jobId={}, winnerJobId={}",
+                savedJob.id, oldestRunning.id)
+            savedJob.markFailed("Duplicate trigger - refresh job ${oldestRunning.id} was already running")
+            refreshJobRepository.update(savedJob)
+            return oldestRunning
+        }
+
+        // Execute refresh asynchronously (via self proxy so @Async applies on the internal call)
+        selfProvider.get().executeRefreshAsync(savedJob.id!!)
 
         return savedJob
     }
@@ -183,7 +206,7 @@ open class MaterializedViewRefreshService(
         }.toMap()
 
         job.totalAssets = assetsWithOverdueVulns.size
-        updateJob(job)
+        selfProvider.get().updateJob(job)
 
         log.info("Found {} assets with overdue vulnerabilities (after exception filtering)", assetsWithOverdueVulns.size)
 
@@ -199,7 +222,7 @@ open class MaterializedViewRefreshService(
             // Update progress
             val processed = ((batchIndex + 1) * BATCH_SIZE).coerceAtMost(assetsWithOverdueVulns.size)
             job.updateProgress(processed)
-            updateJob(job)
+            selfProvider.get().updateJob(job)
 
             // Publish progress event
             publishProgressEvent(job, "Processing assets...")
@@ -213,11 +236,13 @@ open class MaterializedViewRefreshService(
         // this point leaves the previous snapshot intact. The write phase is small
         // (one row per outdated asset), so a single transaction is cheap; only the
         // read/compute phase above must stay outside a transaction.
-        swapMaterializedView(materializedRecords)
+        // Invoked via the self proxy - a direct call on `this` would bypass the AOP
+        // interceptor and split the delete+insert into two separate transactions.
+        selfProvider.get().swapMaterializedView(materializedRecords)
 
         // Step 5: Mark job as completed
         job.markCompleted()
-        updateJob(job)
+        selfProvider.get().updateJob(job)
 
         // Step 6 & 7: Refresh derived data (statistics cache + heatmap)
         refreshDerivedData(allOverdueVulnerabilities)

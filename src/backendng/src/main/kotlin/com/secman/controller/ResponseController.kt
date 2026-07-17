@@ -221,17 +221,22 @@ open class ResponseController(
             
             // Validate all requirements have been answered
             if (responses.size < requirements.size) {
-                return HttpResponse.badRequest(ErrorResponse("INCOMPLETE_ASSESSMENT", 
+                return HttpResponse.badRequest(ErrorResponse("INCOMPLETE_ASSESSMENT",
                     "Assessment is incomplete. ${responses.size} of ${requirements.size} requirements answered."))
             }
-            
+
+            // Atomically claim the one-time token before completing the assessment. The
+            // isValid() check above is only a fast pre-check - two concurrent submits can
+            // both pass it. The guarded UPDATE (WHERE isUsed = false) lets exactly one
+            // request win; the loser gets 0 rows and is rejected here.
+            val claimed = assessmentTokenRepository.claimToken(token, java.time.LocalDateTime.now())
+            if (claimed == 0) {
+                return HttpResponse.badRequest(ErrorResponse("TOKEN_EXPIRED", "Assessment token has expired or been used"))
+            }
+
             // Mark assessment as completed
             assessment.status = "COMPLETED"
             riskAssessmentRepository.update(assessment)
-            
-            // Mark token as used
-            assessmentToken.markAsUsed()
-            assessmentTokenRepository.update(assessmentToken)
             
             // TODO: Send completion notification email to requestor
             

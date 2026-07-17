@@ -17,6 +17,10 @@ import java.time.Instant
 @Entity
 @Table(
     name = "github_repo_dependabot_alert",
+    uniqueConstraints = [
+        // Backstop against concurrent-import interleavings duplicating alert rows (V243).
+        UniqueConstraint(name = "uk_ghalert_repo_alert", columnNames = ["github_repository_id", "alert_number"])
+    ],
     indexes = [
         Index(name = "idx_ghalert_repo", columnList = "github_repository_id"),
         Index(name = "idx_ghalert_severity", columnList = "severity")

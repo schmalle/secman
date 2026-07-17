@@ -131,6 +131,39 @@ class AwsAccountRiskAssessmentServiceTest {
     }
 
     @Test
+    fun `skips creation when an open assessment is already tracked for the account-owner pair`() {
+        val openAssessment = RiskAssessment(
+            id = 77L,
+            startDate = LocalDate.now().minusDays(3),
+            endDate = LocalDate.now().plusDays(4),
+            assessmentBasisType = AssessmentBasisType.ASSET,
+            assessmentBasisId = 1L,
+            assessor = champion1,
+            requestor = admin
+        )
+        every { trackingRepository.findByAwsAccountId("111111111111") } returns listOf(
+            AwsAccountRiskAssessment(
+                id = 300L,
+                awsAccountId = "111111111111",
+                ownerEmail = "ALICE@corp.com", // case-insensitive match
+                riskAssessment = openAssessment,
+                useCaseName = "Cloud Onboarding"
+            )
+        )
+
+        val results = service.startAssessmentsForNewAccounts(
+            listOf(NewAccountImportInfo("111111111111", listOf("alice@corp.com"))),
+            "Cloud Onboarding", 7, 9L
+        )
+
+        assertThat(results.single().error).contains("already exists")
+        assertThat(results.single().riskAssessmentId).isEqualTo(77L)
+        verify(exactly = 0) { riskAssessmentRepository.save(any()) }
+        verify(exactly = 0) { trackingRepository.save(any()) }
+        verify(exactly = 0) { emailService.sendEmail(any(), any(), any(), any()) }
+    }
+
+    @Test
     fun `creates dedicated AWS account asset when none exists`() {
         val assetSlot = slot<Asset>()
         every { assetRepository.save(capture(assetSlot)) } answers { firstArg<Asset>().apply { id = 100L } }
@@ -236,14 +269,14 @@ class AwsAccountRiskAssessmentServiceTest {
         val today = LocalDate.now()
         val t = tracking(endDate = today.plusDays(2))
         every { trackingRepository.findPendingDeadlineReminders(today, today.plusDays(2)) } returns listOf(t)
+        every { trackingRepository.claimTwoDayReminder(300L, any()) } returns 1
 
         val sent = service.processDeadlineReminders(today)
 
         assertThat(sent).isEqualTo(1)
-        assertThat(t.reminderTwoDaysSentAt).isNotNull()
-        assertThat(t.reminderOneDaySentAt).isNull()
+        verify { trackingRepository.claimTwoDayReminder(300L, any()) }
         verify { emailService.sendEmail("alice@corp.com", match { it.contains("2 days") }, any(), any()) }
-        verify { trackingRepository.update(t) }
+        verify(exactly = 0) { trackingRepository.claimOneDayReminder(any(), any()) }
     }
 
     @Test
@@ -251,11 +284,12 @@ class AwsAccountRiskAssessmentServiceTest {
         val today = LocalDate.now()
         val t = tracking(endDate = today.plusDays(1), twoSent = true)
         every { trackingRepository.findPendingDeadlineReminders(today, today.plusDays(2)) } returns listOf(t)
+        every { trackingRepository.claimOneDayReminder(300L, any()) } returns 1
 
         val sent = service.processDeadlineReminders(today)
 
         assertThat(sent).isEqualTo(1)
-        assertThat(t.reminderOneDaySentAt).isNotNull()
+        verify { trackingRepository.claimOneDayReminder(300L, any()) }
         verify { emailService.sendEmail("alice@corp.com", match { it.contains("1 day") }, any(), any()) }
     }
 
@@ -264,13 +298,14 @@ class AwsAccountRiskAssessmentServiceTest {
         val today = LocalDate.now()
         val t = tracking(endDate = today.plusDays(1))
         every { trackingRepository.findPendingDeadlineReminders(today, today.plusDays(2)) } returns listOf(t)
+        // claimOneDayReminder stamps BOTH slots in one atomic UPDATE (catch-up collapse).
+        every { trackingRepository.claimOneDayReminder(300L, any()) } returns 1
 
         val sent = service.processDeadlineReminders(today)
 
         assertThat(sent).isEqualTo(1)
-        assertThat(t.reminderOneDaySentAt).isNotNull()
-        assertThat(t.reminderTwoDaysSentAt).isNotNull()
         verify(exactly = 1) { emailService.sendEmail(any(), any(), any(), any()) }
+        verify(exactly = 0) { trackingRepository.claimTwoDayReminder(any(), any()) }
     }
 
     @Test
@@ -286,16 +321,30 @@ class AwsAccountRiskAssessmentServiceTest {
     }
 
     @Test
-    fun `failed reminder email leaves state unstamped for retry on next run`() {
+    fun `lost reminder claim means a concurrent run already sent - no duplicate email`() {
         val today = LocalDate.now()
         val t = tracking(endDate = today.plusDays(2))
         every { trackingRepository.findPendingDeadlineReminders(today, today.plusDays(2)) } returns listOf(t)
+        // Another instance won the guarded UPDATE: 0 rows affected here.
+        every { trackingRepository.claimTwoDayReminder(300L, any()) } returns 0
+
+        val sent = service.processDeadlineReminders(today)
+
+        assertThat(sent).isEqualTo(0)
+        verify(exactly = 0) { emailService.sendEmail(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `failed reminder email releases the claim for retry on next run`() {
+        val today = LocalDate.now()
+        val t = tracking(endDate = today.plusDays(2))
+        every { trackingRepository.findPendingDeadlineReminders(today, today.plusDays(2)) } returns listOf(t)
+        every { trackingRepository.claimTwoDayReminder(300L, any()) } returns 1
         every { emailService.sendEmail(any(), any(), any(), any()) } returns CompletableFuture.completedFuture(false)
 
         val sent = service.processDeadlineReminders(today)
 
         assertThat(sent).isEqualTo(0)
-        assertThat(t.reminderTwoDaysSentAt).isNull()
-        verify(exactly = 0) { trackingRepository.update(any<AwsAccountRiskAssessment>()) }
+        verify { trackingRepository.releaseTwoDayReminderClaim(300L, any()) }
     }
 }

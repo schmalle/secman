@@ -29,6 +29,15 @@ interface AssessmentTokenRepository : JpaRepository<AssessmentToken, Long> {
     fun findValidTokensByRiskAssessmentId(assessmentId: Long, now: LocalDateTime): List<AssessmentToken>
     
     fun deleteByRiskAssessmentId(riskAssessmentId: Long): Long
-    
+
     fun deleteByExpiresAtBefore(date: LocalDateTime): Long
+
+    /**
+     * Atomically claim a one-time token. Returns 1 when this caller won the claim, 0 when the
+     * token was already used (or does not exist). A read-check-write of isUsed is racy — two
+     * concurrent submits both see isUsed=false and both complete the assessment; this guarded
+     * UPDATE lets exactly one submit win.
+     */
+    @Query("UPDATE AssessmentToken t SET t.isUsed = true, t.usedAt = :now, t.updatedAt = :now WHERE t.token = :token AND t.isUsed = false")
+    fun claimToken(token: String, now: LocalDateTime): Int
 }

@@ -9,6 +9,7 @@ import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import java.util.Optional
 
 class AssetMatchClearServiceTest {
 
@@ -136,6 +137,7 @@ class AssetMatchClearServiceTest {
         val gone = awsAsset(7L, "ghost", "111", "i-bbb")
         every { assetRepository.findAwsAssetsInAccounts(setOf("111")) } returns listOf(gone)
         every { assetRepository.countAwsAssetsInAccounts(setOf("111")) } returns 1L
+        every { assetRepository.findById(7L) } returns Optional.of(gone)
         every {
             assetCascadeDeleteService.deleteAsset(7L, "admin", forceTimeout = true, bulkOperationId = any())
         } returns mockk(relaxed = true)
@@ -230,6 +232,8 @@ class AssetMatchClearServiceTest {
         val ok = awsAsset(12L, "ok", "111", "i-y")
         every { assetRepository.findAwsAssetsInAccounts(setOf("111")) } returns listOf(blocked, ok)
         every { assetRepository.countAwsAssetsInAccounts(setOf("111")) } returns 10L  // brake disabled by ratio
+        every { assetRepository.findById(11L) } returns Optional.of(blocked)
+        every { assetRepository.findById(12L) } returns Optional.of(ok)
         every {
             assetCascadeDeleteService.deleteAsset(11L, "admin", forceTimeout = true, bulkOperationId = any())
         } throws IllegalStateException("referenced by risk")
@@ -250,6 +254,52 @@ class AssetMatchClearServiceTest {
         assertThat(result.errors).hasSize(1)
         assertThat(result.errors[0].assetName).isEqualTo("blocked")
         assertThat(result.status).isEqualTo("PARTIAL")
+    }
+
+    @Test
+    fun `re-verifies candidates at delete time and skips concurrently re-matched assets`() {
+        // Scan snapshot: i-bbb is stale (not in the resource set) → candidate.
+        val scanned = awsAsset(7L, "ghost", "111", "i-bbb")
+        every { assetRepository.findAwsAssetsInAccounts(setOf("111")) } returns listOf(scanned)
+        every { assetRepository.countAwsAssetsInAccounts(setOf("111")) } returns 1L
+        // Between scan and delete, a concurrent import re-matched the asset: its
+        // cloudInstanceId now IS in the snapshot → deleting it would destroy a live asset.
+        val reimported = awsAsset(7L, "ghost", "111", "i-aaa")
+        every { assetRepository.findById(7L) } returns Optional.of(reimported)
+
+        val result = service.clear(
+            accountIds = listOf("111"),
+            resourceIds = listOf("i-aaa"),
+            dryRun = false,
+            username = "admin",
+            maxDeletePercent = 100
+        )
+
+        assertThat(result.candidateCount).isEqualTo(1)
+        assertThat(result.deletedCount).isEqualTo(0)
+        assertThat(result.skippedCount).isEqualTo(1)
+        assertThat(result.errors).isEmpty()
+        verify(exactly = 0) { assetCascadeDeleteService.deleteAsset(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `re-verification skips candidates deleted by a concurrent run`() {
+        val scanned = awsAsset(8L, "gone", "111", "i-bbb")
+        every { assetRepository.findAwsAssetsInAccounts(setOf("111")) } returns listOf(scanned)
+        every { assetRepository.countAwsAssetsInAccounts(setOf("111")) } returns 1L
+        every { assetRepository.findById(8L) } returns Optional.empty()
+
+        val result = service.clear(
+            accountIds = listOf("111"),
+            resourceIds = listOf("i-aaa"),
+            dryRun = false,
+            username = "admin",
+            maxDeletePercent = 100
+        )
+
+        assertThat(result.deletedCount).isEqualTo(0)
+        assertThat(result.skippedCount).isEqualTo(1)
+        verify(exactly = 0) { assetCascadeDeleteService.deleteAsset(any(), any(), any(), any()) }
     }
 
     private fun awsAsset(id: Long, name: String, account: String, instance: String): Asset =
