@@ -13,10 +13,11 @@ import {
 import { connectToBadgeUpdates } from '../services/exceptionBadgeService';
 
 const Sidebar = () => {
+    const [assetsExpanded, setAssetsExpanded] = useState(false);
+    const [ioMenuOpen, setIoMenuOpen] = useState(false);
     const [requirementsExpanded, setRequirementsExpanded] = useState(false);
     const [riskManagementExpanded, setRiskManagementExpanded] = useState(false);
     const [vulnMenuOpen, setVulnMenuOpen] = useState(false);
-    const [ioMenuOpen, setIoMenuOpen] = useState(false);
     const [exportMenuOpen, setExportMenuOpen] = useState(false);
     const [adminMenuOpen, setAdminMenuOpen] = useState(false);
     const [isAdmin, setIsAdmin] = useState(false);
@@ -30,49 +31,64 @@ const Sidebar = () => {
     const [domainCount, setDomainCount] = useState<number>(0);
     const [pendingExceptionCount, setPendingExceptionCount] = useState<number>(0);
 
+    const toggleAssets = () => {
+        setAssetsExpanded(!assetsExpanded);
+        // Collapse all other sections
+        setRequirementsExpanded(false);
+        setRiskManagementExpanded(false);
+        setVulnMenuOpen(false);
+        setAdminMenuOpen(false);
+        setIoMenuOpen(false);
+    };
+
     const toggleRequirements = () => {
         setRequirementsExpanded(!requirementsExpanded);
         // Collapse all other sections
+        setAssetsExpanded(false);
         setRiskManagementExpanded(false);
         setVulnMenuOpen(false);
-        setIoMenuOpen(false);
         setAdminMenuOpen(false);
+        setIoMenuOpen(false);
     };
 
     const toggleRiskManagement = () => {
         setRiskManagementExpanded(!riskManagementExpanded);
         // Collapse all other sections
+        setAssetsExpanded(false);
         setRequirementsExpanded(false);
         setVulnMenuOpen(false);
-        setIoMenuOpen(false);
         setAdminMenuOpen(false);
+        setIoMenuOpen(false);
     };
 
     const toggleVulnManagement = () => {
         setVulnMenuOpen(!vulnMenuOpen);
         // Collapse all other sections
+        setAssetsExpanded(false);
         setRequirementsExpanded(false);
         setRiskManagementExpanded(false);
+        setAdminMenuOpen(false);
         setIoMenuOpen(false);
-        setAdminMenuOpen(false);
-    };
-
-    const toggleIoMenu = () => {
-        setIoMenuOpen(!ioMenuOpen);
-        // Collapse all other sections
-        setRequirementsExpanded(false);
-        setRiskManagementExpanded(false);
-        setVulnMenuOpen(false);
-        setAdminMenuOpen(false);
     };
 
     const toggleAdminMenu = () => {
         setAdminMenuOpen(!adminMenuOpen);
         // Collapse all other sections
+        setAssetsExpanded(false);
         setRequirementsExpanded(false);
         setRiskManagementExpanded(false);
         setVulnMenuOpen(false);
         setIoMenuOpen(false);
+    };
+
+    const toggleIoMenu = () => {
+        setIoMenuOpen(!ioMenuOpen);
+        // Collapse all other sections
+        setAssetsExpanded(false);
+        setRequirementsExpanded(false);
+        setRiskManagementExpanded(false);
+        setVulnMenuOpen(false);
+        setAdminMenuOpen(false);
     };
 
     // Check if user has admin role and access permissions
@@ -132,16 +148,31 @@ const Sidebar = () => {
             </div>
 
             <ul className="list-unstyled components p-2">
-                {/* ASSET MANAGEMENT Section */}
+                {/* ASSETS Section */}
                 <li>
-                    <a href="/assets" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                        <i className="bi bi-server me-2"></i> Assets Overview
-                    </a>
-                </li>
-                <li>
-                    <a href="/applications" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                        <i className="bi bi-window-stack me-2"></i> Application Register
-                    </a>
+                    <div
+                        onClick={toggleAssets}
+                        className="sidebar-section-header-clickable d-flex align-items-center cursor-pointer"
+                        style={{ cursor: 'pointer' }}
+                    >
+                        <i className="bi bi-server me-2"></i>
+                        ASSETS
+                        <i className={`bi ${assetsExpanded ? 'bi-chevron-down' : 'bi-chevron-right'} ms-auto`}></i>
+                    </div>
+                    {assetsExpanded && (
+                        <ul className="list-unstyled ps-4">
+                            <li>
+                                <a href="/assets" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                    <i className="bi bi-server me-2"></i> Asset Register
+                                </a>
+                            </li>
+                            <li>
+                                <a href="/applications" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                    <i className="bi bi-window-stack me-2"></i> Application Register
+                                </a>
+                            </li>
+                        </ul>
+                    )}
                 </li>
 
 
@@ -227,17 +258,20 @@ const Sidebar = () => {
                                         <i className="bi bi-bar-chart-fill me-2"></i> Reports
                                     </a>
                                 </li>
+                                <li>
+                                    <a href="/demands" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-clipboard-plus me-2"></i> Demand Management
+                                    </a>
+                                </li>
+                                {hasClassification && (
+                                    <li>
+                                        <a href="/public-classification" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                            <i className="bi bi-funnel me-2"></i> Demand Classification
+                                        </a>
+                                    </li>
+                                )}
                             </ul>
                         )}
-                    </li>
-                )}
-
-                {/* DEMAND MANAGEMENT Section - ADMIN, RISK, or SECCHAMPION only (Feature: 025-role-based-access-control) */}
-                {hasRisk && (
-                    <li>
-                        <a href="/demands" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                            <i className="bi bi-clipboard-plus me-2"></i> Demand Management
-                        </a>
                     </li>
                 )}
 
@@ -387,8 +421,9 @@ const Sidebar = () => {
                     </li>
                 )}
 
-                {/* I/O Section - ADMIN or SECCHAMPION only */}
-                {(userRoles.includes('ADMIN') || userRoles.includes('SECCHAMPION')) && (
+                {/* I/O Section for non-admin SECCHAMPIONs. Admins reach Import/Export via
+                    the I/O subsection of the ADMIN menu below. */}
+                {!isAdmin && userRoles.includes('SECCHAMPION') && (
                     <li>
                         <div
                             onClick={toggleIoMenu}
@@ -401,59 +436,38 @@ const Sidebar = () => {
                         </div>
                         {ioMenuOpen && (
                             <ul className="list-unstyled ps-4">
-                                {/* Import - direct link to /import page with tabs */}
                                 <li>
                                     <a href="/import" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
                                         <i className="bi bi-cloud-upload me-2"></i> Import
                                     </a>
                                 </li>
-                                {/* Export sub-menu - ADMIN, REQ, or SECCHAMPION only */}
-                                {hasReq && (
-                                    <li>
-                                        <div
-                                            onClick={() => setExportMenuOpen(!exportMenuOpen)}
-                                            className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary cursor-pointer"
-                                            style={{ cursor: 'pointer' }}
-                                        >
-                                            <i className="bi bi-download me-2"></i>
-                                            Export
-                                            <i className={`bi ${exportMenuOpen ? 'bi-chevron-down' : 'bi-chevron-right'} ms-auto`}></i>
-                                        </div>
-                                        {exportMenuOpen && (
-                                            <ul className="list-unstyled ps-4">
-                                                <li>
-                                                    <a href="/export" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                                        <i className="bi bi-file-earmark-excel me-2"></i> Requirements
-                                                    </a>
-                                                </li>
-                                                <li>
-                                                    <a href="/export?type=assets" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                                        <i className="bi bi-hdd-rack me-2"></i> Assets
-                                                    </a>
-                                                </li>
-                                            </ul>
-                                        )}
-                                    </li>
-                                )}
-                                {/* Configuration Bundle - ADMIN only */}
-                                {isAdmin && (
-                                    <li>
-                                        <a href="/admin/config-bundle" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                                            <i className="bi bi-box-arrow-in-down me-2"></i> Configuration Bundle
-                                        </a>
-                                    </li>
-                                )}
+                                <li>
+                                    <div
+                                        onClick={() => setExportMenuOpen(!exportMenuOpen)}
+                                        className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary cursor-pointer"
+                                        style={{ cursor: 'pointer' }}
+                                    >
+                                        <i className="bi bi-download me-2"></i>
+                                        Export
+                                        <i className={`bi ${exportMenuOpen ? 'bi-chevron-down' : 'bi-chevron-right'} ms-auto`}></i>
+                                    </div>
+                                    {exportMenuOpen && (
+                                        <ul className="list-unstyled ps-4">
+                                            <li>
+                                                <a href="/export" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                                    <i className="bi bi-file-earmark-excel me-2"></i> Requirements
+                                                </a>
+                                            </li>
+                                            <li>
+                                                <a href="/export?type=assets" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                                    <i className="bi bi-hdd-rack me-2"></i> Assets
+                                                </a>
+                                            </li>
+                                        </ul>
+                                    )}
+                                </li>
                             </ul>
                         )}
-                    </li>
-                )}
-
-                {/* TOOLS Section - ADMIN or SECCHAMPION only */}
-                {hasClassification && (
-                    <li>
-                        <a href="/public-classification" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
-                            <i className="bi bi-funnel me-2"></i> Classification Tool
-                        </a>
                     </li>
                 )}
 
@@ -559,6 +573,44 @@ const Sidebar = () => {
                                 <li>
                                     <a href="/admin/add-system" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
                                         <i className="bi bi-plus-circle me-2"></i> Add System
+                                    </a>
+                                </li>
+
+                                {/* I/O (import/export/config bundle) */}
+                                <li className="admin-subsection-header">I/O</li>
+                                <li>
+                                    <a href="/import" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-cloud-upload me-2"></i> Import
+                                    </a>
+                                </li>
+                                <li>
+                                    <div
+                                        onClick={() => setExportMenuOpen(!exportMenuOpen)}
+                                        className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary cursor-pointer"
+                                        style={{ cursor: 'pointer' }}
+                                    >
+                                        <i className="bi bi-download me-2"></i>
+                                        Export
+                                        <i className={`bi ${exportMenuOpen ? 'bi-chevron-down' : 'bi-chevron-right'} ms-auto`}></i>
+                                    </div>
+                                    {exportMenuOpen && (
+                                        <ul className="list-unstyled ps-4">
+                                            <li>
+                                                <a href="/export" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                                    <i className="bi bi-file-earmark-excel me-2"></i> Requirements
+                                                </a>
+                                            </li>
+                                            <li>
+                                                <a href="/export?type=assets" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                                    <i className="bi bi-hdd-rack me-2"></i> Assets
+                                                </a>
+                                            </li>
+                                        </ul>
+                                    )}
+                                </li>
+                                <li>
+                                    <a href="/admin/config-bundle" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-box-arrow-in-down me-2"></i> Configuration Bundle
                                     </a>
                                 </li>
 
