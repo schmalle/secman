@@ -12,10 +12,7 @@ interface UseCaseRepository : JpaRepository<UseCase, Long> {
     fun findByName(name: String): Optional<UseCase>
     
     fun findByNameContainingIgnoreCase(name: String): List<UseCase>
-    
-    @Query("SELECT u FROM UseCase u WHERE u.isCurrent = true")
-    fun findCurrentUseCases(): List<UseCase>
-    
+
     fun existsByName(name: String): Boolean
     
     // Case-insensitive name validation for uniqueness

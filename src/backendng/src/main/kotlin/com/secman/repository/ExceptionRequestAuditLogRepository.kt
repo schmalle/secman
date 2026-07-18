@@ -1,6 +1,5 @@
 package com.secman.repository
 
-import com.secman.domain.AuditEventType
 import com.secman.domain.ExceptionRequestAuditLog
 import io.micronaut.data.annotation.Query
 import io.micronaut.data.annotation.Repository
@@ -30,28 +29,6 @@ interface ExceptionRequestAuditLogRepository : JpaRepository<ExceptionRequestAud
     fun findByRequestIdOrderByTimestampAsc(requestId: Long): List<ExceptionRequestAuditLog>
 
     /**
-     * Find audit logs by event type and after a specific timestamp
-     * Used for compliance reporting and analytics
-     *
-     * @param eventType Type of event to filter by
-     * @param timestampAfter Minimum timestamp
-     * @return List of audit logs matching criteria
-     */
-    fun findByEventTypeAndTimestampAfter(
-        eventType: AuditEventType,
-        timestampAfter: LocalDateTime
-    ): List<ExceptionRequestAuditLog>
-
-    /**
-     * Find audit logs by actor (user who performed the action)
-     * Used for user activity audits
-     *
-     * @param actorUserId ID of the user who performed actions
-     * @return List of audit logs for this user
-     */
-    fun findByActorUserId(actorUserId: Long): List<ExceptionRequestAuditLog>
-
-    /**
      * Find audit logs within a time range
      * Used for compliance reports and historical analysis
      *
@@ -63,15 +40,6 @@ interface ExceptionRequestAuditLogRepository : JpaRepository<ExceptionRequestAud
         startTime: LocalDateTime,
         endTime: LocalDateTime
     ): List<ExceptionRequestAuditLog>
-
-    /**
-     * Count audit logs for a specific request
-     * Used for verification of complete audit trail
-     *
-     * @param requestId ID of the exception request
-     * @return Count of audit log entries
-     */
-    fun countByRequestId(requestId: Long): Long
 
     /**
      * Nullify the actorUser reference when a user is deleted.

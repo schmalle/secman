@@ -6,7 +6,6 @@ import io.micronaut.data.annotation.Repository
 import io.micronaut.data.jpa.repository.JpaRepository
 import io.micronaut.data.model.Page
 import io.micronaut.data.model.Pageable
-import java.util.Optional
 
 /**
  * Repository for AwsAccountSharing entity.
@@ -16,11 +15,7 @@ import java.util.Optional
 @Repository
 interface AwsAccountSharingRepository : JpaRepository<AwsAccountSharing, Long> {
 
-    fun findByTargetUserId(targetUserId: Long): List<AwsAccountSharing>
-
     fun countByTargetUserId(targetUserId: Long): Long
-
-    fun findBySourceUserId(sourceUserId: Long): List<AwsAccountSharing>
 
     fun deleteBySourceUserId(sourceUserId: Long)
 
@@ -29,10 +24,6 @@ interface AwsAccountSharingRepository : JpaRepository<AwsAccountSharing, Long> {
     fun deleteByCreatedBy_Id(createdById: Long)
 
     fun existsBySourceUserIdAndTargetUserId(sourceUserId: Long, targetUserId: Long): Boolean
-
-    fun findBySourceUserIdAndTargetUserId(sourceUserId: Long, targetUserId: Long): Optional<AwsAccountSharing>
-
-    fun deleteBySourceUserIdAndTargetUserId(sourceUserId: Long, targetUserId: Long)
 
     override fun findAll(pageable: Pageable): Page<AwsAccountSharing>
 

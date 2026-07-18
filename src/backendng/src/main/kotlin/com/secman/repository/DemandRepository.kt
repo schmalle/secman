@@ -7,7 +7,6 @@ import com.secman.domain.Priority
 import io.micronaut.data.annotation.Query
 import io.micronaut.data.annotation.Repository
 import io.micronaut.data.jpa.repository.JpaRepository
-import java.time.LocalDateTime
 
 @Repository
 interface DemandRepository : JpaRepository<Demand, Long> {
@@ -19,26 +18,9 @@ interface DemandRepository : JpaRepository<Demand, Long> {
     fun findByStatus(status: DemandStatus): List<Demand>
     
     fun findByDemandType(demandType: DemandType): List<Demand>
-    
-    fun findByPriority(priority: Priority): List<Demand>
-    
+
     fun findByExistingAssetId(assetId: Long): List<Demand>
-    
-    @Query("SELECT d FROM Demand d WHERE d.status = :status AND d.requestor.id = :requestorId")
-    fun findByStatusAndRequestorId(status: DemandStatus, requestorId: Long): List<Demand>
-    
-    @Query("SELECT d FROM Demand d WHERE d.status = :status AND d.demandType = :demandType")
-    fun findByStatusAndDemandType(status: DemandStatus, demandType: DemandType): List<Demand>
-    
-    @Query("SELECT d FROM Demand d WHERE d.requestedDate >= :startDate AND d.requestedDate <= :endDate")
-    fun findByRequestedDateRange(startDate: LocalDateTime, endDate: LocalDateTime): List<Demand>
-    
-    @Query("SELECT d FROM Demand d WHERE d.approvedDate >= :startDate AND d.approvedDate <= :endDate")
-    fun findByApprovedDateRange(startDate: LocalDateTime, endDate: LocalDateTime): List<Demand>
-    
-    @Query("SELECT d FROM Demand d WHERE d.status = 'PENDING' ORDER BY d.priority DESC, d.requestedDate ASC")
-    fun findPendingDemandsOrderedByPriorityAndDate(): List<Demand>
-    
+
     @Query("SELECT d FROM Demand d WHERE d.status = 'APPROVED' AND d.id NOT IN (SELECT ra.demand.id FROM RiskAssessment ra WHERE ra.demand IS NOT NULL)")
     fun findApprovedDemandsWithoutRiskAssessment(): List<Demand>
     
@@ -60,8 +42,6 @@ interface DemandRepository : JpaRepository<Demand, Long> {
     fun countByStatus(status: DemandStatus): Long
     
     fun countByDemandType(demandType: DemandType): Long
-    
-    fun countByRequestorId(requestorId: Long): Long
 
     /**
      * Nullify the approver reference when a user is deleted.

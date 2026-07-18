@@ -2,7 +2,6 @@ package com.secman.repository
 
 import com.secman.domain.AiAnswerSuggestion
 import com.secman.domain.AiAnswerSuggestionStatus
-import com.secman.domain.ConfidenceBand
 import io.micronaut.data.annotation.Query
 import io.micronaut.data.annotation.Repository
 import io.micronaut.data.jpa.repository.JpaRepository
@@ -14,30 +13,9 @@ import io.micronaut.transaction.annotation.Transactional
 @Repository
 interface AiAnswerSuggestionRepository : JpaRepository<AiAnswerSuggestion, Long> {
 
-    fun findByJobId(jobId: Long): List<AiAnswerSuggestion>
-
     fun findByRiskAssessmentIdAndStatus(
         riskAssessmentId: Long,
         status: AiAnswerSuggestionStatus
-    ): List<AiAnswerSuggestion>
-
-    fun findByRiskAssessmentIdAndRequirementIdAndStatus(
-        riskAssessmentId: Long,
-        requirementId: Long,
-        status: AiAnswerSuggestionStatus
-    ): AiAnswerSuggestion?
-
-    @Query(
-        """
-        SELECT s FROM AiAnswerSuggestion s
-        WHERE s.riskAssessmentId = :assessmentId
-          AND s.status = com.secman.domain.AiAnswerSuggestionStatus.APPLIED
-          AND s.confidenceBand = :band
-        """
-    )
-    fun findAppliedByAssessmentAndBand(
-        assessmentId: Long,
-        band: ConfidenceBand
     ): List<AiAnswerSuggestion>
 
     /**

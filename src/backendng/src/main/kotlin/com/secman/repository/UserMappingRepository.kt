@@ -115,26 +115,6 @@ interface UserMappingRepository : JpaRepository<UserMapping, Long> {
     ): Optional<UserMapping>
 
     /**
-     * Count total mappings for a user
-     * 
-     * Use case: Display user's total access scope
-     * 
-     * @param email User's email address
-     * @return Number of mappings for the user
-     */
-    fun countByEmail(email: String): Long
-
-    /**
-     * Count total mappings for an AWS account
-     * 
-     * Use case: Display how many users have access to an account
-     * 
-     * @param awsAccountId AWS account identifier
-     * @return Number of mappings for the account
-     */
-    fun countByAwsAccountId(awsAccountId: String): Long
-
-    /**
      * Find distinct AWS account IDs for a user
      *
      * Use case: Get list of AWS accounts a user can access
@@ -166,19 +146,6 @@ interface UserMappingRepository : JpaRepository<UserMapping, Long> {
     fun findDistinctDomains(): List<String>
 
     // IP Address Mapping - Feature 020
-
-    /**
-     * Find all IP address mappings for a specific email
-     *
-     * Use case: Get all IP ranges a user has access to
-     *
-     * Related to: Feature 020 (IP Address Mapping)
-     *
-     * @param email User's email address
-     * @return List of mappings with IP addresses (excluding null IP addresses)
-     */
-    @Query("SELECT m FROM UserMapping m WHERE m.email = :email AND m.ipAddress IS NOT NULL")
-    fun findIpMappingsByEmail(email: String): List<UserMapping>
 
     /**
      * Check if a specific IP mapping exists (duplicate detection).
@@ -227,19 +194,6 @@ interface UserMappingRepository : JpaRepository<UserMapping, Long> {
         ipAddress: String?,
         domain: String?
     ): Optional<UserMapping>
-
-    /**
-     * Count total IP mappings for a user
-     *
-     * Use case: Display user's IP-based access scope
-     *
-     * Related to: Feature 020 (IP Address Mapping)
-     *
-     * @param email User's email address
-     * @return Number of IP mappings for the user
-     */
-    @Query("SELECT COUNT(m) FROM UserMapping m WHERE m.email = :email AND m.ipAddress IS NOT NULL")
-    fun countIpMappingsByEmail(email: String): Long
 
     // Future User Mapping - Feature 042
 

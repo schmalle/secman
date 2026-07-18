@@ -33,13 +33,13 @@ interface RiskAssessmentRequirementFileRepository : JpaRepository<RiskAssessment
         ORDER BY rarf.createdAt DESC
     """)
     fun findByRequirementId(requirementId: Long): List<RiskAssessmentRequirementFile>
-    
+
     @Query("""
-        SELECT rarf FROM RiskAssessmentRequirementFile rarf 
+        SELECT rarf FROM RiskAssessmentRequirementFile rarf
         WHERE rarf.file.id = :fileId
     """)
     fun findByFileId(fileId: Long): Optional<RiskAssessmentRequirementFile>
-    
+
     @Query("""
         SELECT rarf FROM RiskAssessmentRequirementFile rarf 
         WHERE rarf.uploadedBy.id = :userId
@@ -52,13 +52,4 @@ interface RiskAssessmentRequirementFileRepository : JpaRepository<RiskAssessment
         WHERE rarf.file.id = :fileId
     """)
     fun deleteByFileId(fileId: Long): Int
-    
-    fun existsByFileId(fileId: Long): Boolean
-    
-    @Query("""
-        SELECT COUNT(rarf) FROM RiskAssessmentRequirementFile rarf 
-        WHERE rarf.riskAssessment.id = :riskAssessmentId 
-        AND rarf.requirement.id = :requirementId
-    """)
-    fun countByRiskAssessmentAndRequirement(riskAssessmentId: Long, requirementId: Long): Long
 }

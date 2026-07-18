@@ -119,17 +119,6 @@ interface RiskAssessmentNotificationConfigRepository : JpaRepository<RiskAssessm
     fun existsByNameAndIdNot(name: String, excludeId: Long): Boolean
 
     /**
-     * Update active status by ID
-     */
-    @Query("""
-        UPDATE RiskAssessmentNotificationConfig r
-        SET r.isActive = :isActive,
-            r.updatedAt = :updatedAt
-        WHERE r.id = :id
-    """)
-    fun updateActiveStatus(id: Long, isActive: Boolean, updatedAt: LocalDateTime): Int
-
-    /**
      * Update notification timing for configuration
      */
     @Query("""

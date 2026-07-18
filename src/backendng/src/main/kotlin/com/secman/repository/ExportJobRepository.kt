@@ -3,7 +3,6 @@ package com.secman.repository
 import com.secman.domain.ExportJob
 import com.secman.domain.ExportJobStatus
 import com.secman.domain.ExportType
-import io.micronaut.data.annotation.Query
 import io.micronaut.data.annotation.Repository
 import io.micronaut.data.jpa.repository.JpaRepository
 import java.time.LocalDateTime
@@ -27,12 +26,6 @@ interface ExportJobRepository : JpaRepository<ExportJob, String> {
     fun findByUsernameOrderByCreatedAtDesc(username: String): List<ExportJob>
 
     /**
-     * Find recent jobs for a user (last N)
-     */
-    @Query("SELECT e FROM ExportJob e WHERE e.username = :username ORDER BY e.createdAt DESC")
-    fun findRecentByUsername(username: String, limit: Int = 10): List<ExportJob>
-
-    /**
      * Find running jobs for a user (to prevent multiple concurrent exports)
      */
     fun findByUsernameAndStatusIn(username: String, statuses: List<ExportJobStatus>): List<ExportJob>
@@ -46,11 +39,6 @@ interface ExportJobRepository : JpaRepository<ExportJob, String> {
      * Find completed jobs older than a certain date (for file cleanup)
      */
     fun findByStatusAndCompletedAtBefore(status: ExportJobStatus, cutoffDate: LocalDateTime): List<ExportJob>
-
-    /**
-     * Count running jobs for a user
-     */
-    fun countByUsernameAndStatusIn(username: String, statuses: List<ExportJobStatus>): Long
 
     /**
      * Count running jobs for a user filtered by export type (for per-type rate limiting)

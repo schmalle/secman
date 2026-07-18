@@ -1,7 +1,6 @@
 package com.secman.repository
 
 import com.secman.domain.Asset
-import com.secman.domain.NetworkZone
 import io.micronaut.data.annotation.Repository
 import io.micronaut.data.jpa.repository.JpaRepository
 import io.micronaut.data.model.Page
@@ -169,8 +168,6 @@ interface AssetRepository : JpaRepository<Asset, Long> {
     fun findByOwner(owner: String): List<Asset>
 
     fun findByIp(ip: String): List<Asset>
-
-    fun findByTypeAndOwner(type: String, owner: String): List<Asset>
 
     // --- Scope -> asset resolution for materialized-exception recompute ---------------------------
     // Mirror the scope semantics of ExceptionMatchSql.EXCEPTION_MATCH so a bounded recompute touches
@@ -384,34 +381,6 @@ interface AssetRepository : JpaRepository<Asset, Long> {
      */
     fun findByCloudAccountIdIn(cloudAccountIds: List<String>): List<Asset>
 
-    // IP Address Mapping - Feature 020
-
-    /**
-     * Find assets with IP addresses in a numeric range
-     * Used for IP-based access control filtering
-     *
-     * Related to: Feature 020 (IP Address Mapping)
-     *
-     * @param startIp Start of IP range (numeric)
-     * @param endIp End of IP range (numeric)
-     * @return List of assets with IPs in the specified range
-     */
-    fun findByIpNumericBetween(startIp: Long, endIp: Long): List<Asset>
-
-    /**
-     * Find assets with IP addresses matching any of the provided numeric ranges
-     * Used for IP-based access control when user has multiple IP mappings
-     *
-     * Note: This is a convenience method for the common case where a user has multiple IP ranges.
-     * For complex queries, use custom JPA queries in the service layer.
-     *
-     * Related to: Feature 020 (IP Address Mapping)
-     *
-     * @param ipNumeric Single IP address (numeric)
-     * @return List of assets with the specified IP
-     */
-    fun findByIpNumeric(ipNumeric: Long): List<Asset>
-
     /**
      * Find assets that belong to any of the specified workgroups
      * Used for WG Vulns feature (022-wg-vulns-handling)
@@ -516,22 +485,6 @@ interface AssetRepository : JpaRepository<Asset, Long> {
     """)
     fun findPotentialDuplicates(name: String): List<Asset>
 
-    /**
-     * Find all assets with non-null AD domain
-     * Optimized for domain filtering operations
-     * Uses index: idx_asset_ad_domain
-     *
-     * Feature: Database Structure Optimization
-     *
-     * @return List of assets with AD domain set
-     */
-    @io.micronaut.data.annotation.Query("""
-        SELECT a FROM Asset a
-        WHERE a.adDomain IS NOT NULL
-        ORDER BY a.name ASC
-    """)
-    fun findAllWithAdDomain(): List<Asset>
-
     // Feature 054: Products Overview - Asset queries by product
 
     /**
@@ -597,42 +550,6 @@ interface AssetRepository : JpaRepository<Asset, Long> {
     ): Page<Asset>
 
     /**
-     * Count assets running a specific product with access control
-     * Used for pagination total count
-     *
-     * Feature: 054-products-overview
-     * Task: T007
-     *
-     * @param product The product name to search for
-     * @param accessibleAssetIds Set of asset IDs the user has access to
-     * @return Count of assets running the specified product
-     */
-    @io.micronaut.data.annotation.Query("""
-        SELECT COUNT(DISTINCT a.id) FROM Asset a
-        JOIN Vulnerability v ON v.asset.id = a.id
-        WHERE v.vulnerableProductVersions = :product
-        AND a.id IN :accessibleAssetIds
-    """)
-    fun countAssetsByProductWithAccessControl(product: String, accessibleAssetIds: Set<Long>): Long
-
-    /**
-     * Count all assets running a specific product (admin view)
-     * Used for pagination total count
-     *
-     * Feature: 054-products-overview
-     * Task: T007
-     *
-     * @param product The product name to search for
-     * @return Count of all assets running the specified product
-     */
-    @io.micronaut.data.annotation.Query("""
-        SELECT COUNT(DISTINCT a.id) FROM Asset a
-        JOIN Vulnerability v ON v.asset.id = a.id
-        WHERE v.vulnerableProductVersions = :product
-    """)
-    fun countAssetsByProductForAll(product: String): Long
-
-    /**
      * Find all assets running a specific product with access control (no pagination)
      * Used for export functionality
      *
@@ -673,18 +590,7 @@ interface AssetRepository : JpaRepository<Asset, Long> {
     """)
     fun findAssetsByProductForAllNoLimit(product: String): List<Asset>
 
-    /**
-     * Get all asset IDs (lightweight query for bulk operations).
-     * Feature: ec2-vulnerability-tracking
-     */
-    @io.micronaut.data.annotation.Query("SELECT a.id FROM Asset a")
-    fun findAllIds(): List<Long>
-
     // Network Zone filtering - Port Scan Addon
-
-    fun findByNetworkZone(zone: NetworkZone): List<Asset>
-
-    fun findByNetworkZoneIn(zones: List<NetworkZone>): List<Asset>
 
     /**
      * Find internet-facing assets (EXTERNAL or DMZ) that have an IP address.

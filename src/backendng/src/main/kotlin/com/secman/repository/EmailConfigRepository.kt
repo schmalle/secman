@@ -13,13 +13,7 @@ interface EmailConfigRepository : JpaRepository<EmailConfig, Long> {
     
     @Query("SELECT e FROM EmailConfig e WHERE e.isActive = true")
     fun findActiveConfig(): Optional<EmailConfig>
-    
-    @Query("SELECT e FROM EmailConfig e WHERE e.smtpHost = :host AND e.smtpPort = :port")
-    fun findBySmtpHostAndPort(host: String, port: Int): List<EmailConfig>
-    
-    @Query("SELECT e FROM EmailConfig e WHERE e.fromEmail = :email")
-    fun findByFromEmail(email: String): List<EmailConfig>
-    
+
     @Query("UPDATE EmailConfig e SET e.isActive = false WHERE e.isActive = true AND e.id != :excludeId")
     fun deactivateAllExcept(excludeId: Long): Int
     

@@ -36,9 +36,6 @@ interface DemandClassificationResultRepository : JpaRepository<DemandClassificat
 
     fun findByClassificationHash(hash: String): Optional<DemandClassificationResult>
 
-    @Query("SELECT r FROM DemandClassificationResult r WHERE r.demand.id = :demandId ORDER BY r.classifiedAt DESC")
-    fun findLatestByDemandId(demandId: Long): Optional<DemandClassificationResult>
-
     @Query("SELECT COUNT(r) FROM DemandClassificationResult r WHERE r.classification = :classification")
     fun countByClassification(classification: Classification): Long
 

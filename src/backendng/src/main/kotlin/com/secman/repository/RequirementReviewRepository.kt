@@ -2,7 +2,6 @@ package com.secman.repository
 
 import com.secman.domain.RequirementReview
 import com.secman.domain.RequirementReview.ReviewAssessment
-import io.micronaut.data.annotation.Query
 import io.micronaut.data.annotation.Repository
 import io.micronaut.data.jpa.repository.JpaRepository
 import java.util.*
@@ -40,11 +39,6 @@ interface RequirementReviewRepository : JpaRepository<RequirementReview, Long> {
     fun countBySession_IdAndAssessment(sessionId: Long, assessment: ReviewAssessment): Long
 
     /**
-     * Count reviews by assessment type for a specific snapshot.
-     */
-    fun countBySnapshot_IdAndAssessment(snapshotId: Long, assessment: ReviewAssessment): Long
-
-    /**
      * Count total reviews submitted by a reviewer.
      */
     fun countByReviewer_Id(reviewerId: Long): Long
@@ -53,27 +47,6 @@ interface RequirementReviewRepository : JpaRepository<RequirementReview, Long> {
      * Count total reviews for a session.
      */
     fun countBySession_Id(sessionId: Long): Long
-
-    /**
-     * Get assessment summary for a snapshot.
-     * Returns counts of OK, CHANGE, NOGO assessments.
-     */
-    @Query("""
-        SELECT new map(
-            r.assessment as assessment,
-            COUNT(r) as count
-        )
-        FROM RequirementReview r
-        WHERE r.snapshot.id = :snapshotId
-        GROUP BY r.assessment
-    """)
-    fun getAssessmentSummary(snapshotId: Long): List<Map<String, Any>>
-
-    /**
-     * Find reviews with NOK assessment for a session.
-     */
-    @Query("SELECT r FROM RequirementReview r WHERE r.session.id = :sessionId AND r.assessment = 'NOK'")
-    fun findNokReviews(sessionId: Long): List<RequirementReview>
 
     /**
      * Delete all reviews for a session.

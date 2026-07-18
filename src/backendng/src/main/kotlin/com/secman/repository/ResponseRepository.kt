@@ -14,8 +14,6 @@ interface ResponseRepository : JpaRepository<Response, Long> {
 
     fun findByRequirementId(requirementId: Long): List<Response>
 
-    fun findByRespondentEmail(email: String): List<Response>
-
     @Query("SELECT r FROM Response r WHERE r.riskAssessment.id = :assessmentId AND r.respondentEmail = :email")
     fun findByRiskAssessmentIdAndEmail(assessmentId: Long, email: String): List<Response>
 
@@ -24,9 +22,6 @@ interface ResponseRepository : JpaRepository<Response, Long> {
 
     @Query("SELECT COUNT(r) FROM Response r WHERE r.riskAssessment.id = :assessmentId")
     fun countByRiskAssessmentId(assessmentId: Long): Long
-
-    @Query("SELECT COUNT(DISTINCT r.requirement.id) FROM Response r WHERE r.riskAssessment.id = :assessmentId")
-    fun countDistinctRequirementsByAssessmentId(assessmentId: Long): Long
 
     fun deleteByRiskAssessmentId(riskAssessmentId: Long): Long
 

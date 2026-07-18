@@ -14,17 +14,9 @@ interface TranslationConfigRepository : JpaRepository<TranslationConfig, Long> {
     @Query("SELECT t FROM TranslationConfig t WHERE t.isActive = true")
     fun findActiveConfig(): Optional<TranslationConfig>
     
-    @Query("SELECT t FROM TranslationConfig t WHERE t.modelName = :modelName")
-    fun findByModelName(modelName: String): List<TranslationConfig>
-    
-    @Query("SELECT t FROM TranslationConfig t WHERE t.baseUrl = :baseUrl")
-    fun findByBaseUrl(baseUrl: String): List<TranslationConfig>
-    
     @Query("UPDATE TranslationConfig t SET t.isActive = false WHERE t.isActive = true AND t.id != :excludeId")
     fun deactivateAllExcept(excludeId: Long): Int
     
     @Query("UPDATE TranslationConfig t SET t.isActive = false WHERE t.isActive = true")
     fun deactivateAll(): Int
-    
-    fun existsByIsActive(isActive: Boolean): Boolean
 }
