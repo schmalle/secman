@@ -26,25 +26,6 @@ interface McpApiKeyRepository : JpaRepository<McpApiKey, Long> {
     fun findByKeyIdAndActive(keyId: String): Optional<McpApiKey>
 
     /**
-     * Find an API key by its hashed value.
-     * Used for secure key validation after initial lookup.
-     */
-    @Query("SELECT ak FROM McpApiKey ak WHERE ak.keyHash = :keyHash AND ak.isActive = true")
-    fun findByKeyHashAndActive(keyHash: String): Optional<McpApiKey>
-
-    /**
-     * Validate an API key by ID and check if it's not expired.
-     * Used for comprehensive key validation during authentication.
-     */
-    @Query("""
-        SELECT ak FROM McpApiKey ak
-        WHERE ak.keyId = :keyId
-        AND ak.isActive = true
-        AND (ak.expiresAt IS NULL OR ak.expiresAt > :now)
-    """)
-    fun findValidKeyById(keyId: String, now: LocalDateTime): Optional<McpApiKey>
-
-    /**
      * Find all active API keys across all users.
      * SECURITY: Used for efficient authentication lookup instead of loading all keys and filtering in memory.
      * Performs database-level filtering for better performance and security.
@@ -69,13 +50,6 @@ interface McpApiKeyRepository : JpaRepository<McpApiKey, Long> {
     fun findActiveByUserId(userId: Long): List<McpApiKey>
 
     /**
-     * Count active API keys for a user.
-     * Used for enforcing per-user API key limits.
-     */
-    @Query("SELECT COUNT(ak) FROM McpApiKey ak WHERE ak.userId = :userId AND ak.isActive = true")
-    fun countActiveByUserId(userId: Long): Long
-
-    /**
      * Check if a user has an active API key with the given name.
      * Revoked (isActive=false) keys are ignored so their names can be reused.
      */
@@ -90,19 +64,6 @@ interface McpApiKeyRepository : JpaRepository<McpApiKey, Long> {
      */
     @Query("SELECT ak FROM McpApiKey ak WHERE ak.expiresAt IS NOT NULL AND ak.expiresAt <= :now")
     fun findExpired(now: LocalDateTime): List<McpApiKey>
-
-    /**
-     * Find API keys expiring within a specific time window.
-     * Used for sending expiration warnings to users.
-     */
-    @Query("""
-        SELECT ak FROM McpApiKey ak
-        WHERE ak.expiresAt IS NOT NULL
-        AND ak.expiresAt > :now
-        AND ak.expiresAt <= :warningTime
-        AND ak.isActive = true
-    """)
-    fun findExpiringWithin(now: LocalDateTime, warningTime: LocalDateTime): List<McpApiKey>
 
     /**
      * Deactivate expired API keys in bulk.
@@ -132,50 +93,7 @@ interface McpApiKeyRepository : JpaRepository<McpApiKey, Long> {
     fun updateKeyHash(id: Long, keyHash: String): Int
 
 
-    /**
-     * Find API keys that haven't been used for a specified period.
-     * Used for identifying unused keys for cleanup.
-     */
-    @Query("""
-        SELECT ak FROM McpApiKey ak
-        WHERE ak.lastUsedAt IS NULL
-        OR ak.lastUsedAt < :cutoffTime
-        ORDER BY ak.lastUsedAt ASC NULLS FIRST
-    """)
-    fun findUnusedSince(cutoffTime: LocalDateTime): List<McpApiKey>
-
-    /**
-     * Find API keys used within a specific time range.
-     * Used for activity reporting and analytics.
-     */
-    @Query("""
-        SELECT ak FROM McpApiKey ak
-        WHERE ak.lastUsedAt IS NOT NULL
-        AND ak.lastUsedAt BETWEEN :startTime AND :endTime
-        ORDER BY ak.lastUsedAt DESC
-    """)
-    fun findUsedBetween(startTime: LocalDateTime, endTime: LocalDateTime): List<McpApiKey>
-
     // ===== SECURITY AND MONITORING QUERIES =====
-
-    /**
-     * Find API keys with specific permissions.
-     * Used for security auditing and permission analysis.
-     */
-    @Query("SELECT ak FROM McpApiKey ak WHERE ak.permissions LIKE :permissionPattern")
-    fun findByPermissionPattern(permissionPattern: String): List<McpApiKey>
-
-    /**
-     * Find API keys that require admin privileges.
-     * Used for security monitoring of elevated access keys.
-     */
-    @Query("""
-        SELECT ak FROM McpApiKey ak
-        WHERE ak.permissions LIKE '%ADMIN%'
-        OR ak.permissions LIKE '%SYSTEM%'
-        ORDER BY ak.createdAt DESC
-    """)
-    fun findAdminKeys(): List<McpApiKey>
 
     /**
      * Find recently created API keys.
@@ -185,19 +103,6 @@ interface McpApiKeyRepository : JpaRepository<McpApiKey, Long> {
     fun findCreatedSince(since: LocalDateTime): List<McpApiKey>
 
     // ===== STATISTICS AND REPORTING QUERIES =====
-
-    /**
-     * Get usage statistics for API keys by user.
-     * Returns user ID and count of active keys.
-     */
-    @Query("""
-        SELECT ak.userId, COUNT(ak)
-        FROM McpApiKey ak
-        WHERE ak.isActive = true
-        GROUP BY ak.userId
-        ORDER BY COUNT(ak) DESC
-    """)
-    fun getUsageStatisticsByUser(): List<Array<Any>>
 
     /**
      * Get API key creation statistics by time period.
@@ -228,13 +133,6 @@ interface McpApiKeyRepository : JpaRepository<McpApiKey, Long> {
     // ===== BATCH OPERATIONS =====
 
     /**
-     * Deactivate all API keys for a specific user.
-     * Used when a user account is disabled or suspended.
-     */
-    @Query("UPDATE McpApiKey ak SET ak.isActive = false WHERE ak.userId = :userId")
-    fun deactivateAllForUser(userId: Long): Int
-
-    /**
      * Delete inactive API keys older than specified date.
      * Used for database cleanup of old, unused keys.
      */
@@ -254,25 +152,4 @@ interface McpApiKeyRepository : JpaRepository<McpApiKey, Long> {
      * Used for audit and compliance reporting.
      */
     fun findByCreatedAtBetween(startDate: LocalDateTime, endDate: LocalDateTime): List<McpApiKey>
-
-    /**
-     * Check if any API key exists with the given key ID.
-     * Used for ensuring global key ID uniqueness.
-     */
-    fun existsByKeyId(keyId: String): Boolean
-
-    // ===== VALIDATION METHODS =====
-
-    /**
-     * Count API keys with a specific key ID (should be 0 or 1).
-     * Used for validation during key creation.
-     */
-    fun countByKeyId(keyId: String): Long
-
-    /**
-     * Find API keys that would conflict with a new key name for a user.
-     * Used for preventing duplicate key names per user.
-     */
-    @Query("SELECT ak FROM McpApiKey ak WHERE ak.userId = :userId AND ak.name = :name AND ak.id != :excludeId")
-    fun findConflictingName(userId: Long, name: String, excludeId: Long): List<McpApiKey>
 }

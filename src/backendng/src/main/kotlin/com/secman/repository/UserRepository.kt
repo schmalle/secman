@@ -43,9 +43,6 @@ interface UserRepository : JpaRepository<User, Long> {
     """)
     fun findAllWithWorkgroups(): List<User>
 
-    @Query("SELECT COUNT(w) FROM User u JOIN u.workgroups w WHERE u.username = :username")
-    fun countWorkgroupsByUsername(username: String): Long
-
     fun findByUsername(username: String): Optional<User>
 
     fun findByEmail(email: String): Optional<User>
@@ -70,17 +67,6 @@ interface UserRepository : JpaRepository<User, Long> {
      * @return List of users in the specified workgroup
      */
     fun findByWorkgroupsIdOrderByUsernameAsc(workgroupId: Long): List<User>
-
-    /**
-     * Count users assigned to a workgroup
-     * Used for workgroup detail views and validation
-     *
-     * Related to: Feature 008 (Workgroup-Based Access Control) - FR-010
-     *
-     * @param workgroupId The workgroup ID
-     * @return Number of users in the workgroup
-     */
-    fun countByWorkgroupsId(workgroupId: Long): Long
 
     // Note: User deletion validation requires service-level logic
     // since Asset has manualCreator/scanUploader FKs but User doesn't have reverse relationships.
@@ -112,8 +98,6 @@ interface UserRepository : JpaRepository<User, Long> {
      * Used by the admin broadcast feature to skip pending (never-activated) accounts.
      */
     fun findByLastLoginIsNotNull(): List<User>
-
-    fun countByLastLoginIsNotNull(): Long
 
     // Note: For other admin user queries, use findAll() and filter in service layer
     // (e.g., users.filter { it.hasRole(Role.ADMIN) })

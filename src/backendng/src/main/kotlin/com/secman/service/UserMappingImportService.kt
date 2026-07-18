@@ -2,6 +2,7 @@ package com.secman.service
 
 import com.secman.domain.UserMapping
 import com.secman.repository.UserMappingRepository
+import com.secman.util.ExcelCellUtils
 import io.micronaut.serde.annotation.Serdeable
 import jakarta.inject.Singleton
 import org.apache.poi.ss.usermodel.*
@@ -143,7 +144,7 @@ open class UserMappingImportService(
         for (cellIndex in 0 until headerRow.lastCellNum) {
             val cell = headerRow.getCell(cellIndex)
             if (cell != null) {
-                actualHeaders.add(getCellValueAsString(cell).trim())
+                actualHeaders.add(ExcelCellUtils.getCellValueAsString(cell).trim())
             }
         }
 
@@ -168,7 +169,7 @@ open class UserMappingImportService(
         for (cellIndex in 0 until headerRow.lastCellNum) {
             val cell = headerRow.getCell(cellIndex)
             if (cell != null) {
-                val headerName = getCellValueAsString(cell).trim()
+                val headerName = ExcelCellUtils.getCellValueAsString(cell).trim()
                 REQUIRED_HEADERS.forEach { required ->
                     if (headerName.equals(required, ignoreCase = true)) {
                         headerMap[required] = cellIndex
@@ -190,9 +191,9 @@ open class UserMappingImportService(
      * @throws IllegalArgumentException if validation fails
      */
     private fun parseRowToUserMapping(row: Row, headerMap: Map<String, Int>, rowNumber: Int): UserMapping? {
-        val email = getCellValue(row, headerMap, "Email Address")?.trim()
-        val awsAccountId = getCellValue(row, headerMap, "AWS Account ID")?.trim()
-        val domain = getCellValue(row, headerMap, "Domain")?.trim()
+        val email = ExcelCellUtils.getCellValue(row, headerMap, "Email Address")?.trim()
+        val awsAccountId = ExcelCellUtils.getCellValue(row, headerMap, "AWS Account ID")?.trim()
+        val domain = ExcelCellUtils.getCellValue(row, headerMap, "Domain")?.trim()
 
         // Validate required fields
         if (email.isNullOrBlank()) {
@@ -258,57 +259,13 @@ open class UserMappingImportService(
     }
 
     /**
-     * Get cell value from row using header mapping
-     */
-    private fun getCellValue(row: Row, headerMap: Map<String, Int>, headerName: String): String? {
-        val cellIndex = headerMap[headerName] ?: return null
-        val cell = row.getCell(cellIndex) ?: return null
-        return getCellValueAsString(cell)
-    }
-
-    /**
-     * Convert cell value to string, handling different cell types
-     * CRITICAL: Use DataFormatter to preserve AWS account ID precision
-     */
-    private fun getCellValueAsString(cell: Cell): String {
-        return when (cell.cellType) {
-            CellType.STRING -> cell.stringCellValue
-            CellType.NUMERIC -> {
-                // Use DataFormatter to preserve precision
-                // Without this, "123456789012" becomes "1.23E+11"
-                val formatter = DataFormatter()
-                formatter.formatCellValue(cell)
-            }
-            CellType.BOOLEAN -> cell.booleanCellValue.toString()
-            CellType.FORMULA -> {
-                try {
-                    when (cell.cachedFormulaResultType) {
-                        CellType.STRING -> cell.richStringCellValue.string
-                        CellType.NUMERIC -> {
-                            val formatter = DataFormatter()
-                            formatter.formatCellValue(cell)
-                        }
-                        CellType.BOOLEAN -> cell.booleanCellValue.toString()
-                        else -> ""
-                    }
-                } catch (e: Exception) {
-                    log.warn("Failed to read cached formula result: {}", e.message)
-                    ""
-                }
-            }
-            CellType.BLANK -> ""
-            else -> ""
-        }
-    }
-
-    /**
      * Check if a row is completely empty
      */
     private fun isRowEmpty(row: Row): Boolean {
         for (cellIndex in 0 until row.lastCellNum) {
             val cell = row.getCell(cellIndex)
             if (cell != null && cell.cellType != CellType.BLANK) {
-                val value = getCellValueAsString(cell).trim()
+                val value = ExcelCellUtils.getCellValueAsString(cell).trim()
                 if (value.isNotEmpty()) {
                     return false
                 }

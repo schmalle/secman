@@ -45,9 +45,7 @@ class NotifyNewAccountsTool(
     )
 
     override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
-        if (!context.hasDelegation()) {
-            return McpToolResult.error("DELEGATION_REQUIRED", "User Delegation must be enabled to use this tool")
-        }
+        requireDelegation(context)?.let { return it }
         if (!context.isAdmin) {
             return McpToolResult.error("ADMIN_REQUIRED", "ADMIN role required to send new-account notifications")
         }

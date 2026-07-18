@@ -22,6 +22,11 @@ package com.secman.repository
  *   - VulnerabilityService.kt      (1 site, dynamic helper)
  *   - AccountVulnsService.kt       (1 site)
  *
+ * Two in-memory siblings must be updated BY HAND for any semantic change:
+ *   - com.secman.domain.VulnerabilityException.matches() (canonical entity predicate)
+ *   - com.secman.service.ExceptionMatchIndex (shared bulk index; agreement-tested
+ *     against the entity predicate in ExceptionMatchIndexTest)
+ *
  * Spec: docs/superpowers/specs/2026-04-28-vulnerability-exceptions-holistic-design.md (§3, §5)
  */
 object ExceptionMatchSql {

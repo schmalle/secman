@@ -48,12 +48,7 @@ class GetAlignmentStatusTool(
 
     override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
         // Check authorization
-        if (!context.hasDelegation()) {
-            return McpToolResult.error(
-                "DELEGATION_REQUIRED",
-                "User Delegation must be enabled to use this tool"
-            )
-        }
+        requireDelegation(context)?.let { return it }
 
         // Extract parameters
         val sessionId = (arguments["session_id"] as? Number)?.toLong()

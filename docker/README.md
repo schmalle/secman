@@ -2,6 +2,10 @@
 
 Three standalone Docker containers (no docker-compose) for running the full Secman stack.
 
+> Looking for the **single-container AWS image** (web server + backend in one
+> container, ECS/Fargate + Secrets Manager)? See `docker/aws/` and
+> [docs/DOCKER_AWS.md](../docs/DOCKER_AWS.md).
+
 ## Architecture
 
 ```

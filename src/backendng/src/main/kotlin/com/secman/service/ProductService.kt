@@ -9,6 +9,7 @@ import com.secman.dto.TopProductsResponse
 import com.secman.repository.AssetRepository
 import com.secman.repository.VulnerabilityRepository
 import io.micronaut.data.model.Pageable
+import com.secman.security.hasRole
 import io.micronaut.security.authentication.Authentication
 import jakarta.inject.Singleton
 import org.apache.poi.ss.usermodel.CellStyle
@@ -46,7 +47,7 @@ open class ProductService(
      * @return ProductListResponse with unique product names sorted alphabetically
      */
     fun getProducts(authentication: Authentication, search: String? = null): ProductListResponse {
-        val isAdmin = hasRole(authentication, "ADMIN")
+        val isAdmin = authentication.hasRole("ADMIN")
         val searchTerm = search?.trim()?.takeIf { it.isNotEmpty() }
 
         val products = if (isAdmin) {
@@ -102,7 +103,7 @@ open class ProductService(
         val pageSize = minOf(maxOf(size, 1), 500)
         val pageable = Pageable.from(pageNumber, pageSize)
 
-        val isAdmin = hasRole(authentication, "ADMIN")
+        val isAdmin = authentication.hasRole("ADMIN")
 
         val assetsPage = if (isAdmin) {
             log.debug("Admin user - fetching all systems for product: {}", product)
@@ -171,7 +172,7 @@ open class ProductService(
         authentication: Authentication,
         product: String
     ): ByteArrayOutputStream {
-        val isAdmin = hasRole(authentication, "ADMIN")
+        val isAdmin = authentication.hasRole("ADMIN")
 
         // Get all systems (without pagination limit)
         val systems = if (isAdmin) {
@@ -280,7 +281,7 @@ open class ProductService(
      * @return TopProductsResponse with products sorted by vulnerability count
      */
     fun getTopProducts(authentication: Authentication, limit: Int = 15): TopProductsResponse {
-        val isAdmin = hasRole(authentication, "ADMIN")
+        val isAdmin = authentication.hasRole("ADMIN")
 
         val topProducts = if (isAdmin) {
             log.debug("Admin user - fetching top {} products", limit)
@@ -314,10 +315,4 @@ open class ProductService(
         )
     }
 
-    /**
-     * Check if authentication has a specific role
-     */
-    private fun hasRole(authentication: Authentication, role: String): Boolean {
-        return authentication.roles.contains(role)
-    }
 }

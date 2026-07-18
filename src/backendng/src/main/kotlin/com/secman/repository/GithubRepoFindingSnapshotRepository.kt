@@ -19,10 +19,4 @@ interface GithubRepoFindingSnapshotRepository : JpaRepository<GithubRepoFindingS
         cutoff: Instant
     ): Optional<GithubRepoFindingSnapshot>
 
-    /** Oldest snapshot, used to report repos with insufficient history. */
-    fun findFirstByGithubRepositoryIdOrderBySnapshotAtAsc(
-        githubRepositoryId: Long
-    ): Optional<GithubRepoFindingSnapshot>
-
-    fun findByGithubRepositoryIdOrderBySnapshotAtDesc(githubRepositoryId: Long): List<GithubRepoFindingSnapshot>
 }

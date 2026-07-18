@@ -3,7 +3,6 @@ package com.secman.service
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.secman.domain.Asset
 import com.secman.domain.Vulnerability
-import com.secman.domain.VulnerabilityStatisticsCache
 import com.secman.repository.AssetRepository
 import com.secman.repository.VulnerabilityRepository
 import com.secman.repository.VulnerabilityStatisticsCacheRepository
@@ -69,15 +68,14 @@ class AwsCleanServerKpiServiceTest {
         every { assetRepository.countAllAwsAssetsWithInstanceId() } returns 3L
         every { vulnerabilityRepository.findOverdueVulnerabilitiesWithAssets(any()) } returns emptyList()
 
-        val cacheSlot = slot<VulnerabilityStatisticsCache>()
-        every { cacheRepository.findByCacheKey(AwsCleanServerKpiService.CACHE_KEY) } returns Optional.empty()
-        every { cacheRepository.save(capture(cacheSlot)) } answers { cacheSlot.captured }
+        val jsonSlot = slot<String>()
+        every { cacheRepository.upsertByCacheKey(AwsCleanServerKpiService.CACHE_KEY, capture(jsonSlot), any(), any()) } returns 1
 
         service.recalculate()
 
-        assertThat(cacheSlot.captured.cachedJson).contains("\"totalAwsServers\":3")
-        assertThat(cacheSlot.captured.cachedJson).contains("\"cleanAwsServers\":3")
-        assertThat(cacheSlot.captured.cachedJson).contains("\"percentage\":100.0")
+        assertThat(jsonSlot.captured).contains("\"totalAwsServers\":3")
+        assertThat(jsonSlot.captured).contains("\"cleanAwsServers\":3")
+        assertThat(jsonSlot.captured).contains("\"percentage\":100.0")
     }
 
     @Test
@@ -94,16 +92,15 @@ class AwsCleanServerKpiServiceTest {
         every { vulnerabilityRepository.findOverdueVulnerabilitiesWithAssets(any()) } returns
             listOf(dirtyVuln, exceptedVuln, nonAwsVuln)
 
-        val cacheSlot = slot<VulnerabilityStatisticsCache>()
-        every { cacheRepository.findByCacheKey(AwsCleanServerKpiService.CACHE_KEY) } returns Optional.empty()
-        every { cacheRepository.save(capture(cacheSlot)) } answers { cacheSlot.captured }
+        val jsonSlot = slot<String>()
+        every { cacheRepository.upsertByCacheKey(AwsCleanServerKpiService.CACHE_KEY, capture(jsonSlot), any(), any()) } returns 1
 
         service.recalculate()
 
         // 3 total AWS servers, 1 genuinely dirty (asset 1) -> 2 clean -> 66.7%
-        assertThat(cacheSlot.captured.cachedJson).contains("\"totalAwsServers\":3")
-        assertThat(cacheSlot.captured.cachedJson).contains("\"cleanAwsServers\":2")
-        assertThat(cacheSlot.captured.cachedJson).contains("\"percentage\":66.7")
+        assertThat(jsonSlot.captured).contains("\"totalAwsServers\":3")
+        assertThat(jsonSlot.captured).contains("\"cleanAwsServers\":2")
+        assertThat(jsonSlot.captured).contains("\"percentage\":66.7")
     }
 
     @Test
@@ -113,13 +110,12 @@ class AwsCleanServerKpiServiceTest {
 
         every { assetRepository.countAllAwsAssetsWithInstanceId() } returns 1L
 
-        val cacheSlot = slot<VulnerabilityStatisticsCache>()
-        every { cacheRepository.findByCacheKey(AwsCleanServerKpiService.CACHE_KEY) } returns Optional.empty()
-        every { cacheRepository.save(capture(cacheSlot)) } answers { cacheSlot.captured }
+        val jsonSlot = slot<String>()
+        every { cacheRepository.upsertByCacheKey(AwsCleanServerKpiService.CACHE_KEY, capture(jsonSlot), any(), any()) } returns 1
 
         service.recalculate(preloadedVulnerabilities = listOf(dirtyVuln))
 
-        assertThat(cacheSlot.captured.cachedJson).contains("\"cleanAwsServers\":0")
+        assertThat(jsonSlot.captured).contains("\"cleanAwsServers\":0")
         verify(exactly = 0) { vulnerabilityRepository.findOverdueVulnerabilitiesWithAssets(any()) }
     }
 
@@ -127,14 +123,13 @@ class AwsCleanServerKpiServiceTest {
     fun `recalculate is a no-op safe when total AWS servers is zero`() {
         every { assetRepository.countAllAwsAssetsWithInstanceId() } returns 0L
 
-        val cacheSlot = slot<VulnerabilityStatisticsCache>()
-        every { cacheRepository.findByCacheKey(AwsCleanServerKpiService.CACHE_KEY) } returns Optional.empty()
-        every { cacheRepository.save(capture(cacheSlot)) } answers { cacheSlot.captured }
+        val jsonSlot = slot<String>()
+        every { cacheRepository.upsertByCacheKey(AwsCleanServerKpiService.CACHE_KEY, capture(jsonSlot), any(), any()) } returns 1
 
         service.recalculate()
 
-        assertThat(cacheSlot.captured.cachedJson).contains("\"totalAwsServers\":0")
-        assertThat(cacheSlot.captured.cachedJson).contains("\"percentage\":0.0")
+        assertThat(jsonSlot.captured).contains("\"totalAwsServers\":0")
+        assertThat(jsonSlot.captured).contains("\"percentage\":0.0")
         verify(exactly = 0) { vulnerabilityRepository.findOverdueVulnerabilitiesWithAssets(any()) }
     }
 

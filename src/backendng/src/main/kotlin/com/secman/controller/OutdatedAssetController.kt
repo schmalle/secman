@@ -10,6 +10,7 @@ import io.micronaut.http.annotation.Controller
 import io.micronaut.http.annotation.Get
 import io.micronaut.http.annotation.QueryValue
 import io.micronaut.security.annotation.Secured
+import com.secman.security.hasAnyRole
 import io.micronaut.security.authentication.Authentication
 import io.micronaut.security.rules.SecurityRule
 import org.slf4j.LoggerFactory
@@ -71,7 +72,7 @@ class OutdatedAssetController(
         pageable: Pageable
     ): HttpResponse<Map<String, Any>> {
         // Validate user has required role
-        val hasRequiredRole = authentication.roles.any { it == "ADMIN" || it == "VULN" }
+        val hasRequiredRole = authentication.hasAnyRole("ADMIN", "VULN")
         if (!hasRequiredRole) {
             return HttpResponse.status(HttpStatus.FORBIDDEN)
         }
@@ -109,7 +110,7 @@ class OutdatedAssetController(
     @Secured("ADMIN", "VULN")
     fun getAdDomains(authentication: Authentication): HttpResponse<Map<String, Any>> {
         // Validate user has required role
-        val hasRequiredRole = authentication.roles.any { it == "ADMIN" || it == "VULN" }
+        val hasRequiredRole = authentication.hasAnyRole("ADMIN", "VULN")
         if (!hasRequiredRole) {
             return HttpResponse.status(HttpStatus.FORBIDDEN)
         }
@@ -134,7 +135,7 @@ class OutdatedAssetController(
     @Secured("ADMIN", "VULN")
     fun getLastRefreshTimestamp(authentication: Authentication): HttpResponse<Map<String, Any>> {
         // Validate user has required role
-        val hasRequiredRole = authentication.roles.any { it == "ADMIN" || it == "VULN" }
+        val hasRequiredRole = authentication.hasAnyRole("ADMIN", "VULN")
         if (!hasRequiredRole) {
             return HttpResponse.status(HttpStatus.FORBIDDEN)
         }
@@ -163,7 +164,7 @@ class OutdatedAssetController(
     @Secured("ADMIN", "VULN")
     fun getOutdatedAssetsCount(authentication: Authentication): HttpResponse<Map<String, Any>> {
         // Validate user has required role
-        val hasRequiredRole = authentication.roles.any { it == "ADMIN" || it == "VULN" }
+        val hasRequiredRole = authentication.hasAnyRole("ADMIN", "VULN")
         if (!hasRequiredRole) {
             return HttpResponse.status(HttpStatus.FORBIDDEN)
         }
@@ -195,7 +196,7 @@ class OutdatedAssetController(
         @QueryValue(defaultValue = "") minSeverity: String?,
         @QueryValue(defaultValue = "") adDomain: String?
     ): HttpResponse<*> {
-        val hasRequiredRole = authentication.roles.any { it == "ADMIN" || it == "VULN" }
+        val hasRequiredRole = authentication.hasAnyRole("ADMIN", "VULN")
         if (!hasRequiredRole) {
             return HttpResponse.status<Any>(HttpStatus.FORBIDDEN)
         }
@@ -250,7 +251,7 @@ class OutdatedAssetController(
         authentication: Authentication
     ): HttpResponse<OutdatedAssetDto> {
         // Validate user has required role
-        val hasRequiredRole = authentication.roles.any { it == "ADMIN" || it == "VULN" }
+        val hasRequiredRole = authentication.hasAnyRole("ADMIN", "VULN")
         if (!hasRequiredRole) {
             return HttpResponse.status(HttpStatus.FORBIDDEN)
         }
@@ -293,7 +294,7 @@ class OutdatedAssetController(
         pageable: Pageable
     ): HttpResponse<Map<String, Any>> {
         // Validate user has required role
-        val hasRequiredRole = authentication.roles.any { it == "ADMIN" || it == "VULN" }
+        val hasRequiredRole = authentication.hasAnyRole("ADMIN", "VULN")
         if (!hasRequiredRole) {
             return HttpResponse.status(HttpStatus.FORBIDDEN)
         }

@@ -86,12 +86,7 @@ open class CreateExceptionRequestTool(
 
     override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
         // FR-006: Require User Delegation
-        if (!context.hasDelegation()) {
-            return McpToolResult.error(
-                "DELEGATION_REQUIRED",
-                "User Delegation must be enabled to use this tool"
-            )
-        }
+        requireDelegation(context)?.let { return it }
 
         try {
             // Parse and validate vulnerabilityId

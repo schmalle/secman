@@ -33,12 +33,7 @@ class ListUsersTool(
     override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
         // FR-002, FR-004: Require User Delegation
         // T002: Delegation check - cannot verify admin role without knowing the user
-        if (!context.hasDelegation()) {
-            return McpToolResult.error(
-                "DELEGATION_REQUIRED",
-                "User Delegation must be enabled to use this tool"
-            )
-        }
+        requireDelegation(context)?.let { return it }
 
         // FR-003, FR-005, FR-010: Require ADMIN role
         // T003: Admin role check - protect user data privacy

@@ -1,7 +1,6 @@
 package com.secman.repository
 
 import com.secman.domain.AlignmentReviewer
-import com.secman.domain.AlignmentReviewer.ReviewerStatus
 import io.micronaut.data.annotation.Query
 import io.micronaut.data.annotation.Repository
 import io.micronaut.data.jpa.repository.JpaRepository
@@ -30,16 +29,6 @@ interface AlignmentReviewerRepository : JpaRepository<AlignmentReviewer, Long> {
     fun findByReviewToken(reviewToken: String): Optional<AlignmentReviewer>
 
     /**
-     * Find reviewers by status within a session.
-     */
-    fun findBySession_IdAndStatus(sessionId: Long, status: ReviewerStatus): List<AlignmentReviewer>
-
-    /**
-     * Count reviewers by status within a session.
-     */
-    fun countBySession_IdAndStatus(sessionId: Long, status: ReviewerStatus): Long
-
-    /**
      * Count total reviewers in a session.
      */
     fun countBySession_Id(sessionId: Long): Long
@@ -54,12 +43,6 @@ interface AlignmentReviewerRepository : JpaRepository<AlignmentReviewer, Long> {
      * Find all reviews by a specific user across all sessions.
      */
     fun findByUser_Id(userId: Long): List<AlignmentReviewer>
-
-    /**
-     * Check if a user is a reviewer for a session.
-     */
-    @Query("SELECT COUNT(r) > 0 FROM AlignmentReviewer r WHERE r.session.id = :sessionId AND r.user.id = :userId")
-    fun isUserReviewer(sessionId: Long, userId: Long): Boolean
 
     /**
      * Delete all reviewers for a session.

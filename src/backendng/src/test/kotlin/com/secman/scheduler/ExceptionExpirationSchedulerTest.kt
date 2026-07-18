@@ -39,7 +39,11 @@ class ExceptionExpirationSchedulerTest {
             requestRepository, exceptionRepository, auditService, notificationService, cacheInvalidator
         )
         // Production gets the AOP self-proxy injected; the plain instance suffices here.
-        scheduler.selfProvider = jakarta.inject.Provider { scheduler }
+        // The field is private (public/internal visibility crashes the bean graph), so set via reflection.
+        ExceptionExpirationScheduler::class.java.getDeclaredField("selfProvider").apply {
+            isAccessible = true
+            set(scheduler, jakarta.inject.Provider { scheduler })
+        }
         every { notificationService.notifyRequesterOfExpiration(any()) } returns
             CompletableFuture.completedFuture(true)
         every { notificationService.notifyAdminsAndSecChampionsOfExpiration(any()) } returns

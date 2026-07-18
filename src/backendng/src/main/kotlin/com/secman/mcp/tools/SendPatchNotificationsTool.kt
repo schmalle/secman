@@ -57,12 +57,7 @@ class SendPatchNotificationsTool(
 
     override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
         // Require User Delegation for audit trail
-        if (!context.hasDelegation()) {
-            return McpToolResult.error(
-                "DELEGATION_REQUIRED",
-                "User Delegation must be enabled to use this tool"
-            )
-        }
+        requireDelegation(context)?.let { return it }
 
         // Require ADMIN role
         if (!context.isAdmin) {

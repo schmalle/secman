@@ -15,9 +15,4 @@ interface NotificationPreferenceRepository : JpaRepository<NotificationPreferenc
      * Find notification preference by user ID
      */
     fun findByUserId(userId: Long): Optional<NotificationPreference>
-
-    /**
-     * Find all users who have enabled new vulnerability notifications
-     */
-    fun findByEnableNewVulnNotificationsTrue(): List<NotificationPreference>
 }

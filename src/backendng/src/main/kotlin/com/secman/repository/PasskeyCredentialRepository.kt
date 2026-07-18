@@ -26,9 +26,4 @@ interface PasskeyCredentialRepository : JpaRepository<PasskeyCredential, Long> {
      * Delete all passkeys for a given user
      */
     fun deleteByUserId(userId: Long): Int
-
-    /**
-     * Count passkeys for a given user
-     */
-    fun countByUserId(userId: Long): Long
 }

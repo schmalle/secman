@@ -55,12 +55,7 @@ class GetOverdueAssetsTool(
 
     override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
         // FR-002: Require User Delegation
-        if (!context.hasDelegation()) {
-            return McpToolResult.error(
-                "DELEGATION_REQUIRED",
-                "User Delegation must be enabled to use this tool"
-            )
-        }
+        requireDelegation(context)?.let { return it }
 
         // FR-003: Require ADMIN or VULN role
         val hasRole = context.isAdmin || context.delegatedUserRoles?.contains("VULN") == true

@@ -15,11 +15,6 @@ import java.util.*
 interface AlignmentSessionRepository : JpaRepository<AlignmentSession, Long> {
 
     /**
-     * Find alignment session by release ID.
-     */
-    fun findByRelease_Id(releaseId: Long): Optional<AlignmentSession>
-
-    /**
      * Find all sessions for a release.
      */
     fun findAllByRelease_Id(releaseId: Long): List<AlignmentSession>
@@ -34,11 +29,6 @@ interface AlignmentSessionRepository : JpaRepository<AlignmentSession, Long> {
      * Find sessions by status.
      */
     fun findByStatus(status: AlignmentStatus): List<AlignmentSession>
-
-    /**
-     * Find sessions initiated by a specific user.
-     */
-    fun findByInitiatedBy_Id(userId: Long): List<AlignmentSession>
 
     /**
      * Check if a release has an open alignment session.

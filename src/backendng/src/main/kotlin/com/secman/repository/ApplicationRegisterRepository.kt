@@ -13,8 +13,6 @@ interface ApplicationRegisterRepository : JpaRepository<ApplicationRegister, Lon
 
     fun existsByCarIdIgnoreCase(carId: String): Boolean
 
-    fun findByCarIdIgnoreCase(carId: String): Optional<ApplicationRegister>
-
     @Query("SELECT a.carId FROM ApplicationRegister a")
     fun findAllCarIds(): List<String>
 
