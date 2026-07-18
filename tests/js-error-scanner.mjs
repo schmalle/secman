@@ -88,7 +88,7 @@ function isExpectedHttpError(uri, httpError) {
       return true;
     }
   }
-  if (httpError.status === 404 && (url.includes('/api/account-vulns') || url.includes('/api/domain-vulns'))) {
+  if (httpError.status === 404 && (url.includes('/api/account-vulns') || url.includes('/api/domain-vulns') || url.includes('/api/wg-vulns'))) {
     return true;
   }
   return false;
