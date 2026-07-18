@@ -12,6 +12,7 @@ import com.secman.repository.UserRepository
 import com.secman.repository.VulnerabilityRepository
 import com.secman.repository.WorkgroupAdDomainRepository
 import com.secman.repository.WorkgroupAwsAccountRepository
+import com.secman.security.hasRole
 import io.micronaut.security.authentication.Authentication
 import jakarta.inject.Singleton
 import org.hibernate.Hibernate
@@ -73,7 +74,7 @@ open class AssetFilterService(
      */
     fun getAccessibleAssets(authentication: Authentication): List<Asset> {
         // ADMIN and SECCHAMPION have universal access
-        if (hasRole(authentication, "ADMIN") || hasRole(authentication, "SECCHAMPION")) {
+        if (authentication.hasRole("ADMIN") || authentication.hasRole("SECCHAMPION")) {
             return assetRepository.findAll()
         }
 
@@ -81,7 +82,7 @@ open class AssetFilterService(
     }
 
     fun getScopedAccessibleAssetIds(authentication: Authentication): Set<Long> {
-        if (hasRole(authentication, "ADMIN")) {
+        if (authentication.hasRole("ADMIN")) {
             return assetRepository.findAll().mapNotNull { it.id }.toSet()
         }
         return getAccessibleAssetsForScopedUser(authentication).mapNotNull { it.id }.toSet()
@@ -108,7 +109,7 @@ open class AssetFilterService(
      * that only need membership checks or `IN (:assetIds)` filtering.
      */
     fun getAccessibleAssetIds(authentication: Authentication): Set<Long> {
-        if (hasRole(authentication, "ADMIN") || hasRole(authentication, "SECCHAMPION")) {
+        if (authentication.hasRole("ADMIN") || authentication.hasRole("SECCHAMPION")) {
             return assetRepository.findAll().mapNotNull { it.id }.toSet()
         }
         return getAccessibleAssets(authentication).mapNotNull { it.id }.toSet()
@@ -219,7 +220,7 @@ open class AssetFilterService(
      */
     fun getAccessibleVulnerabilities(authentication: Authentication): List<Vulnerability> {
         // ADMIN and SECCHAMPION have universal access
-        if (hasRole(authentication, "ADMIN") || hasRole(authentication, "SECCHAMPION")) {
+        if (authentication.hasRole("ADMIN") || authentication.hasRole("SECCHAMPION")) {
             return vulnerabilityRepository.findAll()
         }
 
@@ -243,7 +244,7 @@ open class AssetFilterService(
      */
     fun getAccessibleScans(authentication: Authentication): List<Scan> {
         // ADMIN and SECCHAMPION have universal access
-        if (hasRole(authentication, "ADMIN") || hasRole(authentication, "SECCHAMPION")) {
+        if (authentication.hasRole("ADMIN") || authentication.hasRole("SECCHAMPION")) {
             return scanRepository.findAll()
         }
 
@@ -290,7 +291,7 @@ open class AssetFilterService(
      */
     fun canAccessAsset(assetId: Long, authentication: Authentication): Boolean {
         // ADMIN and SECCHAMPION have universal access
-        if (hasRole(authentication, "ADMIN") || hasRole(authentication, "SECCHAMPION")) {
+        if (authentication.hasRole("ADMIN") || authentication.hasRole("SECCHAMPION")) {
             return true
         }
 
@@ -340,14 +341,4 @@ open class AssetFilterService(
         return authentication.attributes["email"]?.toString()
     }
 
-    /**
-     * Check if authentication has a specific role
-     *
-     * @param authentication Current user authentication
-     * @param role Role name to check (e.g., "ADMIN", "VULN", "USER")
-     * @return true if user has the role
-     */
-    private fun hasRole(authentication: Authentication, role: String): Boolean {
-        return authentication.roles.contains(role)
-    }
 }
