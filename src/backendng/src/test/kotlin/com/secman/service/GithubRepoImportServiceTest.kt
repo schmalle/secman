@@ -47,7 +47,11 @@ class GithubRepoImportServiceTest {
         entityManager = mockk()
         service = GithubRepoImportService(configRepository, repoRepository, snapshotRepository, alertRepository, client, ownerEmailMappingRepository, entityManager)
         // Production gets the AOP self-proxy injected; the plain instance suffices in unit tests.
-        service.selfProvider = jakarta.inject.Provider { service }
+        // The field is private (public/internal visibility crashes the bean graph), so set via reflection.
+        GithubRepoImportService::class.java.getDeclaredField("selfProvider").apply {
+            isAccessible = true
+            set(service, jakarta.inject.Provider { service })
+        }
 
         every { configRepository.findActiveConfig() } returns Optional.of(config)
         every { client.getInstallationToken(config) } returns "token"

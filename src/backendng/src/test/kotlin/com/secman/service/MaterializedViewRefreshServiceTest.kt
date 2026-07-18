@@ -59,8 +59,12 @@ class MaterializedViewRefreshServiceTest {
             awsCleanServerKpiService
         )
         // In production Micronaut injects the AOP self-proxy; in unit tests the plain
-        // instance is fine (no transactionality to assert here).
-        service.selfProvider = jakarta.inject.Provider { service }
+        // instance is fine (no transactionality to assert here). The field is private
+        // (public/internal visibility crashes the bean graph), so set via reflection.
+        MaterializedViewRefreshService::class.java.getDeclaredField("selfProvider").apply {
+            isAccessible = true
+            set(service, jakarta.inject.Provider { service })
+        }
     }
 
     private fun overdueVulnerability(): Vulnerability {

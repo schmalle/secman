@@ -60,11 +60,12 @@ open class GithubOwnerEmailMappingService(
     open fun update(id: Long, email: String): GithubOwnerEmailMapping {
         val mapping = mappingRepository.findById(id).orElseThrow { NotFoundException(id) }
         val normalizedEmail = validateAndNormalize(email)
+        val previousEmail = mapping.email
 
         mapping.email = normalizedEmail
         mapping.updatedAt = java.time.Instant.now()
         val saved = mappingRepository.update(mapping)
-        backfill(mapping.owner, normalizedEmail)
+        backfill(mapping.owner, normalizedEmail, replaceable = previousEmail)
         log.info("GitHub owner email mapping {} updated to {}", mapping.owner, normalizedEmail)
         return saved
     }
@@ -76,16 +77,24 @@ open class GithubOwnerEmailMappingService(
         log.info("GitHub owner email mapping for {} deleted", mapping.owner)
     }
 
-    /** Fill `ownerEmail` on every repo for [owner] whose value is currently blank. */
-    private fun backfill(owner: String, email: String) {
-        val blankRepos = githubRepositoryRepository.findByOwnerIgnoreCase(owner)
-            .filter { it.ownerEmail.isNullOrBlank() }
-        blankRepos.forEach { repo ->
+    /**
+     * Fill `ownerEmail` on every repo for [owner] whose value is currently blank.
+     * On mapping update, [replaceable] carries the mapping's previous email so repos
+     * still holding the mapping-driven value follow the update; repos whose email was
+     * hand-edited to something else are never touched.
+     */
+    private fun backfill(owner: String, email: String, replaceable: String? = null) {
+        val repos = githubRepositoryRepository.findByOwnerIgnoreCase(owner)
+            .filter {
+                it.ownerEmail.isNullOrBlank() ||
+                    (replaceable != null && it.ownerEmail.equals(replaceable, ignoreCase = true))
+            }
+        repos.forEach { repo ->
             repo.ownerEmail = email
             githubRepositoryRepository.update(repo)
         }
-        if (blankRepos.isNotEmpty()) {
-            log.info("Backfilled ownerEmail for {} repo(s) under owner {}", blankRepos.size, owner)
+        if (repos.isNotEmpty()) {
+            log.info("Backfilled ownerEmail for {} repo(s) under owner {}", repos.size, owner)
         }
     }
 
