@@ -48,12 +48,7 @@ class SetReleaseStatusTool(
 
     override suspend fun execute(arguments: Map<String, Any>, context: McpExecutionContext): McpToolResult {
         // Check authorization - require User Delegation with ADMIN or RELEASE_MANAGER role
-        if (!context.hasDelegation()) {
-            return McpToolResult.error(
-                "DELEGATION_REQUIRED",
-                "User Delegation must be enabled to use this tool"
-            )
-        }
+        requireDelegation(context)?.let { return it }
 
         val userRoles = context.delegatedUserRoles?.map { it.uppercase() } ?: emptyList()
         if (!userRoles.contains("ADMIN") && !userRoles.contains("RELEASE_MANAGER")) {
