@@ -54,14 +54,6 @@ data class ExportJobDto(
 }
 
 /**
- * Request to start an export job
- */
-@Serdeable
-data class StartExportRequest(
-    val exportType: ExportType = ExportType.VULNERABILITIES
-)
-
-/**
  * Response when starting an export job
  */
 @Serdeable
