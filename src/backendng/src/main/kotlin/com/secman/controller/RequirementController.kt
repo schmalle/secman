@@ -407,13 +407,14 @@ open class RequirementController(
     }
 
     @Get("/export/docx")
+    @Secured(SecurityRule.IS_ANONYMOUS) // Public: powers the unauthenticated /requirements/download page
     fun exportToDocx(
         @Nullable @QueryValue("releaseId") releaseId: Long?,
         @QueryValue(defaultValue = "LATEST") templateMode: String,
         @Nullable @QueryValue("templateId") templateId: Long?,
         @QueryValue(defaultValue = "REJECT") missingPlaceholderBehavior: String,
         @Nullable @QueryValue("classification") classification: String?,
-        authentication: Authentication
+        @Nullable authentication: Authentication?
     ): HttpResponse<*> {
         val exportData = resolveRequirementExportData(releaseId)
             ?: return HttpResponse.notFound(mapOf("error" to "Release not found"))
@@ -466,6 +467,7 @@ open class RequirementController(
     }
 
     @Get("/export/docx/usecase/{usecaseId}")
+    @Secured(SecurityRule.IS_ANONYMOUS) // Public: powers the unauthenticated /requirements/download page
     fun exportToDocxByUseCase(
         @PathVariable usecaseId: Long,
         @Nullable @QueryValue("releaseId") releaseId: Long?,
@@ -473,7 +475,7 @@ open class RequirementController(
         @Nullable @QueryValue("templateId") templateId: Long?,
         @QueryValue(defaultValue = "REJECT") missingPlaceholderBehavior: String,
         @Nullable @QueryValue("classification") classification: String?,
-        authentication: Authentication
+        @Nullable authentication: Authentication?
     ): HttpResponse<*> {
         val useCaseOptional = useCaseRepository.findById(usecaseId)
 
@@ -549,6 +551,7 @@ open class RequirementController(
     }
 
     @Get("/export/xlsx")
+    @Secured(SecurityRule.IS_ANONYMOUS) // Public: powers the unauthenticated /requirements/download page
     fun exportToExcel(@Nullable @QueryValue("releaseId") releaseId: Long?): HttpResponse<*> {
         val requirements: List<Requirement>
         val filename: String
@@ -590,6 +593,7 @@ open class RequirementController(
     }
 
     @Get("/export/xlsx/usecase/{usecaseId}")
+    @Secured(SecurityRule.IS_ANONYMOUS) // Public: powers the unauthenticated /requirements/download page
     fun exportToExcelByUseCase(@PathVariable usecaseId: Long, @Nullable @QueryValue("releaseId") releaseId: Long?): HttpResponse<*> {
         val useCaseOptional = useCaseRepository.findById(usecaseId)
 
@@ -673,8 +677,9 @@ open class RequirementController(
         scope: RequirementExportScope,
         releaseId: Long?,
         usecaseId: Long?,
-        authentication: Authentication
+        authentication: Authentication?
     ): HttpResponse<*> {
+        val exportedBy = authentication?.name ?: "anonymous"
         val behavior = parseMissingPlaceholderBehavior(missingPlaceholderBehavior)
         val resolvedTemplate = try {
             resolveTemplate(templateMode, templateId, adHocTemplate, behavior)
@@ -688,7 +693,7 @@ open class RequirementController(
                 templateBytes = resolvedTemplate.bytes,
                 requirements = requirements,
                 title = title,
-                exportedBy = authentication.name,
+                exportedBy = exportedBy,
                 language = language ?: "english",
                 classification = classification ?: "Internal"
             )
@@ -700,7 +705,7 @@ open class RequirementController(
             RequirementExportTemplateUsage(
                 template = resolvedTemplate.savedTemplate,
                 templateSha256 = resolvedTemplate.sha256,
-                exportedBy = authentication.name,
+                exportedBy = exportedBy,
                 exportScope = scope,
                 releaseId = releaseId,
                 usecaseId = usecaseId,

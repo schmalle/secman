@@ -68,6 +68,7 @@ open class ReleaseController(
      * Optional filter by status, with pagination
      */
     @Get
+    @Secured(SecurityRule.IS_ANONYMOUS) // Public: powers the unauthenticated /requirements/download page
     fun listReleases(
         @QueryValue("status") status: Release.ReleaseStatus?,
         @QueryValue("page") page: Int?,
@@ -110,6 +111,7 @@ open class ReleaseController(
      * GET /api/releases/{id} - Get release details
      */
     @Get("/{id}")
+    @Secured(SecurityRule.IS_ANONYMOUS) // Public: powers the unauthenticated /requirements/download page
     fun getReleaseById(@PathVariable id: Long): HttpResponse<Map<String, Any>> {
         logger.debug("Getting release by ID: $id")
 

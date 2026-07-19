@@ -53,6 +53,7 @@ open class UseCaseController(
     )
 
     @Get
+    @Secured(SecurityRule.IS_ANONYMOUS) // Public: powers the unauthenticated /requirements/download page
     @Transactional(readOnly = true)
     open fun getUseCases(): HttpResponse<List<UseCase>> {
         return try {
