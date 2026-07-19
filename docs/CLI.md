@@ -346,6 +346,47 @@ If you have questions, contact your security team.
 The rendered email appends the account list below this text (both in HTML and
 plain-text parts).
 
+### `send-exception-expiry-reminders` — vulnerability exception expiry reminders
+
+Notifies vulnerability exception owners when their exception is expiring soon
+(default: **exactly 7 days from today**). Finds `VulnerabilityException` rows whose
+`expiration_date` falls on the target day, resolves each exception's owner (the
+exception's `createdBy` username, mapped to that user's email), and sends each owner
+one consolidated email listing all of their expiring exceptions (id, subject/scope,
+expiration date, reason).
+
+A reminder is sent **at most once per (exception, expiration date) pair**, so running
+this command daily (e.g. via cron) never re-notifies an owner for the same expiration
+date. If an exception's expiration date is later edited/extended, a fresh reminder is
+sent for the new date once it falls inside the window again.
+
+Requires `ADMIN`. Backend endpoint: `POST /api/cli/vulnerability-exception-expiry-notifications/send`.
+Mirrored by MCP tool `send_exception_expiry_reminders`.
+
+```bash
+# Preview who would be reminded about exceptions expiring in exactly 7 days:
+./scripts/secman send-exception-expiry-reminders --dry-run
+
+# Send the actual reminders (default 7-day window):
+./scripts/secman send-exception-expiry-reminders
+
+# 14-day window with per-recipient detail:
+./scripts/secman send-exception-expiry-reminders --days 14 --verbose
+
+# Via the AWS Secrets Manager wrapper (e.g. from a cron job):
+./scripts/secmancliaws.sh send-exception-expiry-reminders
+```
+
+| Option | Default | Notes |
+|---|---|---|
+| `--days <n>` | 7 | remind about exceptions expiring exactly this many days from today |
+| `--dry-run` | false | print planned recipients only, no emails sent |
+| `--verbose` | false | per-recipient delivery status |
+| `--username` / `--password` | env | `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS` |
+| `--backend-url` | env | `SECMAN_HOST` / `SECMAN_BACKEND_URL` |
+
+**Exit codes:** `0` success/dry-run, `1` partial failure or error, `2` invalid arguments (e.g. `--days < 1`).
+
 ### `manage-user-mappings`
 
 Subcommands: `list`, `add-aws`, `add-domain`, `import`, `import-s3`, `download-s3`, `print-s3`, `remove`.

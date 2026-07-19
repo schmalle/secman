@@ -11,6 +11,7 @@ import com.secman.service.NotificationService
 import com.secman.service.UserMappingStatisticsService
 import com.secman.service.UserVulnerabilityNotificationService
 import com.secman.service.ApplicationRegisterReminderService
+import com.secman.service.VulnerabilityExceptionExpiryReminderService
 import io.micronaut.data.model.Pageable
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.MediaType
@@ -45,7 +46,8 @@ class CliController(
     private val applicationRegisterReminderService: ApplicationRegisterReminderService,
     private val newAccountNotificationService: NewAccountNotificationService,
     private val recipientResolver: AwsAccountRecipientResolver,
-    private val githubRepoAlertService: GithubRepoAlertService
+    private val githubRepoAlertService: GithubRepoAlertService,
+    private val vulnerabilityExceptionExpiryReminderService: VulnerabilityExceptionExpiryReminderService
 ) {
     private val logger = LoggerFactory.getLogger(CliController::class.java)
 
@@ -573,6 +575,75 @@ class CliController(
             ))
         } catch (e: Exception) {
             logger.error("Error sending new-account notifications", e)
+            HttpResponse.serverError()
+        }
+    }
+
+    // --- Vulnerability Exception Expiry Reminder Endpoint ---
+
+    @Serdeable
+    data class SendExceptionExpiryRemindersRequest(
+        val dryRun: Boolean = false,
+        val verbose: Boolean = false,
+        val days: Int = 7
+    )
+
+    @Serdeable
+    data class ExceptionExpiryReminderResultDto(
+        val status: String,
+        val days: Int,
+        val exceptionsExpiring: Int,
+        val ownersNotified: Int,
+        val emailsSent: Int,
+        val emailsFailed: Int,
+        val recipients: List<String>,
+        val failedRecipients: List<String>,
+        val unmappedOwners: List<String>,
+        val alreadyNotified: Int
+    )
+
+    /**
+     * POST /api/cli/vulnerability-exception-expiry-notifications/send
+     *
+     * Finds VulnerabilityException rows expiring exactly [days] days from today,
+     * resolves each exception's owner (createdBy username -> User.email), and sends
+     * each owner one consolidated email listing all of their expiring exceptions.
+     * A reminder is sent once per (exception, expirationDate) pair.
+     */
+    @Post("/vulnerability-exception-expiry-notifications/send")
+    @Produces(MediaType.APPLICATION_JSON)
+    fun sendExceptionExpiryReminders(
+        @Body request: SendExceptionExpiryRemindersRequest,
+        authentication: Authentication
+    ): HttpResponse<ExceptionExpiryReminderResultDto> {
+        logger.info("CLI vulnerability-exception-expiry-notifications requested by user: {} (dryRun={}, days={})",
+            authentication.name, request.dryRun, request.days)
+
+        if (request.days < 1) {
+            logger.warn("Invalid days value: {}", request.days)
+            return HttpResponse.badRequest()
+        }
+
+        return try {
+            val result = vulnerabilityExceptionExpiryReminderService.sendExpiryReminders(
+                days = request.days,
+                dryRun = request.dryRun,
+                verbose = request.verbose
+            )
+            HttpResponse.ok(ExceptionExpiryReminderResultDto(
+                status = result.status.name,
+                days = result.days,
+                exceptionsExpiring = result.exceptionsExpiring,
+                ownersNotified = result.ownersNotified,
+                emailsSent = result.emailsSent,
+                emailsFailed = result.emailsFailed,
+                recipients = result.recipients,
+                failedRecipients = result.failedRecipients,
+                unmappedOwners = result.unmappedOwners,
+                alreadyNotified = result.alreadyNotified
+            ))
+        } catch (e: Exception) {
+            logger.error("Error sending vulnerability exception expiry reminders", e)
             HttpResponse.serverError()
         }
     }

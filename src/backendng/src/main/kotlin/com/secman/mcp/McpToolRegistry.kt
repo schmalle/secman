@@ -107,6 +107,7 @@ class McpToolRegistry(
     @Inject private val deduplicateVulnerabilitiesTool: DeduplicateVulnerabilitiesTool,
     @Inject private val deleteAssetNotSeenTool: DeleteAssetNotSeenTool,
     @Inject private val notifyNewAccountsTool: NotifyNewAccountsTool,
+    @Inject private val sendExceptionExpiryRemindersTool: SendExceptionExpiryRemindersTool,
     @Inject private val sendOutdatedNotificationsTool: SendOutdatedNotificationsTool,
     @Inject private val sendVulnerabilityNotificationsTool: SendVulnerabilityNotificationsTool,
     @Inject private val sendApplicationRegisterRemindersTool: SendApplicationRegisterRemindersTool,
@@ -222,6 +223,7 @@ class McpToolRegistry(
             deduplicateVulnerabilitiesTool,
             deleteAssetNotSeenTool,
             notifyNewAccountsTool,
+            sendExceptionExpiryRemindersTool,
             sendOutdatedNotificationsTool,
             sendVulnerabilityNotificationsTool,
             sendApplicationRegisterRemindersTool,
@@ -529,6 +531,9 @@ class McpToolRegistry(
                 permissions.contains(McpPermission.ASSETS_READ) // ADMIN role checked in tool execute()
             }
             "notify_new_accounts" -> {
+                permissions.contains(McpPermission.NOTIFICATIONS_SEND) // ADMIN role checked in tool execute()
+            }
+            "send_exception_expiry_reminders" -> {
                 permissions.contains(McpPermission.NOTIFICATIONS_SEND) // ADMIN role checked in tool execute()
             }
             "send_outdated_notifications" -> {
