@@ -61,13 +61,19 @@ open class AlignmentController(
         @Valid @Body request: StartAlignmentRequest?,
         authentication: Authentication
     ): HttpResponse<Map<String, Any>> {
-        logger.info("Starting alignment for release {} by user {} (reviewAll={})", releaseId, authentication.name, request?.reviewAll)
+        logger.info("Starting alignment for release {} by user {} (reviewAll={}, reviewers={})",
+            releaseId, authentication.name, request?.reviewAll, request?.reviewerUserIds?.size ?: "all")
 
         try {
             val user = userRepository.findByUsername(authentication.name)
                 .orElseThrow { NoSuchElementException("User not found: ${authentication.name}") }
 
-            val result = alignmentService.startAlignment(releaseId, user.id!!, request?.reviewAll ?: false)
+            val result = alignmentService.startAlignment(
+                releaseId,
+                user.id!!,
+                request?.reviewAll ?: false,
+                request?.reviewerUserIds
+            )
 
             // Send notification emails to all reviewers
             alignmentEmailService.sendReviewRequestEmails(result.session, result.reviewers)
@@ -141,6 +147,26 @@ open class AlignmentController(
                 "message" to (e.message ?: "Release not found")
             ))
         }
+    }
+
+    /**
+     * GET /api/alignment/eligible-reviewers - List users who can be selected as reviewers
+     * Authorization: ADMIN or RELEASE_MANAGER only
+     */
+    @Get("/alignment/eligible-reviewers")
+    @Secured("ADMIN", "RELEASE_MANAGER")
+    fun getEligibleReviewers(): HttpResponse<Map<String, Any>> {
+        val users = alignmentService.getEligibleReviewers()
+        return HttpResponse.ok(mapOf(
+            "reviewers" to users.map { user ->
+                mapOf(
+                    "id" to user.id,
+                    "username" to user.username,
+                    "email" to user.email
+                )
+            },
+            "totalCount" to users.size
+        ))
     }
 
     // ========== Session-Based Endpoints ==========
@@ -1190,7 +1216,9 @@ open class AlignmentController(
 
 @Serdeable
 data class StartAlignmentRequest(
-    val reviewAll: Boolean = false
+    val reviewAll: Boolean = false,
+    /** Optional subset of REQ-role user IDs to enroll as reviewers; null = all REQ users */
+    val reviewerUserIds: List<Long>? = null
 )
 
 @Serdeable

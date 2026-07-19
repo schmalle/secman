@@ -87,13 +87,22 @@ open class AlignmentService(
      *
      * @param releaseId The release to start alignment for
      * @param initiatorId The user initiating the alignment
+     * @param reviewAll If true, review all requirements instead of only changed ones
+     * @param reviewerUserIds Optional subset of REQ-role user IDs to enroll as reviewers;
+     *                        null means all REQ-role users (default behavior)
      * @return AlignmentStartResult with session details
-     * @throws IllegalArgumentException if release is not in PREPARATION status
+     * @throws IllegalArgumentException if release is not in PREPARATION status or reviewer selection is invalid
      * @throws IllegalStateException if no REQ-role users exist
      */
     @Transactional
-    open fun startAlignment(releaseId: Long, initiatorId: Long, reviewAll: Boolean = false): AlignmentStartResult {
-        logger.info("Starting alignment for release {} by user {} (reviewAll={})", releaseId, initiatorId, reviewAll)
+    open fun startAlignment(
+        releaseId: Long,
+        initiatorId: Long,
+        reviewAll: Boolean = false,
+        reviewerUserIds: List<Long>? = null
+    ): AlignmentStartResult {
+        logger.info("Starting alignment for release {} by user {} (reviewAll={}, reviewerUserIds={})",
+            releaseId, initiatorId, reviewAll, reviewerUserIds)
 
         val release = releaseRepository.findById(releaseId)
             .orElseThrow { NoSuchElementException("Release not found: $releaseId") }
@@ -109,11 +118,7 @@ open class AlignmentService(
         val initiator = userRepository.findById(initiatorId)
             .orElseThrow { NoSuchElementException("User not found: $initiatorId") }
 
-        // Find users with REQ role
-        val reviewerUsers = userRepository.findByRolesContaining(User.Role.REQ)
-        if (reviewerUsers.isEmpty()) {
-            throw IllegalStateException("No users with REQ role found. Cannot start alignment without reviewers.")
-        }
+        val reviewerUsers = resolveReviewers(reviewerUserIds)
 
         // Find baseline release (last ACTIVE)
         val baselineRelease = releaseRepository.findByStatus(ReleaseStatus.ACTIVE).firstOrNull()
@@ -160,6 +165,47 @@ open class AlignmentService(
             modifiedCount = modifiedCount,
             deletedCount = deletedCount
         )
+    }
+
+    /**
+     * Resolve the reviewer set for an alignment session.
+     *
+     * When [reviewerUserIds] is null, all REQ-role users are enrolled (default).
+     * When provided, it must be a non-empty subset of REQ-role users.
+     */
+    private fun resolveReviewers(reviewerUserIds: List<Long>?): List<User> {
+        val eligibleUsers = userRepository.findByRolesContaining(User.Role.REQ)
+        if (eligibleUsers.isEmpty()) {
+            throw IllegalStateException("No users with REQ role found. Cannot start alignment without reviewers.")
+        }
+
+        if (reviewerUserIds == null) {
+            return eligibleUsers
+        }
+
+        val requestedIds = reviewerUserIds.distinct()
+        if (requestedIds.isEmpty()) {
+            throw IllegalArgumentException("At least one reviewer must be selected")
+        }
+
+        val eligibleById = eligibleUsers.associateBy { it.id!! }
+        val ineligibleIds = requestedIds.filter { it !in eligibleById }
+        if (ineligibleIds.isNotEmpty()) {
+            throw IllegalArgumentException(
+                "Invalid reviewer selection: user IDs $ineligibleIds do not exist or do not have the REQ role"
+            )
+        }
+
+        return requestedIds.map { eligibleById.getValue(it) }
+    }
+
+    /**
+     * Get all users eligible to review an alignment (REQ-role users).
+     * Used by the UI to offer reviewer selection when starting an alignment.
+     */
+    @Transactional
+    open fun getEligibleReviewers(): List<User> {
+        return userRepository.findByRolesContaining(User.Role.REQ)
     }
 
     /**
