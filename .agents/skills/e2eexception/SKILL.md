@@ -45,6 +45,8 @@ for direct database operations (cleanup, view truncation, ID lookups).
 ## High-Level Loop
 
 ```
+0. Kill any running backend/frontend (./scripts/stopbackenddev.sh +
+   ./scripts/stopfrontenddev.sh) — always, even if ports look free
 1. Start backend   (scripts/startbackenddev.sh outside the sandbox)
 2. Start frontend  (scripts/startfrontenddev.sh outside the sandbox)
 3. Wait for both to be healthy
@@ -78,8 +80,17 @@ inside the filesystem sandbox.
 
 1. **Create log directory** `.e2e-logs/` if it doesn't exist.
 
-2. **Check for port conflicts** — run `lsof -i :8080` and `lsof -i :4321`. If ports
-   are in use, kill the existing processes before starting.
+2. **Kill any running services (mandatory, unconditional)** — never reuse an
+   already-running backend or frontend; a running instance may predate the
+   current working tree. Always run both stop scripts, even if the ports look
+   free (they are safe no-ops when nothing is running; never call `kill` or
+   `lsof | xargs kill` inline):
+   ```bash
+   ./scripts/stopbackenddev.sh
+   ./scripts/stopfrontenddev.sh
+   ```
+   Wait ~3 seconds, then verify with `lsof -iTCP:8080 -sTCP:LISTEN -n -P` and
+   `lsof -iTCP:4321 -sTCP:LISTEN -n -P` — both must print nothing.
 
 3. **Start backend** in background:
    ```bash
@@ -242,8 +253,9 @@ Go back to Phase 2 and re-run the test script. Increment the iteration counter.
 - **Secrets are handled by Proton Pass** — `scripts/startbackenddev.sh` and
   `scripts/startfrontenddev.sh` use `pass-cli run` to inject secrets. The test script
   must also be run with `pass-cli run` to resolve `SECMAN_MCP_KEY` and `SECMAN_ADMIN_EMAIL`.
-- **Port collisions**: Before starting, check if ports 8080 and 4321 are in use
-  and kill existing processes.
+- **Fresh services always**: killing any running backend/frontend via the stop
+  scripts and starting both fresh is an unconditional part of Phase 1 — never
+  attach the test run to services you did not start in this invocation.
 - **Log files** go to `.e2e-logs/` — this directory is gitignored.
 - **MariaDB access**: The test script connects to `mariadb -h 127.0.0.1 -u secman -pCHANGEME secman`
   for direct database operations. Ensure MariaDB is running.

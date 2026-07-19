@@ -22,7 +22,8 @@ load them only when a specific phase needs them.
 ## High-Level Loop
 
 ```
-0. Kill anything listening on 8080 / 4321 (via stop scripts, never `kill`).
+0. Kill any running backend/frontend via the stop scripts — always,
+   even if ports look free (never `kill`).
 1. Start backend  (./scripts/startbackenddev.sh outside the sandbox)
 2. Start frontend (./scripts/startfrontenddev.sh outside the sandbox)
 3. Wait for both ports to be BOUND (port binding, not HTTP)
@@ -59,7 +60,11 @@ start either dev server inside the filesystem sandbox.
 Steps:
 
 1. `mkdir -p .e2e-logs`
-2. Check ports 8080 / 4321; if occupied, run the canonical stop scripts.
+2. **Always** run `./scripts/stopbackenddev.sh` and
+   `./scripts/stopfrontenddev.sh` — unconditional, even if 8080/4321 look
+   free (safe no-ops when nothing runs). Never reuse an already-running
+   backend or frontend. Wait ~3s, then verify both ports are unbound via
+   `lsof -iTCP:8080 -sTCP:LISTEN -n -P` / `lsof -iTCP:4321 -sTCP:LISTEN -n -P`.
 3. `nohup ./scripts/startbackenddev.sh > .e2e-logs/backend.log 2>&1 &` (outside the sandbox)
 4. `nohup ./scripts/startfrontenddev.sh > .e2e-logs/frontend.log 2>&1 &` (outside the sandbox)
 5. Poll `lsof` until both ports bind (exit as soon as bound — don't sleep the full window).

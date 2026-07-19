@@ -33,6 +33,8 @@ The E2E test (`tests/e2e/admin-asset-vuln.spec.ts`) performs:
 ## High-Level Loop
 
 ```
+0. Kill any running backend/frontend (./scripts/stopbackenddev.sh +
+   ./scripts/stopfrontenddev.sh) — always, even if ports look free
 1. Start backend   (./scripts/startbackenddev.sh outside the sandbox)
 2. Start frontend  (./scripts/startfrontenddev.sh outside the sandbox)
 3. Wait for both to be healthy
@@ -49,6 +51,27 @@ The E2E test (`tests/e2e/admin-asset-vuln.spec.ts`) performs:
 ```
 
 ## Detailed Instructions
+
+### Phase 0 — Kill Running Services (mandatory, unconditional)
+
+Never reuse an already-running backend or frontend — a running instance may
+predate the current working tree and would invalidate the run. Always start
+from a cold stack, even if the ports look free or the services look healthy:
+
+```bash
+./scripts/stopbackenddev.sh
+./scripts/stopfrontenddev.sh
+```
+
+Both scripts graceful-kill first, force-kill anything still listening on
+8080/4321, and are safe no-ops when nothing is running. Never call `kill` or
+`lsof | xargs kill` inline. Wait ~3 seconds, then verify both ports are free
+before proceeding to Phase 1:
+
+```bash
+lsof -iTCP:8080 -sTCP:LISTEN -n -P   # must print nothing
+lsof -iTCP:4321 -sTCP:LISTEN -n -P   # must print nothing
+```
 
 ### Phase 1 — Environment Setup
 
@@ -162,5 +185,7 @@ Fix in priority order: **backend errors first**, then frontend.
   `scripts/startfrontenddev.sh` use `pass-cli run` to inject secrets into the
   backend/frontend. The Playwright test invocation is also wrapped with
   `pass-cli run` to resolve `SECMAN_*` credentials.
-- **Port collisions**: Before starting, check if ports are in use.
+- **Fresh services always**: Phase 0 is unconditional — kill any running
+  backend/frontend via the stop scripts and start both fresh. Never attach the
+  test run to services you did not start in this invocation.
 - Prefer reading `scripts/wait-for-health.sh` for health-checking logic.

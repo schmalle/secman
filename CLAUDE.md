@@ -179,8 +179,9 @@ GRANT ALL PRIVILEGES ON secman_test.* TO 'secman_test'@'localhost';
 
 ## E2E Runner
 
-Triggered by `/e2eexception`, `/admin-asset-e2e`, `/e2ejs`, `/e2evulnexception` skills.
+Triggered by `/e2eexception`, `/admin-asset-e2e`, `/e2ejs`, `/e2evulnexception`, `/importtest`, `/crowdstrike-vuln-match` skills.
 
+- **Cold start is mandatory**: every skill that touches the running stack assumes backend and frontend must be started by the skill itself. It always begins by killing any running backend/frontend via `./scripts/stopbackenddev.sh` / `./scripts/stopfrontenddev.sh` (unconditional — even if ports look free; the scripts are safe no-ops), then starts both fresh via the canonical start scripts. Never reuse an already-running instance; never assume services are up.
 - Backend changes (Kotlin/Java) → restart required.
 - Frontend changes → Vite hot-reload (no restart).
 - Config (`astro.config.mjs`, `application.yml`) → restart.
@@ -190,7 +191,7 @@ Triggered by `/e2eexception`, `/admin-asset-e2e`, `/e2ejs`, `/e2evulnexception` 
 
 ---
 
-*Last updated: 2026-05-15*
+*Last updated: 2026-07-19*
 
 ## Recent Changes
 
