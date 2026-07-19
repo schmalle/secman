@@ -7,8 +7,36 @@ Docker runs. The database is **not** part of the container — point it at
 Amazon RDS (MariaDB) or any reachable MariaDB 11.4.
 
 For the local multi-container setup (separate backend/frontend/database
-containers), see `docker/README.md`. This document only covers the
-all-in-one image.
+containers), see `docker/README.md`. This document covers the all-in-one
+image and how to run it against either a **Docker MariaDB container** or an
+**Amazon RDS** backend.
+
+## Database: container or RDS
+
+The all-in-one image never contains a database — it connects to whatever
+`DB_CONNECT` points at. That single variable is the switch between the two
+supported backends:
+
+| Backend | When | `DB_CONNECT` |
+|---|---|---|
+| **MariaDB Docker container** | Local dev, demos, self-hosted small deployments | `jdbc:mariadb://db:3306/secman` (compose service `db`) |
+| **Amazon RDS (MariaDB 11.4)** | AWS / production | `jdbc:mariadb://<instance>.<id>.<region>.rds.amazonaws.com:3306/secman` |
+
+The quickest way to get either mode running is **Docker Compose**, which also
+manages the optional bundled database:
+
+```bash
+# Bundled MariaDB container (compose starts it via the `local-db` profile)
+./docker/compose-up.sh --local-db
+
+# External DB / Amazon RDS (only the app container runs; set DB_CONNECT first)
+./docker/compose-up.sh --rds
+```
+
+`compose-up.sh` seeds `docker/.env` (from `docker/.env.example`) with freshly
+generated secrets on first run. See `docker/README.md` for the compose
+reference. The rest of this document covers building the image and deploying it
+to AWS ECS/Fargate, where the database is **always RDS**.
 
 ## Architecture
 
@@ -227,5 +255,7 @@ ARN in `valueFrom` plus `ssm:GetParameters` on the role.)
 | Schema errors on first boot against a fresh DB | ensure `FLYWAY_DATASOURCES_DEFAULT_ENABLED=false` so Hibernate creates the schema |
 
 ---
-*See also: `docs/ENVIRONMENT.md` (full variable catalog), `docs/DEPLOYMENT.md`,
-`docs/AWS_SECRETS_SETUP.md`, `docker/README.md` (local multi-container setup).*
+*See also: `docker/docker-compose.yml` + `docker/compose-up.sh` (run the same
+image locally with a bundled DB or against RDS), `docs/ENVIRONMENT.md` (full
+variable catalog), `docs/DEPLOYMENT.md`, `docs/AWS_SECRETS_SETUP.md`,
+`docker/README.md` (local multi-container setup).*

@@ -1,10 +1,76 @@
 # Secman Docker Deployment
 
-Three standalone Docker containers (no docker-compose) for running the full Secman stack.
+This directory holds three ways to run Secman in Docker. Pick the one that
+fits:
 
-> Looking for the **single-container AWS image** (web server + backend in one
-> container, ECS/Fargate + Secrets Manager)? See `docker/aws/` and
+| Setup | Files | Best for | Database |
+|-------|-------|----------|----------|
+| **Compose (all-in-one)** | `docker-compose.yml`, `compose-up.sh`, `.env.example` | Fastest local/demo start; mirrors the AWS image | **Bundled MariaDB container OR external RDS** (toggle) |
+| **Single-container (AWS)** | `docker/aws/` | ECS/Fargate + Secrets Manager | External RDS / MariaDB |
+| **Multi-container scripts** | `build-all.sh`, `start-*.sh` | Separate backend/frontend/db containers, no compose | Bundled MariaDB container |
+
+> Deploying to AWS ECS/Fargate? The full reference is
 > [docs/DOCKER_AWS.md](../docs/DOCKER_AWS.md).
+
+---
+
+## Option 1 — Docker Compose (recommended, DB is a container *or* RDS)
+
+One compose file runs the all-in-one image (Astro SSR + Micronaut + nginx) and
+lets you choose where the database lives. This is the direct answer to
+"run in AWS with the DB as either a Docker container or an RDS backend":
+develop locally against a bundled MariaDB, then point the same image at RDS in
+AWS by changing one variable.
+
+```bash
+# A) Bundled MariaDB container (dev/demo) — generates docker/.env with secrets
+./docker/compose-up.sh --local-db
+
+# B) External database / Amazon RDS — set DB_CONNECT in docker/.env first
+./docker/compose-up.sh --rds
+```
+
+The helper creates `docker/.env` from `.env.example` on first run, filling in
+freshly generated `JWT_SECRET`, encryption password/salt, and DB passwords.
+Review it before real use. Open `http://localhost:8080` (default host port).
+
+**Database mode is a single switch:**
+
+| Mode | Command | `DB_CONNECT` in `docker/.env` |
+|------|---------|-------------------------------|
+| Container | `compose-up.sh --local-db` | `jdbc:mariadb://db:3306/secman` |
+| RDS / external | `compose-up.sh --rds` | `jdbc:mariadb://<rds-endpoint>:3306/secman` |
+
+In `--rds` mode the bundled `db` service (guarded by the `local-db` compose
+profile) never starts — only the app container runs, talking to your RDS.
+
+Raw compose (no helper):
+
+```bash
+cp docker/.env.example docker/.env            # then edit secrets + DB_CONNECT
+# bundled DB:
+docker compose -f docker/docker-compose.yml --profile local-db up -d
+# RDS:
+docker compose -f docker/docker-compose.yml up -d
+```
+
+Tear down: `docker compose -f docker/docker-compose.yml --profile local-db down`
+(add `-v` to also drop the `secman-db-data` volume).
+
+---
+
+## Option 2 — Single-container AWS image
+
+The same all-in-one image, deployed to AWS ECS/Fargate behind an ALB with
+secrets in AWS Secrets Manager and the database on RDS. Build, push, and task
+definition instructions live in
+[docs/DOCKER_AWS.md](../docs/DOCKER_AWS.md).
+
+---
+
+## Option 3 — Multi-container scripts (no docker-compose)
+
+Three standalone Docker containers for running the full Secman stack.
 
 ## Architecture
 

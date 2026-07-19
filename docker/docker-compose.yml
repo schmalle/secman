@@ -1,0 +1,73 @@
+# Secman — Docker Compose for the all-in-one image
+# =============================================================================
+# One compose file, two database modes:
+#
+#   1. Bundled MariaDB container  ->  docker compose --profile local-db up
+#   2. External Amazon RDS (or any reachable MariaDB 11.4)
+#                                 ->  docker compose up   (no profile)
+#
+# The database service only starts when the `local-db` profile is enabled, so
+# in RDS mode nothing local is spun up — the app just talks to DB_CONNECT.
+#
+# Configuration is read from ./.env (copy .env.example -> .env first, or let
+# ./compose-up.sh generate one with fresh secrets). See docs/DOCKER_AWS.md.
+#
+# Convenience wrapper:  ./docker/compose-up.sh --local-db | --rds
+# =============================================================================
+
+services:
+  # --- Application: Astro SSR + Micronaut backend + nginx in one container ---
+  secman:
+    build:
+      context: ..
+      dockerfile: docker/aws/Dockerfile
+    image: secman-aio:latest
+    container_name: secman
+    restart: unless-stopped
+    ports:
+      # host:container — container always serves plain HTTP on :80.
+      # Front it with a TLS-terminating reverse proxy / ALB in production.
+      - "${SECMAN_HTTP_PORT:-8080}:80"
+    env_file:
+      - .env
+    depends_on:
+      # In RDS mode the `db` service is not enabled (no profile), so
+      # `required: false` lets the app start without it. In local-db mode the
+      # app waits until MariaDB reports healthy before booting.
+      db:
+        condition: service_healthy
+        required: false
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:80/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 90s
+
+  # --- Bundled database (only with `--profile local-db`) ---
+  db:
+    image: mariadb:11.4
+    container_name: secman-db
+    profiles: ["local-db"]
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-secman-root-pw}
+      MARIADB_DATABASE: ${DB_NAME:-secman}
+      MARIADB_USER: ${DB_USERNAME:-secman}
+      MARIADB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in .env}
+    volumes:
+      - secman-db-data:/var/lib/mysql
+    ports:
+      # Exposed for host-side inspection only; the app reaches it via the
+      # compose network as host `db`. Change/remove for production.
+      - "${DB_HOST_PORT:-3307}:3306"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+volumes:
+  secman-db-data:
+    name: secman-db-data
