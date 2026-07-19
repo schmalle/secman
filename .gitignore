@@ -97,6 +97,8 @@ docker/backend/app.jar
 *.yml
 # GitHub Actions workflows must be tracked despite the blanket *.yml ignore above
 !.github/workflows/*.yml
+# Docker Compose file must be tracked despite the blanket *.yml ignore above
+!docker/docker-compose.yml
 .playwright-cli/ChatGPT-Atlas.dmg
 crowdstrike-vulnerability-match-report.json
 crowdstrike-vulnerability-match-report.md
