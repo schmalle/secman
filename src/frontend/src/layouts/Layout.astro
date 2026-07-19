@@ -16,7 +16,7 @@ interface Props {
 const { title = "SecMan" } = Astro.props; // Updated default title
 
 // Define public paths that don't require login
-const publicPaths = ['/login']; // Add other public paths if needed
+const publicPaths = ['/login', '/requirements/download']; // Add other public paths if needed
 
 // Check auth status on the server-side for initial load
 let user = null;
