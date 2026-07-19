@@ -9,18 +9,18 @@ Security requirement, vulnerability and risk-assessment platform.
 
 ## What it does
 
-- Security requirement lifecycle (versioned releases: PREPARATION → ALIGNMENT → ACTIVE → ARCHIVED), Excel/Word/CSV export, automated translation (OpenRouter, 20+ languages).
-- Vulnerability management: CrowdStrike Falcon import, exception-request workflow, statistics, heatmap, materialized view for fast outdated-asset queries (<2s @ 10k assets).
+- Security requirement lifecycle (versioned releases: PREPARATION → ALIGNMENT → ACTIVE → ARCHIVED), Excel/Word/CSV export, automated translation (OpenRouter, 10 languages).
+- Vulnerability management: CrowdStrike Falcon import, GitHub App Dependabot alert tracking with 30-day non-decrease owner alerts, exception-request workflow, statistics, heatmap, materialized view for fast outdated-asset queries (<2s @ 10k assets).
 - Asset inventory: Nmap/Masscan import, AD/cloud metadata, criticality, workgroup-scoped access.
-- Risk register, demand classification, compliance-framework mapping (SOC2, ISO 27001, NIST).
+- Risk register, demand classification, compliance-framework mapping (SOC2, ISO 27001, NIST), optional AI-assisted pre-fill of compliance answers (OpenRouter LLM, confidence scoring + citations, human review required).
 - AuthN: local (BCrypt) + OAuth2/OIDC + Passkey/WebAuthn + optional MFA.
 - AuthZ: 9-role RBAC with row-level filtering on assets (workgroup, ownership, AWS account, AD domain, sharing rules).
-- AI integration: 55-tool MCP server (Streamable HTTP) for Claude Desktop/Code and other MCP clients, with mandatory user delegation.
+- AI integration: 80+ tool MCP server (Streamable HTTP) for Claude Desktop/Code and other MCP clients, with mandatory user delegation.
 - Email: SMTP/SES with retry + audit, Thymeleaf HTML templates, escalation tiers.
 
 ## Stack
 
-Kotlin 2.3.21 / Java 25 · Micronaut 4.10 · Hibernate JPA · Astro 6.3 + React 19 · Bootstrap 5.3 · MariaDB 11.4 · Gradle 9.5.0 (Kotlin DSL) · Picocli 4.7.7 · AWS SDK v2.
+Kotlin 2.4.0 / Java 25 · Micronaut 5.0 · Hibernate JPA · Astro 7 + React 19 · Bootstrap 5.3 · MariaDB 11.4 · Gradle 9.6 (Kotlin DSL) · Picocli 4.7.7 · AWS SDK v2.
 
 ## Quick Start (development)
 
@@ -45,7 +45,7 @@ src/
   frontend/   Astro pages + React islands, services/ (Axios)
   cli/        Picocli commands + service/
 docs/         see below
-scripts/     ALL scripts live here (./scripts is deprecated)
+scripts/     ALL scripts live here (canonical — never invoke gradle/npm/etc. directly for dev start)
 specs/        historical implementation plans (frozen)
 ```
 
@@ -96,6 +96,9 @@ All endpoints under `/api/*` require `Authorization: Bearer <jwt>` unless noted.
 | `/api/identity-providers[/{id}[/test]]` | GET/POST/PUT/DELETE | ADMIN |
 | `/api/maintenance-banners[/active|/{id}]` | GET/POST/PUT/DELETE | ADMIN (active: public) |
 | `/api/users/profile[/change-password,mfa-{status,toggle}]` | GET/PUT | auth |
+| `/api/user-dashboard` | GET | auth |
+| `/api/github-config[/{id}[/test]]`, `/api/github/import`, `.../repositories/{id}/alerts` | GET/POST/PUT/DELETE | ADMIN (import: ADMIN/VULN) |
+| `/api/risk-assessments/{id}/ai-suggestions/...` | GET/POST/DELETE | ADMIN/SECCHAMPION |
 | `/oauth/{authorize,callback}` | GET | public |
 | `/mcp` | POST | MCP API key + delegation |
 | `/health`, `/memory` | GET | public |
@@ -147,6 +150,8 @@ Full reference (SMTP, OAuth retry, memory tuning, debug logging, vuln settings):
 | [docs/CLI.md](docs/CLI.md) | CLI commands, cron, S3 ops |
 | [docs/MCP.md](docs/MCP.md) | MCP tools, API keys, delegation, troubleshooting |
 | [docs/CROWDSTRIKE_IMPORT.md](docs/CROWDSTRIKE_IMPORT.md) | Transactional-replace pattern, JPA cascade trap |
+| [docs/GITHUB_REPOS.md](docs/GITHUB_REPOS.md) | GitHub App vulnerability import, Dependabot alerts, owner alerting |
+| [docs/AI_RISK_ASSESSMENT.md](docs/AI_RISK_ASSESSMENT.md) | AI-assisted risk-assessment answer pre-fill |
 | [docs/TESTING.md](docs/TESTING.md) | JUnit/Mockk/Testcontainers stack and patterns |
 | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Symptom → diagnosis → fix |
 | [docs/S3_USER_MAPPING_IMPORT.md](docs/S3_USER_MAPPING_IMPORT.md) | `import-s3` / `download-s3` / `print-s3` / `list-bucket` |
