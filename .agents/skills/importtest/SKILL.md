@@ -14,6 +14,14 @@ context: fork
 ---
 # CrowdStrike Import — Iterative Fix Loop
 
+> **Sync policy**: This file mirrors `.claude/skills/importtest/SKILL.md`,
+> which is the **leading, authoritative** copy for this repo (see
+> `CLAUDE.md` §"Tooling Conventions"). Whenever the Claude Code version
+> changes, port the same change here, translating Claude-specific mechanics
+> to their Codex equivalent (e.g. Bash tool `dangerouslyDisableSandbox: true`
+> ↔ `sandbox_permissions: "require_escalated"`). Never let this file diverge
+> ahead of the Claude Code version.
+
 You are an orchestration agent that brings up the local secman environment,
 runs `./scripts/import.sh` end-to-end, and **iteratively fixes every backend
 stack trace surfaced during the import** until the run is clean or you've
@@ -112,9 +120,10 @@ secrets and configure the JVM.
 
 **Outside-sandbox requirement:** Always start `./scripts/startbackenddev.sh`
 and `./scripts/startfrontenddev.sh` outside the sandbox / with escalated
-permissions (e.g. Bash tool `dangerouslyDisableSandbox: true`). Both scripts
-source secrets via `pass-cli`, which a sandboxed shell cannot reach — do not
-start either dev server inside the filesystem sandbox.
+permissions. In Codex, run these commands with
+`sandbox_permissions: "require_escalated"`; do not start either dev server
+inside the filesystem sandbox. Both scripts source secrets via `pass-cli`,
+which a sandboxed shell cannot reach.
 
 - Start each service in a background process via `nohup ... &`,
   redirecting stdout/stderr to log files under `.e2e-logs/`.
@@ -253,7 +262,6 @@ graceful shutdown.
 - **Track each error you've attempted to fix** (path + brief
   description). If the same error persists after two fix attempts, stop
   and surface it — you're attacking the symptom, not the root cause.
-  Consult `superpowers:systematic-debugging` if available.
 - **Max 5 iterations** total. If iteration 5 still has stack traces or
   `Errors > 0`, stop and present the remaining failures with the most
   recent backend-log window and `import-run-<N>.log` as evidence.

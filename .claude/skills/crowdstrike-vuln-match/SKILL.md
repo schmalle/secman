@@ -11,14 +11,6 @@ context: fork
 ---
 # CrowdStrike Vulnerability Match Test
 
-> **Sync policy**: This file mirrors `.claude/skills/crowdstrike-vuln-match/SKILL.md`,
-> which is the **leading, authoritative** copy for this repo (see
-> `CLAUDE.md` §"Tooling Conventions"). Whenever the Claude Code version
-> changes, port the same change here, translating Claude-specific mechanics
-> to their Codex equivalent (e.g. Bash tool `dangerouslyDisableSandbox: true`
-> ↔ `sandbox_permissions: "require_escalated"`). Never let this file diverge
-> ahead of the Claude Code version.
-
 This skill validates that SecMan's current CrowdStrike vulnerability state still
 matches Falcon for a bounded sample of assets. The matcher itself is
 **read-only** against SecMan data: it authenticates to SecMan, reads assets and
@@ -50,10 +42,9 @@ lsof -iTCP:4321 -sTCP:LISTEN -n -P   # must print nothing
 
 **Outside-sandbox requirement:** Always start `./scripts/startbackenddev.sh`
 and `./scripts/startfrontenddev.sh` outside the sandbox / with escalated
-permissions. In Codex, run these commands with
-`sandbox_permissions: "require_escalated"`; do not start either dev server
-inside the filesystem sandbox. Both scripts source secrets via `pass-cli`,
-which a sandboxed shell cannot reach.
+permissions (e.g. Bash tool `dangerouslyDisableSandbox: true`). Both scripts
+source secrets via `pass-cli`, which a sandboxed shell cannot reach — do not
+start either dev server inside the filesystem sandbox.
 
 1. `mkdir -p .e2e-logs`
 2. Start backend in background (outside the sandbox):

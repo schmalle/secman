@@ -93,6 +93,8 @@ Static-review checklist (inspect artifacts only):
 ## High-Level Loop
 
 ```
+0. Kill any running backend/frontend via the stop scripts — always,
+   even if ports look free (never `kill`).
 1. Start backend   (./scripts/startbackenddev.sh outside the sandbox)
 2. Start frontend  (./scripts/startfrontenddev.sh outside the sandbox)
 3. Wait for both ports to be bound (8080 / 4321)
@@ -141,9 +143,12 @@ inside the filesystem sandbox.
 **Starting services:**
 
 1. Create `.e2e-logs/` if it doesn't exist.
-2. **Check ports** — `lsof -iTCP:8080 -sTCP:LISTEN -n -P` and
-   `lsof -iTCP:4321 -sTCP:LISTEN -n -P`. If something is listening,
-   stop it via the canonical scripts (never `kill` inline).
+2. **Always** run `./scripts/stopbackenddev.sh` and
+   `./scripts/stopfrontenddev.sh` — unconditional, even if 8080/4321 look
+   free (safe no-ops when nothing runs; never `kill` inline). Never reuse an
+   already-running backend or frontend. Wait ~3s, then verify both ports are
+   unbound via `lsof -iTCP:8080 -sTCP:LISTEN -n -P` /
+   `lsof -iTCP:4321 -sTCP:LISTEN -n -P`.
 3. Start backend in background:
    ```bash
    nohup ./scripts/startbackenddev.sh > .e2e-logs/backend.log 2>&1 &

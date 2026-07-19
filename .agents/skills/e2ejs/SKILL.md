@@ -81,6 +81,9 @@ Rules:
 ## High-Level Loop
 
 ```
+0. Kill any running backend/frontend (./scripts/stopbackenddev.sh +
+   ./scripts/stopfrontenddev.sh) — always, even if ports look free.
+   Leave whatever owns :443 alone (user's reverse proxy).
 1. Start backend   (./scripts/startbackenddev.sh outside the sandbox)
 2. Start frontend  (./scripts/startfrontenddev.sh outside the sandbox)
 3. Wait for both to be healthy (via shared URL, not localhost)
@@ -118,10 +121,19 @@ inside the filesystem sandbox.
    If it does not resolve to loopback, stop and ask the user to add the
    `/etc/hosts` entry. Do not fall back to `localhost`.
 
-2. **Check for port conflicts** — run `lsof -i :8080`, `lsof -i :4321`, and
-   `lsof -i :443`. If ports are in use by stale processes from a previous run,
-   kill them before starting. Port 443 may legitimately be held by the local
-   reverse proxy the user runs — only kill it if it is your own leftover.
+2. **Kill any running services (mandatory, unconditional)** — never reuse an
+   already-running backend or frontend; a running instance may predate the
+   current working tree. Always run both stop scripts, even if ports 8080/4321
+   look free (they are safe no-ops when nothing is running; never call `kill`
+   or `lsof | xargs kill` inline):
+   ```bash
+   ./scripts/stopbackenddev.sh
+   ./scripts/stopfrontenddev.sh
+   ```
+   Wait ~3 seconds, then verify `lsof -iTCP:8080 -sTCP:LISTEN -n -P` and
+   `lsof -iTCP:4321 -sTCP:LISTEN -n -P` both print nothing. Port 443 is
+   different: it may legitimately be held by the local reverse proxy the user
+   runs — leave it alone unless it is your own leftover.
 
 3. **Start backend** in background:
    ```bash
@@ -310,10 +322,11 @@ error count decreased.
 - **Secrets are handled by the dev scripts** — `scripts/startbackenddev.sh`
   and `scripts/startfrontenddev.sh` use `pass-cli run` to inject Proton Pass
   secrets. Do not set secrets manually.
-- **Port collisions**: Before starting, check if ports 8080 and 4321 are
-  already in use and kill existing processes. Do not kill whatever owns :443
-  unless you are sure it is your own leftover — it is likely the user's
-  reverse proxy.
+- **Fresh services always**: killing any running backend/frontend via the stop
+  scripts and starting both fresh is an unconditional part of Phase 1 — never
+  attach the scan to services you did not start in this invocation. Do not
+  kill whatever owns :443 unless you are sure it is your own leftover — it is
+  likely the user's reverse proxy.
 - **TLS**: do not set `SECMAN_INSECURE=true`. The shared hostname must present
   a valid certificate. If TLS verification fails, fix the cert/proxy rather
   than disabling verification.
