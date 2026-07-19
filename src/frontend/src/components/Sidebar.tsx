@@ -195,6 +195,11 @@ const Sidebar = () => {
                                         <i className="bi bi-card-checklist me-2"></i> Requirements Overview
                                     </a>
                                 </li>
+                                <li>
+                                    <a href="/requirements/download" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
+                                        <i className="bi bi-download me-2"></i> Requirement download
+                                    </a>
+                                </li>
                                 {canAccessNormManagement(userRoles) && (
                                     <li>
                                         <a href="/norms" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary">
