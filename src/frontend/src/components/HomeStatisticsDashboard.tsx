@@ -90,10 +90,10 @@ const HomeStatisticsDashboard: React.FC = () => {
       }
 
       try {
-        const releasesResp = await authenticatedGet('/api/releases');
+        const releasesResp = await authenticatedGet('/api/releases?status=ACTIVE');
         if (releasesResp.ok) {
-          const releases = await releasesResp.json();
-          next.releases = Array.isArray(releases) ? releases.length : null;
+          const releasesPage = await releasesResp.json();
+          next.releases = typeof releasesPage?.totalItems === 'number' ? releasesPage.totalItems : null;
         }
       } catch (error) {
         console.warn('Failed to load release statistics:', error);
@@ -149,7 +149,7 @@ const HomeStatisticsDashboard: React.FC = () => {
 
   const cards: StatItem[] = [
     { label: 'Systems in Asset Inventory', value: formatCount(stats.assets), subtitle: 'All asset records', icon: 'bi-hdd-network' },
-    { label: 'Active Standard Releases', value: formatCount(stats.releases), subtitle: 'All release records', icon: 'bi-journals' },
+    { label: 'Active Standard Releases', value: formatCount(stats.releases), subtitle: 'Releases with status ACTIVE', icon: 'bi-journals' },
     { label: 'Running Risk Assessments', value: formatCount(stats.runningAssessments), subtitle: 'Status: IN_PROGRESS', icon: 'bi-clipboard2-pulse' },
     { label: 'Last CrowdStrike Import', value: stats.lastCrowdStrikeCheckin ?? '—', subtitle: 'Most recent server check-in', icon: 'bi-shield-check' }
   ];
