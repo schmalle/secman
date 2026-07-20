@@ -194,11 +194,13 @@ open class ExceptionExpirationScheduler(
      *    so the next run retries; a lost release skips the reminder rather than
      *    duplicating it
      *
-     * Outer @Transactional only provides the Hibernate session for lazy access;
-     * claims commit independently via REQUIRES_NEW and entities are never mutated.
+     * Deliberately NOT @Transactional: the reminder query eagerly fetches the associations
+     * the email/log fields need (vulnerability, vulnerability.asset, requestedByUser), so no
+     * open transaction is required to resolve them — and the blocking SMTP send below must
+     * never hold a pooled DB connection across the wait. Each claim still commits independently
+     * via REQUIRES_NEW (selfProvider), and entities are never mutated here.
      */
     @Scheduled(cron = "0 0 8 * * ?")
-    @Transactional
     open fun sendExpirationReminders() {
         logger.info("Starting daily expiration reminder processing")
 

@@ -5,7 +5,6 @@ import com.secman.repository.GithubOwnerEmailMappingRepository
 import com.secman.repository.GithubRepositoryRepository
 import io.micronaut.serde.annotation.Serdeable
 import jakarta.inject.Singleton
-import jakarta.transaction.Transactional
 import org.slf4j.LoggerFactory
 
 /**
@@ -43,7 +42,12 @@ open class GithubOwnerEmailDiscoveryService(
         val errors: List<String>
     )
 
-    @Transactional
+    // Deliberately NOT @Transactional: this method makes N sequential GitHub REST calls
+    // (fetchPublicEmail) in the loop below. A method-level transaction would pin one pooled
+    // DB connection across every one of those HTTP round-trips. The only reads here
+    // (findByOwnerEmailIsNull / findByOwnerIgnoreCase) auto-commit per call and touch no
+    // lazy relations, and each mapping write goes through GithubOwnerEmailMappingService.create(),
+    // which is @Transactional on its own bean — so every DB touch is a short, self-contained tx.
     open fun discover(dryRun: Boolean, actor: String): DiscoveryResult {
         val config = githubAppConfigRepository.findActiveConfig().orElseThrow {
             IllegalStateException("No active GitHub App configuration — configure one under Admin → GitHub App")

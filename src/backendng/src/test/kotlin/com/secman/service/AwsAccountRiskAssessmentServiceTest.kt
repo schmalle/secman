@@ -12,6 +12,7 @@ import com.secman.repository.AwsAccountRiskAssessmentRepository
 import com.secman.repository.RiskAssessmentRepository
 import com.secman.repository.UseCaseRepository
 import com.secman.repository.UserRepository
+import jakarta.inject.Provider
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -32,14 +33,9 @@ class AwsAccountRiskAssessmentServiceTest {
     private val trackingRepository = mockk<AwsAccountRiskAssessmentRepository>(relaxed = true)
     private val emailService = mockk<EmailService>(relaxed = true)
 
-    private val service = AwsAccountRiskAssessmentService(
-        userRepository = userRepository,
-        useCaseRepository = useCaseRepository,
-        assetRepository = assetRepository,
-        riskAssessmentRepository = riskAssessmentRepository,
-        trackingRepository = trackingRepository,
-        emailService = emailService
-    )
+    // Constructed in setup(); selfProvider returns this same instance (the AOP proxy is a
+    // no-op under a plain unit test, so createAssessment runs directly with REQUIRES_NEW inert).
+    private lateinit var service: AwsAccountRiskAssessmentService
 
     private val useCase = UseCase(id = 5L, name = "Cloud Onboarding")
     private val champion1 = user(1L, "champ1", "champ1@corp.com", User.Role.SECCHAMPION)
@@ -51,6 +47,15 @@ class AwsAccountRiskAssessmentServiceTest {
 
     @BeforeEach
     fun setup() {
+        service = AwsAccountRiskAssessmentService(
+            userRepository = userRepository,
+            useCaseRepository = useCaseRepository,
+            assetRepository = assetRepository,
+            riskAssessmentRepository = riskAssessmentRepository,
+            trackingRepository = trackingRepository,
+            emailService = emailService,
+            selfProvider = Provider { service }
+        )
         every { useCaseRepository.findByNameIgnoreCase("Cloud Onboarding") } returns Optional.of(useCase)
         every { userRepository.findByRolesContaining(User.Role.SECCHAMPION) } returns listOf(champion1, champion2)
         every { userRepository.findById(9L) } returns Optional.of(admin)
@@ -128,6 +133,22 @@ class AwsAccountRiskAssessmentServiceTest {
 
         verify(exactly = 2) { trackingRepository.save(any()) }
         verify(exactly = 2) { emailService.sendEmail(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `owner email is sent only after the assessment is persisted`() {
+        // Locks the pool-safety refactor: the blocking SMTP send must happen AFTER the persist
+        // transaction (createAssessment / REQUIRES_NEW) commits, never while its connection is held.
+        service.startAssessmentsForNewAccounts(
+            listOf(NewAccountImportInfo("111111111111", listOf("alice@corp.com"))),
+            "Cloud Onboarding", 7, 9L
+        )
+
+        io.mockk.verifyOrder {
+            riskAssessmentRepository.save(any())
+            trackingRepository.save(any())
+            emailService.sendEmail(any(), any(), any(), any())
+        }
     }
 
     @Test

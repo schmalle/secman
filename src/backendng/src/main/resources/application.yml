@@ -452,6 +452,19 @@ datasources:
       prepStmtCacheSize: 250
       prepStmtCacheSqlLimit: 2048
       useServerPrepStmts: false
+      # Hard client-side ceiling on any single socket read (2026-07 robustness fix).
+      # Without it, a connection wedged on a dead/half-open TCP socket to MariaDB (network
+      # blip, DB restart, firewall idle-drop) stays checked out of the pool until max-lifetime
+      # (2h) — leak-detection only WARNs, it never reclaims. 300s reclaims a truly-hung
+      # connection while sitting safely ABOVE the slowest legitimate query: the daily
+      # full-table `excepted` recompute (~124s, ExceptionMaterializationService) and the
+      # post-import stats refresh (~60-100s, VulnerabilityStatisticsCacheService). Raise this
+      # ceiling if a legitimate query ever approaches it; do not lower it below ~130s.
+      # A server-side per-statement ceiling (MariaDB max_statement_time via sessionVariables,
+      # or a jakarta.persistence.query.timeout hint on the heavy read methods) is the
+      # follow-up for aborting a runaway-but-still-running query — deliberately left out here
+      # to avoid a global abort ceiling surprising a valid long analytical read.
+      socketTimeout: 300000
 
 flyway:
   datasources:

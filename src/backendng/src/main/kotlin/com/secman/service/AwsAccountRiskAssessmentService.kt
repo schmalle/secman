@@ -13,6 +13,7 @@ import com.secman.repository.AwsAccountRiskAssessmentRepository
 import com.secman.repository.RiskAssessmentRepository
 import com.secman.repository.UseCaseRepository
 import com.secman.repository.UserRepository
+import jakarta.inject.Provider
 import jakarta.inject.Singleton
 import jakarta.transaction.Transactional
 import org.slf4j.LoggerFactory
@@ -46,7 +47,13 @@ open class AwsAccountRiskAssessmentService(
     private val assetRepository: AssetRepository,
     private val riskAssessmentRepository: RiskAssessmentRepository,
     private val trackingRepository: AwsAccountRiskAssessmentRepository,
-    private val emailService: EmailService
+    private val emailService: EmailService,
+    // Self-reference so [createAssessment]'s `@Transactional(REQUIRES_NEW)` runs through the AOP
+    // proxy (a same-class call would bypass it). Each per-(account, owner) persist thus commits
+    // in its own short transaction, letting the caller send the owner email AFTER the connection
+    // is returned — never holding a pooled connection across the blocking SMTP send. A Provider
+    // (lazy) is used so the bean can depend on a provider of itself without a construction cycle.
+    private val selfProvider: Provider<AwsAccountRiskAssessmentService>
 ) {
     private val log = LoggerFactory.getLogger(AwsAccountRiskAssessmentService::class.java)
 
@@ -85,7 +92,10 @@ open class AwsAccountRiskAssessmentService(
      *        the assessments); falls back to the assessor when unresolvable.
      * @return one result entry per pair — id on success, error message on failure.
      */
-    @Transactional
+    // Deliberately NOT @Transactional: each per-(account, owner) persist runs in its own
+    // REQUIRES_NEW transaction (createAssessment via selfProvider) so the blocking owner-email
+    // send below never holds a pooled DB connection. A failure on one pair no longer risks the
+    // others, and — per the method contract — nothing here can roll back the committed import.
     open fun startAssessmentsForNewAccounts(
         newAccounts: List<NewAccountImportInfo>,
         useCaseName: String,
@@ -114,17 +124,19 @@ open class AwsAccountRiskAssessmentService(
 
         val results = mutableListOf<AccountRiskAssessmentInfo>()
         var assessorIndex = 0
+        // Computed once so the persisted endDate and the emailed deadline can never disagree.
+        val endDate = LocalDate.now().plusDays(deadlineDays.toLong())
 
         for (account in newAccounts) {
             for (ownerEmail in account.emails) {
                 val assessor = secChampions[assessorIndex % secChampions.size]
                 assessorIndex++
-                results += try {
-                    createAssessment(
+                val info = try {
+                    selfProvider.get().createAssessment(
                         awsAccountId = account.awsAccountId,
                         ownerEmail = ownerEmail,
                         useCase = useCase,
-                        deadlineDays = deadlineDays,
+                        endDate = endDate,
                         assessor = assessor,
                         requestor = requestorUser ?: assessor
                     )
@@ -139,21 +151,41 @@ open class AwsAccountRiskAssessmentService(
                         error = "Failed to start risk assessment: ${e.message}"
                     )
                 }
+                results += info
+
+                // Notify the owner only AFTER the persist transaction has committed, so the
+                // blocking SMTP send holds no pooled DB connection. Skip when error != null:
+                // that is either a genuine failure or an idempotent skip (already notified when
+                // the still-open assessment was first created). Best-effort — a mail failure
+                // must not undo the committed assessment.
+                if (info.error == null && info.riskAssessmentId != null) {
+                    try {
+                        sendStartNotification(ownerEmail, account.awsAccountId, useCase.name, endDate, assessor)
+                    } catch (e: Exception) {
+                        log.warn("Risk assessment {} created, but owner notification to {} failed: {}",
+                            info.riskAssessmentId, ownerEmail, e.message)
+                    }
+                }
             }
         }
         return results
     }
 
-    private fun createAssessment(
+    // REQUIRES_NEW: each pair persists in its own short, independent transaction so the caller
+    // can send the owner email after commit (no connection held across SMTP) and one failure
+    // never rolls back another pair. Must be `open` and invoked via selfProvider for the AOP
+    // proxy to apply. Detached assessor/requestor/useCase are safe FK references here — those
+    // associations declare no cascade (see RiskAssessment).
+    @Transactional(Transactional.TxType.REQUIRES_NEW)
+    open fun createAssessment(
         awsAccountId: String,
         ownerEmail: String,
         useCase: UseCase,
-        deadlineDays: Int,
+        endDate: LocalDate,
         assessor: User,
         requestor: User
     ): AccountRiskAssessmentInfo {
         val today = LocalDate.now()
-        val endDate = today.plusDays(deadlineDays.toLong())
 
         // Idempotency guard: re-running an import (or two overlapping imports) must not
         // create a second assessment + tracking row + reminder stream for the same
@@ -204,14 +236,8 @@ open class AwsAccountRiskAssessmentService(
             )
         )
 
-        // Best-effort owner notification — a mail failure must not undo the assessment.
-        try {
-            sendStartNotification(ownerEmail, awsAccountId, useCase.name, endDate, assessor)
-        } catch (e: Exception) {
-            log.warn("Risk assessment {} created, but owner notification to {} failed: {}",
-                saved.id, ownerEmail, e.message)
-        }
-
+        // Owner notification is sent by the caller AFTER this transaction commits, so the
+        // blocking SMTP send never holds this pooled DB connection.
         log.info(
             "Started risk assessment {} for new AWS account {} (owner={}, assessor={}, useCase={}, deadline={})",
             saved.id, awsAccountId, ownerEmail, assessor.username, useCase.name, endDate

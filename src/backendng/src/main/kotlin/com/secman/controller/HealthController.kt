@@ -60,13 +60,38 @@ class HealthController @Inject constructor(
     }
 
     /**
+     * The physical HikariCP pool, resolved once. Micronaut Data injects a connection-context-aware
+     * `DataSource` proxy: calling `.connection` on it OUTSIDE an `@Connectable`/`@Transactional`
+     * scope (and this probe always runs on a separate thread with no such context) throws
+     * `io.micronaut.data.connection.exceptions.NoConnectionException`, and `as? HikariDataSource`
+     * fails against the proxy. Unwrapping via the JDBC `Wrapper` contract reaches the real pool,
+     * whose `.connection` needs no ambient context and whose MXBean powers the saturation check.
+     * Falls back to `null` for a non-Hikari DataSource (e.g. a test mock), preserving prior behavior.
+     */
+    private val hikariPool: HikariDataSource? by lazy { resolveHikariPool() }
+
+    private fun resolveHikariPool(): HikariDataSource? = try {
+        when {
+            dataSource is HikariDataSource -> dataSource
+            dataSource.isWrapperFor(HikariDataSource::class.java) -> dataSource.unwrap(HikariDataSource::class.java)
+            else -> null
+        }
+    } catch (e: Exception) {
+        logger.warn("Health check: could not resolve underlying HikariDataSource: {}", e.message)
+        null
+    }
+
+    /**
      * Bounded on a separate thread: Hikari's own connection-timeout is 30s,
      * far too slow for a watchdog probe that needs to detect DB loss quickly.
      */
     private fun checkDatabase(): Boolean {
+        // Probe the physical pool directly (no Micronaut connection context on this thread);
+        // fall back to the injected DataSource only when no Hikari pool could be resolved.
+        val probeSource: DataSource = hikariPool ?: dataSource
         return try {
             probeExecutor.submit<Boolean> {
-                dataSource.connection.use { connection ->
+                probeSource.connection.use { connection ->
                     connection.createStatement().use { statement ->
                         statement.executeQuery("SELECT 1").use { it.next() }
                     }
@@ -105,7 +130,7 @@ class HealthController @Inject constructor(
      * behavior.
      */
     private fun isPoolSaturatedWithLegitimateLoad(): Boolean {
-        val hikari = dataSource as? HikariDataSource ?: return false
+        val hikari = hikariPool ?: return false
         return try {
             val poolBean = hikari.hikariPoolMXBean ?: return false
             val active = poolBean.activeConnections

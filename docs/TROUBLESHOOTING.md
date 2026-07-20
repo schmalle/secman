@@ -142,9 +142,15 @@ curl -v --url smtp://smtp.gmail.com:587 --user user:pass --mail-from from@exampl
 SET GLOBAL slow_query_log='ON'; SET GLOBAL long_query_time=1;
 ```
 ```yaml
-datasources.default: { maximum-pool-size: 20, minimum-idle: 5 }
+datasources.default: { maximum-pool-size: 40, minimum-idle: 5 }
 ```
 Look for N+1 in service layer.
+
+**DB connection-pool saturation** (`/health` reports slow/DOWN, requests block ~30s on `connection-timeout`, HikariCP logs "Connection is not available"):
+- The pool is 40 (raised from 20). A single-instance deploy against MariaDB (`max_connections` default 151) has headroom to raise further via `DB_CONNECT`/config if needed.
+- **Background vs interactive headroom** — background work is small and MUST stay well under the pool so interactive requests always have connections: a CrowdStrike import holds ~3 short per-server transactions + 1 post-import stats-refresh connection (≈4 total), and the heavy analytical refreshes (`MaterializedViewRefreshService`, `VulnerabilityStatisticsCacheService`) are single-flight (one at a time). No explicit concurrency governor is in place because that ~4-connection floor is nowhere near 40; if that ever changes (more parallel CLI import workers, additional background jobs), add a bounded semaphore that background paths acquire *before* opening a transaction.
+- **Metric to watch**: HikariCP exposes `activeConnections` / `idleConnections` / `totalConnections` (JMX `hikariPoolMXBean`, and `/health` inspects it via `HealthController.isPoolSaturatedWithLegitimateLoad`). Sustained `activeConnections == maximumPoolSize` during business hours = interactive starvation → investigate a stuck transaction, then raise the pool or add the governor above.
+- A truly wedged connection (dead TCP socket to MariaDB) is now reclaimed by `socketTimeout: 300000` (5 min) instead of being pinned to `max-lifetime` (2h). Check `SHOW PROCESSLIST` on MariaDB for long-running queries. See `docs/DB_CONNECTION_LOST_RUNBOOK.md`.
 
 **High memory**:
 ```bash
