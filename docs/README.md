@@ -30,6 +30,7 @@ Stack: Kotlin 2.3.21 / Java 25 · Micronaut 4.10 · Hibernate JPA · Astro 6.3 /
 | [CROWDSTRIKE_IMPORT.md](./CROWDSTRIKE_IMPORT.md) | Vulnerability and installed-product imports, transactional-replace pattern, JPA cascade trap |
 | [TESTING.md](./TESTING.md) | JUnit/Mockk/Testcontainers stack and patterns |
 | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) | Symptom → fix |
+| [DB_CONNECTION_LOST_RUNBOOK.md](./DB_CONNECTION_LOST_RUNBOOK.md) | Step-by-step recovery when `/health` reports the database connection lost |
 | [E2E_EXCEPTION_WORKFLOW_TEST.md](./E2E_EXCEPTION_WORKFLOW_TEST.md) | Vuln-exception MCP E2E |
 | [S3_USER_MAPPING_IMPORT.md](./S3_USER_MAPPING_IMPORT.md) | `import-s3` / `download-s3` / `print-s3` / `list-bucket` |
 | [SKILLS_AND_AGENTS.md](./SKILLS_AND_AGENTS.md) | Claude Code skills + sub-agents |
