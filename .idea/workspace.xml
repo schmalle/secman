@@ -5,10 +5,10 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="94ada8b3-9f4e-473c-9fea-3bc9651b5bdd" name="Changes" comment="test change">
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/VulnerabilityManagementController.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/VulnerabilityManagementController.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/domain/Vulnerability.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/domain/Vulnerability.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/repository/VulnerabilityRepository.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/repository/VulnerabilityRepository.kt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/VulnerabilityExceptionService.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/service/VulnerabilityExceptionService.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/DB_CONNECTION_LOST_RUNBOOK.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/DB_CONNECTION_LOST_RUNBOOK.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/HealthController.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/kotlin/com/secman/controller/HealthController.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/main/resources/application.yml" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/main/resources/application.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/backendng/src/test/kotlin/com/secman/controller/HealthControllerTest.kt" beforeDir="false" afterPath="$PROJECT_DIR$/src/backendng/src/test/kotlin/com/secman/controller/HealthControllerTest.kt" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -70,12 +70,12 @@
     &quot;assignee&quot;: &quot;schmalle&quot;
   }
 }</component>
-  <component name="GithubPullRequestsUISettings"><![CDATA[{
-  "selectedUrlAndAccountId": {
-    "url": "git@github.com:schmalle/secman.git",
-    "accountId": "656f2107-bfc3-4580-8f63-0a8886402791"
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;git@github.com:schmalle/secman.git&quot;,
+    &quot;accountId&quot;: &quot;656f2107-bfc3-4580-8f63-0a8886402791&quot;
   }
-}]]></component>
+}</component>
   <component name="GradleScriptDefinitionsStorage" workingDir="$PROJECT_DIR$" gradleHome="$USER_HOME$/.gradle/wrapper/dists/gradle-9.4.0-bin/lcvyxq3t37f6mx9miaydrrgs/gradle-9.4.0" javaHome="$USER_HOME$/.sdkman/candidates/java/current" gradleVersion="9.4.0" />
   <component name="ProjectCodeStyleSettingsMigration">
     <option name="version" value="2" />
@@ -326,6 +326,7 @@
       <workItem from="1782299928381" duration="24000" />
       <workItem from="1783366236661" duration="1215000" />
       <workItem from="1784228927518" duration="70000" />
+      <workItem from="1784549193229" duration="856000" />
     </task>
     <task id="LOCAL-00001" summary="added source of testdata">
       <option name="closed" value="true" />

@@ -398,7 +398,15 @@ datasources:
     username: ${DB_USERNAME:secman}
     password: ${DB_PASSWORD:CHANGEME}
     # Connection pool configuration (Feature: Database Structure Optimization)
-    maximum-pool-size: 20          # Maximum number of connections in the pool
+    # Raised from 20 -> 40 (2026-07): a CrowdStrike import (3 parallel @Transactional worker
+    # threads + 1 long-running post-import stats-refresh connection, see
+    # CrowdStrikeVulnerabilityImportService) combined with concurrent interactive-user traffic
+    # could fully saturate a 20-connection pool during business hours, which the health probe
+    # (HealthController.checkDatabase) was misreporting as DOWN. Single-instance deployment
+    # (docker-compose / ECS Fargate / systemd - no horizontal scaling), MariaDB default
+    # max_connections=151 (not overridden anywhere) -- 40 leaves ample headroom under that
+    # ceiling with room to raise further if needed.
+    maximum-pool-size: 40          # Maximum number of connections in the pool
     minimum-idle: 5                # Minimum number of idle connections
     connection-timeout: 30000      # 30 seconds - timeout for acquiring connection
     idle-timeout: 1800000          # 30 minutes - extended to match session duration

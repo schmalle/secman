@@ -26,6 +26,14 @@ curl -s http://localhost:8080/health | jq .
   runbook covers.** The endpoint runs a bounded ~3s `SELECT 1` on a separate thread
   (independent of HikariCP's own 30s connection-timeout), specifically so a wedged pool is
   detected fast instead of hanging. Continue to step 2.
+
+  As of 2026-07, a timed-out probe is only reported `DOWN` if HikariCP's pool is *not* fully
+  saturated — i.e. there was an idle connection or room under `maximum-pool-size` and the
+  probe still couldn't get one in time. If every pooled connection is checked out and the
+  pool is at its configured max, that's treated as busy-but-healthy (e.g. a CrowdStrike
+  import plus concurrent user traffic) and reported `UP` instead, with a WARN logged
+  (`HealthController.isPoolSaturatedWithLegitimateLoad`). A `DOWN` result is therefore a
+  stronger signal than it used to be.
 - Connection refused / timeout → the backend process itself is down, not just its DB
   connection. Skip to step 4 (restart backend) after checking `journalctl -u secman-backend`
   for a crash, then re-run this health check once it's back up.
@@ -74,12 +82,16 @@ If MariaDB itself won't start, that's a database incident, not a secman one — 
 
 ## 3. Rule out non-DB causes of a wedged pool
 
-Quick checks before restarting, since they change what you do afterward:
+The probe already applies a similar heuristic internally before ever reporting `DOWN` (step
+1) — a saturated-but-active pool is reported `UP`, not `DOWN`. So if you're here, the probe
+either found the pool genuinely *not* saturated (a real problem) or couldn't safely apply the
+heuristic — either way it's still worth an independent, DB-side confirmation rather than just
+trusting the backend's own self-report:
 
 ```bash
 # Is the pool exhausted rather than the DB unreachable? (MariaDB side)
 mysql -u secman -p secman -e "SHOW PROCESSLIST;" | grep -c secman
-# secman's pool caps at maximum-pool-size: 20 (application.yml) — a count near/at 20
+# secman's pool caps at maximum-pool-size: 40 (application.yml) — a count near/at 40
 # with most connections idle/sleeping for a long time points at a leak, not an outage.
 
 # Disk full on the DB host causes MariaDB to refuse writes without necessarily going down
@@ -162,10 +174,14 @@ restart if the DB drops again soon after. Once you've manually confirmed recover
   root cause (network blip, MariaDB OOM/crash, disk full, max_connections exhausted on the DB
   side, etc.). A backend restart clears the symptom, not the cause.
 - If the pool was exhausted (step 3) rather than the DB actually going away, look for a
-  connection leak introduced by a recent change — `maximum-pool-size: 20` /
+  connection leak introduced by a recent change — `maximum-pool-size: 40` /
   `connection-timeout: 30000` / `idle-timeout: 1800000` are in
   `src/backendng/src/main/resources/application.yml` under `datasources.default` if tuning is
-  warranted.
+  warranted. If `/health` is reporting `DOWN` even after this, that's a stronger signal than
+  before (see step 1) — a merely-busy pool no longer reports `DOWN` on its own. If you suspect
+  the heuristic itself is misbehaving, it lives in
+  `HealthController.isPoolSaturatedWithLegitimateLoad`
+  (`src/backendng/src/main/kotlin/com/secman/controller/HealthController.kt`).
 - Confirm the watchdog cron/alert path is still installed and pointed at the right URL —
   this incident is exactly what it exists to catch automatically next time:
   ```cron
