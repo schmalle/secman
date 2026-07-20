@@ -24,6 +24,7 @@ import com.secman.cli.commands.SendNotificationUsersCommand
 import com.secman.cli.commands.NotifyNewAccountsCommand
 import com.secman.cli.commands.SendPatchNotificationsCommand
 import com.secman.cli.commands.SendApplicationRegisterRemindersCommand
+import com.secman.cli.commands.SendExceptionExpiryRemindersCommand
 import com.secman.cli.commands.ServersCommand
 import io.micronaut.configuration.picocli.PicocliRunner
 import io.micronaut.context.ApplicationContext
@@ -348,6 +349,14 @@ class SecmanCli {
                 }
                 0
             }
+            args[0] == "send-exception-expiry-reminders" -> {
+                // Notify vulnerability exception owners about exceptions expiring soon
+                val subArgs = args.drop(1).toTypedArray()
+                createCliContext().use { ctx ->
+                    PicocliRunner.run(SendExceptionExpiryRemindersCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
             args[0] == "deduplicate-vulnerabilities" -> {
                 // Remove duplicate vulnerability records from the database
                 val subArgs = args.drop(1).toTypedArray()
@@ -459,6 +468,7 @@ class SecmanCli {
                 send-patch-notifications  Notify users about missing patches, filtered by email first character
                 send-application-register-reminders  Send reminders for stale application register quality checks
                 notify-new-accounts    Notify users about new AWS account mappings created in the last N hours
+                send-exception-expiry-reminders  Notify vulnerability exception owners about exceptions expiring soon
 
               User & Access Management:
                 manage-user-mappings   Manage user mappings for domains and AWS accounts
@@ -1255,6 +1265,58 @@ class SecmanCli {
 
                   # Custom credentials and backend:
                   secman notify-new-accounts --file msg.txt --username admin --password secret \
+                    --backend-url https://secman.example.com
+            """.trimIndent(),
+
+            "send-exception-expiry-reminders" to """
+                secman send-exception-expiry-reminders - Notify vulnerability exception owners about exceptions expiring soon
+
+                Usage: secman send-exception-expiry-reminders [options]
+
+                Requires: ADMIN role
+
+                Description:
+                  Finds VulnerabilityException rows whose expiration_date falls exactly
+                  --days days from today (default: 7), resolves each exception's owner
+                  (the exception's createdBy username, mapped to that user's email), and
+                  sends each owner one consolidated email listing all of their expiring
+                  exceptions (id, subject/scope, expiration date, reason).
+
+                  A reminder is sent at most once per (exception, expiration date) pair,
+                  so running this command daily (e.g. via cron) never re-notifies an owner
+                  for the same expiration date. If an exception's expiration date is later
+                  edited/extended, a fresh reminder is sent for the new date once it falls
+                  inside the window again.
+
+                  Typical use-case: schedule this command to run once a day so exception
+                  owners always get a heads-up exactly one week before their exception
+                  lapses and matching vulnerabilities reappear as active findings.
+
+                Options:
+                  --days <n>                Remind about exceptions expiring exactly this many days from today (default: 7)
+                  --dry-run                 Preview planned recipients without sending emails
+                  --verbose, -v              Per-recipient delivery status
+                  --username <user>         Backend username (or SECMAN_ADMIN_NAME env var)
+                  --password <pass>         Backend password (or SECMAN_ADMIN_PASS env var)
+                  --backend-url <url>       Backend API URL (or SECMAN_HOST / SECMAN_BACKEND_URL env var)
+
+                Exit codes:
+                  0  Success (or dry run completed)
+                  1  Partial failure or unexpected error
+                  2  Invalid arguments (e.g. --days < 1)
+
+                Examples:
+                  # Preview who would be reminded about exceptions expiring in exactly 7 days:
+                  secman send-exception-expiry-reminders --dry-run
+
+                  # Send the actual reminders (default 7-day window):
+                  secman send-exception-expiry-reminders
+
+                  # Use a 14-day window with per-recipient status:
+                  secman send-exception-expiry-reminders --days 14 --verbose
+
+                  # Custom credentials and backend:
+                  secman send-exception-expiry-reminders --username admin --password secret \
                     --backend-url https://secman.example.com
             """.trimIndent(),
 
