@@ -23,7 +23,7 @@ class StartAlignmentTool(
 ) : McpTool {
 
     override val name = "start_alignment"
-    override val description = "Start a requirements alignment process for a DRAFT release. Notifies all REQ-role users to review requirement changes."
+    override val description = "Start a requirements alignment process for a DRAFT release. Notifies REQ-role users to review requirement changes. By default all REQ-role users are enrolled; a subset can be selected via reviewer_user_ids."
     override val operation = McpOperation.WRITE
 
     override val inputSchema = mapOf(
@@ -36,6 +36,11 @@ class StartAlignmentTool(
             "send_notifications" to mapOf(
                 "type" to "boolean",
                 "description" to "Whether to send email notifications to reviewers (default: true)"
+            ),
+            "reviewer_user_ids" to mapOf(
+                "type" to "array",
+                "items" to mapOf("type" to "number"),
+                "description" to "Optional subset of REQ-role user IDs to enroll as reviewers (default: all REQ-role users)"
             )
         ),
         "required" to listOf("release_id")
@@ -56,13 +61,25 @@ class StartAlignmentTool(
         // Extract parameters
         val releaseId = (arguments["release_id"] as? Number)?.toLong()
         val sendNotifications = arguments["send_notifications"] as? Boolean ?: true
+        val reviewerUserIds = (arguments["reviewer_user_ids"] as? List<*>)?.let { rawList ->
+            val ids = rawList.mapNotNull { (it as? Number)?.toLong() }
+            if (ids.size != rawList.size) {
+                return McpToolResult.error("VALIDATION_ERROR", "reviewer_user_ids must be an array of numbers")
+            }
+            ids
+        }
 
         if (releaseId == null) {
             return McpToolResult.error("VALIDATION_ERROR", "release_id is required")
         }
 
         try {
-            val result = alignmentService.startAlignment(releaseId, context.delegatedUserId!!)
+            val result = alignmentService.startAlignment(
+                releaseId,
+                context.delegatedUserId!!,
+                reviewAll = false,
+                reviewerUserIds = reviewerUserIds
+            )
 
             // Send notifications if requested
             if (sendNotifications && result.reviewers.isNotEmpty()) {

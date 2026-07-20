@@ -18,7 +18,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { releaseService, type Release, type AlignmentStatus } from '../services/releaseService';
+import { releaseService, type Release, type AlignmentStatus, type EligibleReviewer } from '../services/releaseService';
 import { hasRole } from '../utils/auth';
 
 interface ReleaseStatusActionsProps {
@@ -157,6 +157,9 @@ export const ReleaseStatusActions: React.FC<ReleaseStatusActionsProps> = ({
     const [hasChanges, setHasChanges] = useState<boolean | null>(null);
     const [alignmentStatus, setAlignmentStatus] = useState<AlignmentStatus | null>(null);
     const [reviewAll, setReviewAll] = useState(false);
+    const [eligibleReviewers, setEligibleReviewers] = useState<EligibleReviewer[]>([]);
+    const [selectedReviewerIds, setSelectedReviewerIds] = useState<Set<number>>(new Set());
+    const [reviewersLoadError, setReviewersLoadError] = useState<string | null>(null);
 
     // Check user permissions
     const canManageStatus = typeof window !== 'undefined' && hasRole(['ADMIN', 'RELEASE_MANAGER']);
@@ -179,6 +182,23 @@ export const ReleaseStatusActions: React.FC<ReleaseStatusActionsProps> = ({
         }
     }, [release.id, release.status, canManageStatus]);
 
+    // Load eligible reviewers when the alignment modal opens (default: all selected)
+    useEffect(() => {
+        if (showAlignmentModal) {
+            setReviewersLoadError(null);
+            releaseService.getEligibleReviewers()
+                .then(result => {
+                    setEligibleReviewers(result.reviewers);
+                    setSelectedReviewerIds(new Set(result.reviewers.map(r => r.id)));
+                })
+                .catch(err => {
+                    setEligibleReviewers([]);
+                    setSelectedReviewerIds(new Set());
+                    setReviewersLoadError(err instanceof Error ? err.message : 'Failed to load reviewers');
+                });
+        }
+    }, [showAlignmentModal]);
+
     // Only show actions if user has permission
     if (!canManageStatus) {
         return null;
@@ -197,7 +217,12 @@ export const ReleaseStatusActions: React.FC<ReleaseStatusActionsProps> = ({
         setError(null);
 
         try {
-            const result = await releaseService.startAlignment(release.id, reviewAll);
+            const allSelected = selectedReviewerIds.size === eligibleReviewers.length;
+            const result = await releaseService.startAlignment(
+                release.id,
+                reviewAll,
+                allSelected ? undefined : Array.from(selectedReviewerIds)
+            );
 
             // Notify parent
             onAlignmentStart?.();
@@ -246,7 +271,20 @@ export const ReleaseStatusActions: React.FC<ReleaseStatusActionsProps> = ({
             setShowAlignmentModal(false);
             setReviewAll(false);
             setError(null);
+            setReviewersLoadError(null);
         }
+    };
+
+    const toggleReviewer = (id: number) => {
+        setSelectedReviewerIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) {
+                next.delete(id);
+            } else {
+                next.add(id);
+            }
+            return next;
+        });
     };
 
     return (
@@ -383,12 +421,62 @@ export const ReleaseStatusActions: React.FC<ReleaseStatusActionsProps> = ({
                                         </div>
                                     </div>
 
+                                    <div className="mb-3">
+                                        <div className="d-flex justify-content-between align-items-center">
+                                            <label className="form-label fw-semibold mb-0">Reviewers</label>
+                                            <div className="btn-group btn-group-sm">
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-outline-secondary"
+                                                    onClick={() => setSelectedReviewerIds(new Set(eligibleReviewers.map(r => r.id)))}
+                                                    disabled={eligibleReviewers.length === 0}
+                                                >
+                                                    Select all
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-outline-secondary"
+                                                    onClick={() => setSelectedReviewerIds(new Set())}
+                                                    disabled={eligibleReviewers.length === 0}
+                                                >
+                                                    Clear
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <small className="d-block text-muted mb-2">
+                                            Select who receives a review request ({selectedReviewerIds.size} of {eligibleReviewers.length} selected)
+                                        </small>
+                                        {reviewersLoadError && (
+                                            <div className="alert alert-warning py-2 mb-2">{reviewersLoadError}</div>
+                                        )}
+                                        <div className="border rounded p-2" style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                                            {eligibleReviewers.length === 0 && !reviewersLoadError && (
+                                                <small className="text-muted">No users with REQ role available</small>
+                                            )}
+                                            {eligibleReviewers.map(reviewer => (
+                                                <div className="form-check" key={reviewer.id}>
+                                                    <input
+                                                        type="checkbox"
+                                                        className="form-check-input"
+                                                        id={`reviewer-${reviewer.id}`}
+                                                        checked={selectedReviewerIds.has(reviewer.id)}
+                                                        onChange={() => toggleReviewer(reviewer.id)}
+                                                    />
+                                                    <label className="form-check-label" htmlFor={`reviewer-${reviewer.id}`}>
+                                                        {reviewer.username}
+                                                        <small className="text-muted ms-2">{reviewer.email}</small>
+                                                    </label>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+
                                     <p className="text-muted">
                                         This will:
                                     </p>
                                     <ul className="text-muted">
                                         <li>Change release status to ALIGNMENT</li>
-                                        <li>Send email notifications to all users with REQ role</li>
+                                        <li>Send email notifications to the selected reviewers</li>
                                         <li>Allow reviewers to submit feedback on requirement changes</li>
                                     </ul>
                                 </div>
@@ -405,7 +493,7 @@ export const ReleaseStatusActions: React.FC<ReleaseStatusActionsProps> = ({
                                         type="button"
                                         className="btn btn-primary"
                                         onClick={handleStartAlignment}
-                                        disabled={isLoading}
+                                        disabled={isLoading || selectedReviewerIds.size === 0}
                                     >
                                         {isLoading ? (
                                             <>

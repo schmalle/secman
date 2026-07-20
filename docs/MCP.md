@@ -191,7 +191,7 @@ curl -XPOST http://localhost:8080/mcp \
 - **`compare_releases`** — `fromReleaseId`*, `toReleaseId`*. Returns `summary{added,deleted,modified,unchanged}` plus per-requirement diffs.
 
 ### Alignment
-- **`start_alignment`** (ADMIN/REQADMIN) — `releaseId`*. PREPARATION → ALIGNMENT.
+- **`start_alignment`** (ADMIN/REQADMIN) — `release_id`*, `send_notifications` (default true), `reviewer_user_ids` (optional array of REQ-role user IDs; default: all REQ users). PREPARATION → ALIGNMENT.
 - **`get_alignment_status`** — `releaseId`*.
 - **`submit_review`** — `releaseId`*, `approved`*, `comment`.
 - **`finalize_alignment`** (ADMIN/REQADMIN) — `releaseId`*.

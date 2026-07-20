@@ -102,6 +102,12 @@ export interface AlignmentStatus {
     assessments: AssessmentCounts;
 }
 
+export interface EligibleReviewer {
+    id: number;
+    username: string;
+    email: string;
+}
+
 export interface AlignmentStartResult {
     success: boolean;
     message: string;
@@ -390,19 +396,35 @@ export const releaseService = {
     },
 
     /**
+     * Get users eligible to be selected as alignment reviewers (REQ-role users)
+     *
+     * @returns List of eligible reviewers
+     */
+    async getEligibleReviewers(): Promise<{ reviewers: EligibleReviewer[]; totalCount: number }> {
+        const response = await authenticatedFetch('/api/alignment/eligible-reviewers');
+
+        if (!response.ok) {
+            throw new Error(`Failed to load eligible reviewers: ${response.statusText}`);
+        }
+
+        return response.json();
+    },
+
+    /**
      * Start alignment process for a PREPARATION release
      *
      * @param releaseId Release ID
      * @param reviewAll If true, include all requirements (not just changed ones)
+     * @param reviewerUserIds Optional subset of REQ-role user IDs to enroll as reviewers (default: all)
      * @returns Alignment start result with session details
      */
-    async startAlignment(releaseId: number, reviewAll: boolean = false): Promise<AlignmentStartResult> {
+    async startAlignment(releaseId: number, reviewAll: boolean = false, reviewerUserIds?: number[]): Promise<AlignmentStartResult> {
         const response = await authenticatedFetch(`/api/releases/${releaseId}/alignment/start`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ reviewAll }),
+            body: JSON.stringify({ reviewAll, reviewerUserIds: reviewerUserIds ?? null }),
         });
 
         if (!response.ok) {
