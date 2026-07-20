@@ -282,7 +282,7 @@ sudo journalctl -u secman-frontend -f
 sudo tail -f /var/log/nginx/secman-api-{access,error}.log
 ```
 
-`/health` actually probes the database (bounded ~3s `SELECT 1`, independent of HikariCP's own 30s connection-timeout) and returns HTTP 503 with `checks.database: "DOWN"` when the DB is unreachable — this is what caught a production incident where the backend silently lost its DB connection and never recovered on its own.
+`/health` actually probes the database (bounded ~3s `SELECT 1`, independent of HikariCP's own 30s connection-timeout) and returns HTTP 503 with `checks.database: "DOWN"` when the DB is unreachable — this is what caught a production incident where the backend silently lost its DB connection and never recovered on its own. Manual recovery steps: [`DB_CONNECTION_LOST_RUNBOOK.md`](./DB_CONNECTION_LOST_RUNBOOK.md).
 
 Frontend-only watchdog `/opt/secman/bin/monitor.sh` (unchanged, still handles the frontend; the backend DB-outage case is handled by the dedicated script below):
 ```bash
