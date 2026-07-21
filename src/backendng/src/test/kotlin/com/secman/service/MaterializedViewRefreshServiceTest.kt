@@ -29,6 +29,7 @@ class MaterializedViewRefreshServiceTest {
     private val refreshJobRepository = mockk<com.secman.repository.MaterializedViewRefreshJobRepository>(relaxed = true)
     private val outdatedAssetRepository = mockk<com.secman.repository.OutdatedAssetMaterializedViewRepository>(relaxed = true)
     private val vulnerabilityRepository = mockk<com.secman.repository.VulnerabilityRepository>(relaxed = true)
+    private val assetRepository = mockk<com.secman.repository.AssetRepository>(relaxed = true)
     private val vulnerabilityConfigService = mockk<VulnerabilityConfigService>()
     private val eventPublisher = mockk<io.micronaut.context.event.ApplicationEventPublisher<com.secman.domain.RefreshProgressEvent>>(relaxed = true)
     private val vulnerabilityStatisticsCacheService = mockk<VulnerabilityStatisticsCacheService>(relaxed = true)
@@ -87,6 +88,7 @@ class MaterializedViewRefreshServiceTest {
             refreshJobRepository,
             outdatedAssetRepository,
             vulnerabilityRepository,
+            assetRepository,
             vulnerabilityConfigService,
             eventPublisher,
             vulnerabilityStatisticsCacheService,
@@ -159,6 +161,22 @@ class MaterializedViewRefreshServiceTest {
         assertThat(saved.flatten()).hasSize(1)
         assertThat(saved.flatten().single().assetId).isEqualTo(42L)
         assertThat(saved.flatten().single().highCount).isEqualTo(1)
+    }
+
+    @Test
+    @DisplayName("resolves workgroupIds via the bulk lookup, not the (now unfetched) asset.workgroups collection")
+    fun workgroupIdsResolvedViaBulkLookupNotFetchJoin() {
+        val vuln = overdueVulnerability() // asset id = 42L
+        every { vulnerabilityRepository.findOverdueVulnerabilitiesWithAssets(any()) } returns listOf(vuln)
+        every { assetRepository.findWorkgroupIdsByAssetIds(listOf(42L)) } returns
+            listOf(arrayOf<Any>(42L, 7L), arrayOf<Any>(42L, 9L))
+
+        val saved = mutableListOf<List<com.secman.domain.OutdatedAssetMaterializedView>>()
+        every { outdatedAssetRepository.saveAll(capture(saved)) } answers { firstArg() }
+
+        service.executeRefresh(job)
+
+        assertThat(saved.flatten().single().workgroupIds).isEqualTo("7,9")
     }
 
     @Test

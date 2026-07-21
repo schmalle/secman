@@ -31,6 +31,25 @@ interface AssetRepository : JpaRepository<Asset, Long> {
     fun findByIdWithWorkgroups(id: Long): Optional<Asset>
 
     /**
+     * Bulk (asset_id, workgroup_id) pairs for a set of asset ids — the cartesian-safe
+     * alternative to `LEFT JOIN FETCH a.workgroups` when the driving query already
+     * returns many rows per asset (e.g. one row per vulnerability). Callers aggregate
+     * the two-column rows into a Map<assetId, List<workgroupId>> themselves; chunk
+     * the input by ~1000 ids to stay within a practical IN-clause size.
+     *
+     * @param assetIds The asset ids to look up (caller-chunked)
+     * @return Rows of [assetId, workgroupId] (both Long, boxed via native projection)
+     */
+    @io.micronaut.data.annotation.Query(
+        value = """
+            SELECT aw.asset_id, aw.workgroup_id FROM asset_workgroups aw
+            WHERE aw.asset_id IN (:assetIds)
+        """,
+        nativeQuery = true
+    )
+    fun findWorkgroupIdsByAssetIds(assetIds: List<Long>): List<Array<Any>>
+
+    /**
      * Find the distinct emails of all users who are members of a workgroup that
      * contains at least one asset belonging to the given cloud (AWS) account.
      *

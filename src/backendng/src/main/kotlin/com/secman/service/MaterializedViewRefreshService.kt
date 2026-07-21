@@ -3,6 +3,7 @@ package com.secman.service
 import com.secman.domain.MaterializedViewRefreshJob
 import com.secman.domain.OutdatedAssetMaterializedView
 import com.secman.domain.RefreshProgressEvent
+import com.secman.repository.AssetRepository
 import com.secman.repository.MaterializedViewRefreshJobRepository
 import com.secman.repository.OutdatedAssetMaterializedViewRepository
 import com.secman.repository.VulnerabilityRepository
@@ -39,6 +40,7 @@ open class MaterializedViewRefreshService(
     private val refreshJobRepository: MaterializedViewRefreshJobRepository,
     private val outdatedAssetRepository: OutdatedAssetMaterializedViewRepository,
     private val vulnerabilityRepository: VulnerabilityRepository,
+    private val assetRepository: AssetRepository,
     private val vulnerabilityConfigService: VulnerabilityConfigService,
     private val eventPublisher: ApplicationEventPublisher<RefreshProgressEvent>,
     private val vulnerabilityStatisticsCacheService: VulnerabilityStatisticsCacheService,
@@ -261,13 +263,19 @@ open class MaterializedViewRefreshService(
 
         log.info("Found {} assets with overdue vulnerabilities (after exception filtering)", assetsWithOverdueVulns.size)
 
+        // Workgroup ids for these assets, fetched in bulk separately from the overdue-vulnerability
+        // query above (which no longer fetch-joins a.workgroups — see findOverdueVulnerabilitiesWithAssets
+        // for why). Scoped to just the assets kept after exception filtering, not every asset touched
+        // by the wider query.
+        val workgroupIdsByAsset = loadWorkgroupIdsByAsset(assetsWithOverdueVulns.keys)
+
         // Step 3: Build the complete new snapshot in memory, with progress updates.
         // No database write happens until the snapshot is fully computed.
         val assetEntries = assetsWithOverdueVulns.entries.toList()
         val materializedRecords = mutableListOf<OutdatedAssetMaterializedView>()
         assetEntries.chunked(BATCH_SIZE).forEachIndexed { batchIndex, batch ->
             batch.mapTo(materializedRecords) { (asset, overdueVulns) ->
-                createMaterializedRecordFromVulns(asset, overdueVulns)
+                createMaterializedRecordFromVulns(asset, overdueVulns, workgroupIdsByAsset[asset.id].orEmpty())
             }
 
             // Update progress
@@ -371,6 +379,25 @@ open class MaterializedViewRefreshService(
     }
 
     /**
+     * Bulk-resolve workgroup ids for the given assets, chunking the IN-clause at 1000
+     * ids (same convention as CrowdStrikeVulnerabilityImportService's reconcile sweep).
+     * Replaces the `LEFT JOIN FETCH a.workgroups` this service used to rely on.
+     */
+    private fun loadWorkgroupIdsByAsset(assets: Collection<com.secman.domain.Asset>): Map<Long, List<Long>> {
+        val assetIds = assets.mapNotNull { it.id }
+        if (assetIds.isEmpty()) return emptyMap()
+        val result = mutableMapOf<Long, MutableList<Long>>()
+        assetIds.chunked(1000).forEach { idBatch ->
+            assetRepository.findWorkgroupIdsByAssetIds(idBatch).forEach { row ->
+                val assetId = (row[0] as Number).toLong()
+                val workgroupId = (row[1] as Number).toLong()
+                result.getOrPut(assetId) { mutableListOf() }.add(workgroupId)
+            }
+        }
+        return result
+    }
+
+    /**
      * Create materialized record from pre-loaded vulnerability list
      *
      * **Performance Optimization (Fix 3):**
@@ -380,13 +407,15 @@ open class MaterializedViewRefreshService(
      * Task: T011
      * Spec reference: data-model.md
      *
-     * @param asset The asset entity (already loaded with workgroups)
+     * @param asset The asset entity (already loaded, workgroups NOT fetched — see loadWorkgroupIdsByAsset)
      * @param overdueVulns Pre-filtered list of overdue, non-excepted vulnerabilities for this asset
+     * @param workgroupIds This asset's workgroup ids, resolved separately in bulk
      * @return OutdatedAssetMaterializedView record ready for persistence
      */
     private fun createMaterializedRecordFromVulns(
         asset: com.secman.domain.Asset,
-        overdueVulns: List<com.secman.domain.Vulnerability>
+        overdueVulns: List<com.secman.domain.Vulnerability>,
+        workgroupIds: List<Long>
     ): OutdatedAssetMaterializedView {
         // Calculate severity counts. cvssSeverity is stored title-case
         // ("Critical", "High", "Medium", "Low") by VulnerabilityService.addVulnerabilityFromCli
@@ -408,9 +437,6 @@ open class MaterializedViewRefreshService(
             ChronoUnit.DAYS.between(it.firstSeenAt ?: it.scanTimestamp, now).toInt()
         } ?: 0
 
-        // Get workgroup IDs (denormalized for performance) - already loaded via JOIN FETCH
-        val workgroupIds = asset.workgroups.joinToString(",") { it.id.toString() }
-
         return OutdatedAssetMaterializedView(
             assetId = asset.id!!,
             assetName = asset.name,
@@ -422,7 +448,7 @@ open class MaterializedViewRefreshService(
             lowCount = lowCount,
             oldestVulnDays = oldestVulnDays,
             oldestVulnId = oldestVuln?.vulnerabilityId,
-            workgroupIds = workgroupIds,
+            workgroupIds = workgroupIds.joinToString(","),
             adDomain = asset.adDomain,
             lastCalculatedAt = now
         )
