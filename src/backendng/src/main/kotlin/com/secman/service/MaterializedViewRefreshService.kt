@@ -6,10 +6,12 @@ import com.secman.domain.RefreshProgressEvent
 import com.secman.repository.MaterializedViewRefreshJobRepository
 import com.secman.repository.OutdatedAssetMaterializedViewRepository
 import com.secman.repository.VulnerabilityRepository
+import io.micronaut.context.annotation.Value
 import io.micronaut.context.event.ApplicationEventPublisher
 import io.micronaut.data.model.Pageable
 import io.micronaut.data.model.Sort
 import io.micronaut.scheduling.annotation.Async
+import io.micronaut.scheduling.annotation.Scheduled
 import jakarta.inject.Singleton
 import jakarta.transaction.Transactional
 import org.slf4j.LoggerFactory
@@ -42,7 +44,9 @@ open class MaterializedViewRefreshService(
     private val vulnerabilityStatisticsCacheService: VulnerabilityStatisticsCacheService,
     private val assetHeatmapService: AssetHeatmapService,
     private val vulnerabilityService: VulnerabilityService,
-    private val awsCleanServerKpiService: AwsCleanServerKpiService
+    private val awsCleanServerKpiService: AwsCleanServerKpiService,
+    @Value("\${secman.materialized-view-refresh.min-interval-seconds:60}")
+    private val minRefreshIntervalSeconds: Long
 ) {
     private val log = LoggerFactory.getLogger(MaterializedViewRefreshService::class.java)
 
@@ -59,6 +63,19 @@ open class MaterializedViewRefreshService(
     // SSE sink for broadcasting refresh progress to all connected clients
     // Many().multicast() allows multiple subscribers
     private val progressSink: Sinks.Many<RefreshProgressEvent> = Sinks.many().multicast().onBackpressureBuffer()
+
+    /**
+     * Reason for a trigger that arrived while a refresh could not start immediately
+     * (a job is already running, or the cooldown since the last completed cycle hasn't
+     * elapsed). Drained by [sweepPendingRefreshTrigger] once both conditions clear,
+     * guaranteeing the latest such trigger eventually runs instead of being dropped by
+     * the cooldown gate below. A newer reason simply overwrites an older one — only
+     * "did anything change since the last cycle" matters, not a queue of every trigger.
+     */
+    private val pendingTriggerReason = java.util.concurrent.atomic.AtomicReference<String?>(null)
+
+    /** Anchor for the cooldown gate: the most recently completed (or failed) refresh job. */
+    private val lastCompletedJob = java.util.concurrent.atomic.AtomicReference<MaterializedViewRefreshJob?>(null)
 
     companion object {
         private const val BATCH_SIZE = 1000
@@ -79,10 +96,17 @@ open class MaterializedViewRefreshService(
      * Spec reference: FR-005 (async refresh)
      *
      * @param triggeredBy Description of what triggered the refresh (for audit trail)
-     * @return Either the newly created job, or the existing running job (if one is in progress)
+     * @param bypassCooldown Skip the min-interval cooldown gate below. Only the manual
+     *   admin "Refresh Now" endpoint sets this — an explicit request should never be
+     *   silently deferred; every other caller (e.g. CrowdStrike import, once per
+     *   sub-batch HTTP request) is subject to the cooldown so a long import doesn't
+     *   run this service's full-table-scale refresh chain back-to-back for its whole
+     *   duration (2026-07-21 incident: HikariCP pool starvation from exactly that).
+     * @return Either the newly created job, the existing running job (if one is in
+     *   progress), or the last completed job (if deferred by the cooldown)
      */
-    fun triggerAsyncRefresh(triggeredBy: String): MaterializedViewRefreshJob {
-        log.info("Triggering async refresh: triggeredBy={}", triggeredBy)
+    fun triggerAsyncRefresh(triggeredBy: String, bypassCooldown: Boolean = false): MaterializedViewRefreshJob {
+        log.info("Triggering async refresh: triggeredBy={}, bypassCooldown={}", triggeredBy, bypassCooldown)
 
         // Concurrency control: Check if a refresh is already running
         val runningJob = getCurrentRunningJob()
@@ -101,7 +125,29 @@ open class MaterializedViewRefreshService(
             } else {
                 log.info("Skipping refresh trigger - job already running: jobId={}, triggeredBy={}, progress={}%",
                     runningJob.id, runningJob.triggeredBy, runningJob.progressPercentage)
+                if (!bypassCooldown) {
+                    pendingTriggerReason.set(triggeredBy)
+                }
                 return runningJob
+            }
+        }
+
+        // Cooldown gate: space refresh cycles at least minRefreshIntervalSeconds apart.
+        // A trigger that arrives too soon is remembered (not lost) and drained later by
+        // sweepPendingRefreshTrigger() once the cooldown elapses.
+        if (!bypassCooldown) {
+            val last = lastCompletedJob.get()
+            val lastFinishedAt = last?.completedAt
+            if (lastFinishedAt != null) {
+                val elapsedSeconds = ChronoUnit.SECONDS.between(lastFinishedAt, LocalDateTime.now())
+                if (elapsedSeconds < minRefreshIntervalSeconds) {
+                    pendingTriggerReason.set(triggeredBy)
+                    log.info(
+                        "Deferring refresh trigger (cooldown active): triggeredBy={}, elapsedSeconds={}, minIntervalSeconds={}",
+                        triggeredBy, elapsedSeconds, minRefreshIntervalSeconds
+                    )
+                    return last
+                }
             }
         }
 
@@ -154,6 +200,11 @@ open class MaterializedViewRefreshService(
 
             // Publish failure event
             publishProgressEvent(job, "Refresh failed: ${e.message}")
+        } finally {
+            // Anchors the cooldown gate in triggerAsyncRefresh() — set on both success
+            // and failure so a repeatedly-failing refresh still gets spaced out instead
+            // of retrying back-to-back.
+            lastCompletedJob.set(job)
         }
     }
 
@@ -438,5 +489,35 @@ open class MaterializedViewRefreshService(
     fun getRecentJobs(limit: Int = 10): List<MaterializedViewRefreshJob> {
         val pageable = Pageable.from(0, limit, Sort.of(Sort.Order.desc("startedAt")))
         return refreshJobRepository.findAll(pageable).content
+    }
+
+    /**
+     * Drains a debounced refresh trigger once it's safe to start: no job currently
+     * running, and the cooldown since the last completed cycle has elapsed. This is
+     * what guarantees the latest trigger received during a burst (e.g. a long
+     * CrowdStrike import posting many sub-batches) eventually runs, instead of being
+     * permanently dropped by the cooldown gate in [triggerAsyncRefresh].
+     *
+     * 15s is intentionally much shorter than the cooldown itself, so the extra
+     * staleness this sweep can introduce is bounded and negligible relative to the
+     * cooldown — it isn't separately configurable to keep the config surface small.
+     */
+    @Scheduled(fixedDelay = "15s")
+    open fun sweepPendingRefreshTrigger() {
+        val reason = pendingTriggerReason.get() ?: return
+        if (getCurrentRunningJob() != null) return
+
+        val lastFinishedAt = lastCompletedJob.get()?.completedAt
+        if (lastFinishedAt != null) {
+            val elapsedSeconds = ChronoUnit.SECONDS.between(lastFinishedAt, LocalDateTime.now())
+            if (elapsedSeconds < minRefreshIntervalSeconds) return
+        }
+
+        // CAS so a trigger racing this sweep tick can't have its (newer) reason
+        // silently dropped by a plain get-then-clear.
+        if (pendingTriggerReason.compareAndSet(reason, null)) {
+            log.info("Draining debounced refresh trigger after cooldown: reason={}", reason)
+            triggerAsyncRefresh(reason)
+        }
     }
 }

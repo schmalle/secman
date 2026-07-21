@@ -40,6 +40,12 @@ class MaterializedViewRefreshServiceTest {
 
     private val job = MaterializedViewRefreshJob(id = 1L, triggeredBy = "test", totalAssets = 0)
 
+    // In-memory fake backing the job repository, so trigger/execute/sweep tests can
+    // exercise real save -> findById -> findRunningJob(s) round-trips instead of
+    // stubbing each call's return value by hand.
+    private val jobStore = mutableListOf<MaterializedViewRefreshJob>()
+    private var nextId = 1L
+
     @BeforeEach
     fun setUp() {
         every { vulnerabilityConfigService.getReminderOneDays() } returns 30
@@ -47,7 +53,37 @@ class MaterializedViewRefreshServiceTest {
         // Micronaut Data repository interface then fails to cast — stub explicitly.
         every { refreshJobRepository.update(any()) } answers { firstArg() }
         every { outdatedAssetRepository.saveAll(any<List<com.secman.domain.OutdatedAssetMaterializedView>>()) } answers { firstArg() }
-        service = MaterializedViewRefreshService(
+        every { refreshJobRepository.save(any()) } answers {
+            val saved = firstArg<MaterializedViewRefreshJob>()
+            if (saved.id == null) saved.id = nextId++
+            jobStore.add(saved)
+            saved
+        }
+        every { refreshJobRepository.findById(any()) } answers {
+            java.util.Optional.ofNullable(jobStore.find { it.id == firstArg<Long>() })
+        }
+        every { refreshJobRepository.findRunningJob() } answers {
+            java.util.Optional.ofNullable(
+                jobStore.filter { it.status == com.secman.domain.RefreshJobStatus.RUNNING }
+                    .maxByOrNull { it.startedAt }
+            )
+        }
+        every { refreshJobRepository.findRunningJobs() } answers {
+            jobStore.filter { it.status == com.secman.domain.RefreshJobStatus.RUNNING }.sortedBy { it.id }
+        }
+        // Default: no cooldown, so tests unrelated to debouncing keep seeing the
+        // pre-existing "every trigger starts immediately" behavior.
+        service = buildService(minRefreshIntervalSeconds = 0L)
+    }
+
+    /**
+     * Builds a service instance wired to the shared mocks/fakes above, with the given
+     * cooldown. Cooldown-specific tests build their own instance here instead of using
+     * the default 0-second [service] from [setUp], so deferral is deterministic without
+     * needing to mock the wall clock.
+     */
+    private fun buildService(minRefreshIntervalSeconds: Long): MaterializedViewRefreshService {
+        val built = MaterializedViewRefreshService(
             refreshJobRepository,
             outdatedAssetRepository,
             vulnerabilityRepository,
@@ -56,15 +92,17 @@ class MaterializedViewRefreshServiceTest {
             vulnerabilityStatisticsCacheService,
             assetHeatmapService,
             vulnerabilityService,
-            awsCleanServerKpiService
+            awsCleanServerKpiService,
+            minRefreshIntervalSeconds
         )
         // In production Micronaut injects the AOP self-proxy; in unit tests the plain
         // instance is fine (no transactionality to assert here). The field is private
         // (public/internal visibility crashes the bean graph), so set via reflection.
         MaterializedViewRefreshService::class.java.getDeclaredField("selfProvider").apply {
             isAccessible = true
-            set(service, jakarta.inject.Provider { service })
+            set(built, jakarta.inject.Provider { built })
         }
+        return built
     }
 
     private fun overdueVulnerability(): Vulnerability {
@@ -171,5 +209,103 @@ class MaterializedViewRefreshServiceTest {
         service.executeRefresh(job)
 
         verify(exactly = 1) { awsCleanServerKpiService.recalculate(listOf(vuln)) }
+    }
+
+    @Test
+    @DisplayName("defers a second trigger within the cooldown window instead of starting a new job")
+    fun secondTriggerWithinCooldownIsDeferredAndReturnsLastCompletedJob() {
+        val cooldownService = buildService(minRefreshIntervalSeconds = 3600L)
+
+        val first = cooldownService.triggerAsyncRefresh("first")
+        val second = cooldownService.triggerAsyncRefresh("second")
+
+        assertThat(second.id).isEqualTo(first.id)
+        assertThat(jobStore).hasSize(1)
+    }
+
+    @Test
+    @DisplayName("bypassCooldown always starts a new job, even within the cooldown window")
+    fun bypassCooldownAlwaysStartsANewJob() {
+        val cooldownService = buildService(minRefreshIntervalSeconds = 3600L)
+
+        val first = cooldownService.triggerAsyncRefresh("first")
+        val second = cooldownService.triggerAsyncRefresh("Manual refresh by admin", bypassCooldown = true)
+
+        assertThat(second.id).isNotEqualTo(first.id)
+        assertThat(jobStore).hasSize(2)
+    }
+
+    @Test
+    @DisplayName("sweep drains a pending trigger and starts a new job once the cooldown has elapsed")
+    fun sweepDrainsPendingTriggerOnceCooldownElapses() {
+        val cooldownService = buildService(minRefreshIntervalSeconds = 60L)
+
+        val first = cooldownService.triggerAsyncRefresh("first")
+        cooldownService.triggerAsyncRefresh("second") // deferred: within cooldown
+        assertThat(jobStore).hasSize(1)
+
+        // Move the cooldown anchor into the past instead of mocking the wall clock —
+        // `first` is the same job instance the service tracks as lastCompletedJob.
+        first.completedAt = LocalDateTime.now().minusHours(2)
+
+        cooldownService.sweepPendingRefreshTrigger()
+
+        assertThat(jobStore).hasSize(2)
+        assertThat(pendingTriggerReasonOf(cooldownService)).isNull()
+    }
+
+    @Test
+    @DisplayName("sweep is a no-op while a refresh job is currently running")
+    fun sweepIsNoOpWhileAJobIsRunning() {
+        val cooldownService = buildService(minRefreshIntervalSeconds = 60L)
+        jobStore.add(MaterializedViewRefreshJob(id = 99L, triggeredBy = "stuck", totalAssets = 0))
+        setPendingTriggerReasonOf(cooldownService, "queued while running")
+
+        cooldownService.sweepPendingRefreshTrigger()
+
+        assertThat(jobStore).hasSize(1)
+        assertThat(pendingTriggerReasonOf(cooldownService)).isEqualTo("queued while running")
+    }
+
+    @Test
+    @DisplayName("sweep is a no-op before the cooldown has elapsed")
+    fun sweepIsNoOpBeforeCooldownElapses() {
+        val cooldownService = buildService(minRefreshIntervalSeconds = 3600L)
+
+        cooldownService.triggerAsyncRefresh("first")
+        cooldownService.triggerAsyncRefresh("second") // deferred: within cooldown
+        assertThat(jobStore).hasSize(1)
+
+        cooldownService.sweepPendingRefreshTrigger() // completedAt is seconds old, well within 3600s cooldown
+
+        assertThat(jobStore).hasSize(1)
+        assertThat(pendingTriggerReasonOf(cooldownService)).isEqualTo("second")
+    }
+
+    @Test
+    @DisplayName("a failed refresh still updates the cooldown anchor, so it doesn't retry back-to-back")
+    fun failedRefreshStillUpdatesCooldownAnchor() {
+        every { vulnerabilityRepository.findOverdueVulnerabilitiesWithAssets(any()) } throws RuntimeException("boom")
+        val cooldownService = buildService(minRefreshIntervalSeconds = 3600L)
+
+        val first = cooldownService.triggerAsyncRefresh("first")
+        val second = cooldownService.triggerAsyncRefresh("second")
+
+        assertThat(second.id).isEqualTo(first.id)
+        assertThat(jobStore).hasSize(1)
+    }
+
+    private fun pendingTriggerReasonOf(target: MaterializedViewRefreshService): String? {
+        val field = MaterializedViewRefreshService::class.java.getDeclaredField("pendingTriggerReason")
+        field.isAccessible = true
+        @Suppress("UNCHECKED_CAST")
+        return (field.get(target) as java.util.concurrent.atomic.AtomicReference<String?>).get()
+    }
+
+    private fun setPendingTriggerReasonOf(target: MaterializedViewRefreshService, reason: String) {
+        val field = MaterializedViewRefreshService::class.java.getDeclaredField("pendingTriggerReason")
+        field.isAccessible = true
+        @Suppress("UNCHECKED_CAST")
+        (field.get(target) as java.util.concurrent.atomic.AtomicReference<String?>).set(reason)
     }
 }

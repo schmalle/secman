@@ -58,8 +58,10 @@ class MaterializedViewRefreshController(
     fun triggerRefresh(authentication: Authentication): HttpResponse<MaterializedViewRefreshJob> {
         val username = authentication.name
 
-        // Trigger async refresh (returns immediately)
-        val job = refreshService.triggerAsyncRefresh("Manual refresh by $username")
+        // Trigger async refresh (returns immediately). bypassCooldown=true: an explicit
+        // admin request must never be silently deferred by the debounce cooldown that
+        // applies to other callers (e.g. CrowdStrike import sub-batches).
+        val job = refreshService.triggerAsyncRefresh("Manual refresh by $username", bypassCooldown = true)
 
         return HttpResponse.ok(job)
     }

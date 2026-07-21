@@ -283,6 +283,21 @@ secman:
   # Cache is refreshed during materialized view refresh (after CLI import)
   statistics-cache:
     enabled: ${STATISTICS_CACHE_ENABLED:true}
+  # Materialized view refresh debounce (2026-07-21 incident: a long CrowdStrike CLI
+  # import (--save) triggers one refresh cycle per HTTP sub-batch POST — up to ~40+ for
+  # a large run. Each cycle chains full-table-scale reads (findOverdueVulnerabilitiesWithAssets,
+  # VulnerabilityStatisticsCacheService.refreshCache, AssetHeatmapService.recalculateHeatmap),
+  # each legitimately costing ~60-100s in production (see the leak-detection-threshold
+  # comment on the datasource block below). Without spacing, refresh N+1 started the
+  # instant refresh N finished, holding HikariCP connections back-to-back for the whole
+  # import and starving the CLI's own parallel import writes — the root cause of the
+  # CLI's sub-batch 504 timeouts. min-interval-seconds enforces a cooldown between one
+  # cycle completing and the next starting; only the LAST trigger received during the
+  # cooldown is coalesced and guaranteed to eventually run (see
+  # MaterializedViewRefreshService.pendingTriggerReason / sweepPendingRefreshTrigger).
+  # The manual admin "Refresh Now" endpoint always bypasses this cooldown.
+  materialized-view-refresh:
+    min-interval-seconds: ${MATERIALIZED_VIEW_REFRESH_MIN_INTERVAL_SECONDS:60}
   vulnerability:
     # Use patch publication date for calculating days open
     # When true: days_open = scan_timestamp - patch_publication_date
