@@ -406,6 +406,15 @@ const Sidebar = () => {
                                         </a>
                                     </li>
                                 )}
+                                {/* Longest-open findings by account - ADMIN only (mirrors GET /api/admin/account-finding-age/top) */}
+                                {userRoles.includes('ADMIN') && (
+                                    <li>
+                                        <a href="/account-finding-age" className="d-flex align-items-center p-2 text-dark text-decoration-none rounded hover-bg-secondary"
+                                            title="AWS accounts ranked by the age of their oldest still-open finding">
+                                            <i className="bi bi-hourglass-bottom me-2"></i> Account Aging
+                                        </a>
+                                    </li>
+                                )}
                             </ul>
                         )}
                     </li>
