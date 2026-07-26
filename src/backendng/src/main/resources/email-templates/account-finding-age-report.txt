@@ -1,0 +1,11 @@
+SecMan - Accounts With The Longest-Open Findings
+================================================
+Generated on: ${executionDate}
+
+The ${accountCount} AWS account(s) below have the oldest still-open
+vulnerabilities in the estate. Findings covered by an active exception
+are excluded.
+
+${accountsText}
+
+Full report: ${reportUrl}
