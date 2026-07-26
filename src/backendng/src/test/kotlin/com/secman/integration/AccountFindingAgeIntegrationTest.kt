@@ -193,4 +193,112 @@ class AccountFindingAgeIntegrationTest : BaseIntegrationTest() {
         assertThat((match["affectedAssetCount"] as Number).toLong()).isEqualTo(2L)
         assertThat((match["oldestFindingDaysOpen"] as Number).toLong()).isGreaterThanOrEqualTo(199L)
     }
+
+    /**
+     * Generates a fresh 12-digit numeric AWS account id, unique per call, so tests never
+     * collide with each other's fixed literal ids ("123456789012", "777777777777", ...) or
+     * with rows left behind by earlier tests in this class (schema is create-drop per CLASS,
+     * not per test — see class-level comment).
+     */
+    private fun uniqueAccountId(prefix: String): String {
+        require(prefix.length in 1..3) { "prefix must leave room for a 9-12 digit suffix" }
+        val suffix = (System.nanoTime() % 1_000_000_000_000L).toString().padStart(12 - prefix.length, '0')
+        return (prefix + suffix).takeLast(12)
+    }
+
+    @Test
+    fun `top endpoint orders three accounts oldest-first and resolves name fallback`() {
+        val token = TestAuthHelper.getAuthToken(client, adminUser.username)
+
+        // Three distinct accounts, clearly separated ages. Only the oldest gets a display
+        // name; the other two must fall back to their bare account id in the response.
+        val oldAccountId = uniqueAccountId("91")
+        val midAccountId = uniqueAccountId("92")
+        val newAccountId = uniqueAccountId("93")
+
+        awsAccountRepository.save(AwsAccount(awsAccountId = oldAccountId, name = "Named Old Account"))
+
+        fun seed(accountId: String, daysOld: Long, cve: String) {
+            val asset = assetRepository.save(TestDataFactory.createAsset(
+                name = "afa-multi-${accountId}-${System.nanoTime()}"
+            ).apply { cloudAccountId = accountId; cloudInstanceId = "i-$accountId" })
+            vulnerabilityRepository.save(TestDataFactory.createVulnerabilityWithTimestamp(
+                asset, cve, "High", LocalDateTime.now().minusDays(daysOld)
+            ))
+        }
+
+        seed(oldAccountId, 300, "CVE-MULTI-OLD")
+        seed(midAccountId, 150, "CVE-MULTI-MID")
+        seed(newAccountId, 20, "CVE-MULTI-NEW")
+
+        // limit=MAX_LIMIT (50): guarantees all three seeded accounts are within the window
+        // regardless of how many other accounts earlier tests in this class left behind —
+        // the assertion below filters to just our three ids, so leaked rows from other tests
+        // are irrelevant as long as they don't push us past the limit (they won't: at most a
+        // handful of other ranked accounts exist across this whole test class).
+        val response = client.toBlocking().exchange(
+            HttpRequest.GET<Any>("/api/admin/account-finding-age/top?limit=50").bearerAuth(token),
+            io.micronaut.core.type.Argument.listOf(Map::class.java)
+        )
+        assertThat(response.status).isEqualTo(HttpStatus.OK)
+
+        @Suppress("UNCHECKED_CAST")
+        val ours = response.body()!!.map { it as Map<String, Any?> }
+            .filter { it["awsAccountId"] in setOf(oldAccountId, midAccountId, newAccountId) }
+
+        // Order, not just membership: if RANK_ACCOUNTS' ORDER BY were flipped to DESC (or
+        // removed), this exact assertion would fail.
+        assertThat(ours.map { it["awsAccountId"] }).containsExactly(oldAccountId, midAccountId, newAccountId)
+
+        assertThat(ours[0]["accountName"]).isEqualTo("Named Old Account")
+        // No AwsAccount row for these two -> name falls back to the bare account id.
+        assertThat(ours[1]["accountName"]).isEqualTo(midAccountId)
+        assertThat(ours[2]["accountName"]).isEqualTo(newAccountId)
+    }
+
+    @Test
+    fun `name upsert with a blank name clears the stored name and the report falls back to the bare id`() {
+        val token = TestAuthHelper.getAuthToken(client, adminUser.username)
+
+        val accountId = uniqueAccountId("95")
+
+        // Give this account an open finding so it's visible in the ranking report both
+        // before and after the name is cleared.
+        val asset = assetRepository.save(TestDataFactory.createAsset(
+            name = "afa-blankname-${System.nanoTime()}"
+        ).apply { cloudAccountId = accountId; cloudInstanceId = "i-blankname" })
+        vulnerabilityRepository.save(TestDataFactory.createVulnerabilityWithTimestamp(
+            asset, "CVE-BLANKNAME", "Medium", LocalDateTime.now().minusDays(60)
+        ))
+
+        // (a) PUT a real name, assert it stored.
+        client.toBlocking().exchange(
+            HttpRequest.PUT("/api/admin/aws-accounts/$accountId/name", mapOf("name" to "Real Name"))
+                .bearerAuth(token),
+            Map::class.java
+        )
+        assertThat(awsAccountRepository.findByAwsAccountId(accountId).get().name).isEqualTo("Real Name")
+
+        // (b) PUT a blank (whitespace-only) name for the SAME account.
+        client.toBlocking().exchange(
+            HttpRequest.PUT("/api/admin/aws-accounts/$accountId/name", mapOf("name" to "   "))
+                .bearerAuth(token),
+            Map::class.java
+        )
+
+        val afterBlank = awsAccountRepository.findByAwsAccountId(accountId)
+        assertThat(afterBlank).isPresent
+        assertThat(afterBlank.get().name).isNull()
+
+        // The fallback must be visible end-to-end where it actually matters: the report.
+        val response = client.toBlocking().exchange(
+            HttpRequest.GET<Any>("/api/admin/account-finding-age/top?limit=50").bearerAuth(token),
+            io.micronaut.core.type.Argument.listOf(Map::class.java)
+        )
+        assertThat(response.status).isEqualTo(HttpStatus.OK)
+
+        @Suppress("UNCHECKED_CAST")
+        val match = response.body()!!.map { it as Map<String, Any?> }.first { it["awsAccountId"] == accountId }
+        assertThat(match["accountName"]).isEqualTo(accountId)
+    }
 }
