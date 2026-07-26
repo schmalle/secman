@@ -50,7 +50,7 @@ open class AccountFindingAgeReportService(
         if (accounts.isEmpty()) {
             logger.info("Account finding-age report: no accounts with open findings, nothing sent")
             return ReportResult(
-                recipientCount = recipients.size,
+                recipientCount = 0,
                 emailsSent = 0,
                 emailsFailed = 0,
                 status = ExecutionStatus.SUCCESS,
@@ -140,12 +140,12 @@ open class AccountFindingAgeReportService(
         val rows = accounts.mapIndexed { index, a ->
             """            <tr>
                 <td style="padding: 8px 12px; border-bottom: 1px solid #e9ecef;">${index + 1}</td>
-                <td style="padding: 8px 12px; border-bottom: 1px solid #e9ecef;">${escape(a.accountName)}</td>
-                <td style="padding: 8px 12px; border-bottom: 1px solid #e9ecef;">${escape(a.awsAccountId)}</td>
+                <td style="padding: 8px 12px; border-bottom: 1px solid #e9ecef;">${escapeHtmlText(a.accountName)}</td>
+                <td style="padding: 8px 12px; border-bottom: 1px solid #e9ecef;">${escapeHtmlText(a.awsAccountId)}</td>
                 <td style="padding: 8px 12px; border-bottom: 1px solid #e9ecef; text-align: right; font-weight: bold; color: #dc3545;">${a.oldestFindingDaysOpen}</td>
-                <td style="padding: 8px 12px; border-bottom: 1px solid #e9ecef;">${escape(a.oldestFindingCve ?: "-")}</td>
-                <td style="padding: 8px 12px; border-bottom: 1px solid #e9ecef;">${escape(a.oldestFindingSeverity ?: "-")}</td>
-                <td style="padding: 8px 12px; border-bottom: 1px solid #e9ecef;">${escape(a.oldestFindingAssetName ?: "-")}</td>
+                <td style="padding: 8px 12px; border-bottom: 1px solid #e9ecef;">${escapeHtmlText(a.oldestFindingCve ?: "-")}</td>
+                <td style="padding: 8px 12px; border-bottom: 1px solid #e9ecef;">${escapeHtmlText(a.oldestFindingSeverity ?: "-")}</td>
+                <td style="padding: 8px 12px; border-bottom: 1px solid #e9ecef;">${escapeHtmlText(a.oldestFindingAssetName ?: "-")}</td>
                 <td style="padding: 8px 12px; border-bottom: 1px solid #e9ecef; text-align: right;">${a.openFindingCount}</td>
             </tr>"""
         }.joinToString("\n")
@@ -172,7 +172,11 @@ $rows
                 "${a.openFindingCount} open findings"
         }.joinToString("\n")
 
-    private fun escape(value: String): String = value
+    /**
+     * Escapes &, < and > for safe use inside HTML element text content (e.g. <td>…</td>).
+     * Does NOT escape quotes — unsafe for use inside an attribute value such as title="…" or href="…".
+     */
+    private fun escapeHtmlText(value: String): String = value
         .replace("&", "&amp;")
         .replace("<", "&lt;")
         .replace(">", "&gt;")

@@ -93,6 +93,8 @@ class AccountFindingAgeReportServiceTest {
         assertThat(result.status).isEqualTo(ExecutionStatus.SUCCESS)
         assertThat(result.accountCount).isZero()
         assertThat(result.emailsSent).isZero()
+        assertThat(result.recipientCount).isZero()
+        assertThat(result.recipients).isEmpty()
         verify(exactly = 0) { emailService.sendEmailWithInlineImages(any(), any(), any(), any(), any()) }
     }
 }
