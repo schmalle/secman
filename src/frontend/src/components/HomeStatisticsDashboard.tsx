@@ -24,6 +24,11 @@ type DashboardState = {
   releases: number | null;
   lastCrowdStrikeCheckin: string | null;
   awsCleanServerKpi: AwsCleanServerKpi | null;
+  accountFindingAge: Array<{
+    awsAccountId: string;
+    accountName: string;
+    oldestFindingDaysOpen: number;
+  }> | null;
 };
 
 const initialState: DashboardState = {
@@ -33,7 +38,8 @@ const initialState: DashboardState = {
   runningAssessments: null,
   releases: null,
   lastCrowdStrikeCheckin: null,
-  awsCleanServerKpi: null
+  awsCleanServerKpi: null,
+  accountFindingAge: null
 };
 
 const formatAwsCleanServerKpi = (kpi: AwsCleanServerKpi | null): string => {
@@ -121,6 +127,17 @@ const HomeStatisticsDashboard: React.FC = () => {
 
       if (hasRole('ADMIN')) {
         try {
+          const agingResp = await authenticatedGet('/api/admin/account-finding-age/top?limit=10');
+          if (agingResp.ok) {
+            next.accountFindingAge = await agingResp.json();
+          }
+        } catch (error) {
+          console.warn('Failed to load account finding-age report:', error);
+        }
+      }
+
+      if (hasRole('ADMIN')) {
+        try {
           const usersResp = await authenticatedGet('/api/users');
           if (usersResp.ok) {
             const users = await usersResp.json();
@@ -202,6 +219,36 @@ const HomeStatisticsDashboard: React.FC = () => {
           </div>
         ))}
       </div>
+
+      {isAdmin && stats.accountFindingAge && stats.accountFindingAge.length > 0 && (
+        <div className="row g-4 mt-0">
+          <div className="col-12">
+            <article className="card border-0 shadow-sm h-100">
+              <div className="card-header bg-transparent border-0 pt-4 px-4 pb-0 d-flex justify-content-between align-items-center">
+                <h2 className="h6 text-muted text-uppercase mb-0" style={{ letterSpacing: '0.04em' }}>
+                  <i className="bi bi-hourglass-bottom me-2"></i>Longest-open findings by account
+                </h2>
+                <a href="/account-finding-age" className="btn btn-sm btn-outline-primary">View all</a>
+              </div>
+              <div className="card-body p-4">
+                <ul className="list-group list-group-flush">
+                  {stats.accountFindingAge.map((a) => (
+                    <li key={a.awsAccountId} className="list-group-item px-0 d-flex justify-content-between align-items-center">
+                      <span>
+                        {a.accountName}
+                        {a.accountName !== a.awsAccountId && (
+                          <small className="text-muted ms-2">{a.awsAccountId}</small>
+                        )}
+                      </span>
+                      <span className="badge bg-danger rounded-pill">{a.oldestFindingDaysOpen} d</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </article>
+          </div>
+        </div>
+      )}
     </section>
   );
 };
