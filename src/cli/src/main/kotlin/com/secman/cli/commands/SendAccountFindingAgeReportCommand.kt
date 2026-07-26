@@ -39,6 +39,13 @@ class SendAccountFindingAgeReportCommand : Runnable {
     @Inject
     lateinit var cliHttpClient: CliHttpClient
 
+    /**
+     * Test seam: production always exits the real JVM via System.exit; unit tests replace
+     * this with a recorder so run() can be exercised end-to-end (including the exception and
+     * FAILURE/PARTIAL_FAILURE paths) without terminating the test process.
+     */
+    var exitAction: (Int) -> Unit = { code -> System.exit(code) }
+
     override fun run() {
         try {
             println("=".repeat(60))
@@ -55,11 +62,15 @@ class SendAccountFindingAgeReportCommand : Runnable {
             val authToken = cliHttpClient.authenticate(getEffectiveUsername(), getEffectivePassword(), effectiveUrl)
                 ?: throw RuntimeException("Authentication failed. Check credentials.")
 
-            val sendResult = cliHttpClient.postMap(
+            val (httpStatus, sendResult) = cliHttpClient.postMapWithStatus(
                 "$effectiveUrl/api/cli/account-finding-age-report/send",
                 mapOf("limit" to limit, "dryRun" to dryRun, "verbose" to verbose),
                 authToken
-            ) ?: throw RuntimeException("Failed to send report - no response from server")
+            )
+
+            if (httpStatus !in 200..299 || sendResult == null) {
+                throw RuntimeException(describeError(httpStatus, sendResult, effectiveUrl))
+            }
 
             val status = sendResult["status"]?.toString() ?: "UNKNOWN"
             val recipientCount = (sendResult["recipientCount"] as? Number)?.toInt() ?: 0
@@ -104,16 +115,37 @@ class SendAccountFindingAgeReportCommand : Runnable {
                 }
             }
 
-            if (status == "FAILURE" || status == "PARTIAL_FAILURE") {
-                System.exit(2)
+            val exitCode = determineExitCode(status)
+            if (exitCode != null) {
+                exitAction(exitCode)
             }
 
         } catch (e: Exception) {
             System.err.println("Error: ${e.message}")
             if (verbose) e.printStackTrace()
-            System.exit(2)
+            exitAction(2)
         }
     }
+
+    /**
+     * Turns a failed HTTP response into the message shown to the user. A genuine
+     * connectivity failure (CliHttpClient.postMapWithStatus signals this with status -1
+     * and a null body) is reported distinctly from a backend-returned error so the two
+     * are never confused with each other or with "no response from server".
+     */
+    fun describeError(status: Int, body: Map<*, *>?, backendUrl: String): String {
+        if (status == -1) {
+            return "Failed to reach backend at $backendUrl (connection error). " +
+                "Check network connectivity and the --backend-url/SECMAN_HOST value."
+        }
+        return body?.get("message")?.toString()
+            ?: body?.get("error")?.toString()
+            ?: "Backend returned HTTP $status"
+    }
+
+    /** exit-code-2 (not 1) is deliberate for this command; see task-6 brief. */
+    fun determineExitCode(status: String): Int? =
+        if (status == "FAILURE" || status == "PARTIAL_FAILURE") 2 else null
 
     private fun getEffectiveUsername(): String =
         username ?: System.getenv("SECMAN_ADMIN_NAME")
