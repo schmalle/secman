@@ -93,6 +93,8 @@ class McpToolRegistry(
     // Feature 086: MCP Heatmap Tools
     @Inject private val getVulnerabilityHeatmapTool: GetVulnerabilityHeatmapTool,
     @Inject private val refreshVulnerabilityHeatmapTool: RefreshVulnerabilityHeatmapTool,
+    // Account finding-age report (ADMIN only)
+    @Inject private val getTopAccountsByFindingAgeTool: GetTopAccountsByFindingAgeTool,
     // Feature: Workgroup AWS Account Assignment
     @Inject private val listWorkgroupAwsAccountsTool: ListWorkgroupAwsAccountsTool,
     @Inject private val addWorkgroupAwsAccountTool: AddWorkgroupAwsAccountTool,
@@ -209,6 +211,8 @@ class McpToolRegistry(
             // Feature 086: MCP Heatmap Tools
             getVulnerabilityHeatmapTool,
             refreshVulnerabilityHeatmapTool,
+            // Account finding-age report (ADMIN only)
+            getTopAccountsByFindingAgeTool,
             // Feature: Workgroup AWS Account Assignment
             listWorkgroupAwsAccountsTool,
             addWorkgroupAwsAccountTool,
@@ -510,6 +514,11 @@ class McpToolRegistry(
             }
             "refresh_vulnerability_heatmap" -> {
                 permissions.contains(McpPermission.VULNERABILITIES_READ) // ADMIN role checked in tool execute()
+            }
+
+            // Account finding-age report (ADMIN role checked in tool execute())
+            "get_top_accounts_by_finding_age" -> {
+                permissions.contains(McpPermission.VULNERABILITIES_READ)
             }
 
             // Feature: Workgroup AWS Account Assignment (ADMIN only via User Delegation)
