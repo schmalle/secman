@@ -100,6 +100,40 @@ open class CrowdStrikeQueryService(
         }
 
         // Fall through to CrowdStrike API
+        return queryVulnerabilitiesLive(hostname, severity, product)
+    }
+
+    /**
+     * Query vulnerabilities straight from CrowdStrike Falcon, bypassing BOTH the persisted
+     * `vulnerability` rows and the `vulnerability_queries` cache.
+     *
+     * Backs the "Refresh" button on the System Vulnerabilities lookup (`force=true`): the operator
+     * explicitly asked for live data, so neither the DB-first short-circuit in [queryVulnerabilities]
+     * nor a cached result may be served. Also used as the fall-through of [queryVulnerabilities]
+     * when a host has no persisted rows at all.
+     *
+     * DO NOT annotate this method with `@Cacheable`, `@CacheInvalidate`, `@Transactional` or
+     * `@Retryable`. Micronaut's compile-time AOP intercepts self-invocation — the bean *is* the
+     * generated `$Intercepted` subclass, unlike Spring's separate proxy object — so adding advice
+     * here would route the call from [queryVulnerabilities] through the interceptor and cache live
+     * results again, reintroducing the exact defect this method exists to fix (a second Refresh
+     * within the 15-minute TTL would replay stale "live" data).
+     *
+     * Note there is deliberately no `limit`/`page`: the Spotlight per-host endpoint returns every
+     * vulnerability for the device in one response, so paging applies only to the DB-served path.
+     */
+    open fun queryVulnerabilitiesLive(
+        hostname: String,
+        severity: String? = null,
+        product: String? = null
+    ): CrowdStrikeQueryResponse {
+        require(hostname.isNotBlank()) { "Hostname cannot be blank" }
+
+        log.info(
+            "Querying CrowdStrike live (cache and DB bypassed): hostname={}, severity={}, product={}",
+            hostname, severity, product
+        )
+
         try {
             // Get config from database
             val config = getConfiguration()
@@ -240,6 +274,25 @@ open class CrowdStrikeQueryService(
         }
 
         // Fall through to CrowdStrike API
+        return queryByInstanceIdLive(instanceId, severity, product)
+    }
+
+    /**
+     * Instance-ID twin of [queryVulnerabilitiesLive] — see that method's KDoc for why this one must
+     * stay free of `@Cacheable`/`@Transactional`/`@Retryable` advice.
+     */
+    open fun queryByInstanceIdLive(
+        instanceId: String,
+        severity: String? = null,
+        product: String? = null
+    ): CrowdStrikeQueryResponse {
+        require(instanceId.isNotBlank()) { "Instance ID cannot be blank" }
+
+        log.info(
+            "Querying CrowdStrike live by instance ID (cache and DB bypassed): instanceId={}, severity={}, product={}",
+            instanceId, severity, product
+        )
+
         try {
             // Get config from database
             val config = getConfiguration()
@@ -304,6 +357,40 @@ open class CrowdStrikeQueryService(
     open fun invalidateAllCachedQueries() {
         log.debug("Invalidating all cached vulnerability_queries after import")
     }
+
+    /**
+     * Serve the persisted rows for a host without consulting — or populating — the
+     * `vulnerability_queries` cache.
+     *
+     * Used by the controller as the fallback when a force refresh reaches Falcon but Falcon has no
+     * device record for the host. Uncached on purpose: the whole point of the surrounding request
+     * was to get the freshest available view, so falling back to a possibly 15-minute-old cache
+     * entry would be self-defeating.
+     *
+     * @return the persisted response, or null when the asset is unknown or has no vulnerabilities.
+     */
+    open fun queryFromDatabase(
+        hostname: String,
+        severity: String? = null,
+        product: String? = null,
+        limit: Int = 20000,
+        page: Int = 0
+    ): CrowdStrikeQueryResponse? =
+        queryFromDatabaseByHostname(hostname, limit, page)
+            ?.let { applyExceptions(applyFilters(it, severity, product)) }
+
+    /**
+     * Instance-ID twin of [queryFromDatabase].
+     */
+    open fun queryFromDatabaseByInstance(
+        instanceId: String,
+        severity: String? = null,
+        product: String? = null,
+        limit: Int = 20000,
+        page: Int = 0
+    ): CrowdStrikeQueryResponse? =
+        queryFromDatabaseByInstanceId(instanceId, limit, page)
+            ?.let { applyExceptions(applyFilters(it, severity, product)) }
 
     /**
      * Query vulnerabilities from the local database by hostname.

@@ -16,7 +16,6 @@ import com.secman.service.CrowdStrikeVulnerabilityService
 import com.secman.service.ReconcileJobConflictException
 import com.secman.util.InputDetectionUtils
 import com.secman.util.ValidationUtils
-import io.micronaut.cache.annotation.CacheInvalidate
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.HttpStatus
 import io.micronaut.http.MediaType
@@ -65,7 +64,10 @@ open class CrowdStrikeController(
      * @param severity Optional severity filter (critical, high, medium, low)
      * @param product Optional product filter (substring match)
      * @param limit Result limit (default: 100, max: 1000)
-     * @param force If true, bypasses cache and fetches fresh data (Feature 041, Task T035)
+     * @param force If true ("Refresh" button), queries CrowdStrike Falcon live, bypassing both the
+     *              persisted vulnerability rows and the vulnerability_queries cache. If Falcon has
+     *              no device for the host, the persisted rows are returned with a `notice` rather
+     *              than a 404 (Feature 041, Task T035)
      * @return CrowdStrikeQueryResponse with vulnerabilities
      *
      * Error responses:
@@ -118,26 +120,35 @@ open class CrowdStrikeController(
                 else -> page
             }
 
-            // T035: If force=true, invalidate cache before querying
-            if (force) {
-                log.info("Force refresh requested - invalidating cache for input: {}", trimmedInput)
-                if (InputDetectionUtils.isAwsInstanceId(trimmedInput)) {
-                    val normalizedInstanceId = ValidationUtils.validateAndNormalizeAwsInstanceId(trimmedInput)
-                    invalidateCacheForInstanceId(normalizedInstanceId, severity, product, pageSize)
-                } else {
-                    val sanitizedHostname = sanitizeHostname(trimmedInput)
-                    invalidateCacheForHostname(sanitizedHostname, severity, product, pageSize)
-                }
-            }
-
-            // Detect query type and route to appropriate service method
+            // Detect query type and route to appropriate service method.
+            //
+            // force=true is the "Refresh" button on the System Vulnerabilities lookup: the operator
+            // explicitly asked for live CrowdStrike data, so route to the uncached *Live methods
+            // which bypass both the persisted rows and the vulnerability_queries cache. The plain
+            // (non-force) path is unchanged: DB-first, 15-minute cache.
             val response: CrowdStrikeQueryResponse = if (InputDetectionUtils.isAwsInstanceId(trimmedInput)) {
                 // Instance ID query (Feature 041)
-                // T017: Validate instance ID format
-                try {
-                    val normalizedInstanceId = ValidationUtils.validateAndNormalizeAwsInstanceId(trimmedInput)
-                    log.info("Detected AWS instance ID query: instanceId={}", normalizedInstanceId)
+                // T017: Validate instance ID format. Only the validation call belongs inside this
+                // try — wrapping the service call too would misreport any IllegalArgumentException
+                // raised by the service as an instance-ID *format* error.
+                val normalizedInstanceId = try {
+                    ValidationUtils.validateAndNormalizeAwsInstanceId(trimmedInput)
+                } catch (e: IllegalArgumentException) {
+                    throw IllegalArgumentException(ValidationUtils.getInstanceIdValidationError(trimmedInput))
+                }
+                log.info("Detected AWS instance ID query: instanceId={}, force={}", normalizedInstanceId, force)
 
+                if (force) {
+                    liveOrPersisted(
+                        identifier = normalizedInstanceId,
+                        live = { queryService.queryByInstanceIdLive(normalizedInstanceId, severity, product) },
+                        persisted = {
+                            queryService.queryFromDatabaseByInstance(
+                                normalizedInstanceId, severity, product, pageSize, pageNumber
+                            )
+                        }
+                    )
+                } else {
                     queryService.queryByInstanceId(
                         instanceId = normalizedInstanceId,
                         severity = severity,
@@ -145,22 +156,31 @@ open class CrowdStrikeController(
                         limit = pageSize,
                         page = pageNumber
                     )
-                } catch (e: IllegalArgumentException) {
-                    // T017: Clear error message for invalid instance ID format
-                    throw IllegalArgumentException(ValidationUtils.getInstanceIdValidationError(trimmedInput))
                 }
             } else {
                 // Hostname query (existing functionality)
                 val sanitizedHostname = sanitizeHostname(trimmedInput)
-                log.info("Detected hostname query: hostname={}", sanitizedHostname)
+                log.info("Detected hostname query: hostname={}, force={}", sanitizedHostname, force)
 
-                queryService.queryVulnerabilities(
-                    hostname = sanitizedHostname,
-                    severity = severity,
-                    product = product,
-                    limit = pageSize,
-                    page = pageNumber
-                )
+                if (force) {
+                    liveOrPersisted(
+                        identifier = sanitizedHostname,
+                        live = { queryService.queryVulnerabilitiesLive(sanitizedHostname, severity, product) },
+                        persisted = {
+                            queryService.queryFromDatabase(
+                                sanitizedHostname, severity, product, pageSize, pageNumber
+                            )
+                        }
+                    )
+                } else {
+                    queryService.queryVulnerabilities(
+                        hostname = sanitizedHostname,
+                        severity = severity,
+                        product = product,
+                        limit = pageSize,
+                        page = pageNumber
+                    )
+                }
             }
 
             log.info(
@@ -278,6 +298,19 @@ open class CrowdStrikeController(
 
         return try {
             val response = crowdStrikeService.saveToDatabase(request, authentication)  // T012: Pass both parameters
+
+            // Saving mutates the persisted rows that the DB-first lookup path serves, so the
+            // 15-minute vulnerability_queries cache is now stale for this host. Without this, the
+            // natural Refresh -> "Save to Database" -> Search flow would show pre-save data for up
+            // to 15 minutes. Same non-fatal pattern the import service already uses; a cache
+            // failure must never fail an otherwise successful save.
+            if (response.vulnerabilitiesSaved > 0) {
+                try {
+                    queryService.invalidateAllCachedQueries()
+                } catch (e: Exception) {
+                    log.warn("Failed to invalidate vulnerability_queries cache after save", e)
+                }
+            }
 
             log.info("CrowdStrike save successful: {}, user={}", response.message, username)
             HttpResponse.ok(response)
@@ -464,46 +497,41 @@ open class CrowdStrikeController(
     }
 
     /**
-     * Invalidate cache for hostname query
+     * Run a force-refresh live CrowdStrike lookup, falling back to the persisted rows when Falcon
+     * has no device record for the identifier.
      *
-     * Feature: 041-falcon-instance-lookup
-     * Task: T035
+     * A `NotFoundError` on the live path does NOT mean "no vulnerability data" — it means Falcon
+     * holds no device for this hostname/instance ID, which routinely happens for decommissioned
+     * hosts, uninstalled sensors and renamed machines. Failing the request outright would clear the
+     * operator's results (the frontend drops `queryResponse` on error), so a screen full of valid
+     * historic data would vanish because the user pressed Refresh. Instead the stored rows are
+     * returned with a `notice` explaining that the live lookup found nothing.
      *
-     * @param hostname System hostname
-     * @param severity Optional severity filter
-     * @param product Optional product filter
-     * @param limit Page size
+     * Deliberately narrow: only `NotFoundError` is caught. `RateLimitError` and `ServerError` are
+     * transient and must keep surfacing as 429/500 so the operator retries rather than believing
+     * they are looking at freshly refreshed data.
      */
-    @CacheInvalidate("vulnerability_queries")
-    open fun invalidateCacheForHostname(
-        hostname: String,
-        severity: String? = null,
-        product: String? = null,
-        limit: Int = 100
-    ) {
-        log.debug("Invalidating cache for hostname query: hostname={}, severity={}, product={}, limit={}",
-            hostname, severity, product, limit)
-    }
-
-    /**
-     * Invalidate cache for instance ID query
-     *
-     * Feature: 041-falcon-instance-lookup
-     * Task: T035
-     *
-     * @param instanceId AWS EC2 Instance ID
-     * @param severity Optional severity filter
-     * @param product Optional product filter
-     * @param limit Page size
-     */
-    @CacheInvalidate("vulnerability_queries")
-    open fun invalidateCacheForInstanceId(
-        instanceId: String,
-        severity: String? = null,
-        product: String? = null,
-        limit: Int = 100
-    ) {
-        log.debug("Invalidating cache for instance ID query: instanceId={}, severity={}, product={}, limit={}",
-            instanceId, severity, product, limit)
+    private fun liveOrPersisted(
+        identifier: String,
+        live: () -> CrowdStrikeQueryResponse,
+        persisted: () -> CrowdStrikeQueryResponse?
+    ): CrowdStrikeQueryResponse {
+        return try {
+            live()
+        } catch (e: CrowdStrikeError.NotFoundError) {
+            val fallback = persisted()
+            if (fallback == null) {
+                // Unknown to Falcon *and* nothing stored - a genuine 404.
+                throw e
+            }
+            log.warn(
+                "Live refresh found no CrowdStrike device for {} - serving {} persisted vulnerabilities instead",
+                identifier, fallback.vulnerabilities.size
+            )
+            fallback.copy(
+                notice = "Not found in CrowdStrike Falcon - showing the last imported data instead. " +
+                    "The host may have been decommissioned, renamed, or had its sensor removed."
+            )
+        }
     }
 }

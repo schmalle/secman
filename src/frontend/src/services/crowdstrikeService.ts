@@ -46,6 +46,12 @@ export interface CrowdStrikeQueryResponse {
      * and are NOT yet imported (they will not appear in the persisted-table views).
      */
     dataSource?: 'DATABASE' | 'LIVE_API';
+    /**
+     * Optional note about how this response was produced, rendered as a warning banner.
+     * Set when a force refresh reached CrowdStrike but Falcon held no device record for the
+     * host, so the persisted rows were returned instead.
+     */
+    notice?: string | null;
 }
 
 /**

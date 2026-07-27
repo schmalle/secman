@@ -74,5 +74,16 @@ data class CrowdStrikeQueryResponse(
      *   appear in the persisted-table views. Lets the UI label the difference instead of
      *   silently showing live counts that contradict the other pages.
      */
-    val dataSource: String = "DATABASE"
+    val dataSource: String = "DATABASE",
+
+    /**
+     * Optional human-readable note about how this response was produced, rendered by the UI as a
+     * warning banner above the results.
+     *
+     * Currently set only when a force refresh asked CrowdStrike for live data but Falcon has no
+     * device record for the host (decommissioned, sensor removed, hostname drift). Rather than
+     * failing the request and wiping the operator's screen, the persisted rows are returned with
+     * this notice so it is obvious the live lookup did not succeed.
+     */
+    val notice: String? = null
 )
