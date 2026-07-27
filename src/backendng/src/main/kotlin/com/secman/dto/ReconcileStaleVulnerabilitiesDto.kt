@@ -77,3 +77,30 @@ data class ReconcileStaleResult(
     val aborted: Boolean = false,
     val abortReason: String? = null
 )
+
+/**
+ * 202 body returned by POST /api/crowdstrike/servers/reconcile-stale. The sweep runs
+ * as a background job (it can exceed reverse-proxy timeouts on large tables); the
+ * caller polls GET .../reconcile-stale/{jobId}/status until a terminal status.
+ */
+@Serdeable
+data class ReconcileJobStartedResponse(
+    val jobId: String,
+    val status: String
+)
+
+/**
+ * Body of GET /api/crowdstrike/servers/reconcile-stale/{jobId}/status.
+ * `result` is populated only when status is COMPLETED. An aborted-by-safety-brake
+ * sweep is COMPLETED with `result.aborted = true`, not FAILED.
+ */
+@Serdeable
+data class ReconcileJobStatusResponse(
+    val jobId: String,
+    val status: String,
+    val createdAt: LocalDateTime,
+    val startedAt: LocalDateTime? = null,
+    val completedAt: LocalDateTime? = null,
+    val errorMessage: String? = null,
+    val result: ReconcileStaleVulnerabilitiesResponse? = null
+)

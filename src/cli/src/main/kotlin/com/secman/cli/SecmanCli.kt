@@ -18,6 +18,7 @@ import com.secman.cli.commands.ManageWorkgroupsCommand
 import com.secman.cli.commands.MonitorCommand
 import com.secman.cli.commands.PortScanCommand
 import com.secman.cli.commands.QueryCommand
+import com.secman.cli.commands.SendAccountFindingAgeReportCommand
 import com.secman.cli.commands.SendAdminSummaryCommand
 import com.secman.cli.commands.SendNotificationsCommand
 import com.secman.cli.commands.SendNotificationUsersCommand
@@ -318,6 +319,13 @@ class SecmanCli {
                 }
                 0
             }
+            args[0] == "send-account-finding-age-report" -> {
+                val subArgs = args.drop(1).toTypedArray()
+                createCliContext().use { ctx ->
+                    PicocliRunner.run(SendAccountFindingAgeReportCommand::class.java, ctx, *subArgs)
+                }
+                0
+            }
             args[0] == "send-application-register-reminders" -> {
                 val subArgs = args.drop(1).toTypedArray()
                 createCliContext().use { ctx ->
@@ -464,6 +472,7 @@ class SecmanCli {
               Notifications:
                 send-notifications     Send email notifications for outdated assets
                 send-admin-summary     Send system statistics summary email to ADMIN users
+                send-account-finding-age-report  Email accounts with the longest-open findings to ADMIN users
                 send-notification-users  Send vulnerability notifications to users by AWS account
                 send-patch-notifications  Notify users about missing patches, filtered by email first character
                 send-application-register-reminders  Send reminders for stale application register quality checks
@@ -692,6 +701,21 @@ class SecmanCli {
                   secman send-admin-summary --verbose
                   secman send-admin-summary --dry-run --verbose
             """.trimIndent(),
+            "send-account-finding-age-report" to """
+                secman send-account-finding-age-report - Email the accounts with the longest-open findings to ADMIN users
+
+                Usage: secman send-account-finding-age-report [options]
+
+                Options:
+                  --limit <n>     Number of accounts to report (1-50, default: 10)
+                  --dry-run       Preview planned recipients without sending emails
+                  --verbose, -v   Detailed logging (per-recipient status)
+
+                Examples:
+                  secman send-account-finding-age-report
+                  secman send-account-finding-age-report --limit 20
+                  secman send-account-finding-age-report --dry-run
+                """.trimIndent(),
 
             "send-notification-users" to """
                 secman send-notification-users - Send vulnerability notification emails to users with affected AWS accounts

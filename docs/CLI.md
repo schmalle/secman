@@ -72,6 +72,13 @@ Full env reference: `docs/ENVIRONMENT.md`.
 | `--output-file` / `--format` | — / `json` | `json|csv` |
 | `--verbose` / `--insecure` | false | `--insecure` allows self-signed TLS |
 
+After a `--save` run the CLI triggers the backend's stale-vulnerability
+reconcile as an async job (POST returns `202` + jobId, then status polling —
+see `docs/CROWDSTRIKE_IMPORT.md`). Polling cadence is configurable via
+`secman.crowdstrike.reconcile-poll-interval-ms` (default `5000`) and
+`secman.crowdstrike.reconcile-poll-timeout-ms` (default `900000`, 15 min).
+A failed, timed-out, or conflicting (409) reconcile exits with code `2`.
+
 ### `installed-products` — CrowdStrike Discover software inventory
 
 Imports installed product/application rows from CrowdStrike Discover into SecMan for assets that already exist in the backend. Use this after `query servers --save` or another asset import has populated the systems table; the command does **not** create missing assets. Unknown hosts are counted as skipped `unknown systems` so operators can identify inventory gaps.
@@ -581,6 +588,26 @@ Sends a summary email to all users with the `ADMIN` or `REPORT` role. The email 
 | `--backend-url` | env | `SECMAN_HOST` / `SECMAN_BACKEND_URL`, then `http://localhost:8080` |
 
 Exit codes: `0` success or dry-run, `1` partial or total failure.
+
+### `send-account-finding-age-report` — longest-open findings by AWS account email
+
+Emails the top AWS accounts ranked by the age of their oldest still-open, non-excepted vulnerability. Statistics are fetched and the email dispatched via `POST /api/cli/account-finding-age-report/send`. Requires `ADMIN`. Recipients are all users with the `ADMIN` role only — deliberately **not** `REPORT` users, unlike `send-admin-summary`.
+
+```bash
+./scripts/secman send-account-finding-age-report --dry-run          # preview recipients, no emails sent
+./scripts/secman send-account-finding-age-report --limit 20         # report on the top 20 accounts
+./scripts/secman send-account-finding-age-report --verbose          # show per-recipient delivery status
+```
+
+| Option | Default | Notes |
+|---|---|---|
+| `--limit` | `10` | number of accounts to include in the report (1-50) |
+| `--dry-run` | false | preview planned recipients without sending |
+| `--verbose` / `-v` | false | show per-recipient SUCCESS / FAILED status |
+| `--username` / `--password` | env | `SECMAN_ADMIN_NAME` / `SECMAN_ADMIN_PASS` |
+| `--backend-url` | env | `SECMAN_HOST` / `SECMAN_BACKEND_URL`, then `http://localhost:8080` |
+
+Prints an explicit "No accounts with open findings - nothing to send" line when the report is empty. Exit codes: `0` success or dry-run, `2` on failure (auth, no ADMIN recipients, or partial/total send failure).
 
 ### `crowdstrike-last-import` — last CrowdStrike import metadata
 

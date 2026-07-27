@@ -1,18 +1,19 @@
 package com.secman.controller
 
-import com.secman.constants.AssetOwners
 import com.secman.dto.CrowdStrikeImportStatusDto
 import com.secman.dto.CrowdStrikeQueryResponse
 import com.secman.dto.CrowdStrikeSaveRequest
 import com.secman.dto.CrowdStrikeSaveResponse
 import com.secman.dto.CrowdStrikeVulnerabilityBatchDto
 import com.secman.dto.ImportStatisticsDto
+import com.secman.dto.ReconcileJobStartedResponse
 import com.secman.dto.ReconcileStaleVulnerabilitiesRequest
-import com.secman.dto.ReconcileStaleVulnerabilitiesResponse
 import com.secman.service.CrowdStrikeError
 import com.secman.service.CrowdStrikeQueryService
+import com.secman.service.CrowdStrikeReconcileJobService
 import com.secman.service.CrowdStrikeVulnerabilityImportService
 import com.secman.service.CrowdStrikeVulnerabilityService
+import com.secman.service.ReconcileJobConflictException
 import com.secman.util.InputDetectionUtils
 import com.secman.util.ValidationUtils
 import io.micronaut.cache.annotation.CacheInvalidate
@@ -48,7 +49,8 @@ import org.slf4j.LoggerFactory
 open class CrowdStrikeController(
     private val crowdStrikeService: CrowdStrikeVulnerabilityService,
     private val queryService: CrowdStrikeQueryService,
-    private val importService: CrowdStrikeVulnerabilityImportService
+    private val importService: CrowdStrikeVulnerabilityImportService,
+    private val reconcileJobService: CrowdStrikeReconcileJobService
 ) {
     private val log = LoggerFactory.getLogger(CrowdStrikeController::class.java)
 
@@ -351,6 +353,11 @@ open class CrowdStrikeController(
      *
      * Body: `{ importStartedAt, severities }`. Owner is implicitly `CROWDSTRIKE_IMPORT`.
      *
+     * The sweep runs as a background job: on a large table it exceeds reverse-proxy
+     * timeouts (real incident: ~65s vs nginx's 60s → 504 to the CLI while the backend
+     * completed fine). Returns 202 + jobId immediately; the CLI polls
+     * GET .../reconcile-stale/{jobId}/status until a terminal status.
+     *
      * Security: inherits class-level `@Secured("ADMIN", "VULN")`.
      */
     @Post("/crowdstrike/servers/reconcile-stale")
@@ -367,30 +374,43 @@ open class CrowdStrikeController(
             "Reconcile stale CrowdStrike vulns: importStartedAt(client)={}, backendNow={}, severities={}, user={}",
             request.importStartedAt, java.time.LocalDateTime.now(), request.severities, username
         )
-        return try {
-            val result = importService.reconcileStaleCrowdStrikeImports(
-                cutoff = request.importStartedAt,
-                severities = request.severities,
-                queriedHosts = request.queriedHosts ?: emptyList()
-            )
-            HttpResponse.ok(
-                ReconcileStaleVulnerabilitiesResponse(
-                    rowsDeleted = result.rowsDeleted,
-                    cutoff = request.importStartedAt,
-                    severities = request.severities,
-                    owner = AssetOwners.CROWDSTRIKE_IMPORT,
-                    aborted = result.aborted,
-                    abortReason = result.abortReason
-                )
-            )
-        } catch (e: IllegalArgumentException) {
-            log.warn("Invalid reconcile request: user={}", username, e)
-            HttpResponse.badRequest(mapOf("error" to (e.message ?: "Invalid request")))
-        } catch (e: Exception) {
-            log.error("Error reconciling stale CrowdStrike vulnerabilities: user={}", username, e)
-            HttpResponse.status<Map<String, String>>(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(mapOf("error" to "An internal error occurred while reconciling stale vulnerabilities"))
+        // Pre-validate here (mirrors the service's require()) so a bad request is a 400
+        // to the caller instead of a job that only fails after polling.
+        if (request.severities.none { it.isNotBlank() }) {
+            return HttpResponse.badRequest(mapOf("error" to "severities must contain at least one non-blank value"))
         }
+        return try {
+            val started = reconcileJobService.startReconcile(username, request)
+            HttpResponse.status<ReconcileJobStartedResponse>(HttpStatus.ACCEPTED).body(started)
+        } catch (e: ReconcileJobConflictException) {
+            log.warn("Reconcile request rejected, job {} already running: user={}", e.existingJobId, username)
+            HttpResponse.status<Map<String, String>>(HttpStatus.CONFLICT)
+                .body(mapOf("error" to "A reconcile job is already running", "jobId" to e.existingJobId))
+        } catch (e: Exception) {
+            log.error("Error starting reconcile job: user={}", username, e)
+            HttpResponse.status<Map<String, String>>(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(mapOf("error" to "An internal error occurred while starting the reconcile job"))
+        }
+    }
+
+    /**
+     * Poll the status of a reconcile-stale background job started via the POST above.
+     *
+     * Returns 404 when the job doesn't exist or belongs to another user. `result` is
+     * populated only on COMPLETED; an aborted-by-safety-brake sweep is COMPLETED with
+     * `result.aborted = true`, not FAILED.
+     *
+     * Security: inherits class-level `@Secured("ADMIN", "VULN")`.
+     */
+    @Get("/crowdstrike/servers/reconcile-stale/{jobId}/status")
+    open fun getReconcileJobStatus(
+        @PathVariable jobId: String,
+        authentication: Authentication
+    ): HttpResponse<*> {
+        val status = reconcileJobService.getJobStatus(jobId, authentication.name)
+        return status?.let { HttpResponse.ok(it) }
+            ?: HttpResponse.status<Map<String, String>>(HttpStatus.NOT_FOUND)
+                .body(mapOf("error" to "Reconcile job not found"))
     }
 
     /**

@@ -47,7 +47,8 @@ class CliController(
     private val newAccountNotificationService: NewAccountNotificationService,
     private val recipientResolver: AwsAccountRecipientResolver,
     private val githubRepoAlertService: GithubRepoAlertService,
-    private val vulnerabilityExceptionExpiryReminderService: VulnerabilityExceptionExpiryReminderService
+    private val vulnerabilityExceptionExpiryReminderService: VulnerabilityExceptionExpiryReminderService,
+    private val accountFindingAgeReportService: com.secman.service.AccountFindingAgeReportService
 ) {
     private val logger = LoggerFactory.getLogger(CliController::class.java)
 
@@ -206,6 +207,24 @@ class CliController(
         val failedRecipients: List<String>
     )
 
+    @Serdeable
+    data class SendAccountFindingAgeReportRequest(
+        val limit: Int = 10,
+        val dryRun: Boolean = false,
+        val verbose: Boolean = false
+    )
+
+    @Serdeable
+    data class AccountFindingAgeReportResultDto(
+        val status: String,
+        val recipientCount: Int,
+        val emailsSent: Int,
+        val emailsFailed: Int,
+        val recipients: List<String>,
+        val failedRecipients: List<String>,
+        val accountCount: Int
+    )
+
     /**
      * GET /api/cli/admin-summary/statistics
      *
@@ -259,6 +278,48 @@ class CliController(
         } catch (e: Exception) {
             logger.error("Error sending admin summary", e)
             HttpResponse.serverError()
+        }
+    }
+
+    /**
+     * POST /api/cli/account-finding-age-report/send
+     *
+     * Emails the "accounts with the longest-open findings" report to all ADMIN users.
+     * The controller is class-level @Secured("ADMIN").
+     */
+    @Post("/account-finding-age-report/send")
+    @Produces(MediaType.APPLICATION_JSON)
+    fun sendAccountFindingAgeReport(
+        @Body request: SendAccountFindingAgeReportRequest,
+        authentication: Authentication
+    ): HttpResponse<*> {
+        logger.info(
+            "CLI account-finding-age-report send requested by user: {} (limit={}, dryRun={})",
+            authentication.name, request.limit, request.dryRun
+        )
+
+        return try {
+            val result = accountFindingAgeReportService.sendReport(
+                limit = request.limit,
+                dryRun = request.dryRun,
+                verbose = request.verbose
+            )
+            HttpResponse.ok(
+                AccountFindingAgeReportResultDto(
+                    status = result.status.name,
+                    recipientCount = result.recipientCount,
+                    emailsSent = result.emailsSent,
+                    emailsFailed = result.emailsFailed,
+                    recipients = result.recipients,
+                    failedRecipients = result.failedRecipients,
+                    accountCount = result.accountCount
+                )
+            )
+        } catch (e: IllegalArgumentException) {
+            HttpResponse.badRequest(mapOf("message" to (e.message ?: "Invalid limit")))
+        } catch (e: Exception) {
+            logger.error("Error sending account finding-age report", e)
+            HttpResponse.serverError<Any>()
         }
     }
 

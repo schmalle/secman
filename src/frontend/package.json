@@ -25,17 +25,17 @@
     "date-fns": "4.4.0",
     "dompurify": "3.4.12",
     "exceljs": "4.4.0",
-    "react": "19.2.7",
+    "react": "19.2.8",
     "react-chartjs-2": "5.3.1",
-    "react-dom": "19.2.7",
+    "react-dom": "19.2.8",
     "react-markdown": "10.1.0"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@types/node": "26.1.1",
-    "@typescript-eslint/eslint-plugin": "8.63.0",
-    "@typescript-eslint/parser": "8.63.0",
-    "eslint": "10.7.0",
+    "@typescript-eslint/eslint-plugin": "8.65.0",
+    "@typescript-eslint/parser": "8.65.0",
+    "eslint": "10.8.0",
     "eslint-plugin-react": "7.37.5",
     "eslint-plugin-react-hooks": "7.1.1"
   },
