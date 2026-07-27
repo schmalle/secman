@@ -37,15 +37,18 @@ interface AssetRepository : JpaRepository<Asset, Long> {
      * the two-column rows into a Map<assetId, List<workgroupId>> themselves; chunk
      * the input by ~1000 ids to stay within a practical IN-clause size.
      *
+     * Declared as JPQL, not a native query: a `nativeQuery = true` method returning
+     * `List<Array<Any>>` yields one-element rows, so reading `row[1]` threw
+     * ArrayIndexOutOfBoundsException. A JPQL multi-select projection returns a
+     * correctly-sized Object[] per row — the shape every other `List<Array<Any>>`
+     * method in this codebase relies on. `JOIN a.workgroups w` projects ids only;
+     * it is not a fetch join, so no collection is initialized.
+     *
      * @param assetIds The asset ids to look up (caller-chunked)
-     * @return Rows of [assetId, workgroupId] (both Long, boxed via native projection)
+     * @return Rows of [assetId, workgroupId] (both Long)
      */
     @io.micronaut.data.annotation.Query(
-        value = """
-            SELECT aw.asset_id, aw.workgroup_id FROM asset_workgroups aw
-            WHERE aw.asset_id IN (:assetIds)
-        """,
-        nativeQuery = true
+        "SELECT a.id, w.id FROM Asset a JOIN a.workgroups w WHERE a.id IN (:assetIds)"
     )
     fun findWorkgroupIdsByAssetIds(assetIds: List<Long>): List<Array<Any>>
 

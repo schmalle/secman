@@ -219,6 +219,19 @@ To close that gap, after all per-host imports the CLI calls
 `POST /api/crowdstrike/servers/reconcile-stale`, which deletes any
 CrowdStrike-sourced vuln row whose `import_timestamp` predates the run start.
 
+The sweep runs as a **background job**: the POST returns `202 Accepted` with a
+`jobId` immediately and the CLI polls
+`GET /api/crowdstrike/servers/reconcile-stale/{jobId}/status` (every 5s,
+15 min budget; tunable via `secman.crowdstrike.reconcile-poll-interval-ms` /
+`reconcile-poll-timeout-ms`) until the job reports `COMPLETED` or `FAILED`.
+This exists because the synchronous sweep took ~65s on a 1.3M-row table and
+nginx's 60s proxy timeout returned 504 to the CLI even though the backend
+finished successfully (2026-07-21 incident). Only one reconcile job may run
+at a time — a concurrent POST gets `409` with the running job's id. A
+safety-brake-aborted sweep is `COMPLETED` with `result.aborted = true`, not
+`FAILED`. Jobs stuck >30 min (backend restart mid-sweep) are auto-failed at
+the next start.
+
 Three layers of safety prevent over-deletion:
 
 1. **`vulnerability.source` (V213)** — every row carries the importer that
@@ -231,12 +244,15 @@ Three layers of safety prevent over-deletion:
    (e.g. yesterday `CRITICAL,HIGH`, today `CRITICAL`) no longer creates a
    gap: today's sweep still covers HIGH because HIGH is in the history.
 3. **Hard-fail on reconcile error** — `VulnerabilityStorageService` throws
-   `ReconcileFailedException` on any HTTP/transport error; the CLI exits
-   with code `2` and prints an explicit operator message. Cron pipelines
-   see the failure instead of silently leaving stale rows.
+   `ReconcileFailedException` on any HTTP/transport error, a `FAILED` job,
+   or a polling timeout; the CLI exits with code `2` and prints an explicit
+   operator message. Cron pipelines see the failure instead of silently
+   leaving stale rows.
 
 Coverage: `CrowdStrikeStaleVulnerabilityIntegrationTest` (5 cases — happy path,
-empty payload, source-on-human-owned-asset, severity drift, XLSX isolation).
+empty payload, source-on-human-owned-asset, severity drift, XLSX isolation)
+plus `CrowdStrikeReconcileJobIntegrationTest` (async job lifecycle, 409 guard,
+unknown-job 404) and `CrowdStrikeReconcileJobServiceTest` (job state machine).
 
 ## Tests
 

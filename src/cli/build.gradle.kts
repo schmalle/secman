@@ -27,30 +27,30 @@ dependencies {
     // Jackson for YAML/JSON
     implementation("com.fasterxml.jackson.core:jackson-databind")
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml")
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.22.0")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.22.1")
     
     // CSV export
     implementation("org.apache.commons:commons-csv:1.14.1")
 
     // AWS SDK for S3 (Feature 065 - S3 User Mapping Import)
-    implementation(platform("software.amazon.awssdk:bom:2.46.21"))
+    implementation(platform("software.amazon.awssdk:bom:2.49.3"))
     implementation("software.amazon.awssdk:s3")
     
     // Kotlin
-    implementation("org.jetbrains.kotlin:kotlin-reflect:2.4.0")
-    implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.4.0")
+    implementation("org.jetbrains.kotlin:kotlin-reflect:2.4.10")
+    implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.4.10")
     
     // Logging
-    runtimeOnly("ch.qos.logback:logback-classic:1.5.34")
+    runtimeOnly("ch.qos.logback:logback-classic:1.6.0")
     runtimeOnly("org.yaml:snakeyaml:2.6")
     
     // KSP
     ksp("io.micronaut:micronaut-http-validation")
 
     // Test dependencies - Feature 056
-    testImplementation("org.junit.jupiter:junit-jupiter-api:6.1.1")
-    testImplementation("org.junit.jupiter:junit-jupiter-engine:6.1.1")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher:6.1.1")
+    testImplementation("org.junit.jupiter:junit-jupiter-api:6.1.2")
+    testImplementation("org.junit.jupiter:junit-jupiter-engine:6.1.2")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher:6.1.2")
     testImplementation("io.mockk:mockk:1.14.11")
     testImplementation("org.assertj:assertj-core:3.27.7")
 }

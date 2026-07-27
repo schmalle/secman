@@ -24,23 +24,23 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:${kotlinVersion}")
     
     // Jackson for JSON
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.22.0")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.22.1")
     
     // Validation
     implementation("io.micronaut.validation:micronaut-validation")
     implementation("jakarta.validation:jakarta.validation-api")
     
     // Logging
-    runtimeOnly("ch.qos.logback:logback-classic:1.5.37")
+    runtimeOnly("ch.qos.logback:logback-classic:1.6.0")
     
     // KSP
     ksp("io.micronaut:micronaut-http-validation")
     ksp("io.micronaut.validation:micronaut-validation-processor")
     ksp("io.micronaut.serde:micronaut-serde-processor")
 
-    testImplementation("org.junit.jupiter:junit-jupiter-api:6.1.1")
-    testImplementation("org.junit.jupiter:junit-jupiter-engine:6.1.1")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher:6.1.1")
+    testImplementation("org.junit.jupiter:junit-jupiter-api:6.1.2")
+    testImplementation("org.junit.jupiter:junit-jupiter-engine:6.1.2")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher:6.1.2")
     testImplementation("io.mockk:mockk:1.14.11")
     testImplementation("org.assertj:assertj-core:3.27.7")
 }

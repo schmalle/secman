@@ -1,5 +1,7 @@
 src/adread/adread.env.local
 
+3rdparty/
+
 # Dependencies
 backendng/bin/
 node_modules/
