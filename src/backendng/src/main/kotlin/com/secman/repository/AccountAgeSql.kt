@@ -32,24 +32,32 @@ object AccountAgeSql {
         """
 
     /**
-     * Step 2 — the single oldest finding in one account.
+     * Step 2 (batched) — the single oldest finding for EVERY account in `:accountIds` in
+     * one query, scoped by an IN list of at most MAX_LIMIT (50) account ids per the design.
      *
-     * Takes the already-known minimum timestamp as an equality predicate so this is a
-     * selective filter rather than a filesort over the whole account. Ties are broken
-     * by vulnerability_id so repeated runs report the same row.
+     * A window function partitions the IN-scoped rows by account and orders each partition
+     * by the same age anchor + tie-break as step 1 (oldest COALESCE(first_seen_at,
+     * scan_timestamp) first, ties broken by vulnerability_id ASC); the outer query keeps
+     * only rn = 1. This is one scan of the scoped rows, not a correlated subquery re-run
+     * per account — the partitioning happens once, in a single pass.
      */
     const val OLDEST_FINDING_DETAIL = """
-        SELECT a.cloud_account_id  AS awsAccountId,
-               v.vulnerability_id  AS cve,
-               v.cvss_severity     AS severity,
-               a.name              AS assetName,
-               a.cloud_instance_id AS assetInstanceId
-        FROM vulnerability v
-        JOIN asset a ON v.asset_id = a.id
-        WHERE v.excepted = 0
-          AND a.cloud_account_id = :accountId
-          AND COALESCE(v.first_seen_at, v.scan_timestamp) = :firstSeenAt
-        ORDER BY v.vulnerability_id ASC
-        LIMIT 1
+        SELECT awsAccountId, cve, severity, assetName, assetInstanceId
+        FROM (
+            SELECT a.cloud_account_id  AS awsAccountId,
+                   v.vulnerability_id  AS cve,
+                   v.cvss_severity     AS severity,
+                   a.name              AS assetName,
+                   a.cloud_instance_id AS assetInstanceId,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY a.cloud_account_id
+                       ORDER BY COALESCE(v.first_seen_at, v.scan_timestamp) ASC, v.vulnerability_id ASC
+                   ) AS rn
+            FROM vulnerability v
+            JOIN asset a ON v.asset_id = a.id
+            WHERE v.excepted = 0
+              AND a.cloud_account_id IN (:accountIds)
+        ) ranked
+        WHERE rn = 1
         """
 }

@@ -66,12 +66,17 @@ open class AccountFindingAgeService(
         val namesById = awsAccountRepository.findByAwsAccountIdIn(accountIds)
             .associate { it.awsAccountId to it.name }
 
+        // Single batched query for all accounts (design §2 step 2) instead of one call
+        // per account inside the map below.
+        val detailsByAccount = vulnerabilityRepository.findOldestFindingDetail(accountIds)
+            .associateBy { it.awsAccountId }
+
         val now = LocalDateTime.now()
 
         return ranked.map { row ->
             val accountId = row.awsAccountId!!
             val firstSeen = row.oldestFirstSeen!!
-            val detail = vulnerabilityRepository.findOldestFindingDetail(accountId, firstSeen).firstOrNull()
+            val detail = detailsByAccount[accountId]
 
             AccountFindingAge(
                 awsAccountId = accountId,

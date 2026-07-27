@@ -142,7 +142,7 @@ export default function AccountFindingAgeTable() {
                     ) : (
                       <>
                         {r.accountName === r.awsAccountId
-                          ? <span className="text-muted">unnamed</span>
+                          ? <span className="text-muted" title="Unnamed account">{r.accountName}</span>
                           : r.accountName}
                         <button
                           className="btn btn-link btn-sm p-0 ms-2"

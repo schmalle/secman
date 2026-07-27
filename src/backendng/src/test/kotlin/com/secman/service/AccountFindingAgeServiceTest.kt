@@ -42,8 +42,8 @@ class AccountFindingAgeServiceTest {
             rank("111111111111", 400),
             rank("222222222222", 90)
         )
-        every { vulnerabilityRepository.findOldestFindingDetail(any(), any()) } answers {
-            listOf(detail(firstArg(), "CVE-2023-0001"))
+        every { vulnerabilityRepository.findOldestFindingDetail(any()) } answers {
+            firstArg<Collection<String>>().map { detail(it, "CVE-2023-0001") }
         }
         every { awsAccountRepository.findByAwsAccountIdIn(any()) } returns emptyList()
 
@@ -58,7 +58,7 @@ class AccountFindingAgeServiceTest {
     @Test
     fun `account name falls back to the account id when no row exists`() {
         every { vulnerabilityRepository.findAccountsByOldestOpenFinding(10) } returns listOf(rank("333333333333", 10))
-        every { vulnerabilityRepository.findOldestFindingDetail(any(), any()) } returns
+        every { vulnerabilityRepository.findOldestFindingDetail(any()) } returns
             listOf(detail("333333333333", "CVE-2024-1"))
         every { awsAccountRepository.findByAwsAccountIdIn(any()) } returns emptyList()
 
@@ -70,7 +70,7 @@ class AccountFindingAgeServiceTest {
     @Test
     fun `account name falls back to the account id when the stored name is blank`() {
         every { vulnerabilityRepository.findAccountsByOldestOpenFinding(10) } returns listOf(rank("444444444444", 10))
-        every { vulnerabilityRepository.findOldestFindingDetail(any(), any()) } returns
+        every { vulnerabilityRepository.findOldestFindingDetail(any()) } returns
             listOf(detail("444444444444", "CVE-2024-2"))
         every { awsAccountRepository.findByAwsAccountIdIn(any()) } returns
             listOf(AwsAccount(awsAccountId = "444444444444", name = "   "))
@@ -83,7 +83,7 @@ class AccountFindingAgeServiceTest {
     @Test
     fun `account name uses the stored name when present`() {
         every { vulnerabilityRepository.findAccountsByOldestOpenFinding(10) } returns listOf(rank("555555555555", 10))
-        every { vulnerabilityRepository.findOldestFindingDetail(any(), any()) } returns
+        every { vulnerabilityRepository.findOldestFindingDetail(any()) } returns
             listOf(detail("555555555555", "CVE-2024-3"))
         every { awsAccountRepository.findByAwsAccountIdIn(any()) } returns
             listOf(AwsAccount(awsAccountId = "555555555555", name = "Platform Prod"))
@@ -96,7 +96,7 @@ class AccountFindingAgeServiceTest {
     @Test
     fun `missing detail row still yields a result with null cve`() {
         every { vulnerabilityRepository.findAccountsByOldestOpenFinding(10) } returns listOf(rank("666666666666", 30))
-        every { vulnerabilityRepository.findOldestFindingDetail(any(), any()) } returns emptyList()
+        every { vulnerabilityRepository.findOldestFindingDetail(any()) } returns emptyList()
         every { awsAccountRepository.findByAwsAccountIdIn(any()) } returns emptyList()
 
         val result = service.getTopAccountsByOldestFinding(10)

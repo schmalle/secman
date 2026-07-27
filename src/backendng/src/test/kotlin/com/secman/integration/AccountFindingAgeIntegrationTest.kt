@@ -47,6 +47,9 @@ class AccountFindingAgeIntegrationTest : BaseIntegrationTest() {
 
     private lateinit var adminUser: User
     private lateinit var regularUser: User
+    private lateinit var vulnUser: User
+    private lateinit var secChampionUser: User
+    private lateinit var releaseManagerUser: User
 
     @BeforeEach
     fun setupTestUsers() {
@@ -57,6 +60,19 @@ class AccountFindingAgeIntegrationTest : BaseIntegrationTest() {
         regularUser = userRepository.save(TestDataFactory.createRegularUser(
             username = "afa-user-${System.nanoTime()}",
             email = "afa-user-${System.nanoTime()}@test.com"
+        ))
+        vulnUser = userRepository.save(TestDataFactory.createVulnUser(
+            username = "afa-vuln-${System.nanoTime()}",
+            email = "afa-vuln-${System.nanoTime()}@test.com"
+        ))
+        secChampionUser = userRepository.save(TestDataFactory.createSecChampionUser(
+            username = "afa-secchamp-${System.nanoTime()}",
+            email = "afa-secchamp-${System.nanoTime()}@test.com"
+        ))
+        releaseManagerUser = userRepository.save(TestDataFactory.createUserWithRoles(
+            username = "afa-relmgr-${System.nanoTime()}",
+            email = "afa-relmgr-${System.nanoTime()}@test.com",
+            User.Role.USER, User.Role.RELEASE_MANAGER
         ))
     }
 
@@ -91,6 +107,63 @@ class AccountFindingAgeIntegrationTest : BaseIntegrationTest() {
             client.toBlocking().exchange(
                 HttpRequest.GET<Any>("/api/admin/account-finding-age/top").bearerAuth(token),
                 List::class.java
+            )
+        }
+
+        assertThat(ex.status).isEqualTo(HttpStatus.FORBIDDEN)
+    }
+
+    @Test
+    fun `top endpoint rejects a VULN user with 403`() {
+        val token = TestAuthHelper.getAuthToken(client, vulnUser.username)
+
+        val ex = org.junit.jupiter.api.assertThrows<HttpClientResponseException> {
+            client.toBlocking().exchange(
+                HttpRequest.GET<Any>("/api/admin/account-finding-age/top").bearerAuth(token),
+                List::class.java
+            )
+        }
+
+        assertThat(ex.status).isEqualTo(HttpStatus.FORBIDDEN)
+    }
+
+    @Test
+    fun `top endpoint rejects a SECCHAMPION user with 403`() {
+        val token = TestAuthHelper.getAuthToken(client, secChampionUser.username)
+
+        val ex = org.junit.jupiter.api.assertThrows<HttpClientResponseException> {
+            client.toBlocking().exchange(
+                HttpRequest.GET<Any>("/api/admin/account-finding-age/top").bearerAuth(token),
+                List::class.java
+            )
+        }
+
+        assertThat(ex.status).isEqualTo(HttpStatus.FORBIDDEN)
+    }
+
+    @Test
+    fun `top endpoint rejects a RELEASE_MANAGER user with 403`() {
+        val token = TestAuthHelper.getAuthToken(client, releaseManagerUser.username)
+
+        val ex = org.junit.jupiter.api.assertThrows<HttpClientResponseException> {
+            client.toBlocking().exchange(
+                HttpRequest.GET<Any>("/api/admin/account-finding-age/top").bearerAuth(token),
+                List::class.java
+            )
+        }
+
+        assertThat(ex.status).isEqualTo(HttpStatus.FORBIDDEN)
+    }
+
+    @Test
+    fun `name upsert rejects a non-admin user with 403`() {
+        val token = TestAuthHelper.getAuthToken(client, regularUser.username)
+
+        val ex = org.junit.jupiter.api.assertThrows<HttpClientResponseException> {
+            client.toBlocking().exchange(
+                HttpRequest.PUT("/api/admin/aws-accounts/777777777712/name", mapOf("name" to "X"))
+                    .bearerAuth(token),
+                Map::class.java
             )
         }
 
@@ -300,5 +373,41 @@ class AccountFindingAgeIntegrationTest : BaseIntegrationTest() {
         @Suppress("UNCHECKED_CAST")
         val match = response.body()!!.map { it as Map<String, Any?> }.first { it["awsAccountId"] == accountId }
         assertThat(match["accountName"]).isEqualTo(accountId)
+    }
+
+    @Test
+    fun `an excepted oldest finding is invisible to the ranking - the newer non-excepted finding wins`() {
+        val token = TestAuthHelper.getAuthToken(client, adminUser.username)
+
+        val accountId = uniqueAccountId("96")
+
+        val asset = assetRepository.save(TestDataFactory.createAsset(
+            name = "afa-excepted-${System.nanoTime()}"
+        ).apply { cloudAccountId = accountId; cloudInstanceId = "i-excepted" })
+
+        // Oldest finding is excepted -> must not be seen by the ranking at all.
+        val exceptedVuln = TestDataFactory.createVulnerabilityWithTimestamp(
+            asset, "CVE-EXCEPTED-OLDEST", "Critical", LocalDateTime.now().minusDays(500)
+        )
+        exceptedVuln.excepted = true
+        vulnerabilityRepository.save(exceptedVuln)
+
+        // Newer, non-excepted finding -> this is the one the report must surface.
+        vulnerabilityRepository.save(TestDataFactory.createVulnerabilityWithTimestamp(
+            asset, "CVE-VISIBLE-NEWER", "Low", LocalDateTime.now().minusDays(10)
+        ))
+
+        val response = client.toBlocking().exchange(
+            HttpRequest.GET<Any>("/api/admin/account-finding-age/top?limit=50").bearerAuth(token),
+            io.micronaut.core.type.Argument.listOf(Map::class.java)
+        )
+        assertThat(response.status).isEqualTo(HttpStatus.OK)
+
+        @Suppress("UNCHECKED_CAST")
+        val match = response.body()!!.map { it as Map<String, Any?> }.first { it["awsAccountId"] == accountId }
+
+        assertThat(match["oldestFindingCve"]).isEqualTo("CVE-VISIBLE-NEWER")
+        assertThat((match["oldestFindingDaysOpen"] as Number).toLong()).isLessThan(20L)
+        assertThat((match["openFindingCount"] as Number).toLong()).isEqualTo(1L)
     }
 }
