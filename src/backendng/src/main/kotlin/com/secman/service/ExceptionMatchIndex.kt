@@ -7,20 +7,23 @@ import com.secman.domain.VulnerabilityException
 
 /**
  * Pre-parsed, bucketed index of active exceptions for cheap per-row matching against
- * any [ExceptionMatchable] projection (statistics raw rows, status-filtered page rows)
- * or a (Vulnerability, Asset) entity pair. This is the single in-memory bulk-match
+ * any [ExceptionMatchable] projection (status-filtered page rows) or a
+ * (Vulnerability, Asset) entity pair. This is the single in-memory bulk-match
  * implementation; the entity-level [VulnerabilityException.matches] stays the canonical
  * per-pair semantic reference and the native-SQL predicate lives in
  * ExceptionMatchSql.EXCEPTION_MATCH — keep all three in sync (see ExceptionMatchSql.kt's
  * cross-reference list).
  *
  * Why this exists instead of calling `VulnerabilityException.matches()` per row: the
- * entity method reparses comma-separated CVE lists on every call. This index parses
- * once and buckets by Subject, which matters both at page-render scale (50 exceptions ×
- * 50 rows) and at statistics scale — it runs over the *entire* vulnerability table
- * (~358k+ rows) inside VulnerabilityStatisticsCacheService, replacing 4 correlated
- * NOT EXISTS SQL scans that could hold a pooled connection for minutes (HikariCP
- * leak-detection incident, 2026-07-15).
+ * entity method reparses comma-separated CVE lists on every call. This index parses once
+ * and buckets by Subject, which matters at page-render scale (50 exceptions × 50 rows).
+ *
+ * **Page scale only.** This index is for bounded row sets, where the caller needs to know
+ * WHICH exception matched (a boolean column cannot answer that). It is deliberately NOT
+ * used for aggregate/statistics scale any more: it was, over the entire vulnerability
+ * table inside VulnerabilityStatisticsCacheService, and that full-table fetch ran a 1 GB
+ * container out of heap during the 2026-07-30 CrowdStrike import. Aggregates now filter in
+ * SQL on the materialized `excepted` flag — see VulnQuerySql.NOT_EXCEPTED.
  *
  * Match priority mirrors entity logic:
  *   1. ALL_VULNS exceptions (subject always matches; fall through to scope check)

@@ -620,6 +620,57 @@ create_user_mapping() {
 }
 
 # =============================================================================
+# Playwright runner
+#
+# $1 (optional): -g title filter. Without it the whole spec runs.
+# Returns non-zero via fail() on test failure. No-op when the UI phase is off.
+# =============================================================================
+
+run_ui_spec() {
+    local title_filter="${1:-}"
+
+    if [[ "$SKIP_UI" == "true" || "$MCP_ONLY" == "true" ]]; then
+        return 0
+    fi
+
+    pushd "$(dirname "$0")/../../tests/e2e" >/dev/null
+
+    local -a pw_args=(playwright test vuln-exception-full.spec.ts --project=chrome --reporter=list)
+    if [[ -n "$title_filter" ]]; then
+        pw_args+=(-g "$title_filter")
+    fi
+
+    SECMAN_BASE_URL="$FRONTEND_URL" \
+    SECMAN_ADMIN_NAME="$ADMIN_USERNAME" \
+    SECMAN_ADMIN_PASS="$ADMIN_PASSWORD" \
+    E2E_USER1_NAME="$USER1_USERNAME" \
+    E2E_USER1_PASS="$USER1_PASSWORD" \
+    E2E_USER2_NAME="$USER2_USERNAME" \
+    E2E_USER2_PASS="$USER2_PASSWORD" \
+    E2E_USER1_EMAIL="$USER1_EMAIL" \
+    E2E_USER2_EMAIL="$USER2_EMAIL" \
+    E2E_ASSET1_NAME="$ASSET1_NAME" \
+    E2E_ASSET2_NAME="$ASSET2_NAME" \
+    E2E_CVE_VULN1="$CVE_VULN1" \
+    E2E_CVE_VULN2="$CVE_VULN2" \
+    E2E_REQ_APPROVE_ID="$REQ_APPROVE_ID" \
+    E2E_REQ_REJECT_ID="$REQ_REJECT_ID" \
+    E2E_AWS_ACCOUNT_A="$AWS_ACCOUNT_A" \
+    E2E_AWS_ACCOUNT_B="$AWS_ACCOUNT_B" \
+    E2E_AWS_ACCOUNT_C="$AWS_ACCOUNT_C" \
+    E2E_AWS_ASSET_A_NAME="$AWS_ASSET_A_NAME" \
+    E2E_AWS_ASSET_B_NAME="$AWS_ASSET_B_NAME" \
+    E2E_AWS_ASSET_C_NAME="$AWS_ASSET_C_NAME" \
+    E2E_AWS_SHARING_RULE_ID="$AWS_SHARING_RULE_ID" \
+    E2E_EXCEPTION_MATRIX_FILE="$MATRIX_FIXTURE_FILE" \
+        npx "${pw_args[@]}"
+    local pw_status=$?
+
+    popd >/dev/null
+    return $pw_status
+}
+
+# =============================================================================
 # Phase 10: Exception import/export/delete-all (MCP + REST)
 # =============================================================================
 
@@ -699,9 +750,13 @@ run_phase_10_exception_import_export() {
     list_count=$(echo "${list_result}" | jq -r '.exceptions | length')
     [[ "${list_count}" == "0" ]] || fail "10.8 MCP list nonzero (got ${list_count})"
 
-    # 10.9 (UI) — handled in the Playwright spec (Phase 11). Export env vars for it.
+    # 10.9 (UI) — must run HERE: the "zero rows" state only exists between the
+    # delete-all (10.7) and the re-import (10.10), and is undone by the baseline
+    # restore in 10.16.
+    log "10.9 UI check (exceptions list empty after delete-all)"
     export EXPECTED_EXCEPTION_COUNT_AFTER_DELETE=0
     export EXPECTED_EXCEPTION_CVE="CVE-2099-90001"
+    run_ui_spec "Phase 10.9" || fail "10.9 UI check failed"
 
     # 10.10 — Re-import the round-trip file
     log "10.10 import round-trip"
@@ -732,8 +787,11 @@ run_phase_10_exception_import_export() {
         fail "10.11 createdBy=${re_created_by}, expected ${ADMIN_USERNAME} (provenance not preserved)"
     }
 
-    # 10.12 (UI) — handled by Playwright; env var below
+    # 10.12 (UI) — the re-imported row is visible from here until the baseline
+    # restore in 10.16, so the check runs at this point.
+    log "10.12 UI check (re-imported exception visible)"
     export EXPECTED_EXCEPTION_COUNT_AFTER_IMPORT=1
+    run_ui_spec "Phase 10.12" || fail "10.12 UI check failed"
 
     # 10.13 — Idempotency: import same file again, expect skippedDuplicates=1
     log "10.13 import same file again (expect skippedDuplicates=1)"
@@ -1594,34 +1652,7 @@ else
         fail "SECMAN_ADMIN_NAME / SECMAN_ADMIN_PASS required for UI phase"
     fi
 
-    pushd "$(dirname "$0")/../../tests/e2e" >/dev/null
-
-    SECMAN_BASE_URL="$FRONTEND_URL" \
-    SECMAN_ADMIN_NAME="$ADMIN_USERNAME" \
-    SECMAN_ADMIN_PASS="$ADMIN_PASSWORD" \
-    E2E_USER1_NAME="$USER1_USERNAME" \
-    E2E_USER1_PASS="$USER1_PASSWORD" \
-    E2E_USER2_NAME="$USER2_USERNAME" \
-    E2E_USER2_PASS="$USER2_PASSWORD" \
-    E2E_USER1_EMAIL="$USER1_EMAIL" \
-    E2E_USER2_EMAIL="$USER2_EMAIL" \
-    E2E_ASSET1_NAME="$ASSET1_NAME" \
-    E2E_ASSET2_NAME="$ASSET2_NAME" \
-    E2E_CVE_VULN1="$CVE_VULN1" \
-    E2E_CVE_VULN2="$CVE_VULN2" \
-    E2E_REQ_APPROVE_ID="$REQ_APPROVE_ID" \
-    E2E_REQ_REJECT_ID="$REQ_REJECT_ID" \
-    E2E_AWS_ACCOUNT_A="$AWS_ACCOUNT_A" \
-    E2E_AWS_ACCOUNT_B="$AWS_ACCOUNT_B" \
-    E2E_AWS_ACCOUNT_C="$AWS_ACCOUNT_C" \
-    E2E_AWS_ASSET_A_NAME="$AWS_ASSET_A_NAME" \
-    E2E_AWS_ASSET_B_NAME="$AWS_ASSET_B_NAME" \
-    E2E_AWS_ASSET_C_NAME="$AWS_ASSET_C_NAME" \
-    E2E_AWS_SHARING_RULE_ID="$AWS_SHARING_RULE_ID" \
-    E2E_EXCEPTION_MATRIX_FILE="$MATRIX_FIXTURE_FILE" \
-        npx playwright test vuln-exception-full.spec.ts --project=chrome --reporter=list
-
-    popd >/dev/null
+    run_ui_spec || fail "Phase 9 Playwright run failed"
     ok "UI phase complete"
 
     verify_phase_8c_exception_matrix_after_ui

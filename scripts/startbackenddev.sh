@@ -6,6 +6,11 @@ export SECMAN_BACKEND_URL="pass://Test/SECMAN//SECMAN_BACKEND_BASE_URL"
 export DB_CONNECT="pass://Test/SECMAN/DB_CONNECT"
 export SECMAN_DEBUG=true
 
+# Verbose logging is a dev-only default; application.yml ships these at INFO so production
+# doesn't pay to format debug lines nobody reads (see the logger block there).
+export LOG_LEVEL_SECMAN=DEBUG
+export LOG_LEVEL_SECURITY=DEBUG
+
 export FALCON_CLIENT_ID="pass://Test/SECMAN/FALCON_CLIENT_ID"
 export FALCON_CLIENT_SECRET="pass://Test/SECMAN/FALCON_CLIENT_SECRET"
 export FALCON_CLOUD_REGION="pass://Test/SECMAN/FALCON_CLOUD_REGION"

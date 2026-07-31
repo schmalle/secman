@@ -12,8 +12,12 @@ package com.secman.repository
  * interpolated `... IN :assetIds AND ` fragment. This removes the risk of the
  * two variants drifting apart (they are the same query with one extra filter).
  *
- * Same compile-time-interpolation pattern as [ExceptionMatchSql]; annotation
- * values stay compile-time constants.
+ * Compile-time interpolation throughout, so annotation values stay compile-time constants.
+ *
+ * Exception filtering here goes through [NOT_EXCEPTED], which reads the materialized
+ * `vulnerability.excepted` flag. These families no longer interpolate
+ * [ExceptionMatchSql.EXCEPTION_MATCH] directly — see [NOT_EXCEPTED] for why that is
+ * equivalent and what maintains the flag.
  */
 object VulnQuerySql {
 
@@ -21,9 +25,37 @@ object VulnQuerySql {
     const val SCOPE_VULN_ASSETS = "v.asset_id IN :assetIds AND "
     const val SCOPE_ASSET_IDS = "a.id IN :assetIds AND "
 
-    const val NOT_EXCEPTED = """NOT EXISTS (
-            SELECT 1 FROM vulnerability_exception e WHERE ${ExceptionMatchSql.EXCEPTION_MATCH}
-        )"""
+    /**
+     * Exception filter for the statistics families: read the MATERIALIZED
+     * `vulnerability.excepted` flag rather than re-deriving the match per row.
+     *
+     * This used to be `NOT EXISTS (SELECT 1 FROM vulnerability_exception e WHERE
+     * ExceptionMatchSql.EXCEPTION_MATCH)`. That predicate is non-sargable by construction —
+     * `LOCATE`, `FIND_IN_SET` and `LOWER()` against `v.*`/`a.*` — so it was evaluated once
+     * per row of a multi-million-row table, on 12 query methods including interactive ones
+     * (`UserDashboardService` on every login, `AdminSummaryService`, the
+     * `get_asset_most_vulnerabilities` MCP tool). It is the reason
+     * `VulnerabilityStatisticsCacheService` existed in its old full-table-into-heap form,
+     * which is what ran out of heap during the 2026-07-30 CrowdStrike import.
+     *
+     * The substitution is safe by CONSTRUCTION, not by inspection:
+     * `VulnerabilityRepository.recomputeExceptedAll()` sets
+     * `excepted = CASE WHEN EXISTS(... ExceptionMatchSql.EXCEPTION_MATCH) THEN 1 ELSE 0 END`
+     * over the same `vulnerability v JOIN asset a` shape — i.e. `excepted = 0` IS the
+     * materialization of `NOT EXISTS(EXCEPTION_MATCH)`, one hop removed.
+     * `ExceptionMaterializationService` keeps it fresh: per-asset during import, on every
+     * exception create/update/delete, an hourly expiry sweep, and a nightly full recompute.
+     *
+     * This is also the flag the hot "current vulnerabilities" list view
+     * (`idx_vulnerability_excepted_sort`) and `MaterializedViewRefreshService` already filter
+     * on, so the statistics now agree with the list they summarise. Before this change the
+     * cache was the only consumer re-deriving the match independently, and the two could
+     * legitimately disagree.
+     *
+     * If you change `ExceptionMatchSql.EXCEPTION_MATCH`, the agreement is re-checked by
+     * `ExceptedFlagSqlAgreementIntegrationTest`.
+     */
+    const val NOT_EXCEPTED = "v.excepted = 0"
 
     // --- Most common vulnerabilities (top 10 by occurrence) ---
     const val MOST_COMMON_SELECT = """
@@ -34,9 +66,13 @@ object VulnQuerySql {
         FROM vulnerability v
         JOIN asset a ON v.asset_id = a.id
         WHERE """
+    // GROUP BY the same COALESCE the SELECT projects, not the raw column: grouping on
+    // `v.cvss_severity` while selecting `COALESCE(v.cvss_severity, 'UNKNOWN')` emits TWO rows
+    // both labelled UNKNOWN when a literal 'UNKNOWN' and a NULL both exist.
+    // Tiebreaker on vulnerability_id so the LIMIT 10 boundary is stable across refreshes.
     const val MOST_COMMON_TAIL = """$NOT_EXCEPTED
-        GROUP BY v.vulnerability_id, v.cvss_severity
-        ORDER BY COUNT(*) DESC
+        GROUP BY v.vulnerability_id, COALESCE(v.cvss_severity, 'UNKNOWN')
+        ORDER BY COUNT(*) DESC, v.vulnerability_id ASC
         LIMIT 10
         """
 
@@ -54,7 +90,7 @@ object VulnQuerySql {
           AND v.vulnerable_product_versions != ''
           AND $NOT_EXCEPTED
         GROUP BY v.vulnerable_product_versions
-        ORDER BY COUNT(DISTINCT v.vulnerability_id) DESC
+        ORDER BY COUNT(DISTINCT v.vulnerability_id) DESC, v.vulnerable_product_versions ASC
         LIMIT 10
         """
 
@@ -79,9 +115,10 @@ object VulnQuerySql {
         FROM vulnerability v
         JOIN asset a ON v.asset_id = a.id
         WHERE """
+    // Tiebreaker on a.id so the LIMIT 50 boundary is stable across refreshes.
     const val TOP_ASSETS_TAIL = """$NOT_EXCEPTED
         GROUP BY a.id, a.name, a.type, a.ip
-        ORDER BY COUNT(*) DESC
+        ORDER BY COUNT(*) DESC, a.id ASC
         LIMIT 50
         """
 

@@ -35,7 +35,9 @@ SECMAN_MCP_KEY="${SECMAN_MCP_KEY:-}"
 VERBOSE="${VERBOSE:-false}"
 
 # Test data constants
-TEST_USER_EMAIL="sometestuser@sometestdomain.com"
+# Domain must be in the MCP API key's allowed delegation domains (see mcp_api_keys.allowed_delegation_domains).
+# @e2e.test is the allowlisted E2E domain, same as scripts/test/test-e2e-vuln-exception-full.sh.
+TEST_USER_EMAIL="sometestuser@e2e.test"
 TEST_USER_NAME="apple-e2e-test"
 TEST_USER_PASSWORD="TestPassword123"
 TEST_ASSET_HOSTNAME="test-asset-e2e-workflow"
@@ -297,10 +299,11 @@ result=$(mcp_call "list_users" '{}' "$ADMIN_USER_EMAIL" 2>/dev/null)
 call_status=$?
 set -e
 
-# Find user ID by email in the list
+# Find user ID by email OR username in the list. Matching the username as well makes the
+# test re-runnable after a mid-run failure that left the user behind under a different email.
 user_id_to_delete=""
 if [[ $call_status -eq 0 ]] && echo "$result" | jq -e . >/dev/null 2>&1; then
-    user_id_to_delete=$(echo "$result" | jq -r ".users[] | select(.email == \"$TEST_USER_EMAIL\") | .id // empty" 2>/dev/null || echo "")
+    user_id_to_delete=$(echo "$result" | jq -r ".users[] | select(.email == \"$TEST_USER_EMAIL\" or .username == \"$TEST_USER_NAME\") | .id // empty" 2>/dev/null | head -1 || echo "")
 fi
 
 if [[ -n "$user_id_to_delete" ]]; then

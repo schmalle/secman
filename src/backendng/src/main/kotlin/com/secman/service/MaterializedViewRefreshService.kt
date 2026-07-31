@@ -39,8 +39,6 @@ import java.time.temporal.ChronoUnit
 open class MaterializedViewRefreshService(
     private val refreshJobRepository: MaterializedViewRefreshJobRepository,
     private val outdatedAssetRepository: OutdatedAssetMaterializedViewRepository,
-    private val vulnerabilityRepository: VulnerabilityRepository,
-    private val assetRepository: AssetRepository,
     private val vulnerabilityConfigService: VulnerabilityConfigService,
     private val eventPublisher: ApplicationEventPublisher<RefreshProgressEvent>,
     private val vulnerabilityStatisticsCacheService: VulnerabilityStatisticsCacheService,
@@ -48,9 +46,20 @@ open class MaterializedViewRefreshService(
     private val vulnerabilityService: VulnerabilityService,
     private val awsCleanServerKpiService: AwsCleanServerKpiService,
     @Value("\${secman.materialized-view-refresh.min-interval-seconds:60}")
-    private val minRefreshIntervalSeconds: Long
+    private val minRefreshIntervalSeconds: Long,
+    @Value("\${secman.materialized-view-refresh.quiet-period-seconds:120}")
+    private val quietPeriodSeconds: Long
 ) {
     private val log = LoggerFactory.getLogger(MaterializedViewRefreshService::class.java)
+
+    companion object {
+        /**
+         * Progress events buffered for a slow SSE subscriber. Matches Reactor's own
+         * SMALL_BUFFER_SIZE default; stated explicitly so the bound is visible where the sink is
+         * created rather than inherited from a no-arg overload.
+         */
+        private const val PROGRESS_SINK_BUFFER_SIZE = 256
+    }
 
     /**
      * Provider for self-reference so @Transactional/@Async apply on internal method calls
@@ -62,9 +71,23 @@ open class MaterializedViewRefreshService(
     @jakarta.inject.Inject
     private lateinit var selfProvider: jakarta.inject.Provider<MaterializedViewRefreshService>
 
-    // SSE sink for broadcasting refresh progress to all connected clients
-    // Many().multicast() allows multiple subscribers
-    private val progressSink: Sinks.Many<RefreshProgressEvent> = Sinks.many().multicast().onBackpressureBuffer()
+    /**
+     * SSE sink broadcasting refresh progress to all connected admin clients.
+     *
+     * `autoCancel = false` is load-bearing. The default no-arg `onBackpressureBuffer()` is
+     * `onBackpressureBuffer(SMALL_BUFFER_SIZE, autoCancel = true)`, which TERMINATES the sink for
+     * the rest of the process lifetime as soon as the last subscriber disconnects. Since this is a
+     * long-lived singleton, that meant the progress stream worked exactly once per backend start:
+     * an admin opened the Outdated Assets page, watched one refresh, closed the tab — and every
+     * later visitor's stream was silently dead. Silently, because `tryEmitNext` keeps returning
+     * `OK` in that state, so nothing was logged and no error surfaced.
+     *
+     * The buffer bound is explicit rather than inherited, so it is visible at the call site. It is
+     * a ceiling on events held for a slow subscriber, not a retention leak: with nobody subscribed
+     * the sink reports `FAIL_ZERO_SUBSCRIBER` instead of accumulating.
+     */
+    private val progressSink: Sinks.Many<RefreshProgressEvent> =
+        Sinks.many().multicast().onBackpressureBuffer(PROGRESS_SINK_BUFFER_SIZE, false)
 
     /**
      * Reason for a trigger that arrived while a refresh could not start immediately
@@ -79,9 +102,12 @@ open class MaterializedViewRefreshService(
     /** Anchor for the cooldown gate: the most recently completed (or failed) refresh job. */
     private val lastCompletedJob = java.util.concurrent.atomic.AtomicReference<MaterializedViewRefreshJob?>(null)
 
-    companion object {
-        private const val BATCH_SIZE = 1000
-    }
+    /**
+     * Wall-clock of the most recent [requestDeferredRefresh], anchoring the quiet-period gate in
+     * [sweepPendingRefreshTrigger]. Only consulted while [pendingTriggerReason] is set, so a
+     * stale value here can never delay anything on its own.
+     */
+    private val lastDeferredRequestAt = java.util.concurrent.atomic.AtomicReference<LocalDateTime?>(null)
 
     /**
      * Trigger asynchronous materialized view refresh with concurrency control
@@ -107,6 +133,37 @@ open class MaterializedViewRefreshService(
      * @return Either the newly created job, the existing running job (if one is in
      *   progress), or the last completed job (if deferred by the cooldown)
      */
+    /**
+     * Register "data changed, refresh eventually" WITHOUT ever starting a refresh inline.
+     *
+     * This is the entry point for BULK writers — the CrowdStrike import and its reconcile sweep.
+     * They call it once per sub-batch HTTP request, which for a full CLI import is ~94 times
+     * (1881 servers / batchSize 20) across 3 concurrent workers over several minutes.
+     *
+     * [triggerAsyncRefresh]'s cooldown gate was not enough for that shape: it defers a trigger
+     * only while the cooldown is *active*, so once `min-interval-seconds` elapsed the very next
+     * sub-batch started a full refresh cycle — roughly once a minute, for the entire duration of
+     * the import, each cycle scanning the whole vulnerability table while the import was still
+     * writing to it. That amplification is what turned one expensive refresh into the sustained
+     * heap and pool pressure behind the 2026-07-30 OutOfMemoryError.
+     *
+     * Here every call just bumps a timestamp. [sweepPendingRefreshTrigger] starts exactly ONE
+     * refresh once `quiet-period-seconds` have passed with no further request — i.e. after the
+     * import has actually stopped.
+     *
+     * Deliberately server-side rather than having the CLI flag its final batch: with
+     * `parallelism = 3` there is no well-defined last batch, and this also covers older CLI
+     * versions, manual callers, and the `/api/crowdstrike/vulnerabilities/save` path.
+     */
+    fun requestDeferredRefresh(triggeredBy: String) {
+        pendingTriggerReason.set(triggeredBy)
+        lastDeferredRequestAt.set(LocalDateTime.now())
+        log.debug(
+            "Deferred refresh requested (quiet period {}s): triggeredBy={}",
+            quietPeriodSeconds, triggeredBy
+        )
+    }
+
     fun triggerAsyncRefresh(triggeredBy: String, bypassCooldown: Boolean = false): MaterializedViewRefreshJob {
         log.info("Triggering async refresh: triggeredBy={}, bypassCooldown={}", triggeredBy, bypassCooldown)
 
@@ -211,13 +268,21 @@ open class MaterializedViewRefreshService(
     }
 
     /**
-     * Execute materialized view refresh with progress tracking
+     * Execute materialized view refresh.
      *
-     * **Performance Optimization (Fix 3):**
-     * Uses batch query to load all overdue vulnerabilities in ONE database call,
-     * eliminating the N+1 query pattern where we previously queried per-asset.
+     * The rebuild is a single server-side statement (see
+     * OutdatedAssetMaterializedViewRepository.rebuildFromOverdueVulnerabilities), so this method's
+     * heap cost is constant: no vulnerability or asset rows enter the JVM at all. It previously
+     * loaded every overdue vulnerability as a managed entity and aggregated in Kotlin, which is
+     * what ran out of heap during the 2026-07-30 import.
      *
-     * Task: T011, T060 (progress publishing), T061 (batch processing)
+     * **Progress reporting is now coarse.** A single statement has no observable intermediate
+     * state, so the SSE stream reports the asset count up front (from a cheap COUNT) and then
+     * jumps to complete, instead of ticking every 1000 assets. That is an honest reflection of
+     * how the work now happens — the previous per-batch ticks measured in-heap record building,
+     * which no longer exists.
+     *
+     * Task: T011, T060 (progress publishing)
      * Spec reference: FR-005, FR-007
      *
      * Note: NOT @Transactional - uses separate short transactions for each operation
@@ -227,88 +292,39 @@ open class MaterializedViewRefreshService(
         val thresholdDays = vulnerabilityConfigService.getReminderOneDays()
         log.info("Executing refresh with threshold: {} days", thresholdDays)
 
-        // Step 1: Load ALL overdue vulnerabilities in ONE query (Fix 3 - eliminates N+1 pattern).
-        // Loaded using whichever threshold is more inclusive of this refresh's own reminderOneDays
-        // window and the AWS clean-server KPI's fixed 30-day window (a smaller day-count means an
-        // earlier date, a superset), so refreshDerivedData() can reuse this same result instead of
-        // re-querying + re-loading the whole overdue-vulnerability set a second time.
-        val thresholdDate = LocalDateTime.now().minusDays(thresholdDays.toLong())
-        val loadThresholdDate = LocalDateTime.now()
-            .minusDays(minOf(thresholdDays.toLong(), AwsCleanServerKpiService.VULN_AGE_THRESHOLD_DAYS))
-        log.debug("Fetching all vulnerabilities older than {} (threshold: {} days)", thresholdDate, thresholdDays)
+        // One timestamp for the whole rebuild, used for both the age arithmetic and
+        // last_calculated_at, so every row in a snapshot is measured from the same instant.
+        val now = LocalDateTime.now()
+        val thresholdDate = now.minusDays(thresholdDays.toLong())
 
-        val allOverdueVulnerabilities = vulnerabilityRepository.findOverdueVulnerabilitiesWithAssets(loadThresholdDate)
-        log.info("Loaded {} overdue vulnerabilities in single query", allOverdueVulnerabilities.size)
-
-        // Step 2: Group vulnerabilities by asset and filter exceptions.
-        // `excepted` is already materialized on the entity (kept fresh by ExceptionMaterializationService
-        // on every exception create/update/delete plus an hourly expiry sweep) — no per-row DB call needed.
-        val vulnerabilitiesByAsset = allOverdueVulnerabilities
-            .asSequence()
-            .filter { (it.firstSeenAt ?: it.scanTimestamp) < thresholdDate }
-            .groupBy { it.asset }
-
-        // Filter to assets with at least one non-excepted overdue vulnerability
-        val assetsWithOverdueVulns = vulnerabilitiesByAsset.mapNotNull { (asset, vulns) ->
-            val nonExceptedVulns = vulns.filter { vuln -> !vuln.excepted }
-            if (nonExceptedVulns.isNotEmpty()) {
-                asset to nonExceptedVulns
-            } else {
-                null
-            }
-        }.toMap()
-
-        job.totalAssets = assetsWithOverdueVulns.size
+        // Step 1: size the job so the SSE progress stream and job history have a real denominator.
+        // Cheap COUNT with the same predicates as the rebuild below.
+        job.totalAssets = outdatedAssetRepository
+            .countAssetsWithOverdueVulnerabilities(thresholdDate)
+            .toInt()
         selfProvider.get().updateJob(job)
+        log.info("Found {} assets with overdue non-excepted vulnerabilities", job.totalAssets)
+        publishProgressEvent(job, "Rebuilding outdated-asset view...")
 
-        log.info("Found {} assets with overdue vulnerabilities (after exception filtering)", assetsWithOverdueVulns.size)
-
-        // Workgroup ids for these assets, fetched in bulk separately from the overdue-vulnerability
-        // query above (which no longer fetch-joins a.workgroups — see findOverdueVulnerabilitiesWithAssets
-        // for why). Scoped to just the assets kept after exception filtering, not every asset touched
-        // by the wider query.
-        val workgroupIdsByAsset = loadWorkgroupIdsByAsset(assetsWithOverdueVulns.keys)
-
-        // Step 3: Build the complete new snapshot in memory, with progress updates.
-        // No database write happens until the snapshot is fully computed.
-        val assetEntries = assetsWithOverdueVulns.entries.toList()
-        val materializedRecords = mutableListOf<OutdatedAssetMaterializedView>()
-        assetEntries.chunked(BATCH_SIZE).forEachIndexed { batchIndex, batch ->
-            batch.mapTo(materializedRecords) { (asset, overdueVulns) ->
-                createMaterializedRecordFromVulns(asset, overdueVulns, workgroupIdsByAsset[asset.id].orEmpty())
-            }
-
-            // Update progress
-            val processed = ((batchIndex + 1) * BATCH_SIZE).coerceAtMost(assetsWithOverdueVulns.size)
-            job.updateProgress(processed)
-            selfProvider.get().updateJob(job)
-
-            // Publish progress event
-            publishProgressEvent(job, "Processing assets...")
-
-            log.debug("Processed batch {}: {} assets", batchIndex + 1, processed)
-        }
-
-        // Step 4: Atomically replace the previous snapshot. Readers (user dashboard
-        // "Overdue Patching", Outdated Assets page) always see either the old complete
-        // snapshot or the new one — never an empty or partial view. A crash before
-        // this point leaves the previous snapshot intact. The write phase is small
-        // (one row per outdated asset), so a single transaction is cheap; only the
-        // read/compute phase above must stay outside a transaction.
+        // Step 2: Atomically replace the snapshot with one server-side statement. Readers (user
+        // dashboard "Overdue Patching", Outdated Assets page) always see either the old complete
+        // snapshot or the new one — never an empty or partial view. A crash before this point
+        // leaves the previous snapshot intact.
         // Invoked via the self proxy - a direct call on `this` would bypass the AOP
         // interceptor and split the delete+insert into two separate transactions.
-        selfProvider.get().swapMaterializedView(materializedRecords)
+        val rowsWritten = selfProvider.get().swapMaterializedView(thresholdDate, now)
 
-        // Step 5: Mark job as completed
+        // Step 3: Mark job as completed
+        job.updateProgress(rowsWritten)
         job.markCompleted()
         selfProvider.get().updateJob(job)
 
-        // Step 6 & 7: Refresh derived data (statistics cache + heatmap)
-        refreshDerivedData(allOverdueVulnerabilities)
+        // Step 4 & 5: Refresh derived data (statistics cache + heatmap)
+        refreshDerivedData()
 
         // Publish completion event
         publishProgressEvent(job,
-            if (materializedRecords.isEmpty()) "Refresh completed: no outdated assets"
+            if (rowsWritten == 0) "Refresh completed: no outdated assets"
             else "Refresh completed successfully")
 
         log.info("Refresh completed: jobId={}, assetsProcessed={}, durationMs={}",
@@ -316,16 +332,24 @@ open class MaterializedViewRefreshService(
     }
 
     /**
-     * Replace the whole materialized view with the freshly computed snapshot in one
-     * transaction, so concurrent readers never observe a cleared-but-not-yet-rebuilt
-     * view (the cause of the dashboard's false "0 overdue assets").
+     * Replace the whole materialized view in one transaction, so concurrent readers never observe
+     * a cleared-but-not-yet-rebuilt view (the cause of the dashboard's false "0 overdue assets").
+     *
+     * Both statements run entirely in the database — nothing is read into the JVM. This replaced a
+     * `deleteAll()` + `saveAll(records)` pair fed by a list built in heap from ~166k managed
+     * `Vulnerability` entities, which was the largest contributor to the 2026-07-30 import OOM.
+     * See OutdatedAssetMaterializedViewRepository.rebuildFromOverdueVulnerabilities for how the
+     * per-asset aggregation and the "oldest vulnerability" pick are expressed in SQL, and which
+     * semantics are preserved exactly.
+     *
+     * @return number of rows written, i.e. assets now in the view
      */
     @Transactional
-    open fun swapMaterializedView(records: List<OutdatedAssetMaterializedView>) {
+    open fun swapMaterializedView(thresholdDate: LocalDateTime, now: LocalDateTime): Int {
         outdatedAssetRepository.deleteAll()
-        if (records.isNotEmpty()) {
-            outdatedAssetRepository.saveAll(records)
-        }
+        val rowsWritten = outdatedAssetRepository.rebuildFromOverdueVulnerabilities(thresholdDate, now)
+        log.info("Materialized view rebuilt in-database: {} rows", rowsWritten)
+        return rowsWritten
     }
 
     /**
@@ -345,10 +369,12 @@ open class MaterializedViewRefreshService(
      * (ExceptionMaterializationService.recomputeAllExceptedScheduled) instead, since the incremental
      * per-CRUD recompute and hourly expiry sweep already keep `excepted` fresh for the common case.
      *
-     * @param preloadedOverdueVulnerabilities the vulnerability set already loaded by executeRefresh(),
-     *   reused here so the AWS clean-server KPI step doesn't re-query and re-load the same table.
+     * Takes no parameters on purpose. It used to receive executeRefresh()'s overdue-vulnerability
+     * list so the AWS KPI step could reuse it — which pinned that whole ~166k-entity list in heap
+     * for the duration of the statistics and heatmap work below. Every step here now issues its
+     * own bounded query instead.
      */
-    private fun refreshDerivedData(preloadedOverdueVulnerabilities: List<com.secman.domain.Vulnerability>) {
+    private fun refreshDerivedData() {
         try {
             log.info("Refreshing vulnerability statistics cache after materialized view refresh")
             vulnerabilityStatisticsCacheService.refreshCache()
@@ -372,86 +398,10 @@ open class MaterializedViewRefreshService(
 
         try {
             log.info("Recalculating AWS clean-server KPI after materialized view refresh")
-            awsCleanServerKpiService.recalculate(preloadedOverdueVulnerabilities)
+            awsCleanServerKpiService.recalculate()
         } catch (e: Exception) {
             log.error("AWS clean-server KPI recalculation failed (non-fatal): {}", e.message, e)
         }
-    }
-
-    /**
-     * Bulk-resolve workgroup ids for the given assets, chunking the IN-clause at 1000
-     * ids (same convention as CrowdStrikeVulnerabilityImportService's reconcile sweep).
-     * Replaces the `LEFT JOIN FETCH a.workgroups` this service used to rely on.
-     */
-    private fun loadWorkgroupIdsByAsset(assets: Collection<com.secman.domain.Asset>): Map<Long, List<Long>> {
-        val assetIds = assets.mapNotNull { it.id }
-        if (assetIds.isEmpty()) return emptyMap()
-        val result = mutableMapOf<Long, MutableList<Long>>()
-        assetIds.chunked(1000).forEach { idBatch ->
-            assetRepository.findWorkgroupIdsByAssetIds(idBatch).forEach { row ->
-                val assetId = (row[0] as Number).toLong()
-                val workgroupId = (row[1] as Number).toLong()
-                result.getOrPut(assetId) { mutableListOf() }.add(workgroupId)
-            }
-        }
-        return result
-    }
-
-    /**
-     * Create materialized record from pre-loaded vulnerability list
-     *
-     * **Performance Optimization (Fix 3):**
-     * Takes pre-loaded vulnerabilities instead of querying per-asset,
-     * eliminating N+1 database queries.
-     *
-     * Task: T011
-     * Spec reference: data-model.md
-     *
-     * @param asset The asset entity (already loaded, workgroups NOT fetched — see loadWorkgroupIdsByAsset)
-     * @param overdueVulns Pre-filtered list of overdue, non-excepted vulnerabilities for this asset
-     * @param workgroupIds This asset's workgroup ids, resolved separately in bulk
-     * @return OutdatedAssetMaterializedView record ready for persistence
-     */
-    private fun createMaterializedRecordFromVulns(
-        asset: com.secman.domain.Asset,
-        overdueVulns: List<com.secman.domain.Vulnerability>,
-        workgroupIds: List<Long>
-    ): OutdatedAssetMaterializedView {
-        // Calculate severity counts. cvssSeverity is stored title-case
-        // ("Critical", "High", "Medium", "Low") by VulnerabilityService.addVulnerabilityFromCli
-        // and by importers, so compare case-insensitively to avoid silently
-        // collapsing every count to zero.
-        val criticalCount = overdueVulns.count { it.cvssSeverity?.equals("CRITICAL", ignoreCase = true) == true }
-        val highCount = overdueVulns.count { it.cvssSeverity?.equals("HIGH", ignoreCase = true) == true }
-        val mediumCount = overdueVulns.count { it.cvssSeverity?.equals("MEDIUM", ignoreCase = true) == true }
-        val lowCount = overdueVulns.count { it.cvssSeverity?.equals("LOW", ignoreCase = true) == true }
-
-        // Find oldest vulnerability. Anchor on firstSeenAt (falls back to scanTimestamp
-        // for legacy rows) to match VulnerabilityService.calculateOverdueStatus — scanTimestamp
-        // alone gets refreshed on every re-import and would understate the true SLA age.
-        val now = LocalDateTime.now()
-        val oldestVuln = overdueVulns.maxByOrNull { vuln ->
-            ChronoUnit.DAYS.between(vuln.firstSeenAt ?: vuln.scanTimestamp, now)
-        }
-        val oldestVulnDays = oldestVuln?.let {
-            ChronoUnit.DAYS.between(it.firstSeenAt ?: it.scanTimestamp, now).toInt()
-        } ?: 0
-
-        return OutdatedAssetMaterializedView(
-            assetId = asset.id!!,
-            assetName = asset.name,
-            assetType = asset.type,
-            totalOverdueCount = overdueVulns.size,
-            criticalCount = criticalCount,
-            highCount = highCount,
-            mediumCount = mediumCount,
-            lowCount = lowCount,
-            oldestVulnDays = oldestVulnDays,
-            oldestVulnId = oldestVuln?.vulnerabilityId,
-            workgroupIds = workgroupIds.joinToString(","),
-            adDomain = asset.adDomain,
-            lastCalculatedAt = now
-        )
     }
 
     /**
@@ -472,8 +422,14 @@ open class MaterializedViewRefreshService(
 
         eventPublisher.publishEvent(event)
 
-        // Also emit to SSE stream for real-time updates
-        progressSink.tryEmitNext(event)
+        // Also emit to SSE stream for real-time updates. The result was previously discarded, which
+        // is how a permanently-terminated sink went unnoticed — surface anything unexpected.
+        // FAIL_ZERO_SUBSCRIBER is the normal case (no admin currently watching), not a problem.
+        val emitResult = progressSink.tryEmitNext(event)
+        if (emitResult != Sinks.EmitResult.OK && emitResult != Sinks.EmitResult.FAIL_ZERO_SUBSCRIBER) {
+            log.warn("Progress event not delivered to SSE subscribers: jobId={}, result={}",
+                job.id, emitResult)
+        }
 
         log.debug("Published progress event: jobId={}, status={}, progress={}%",
             job.id, job.status, job.progressPercentage)
@@ -532,6 +488,21 @@ open class MaterializedViewRefreshService(
     open fun sweepPendingRefreshTrigger() {
         val reason = pendingTriggerReason.get() ?: return
         if (getCurrentRunningJob() != null) return
+
+        // Quiet period: don't start while a bulk writer is still posting. Each
+        // requestDeferredRefresh() pushes this deadline out, so a burst of import sub-batches
+        // collapses into a single refresh that begins after the import goes quiet.
+        val lastRequest = lastDeferredRequestAt.get()
+        if (lastRequest != null) {
+            val quietSeconds = ChronoUnit.SECONDS.between(lastRequest, LocalDateTime.now())
+            if (quietSeconds < quietPeriodSeconds) {
+                log.debug(
+                    "Holding deferred refresh: {}s since last request, quiet period {}s",
+                    quietSeconds, quietPeriodSeconds
+                )
+                return
+            }
+        }
 
         val lastFinishedAt = lastCompletedJob.get()?.completedAt
         if (lastFinishedAt != null) {

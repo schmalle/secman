@@ -93,6 +93,11 @@ maybe_export() {
 export MICRONAUT_ENVIRONMENTS=dev
 export SECMAN_DEBUG=true
 
+# Verbose logging is a dev-only default; application.yml ships these at INFO so production
+# doesn't pay to format debug lines nobody reads (see the logger block there).
+export LOG_LEVEL_SECMAN=DEBUG
+export LOG_LEVEL_SECURITY=DEBUG
+
 maybe_export DB_CONNECT                 DB_CONNECT
 maybe_export SECMAN_BACKEND_URL         SECMAN_BACKEND_BASE_URL
 maybe_export FALCON_CLIENT_ID           FALCON_CLIENT_ID

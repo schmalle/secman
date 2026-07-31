@@ -58,6 +58,16 @@ State retry default sequence: 100 → 150 → 225 → 337 → 500 ms. Increase m
 
 Monitor: `GET /memory` (used/max/free/total MB). Set to `false` to roll back.
 
+### Materialized view refresh debounce
+The refresh chain (outdated-asset view + statistics cache + heatmap + AWS KPI) is expensive and
+is triggered once per CrowdStrike import sub-batch. These two gates stop it running repeatedly
+mid-import. The manual admin "Refresh Now" endpoint bypasses both.
+
+| Var | Default | Effect |
+|---|---|---|
+| `MATERIALIZED_VIEW_REFRESH_MIN_INTERVAL_SECONDS` | `60` | Minimum gap between one refresh cycle completing and the next starting. |
+| `MATERIALIZED_VIEW_REFRESH_QUIET_PERIOD_SECONDS` | `120` | A deferred refresh waits until this long has passed with **no** new request, so a whole import coalesces into one refresh. Raise if imports still overlap a refresh; lower for fresher dashboards sooner after an import. |
+
 ### Vulnerability dating
 | Var | Default | Effect |
 |---|---|---|
@@ -100,6 +110,23 @@ What is NEVER sent: owner emails, IP addresses, internal hostnames, full asset d
 |---|---|---|
 | `SECMAN_DEBUG` | `false` | logs all `/mcp/**` and `/api/**` headers + decoded JWT claims (signature never logged). **Production OFF** — header logs may contain secrets. |
 | `SECMAN_LOGGING` | unset | `NO` (silent except security audit), `ALL` (TRACE/DEBUG), `ERROR`, or unset (INFO app / WARN frameworks). Security audit log (`logs/security-audit.log`) is always active per NFR-002. |
+| `LOG_LEVEL_SECMAN` | `INFO` | level for the `com.secman` logger. `DEBUG` costs real allocation on the CrowdStrike import path (every per-server/per-batch debug line is formatted whether or not anyone reads it) — raise for triage, then put it back. `scripts/startbackenddev.sh` exports `DEBUG`. |
+| `LOG_LEVEL_SECURITY` | `INFO` | level for `io.micronaut.security`. `DEBUG` logs authentication internals; leave at `INFO` in production. `scripts/startbackenddev.sh` exports `DEBUG`. |
+
+### JVM heap & out-of-memory behaviour
+Not read by the application — passed to the JVM via `JAVA_OPTS` (containers) or
+`applicationDefaultJvmArgs` (`gradle run`).
+
+| Context | Setting | Notes |
+|---|---|---|
+| `docker/aws` (all-in-one) | `-XX:MaxRAMPercentage=45.0` | Three processes share the cgroup limit. See [Memory sizing](DOCKER_AWS.md#memory-sizing). Override the limit with `SECMAN_MEM_LIMIT` under compose. |
+| `docker/backend` (backend only) | `-XX:MaxRAMPercentage=75.0` | JVM is the only process in the image. |
+| systemd | `-Xmx2g` | See `INSTALL.md` / `docs/DEPLOYMENT.md`. |
+| `gradle run` (dev) | `-Xmx1g` | Deliberately bounded so unbounded-query regressions reproduce locally instead of only in production. Override per-run: `./gradlew :backendng:run -PsecmanDevHeap=4g`. |
+
+All four also set `-XX:+HeapDumpOnOutOfMemoryError` and `-XX:+ExitOnOutOfMemoryError`: a JVM
+that has thrown `OutOfMemoryError` is in an undefined state, so it dumps and exits and the
+supervisor (ECS / compose `restart:` / systemd `Restart=on-failure`) starts a clean one.
 
 Sample debug output:
 ```

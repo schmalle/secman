@@ -1,6 +1,7 @@
 package com.secman.integration
 
 import com.secman.repository.AssetRepository
+import com.secman.repository.OutdatedAssetMaterializedViewRepository
 import com.secman.repository.VulnerabilityRepository
 import com.secman.testutil.BaseIntegrationTest
 import com.secman.testutil.TestDataFactory
@@ -18,6 +19,14 @@ import java.time.LocalDateTime
  * (CrowdStrike recomputes it from daysOpen; XLSX re-imports reset it), so
  * anchoring the refresh on it makes the dashboard's "Overdue Patching" card
  * disagree with the Current Vulnerabilities view.
+ *
+ * Asserts through the REBUILD STATEMENT itself
+ * (OutdatedAssetMaterializedViewRepository.rebuildFromOverdueVulnerabilities), which is where the
+ * anchor now lives. It previously asserted against findOverdueVulnerabilitiesWithAssets, an
+ * unbounded entity load that no longer has any production caller. Transcribing
+ * `COALESCE(firstSeenAt, scanTimestamp) < threshold` from Kotlin into that SQL is the single most
+ * likely place for a silent regression (a `<` vs `<=` slip, or the two columns transposed), so this
+ * is the guard for it.
  */
 @DisplayName("Overdue SLA anchor: view refresh query vs live badge")
 class OverdueAnchorIntegrationTest : BaseIntegrationTest() {
@@ -28,12 +37,23 @@ class OverdueAnchorIntegrationTest : BaseIntegrationTest() {
     @Inject
     lateinit var vulnerabilityRepository: VulnerabilityRepository
 
+    @Inject
+    lateinit var outdatedAssetRepository: OutdatedAssetMaterializedViewRepository
+
     private val threshold: LocalDateTime = LocalDateTime.now().minusDays(30)
 
     @AfterEach
     fun cleanup() {
+        outdatedAssetRepository.deleteAll()
         vulnerabilityRepository.deleteAll()
         assetRepository.deleteAll()
+    }
+
+    /** Run the production rebuild statement and return the CVE ids it materialized. */
+    private fun rebuiltVulnIds(): List<String?> {
+        outdatedAssetRepository.deleteAll()
+        outdatedAssetRepository.rebuildFromOverdueVulnerabilities(threshold, LocalDateTime.now())
+        return outdatedAssetRepository.findAll().map { it.oldestVulnId }
     }
 
     @Test
@@ -49,9 +69,7 @@ class OverdueAnchorIntegrationTest : BaseIntegrationTest() {
         vuln.firstSeenAt = LocalDateTime.now().minusDays(40) // true SLA anchor
         vulnerabilityRepository.save(vuln)
 
-        val overdue = vulnerabilityRepository.findOverdueVulnerabilitiesWithAssets(threshold)
-
-        assertThat(overdue.map { it.vulnerabilityId }).contains("CVE-2026-1111")
+        assertThat(rebuiltVulnIds()).contains("CVE-2026-1111")
     }
 
     @Test
@@ -67,9 +85,7 @@ class OverdueAnchorIntegrationTest : BaseIntegrationTest() {
         vuln.firstSeenAt = null
         vulnerabilityRepository.save(vuln)
 
-        val overdue = vulnerabilityRepository.findOverdueVulnerabilitiesWithAssets(threshold)
-
-        assertThat(overdue.map { it.vulnerabilityId }).contains("CVE-2026-2222")
+        assertThat(rebuiltVulnIds()).contains("CVE-2026-2222")
     }
 
     @Test
@@ -85,8 +101,6 @@ class OverdueAnchorIntegrationTest : BaseIntegrationTest() {
         vuln.firstSeenAt = LocalDateTime.now().minusDays(10)
         vulnerabilityRepository.save(vuln)
 
-        val overdue = vulnerabilityRepository.findOverdueVulnerabilitiesWithAssets(threshold)
-
-        assertThat(overdue.map { it.vulnerabilityId }).doesNotContain("CVE-2026-3333")
+        assertThat(rebuiltVulnIds()).doesNotContain("CVE-2026-3333")
     }
 }

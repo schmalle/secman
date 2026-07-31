@@ -24,6 +24,11 @@ services:
     image: secman-aio:latest
     container_name: secman
     restart: unless-stopped
+    # The image sizes the JVM heap as a PERCENTAGE of the cgroup limit
+    # (-XX:MaxRAMPercentage, see docker/aws/Dockerfile). Without a limit here the JVM
+    # would size off the whole host's RAM, so a local compose run would behave nothing
+    # like ECS. 2g mirrors the documented Fargate task memory (docs/DOCKER_AWS.md).
+    mem_limit: ${SECMAN_MEM_LIMIT:-2g}
     ports:
       # host:container — container always serves plain HTTP on :80.
       # Front it with a TLS-terminating reverse proxy / ALB in production.

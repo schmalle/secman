@@ -27,10 +27,20 @@ ENV SECMAN_BACKEND_URL=https://localhost:8443
 # Flyway migrations assume pre-existing tables (created by Hibernate on existing deployments).
 ENV FLYWAY_DATASOURCES_DEFAULT_ENABLED=false
 
-# JVM tuning for container
-ENV JAVA_OPTS="-Xmx512m -Xms256m -XX:+UseContainerSupport"
+# JVM tuning for container.
+#
+# Percentage, not -Xmx: the explicit -Xmx512m this replaces overrode the cgroup limit, so
+# raising the container's memory did nothing and the backend OOM'd on any full-table read
+# (2026-07-30 import incident). 75% is safe here because — unlike docker/aws/Dockerfile —
+# the JVM is the only process in this image.
+#
+# On OOM: dump, then exit, so the HEALTHCHECK/orchestrator restarts a clean JVM instead of
+# leaving a poisoned one serving traffic. /app is writable; mount it to keep dumps.
+ENV JAVA_OPTS="-XX:MaxRAMPercentage=75.0 -XX:InitialRAMPercentage=25.0 -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/app/secman-backend-oom.hprof -XX:+ExitOnOutOfMemoryError"
 
 HEALTHCHECK --interval=10s --timeout=5s --retries=12 --start-period=60s \
   CMD curl -sf http://localhost:8080/health || exit 1
 
-ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
+# `exec` so the JVM replaces the shell as PID 1: signals reach it directly and its exit
+# code (notably from -XX:+ExitOnOutOfMemoryError) propagates to the orchestrator.
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar app.jar"]

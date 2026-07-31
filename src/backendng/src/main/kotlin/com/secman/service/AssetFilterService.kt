@@ -215,6 +215,17 @@ open class AssetFilterService(
      * Get vulnerabilities accessible to the authenticated user
      * FR-014, FR-016, FR-018: Filter by asset accessibility, ADMIN has full access
      *
+     * ⚠️ CURRENTLY UNUSED, AND UNSAFE TO CALL AS WRITTEN. Left in place rather than removed
+     * because it is pre-existing dead code, but do not wire it up:
+     *  - the ADMIN branch is `vulnerabilityRepository.findAll()` — every row of a multi-million-row
+     *    table as managed entities;
+     *  - the scoped branch is `findLatestVulnerabilitiesForAssetIds`, which is unbounded for the
+     *    same reason.
+     * Both are the exact shape that ran a 1 GB container out of heap on 2026-07-30 (see the note on
+     * VulnerabilityRepository.findOverdueVulnerabilitiesWithAssets). If a caller ever needs this,
+     * give it a `Pageable` or an aggregate — `countLatestVulnerabilitiesBySeverityForAssetIds` is
+     * the counting equivalent. Otherwise this method should simply be deleted.
+     *
      * @param authentication Current user authentication
      * @return List of accessible vulnerabilities
      */

@@ -129,6 +129,21 @@ dependencies {
 
 application {
     mainClass.set("com.secman.ApplicationKt")
+    // Bound the dev heap to production's ballpark. `gradle run` forks a JVM with NO args
+    // (org.gradle.jvmargs applies to the Gradle daemon, not the fork), so it inherited the
+    // ergonomic default of ~1/4 of physical RAM — a multi-GB heap on a dev machine. That is
+    // why the 2026-07-30 import OOM was invisible locally while killing a 1 GB container:
+    // unbounded-query regressions simply cannot reproduce on an unbounded heap.
+    //
+    // Override for a one-off (e.g. profiling a large import) with:
+    //   ./gradlew :backendng:run -PsecmanDevHeap=4g
+    applicationDefaultJvmArgs = listOf(
+        "-Xmx${providers.gradleProperty("secmanDevHeap").getOrElse("1g")}",
+        "-Xms256m",
+        "-XX:+HeapDumpOnOutOfMemoryError",
+        "-XX:HeapDumpPath=build/secman-backend-oom.hprof",
+        "-XX:+ExitOnOutOfMemoryError"
+    )
 }
 
 java {

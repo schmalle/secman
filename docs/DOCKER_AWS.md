@@ -110,7 +110,8 @@ lives in `docs/ENVIRONMENT.md`; the deployment-critical set:
 | `OPENROUTER_API_KEY` (+ `AI_RISK_ASSESSMENT_ENABLED=true`) | AI-assisted risk assessment |
 | `FALCON_CLIENT_ID`, `FALCON_CLIENT_SECRET`, `FALCON_CLOUD_REGION` | CrowdStrike Falcon integration |
 | `FLYWAY_DATASOURCES_DEFAULT_ENABLED` | `false` (default) for a **fresh** DB — Hibernate creates the schema; `true` for an existing Flyway-managed schema |
-| `JAVA_OPTS` | JVM sizing, default `-Xmx1024m -Xms256m -XX:+UseContainerSupport` |
+| `JAVA_OPTS` | JVM sizing + OOM behaviour. Default `-XX:MaxRAMPercentage=45.0 -XX:InitialRAMPercentage=12.5 -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp/secman-backend-oom.hprof -XX:+ExitOnOutOfMemoryError`. See [Memory sizing](#memory-sizing) |
+| `SECMAN_MEM_LIMIT` | compose only — container memory limit the heap percentage is computed from (default `2g`, mirrors the Fargate task memory) |
 | `SECMAN_AUTH_COOKIE_SECURE` | `true` (default). Only set `false` for plain-HTTP local testing |
 
 ### Local run (docker run)
@@ -233,11 +234,49 @@ ARN in `valueFrom` plus `ssm:GetParameters` on the role.)
    schedulers) run in **every** task; keep a single task unless you have
    reviewed the schedulers for multi-instance safety.
 
+## Memory sizing
+
+This image runs **three** processes in one cgroup — the Micronaut backend, the Astro SSR
+node server, and nginx — so the JVM cannot have the whole limit.
+
+The heap is sized as a **percentage of the container limit**
+(`-XX:MaxRAMPercentage=45.0`), not with `-Xmx`. That matters: an explicit `-Xmx` ignores the
+cgroup limit entirely, so raising the task memory has no effect on the heap. A hardcoded
+`-Xmx1024m` against a multi-million-row `vulnerability` table is what produced the
+2026-07-30 import `OutOfMemoryError`.
+
+Measured with `java -XX:MaxRAM=<limit> -XX:MaxRAMPercentage=45.0 -XX:+PrintFlagsFinal -version`:
+
+| Container limit | Heap at 45% | Remainder for JVM non-heap + node + nginx + page cache |
+|---|---|---|
+| 2048 MiB (documented Fargate task) | 928 MiB | ~1120 MiB |
+| 4096 MiB | ~1856 MiB | ~2240 MiB |
+
+- **Raise the percentage only together with the task memory.** Going above ~60% will start
+  starving the SSR node process, which fails as a 502 from nginx rather than an obvious OOM.
+- **compose**: the limit comes from `SECMAN_MEM_LIMIT` (default `2g`). Without a limit the
+  JVM would size off the whole host's RAM and a local run would behave nothing like ECS.
+- **ECS**: the limit is the task definition's `memory`. Changing it changes the heap
+  automatically — no image rebuild.
+
+### On out-of-memory
+
+`JAVA_OPTS` sets `-XX:+HeapDumpOnOutOfMemoryError` and `-XX:+ExitOnOutOfMemoryError`. A JVM
+that has thrown `OutOfMemoryError` is in an undefined state, so it exits rather than
+continuing to serve traffic; `entrypoint.sh` propagates that and the task is replaced.
+
+**The dump path is ephemeral.** `/tmp/secman-backend-oom.hprof` survives long enough for
+`docker cp` locally, but on Fargate it dies with the task. To keep dumps, mount a volume and
+override `JAVA_OPTS` with a `-XX:HeapDumpPath` pointing at it. Note a dump is roughly the
+size of the live heap (~1 GiB) — make sure the destination can hold it.
+
 ## Operations
 
 - **Logs**: all three processes write to stdout/stderr → CloudWatch via the
   `awslogs` driver. Backend log verbosity: `SECMAN_LOGGING`
   (see `docs/ENVIRONMENT.md`); keep `SECMAN_DEBUG=false` in production.
+  `com.secman` and `io.micronaut.security` default to `INFO`; raise per-deployment with
+  `LOG_LEVEL_SECMAN` / `LOG_LEVEL_SECURITY` (no rebuild needed) for incident triage only.
 - **Health**: `/health` (backend, proxied by nginx) is used by both the
   container HEALTHCHECK and the ALB target group.
 - **Restart behavior**: if any of nginx / backend / SSR server dies, the

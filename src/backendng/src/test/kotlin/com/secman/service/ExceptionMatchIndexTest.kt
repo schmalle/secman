@@ -1,9 +1,9 @@
 package com.secman.service
 
 import com.secman.domain.Asset
+import com.secman.domain.ExceptionMatchable
 import com.secman.domain.Vulnerability
 import com.secman.domain.VulnerabilityException
-import com.secman.repository.projection.VulnerabilityStatsRawRow
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
@@ -12,6 +12,21 @@ import java.time.LocalDateTime
 @DisplayName("ExceptionMatchIndex")
 class ExceptionMatchIndexTest {
 
+    /**
+     * Minimal ExceptionMatchable fixture. Previously this reused
+     * VulnerabilityStatsRawRow, which was deleted along with the unbounded full-table
+     * statistics query it served — the index itself never needed that shape, only these
+     * six fields.
+     */
+    private data class TestRow(
+        override val vulnerabilityId: String?,
+        override val vulnerableProductVersions: String?,
+        override val assetId: Long?,
+        override val assetIp: String?,
+        override val cloudAccountId: String?,
+        override val osVersion: String?
+    ) : ExceptionMatchable
+
     private fun row(
         vulnId: String = "CVE-2024-0001",
         product: String? = null,
@@ -19,13 +34,10 @@ class ExceptionMatchIndexTest {
         assetIp: String? = null,
         cloudAccountId: String? = null,
         osVersion: String? = null
-    ) = VulnerabilityStatsRawRow(
+    ) = TestRow(
         vulnerabilityId = vulnId,
-        cvssSeverity = "HIGH",
         vulnerableProductVersions = product,
         assetId = assetId,
-        assetName = "asset-$assetId",
-        assetType = "SERVER",
         assetIp = assetIp,
         cloudAccountId = cloudAccountId,
         osVersion = osVersion

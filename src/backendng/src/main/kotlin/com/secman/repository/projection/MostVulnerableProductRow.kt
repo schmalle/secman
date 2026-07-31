@@ -20,4 +20,13 @@ data class MostVulnerableProductRow(
     val affectedAssetCount: BigInteger?,
     val criticalCount: BigInteger?,
     val highCount: BigInteger?
-)
+) {
+    /** See [MostCommonVulnerabilityRow.toDto] — one mapping, shared by live and cache paths. */
+    fun toDto() = com.secman.dto.MostVulnerableProductDto(
+        product = product ?: "",
+        vulnerabilityCount = vulnerabilityCount?.toLong() ?: 0L,
+        affectedAssetCount = affectedAssetCount?.toLong() ?: 0L,
+        criticalCount = criticalCount?.toLong() ?: 0L,
+        highCount = highCount?.toLong() ?: 0L
+    )
+}

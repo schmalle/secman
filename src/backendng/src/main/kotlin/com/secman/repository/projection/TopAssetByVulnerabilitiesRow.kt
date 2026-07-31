@@ -24,4 +24,17 @@ data class TopAssetByVulnerabilitiesRow(
     val highCount: BigInteger?,
     val mediumCount: BigInteger?,
     val lowCount: BigInteger?
-)
+) {
+    /** See [MostCommonVulnerabilityRow.toDto] — one mapping, shared by live and cache paths. */
+    fun toDto() = com.secman.dto.TopAssetByVulnerabilitiesDto(
+        assetId = assetId?.toLong() ?: 0L,
+        assetName = assetName ?: "",
+        assetType = assetType,
+        assetIp = assetIp,
+        totalVulnerabilityCount = totalVulnerabilityCount?.toLong() ?: 0L,
+        criticalCount = criticalCount?.toLong() ?: 0L,
+        highCount = highCount?.toLong() ?: 0L,
+        mediumCount = mediumCount?.toLong() ?: 0L,
+        lowCount = lowCount?.toLong() ?: 0L
+    )
+}

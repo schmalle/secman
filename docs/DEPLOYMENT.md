@@ -111,7 +111,7 @@ User=secman
 Group=secman
 WorkingDirectory=/opt/secman/app
 EnvironmentFile=/etc/secman/backend.env
-Environment="JAVA_OPTS=-Xmx2g -Xms512m -XX:+UseG1GC"
+Environment="JAVA_OPTS=-Xmx2g -Xms512m -XX:+UseG1GC -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/var/log/secman/oom.hprof -XX:+ExitOnOutOfMemoryError"
 ExecStart=/usr/bin/java $JAVA_OPTS -jar /opt/secman/app/src/backendng/build/libs/backendng-0.1-all.jar
 Restart=on-failure
 RestartSec=10

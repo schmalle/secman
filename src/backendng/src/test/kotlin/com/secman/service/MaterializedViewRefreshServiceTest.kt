@@ -1,8 +1,6 @@
 package com.secman.service
 
-import com.secman.domain.Asset
 import com.secman.domain.MaterializedViewRefreshJob
-import com.secman.domain.Vulnerability
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -28,8 +26,6 @@ class MaterializedViewRefreshServiceTest {
 
     private val refreshJobRepository = mockk<com.secman.repository.MaterializedViewRefreshJobRepository>(relaxed = true)
     private val outdatedAssetRepository = mockk<com.secman.repository.OutdatedAssetMaterializedViewRepository>(relaxed = true)
-    private val vulnerabilityRepository = mockk<com.secman.repository.VulnerabilityRepository>(relaxed = true)
-    private val assetRepository = mockk<com.secman.repository.AssetRepository>(relaxed = true)
     private val vulnerabilityConfigService = mockk<VulnerabilityConfigService>()
     private val eventPublisher = mockk<io.micronaut.context.event.ApplicationEventPublisher<com.secman.domain.RefreshProgressEvent>>(relaxed = true)
     private val vulnerabilityStatisticsCacheService = mockk<VulnerabilityStatisticsCacheService>(relaxed = true)
@@ -53,7 +49,6 @@ class MaterializedViewRefreshServiceTest {
         // Relaxed mocks return plain Object for generic signatures, which the
         // Micronaut Data repository interface then fails to cast — stub explicitly.
         every { refreshJobRepository.update(any()) } answers { firstArg() }
-        every { outdatedAssetRepository.saveAll(any<List<com.secman.domain.OutdatedAssetMaterializedView>>()) } answers { firstArg() }
         every { refreshJobRepository.save(any()) } answers {
             val saved = firstArg<MaterializedViewRefreshJob>()
             if (saved.id == null) saved.id = nextId++
@@ -83,19 +78,23 @@ class MaterializedViewRefreshServiceTest {
      * the default 0-second [service] from [setUp], so deferral is deterministic without
      * needing to mock the wall clock.
      */
-    private fun buildService(minRefreshIntervalSeconds: Long): MaterializedViewRefreshService {
+    private fun buildService(
+        minRefreshIntervalSeconds: Long,
+        // 0 = no quiet period, so most tests can sweep immediately. Tests that exercise the
+        // import-coalescing behaviour pass a real value.
+        quietPeriodSeconds: Long = 0L
+    ): MaterializedViewRefreshService {
         val built = MaterializedViewRefreshService(
             refreshJobRepository,
             outdatedAssetRepository,
-            vulnerabilityRepository,
-            assetRepository,
             vulnerabilityConfigService,
             eventPublisher,
             vulnerabilityStatisticsCacheService,
             assetHeatmapService,
             vulnerabilityService,
             awsCleanServerKpiService,
-            minRefreshIntervalSeconds
+            minRefreshIntervalSeconds,
+            quietPeriodSeconds
         )
         // In production Micronaut injects the AOP self-proxy; in unit tests the plain
         // instance is fine (no transactionality to assert here). The field is private
@@ -107,99 +106,91 @@ class MaterializedViewRefreshServiceTest {
         return built
     }
 
-    private fun overdueVulnerability(): Vulnerability {
-        val asset = Asset(id = 42L, name = "server-1", type = "SERVER", owner = "ops")
-        return Vulnerability(
-            id = 100L,
-            asset = asset,
-            vulnerabilityId = "CVE-2026-0001",
-            cvssSeverity = "High",
-            scanTimestamp = LocalDateTime.now().minusDays(45),
-            firstSeenAt = LocalDateTime.now().minusDays(45)
-        )
+    /**
+     * The progress sink must survive subscriber churn. With Reactor's default no-arg
+     * `onBackpressureBuffer()` (autoCancel = true) the sink terminated permanently once the last
+     * subscriber disconnected, so on this long-lived singleton the admin progress stream worked
+     * exactly once per backend process — and silently, since tryEmitNext still returned OK.
+     */
+    @Test
+    @DisplayName("progress stream still delivers to a new subscriber after a previous one disconnects")
+    fun progressStreamSurvivesSubscriberChurn() {
+        val firstSeen = mutableListOf<com.secman.domain.RefreshProgressEvent>()
+        val firstSub = service.getProgressStream().subscribe { firstSeen.add(it) }
+
+        every { outdatedAssetRepository.countAssetsWithOverdueVulnerabilities(any()) } returns 1L
+        every { outdatedAssetRepository.rebuildFromOverdueVulnerabilities(any(), any()) } returns 1
+
+        service.executeRefresh(job)
+        assertThat(firstSeen).isNotEmpty()
+
+        // The admin closes the Outdated Assets page.
+        firstSub.dispose()
+
+        // A second admin opens it and triggers another refresh.
+        val secondSeen = mutableListOf<com.secman.domain.RefreshProgressEvent>()
+        val secondSub = service.getProgressStream().subscribe { secondSeen.add(it) }
+        service.executeRefresh(MaterializedViewRefreshJob(id = 2L, triggeredBy = "second", totalAssets = 0))
+        secondSub.dispose()
+
+        assertThat(secondSeen).isNotEmpty()
     }
 
     @Test
-    @DisplayName("preserves the previous snapshot when computing the new one fails")
-    fun refreshFailurePreservesPreviousViewContents() {
-        every { vulnerabilityRepository.findOverdueVulnerabilitiesWithAssets(any()) } throws
+    @DisplayName("does not touch the view when sizing the rebuild fails")
+    fun refreshFailureBeforeSwapPreservesPreviousViewContents() {
+        every { outdatedAssetRepository.countAssetsWithOverdueVulnerabilities(any()) } throws
             RuntimeException("db connection lost mid-refresh")
 
         assertThatThrownBy { service.executeRefresh(job) }
             .hasMessageContaining("db connection lost")
 
         verify(exactly = 0) { outdatedAssetRepository.deleteAll() }
-        verify(exactly = 0) { outdatedAssetRepository.saveAll(any<List<com.secman.domain.OutdatedAssetMaterializedView>>()) }
+        verify(exactly = 0) { outdatedAssetRepository.rebuildFromOverdueVulnerabilities(any(), any()) }
     }
 
     @Test
-    @DisplayName("only clears the view after the new snapshot has been computed")
-    fun clearHappensAfterComputation() {
-        every { vulnerabilityRepository.findOverdueVulnerabilitiesWithAssets(any()) } returns
-            listOf(overdueVulnerability())
+    @DisplayName("clears and rebuilds in that order, inside one swap call")
+    fun clearIsImmediatelyFollowedByRebuild() {
+        every { outdatedAssetRepository.countAssetsWithOverdueVulnerabilities(any()) } returns 1L
+        every { outdatedAssetRepository.rebuildFromOverdueVulnerabilities(any(), any()) } returns 1
 
         service.executeRefresh(job)
 
+        // Atomicity no longer comes from "compute everything before deleting" — there is nothing
+        // to compute in heap any more. It comes from both statements sharing swapMaterializedView's
+        // single @Transactional, so a failed rebuild rolls the delete back. That rollback guarantee
+        // needs a real transaction and is covered by OutdatedAssetRebuildIntegrationTest.
         verifyOrder {
-            vulnerabilityRepository.findOverdueVulnerabilitiesWithAssets(any())
             outdatedAssetRepository.deleteAll()
-            outdatedAssetRepository.saveAll(any<List<com.secman.domain.OutdatedAssetMaterializedView>>())
+            outdatedAssetRepository.rebuildFromOverdueVulnerabilities(any(), any())
         }
     }
 
     @Test
-    @DisplayName("writes the new snapshot rows when overdue vulnerabilities exist")
-    fun refreshWritesSnapshotRows() {
-        every { vulnerabilityRepository.findOverdueVulnerabilitiesWithAssets(any()) } returns
-            listOf(overdueVulnerability())
+    @DisplayName("rebuilds with the configured overdue threshold and reports rows written on the job")
+    fun refreshRebuildsAndRecordsRowsWritten() {
+        every { outdatedAssetRepository.countAssetsWithOverdueVulnerabilities(any()) } returns 7L
+        every { outdatedAssetRepository.rebuildFromOverdueVulnerabilities(any(), any()) } returns 7
 
-        val saved = mutableListOf<List<com.secman.domain.OutdatedAssetMaterializedView>>()
-        every { outdatedAssetRepository.saveAll(capture(saved)) } answers { firstArg() }
-
-        service.executeRefresh(job)
-
-        assertThat(saved.flatten()).hasSize(1)
-        assertThat(saved.flatten().single().assetId).isEqualTo(42L)
-        assertThat(saved.flatten().single().highCount).isEqualTo(1)
-    }
-
-    @Test
-    @DisplayName("resolves workgroupIds via the bulk lookup, not the (now unfetched) asset.workgroups collection")
-    fun workgroupIdsResolvedViaBulkLookupNotFetchJoin() {
-        val vuln = overdueVulnerability() // asset id = 42L
-        every { vulnerabilityRepository.findOverdueVulnerabilitiesWithAssets(any()) } returns listOf(vuln)
-        every { assetRepository.findWorkgroupIdsByAssetIds(listOf(42L)) } returns
-            listOf(arrayOf<Any>(42L, 7L), arrayOf<Any>(42L, 9L))
-
-        val saved = mutableListOf<List<com.secman.domain.OutdatedAssetMaterializedView>>()
-        every { outdatedAssetRepository.saveAll(capture(saved)) } answers { firstArg() }
+        val thresholdSlot = mutableListOf<LocalDateTime>()
+        val nowSlot = mutableListOf<LocalDateTime>()
+        every { outdatedAssetRepository.rebuildFromOverdueVulnerabilities(capture(thresholdSlot), capture(nowSlot)) } returns 7
 
         service.executeRefresh(job)
 
-        assertThat(saved.flatten().single().workgroupIds).isEqualTo("7,9")
-    }
-
-    @Test
-    @DisplayName("oldestVulnDays uses the firstSeenAt SLA anchor, not the re-import-refreshed scanTimestamp")
-    fun oldestVulnDaysUsesFirstSeenAnchor() {
-        val vuln = overdueVulnerability().apply {
-            firstSeenAt = LocalDateTime.now().minusDays(45)
-            scanTimestamp = LocalDateTime.now().minusDays(5) // refreshed by a re-import
-        }
-        every { vulnerabilityRepository.findOverdueVulnerabilitiesWithAssets(any()) } returns listOf(vuln)
-
-        val saved = mutableListOf<List<com.secman.domain.OutdatedAssetMaterializedView>>()
-        every { outdatedAssetRepository.saveAll(capture(saved)) } answers { firstArg() }
-
-        service.executeRefresh(job)
-
-        assertThat(saved.flatten().single().oldestVulnDays).isEqualTo(45)
+        assertThat(job.totalAssets).isEqualTo(7)
+        assertThat(job.assetsProcessed).isEqualTo(7)
+        // getReminderOneDays() is stubbed to 30, so the threshold must be ~30 days before `now`.
+        val daysBack = java.time.temporal.ChronoUnit.DAYS.between(thresholdSlot.single(), nowSlot.single())
+        assertThat(daysBack).isEqualTo(30L)
     }
 
     @Test
     @DisplayName("still clears stale rows when nothing is overdue anymore")
     fun emptyResultClearsView() {
-        every { vulnerabilityRepository.findOverdueVulnerabilitiesWithAssets(any()) } returns emptyList()
+        every { outdatedAssetRepository.countAssetsWithOverdueVulnerabilities(any()) } returns 0L
+        every { outdatedAssetRepository.rebuildFromOverdueVulnerabilities(any(), any()) } returns 0
 
         service.executeRefresh(job)
 
@@ -207,26 +198,17 @@ class MaterializedViewRefreshServiceTest {
     }
 
     @Test
-    @DisplayName("excludes vulnerabilities already flagged excepted, using the materialized column directly")
-    fun excludesExceptedVulnerabilities() {
-        val excepted = overdueVulnerability().apply { excepted = true }
-        every { vulnerabilityRepository.findOverdueVulnerabilitiesWithAssets(any()) } returns listOf(excepted)
+    @DisplayName("triggers the AWS clean-server KPI without handing it any loaded vulnerability list")
+    fun awsKpiStepIsInvokedWithoutSharingALoadedList() {
+        // The KPI used to receive the refresh's overdue-vulnerability list so it could avoid its own
+        // query, which forced that whole ~166k-entity result to stay reachable across the entire
+        // refresh cycle (a contributor to the 2026-07-30 OOM). It now issues its own COUNT.
+        every { outdatedAssetRepository.countAssetsWithOverdueVulnerabilities(any()) } returns 1L
+        every { outdatedAssetRepository.rebuildFromOverdueVulnerabilities(any(), any()) } returns 1
 
         service.executeRefresh(job)
 
-        verify(exactly = 1) { outdatedAssetRepository.deleteAll() }
-        verify(exactly = 0) { outdatedAssetRepository.saveAll(any<List<com.secman.domain.OutdatedAssetMaterializedView>>()) }
-    }
-
-    @Test
-    @DisplayName("passes the already-loaded overdue vulnerabilities into the AWS clean-server KPI recalculation")
-    fun sharesPreloadedVulnerabilitiesWithAwsKpiStep() {
-        val vuln = overdueVulnerability()
-        every { vulnerabilityRepository.findOverdueVulnerabilitiesWithAssets(any()) } returns listOf(vuln)
-
-        service.executeRefresh(job)
-
-        verify(exactly = 1) { awsCleanServerKpiService.recalculate(listOf(vuln)) }
+        verify(exactly = 1) { awsCleanServerKpiService.recalculate() }
     }
 
     @Test
@@ -303,13 +285,66 @@ class MaterializedViewRefreshServiceTest {
     @Test
     @DisplayName("a failed refresh still updates the cooldown anchor, so it doesn't retry back-to-back")
     fun failedRefreshStillUpdatesCooldownAnchor() {
-        every { vulnerabilityRepository.findOverdueVulnerabilitiesWithAssets(any()) } throws RuntimeException("boom")
+        every { outdatedAssetRepository.countAssetsWithOverdueVulnerabilities(any()) } throws RuntimeException("boom")
         val cooldownService = buildService(minRefreshIntervalSeconds = 3600L)
 
         val first = cooldownService.triggerAsyncRefresh("first")
         val second = cooldownService.triggerAsyncRefresh("second")
 
         assertThat(second.id).isEqualTo(first.id)
+        assertThat(jobStore).hasSize(1)
+    }
+
+    @Test
+    @DisplayName("a burst of deferred requests from an import starts zero refreshes")
+    fun deferredRequestsNeverStartARefreshInline() {
+        val service = buildService(minRefreshIntervalSeconds = 0L, quietPeriodSeconds = 3600L)
+
+        // Stands in for a CLI import posting ~94 sub-batches across 3 workers.
+        repeat(94) { i -> service.requestDeferredRefresh("CLI Import - batch $i") }
+
+        assertThat(jobStore).isEmpty()
+        assertThat(pendingTriggerReasonOf(service)).isEqualTo("CLI Import - batch 93")
+    }
+
+    @Test
+    @DisplayName("sweep holds the deferred refresh while requests are still arriving")
+    fun sweepHoldsDeferredRefreshDuringQuietPeriod() {
+        val service = buildService(minRefreshIntervalSeconds = 0L, quietPeriodSeconds = 3600L)
+
+        service.requestDeferredRefresh("CLI Import")
+        service.sweepPendingRefreshTrigger()
+
+        assertThat(jobStore).isEmpty()
+        assertThat(pendingTriggerReasonOf(service)).isEqualTo("CLI Import")
+    }
+
+    @Test
+    @DisplayName("sweep starts exactly one refresh once the import has gone quiet")
+    fun sweepStartsOneRefreshAfterQuietPeriodElapses() {
+        // quietPeriodSeconds = 0 means "any elapsed time counts as quiet", which is how this
+        // asserts the post-quiet-period behaviour without sleeping.
+        val service = buildService(minRefreshIntervalSeconds = 0L, quietPeriodSeconds = 0L)
+
+        repeat(5) { service.requestDeferredRefresh("CLI Import") }
+        service.sweepPendingRefreshTrigger()
+
+        assertThat(jobStore).hasSize(1)
+        assertThat(pendingTriggerReasonOf(service)).isNull()
+
+        // A second sweep with nothing new pending must not start another cycle.
+        service.sweepPendingRefreshTrigger()
+        assertThat(jobStore).hasSize(1)
+    }
+
+    @Test
+    @DisplayName("the manual admin refresh still runs immediately during an import quiet period")
+    fun manualRefreshBypassesTheQuietPeriod() {
+        val service = buildService(minRefreshIntervalSeconds = 3600L, quietPeriodSeconds = 3600L)
+        service.requestDeferredRefresh("CLI Import")
+
+        service.triggerAsyncRefresh("Manual admin refresh", bypassCooldown = true)
+
         assertThat(jobStore).hasSize(1)
     }
 

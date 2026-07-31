@@ -103,8 +103,8 @@ export async function createRequest(dto: CreateExceptionRequestDto): Promise<Vul
 
   // Handle error responses
   if (response.status === 400) {
-    const error = await response.json();
-    throw new Error(error.error || 'Invalid request data. Check reason length (50-2048 chars) and expiration date (must be in future).');
+    const error = await safeReadError(response);
+    throw new Error(error || 'Invalid request data. Check reason length (50-2048 chars) and expiration date (must be in future).');
   }
 
   if (response.status === 401) {
@@ -112,18 +112,18 @@ export async function createRequest(dto: CreateExceptionRequestDto): Promise<Vul
   }
 
   if (response.status === 404) {
-    const error = await response.json();
-    throw new Error(error.error || 'Vulnerability not found.');
+    const error = await safeReadError(response);
+    throw new Error(error || 'Vulnerability not found.');
   }
 
   if (response.status === 409) {
-    const error = await response.json();
-    throw new Error(error.error || 'An active exception request already exists for this vulnerability.');
+    const error = await safeReadError(response);
+    throw new Error(error || 'An active exception request already exists for this vulnerability.');
   }
 
   if (response.status === 500) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to create exception request.');
+    const error = await safeReadError(response);
+    throw new Error(error || 'Failed to create exception request.');
   }
 
   throw new Error(`Failed to create exception request: ${response.status}`);
@@ -194,7 +194,7 @@ export async function getMySummary(): Promise<ExceptionRequestSummaryDto> {
  * with "Unexpected end of JSON input"). Returns the best human-readable
  * message available, or an empty string if nothing usable was returned.
  */
-async function safeReadError(response: Response): Promise<string> {
+export async function safeReadError(response: Response): Promise<string> {
   try {
     const text = await response.text();
     if (!text) return '';
@@ -237,8 +237,8 @@ export async function getRequestById(id: number): Promise<VulnerabilityException
   }
 
   if (response.status === 500) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to fetch exception request.');
+    const error = await safeReadError(response);
+    throw new Error(error || 'Failed to fetch exception request.');
   }
 
   throw new Error(`Failed to fetch exception request: ${response.status}`);
@@ -260,8 +260,8 @@ export async function cancelRequest(id: number): Promise<void> {
 
   // Handle error responses
   if (response.status === 400) {
-    const error = await response.json();
-    throw new Error(error.error || 'Cannot cancel this request. Only PENDING requests can be cancelled.');
+    const error = await safeReadError(response);
+    throw new Error(error || 'Cannot cancel this request. Only PENDING requests can be cancelled.');
   }
 
   if (response.status === 401) {
@@ -277,8 +277,8 @@ export async function cancelRequest(id: number): Promise<void> {
   }
 
   if (response.status === 500) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to cancel exception request.');
+    const error = await safeReadError(response);
+    throw new Error(error || 'Failed to cancel exception request.');
   }
 
   throw new Error(`Failed to cancel exception request: ${response.status}`);
@@ -300,8 +300,8 @@ export async function deleteRequest(id: number): Promise<void> {
 
   // Handle error responses
   if (response.status === 400) {
-    const error = await response.json();
-    throw new Error(error.error || 'Cannot delete this request.');
+    const error = await safeReadError(response);
+    throw new Error(error || 'Cannot delete this request.');
   }
 
   if (response.status === 401) {
@@ -317,8 +317,8 @@ export async function deleteRequest(id: number): Promise<void> {
   }
 
   if (response.status === 500) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to delete exception request.');
+    const error = await safeReadError(response);
+    throw new Error(error || 'Failed to delete exception request.');
   }
 
   throw new Error(`Failed to delete exception request: ${response.status}`);
@@ -357,8 +357,8 @@ export async function getPendingRequests(
   }
 
   if (response.status === 500) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to fetch pending requests.');
+    const error = await safeReadError(response);
+    throw new Error(error || 'Failed to fetch pending requests.');
   }
 
   throw new Error(`Failed to fetch pending requests: ${response.status}`);
@@ -388,8 +388,8 @@ export async function getPendingCount(): Promise<number> {
   }
 
   if (response.status === 500) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to fetch pending count.');
+    const error = await safeReadError(response);
+    throw new Error(error || 'Failed to fetch pending count.');
   }
 
   throw new Error(`Failed to fetch pending count: ${response.status}`);
@@ -426,8 +426,8 @@ export async function getSimilarRequests(id: number): Promise<VulnerabilityExcep
   }
 
   if (response.status === 500) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to fetch similar exception requests.');
+    const error = await safeReadError(response);
+    throw new Error(error || 'Failed to fetch similar exception requests.');
   }
 
   throw new Error(`Failed to fetch similar exception requests: ${response.status}`);
@@ -451,8 +451,8 @@ export async function approveRequest(id: number, comment?: string): Promise<Vuln
 
   // Handle error responses
   if (response.status === 400) {
-    const error = await response.json();
-    throw new Error(error.error || 'Cannot approve this request. Invalid status transition.');
+    const error = await safeReadError(response);
+    throw new Error(error || 'Cannot approve this request. Invalid status transition.');
   }
 
   if (response.status === 401) {
@@ -468,13 +468,13 @@ export async function approveRequest(id: number, comment?: string): Promise<Vuln
   }
 
   if (response.status === 409) {
-    const error = await response.json();
-    throw new Error(error.error || 'This request was just reviewed by another user. Please refresh.');
+    const error = await safeReadError(response);
+    throw new Error(error || 'This request was just reviewed by another user. Please refresh.');
   }
 
   if (response.status === 500) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to approve exception request.');
+    const error = await safeReadError(response);
+    throw new Error(error || 'Failed to approve exception request.');
   }
 
   throw new Error(`Failed to approve exception request: ${response.status}`);
@@ -498,8 +498,8 @@ export async function rejectRequest(id: number, comment: string): Promise<Vulner
 
   // Handle error responses
   if (response.status === 400) {
-    const error = await response.json();
-    throw new Error(error.error || 'Cannot reject this request. Ensure comment is 10-1024 characters.');
+    const error = await safeReadError(response);
+    throw new Error(error || 'Cannot reject this request. Ensure comment is 10-1024 characters.');
   }
 
   if (response.status === 401) {
@@ -515,13 +515,13 @@ export async function rejectRequest(id: number, comment: string): Promise<Vulner
   }
 
   if (response.status === 409) {
-    const error = await response.json();
-    throw new Error(error.error || 'This request was just reviewed by another user. Please refresh.');
+    const error = await safeReadError(response);
+    throw new Error(error || 'This request was just reviewed by another user. Please refresh.');
   }
 
   if (response.status === 500) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to reject exception request.');
+    const error = await safeReadError(response);
+    throw new Error(error || 'Failed to reject exception request.');
   }
 
   throw new Error(`Failed to reject exception request: ${response.status}`);
@@ -585,8 +585,8 @@ export async function getStatistics(dateRange?: string): Promise<ExceptionStatis
   }
 
   if (response.status === 500) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to fetch statistics.');
+    const error = await safeReadError(response);
+    throw new Error(error || 'Failed to fetch statistics.');
   }
 
   throw new Error(`Failed to fetch statistics: ${response.status}`);
@@ -661,8 +661,8 @@ export async function exportToExcel(filters?: ExportFilters): Promise<void> {
   }
 
   if (response.status === 500) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to export exception requests.');
+    const error = await safeReadError(response);
+    throw new Error(error || 'Failed to export exception requests.');
   }
 
   throw new Error(`Failed to export exception requests: ${response.status}`);

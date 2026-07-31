@@ -27,6 +27,14 @@ package com.secman.repository
  *   - com.secman.service.ExceptionMatchIndex (shared bulk index; agreement-tested
  *     against the entity predicate in ExceptionMatchIndexTest)
  *
+ * One DERIVED reader does not interpolate this constant and must not be forgotten:
+ *   - [VulnQuerySql.NOT_EXCEPTED] is `v.excepted = 0`, i.e. it reads the MATERIALIZATION of
+ *     this predicate rather than re-evaluating it. The bridge is `recomputeExcepted*` below
+ *     — those UPDATEs assign `excepted` from this very constant, which is what makes the two
+ *     equivalent. A semantic change here therefore silently changes the statistics families
+ *     only AFTER a recompute lands. `ExceptedFlagSqlAgreementIntegrationTest` asserts the two
+ *     agree; keep it passing.
+ *
  * Spec: docs/superpowers/specs/2026-04-28-vulnerability-exceptions-holistic-design.md (§3, §5)
  */
 object ExceptionMatchSql {

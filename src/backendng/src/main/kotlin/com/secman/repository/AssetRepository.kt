@@ -582,6 +582,10 @@ interface AssetRepository : JpaRepository<Asset, Long> {
      * @param accessibleAssetIds Set of asset IDs the user has access to
      * @return List of all assets running the specified product
      */
+    // "NoLimit" is deliberate and bounded: SELECT DISTINCT on the ASSET side yields at most one row
+    // per asset (thousands), never one per vulnerability, however many vulnerability rows match.
+    // Both callers need the complete set — an Excel export and the broadcast recipient resolver —
+    // so pagination would change behaviour rather than just cost.
     @io.micronaut.data.annotation.Query("""
         SELECT DISTINCT a FROM Asset a
         JOIN Vulnerability v ON v.asset.id = a.id
@@ -617,6 +621,11 @@ interface AssetRepository : JpaRepository<Asset, Long> {
     /**
      * Find internet-facing assets (EXTERNAL or DMZ) that have an IP address.
      * Used by the CLI port-scan command to determine scan targets.
+     *
+     * Intentionally has no LIMIT, and must not gain one: the consumer scans the returned hosts, so
+     * a truncated list would silently scan a partial attack surface — a correctness bug, not a
+     * performance win. Bounded in practice by the EXTERNAL/DMZ-with-IP subset of `asset`
+     * (hundreds), ADMIN-only, and not reached from any page render.
      */
     @io.micronaut.data.annotation.Query(
         value = """

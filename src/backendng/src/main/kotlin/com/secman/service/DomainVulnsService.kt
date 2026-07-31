@@ -116,36 +116,42 @@ class DomainVulnsService(
             )
         }
 
-        // Get vulnerabilities for all assets in user's domains (only from latest import per asset)
+        // Per-asset severity counts, aggregated in SQL (latest import per asset).
+        //
+        // This used to be findLatestVulnerabilitiesForAssetIds(...) — one managed Vulnerability
+        // entity per row, for every asset in the user's AD domains — and then counted them in
+        // Kotlin. On an interactive request that scales with the multi-million-row vulnerability
+        // table, the same shape that ran a 1 GB container out of heap on 2026-07-30. The counts
+        // are all this endpoint ever needed, so the database returns one row per asset instead.
         val assetIds = assetsInDomains.mapNotNull { it.id }
-        val allVulnerabilities = if (assetIds.isNotEmpty()) {
-            vulnerabilityRepository.findLatestVulnerabilitiesForAssetIds(assetIds.toSet())
+        val countsByAssetId = if (assetIds.isNotEmpty()) {
+            vulnerabilityRepository
+                .countLatestVulnerabilitiesBySeverityForAssetIds(assetIds.toSet())
+                .associateBy { it.assetId }
         } else {
-            emptyList()
+            emptyMap()
         }
 
-        log.info("Found {} vulnerabilities for assets in user's domains", allVulnerabilities.size)
+        log.info("Aggregated vulnerability counts for {} of {} assets in user's domains",
+            countsByAssetId.size, assetsInDomains.size)
 
-        // Group vulnerabilities by asset ID (more reliable than object reference)
-        // Native queries may return entities with different object references
-        val vulnsByAssetId = allVulnerabilities.groupBy { it.asset.id }
-
-        // Create device vulnerability counts using asset ID for lookup
+        // Assets with no vulnerabilities in their latest import get no aggregate row, so they
+        // fall through to zeros — matching the previous `vulnsByAssetId[id] ?: emptyList()`.
         val deviceVulnCounts = assetsInDomains.map { asset ->
-            val vulns = vulnsByAssetId[asset.id] ?: emptyList()
+            val counts = countsByAssetId[asset.id]
             DeviceVulnCountDto(
                 hostname = asset.name,
                 ip = asset.ip,
-                vulnerabilityCount = vulns.size,
-                criticalCount = vulns.count { it.cvssSeverity.equals("Critical", ignoreCase = true) },
-                highCount = vulns.count { it.cvssSeverity.equals("High", ignoreCase = true) },
-                mediumCount = vulns.count { it.cvssSeverity.equals("Medium", ignoreCase = true) },
-                lowCount = vulns.count { it.cvssSeverity.equals("Low", ignoreCase = true) }
+                vulnerabilityCount = counts?.totalCount?.toInt() ?: 0,
+                criticalCount = counts?.criticalCount?.toInt() ?: 0,
+                highCount = counts?.highCount?.toInt() ?: 0,
+                mediumCount = counts?.mediumCount?.toInt() ?: 0,
+                lowCount = counts?.lowCount?.toInt() ?: 0
             )
         }.sortedByDescending { it.vulnerabilityCount }
 
         // Group devices by domain
-        val domainGroups = createDomainGroupsFromDatabase(assetsInDomains, deviceVulnCounts, allVulnerabilities)
+        val domainGroups = createDomainGroupsFromDatabase(assetsInDomains, deviceVulnCounts)
 
         // Calculate global totals
         val totalCritical = deviceVulnCounts.sumOf { it.criticalCount ?: 0 }
@@ -162,7 +168,8 @@ class DomainVulnsService(
         return DomainVulnsSummaryDto(
             domainGroups = domainGroups,
             totalDevices = deviceVulnCounts.size,
-            totalVulnerabilities = allVulnerabilities.size,
+            // Was allVulnerabilities.size; the same total, summed from the per-asset aggregates.
+            totalVulnerabilities = deviceVulnCounts.sumOf { it.vulnerabilityCount },
             globalCritical = totalCritical,
             globalHigh = totalHigh,
             globalMedium = totalMedium,
@@ -180,8 +187,7 @@ class DomainVulnsService(
      */
     private fun createDomainGroupsFromDatabase(
         assets: List<com.secman.domain.Asset>,
-        deviceVulnCounts: List<DeviceVulnCountDto>,
-        allVulnerabilities: List<com.secman.domain.Vulnerability>
+        deviceVulnCounts: List<DeviceVulnCountDto>
     ): List<DomainGroupDto> {
         // Create a map of asset name to device count for quick lookup
         val deviceCountMap = deviceVulnCounts.associateBy { it.hostname }

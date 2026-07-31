@@ -296,8 +296,18 @@ secman:
   # cooldown is coalesced and guaranteed to eventually run (see
   # MaterializedViewRefreshService.pendingTriggerReason / sweepPendingRefreshTrigger).
   # The manual admin "Refresh Now" endpoint always bypasses this cooldown.
+  #
+  # min-interval-seconds proved insufficient on its own (2026-07-30 OOM): it defers a trigger
+  # only while the cooldown is ACTIVE, so once it elapsed the next sub-batch immediately started
+  # a new full-table cycle — about once a minute for the import's whole duration, concurrently
+  # with the import's own writes. quiet-period-seconds fixes the shape: bulk writers now call
+  # requestDeferredRefresh(), which never starts a refresh inline, and sweepPendingRefreshTrigger
+  # waits until this many seconds have passed with NO further request. One import => one refresh.
+  # Raise it if imports get slower and still overlap a refresh; lower it to see fresher dashboards
+  # sooner after an import. The manual admin "Refresh Now" endpoint bypasses both gates.
   materialized-view-refresh:
     min-interval-seconds: ${MATERIALIZED_VIEW_REFRESH_MIN_INTERVAL_SECONDS:60}
+    quiet-period-seconds: ${MATERIALIZED_VIEW_REFRESH_QUIET_PERIOD_SECONDS:120}
   vulnerability:
     # Use patch publication date for calculating days open
     # When true: days_open = scan_timestamp - patch_publication_date
@@ -533,10 +543,17 @@ jackson:
   serialization:
     writeDatesAsTimestamps: false
 
+# Default (production) levels. DEBUG for these two lives in application-dev.yml, which the
+# `dev` environment activates — scripts/startbackenddev.sh exports MICRONAUT_ENVIRONMENTS=dev.
+#
+# Shipping com.secman at DEBUG cost real allocation on the hot import path: every per-server
+# and per-batch debug line was formatted and allocated even though nobody read it, on the very
+# code path that ran out of heap on 2026-07-30. io.micronaut.security at DEBUG additionally
+# logs authentication internals, which is poor hygiene for a security product.
 logger:
   levels:
-    com.secman: DEBUG
-    io.micronaut.security: DEBUG
+    com.secman: ${LOG_LEVEL_SECMAN:INFO}
+    io.micronaut.security: ${LOG_LEVEL_SECURITY:INFO}
     io.micronaut.web.router: INFO
 
 app:

@@ -85,8 +85,27 @@ ENV SECMAN_AUTH_COOKIE_SECURE=true
 # first boot). Keep disabled for a FRESH database; set to true for an existing
 # production schema that is migrated by Flyway.
 ENV FLYWAY_DATASOURCES_DEFAULT_ENABLED=false
-# JVM sizing — tune together with the ECS task size (docs/DOCKER_AWS.md)
-ENV JAVA_OPTS="-Xmx1024m -Xms256m -XX:+UseContainerSupport"
+# JVM sizing — tune together with the ECS task size (docs/DOCKER_AWS.md).
+#
+# Percentage, not -Xmx: an explicit -Xmx silently ignores the cgroup limit, so it
+# mis-sizes the heap every time the task memory changes and makes "give the container
+# more RAM" a no-op. That is what turned the 2026-07-30 import into an OutOfMemoryError.
+#
+# 45% deliberately, NOT the usual 75%: entrypoint.sh runs THREE processes in this one
+# cgroup. At the documented 2048 MiB task size that budgets ~920 MiB heap and leaves room
+# for JVM non-heap (metaspace, code cache, thread stacks, direct buffers), the Astro SSR
+# node process, nginx, and page cache. Raise this only together with the task memory.
+#
+# On OOM: dump for post-mortem, then EXIT. A JVM that has already thrown
+# OutOfMemoryError is in an undefined state — on 2026-07-30 it kept running with a
+# broken Hikari connection and a dead event-loop thread, which is strictly worse than a
+# restart. entrypoint.sh's `wait -n` sees the exit and stops the container, so ECS (or
+# compose's `restart: unless-stopped`) replaces it with a clean one.
+#
+# /tmp is ephemeral: the dump survives long enough for `docker cp` locally, but on
+# Fargate it dies with the task unless a volume is mounted. Override JAVA_OPTS to point
+# HeapDumpPath at a mount if you need dumps to outlive the container.
+ENV JAVA_OPTS="-XX:MaxRAMPercentage=45.0 -XX:InitialRAMPercentage=12.5 -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp/secman-backend-oom.hprof -XX:+ExitOnOutOfMemoryError"
 
 # nginx front door (TLS terminates at the ALB)
 EXPOSE 80

@@ -27,6 +27,7 @@ import io.micronaut.security.authentication.Authentication
 import io.micronaut.security.rules.SecurityRule
 import jakarta.validation.Valid
 import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.Size
 import org.slf4j.LoggerFactory
 
 /**
@@ -345,7 +346,13 @@ open class CrowdStrikeController(
      */
     @Post("/crowdstrike/servers/import")
     open fun importServerVulnerabilities(
-        @Body @Valid batches: List<CrowdStrikeVulnerabilityBatchDto>,
+        // The whole body is deserialized eagerly, and @ExecuteOn(BLOCKING) runs on virtual
+        // threads — so without a cap the number of concurrent fully-parsed request bodies
+        // pinned in heap is unbounded (a contributor to the 2026-07-30 import OOM).
+        // The CLI posts 20 servers per request (VulnerabilityStorageService.batchSize);
+        // 100 leaves room for a future bump while keeping the bound meaningful.
+        // Per-server vulnerability count is already capped on the DTO itself.
+        @Body @Valid @Size(max = 100) batches: List<CrowdStrikeVulnerabilityBatchDto>,
         authentication: Authentication
     ): HttpResponse<*> {
         val username = authentication.name

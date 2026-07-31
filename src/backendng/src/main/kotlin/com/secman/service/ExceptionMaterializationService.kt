@@ -45,6 +45,11 @@ open class ExceptionMaterializationService(
     @Inject
     private lateinit var selfProvider: Provider<ExceptionMaterializationService>
 
+    companion object {
+        /** Asset ids per recompute statement. See [recomputeChunked]. */
+        private const val RECOMPUTE_CHUNK_SIZE = 1000
+    }
+
     /** An exception's coverage WIDENED (create, or the new side of an update). May hide more rows. */
     @Transactional
     open fun onExceptionCreated(scope: Scope, scopeValue: String?, assetId: Long?) {
@@ -55,8 +60,8 @@ open class ExceptionMaterializationService(
                 asyncExceptionRecompute.recomputeAll()
             }
             ids.isNotEmpty() -> {
-                val updated = vulnerabilityRepository.recomputeExceptedForAssets(ids)
-                log.debug("excepted recompute after create: scope={} assets={} rows={}", scope, ids.size, updated)
+                val updated = recomputeChunked(ids)
+                log.info("excepted recompute after create: scope={} assets={} rows={}", scope, ids.size, updated)
             }
             else -> log.debug("excepted recompute after create: scope={} matched no assets", scope)
         }
@@ -74,8 +79,8 @@ open class ExceptionMaterializationService(
                 log.info("GLOBAL-scope exception deleted -> currently-excepted un-hide sweep: rows={}", updated)
             }
             ids.isNotEmpty() -> {
-                val updated = vulnerabilityRepository.recomputeExceptedForAssets(ids)
-                log.debug("excepted recompute after delete: scope={} assets={} rows={}", scope, ids.size, updated)
+                val updated = recomputeChunked(ids)
+                log.info("excepted recompute after delete: scope={} assets={} rows={}", scope, ids.size, updated)
             }
             else -> log.debug("excepted recompute after delete: scope={} matched no assets", scope)
         }
@@ -154,6 +159,20 @@ open class ExceptionMaterializationService(
      * Returns null for GLOBAL (no asset bound — caller chooses full vs currently-excepted recompute);
      * an empty list means the scope currently matches no assets (nothing to recompute).
      */
+    /**
+     * Run the scope-bounded recompute in chunks of [RECOMPUTE_CHUNK_SIZE] asset ids.
+     *
+     * A single AWS_ACCOUNT or OS scope can resolve to thousands of assets, and the underlying
+     * statement inlines the whole list into `WHERE asset_id IN (...)` (useServerPrepStmts is off).
+     * Unchunked that risks an oversized statement and holds write locks on the vulnerability table
+     * for the duration of one very large UPDATE — contention the surrounding DeadlockRetry then has
+     * to absorb. 1000 matches the chunk size used by CrowdStrikeVulnerabilityImportService's
+     * reconcile sweep and AssetRepository.findWorkgroupIdsByAssetIds callers.
+     */
+    private fun recomputeChunked(ids: List<Long>): Long =
+        ids.chunked(RECOMPUTE_CHUNK_SIZE)
+            .sumOf { vulnerabilityRepository.recomputeExceptedForAssets(it) }
+
     private fun affectedAssetIds(scope: Scope, scopeValue: String?, assetId: Long?): List<Long>? = when (scope) {
         Scope.GLOBAL -> null
         Scope.ASSET -> assetId?.let { listOf(it) } ?: emptyList()

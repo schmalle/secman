@@ -1,7 +1,6 @@
 package com.secman.service
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.secman.domain.Vulnerability
 import com.secman.dto.AwsCleanServerKpiCacheData
 import com.secman.dto.AwsCleanServerKpiResponse
 import com.secman.repository.AssetRepository
@@ -55,31 +54,26 @@ open class AwsCleanServerKpiService(
      * Recalculate the KPI and upsert it into the cache. Never throws — failures
      * are logged and the previous cached value (if any) is left in place.
      *
-     * @param preloadedVulnerabilities when the caller (MaterializedViewRefreshService) already
-     *   loaded a superset of this KPI's 30-day window in the same refresh cycle, it passes that
-     *   list here to avoid a second full-table load. The 30-day filter below is always applied
-     *   in memory, whether the source is this preloaded (wider) set or a freshly queried one.
+     * Both inputs are scalar COUNTs, so this is constant-heap regardless of fleet size. It
+     * used to accept the overdue-vulnerability list that MaterializedViewRefreshService had
+     * already loaded, to avoid a second full-table read — but that made the entire ~166k-entity
+     * list stay reachable for the whole refresh cycle, which is what left no headroom during the
+     * 2026-07-30 import. Two cheap aggregates beat one reused giant list.
      */
-    fun recalculate(preloadedVulnerabilities: List<Vulnerability>? = null) {
+    fun recalculate() {
         val start = System.currentTimeMillis()
         try {
             val totalAwsServers = assetRepository.countAllAwsAssetsWithInstanceId()
 
-            val dirtyAwsServerIds: Set<Long> = if (totalAwsServers == 0L) {
-                emptySet()
+            val dirtyAwsServers = if (totalAwsServers == 0L) {
+                0L
             } else {
-                val thresholdDate = LocalDateTime.now().minusDays(VULN_AGE_THRESHOLD_DAYS)
-                val source = preloadedVulnerabilities
-                    ?: vulnerabilityRepository.findOverdueVulnerabilitiesWithAssets(thresholdDate)
-                source.asSequence()
-                    .filter { (it.firstSeenAt ?: it.scanTimestamp) < thresholdDate }
-                    .filter { !it.asset.cloudInstanceId.isNullOrBlank() }
-                    .filter { !it.excepted }
-                    .mapNotNull { it.asset.id }
-                    .toSet()
+                vulnerabilityRepository.countDirtyAwsServers(
+                    LocalDateTime.now().minusDays(VULN_AGE_THRESHOLD_DAYS)
+                )
             }
 
-            val cleanAwsServers = (totalAwsServers - dirtyAwsServerIds.size).coerceAtLeast(0)
+            val cleanAwsServers = (totalAwsServers - dirtyAwsServers).coerceAtLeast(0)
             val percentage = computePercentage(cleanAwsServers, totalAwsServers)
 
             val json = objectMapper.writeValueAsString(
