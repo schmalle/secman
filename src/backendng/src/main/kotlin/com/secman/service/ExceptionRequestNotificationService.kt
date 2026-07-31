@@ -85,6 +85,23 @@ open class ExceptionRequestNotificationService(
         resolveAsset(request)?.ip ?: "N/A"
 
     /**
+     * Resolve the requester's email through the repository rather than the
+     * `requestedByUser` association.
+     *
+     * The requester notifications are dispatched from an AFTER_COMMIT listener
+     * (ExceptionRequestNotificationListener), so the Hibernate session is already
+     * closed by the time we get here and the LAZY `requestedByUser` proxy throws
+     * LazyInitializationException instead of yielding an email. The denormalized
+     * `requestedByUsername` column survives detachment, so we look the user up by
+     * it — the same repository-based approach notifyAdminsOfNewRequest already uses.
+     *
+     * Returns null when the requester no longer exists (deleted user, audit-only
+     * request), which callers already treat as "nothing to send".
+     */
+    private fun resolveRequesterEmail(request: VulnerabilityExceptionRequest): String? =
+        userRepository.findByUsername(request.requestedByUsername).orElse(null)?.email
+
+    /**
      * Describe WHAT is excepted for display, covering both single-CVE requests (delegates to
      * resolveCveId) and rule-type requests (subject=PRODUCT/ALL_VULNS, or multi-CVE subjectValue)
      * where there is no single CVE to show.
@@ -214,10 +231,12 @@ open class ExceptionRequestNotificationService(
      * @return CompletableFuture indicating if email was sent successfully
      */
     open fun notifyRequesterOfApproval(request: VulnerabilityExceptionRequest): CompletableFuture<Boolean> {
-        // Resolve entity fields synchronously on the caller's (transactional) thread;
-        // see notifyAdminsOfNewRequest for rationale.
+        // Resolve every entity-backed field before handing off to the async lambda;
+        // see notifyAdminsOfNewRequest for rationale. This runs from an AFTER_COMMIT
+        // listener, so the Hibernate session is already closed: read scalars off the
+        // detached entity and go through repositories, never through LAZY associations.
         val requestId = request.id
-        val requesterEmail = request.requestedByUser?.email
+        val requesterEmail = resolveRequesterEmail(request)
         val cveId = describeSubject(request)
         val assetName = describeScope(request)
         val htmlContent = if (!requesterEmail.isNullOrBlank()) generateApprovalEmail(request) else null
@@ -258,10 +277,12 @@ open class ExceptionRequestNotificationService(
      * @return CompletableFuture indicating if email was sent successfully
      */
     open fun notifyRequesterOfRejection(request: VulnerabilityExceptionRequest): CompletableFuture<Boolean> {
-        // Resolve entity fields synchronously on the caller's (transactional) thread;
-        // see notifyAdminsOfNewRequest for rationale.
+        // Resolve every entity-backed field before handing off to the async lambda;
+        // see notifyAdminsOfNewRequest for rationale. This runs from an AFTER_COMMIT
+        // listener, so the Hibernate session is already closed: read scalars off the
+        // detached entity and go through repositories, never through LAZY associations.
         val requestId = request.id
-        val requesterEmail = request.requestedByUser?.email
+        val requesterEmail = resolveRequesterEmail(request)
         val cveId = describeSubject(request)
         val assetName = describeScope(request)
         val htmlContent = if (!requesterEmail.isNullOrBlank()) generateRejectionEmail(request) else null
@@ -301,10 +322,12 @@ open class ExceptionRequestNotificationService(
      * @return CompletableFuture indicating if email was sent successfully
      */
     open fun notifyRequesterOfExpiration(request: VulnerabilityExceptionRequest): CompletableFuture<Boolean> {
-        // Resolve entity fields synchronously on the caller's (transactional) thread;
-        // see notifyAdminsOfNewRequest for rationale.
+        // Resolve every entity-backed field before handing off to the async lambda;
+        // see notifyAdminsOfNewRequest for rationale. Driven by a scheduled job, so the
+        // request may arrive detached: read scalars off the entity and go through
+        // repositories, never through LAZY associations.
         val requestId = request.id
-        val requesterEmail = request.requestedByUser?.email
+        val requesterEmail = resolveRequesterEmail(request)
         val cveId = describeSubject(request)
         val assetName = describeScope(request)
         val htmlContent = if (!requesterEmail.isNullOrBlank()) generateExpirationReminderEmail(request) else null

@@ -11,7 +11,9 @@ import com.secman.repository.UserRepository
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
+import io.mockk.verify
 import org.assertj.core.api.Assertions.assertThat
+import org.hibernate.LazyInitializationException
 import org.junit.jupiter.api.Test
 import java.time.LocalDateTime
 import java.util.Optional
@@ -116,15 +118,9 @@ class ExceptionRequestNotificationServiceTest {
 
     @Test
     fun `approval email for OS scope request reflects the OS class`() {
-        val request = baseRequest(VulnerabilityException.Scope.OS, scopeValue = "Windows Server 2016").apply {
-            requestedByUser = User(
-                id = 2,
-                username = "demo",
-                email = "demo@example.com",
-                passwordHash = "x"
-            )
-        }
+        val request = baseRequest(VulnerabilityException.Scope.OS, scopeValue = "Windows Server 2016")
         every { assetRepository.findById(42L) } returns Optional.of(originatingAsset)
+        every { userRepository.findByUsername("demo") } returns Optional.of(requester)
         every { emailService.sendHtmlEmail(any(), any(), any()) } returns CompletableFuture.completedFuture(true)
 
         val subjectSlot = slot<String>()
@@ -135,5 +131,68 @@ class ExceptionRequestNotificationServiceTest {
 
         assertThat(subjectSlot.captured).contains("OS: Windows Server 2016")
         assertThat(subjectSlot.captured).doesNotContain("on ANTMESVIS01")
+    }
+
+    /**
+     * A `requestedByUser` association that is still an uninitialized Hibernate proxy
+     * after the session closed. Both notification paths run from an AFTER_COMMIT
+     * listener, so this is the state they actually see in production.
+     */
+    private fun detachedRequesterProxy(): User = mockk<User> {
+        every { email } throws LazyInitializationException(
+            "Could not initialize proxy [com.secman.domain.User#3852] - no session"
+        )
+    }
+
+    private val requester = User(
+        id = 3852,
+        username = "demo",
+        email = "demo@example.com",
+        passwordHash = "x"
+    )
+
+    @Test
+    fun `approval notification survives a detached requester proxy`() {
+        val request = baseRequest(VulnerabilityException.Scope.ASSET).apply {
+            requestedByUser = detachedRequesterProxy()
+        }
+        every { assetRepository.findById(42L) } returns Optional.of(originatingAsset)
+        every { userRepository.findByUsername("demo") } returns Optional.of(requester)
+
+        val toSlot = slot<String>()
+        every { emailService.sendHtmlEmail(capture(toSlot), any(), any()) } returns
+            CompletableFuture.completedFuture(true)
+
+        assertThat(service.notifyRequesterOfApproval(request).get()).isTrue()
+        assertThat(toSlot.captured).isEqualTo("demo@example.com")
+    }
+
+    @Test
+    fun `rejection notification survives a detached requester proxy`() {
+        val request = baseRequest(VulnerabilityException.Scope.ASSET).apply {
+            requestedByUser = detachedRequesterProxy()
+            reviewComment = "Not acceptable"
+        }
+        every { assetRepository.findById(42L) } returns Optional.of(originatingAsset)
+        every { userRepository.findByUsername("demo") } returns Optional.of(requester)
+
+        val toSlot = slot<String>()
+        every { emailService.sendHtmlEmail(capture(toSlot), any(), any()) } returns
+            CompletableFuture.completedFuture(true)
+
+        assertThat(service.notifyRequesterOfRejection(request).get()).isTrue()
+        assertThat(toSlot.captured).isEqualTo("demo@example.com")
+    }
+
+    @Test
+    fun `notification is skipped when the requester no longer exists`() {
+        val request = baseRequest(VulnerabilityException.Scope.ASSET).apply {
+            requestedByUser = detachedRequesterProxy()
+        }
+        every { assetRepository.findById(42L) } returns Optional.of(originatingAsset)
+        every { userRepository.findByUsername("demo") } returns Optional.empty()
+
+        assertThat(service.notifyRequesterOfApproval(request).get()).isFalse()
+        verify(exactly = 0) { emailService.sendHtmlEmail(any(), any(), any()) }
     }
 }
