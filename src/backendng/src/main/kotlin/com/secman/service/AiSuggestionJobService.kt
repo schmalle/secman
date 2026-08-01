@@ -472,8 +472,9 @@ open class AiSuggestionJobService(
     // --- Query / control surface (called from controller) -------------------
 
     @Transactional
-    open fun getJobStatus(jobId: Long): AiJobStatusDto? {
+    open fun getJobStatus(jobId: Long, expectedAssessmentId: Long): AiJobStatusDto? {
         val j = aiJobRepository.findById(jobId).orElse(null) ?: return null
+        if (j.riskAssessmentId != expectedAssessmentId) return null
         return AiJobStatusDto(
             id = j.id!!, status = j.status, model = j.model, scope = j.scope.name,
             totalCount = j.totalCount, completedCount = j.completedCount, failedCount = j.failedCount,
@@ -510,8 +511,9 @@ open class AiSuggestionJobService(
     }
 
     @Transactional
-    open fun cancelJob(jobId: Long): Boolean {
+    open fun cancelJob(jobId: Long, expectedAssessmentId: Long): Boolean {
         val j = aiJobRepository.findById(jobId).orElse(null) ?: return false
+        if (j.riskAssessmentId != expectedAssessmentId) return false
         if (j.status.isTerminal()) return false
         j.status = AiSuggestionJobStatus.CANCELLED
         j.finishedAt = LocalDateTime.now()
@@ -528,7 +530,9 @@ open class AiSuggestionJobService(
      * a single job. Returns an empty stream if the job is unknown or already
      * terminal (the controller follows up with the cached job status).
      */
-    fun getProgressStream(jobId: Long): Flux<JobProgressEvent> {
+    fun getProgressStream(jobId: Long, expectedAssessmentId: Long): Flux<JobProgressEvent> {
+        val j = aiJobRepository.findById(jobId).orElse(null) ?: return Flux.empty()
+        if (j.riskAssessmentId != expectedAssessmentId) return Flux.empty()
         val sink = progressSinks[jobId] ?: return Flux.empty()
         return sink.asFlux()
     }

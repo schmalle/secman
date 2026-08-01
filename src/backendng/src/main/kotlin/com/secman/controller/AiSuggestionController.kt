@@ -62,7 +62,7 @@ open class AiSuggestionController(
         authentication: Authentication
     ): HttpResponse<AiJobStatusDto> {
         ownershipGuard.check(id, authentication)
-        val status = jobService.getJobStatus(jobId)
+        val status = jobService.getJobStatus(jobId, id)
             ?: throw HttpStatusException(HttpStatus.NOT_FOUND, "AI job $jobId not found")
         return HttpResponse.ok(status)
     }
@@ -74,7 +74,7 @@ open class AiSuggestionController(
         authentication: Authentication
     ): HttpResponse<Void> {
         ownershipGuard.check(id, authentication)
-        val cancelled = jobService.cancelJob(jobId)
+        val cancelled = jobService.cancelJob(jobId, id)
         return if (cancelled) HttpResponse.noContent()
         else HttpResponse.status(HttpStatus.CONFLICT)
     }
@@ -98,7 +98,7 @@ open class AiSuggestionController(
         authentication: Authentication
     ): Publisher<Event<JobProgressEvent>> {
         ownershipGuard.check(id, authentication)
-        return jobService.getProgressStream(jobId).map { ev ->
+        return jobService.getProgressStream(jobId, id).map { ev ->
             Event.of(ev).id(ev.jobId.toString()).name(ev.type.lowercase())
         }
     }

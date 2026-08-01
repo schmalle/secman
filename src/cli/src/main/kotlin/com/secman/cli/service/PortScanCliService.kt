@@ -23,6 +23,16 @@ class PortScanCliService(
 ) {
     private val log = LoggerFactory.getLogger(PortScanCliService::class.java)
 
+    companion object {
+        // IPv4 dotted-quad or IPv6 (hex groups + colons, optionally zone/scope id).
+        // Deliberately excludes '-' and any other character nmap could interpret
+        // as a flag, so a malicious Asset.ip value can never be parsed as an
+        // extra nmap argument.
+        private val VALID_SCAN_TARGET = Regex(
+            "^(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|[0-9a-fA-F:]+)$"
+        )
+    }
+
     data class AssetTarget(
         val id: Long,
         val name: String,
@@ -101,6 +111,19 @@ class PortScanCliService(
         ports: String?,
         outputFile: File
     ): NmapScanResult {
+        // Asset.ip is free-text and not format-validated at creation time, so a
+        // value starting with '-' would otherwise be parsed by nmap as an extra
+        // flag (argument injection) rather than as the scan target.
+        if (!VALID_SCAN_TARGET.matches(ip)) {
+            log.error("Refusing to scan invalid or unsafe target: {}", ip)
+            return NmapScanResult(
+                success = false,
+                exitCode = -1,
+                outputFile = null,
+                errorOutput = "Target is not a valid IPv4/IPv6 address: $ip"
+            )
+        }
+
         val command = mutableListOf(nmapPath)
         command.add("-oX")
         command.add(outputFile.absolutePath)

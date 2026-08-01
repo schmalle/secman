@@ -33,7 +33,10 @@ open class WorkgroupAdDomainController(
     }
 
     @Get(produces = [MediaType.APPLICATION_JSON])
-    open fun list(@PathVariable workgroupId: Long): HttpResponse<List<WorkgroupAdDomainDto>> {
+    open fun list(@PathVariable workgroupId: Long, authentication: Authentication): HttpResponse<List<WorkgroupAdDomainDto>> {
+        if (!isMemberOrAdmin(workgroupId, authentication)) {
+            return HttpResponse.status(io.micronaut.http.HttpStatus.FORBIDDEN)
+        }
         return try {
             HttpResponse.ok(service.list(workgroupId).map(WorkgroupAdDomainDto::from))
         } catch (e: IllegalArgumentException) {
