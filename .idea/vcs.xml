@@ -2,5 +2,7 @@
 <project version="4">
   <component name="VcsDirectoryMappings">
     <mapping directory="" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/extensions/secman_ai_github" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/extensions/secman_visual_check" vcs="Git" />
   </component>
 </project>
