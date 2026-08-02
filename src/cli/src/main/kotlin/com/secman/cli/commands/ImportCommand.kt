@@ -37,7 +37,9 @@ import jakarta.inject.Singleton
  * - Optional auto-start of risk assessments for owners of brand-new AWS
  *   accounts (--start-risk-assessment --risk-usecase <name>
  *   [--risk-deadline-days <n>, default 7]); the assessor is a user with the
- *   SECCHAMPION role and owners are reminded 2 days and 1 day before the deadline
+ *   SECCHAMPION role and owners are reminded 2 days and 1 day before the deadline.
+ *   Each assessment is pinned to the ACTIVE requirements release, so its
+ *   questionnaire is the requirements of that version tagged with the use case
  * - Requires ADMIN role
  */
 @Singleton
@@ -93,7 +95,10 @@ class ImportCommand(
 
     @Option(
         names = ["--risk-usecase"],
-        description = ["Name of the use case the risk assessment is based on (required when --start-risk-assessment is set)"]
+        description = [
+            "Name of the use case the risk assessment is scoped to (required when --start-risk-assessment is set). "
+                + "The assessment is measured against the ACTIVE requirements release."
+        ]
     )
     var riskUseCase: String? = null
 
@@ -270,7 +275,9 @@ class ImportCommand(
                         } else {
                             println("  ✅ ${ra.awsAccountId}  ${ra.ownerEmail}  ->  assessment #${ra.riskAssessmentId}" +
                                 (ra.assessor?.let { ", assessor $it" } ?: "") +
-                                (ra.endDate?.let { ", due $it" } ?: ""))
+                                (ra.endDate?.let { ", due $it" } ?: "") +
+                                (ra.releaseVersion?.let { ", requirements $it" } ?: "") +
+                                (ra.requirementCount?.let { " ($it requirement(s))" } ?: ""))
                         }
                     }
                 } else {

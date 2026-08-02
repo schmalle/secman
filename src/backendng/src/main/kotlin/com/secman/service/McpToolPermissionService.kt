@@ -198,6 +198,18 @@ class McpToolPermissionService(
             "list_users", "add_user", "delete_user" -> {
                 permissions.contains(McpPermission.USER_ACTIVITY)
             }
+            // Feature 064: User mapping tools — gated to USER_ACTIVITY here AND ADMIN
+            // role inside each tool's execute(). McpToolRegistry already lists these,
+            // but checkPermissionSetForTool is the path the streamable HTTP controller
+            // takes; without an entry here the fallback else->false denied every
+            // admin-delegated call, making import_user_mappings unreachable.
+            "import_user_mappings", "list_user_mappings" -> {
+                permissions.contains(McpPermission.USER_ACTIVITY)
+            }
+            // Auto risk assessments for newly discovered AWS accounts (ADMIN in execute()).
+            "list_aws_account_risk_assessments" -> {
+                permissions.contains(McpPermission.ASSESSMENTS_READ)
+            }
             "list_products" -> {
                 permissions.contains(McpPermission.VULNERABILITIES_READ)
             }

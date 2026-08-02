@@ -21,6 +21,7 @@ interface AwsAccountRiskAssessmentRepository : JpaRepository<AwsAccountRiskAsses
         """
         SELECT t FROM AwsAccountRiskAssessment t
         JOIN FETCH t.riskAssessment ra
+        LEFT JOIN FETCH ra.lockedRelease
         WHERE ra.endDate > :today
           AND ra.endDate <= :windowEnd
           AND ra.status = 'STARTED'
@@ -28,6 +29,32 @@ interface AwsAccountRiskAssessmentRepository : JpaRepository<AwsAccountRiskAsses
         """
     )
     fun findPendingDeadlineReminders(today: LocalDate, windowEnd: LocalDate): List<AwsAccountRiskAssessment>
+
+    /**
+     * Tracked assessments matching the optional filters, newest first. Backs the MCP
+     * tool `list_aws_account_risk_assessments`.
+     *
+     * The assessment and its pinned release are fetched eagerly - the association is
+     * LAZY, and rendering one row per tracking entry would otherwise be an N+1.
+     */
+    @Query(
+        """
+        SELECT t FROM AwsAccountRiskAssessment t
+        JOIN FETCH t.riskAssessment ra
+        LEFT JOIN FETCH ra.lockedRelease
+        LEFT JOIN FETCH ra.assessor
+        LEFT JOIN FETCH ra.respondent
+        WHERE (:awsAccountId IS NULL OR t.awsAccountId = :awsAccountId)
+          AND (:ownerEmail IS NULL OR LOWER(t.ownerEmail) = LOWER(:ownerEmail))
+          AND (:status IS NULL OR ra.status = :status)
+        ORDER BY t.createdAt DESC, t.id DESC
+        """
+    )
+    fun findByFilters(
+        awsAccountId: String?,
+        ownerEmail: String?,
+        status: String?
+    ): List<AwsAccountRiskAssessment>
 
     /**
      * Atomically claim the 1-day deadline reminder (claim-before-send). Also stamps the

@@ -29,11 +29,9 @@ import org.slf4j.LoggerFactory
 open class UserMappingController(
     @Inject private val userMappingService: UserMappingService,
     @Inject private val userMappingRepository: UserMappingRepository,
-    @Inject private val newAccountNotificationService: com.secman.service.NewAccountNotificationService,
-    @Inject private val awsAccountRiskAssessmentService: com.secman.service.AwsAccountRiskAssessmentService
+    @Inject private val bulkImportService: com.secman.service.UserMappingBulkImportService
 ) {
     private val logger = LoggerFactory.getLogger(UserMappingController::class.java)
-    private val emailRegex = Regex("^[^@]+@[^@]+\\.[^@]+$")
 
     /**
      * POST /api/user-mappings - Create new user mapping
@@ -164,68 +162,21 @@ open class UserMappingController(
     ): HttpResponse<*> {
         logger.info("Bulk create user mappings: entries=${request.mappings.size}, dryRun=${request.dryRun}")
 
-        // Validate notify-address when notification is requested (fail fast → 400)
-        if (request.notifyNewAccounts) {
-            val addr = request.notifyAddress?.trim()
-            if (addr.isNullOrBlank() || !emailRegex.matches(addr)) {
-                return HttpResponse.badRequest(
-                    mapOf(
-                        "error" to "Validation Error",
-                        "message" to "notifyAddress must be a valid email when notifyNewAccounts is true"
-                    )
+        // Fail fast (→ 400) before anything is imported. Shared with MCP
+        // import_user_mappings so both entry points reject the same requests.
+        bulkImportService.validate(request)?.let { validationError ->
+            return HttpResponse.badRequest(
+                mapOf(
+                    "error" to "Validation Error",
+                    "message" to validationError
                 )
-            }
-        }
-
-        // Validate risk-assessment parameters (fail fast → 400): the use case
-        // must exist and at least one SECCHAMPION user must be available as assessor.
-        if (request.startRiskAssessment) {
-            val riskValidationError = awsAccountRiskAssessmentService.validateStartRequest(
-                request.riskAssessmentUseCase,
-                request.riskAssessmentDeadlineDays
             )
-            if (riskValidationError != null) {
-                return HttpResponse.badRequest(
-                    mapOf(
-                        "error" to "Validation Error",
-                        "message" to riskValidationError
-                    )
-                )
-            }
         }
 
         return try {
-            val result = userMappingService.bulkCreateMappings(request)
-
-            // Send the operator email AFTER the transaction has committed, so a
-            // slow/failed send never rolls back the persisted mappings.
-            var finalResult = if (request.notifyNewAccounts && !request.dryRun && result.newAccounts.isNotEmpty()) {
-                val recipient = request.notifyAddress!!.trim()
-                val sent = newAccountNotificationService.sendImportNotification(recipient, result.newAccounts)
-                result.copy(
-                    notificationRecipient = recipient,
-                    notificationSent = sent,
-                    notificationError = if (sent) null else "Email send failed (check email configuration / logs)"
-                )
-            } else {
-                result
-            }
-
-            // Auto-start risk assessments for owners of brand-new AWS accounts,
-            // also AFTER the import committed so a failure here never rolls back
-            // the persisted mappings.
-            if (request.startRiskAssessment && !request.dryRun && result.newAccounts.isNotEmpty()) {
-                val assessments = awsAccountRiskAssessmentService.startAssessmentsForNewAccounts(
-                    newAccounts = result.newAccounts,
-                    useCaseName = request.riskAssessmentUseCase!!.trim(),
-                    deadlineDays = request.riskAssessmentDeadlineDays
-                        ?: com.secman.service.AwsAccountRiskAssessmentService.DEFAULT_DEADLINE_DAYS,
-                    requestorUserId = getUserIdFromAuthenticationOrNull(authentication)
-                )
-                finalResult = finalResult.copy(riskAssessments = assessments)
-            }
-
-            HttpResponse.ok(finalResult)
+            HttpResponse.ok(
+                bulkImportService.execute(request, getUserIdFromAuthenticationOrNull(authentication))
+            )
         } catch (e: IllegalArgumentException) {
             logger.warn("Bulk create validation failed: ${e.message}")
             HttpResponse.badRequest(

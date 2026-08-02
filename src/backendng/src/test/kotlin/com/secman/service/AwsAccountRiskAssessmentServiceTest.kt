@@ -3,6 +3,8 @@ package com.secman.service
 import com.secman.domain.Asset
 import com.secman.domain.AssessmentBasisType
 import com.secman.domain.AwsAccountRiskAssessment
+import com.secman.domain.Release
+import com.secman.domain.Requirement
 import com.secman.domain.RiskAssessment
 import com.secman.domain.UseCase
 import com.secman.domain.User
@@ -32,12 +34,18 @@ class AwsAccountRiskAssessmentServiceTest {
     private val riskAssessmentRepository = mockk<RiskAssessmentRepository>(relaxed = true)
     private val trackingRepository = mockk<AwsAccountRiskAssessmentRepository>(relaxed = true)
     private val emailService = mockk<EmailService>(relaxed = true)
+    private val releaseRequirementScopeService = mockk<ReleaseRequirementScopeService>(relaxed = true)
 
     // Constructed in setup(); selfProvider returns this same instance (the AOP proxy is a
     // no-op under a plain unit test, so createAssessment runs directly with REQUIRES_NEW inert).
     private lateinit var service: AwsAccountRiskAssessmentService
 
     private val useCase = UseCase(id = 5L, name = "Cloud Onboarding")
+    private val activeRelease = Release(id = 42L, version = "2.3.0", name = "Q3 baseline")
+    private val releaseRequirements = listOf(
+        Requirement(id = 901L, shortreq = "Encrypt data at rest"),
+        Requirement(id = 902L, shortreq = "Enable CloudTrail")
+    )
     private val champion1 = user(1L, "champ1", "champ1@corp.com", User.Role.SECCHAMPION)
     private val champion2 = user(2L, "champ2", "champ2@corp.com", User.Role.SECCHAMPION)
     private val admin = user(9L, "admin", "admin@corp.com", User.Role.ADMIN)
@@ -54,8 +62,11 @@ class AwsAccountRiskAssessmentServiceTest {
             riskAssessmentRepository = riskAssessmentRepository,
             trackingRepository = trackingRepository,
             emailService = emailService,
+            releaseRequirementScopeService = releaseRequirementScopeService,
             selfProvider = Provider { service }
         )
+        every { releaseRequirementScopeService.findActiveRelease() } returns activeRelease
+        every { releaseRequirementScopeService.requirementsForRelease(42L, 5L) } returns releaseRequirements
         every { useCaseRepository.findByNameIgnoreCase("Cloud Onboarding") } returns Optional.of(useCase)
         every { userRepository.findByRolesContaining(User.Role.SECCHAMPION) } returns listOf(champion1, champion2)
         every { userRepository.findById(9L) } returns Optional.of(admin)
@@ -100,6 +111,26 @@ class AwsAccountRiskAssessmentServiceTest {
         assertThat(service.validateStartRequest("Cloud Onboarding", null)).isNull()
     }
 
+    @Test
+    fun `validation rejects when no ACTIVE release exists`() {
+        // The assessment is measured against the current version of the security
+        // requirements; without an ACTIVE release there is nothing to measure against.
+        every { releaseRequirementScopeService.findActiveRelease() } returns null
+
+        assertThat(service.validateStartRequest("Cloud Onboarding", 7)).contains("No ACTIVE release")
+    }
+
+    @Test
+    fun `validation rejects when the ACTIVE release has no requirements for the use case`() {
+        every { releaseRequirementScopeService.requirementsForRelease(42L, 5L) } returns emptyList()
+
+        val error = service.validateStartRequest("Cloud Onboarding", 7)
+
+        assertThat(error).contains("2.3.0")
+        assertThat(error).contains("no requirements")
+        assertThat(error).contains("Cloud Onboarding")
+    }
+
     // --- startAssessmentsForNewAccounts --------------------------------------
 
     @Test
@@ -133,6 +164,76 @@ class AwsAccountRiskAssessmentServiceTest {
 
         verify(exactly = 2) { trackingRepository.save(any()) }
         verify(exactly = 2) { emailService.sendEmail(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `assessments are pinned to the ACTIVE release and report it back`() {
+        val results = service.startAssessmentsForNewAccounts(
+            listOf(
+                NewAccountImportInfo("111111111111", listOf("alice@corp.com")),
+                NewAccountImportInfo("222222222222", listOf("bob@corp.com"))
+            ),
+            "Cloud Onboarding", 7, 9L
+        )
+
+        assertThat(results).allSatisfy {
+            assertThat(it.releaseVersion).isEqualTo("2.3.0")
+            assertThat(it.useCase).isEqualTo("Cloud Onboarding")
+            assertThat(it.requirementCount).isEqualTo(2)
+        }
+
+        val saved = mutableListOf<RiskAssessment>()
+        verify(exactly = 2) { riskAssessmentRepository.save(capture(saved)) }
+        assertThat(saved).allSatisfy {
+            assertThat(it.lockedRelease).isEqualTo(activeRelease)
+            assertThat(it.isReleaseLocked).isTrue()
+            assertThat(it.contentSnapshotTaken).isTrue()
+        }
+    }
+
+    @Test
+    fun `the ACTIVE release is resolved once so every account in one import pins to the same version`() {
+        service.startAssessmentsForNewAccounts(
+            listOf(
+                NewAccountImportInfo("111111111111", listOf("alice@corp.com", "carol@corp.com")),
+                NewAccountImportInfo("222222222222", listOf("bob@corp.com"))
+            ),
+            "Cloud Onboarding", 7, 9L
+        )
+
+        // Three (account, owner) pairs, but a single release lookup — activating a new
+        // release mid-run must not split one import across two requirement versions.
+        verify(exactly = 1) { releaseRequirementScopeService.findActiveRelease() }
+    }
+
+    @Test
+    fun `no assessment is created when the ACTIVE release disappeared after validation`() {
+        every { releaseRequirementScopeService.findActiveRelease() } returns null
+
+        val results = service.startAssessmentsForNewAccounts(
+            listOf(NewAccountImportInfo("111111111111", listOf("alice@corp.com"))),
+            "Cloud Onboarding", 7, 9L
+        )
+
+        assertThat(results.single().error).contains("No ACTIVE release")
+        assertThat(results.single().riskAssessmentId).isNull()
+        verify(exactly = 0) { riskAssessmentRepository.save(any()) }
+        verify(exactly = 0) { emailService.sendEmail(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `start notification names the requirements version`() {
+        val body = slot<String>()
+        every { emailService.sendEmail(any(), any(), capture(body), any()) } returns
+            CompletableFuture.completedFuture(true)
+
+        service.startAssessmentsForNewAccounts(
+            listOf(NewAccountImportInfo("111111111111", listOf("alice@corp.com"))),
+            "Cloud Onboarding", 7, 9L
+        )
+
+        assertThat(body.captured).contains("2.3.0")
+        assertThat(body.captured).contains("Q3 baseline")
     }
 
     @Test

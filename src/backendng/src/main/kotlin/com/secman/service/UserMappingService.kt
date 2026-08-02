@@ -239,6 +239,10 @@ open class UserMappingService(
                 errors.add("Entry ${index + 1}: Invalid email format '${entry.email}'")
                 return@forEachIndexed
             }
+            if (entry.awsAccountId.isNullOrBlank() && entry.domain.isNullOrBlank()) {
+                errors.add("Entry ${index + 1}: At least one of awsAccountId or domain must be provided")
+                return@forEachIndexed
+            }
             if (entry.awsAccountId != null && !awsAccountIdRegex.matches(entry.awsAccountId.trim())) {
                 errors.add("Entry ${index + 1}: Invalid AWS account ID '${entry.awsAccountId}' (must be 12 digits)")
                 return@forEachIndexed
