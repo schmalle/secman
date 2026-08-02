@@ -22,6 +22,12 @@ sequence — admin first, then a normal user**, and **iteratively fixes every
 failure** until all pages are clean for both roles or you've exhausted the
 retry budget.
 
+> **Read `../_shared/stack-lifecycle.md` in full before touching the stack.** It
+> defines the cold-start sequence, port-bind liveness, credentials, logging and
+> the 5-iteration budget this skill assumes. Note this skill's one deviation:
+> functional checks go through `https://secman.covestro.net`, not `SECMAN_HOST`
+> directly — see below.
+
 ## Dual-Role Run
 
 Each call to `tests/js-error-scanner-pp.sh` performs two scanner passes back-to-back:
@@ -31,6 +37,11 @@ Each call to `tests/js-error-scanner-pp.sh` performs two scanner passes back-to-
 2. **Normal-user pass** — logs in with `SECMAN_USER_USER` / `SECMAN_USER_PASS`
    (vault field name for the username is `SECMAN_USER_NAME`:
    `pass://Test/SECMAN/SECMAN_USER_NAME` and `…/SECMAN_USER_PASS`).
+   If that login fails because the account does not exist on this instance, run
+   `./scripts/test/provision-test-user.sh` — it creates the account and is
+   idempotent (exits 0 when it already exists). A missing account and a wrong
+   password both surface as a login failure, so check existence before
+   suspecting vault drift.
 
 Both passes hit the **same** host URL pulled from
 `pass://Test/SECMAN/SECMAN_HOST` (must be HTTPS — `https://secman.covestro.net`).
@@ -63,10 +74,9 @@ Rules:
 - The scanner URL is **always** `https://secman.covestro.net`. Do not target
   `http://localhost:4321`, `http://localhost:8080`, or any other variant.
 - Always export `SECMAN_BACKEND_URL=https://secman.covestro.net` before
-  invoking the scanner. This is required to override the scanner's built-in
-  local-auto-detect branch in `tests/js-error-scanner-pp.sh`, which would
-  otherwise flip the target to `http://localhost:4321` as soon as the Astro
-  dev server opens that port.
+  invoking the scanner. The wrapper enforces this host as policy and exits 2 on
+  a non-compliant value (`tests/js-error-scanner-pp.sh:8-12`); its old local
+  auto-detection branch is disabled for policy compliance (`:15`).
 - Do **NOT** set `SECMAN_INSECURE=true`. The shared hostname must present a
   valid certificate end-to-end — if TLS verification fails, fix the cert /
   proxy setup rather than disabling verification.
@@ -167,10 +177,9 @@ SECMAN_BACKEND_URL=https://secman.covestro.net \
 ```
 Where N is the iteration number (starting at 1).
 
-Setting `SECMAN_BACKEND_URL` to an explicit `https://` URL puts the scanner
-script's `USER_PROVIDED_HTTP=true` branch in effect and suppresses the
-`localhost:4321` auto-substitution that would otherwise trigger the moment
-the Astro dev server opens its port.
+The wrapper enforces `https://secman.covestro.net` (or a `pass://` URI) and
+exits early on a host/TLS policy violation, so a misconfigured target fails
+loudly rather than silently scanning the wrong origin.
 
 **Important environment variables** — `SECMAN_ADMIN_NAME`,
 `SECMAN_ADMIN_PASS`, `SECMAN_USER_USER` (vault field `SECMAN_USER_NAME`),
@@ -297,15 +306,24 @@ error count decreased.
 - Print a summary table with **per-role** columns (each iteration runs both roles):
 
 ```
-| Iter | Role  | Pages | Clean | Errors | Timeout | Fix Applied                  |
-|------|-------|-------|-------|--------|---------|------------------------------|
-| 1    | admin | 58    | 54    | 4      | 0       | backend: AssetController.kt  |
-| 1    | user  | 58    | 53    | 5      | 0       | (errors carried into iter 2) |
-| 2    | admin | 58    | 58    | 0      | 0       | —                            |
-| 2    | user  | 58    | 56    | 2      | 0       | frontend: VulnTable.tsx      |
-| 3    | admin | 58    | 58    | 0      | 0       | —                            |
-| 3    | user  | 58    | 58    | 0      | 0       | — (all clean)                |
+| Iter | Role  | Pages | Clean | Errors | Timeout | Expired | Fix Applied                  |
+|------|-------|-------|-------|--------|---------|---------|------------------------------|
+| 1    | admin | 58    | 54    | 4      | 0       | 0       | backend: AssetController.kt  |
+| 1    | user  | 58    | 53    | 5      | 0       | 0       | (errors carried into iter 2) |
+| 2    | admin | 58    | 58    | 0      | 0       | 0       | —                            |
+| 2    | user  | 58    | 56    | 2      | 0       | 0       | frontend: VulnTable.tsx      |
+| 3    | admin | 58    | 58    | 0      | 0       | 0       | —                            |
+| 3    | user  | 58    | 58    | 0      | 0       | 0       | — (all clean)                |
 ```
+
+**The `Expired` column is not optional.** The scanner flips its exit code to 1
+when `expiredPages` is non-empty, exactly as it does for errors and timeouts
+(`tests/js-error-scanner.mjs:214`). A session that expires mid-scan means the
+pages after that point were never genuinely verified — so a run with a non-zero
+Expired count is a **partial scan**, not a clean one, even though the individual
+`[SESSION EXPIRED]` lines are correctly classified as infra rather than code
+bugs. Re-run those pages with a fresh session before reporting the role clean,
+and if you cannot, say which pages went unverified.
 
 - If there are still failures, list each one with the file and line where you
   believe the root cause is, and what you tried.
@@ -328,9 +346,16 @@ error count decreased.
   a valid certificate. If TLS verification fails, fix the cert/proxy rather
   than disabling verification.
 - **Log files** go to `.e2e-logs/` — this directory is gitignored.
-- **Scanner pages list** is hardcoded in `tests/js-error-scanner.mjs` in the
-  `PAGES` array. If the scanner reports a page error, the fix is in the
-  application code, not the scanner.
+- **Scanner pages list** is *discovered*, not hardcoded: `tests/js-error-scanner.mjs`
+  walks `src/frontend/src/pages/` and adds `STATIC_PAGES`. A new page is picked
+  up automatically. If the scanner reports a page error, the fix is usually in
+  the application code, not the scanner.
+- **Product-related pages must be covered**: verify the discovered route list
+  includes `/products`, `/installed-products`, and product drilldown surfaces
+  such as `/vulnerability-statistics` and asset detail routes linked from
+  product tables when test data makes dynamic routes available. Route discovery
+  finds files, not dynamic instances — a `[id].astro` route only gets exercised
+  if data exists to link to it.
 - Backend controllers: `src/backendng/src/main/kotlin/com/secman/controller/`
 - Frontend pages: `src/frontend/src/pages/`
 - Frontend components: `src/frontend/src/components/`

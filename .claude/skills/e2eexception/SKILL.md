@@ -1,11 +1,14 @@
 ---
 name: e2eexception
 description: >
-  Run the E2E vulnerability exception workflow test that verifies the full
-  exception request lifecycle via MCP. Starts backend and frontend, runs the
-  test script, and iteratively fixes failures in both layers.
-  Use this skill when the user says "run exception e2e", "test exception workflow",
-  "e2eexception", or similar.
+  Run the narrow, MCP-only E2E exception test: an 11-step lifecycle covering one
+  exception request through create, approve and verify. Starts backend and
+  frontend, runs the test script, and iteratively fixes failures in both layers.
+  Use this skill when the user says "run exception e2e", "e2eexception", or asks
+  specifically for the quick MCP-only exception check. Prefer /e2evulnexception
+  instead whenever the user wants the full lifecycle (approve + reject + cancel),
+  the subject x scope matrix, authorization negatives, or any Web UI coverage —
+  this skill covers none of those.
 context: fork
 ---
 # E2E Vulnerability Exception Workflow — Iterative Fix Loop
@@ -13,6 +16,20 @@ context: fork
 You are an orchestration agent that brings up a full-stack environment, executes
 the vulnerability exception workflow E2E test, and **iteratively fixes every failure**
 until the test passes or you've exhausted the retry budget.
+
+> **⚠️ This test deletes every asset in the target database (step 2).** It is
+> only safe against a disposable instance. Confirm what `SECMAN_HOST` points at
+> before running — if there is any chance it is a shared or production-like
+> instance, stop and ask the user rather than proceeding.
+
+> **Read `../_shared/stack-lifecycle.md` in full before touching the stack.** It
+> defines the cold-start sequence, port-bind liveness, credentials, logging and
+> the 5-iteration budget this skill assumes.
+
+**Scope check before you start.** This is the *narrow* exception skill: MCP only,
+one request, approve path only. If the user wants reject/cancel, the subject ×
+scope matrix, authorization negatives, or UI verification, `/e2evulnexception` is
+the right skill and this one will report a pass while covering none of it.
 
 ## Test Overview
 
@@ -98,21 +115,32 @@ start either dev server inside the filesystem sandbox.
    ```
    Record the PID.
 
-5. **Wait for health checks**:
-   - Backend: poll `http://localhost:8080` every 5 seconds, timeout after 120 seconds
-   - Frontend: poll `http://localhost:4321` every 3 seconds, timeout after 60 seconds
+5. **Wait for liveness by port bind, not HTTP** — `../_shared/stack-lifecycle.md`
+   §3: `lsof -iTCP:8080 -sTCP:LISTEN -n -P` (120s) and `lsof -iTCP:4321 …` (60s).
+   If `:4321` never binds, check `:4322` before concluding the frontend failed
+   (§4).
 
 ### Phase 2 — Run Tests
 
-Execute the exception workflow test with Proton Pass secret injection:
+Execute the exception workflow test with Proton Pass secret injection.
+
+**`BASE_URL` must be set explicitly.** The driver script defaults it to
+`http://localhost:8080` (`test-e2e-exception-workflowsupport.sh:33`) — that
+default predates the current convention and CLAUDE.md Hard Principle 6 forbids
+it. Overriding it here is what keeps the run pointed at the real host:
 
 ```bash
-export BASE_URL="http://localhost:8080"
+export BASE_URL="pass://Test/SECMAN/SECMAN_HOST"
 export SECMAN_MCP_KEY="pass://Test/SECMAN/SECMAN_MCP_KEY"
 export SECMAN_ADMIN_EMAIL="pass://Test/SECMAN/SECMAN_ADMIN_EMAIL"
 
 pass-cli run -- ./scripts/test/test-e2e-exception-workflowsupport.sh --verbose 2>&1 | tee .e2e-logs/e2e-exception-run-<N>.log
 ```
+
+Before trusting the run, confirm the driver echoed the host you expected — it
+logs `Backend URL: <…>` at startup. A run that silently fell back to localhost
+tests a different backend than the one you cold-started, and will look like it
+passed.
 
 Where `<N>` is the iteration number (starting at 1).
 
@@ -164,8 +192,13 @@ Fix in priority order: **backend errors first**, then frontend.
 
 **Key files for this test:**
 
-- **MCP Tool Handlers**: `src/backendng/src/main/kotlin/com/secman/service/McpToolService.kt`
-- **MCP Controller**: `src/backendng/src/main/kotlin/com/secman/controller/McpController.kt`
+- **MCP tool implementations**: `src/backendng/src/main/kotlin/com/secman/mcp/tools/`
+  (one file per tool) — registered in `com/secman/mcp/McpToolRegistry.kt`
+- **MCP controllers**: `controller/McpStreamableHttpController.kt` (the
+  Streamable-HTTP JSON-RPC endpoint the test drives) and
+  `controller/McpController.kt`
+- **MCP auth / delegation / permissions**: `service/McpAuthenticationService.kt`,
+  `service/McpDelegationService.kt`, `service/McpToolPermissionService.kt`
 - **Vulnerability Service**: `src/backendng/src/main/kotlin/com/secman/service/VulnerabilityService.kt`
 - **Vulnerability Exception Service**: `src/backendng/src/main/kotlin/com/secman/service/VulnerabilityExceptionRequestService.kt`
 - **Outdated Asset Service**: `src/backendng/src/main/kotlin/com/secman/service/OutdatedAssetService.kt`
@@ -180,10 +213,13 @@ Fix in priority order: **backend errors first**, then frontend.
    step failed and the exact error message.
 2. **Read backend logs** from `.e2e-logs/backend.log` — search for exception stack traces
    near the time of the failure.
-3. **Trace the MCP call path**: test script calls `tools/call` with a tool name ->
-   `McpController` routes to `McpToolService` -> service method -> repository.
+3. **Trace the MCP call path**: test script calls `tools/call` with a tool name →
+   `McpStreamableHttpController` authenticates (API key + `X-MCP-User-Email`
+   delegation) → `McpToolRegistry` resolves the name → the tool class under
+   `mcp/tools/` → service → repository.
 4. **Apply minimal fix** — common issues:
-   - Missing MCP tool registration in `McpToolService`
+   - Tool not registered in `McpToolRegistry`, or the name in the test does not
+     match the registered name
    - Null pointer in service layer (missing `?.` or `?: default`)
    - Response format mismatch (tool returns different JSON structure than test expects)
    - RBAC issue — MCP delegation header not checked correctly
@@ -217,11 +253,16 @@ Go back to Phase 2 and re-run the test script. Increment the iteration counter.
 
 #### Step 3e: Guard Rails
 
-- Track which errors you've already attempted to fix. If the **same error persists
-  after two attempts**, flag it for the user and move on.
-- After **5 total iterations**, stop and present a summary.
-- If the backend crashes on startup (health check fails), read `.e2e-logs/backend.log`
-  for compilation or runtime errors and fix before retrying.
+Per `../_shared/stack-lifecycle.md` §6 — **5 iterations total for the whole
+run.** The two-attempt rule operates inside that budget: if one error survives
+two fixes, stop working on *that error* and spend the remaining iterations on the
+others. "Move on" means move on to a different failure, not start a fresh budget.
+
+- If the backend port never binds, do not assume a crash. `startbackenddev.sh`
+  does a full `clean` build every time, so a slow build can exceed the 120s
+  budget while still compiling — check the gradle process and whether the log is
+  still growing before reading `.e2e-logs/backend.log` for a real error
+  (`../_shared/stack-lifecycle.md` §4).
 
 ### Phase 4 — Teardown & Report
 
@@ -249,8 +290,11 @@ Go back to Phase 2 and re-run the test script. Increment the iteration counter.
   scripts and starting both fresh is an unconditional part of Phase 1 — never
   attach the test run to services you did not start in this invocation.
 - **Log files** go to `.e2e-logs/` — this directory is gitignored.
-- **MariaDB access**: The test script connects to `mariadb -h 127.0.0.1 -u secman -pCHANGEME secman`
-  for direct database operations. Ensure MariaDB is running.
+- **MariaDB access**: the driver script performs direct DB operations and carries
+  the local dev credentials inline (see `test-e2e-exception-workflowsupport.sh`).
+  Ensure MariaDB is running. Do not copy those credentials into new code or into
+  your report — the repo convention is `pass-cli`, and the inline literals are a
+  legacy of this script predating that convention.
 - **Always stop both services on error** — never attempt to fix code while services
   are running. The stop-fix-restart cycle ensures a clean state.
 - Backend controllers: `src/backendng/src/main/kotlin/com/secman/controller/`

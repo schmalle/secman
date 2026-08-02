@@ -314,6 +314,30 @@ finds something to trim will eventually trim something load-bearing.
 
 ---
 
+## Step 4b — Skill mirror check
+
+The repo keeps two skill trees — `.claude/skills/` (canonical) and
+`.agents/skills/` (Codex) — that CLAUDE.md requires to move together. They do
+not stay together on their own: 7 of 8 skills had drifted before this check
+existed, one of them into two materially different documents.
+
+```bash
+./scripts/check-skill-sync.sh
+```
+
+Exit `0` is in sync, `1` is real drift, `2` is a script or environment error.
+Report the result either way — a check whose green result is never mentioned
+provides no assurance.
+
+On drift, report what it found; **do not fix it as part of finalizing**. Deciding
+which tree is correct is a judgment call: `.claude` is authoritative by policy,
+but it has been the stale side before, so a mechanical resync can propagate wrong
+content or delete right content. Surface it and let the user choose.
+
+Also surface any `WARNING: normalization rule … matched nothing` line. That
+means a rule no longer matches the wording it was written for, so a green result
+from that run is weaker than it looks.
+
 ## Step 5 — Report
 
 Your final message is the deliverable. Because this skill runs in a forked
@@ -342,6 +366,10 @@ Scope: <which rung of the step 0 ladder, n files>
 ## 4. CLAUDE.md crispness
 Before: <n> lines / <n> words → After: <n> lines / <n> words
 <what moved to docs/CHANGELOG.md, what was tightened>
+
+## 4b. Skill mirror
+./scripts/check-skill-sync.sh → exit <0|1|2>
+<in sync, or the findings verbatim; plus any dead-normalization-rule warnings>
 
 ## Still required
 <the mandatory gates from CLAUDE.md, if src/ was touched>

@@ -12,7 +12,6 @@ description: >
   "fix import bugs", or similar.
 context: fork
 ---
-# CrowdStrike Import — Iterative Fix Loop
 
 > **Sync policy**: This file mirrors `.claude/skills/importtest/SKILL.md`,
 > which is the **leading, authoritative** copy for this repo (see
@@ -21,11 +20,22 @@ context: fork
 > to their Codex equivalent (e.g. Bash tool `dangerouslyDisableSandbox: true`
 > ↔ `sandbox_permissions: "require_escalated"`). Never let this file diverge
 > ahead of the Claude Code version.
+# CrowdStrike Import — Iterative Fix Loop
 
 You are an orchestration agent that brings up the local secman environment,
 runs `./scripts/import.sh` end-to-end, and **iteratively fixes every backend
 stack trace surfaced during the import** until the run is clean or you've
 exhausted the retry budget.
+
+> **⚠️ This skill writes real data.** `import.sh` runs `secman query servers
+> --save`, which imports live CrowdStrike vulnerabilities into whatever database
+> the backend is pointed at, and the import's delete-insert reconcile removes
+> stale rows. Confirm the target before running. If you only want to *compare*
+> SecMan against Falcon without writing anything, use `/crowdstrike-vuln-match`.
+
+> **Read `../_shared/stack-lifecycle.md` in full before touching the stack.** It
+> defines the cold-start sequence, port-bind liveness, credentials, logging and
+> the 5-iteration budget this skill assumes.
 
 ## Why This Skill Exists
 
@@ -89,54 +99,13 @@ rebuild is mandatory; the per-iteration rebuilds are conditional.
 
 ### Phase 1 — Environment Setup
 
-**Kill any running services first (mandatory, unconditional).** Never reuse
-an already-running backend or frontend — a running instance may predate the
-current working tree. Always run both stop scripts, even if the ports look
-free (safe no-ops when nothing runs; never call `kill` or
-`lsof | xargs kill` inline):
+Follow `../_shared/stack-lifecycle.md` §1–§4: stop both services
+unconditionally, confirm the ports actually freed, start both outside the
+sandbox with logs at `.e2e-logs/backend.log` and `.e2e-logs/frontend.log`, and
+wait on the port-bind liveness checks (120s backend, 60s frontend).
 
-```bash
-./scripts/stopbackenddev.sh
-./scripts/stopfrontenddev.sh
-```
-
-Wait ~3 seconds, verify `lsof -iTCP:8080 -sTCP:LISTEN -n -P` and
-`lsof -iTCP:4321 -sTCP:LISTEN -n -P` both print nothing, then start fresh.
-
-Always start services via the wrapper scripts below — never `./gradlew run`
-directly (CLAUDE.md §"Tooling Conventions"). They source `pass-cli` for
-secrets and configure the JVM.
-
-| Setting                  | Default                           |
-| ------------------------ | --------------------------------- |
-| `backend.start`          | `./scripts/startbackenddev.sh`    |
-| `backend.healthPort`     | `8080` (liveness = port-bind)     |
-| `backend.healthTimeout`  | `120` (seconds)                   |
-| `frontend.start`         | `./scripts/startfrontenddev.sh`   |
-| `frontend.healthPort`    | `4321`                            |
-| `frontend.healthTimeout` | `60` (seconds)                    |
-
-**Starting services:**
-
-**Outside-sandbox requirement:** Always start `./scripts/startbackenddev.sh`
-and `./scripts/startfrontenddev.sh` outside the sandbox / with escalated
-permissions. In Codex, run these commands with
-`sandbox_permissions: "require_escalated"`; do not start either dev server
-inside the filesystem sandbox. Both scripts source secrets via `pass-cli`,
-which a sandboxed shell cannot reach.
-
-- Start each service in a background process via `nohup ... &`,
-  redirecting stdout/stderr to log files under `.e2e-logs/`.
-  Standardize filenames so later phases can find them:
-  - `.e2e-logs/backend.log`
-  - `.e2e-logs/frontend.log`
-- Record the PIDs for teardown.
-- Liveness is **port-bind**, not HTTP — per CLAUDE.md §"E2E Runner":
-  ```bash
-  lsof -iTCP:8080 -sTCP:LISTEN -n -P    # 120s budget
-  lsof -iTCP:4321 -sTCP:LISTEN -n -P    # 60s budget
-  ```
-  Use `scripts/wait-for-health.sh` if it exists and supports port-bind.
+`.e2e-logs/backend.log` in particular must exist at that exact path — Phase 2
+byte-offsets into it to isolate this run's log lines from historic ones.
 
 ### Phase 2 — Run the Import
 
@@ -202,11 +171,20 @@ been logged on the backend side, so backing-channel A is the source of
 truth for *why* — channel B tells you only the count and the affected
 host. The CLI exit code is non-zero only on hard CLI failures (missing
 jar, can't authenticate). Per-server import failures do **not** flip
-the CLI exit code.
+the CLI exit code — which is why channels A and B exist at all.
 
-**Success criterion for this skill (both must hold):**
+**Success criterion for this skill (all three must hold):**
 - Channel A: zero new ERROR entries in the import window.
 - Channel B: `Errors (0)` in the final stats block (or no `Errors` block at all).
+- `IMPORT_EXIT == 0`.
+
+The third condition is deliberately *not* dropped just because per-server
+failures don't reach it. A non-zero `IMPORT_EXIT` alongside `Errors (0)` means
+something failed *outside* the per-server path — auth, jar, connectivity — and
+ignoring it would let a run that imported nothing at all report success. If you
+see that combination, confirm the exit-code semantics still hold by checking
+`src/cli/src/main/kotlin/com/secman/cli/commands/ServersCommand.kt` rather than
+trusting this paragraph; it is a claim about CLI behaviour that can age.
 
 WARN-level lines like `Deadlock retry 1/3 for import server '...'` are
 **not** failures — they are evidence the retry path is working as

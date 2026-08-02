@@ -14,6 +14,12 @@ You are an orchestration agent that brings up a full-stack environment, executes
 the admin asset/vulnerability E2E test, and **iteratively fixes every failure**
 until the suite is green or you've exhausted the retry budget.
 
+> **Read `../_shared/stack-lifecycle.md` in full before touching the stack.** It
+> defines the cold-start sequence, port-bind liveness, credentials, logging and
+> the 5-iteration budget this skill assumes. In short: stop both services
+> unconditionally, verify the ports freed, start outside the sandbox, log to
+> `.e2e-logs/`, target `SECMAN_HOST` from `pass-cli` and never `localhost`.
+
 ## Test Overview
 
 The E2E test (`tests/e2e/admin-asset-vuln.spec.ts`) performs:
@@ -39,67 +45,36 @@ The E2E test (`tests/e2e/admin-asset-vuln.spec.ts`) performs:
    d. IF backend changed → restart backend
    e. IF frontend changed → frontend hot-reloads automatically
    f. Go to step 4
-7. After N iterations without progress → stop and report remaining failures
+7. After 5 iterations → stop and report remaining failures
 ```
 
 ## Detailed Instructions
 
-### Phase 0 — Kill Running Services (mandatory, unconditional)
+### Phase 0 / 1 — Cold-start the stack
 
-Never reuse an already-running backend or frontend — a running instance may
-predate the current working tree and would invalidate the run. Always start
-from a cold stack, even if the ports look free or the services look healthy:
+Follow `../_shared/stack-lifecycle.md` §1–§4 exactly: stop both services
+unconditionally, confirm the ports actually freed, start both outside the
+sandbox with logs under `.e2e-logs/`, and wait on the port-bind liveness checks
+(120s backend, 60s frontend).
 
-```bash
-./scripts/stopbackenddev.sh
-./scripts/stopfrontenddev.sh
-```
-
-Both scripts graceful-kill first, force-kill anything still listening on
-8080/4321, and are safe no-ops when nothing is running. Never call `kill` or
-`lsof | xargs kill` inline. Wait ~3 seconds, then verify both ports are free
-before proceeding to Phase 1:
-
-```bash
-lsof -iTCP:8080 -sTCP:LISTEN -n -P   # must print nothing
-lsof -iTCP:4321 -sTCP:LISTEN -n -P   # must print nothing
-```
-
-### Phase 1 — Environment Setup
-
-Always start services via the wrapper scripts below. The health URLs and
-timeouts may still come from `e2e-runner.config.json`.
-
-| Setting                  | Default                           |
-| ------------------------ | --------------------------------- |
-| `backend.start`          | `./scripts/startbackenddev.sh`   |
-| `backend.healthUrl`      | `http://localhost:8080`           |
-| `backend.healthTimeout`  | `120` (seconds)                   |
-| `frontend.start`         | `./scripts/startfrontenddev.sh`  |
-| `frontend.healthUrl`     | `http://localhost:4321`           |
-| `frontend.healthTimeout` | `60` (seconds)                    |
-
-**Starting services:**
-
-**Outside-sandbox requirement:** Always start `./scripts/startbackenddev.sh`
-and `./scripts/startfrontenddev.sh` outside the sandbox / with escalated
-permissions (e.g. Bash tool `dangerouslyDisableSandbox: true`). Both scripts
-source secrets via `pass-cli`, which a sandboxed shell cannot reach — do not
-start either dev server inside the filesystem sandbox.
-
-- Start each service in a **background process** using `bash` with `nohup` or `&`,
-  redirecting stdout/stderr to log files under `.e2e-logs/`.
-- Record the PID so you can kill it later.
-- Use the health-check helper script at `scripts/wait-for-health.sh`.
+Liveness is **port-bind, not HTTP**. Ignore `e2e-runner.config.json` — it is
+stale pre-script-era config that points at a `./frontend` directory which does
+not exist and invokes `gradle :backendng:run` directly, which the Tooling
+Conventions forbid. Nothing in this skill should read it.
 
 ### Phase 2 — Run Tests
 
-Execute the specific admin asset test with Proton Pass secret injection:
+Execute the specific admin asset test with Proton Pass secret injection.
+
+Note the asymmetry on the third line: the env var is `SECMAN_USER_USER` but the
+**vault field is `SECMAN_USER_NAME`**. They do not match, and using the env var
+name as the vault path fails to resolve — which surfaces as a login failure that
+reads like an application bug.
 
 ```bash
 export SECMAN_ADMIN_NAME="pass://Test/SECMAN/SECMAN_ADMIN_NAME"
 export SECMAN_ADMIN_PASS="pass://Test/SECMAN/SECMAN_ADMIN_PASS"
-export SECMAN_USER_USER="pass://Test/SECMAN/SECMAN_USER_USER"
+export SECMAN_USER_USER="pass://Test/SECMAN/SECMAN_USER_NAME"
 export SECMAN_USER_PASS="pass://Test/SECMAN/SECMAN_USER_PASS"
 
 cd tests/e2e && pass-cli run -- npx playwright test admin-asset-vuln.spec.ts --project=chrome
@@ -153,22 +128,32 @@ Fix in priority order: **backend errors first**, then frontend.
 
 #### Guard Rails
 
-- Track which errors you've already attempted to fix. If the same error
-  persists after two attempts, flag it for the user.
-- After 5 total iterations, stop and present a summary.
+Budget rules, per `../_shared/stack-lifecycle.md` §6 — **5 iterations total for
+the whole run.** The two-attempt rule operates inside that budget, not alongside
+it: if one error survives two fixes, stop working on *that error* and spend the
+remaining iterations on the others. It does not end the run, and it does not buy
+extra iterations.
 
 ### Phase 4 — Teardown & Report
 
-- Stop backend and frontend via `./scripts/stopbackenddev.sh` and
-  `./scripts/stopfrontenddev.sh` (never raw `kill`).
-- Print a summary table:
+Stop both services via the stop scripts (`../_shared/stack-lifecycle.md` §7) —
+on the failure path too, not only when green.
+
+Then print the summary. Include the failing test name and the file:line you
+changed, not just a count: a table of numbers cannot distinguish a suite that
+passed from one that never ran.
 
 ```
-| Iteration | Tests Run | Passed | Failed | Fix Applied |
-|-----------|-----------|--------|--------|-------------|
-| 1         | 5         | 3      | 2      | backend: AssetController.kt |
-| 2         | 5         | 5      | 0      | — (all green) |
+| Iteration | Tests Run | Passed | Failed | Failing test | Fix Applied |
+|---|---|---|---|---|---|
+| 1 | 5 | 3 | 2 | admin adds vulnerability | backend: AssetController.kt:214 |
+| 2 | 5 | 5 | 0 | — | — (all green) |
 ```
+
+State explicitly whether the run ended green, ended on the budget, or aborted —
+and if any of the four test steps did not execute, say which. Per
+`../_shared/stack-lifecycle.md` §8, a step that was skipped must not look like a
+step that passed.
 
 ## Important Notes
 
@@ -180,4 +165,6 @@ Fix in priority order: **backend errors first**, then frontend.
 - **Fresh services always**: Phase 0 is unconditional — kill any running
   backend/frontend via the stop scripts and start both fresh. Never attach the
   test run to services you did not start in this invocation.
-- Prefer reading `scripts/wait-for-health.sh` for health-checking logic.
+- Health-checking logic lives in `../_shared/stack-lifecycle.md` §3–§4. There is
+  no `scripts/wait-for-health.sh`; earlier versions of this skill pointed at one
+  that never existed.

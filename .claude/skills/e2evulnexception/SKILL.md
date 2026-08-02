@@ -16,8 +16,40 @@ You are an orchestration agent. Bring up the full stack, run the combined MCP +
 Web UI test, and **iteratively fix every failure** until it passes or the retry
 budget is exhausted.
 
-**Start tool calls immediately.** Do not pre-read the `references/` files —
-load them only when a specific phase needs them.
+> **⚠️ The driver is destructive on real data.** Its Phase 10 baseline wipes
+> every row in the target database — not just rows this test created. It is only
+> safe against a disposable instance. Confirm what `BASE_URL` resolves to before
+> running; if there is any chance it is shared or production-like, stop and ask.
+> Relatedly: never "fix" cleanup by narrowing it to match on `created_by`, which
+> would delete real admin-authored exceptions.
+
+> **Read `../_shared/stack-lifecycle.md` in full before touching the stack.** It
+> defines the cold-start sequence, port-bind liveness, credentials, logging and
+> the 5-iteration budget this skill assumes.
+
+**Then start tool calls immediately.** Beyond the shared contract and the
+warning above, do not pre-read the `references/` files — load them when a
+specific phase needs them. (The destructive warning used to live in
+`references/notes.md`; it was promoted here because the moment you need it is
+before you would have thought to go looking.)
+
+## Read-Only / QA Scope Mode
+
+If the requested scope is explicitly read-only or QA-only, run a **static review
+only**:
+
+- Do **not** start backend/frontend services.
+- Do **not** run the shell driver or Playwright.
+- Do **not** modify repository code or test assets.
+- Produce a concise **completeness + optimization report** with actionable
+  findings.
+
+Static-review checklist (inspect artifacts only):
+- Skill doc: `.claude/skills/e2evulnexception/SKILL.md` and its `references/`
+- Shell driver: `scripts/test/test-e2e-vuln-exception-full.sh`
+- Playwright spec: `tests/e2e/vuln-exception-full.spec.ts`
+- Cleanup semantics: pre/post cleanup behavior, idempotency, trap handling
+- Env assumptions: required vars, `pass-cli` usage, host/base-url assumptions
 
 ## High-Level Loop
 
@@ -40,9 +72,13 @@ load them only when a specific phase needs them.
 
 ## Phase 1 — Start services
 
-This skill is pinned to Proton Pass. Never hardcode `localhost:8080` /
-`localhost:4321`. The driver and Playwright config respect `BASE_URL` /
-`FRONTEND_URL` / `SECMAN_BASE_URL`.
+This skill is pinned to Proton Pass. Strict policy: set the backend and frontend
+URLs from `pass-cli` env (`BASE_URL` or `SECMAN_BACKEND_URL`, plus
+`FRONTEND_URL`) and **fail fast when they are missing** rather than falling back
+to a default. Never hardcode `localhost:8080` / `localhost:4321`. The driver and
+Playwright config respect `BASE_URL` / `FRONTEND_URL` / `SECMAN_BASE_URL`, and
+the driver deliberately has no localhost fallback — an unset variable should stop
+the run, not silently retarget it.
 
 | Setting               | Default                            |
 |-----------------------|------------------------------------|
@@ -159,8 +195,24 @@ suspected root-cause file, and what you tried.
 
 ## Idempotency check & important constraints
 
-Once green, re-run immediately to verify cleanup. Details + the full list of
-non-negotiable constraints (no commits, Proton Pass only, no localhost literals,
-role pinning, Phase 10 destructive baseline, AWS scoping invariant) live in
-`references/notes.md`. **Read it before merging** any fix that touches cleanup,
-roles, or AWS sharing.
+Once green, re-run immediately to verify cleanup.
+
+**This re-run shares the same 5-iteration budget** (`../_shared/stack-lifecycle.md`
+§6) — it does not get its own. A cleanup regression found here is fixed with
+whatever iterations remain; if none remain, report the regression rather than
+continuing. Two independent budgets would multiply to 25 worst-case iterations,
+which is not what a maximum means.
+
+If the second pass fails, the defect is in `cleanup()`, not in the feature under
+test — the first pass already proved the feature works. Fix cleanup, not the
+assertions.
+
+Details + the full list of non-negotiable constraints (no commits, Proton Pass
+only, no localhost literals, role pinning, Phase 10 destructive baseline, AWS
+scoping invariant) live in `references/notes.md`. **Read it before merging** any
+fix that touches cleanup, roles, or AWS sharing.
+
+**Triaging reachability failures:** the driver's pre-flight logs the *resolved*
+`BASE_URL` and `FRONTEND_URL`. Quote that line when reporting a connection
+failure — it removes all ambiguity about which backend and frontend the run
+actually targeted, which is otherwise the most common dead end.

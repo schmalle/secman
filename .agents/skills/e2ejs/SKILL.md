@@ -13,15 +13,15 @@ description: >
   all pages", "fix js errors", or similar.
 context: fork
 ---
-# E2E JavaScript Error Scanner — Iterative Fix Loop (Dual-Role)
 
-> **Sync policy**: This file mirrors `.claude/skills/e2ejs/SKILL.md`, which
-> is the **leading, authoritative** copy for this repo (see `CLAUDE.md`
-> §"Tooling Conventions"). Whenever the Claude Code version changes, port
-> the same change here, translating Claude-specific mechanics to their
-> Codex equivalent (e.g. Bash tool `dangerouslyDisableSandbox: true` ↔
-> `sandbox_permissions: "require_escalated"`). Never let this file diverge
+> **Sync policy**: This file mirrors `.claude/skills/e2ejs/SKILL.md`,
+> which is the **leading, authoritative** copy for this repo (see
+> `CLAUDE.md` §"Tooling Conventions"). Whenever the Claude Code version
+> changes, port the same change here, translating Claude-specific mechanics
+> to their Codex equivalent (e.g. Bash tool `dangerouslyDisableSandbox: true`
+> ↔ `sandbox_permissions: "require_escalated"`). Never let this file diverge
 > ahead of the Claude Code version.
+# E2E JavaScript Error Scanner — Iterative Fix Loop (Dual-Role)
 
 You are an orchestration agent that brings up the full-stack development
 environment on loopback, scans every application page **via the shared URL
@@ -29,6 +29,12 @@ environment on loopback, scans every application page **via the shared URL
 sequence — admin first, then a normal user**, and **iteratively fixes every
 failure** until all pages are clean for both roles or you've exhausted the
 retry budget.
+
+> **Read `../_shared/stack-lifecycle.md` in full before touching the stack.** It
+> defines the cold-start sequence, port-bind liveness, credentials, logging and
+> the 5-iteration budget this skill assumes. Note this skill's one deviation:
+> functional checks go through `https://secman.covestro.net`, not `SECMAN_HOST`
+> directly — see below.
 
 ## Dual-Role Run
 
@@ -39,6 +45,11 @@ Each call to `tests/js-error-scanner-pp.sh` performs two scanner passes back-to-
 2. **Normal-user pass** — logs in with `SECMAN_USER_USER` / `SECMAN_USER_PASS`
    (vault field name for the username is `SECMAN_USER_NAME`:
    `pass://Test/SECMAN/SECMAN_USER_NAME` and `…/SECMAN_USER_PASS`).
+   If that login fails because the account does not exist on this instance, run
+   `./scripts/test/provision-test-user.sh` — it creates the account and is
+   idempotent (exits 0 when it already exists). A missing account and a wrong
+   password both surface as a login failure, so check existence before
+   suspecting vault drift.
 
 Both passes hit the **same** host URL pulled from
 `pass://Test/SECMAN/SECMAN_HOST` (must be HTTPS — `https://secman.covestro.net`).
@@ -71,7 +82,9 @@ Rules:
 - The scanner URL is **always** `https://secman.covestro.net`. Do not target
   `http://localhost:4321`, `http://localhost:8080`, or any other variant.
 - Always export `SECMAN_BACKEND_URL=https://secman.covestro.net` before
-  invoking the scanner. The wrapper now enforces this host as policy and rejects non-compliant values.
+  invoking the scanner. The wrapper enforces this host as policy and exits 2 on
+  a non-compliant value (`tests/js-error-scanner-pp.sh:8-12`); its old local
+  auto-detection branch is disabled for policy compliance (`:15`).
 - Do **NOT** set `SECMAN_INSECURE=true`. The shared hostname must present a
   valid certificate end-to-end — if TLS verification fails, fix the cert /
   proxy setup rather than disabling verification.
@@ -109,9 +122,9 @@ Rules:
 
 **Outside-sandbox requirement:** Always start `./scripts/startbackenddev.sh`
 and `./scripts/startfrontenddev.sh` outside the sandbox / with escalated
-permissions. In Codex, run these commands with
-`sandbox_permissions: "require_escalated"`; do not start either dev server
-inside the filesystem sandbox.
+permissions (e.g. `sandbox_permissions: "require_escalated"`). Both scripts
+source secrets via `pass-cli`, which a sandboxed shell cannot reach — do not
+start either dev server inside the filesystem sandbox.
 
 1. **Verify hostname mapping** — confirm `secman.covestro.net` resolves to
    `127.0.0.1`:
@@ -172,7 +185,9 @@ SECMAN_BACKEND_URL=https://secman.covestro.net \
 ```
 Where N is the iteration number (starting at 1).
 
-The wrapper enforces `https://secman.covestro.net` and exits early on host/TLS policy violations.
+The wrapper enforces `https://secman.covestro.net` (or a `pass://` URI) and
+exits early on a host/TLS policy violation, so a misconfigured target fails
+loudly rather than silently scanning the wrong origin.
 
 **Important environment variables** — `SECMAN_ADMIN_NAME`,
 `SECMAN_ADMIN_PASS`, `SECMAN_USER_USER` (vault field `SECMAN_USER_NAME`),
@@ -263,11 +278,10 @@ After applying fixes (whether backend or frontend):
    ./scripts/stopbackenddev.sh
    ```
    Never call `kill` or `lsof | xargs kill` inline — always go through the script.
-2. **Restart backend**:
+2. **Restart backend** (outside the sandbox):
    ```bash
    nohup ./scripts/startbackenddev.sh > .e2e-logs/backend.log 2>&1 &
    ```
-   This restart command must be executed outside the sandbox.
 3. **Wait for backend health check via the shared URL** —
    poll `https://secman.covestro.net/` until it responds (120s timeout).
    Do not poll `http://localhost:8080` directly; the scanner will not use it.
@@ -300,15 +314,24 @@ error count decreased.
 - Print a summary table with **per-role** columns (each iteration runs both roles):
 
 ```
-| Iter | Role  | Pages | Clean | Errors | Timeout | Fix Applied                  |
-|------|-------|-------|-------|--------|---------|------------------------------|
-| 1    | admin | 58    | 54    | 4      | 0       | backend: AssetController.kt  |
-| 1    | user  | 58    | 53    | 5      | 0       | (errors carried into iter 2) |
-| 2    | admin | 58    | 58    | 0      | 0       | —                            |
-| 2    | user  | 58    | 56    | 2      | 0       | frontend: VulnTable.tsx      |
-| 3    | admin | 58    | 58    | 0      | 0       | —                            |
-| 3    | user  | 58    | 58    | 0      | 0       | — (all clean)                |
+| Iter | Role  | Pages | Clean | Errors | Timeout | Expired | Fix Applied                  |
+|------|-------|-------|-------|--------|---------|---------|------------------------------|
+| 1    | admin | 58    | 54    | 4      | 0       | 0       | backend: AssetController.kt  |
+| 1    | user  | 58    | 53    | 5      | 0       | 0       | (errors carried into iter 2) |
+| 2    | admin | 58    | 58    | 0      | 0       | 0       | —                            |
+| 2    | user  | 58    | 56    | 2      | 0       | 0       | frontend: VulnTable.tsx      |
+| 3    | admin | 58    | 58    | 0      | 0       | 0       | —                            |
+| 3    | user  | 58    | 58    | 0      | 0       | 0       | — (all clean)                |
 ```
+
+**The `Expired` column is not optional.** The scanner flips its exit code to 1
+when `expiredPages` is non-empty, exactly as it does for errors and timeouts
+(`tests/js-error-scanner.mjs:214`). A session that expires mid-scan means the
+pages after that point were never genuinely verified — so a run with a non-zero
+Expired count is a **partial scan**, not a clean one, even though the individual
+`[SESSION EXPIRED]` lines are correctly classified as infra rather than code
+bugs. Re-run those pages with a fresh session before reporting the role clean,
+and if you cannot, say which pages went unverified.
 
 - If there are still failures, list each one with the file and line where you
   believe the root cause is, and what you tried.
@@ -331,13 +354,16 @@ error count decreased.
   a valid certificate. If TLS verification fails, fix the cert/proxy rather
   than disabling verification.
 - **Log files** go to `.e2e-logs/` — this directory is gitignored.
-- **Scanner pages list** is discovered by `tests/js-error-scanner.mjs` from
-  `src/frontend/src/pages/`, plus static entries. If the scanner reports a
-  page error, the fix is usually in the application code, not the scanner.
+- **Scanner pages list** is *discovered*, not hardcoded: `tests/js-error-scanner.mjs`
+  walks `src/frontend/src/pages/` and adds `STATIC_PAGES`. A new page is picked
+  up automatically. If the scanner reports a page error, the fix is usually in
+  the application code, not the scanner.
 - **Product-related pages must be covered**: verify the discovered route list
   includes `/products`, `/installed-products`, and product drilldown surfaces
   such as `/vulnerability-statistics` and asset detail routes linked from
-  product tables when test data makes dynamic routes available.
+  product tables when test data makes dynamic routes available. Route discovery
+  finds files, not dynamic instances — a `[id].astro` route only gets exercised
+  if data exists to link to it.
 - Backend controllers: `src/backendng/src/main/kotlin/com/secman/controller/`
 - Frontend pages: `src/frontend/src/pages/`
 - Frontend components: `src/frontend/src/components/`

@@ -9,7 +9,6 @@ description: >
   or similar.
 context: fork
 ---
-# CrowdStrike Vulnerability Match Test
 
 > **Sync policy**: This file mirrors `.claude/skills/crowdstrike-vuln-match/SKILL.md`,
 > which is the **leading, authoritative** copy for this repo (see
@@ -18,6 +17,7 @@ context: fork
 > to their Codex equivalent (e.g. Bash tool `dangerouslyDisableSandbox: true`
 > ↔ `sandbox_permissions: "require_escalated"`). Never let this file diverge
 > ahead of the Claude Code version.
+# CrowdStrike Vulnerability Match Test
 
 This skill validates that SecMan's current CrowdStrike vulnerability state still
 matches Falcon for a bounded sample of assets. The matcher itself is
@@ -25,48 +25,37 @@ matches Falcon for a bounded sample of assets. The matcher itself is
 vulnerabilities, then runs `secman query --hostname ... --output ...` for every
 sampled host without `--save`.
 
-## Phase 0 — Kill Running Services (mandatory, unconditional)
+> **Read `../_shared/stack-lifecycle.md` in full before touching the stack.** It
+> defines the cold-start sequence, port-bind liveness, credential and host-URL
+> rules this skill assumes. In short: stop both services unconditionally, verify
+> the ports freed, start outside the sandbox, log to `.e2e-logs/`, target
+> `SECMAN_HOST` from `pass-cli` and never `localhost`.
 
-Never reuse an already-running backend or frontend — a running instance may
-predate the current working tree and would invalidate the comparison. Always
-start from a cold stack, even if the ports look free or the services look
-healthy:
+## Phase 0 — Precondition: a current CLI jar
 
-```bash
-./scripts/stopbackenddev.sh
-./scripts/stopfrontenddev.sh
-```
-
-Both scripts graceful-kill first, force-kill anything still listening on
-8080/4321, and are safe no-ops when nothing is running. Never call `kill` or
-`lsof | xargs kill` inline. Wait ~3 seconds, then verify both ports are free:
+The comparison calls Falcon through the SecMan CLI, so a stale jar silently
+compares against outdated query logic and the mismatches it reports look like
+real SecMan/Falcon drift. Rebuild unconditionally and gate on the artifact —
+"rebuild if it isn't current" is not checkable, so don't try:
 
 ```bash
-lsof -iTCP:8080 -sTCP:LISTEN -n -P   # must print nothing
-lsof -iTCP:4321 -sTCP:LISTEN -n -P   # must print nothing
+./gradlew :cli:shadowJar
+JAR=src/cli/build/libs/cli-0.1.0-all.jar
+test -f "$JAR" || { echo "FATAL: CLI jar build did not produce $JAR"; exit 1; }
 ```
 
-## Phase 1 — Start Services Fresh
+If the build fails, stop here and surface the Gradle error. There is no point
+starting services for a comparison that cannot run.
 
-**Outside-sandbox requirement:** Always start `./scripts/startbackenddev.sh`
-and `./scripts/startfrontenddev.sh` outside the sandbox / with escalated
-permissions. In Codex, run these commands with
-`sandbox_permissions: "require_escalated"`; do not start either dev server
-inside the filesystem sandbox. Both scripts source secrets via `pass-cli`,
-which a sandboxed shell cannot reach.
+## Phase 1 — Cold-start the stack
 
-1. `mkdir -p .e2e-logs`
-2. Start backend in background (outside the sandbox):
-   ```bash
-   nohup ./scripts/startbackenddev.sh > .e2e-logs/backend.log 2>&1 &
-   ```
-3. Start frontend in background (outside the sandbox):
-   ```bash
-   nohup ./scripts/startfrontenddev.sh > .e2e-logs/frontend.log 2>&1 &
-   ```
-4. **Wait for liveness via port binding** (not HTTP):
-   - Backend: poll `lsof -iTCP:8080 -sTCP:LISTEN -n -P` until non-empty (120s budget).
-   - Frontend: poll `lsof -iTCP:4321 -sTCP:LISTEN -n -P` until non-empty (60s budget).
+Follow `../_shared/stack-lifecycle.md` §1–§4: stop both services
+unconditionally, verify the ports are free, start both outside the sandbox with
+logs under `.e2e-logs/`, and wait for the port-bind liveness checks.
+
+A cold stack matters more here than in most skills: the whole output is a
+statement about what SecMan currently holds, and a backend predating the working
+tree would make every mismatch unattributable.
 
 ## Phase 2 — Run the Matcher
 
@@ -126,32 +115,56 @@ Exit codes:
 - `1` — at least one asset had a mismatch or Falcon query error.
 - `2`/other shell failures — setup, authentication, or environment problem.
 
-## Recommended operation
-
-1. Build the CLI first if it is not already current:
-
-   ```bash
-   ./gradlew :cli:shadowJar
-   ```
-
-2. Run Phase 0 → Phase 1 → Phase 2 in order. The service kill + fresh start is
-   not optional.
-
-3. If the matcher fails, inspect the Markdown report first. Use the JSON report
-   for automation or to re-check exact `(CVE, product)` keys.
-
-4. Do **not** run a saving import from this skill. If Falcon is authoritative
-   and the mismatch is expected, run the normal operational import separately:
-
-   ```bash
-   ./scripts/secman query servers --save --severity HIGH,CRITICAL --device-type SERVER
-   ```
-
-## Phase 3 — Teardown
-
-Stop both services when the run is complete:
+Do **not** run a saving import from this skill. If Falcon is authoritative and
+the mismatch is expected, run the normal operational import separately:
 
 ```bash
-./scripts/stopbackenddev.sh
-./scripts/stopfrontenddev.sh
+./scripts/secman query servers --save --severity HIGH,CRITICAL --device-type SERVER
 ```
+
+## Phase 3 — Read the report and summarize it
+
+**Exit code 0 is not the deliverable, and exit code 1 is not a failure.** A
+mismatch is the *finding* this skill exists to produce — reporting "exit 1, the
+matcher failed" is the single most likely way to waste a run. You must open
+`crowdstrike-vulnerability-match-report.md` and tell the user what it says.
+
+Read the Markdown report (the JSON is for automation and for re-checking exact
+`(CVE, product)` keys) and report:
+
+```
+# CrowdStrike ↔ SecMan comparison
+
+Sampled: <n> assets (type <T>, severity <S>)   Exit code: <0|1|2>
+
+| Category | Count |
+|---|---|
+| Assets fully matching | |
+| Assets with mismatches | |
+| Rows in SecMan, missing from Falcon | |
+| Rows in Falcon, missing from SecMan | |
+| Severity drift on matching keys | |
+
+## Notable mismatches
+<up to ~10, each with hostname and (CVE, product); say how many were omitted>
+
+## Assets that could not be compared
+<Falcon query errors, auth failures — these are NOT matches, do not count them as clean>
+
+Reports: crowdstrike-vulnerability-match-report.{md,json}
+```
+
+Interpretation, so the counts mean something:
+
+- **Rows in SecMan, missing from Falcon** — usually remediation that the import
+  has not yet reconciled, or a stale row the cleanup sweep should have removed.
+- **Rows in Falcon, missing from SecMan** — usually a missed or partial import.
+  This is the direction that means SecMan is under-reporting risk.
+- **Severity drift** — Falcon re-scored a CVE after import.
+
+Exit code `2` (or another shell failure) is a genuine failure — setup, auth or
+environment. Say so plainly and do not present partial counts as a result.
+
+## Phase 4 — Teardown
+
+Stop both services, on the failure path too — `../_shared/stack-lifecycle.md` §7.

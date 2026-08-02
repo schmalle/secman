@@ -10,7 +10,6 @@ description: >
   "test vulnerability + exception workflow", or similar.
 context: fork
 ---
-# E2E Vulnerability + Exception Full Workflow — Iterative Fix Loop
 
 > **Sync policy**: This file mirrors `.claude/skills/e2evulnexception/SKILL.md`,
 > which is the **leading, authoritative** copy for this repo (see
@@ -19,63 +18,33 @@ context: fork
 > to their Codex equivalent (e.g. Bash tool `dangerouslyDisableSandbox: true`
 > ↔ `sandbox_permissions: "require_escalated"`). Never let this file diverge
 > ahead of the Claude Code version.
+# E2E Vulnerability + Exception — Iterative Fix Loop
 
-You are an orchestration agent that brings up a full-stack environment, runs
-the **combined MCP + Web UI** vulnerability and exception lifecycle test, and
-**iteratively fixes every failure** until it passes or you've exhausted the
-retry budget.
+You are an orchestration agent. Bring up the full stack, run the combined MCP +
+Web UI test, and **iteratively fix every failure** until it passes or the retry
+budget is exhausted.
 
-## Test Overview
+> **⚠️ The driver is destructive on real data.** Its Phase 10 baseline wipes
+> every row in the target database — not just rows this test created. It is only
+> safe against a disposable instance. Confirm what `BASE_URL` resolves to before
+> running; if there is any chance it is shared or production-like, stop and ask.
+> Relatedly: never "fix" cleanup by narrowing it to match on `created_by`, which
+> would delete real admin-authored exceptions.
 
-The driver script is
-`scripts/test/test-e2e-vuln-exception-full.sh`. It owns the testbed:
+> **Read `../_shared/stack-lifecycle.md` in full before touching the stack.** It
+> defines the cold-start sequence, port-bind liveness, credentials, logging and
+> the 5-iteration budget this skill assumes.
 
-**Users** (USER + VULN + REQ — no ADMIN/SECCHAMPION so requests stay PENDING):
-- `e2etestuser1` (`e2etestuser1@e2e.test`)
-- `e2etestuser2` (`e2etestuser2@e2e.test`)
-
-**Vulnerability-test assets** (owner is a plain string username):
-- `testasset1` — owner `e2etestuser1`, ip `10.99.0.1`
-- `testasset2` — owner `e2etestuser2`, ip `10.99.0.2`
-
-**Vulnerabilities**:
-- `vuln1` — `CVE-E2E-0001` CRITICAL, `daysOpen=40` on `testasset1` (overdue, threshold = 30d)
-- `vuln2` — `CVE-E2E-0002` CRITICAL, `daysOpen=5` on **both** `testasset1` and `testasset2`
-
-**AWS account sharing testbed** (Phase 8):
-- AWS account `123456789012` (A) — mapped to `e2etestuser1`; later **shared (scoped) → user2**
-- AWS account `876543210987` (B) — mapped to `e2etestuser2` (their own; never shared)
-- AWS account `555555555555` (C) — mapped to `e2etestuser1` **after** the sharing rule
-  is created. Tests prove the rule's per-account scope (`selectedAwsAccountIds=[A]`)
-  prevents the new account from leaking to user2.
-- Assets `testaws-a` / `testaws-b` / `testaws-c` carry those `cloudAccountId` values and
-  use a non-user owner string (`awssharing-owner`) so the only access path is via
-  `UserMapping` or `AwsAccountSharing` — not the owner rule.
-
-**Phases inside the driver**:
-
-| Phase | What it covers |
-|------:|----------------|
-| 0 | Pre-run cleanup (idempotent — direct SQL on `users`, `asset`, `vulnerability`, `vulnerability_exception_request`, `exception_request_audit`, `outdated_asset_materialized_view`, **`aws_account_sharing`**, **`user_mapping`**) |
-| 1 | MCP setup: `add_user` × 2, `create_asset` × 2, `add_vulnerability` × 3, materialized-view refresh |
-| 2 | MCP visibility/RBAC: `get_vulnerabilities` as user1, user2, admin |
-| 3 | MCP overdue: `get_overdue_assets` as user1, user2, admin |
-| 4 | MCP exception lifecycle — APPROVE path (user1 creates → admin approves → user1 sees APPROVED) |
-| 5 | MCP exception lifecycle — REJECT path (user2 creates → admin rejects with comment) |
-| 6 | MCP exception lifecycle — CANCEL path (user1 creates → user1 cancels) |
-| 7 | MCP authorization negatives: user2 cannot approve, user1 cannot create on user2's asset, missing `X-MCP-User-Email` |
-| 8 | **MCP AWS account sharing** — create `UserMapping`s + AWS-tagged assets, `create_aws_account_sharing` (scoped to one account), verify directional + scoped visibility, add a second mapping/asset to the source user and prove it does **not** leak to the target, `list_aws_account_sharing` as admin |
-| 9 | Web UI (Playwright `tests/e2e/vuln-exception-full.spec.ts`): scoped visibility, my-requests states, approval dashboard, **admin AWS sharing dashboard, `/account-vulns` for user1 and user2 to verify scoped sharing in the UI** |
-| 10 | **Exception import/export/delete-all** — REST `/export`, MCP `delete_all_vulnerability_exceptions`, MCP `list_vulnerability_exceptions`, REST `/import`. 17 steps including non-admin negatives, idempotency, and baseline restore. |
-| (trap) | Post-run cleanup — runs even on failure |
-
-The shell driver calls MCP via `curl`/`jq` and shells out to `npx playwright`
-for Phase 8, passing the captured IDs/credentials through env vars.
+**Then start tool calls immediately.** Beyond the shared contract and the
+warning above, do not pre-read the `references/` files — load them when a
+specific phase needs them. (The destructive warning used to live in
+`references/notes.md`; it was promoted here because the moment you need it is
+before you would have thought to go looking.)
 
 ## Read-Only / QA Scope Mode
 
-If the requested task scope is explicitly read-only or QA-only, run a **static
-review only**:
+If the requested scope is explicitly read-only or QA-only, run a **static review
+only**:
 
 - Do **not** start backend/frontend services.
 - Do **not** run the shell driver or Playwright.
@@ -84,7 +53,7 @@ review only**:
   findings.
 
 Static-review checklist (inspect artifacts only):
-- Skill doc: `.agents/skills/e2evulnexception/SKILL.md`
+- Skill doc: `.agents/skills/e2evulnexception/SKILL.md` and its `references/`
 - Shell driver: `scripts/test/test-e2e-vuln-exception-full.sh`
 - Playwright spec: `tests/e2e/vuln-exception-full.spec.ts`
 - Cleanup semantics: pre/post cleanup behavior, idempotency, trap handling
@@ -95,86 +64,57 @@ Static-review checklist (inspect artifacts only):
 ```
 0. Kill any running backend/frontend via the stop scripts — always,
    even if ports look free (never `kill`).
-1. Start backend   (./scripts/startbackenddev.sh outside the sandbox)
-2. Start frontend  (./scripts/startfrontenddev.sh outside the sandbox)
-3. Wait for both ports to be bound (8080 / 4321)
-4. Run the driver:
+1. Start backend  (./scripts/startbackenddev.sh outside the sandbox)
+2. Start frontend (./scripts/startfrontenddev.sh outside the sandbox)
+3. Wait for both ports to be BOUND (port binding, not HTTP)
+4. Run driver:
      pass-cli run --env-file ./secmanpp.env -- \
-       ./scripts/test/test-e2e-vuln-exception-full.sh --verbose
-5. IF all green → done, report success
-6. IF failure →
-   a. STOP both services (./scripts/stopbackenddev.sh, ./scripts/stopfrontenddev.sh)
-   b. Diagnose backend vs frontend vs test
-   c. Apply the fix
-   d. RESTART both services
-   e. Go to step 4
-7. After 5 iterations without progress → stop and present summary
+       ./scripts/test/test-e2e-vuln-exception-full.sh --verbose \
+       2>&1 | tee .e2e-logs/e2e-vuln-exception-run-<N>.log
+5. All green → done.
+6. Failure → stop services, classify, fix, restart, re-run (max 5 iterations).
 ```
 
-**CRITICAL RULE**: On any error, **stop both services first**, apply the fix,
-then **restart both** before retrying. Never edit code while services are
-running. (Frontend may hot-reload for trivial fixes, but the safe default is
-full restart for this skill.)
+**CRITICAL**: on any failure, **stop both services BEFORE editing**, then
+**restart both** before retrying. Never edit code while services are running.
 
-## Detailed Instructions
+## Phase 1 — Start services
 
-### Phase 1 — Environment Setup
+This skill is pinned to Proton Pass. Strict policy: set the backend and frontend
+URLs from `pass-cli` env (`BASE_URL` or `SECMAN_BACKEND_URL`, plus
+`FRONTEND_URL`) and **fail fast when they are missing** rather than falling back
+to a default. Never hardcode `localhost:8080` / `localhost:4321`. The driver and
+Playwright config respect `BASE_URL` / `FRONTEND_URL` / `SECMAN_BASE_URL`, and
+the driver deliberately has no localhost fallback — an unset variable should stop
+the run, not silently retarget it.
 
-This skill is **pinned to Proton Pass** — start services via the wrapper
-scripts that source secrets via `pass-cli`. Never hardcode `localhost:8080`
-or `localhost:4321` in tests; the driver and Playwright config already
-respect `BASE_URL` / `SECMAN_BACKEND_URL` / `FRONTEND_URL` / `SECMAN_BASE_URL`.
+| Setting               | Default                            |
+|-----------------------|------------------------------------|
+| Backend start         | `./scripts/startbackenddev.sh`     |
+| Backend port wait     | `lsof -iTCP:8080 -sTCP:LISTEN -n -P`, 120s |
+| Frontend start        | `./scripts/startfrontenddev.sh`    |
+| Frontend port wait    | `lsof -iTCP:4321 -sTCP:LISTEN -n -P`, 60s  |
 
 **Outside-sandbox requirement:** Always start `./scripts/startbackenddev.sh`
 and `./scripts/startfrontenddev.sh` outside the sandbox / with escalated
-permissions. In Codex, run these commands with
-`sandbox_permissions: "require_escalated"`; do not start either dev server
-inside the filesystem sandbox.
+permissions (e.g. `sandbox_permissions: "require_escalated"`). Both scripts
+source secrets via `pass-cli`, which a sandboxed shell cannot reach — do not
+start either dev server inside the filesystem sandbox.
 
-| Setting                  | Default                           |
-| ------------------------ | --------------------------------- |
-| Backend start            | `./scripts/startbackenddev.sh`   |
-| Backend port             | `8080` (liveness via port binding)|
-| Backend wait timeout     | `120` seconds                     |
-| Frontend start           | `./scripts/startfrontenddev.sh`  |
-| Frontend port            | `4321` (liveness via port binding)|
-| Frontend wait timeout    | `60` seconds                      |
+Steps:
 
-**Starting services:**
-
-1. Create `.e2e-logs/` if it doesn't exist.
+1. `mkdir -p .e2e-logs`
 2. **Always** run `./scripts/stopbackenddev.sh` and
    `./scripts/stopfrontenddev.sh` — unconditional, even if 8080/4321 look
-   free (safe no-ops when nothing runs; never `kill` inline). Never reuse an
-   already-running backend or frontend. Wait ~3s, then verify both ports are
-   unbound via `lsof -iTCP:8080 -sTCP:LISTEN -n -P` /
-   `lsof -iTCP:4321 -sTCP:LISTEN -n -P`.
-3. Start backend in background:
-   ```bash
-   nohup ./scripts/startbackenddev.sh > .e2e-logs/backend.log 2>&1 &
-   ```
-   This start command must be executed outside the sandbox.
-4. Start frontend in background:
-   ```bash
-   nohup ./scripts/startfrontenddev.sh > .e2e-logs/frontend.log 2>&1 &
-   ```
-   This start command must be executed outside the sandbox.
-5. **Wait for liveness via port binding** (not HTTP probes against localhost):
-   - Backend: poll `lsof -iTCP:8080 -sTCP:LISTEN -n -P` until non-empty (120s).
-   - Frontend: poll `lsof -iTCP:4321 -sTCP:LISTEN -n -P` until non-empty (60s).
-6. **Install Playwright deps** if missing:
-   ```bash
-   [ -d tests/e2e/node_modules ] || (cd tests/e2e && npm install)
-   ```
-   (Browsers should already be installed via
-   `npx playwright install chrome msedge` per `AGENTS.md`.)
+   free (safe no-ops when nothing runs). Never reuse an already-running
+   backend or frontend. Wait ~3s, then verify both ports are unbound via
+   `lsof -iTCP:8080 -sTCP:LISTEN -n -P` / `lsof -iTCP:4321 -sTCP:LISTEN -n -P`.
+3. `nohup ./scripts/startbackenddev.sh > .e2e-logs/backend.log 2>&1 &` (outside the sandbox)
+4. `nohup ./scripts/startfrontenddev.sh > .e2e-logs/frontend.log 2>&1 &` (outside the sandbox)
+5. Poll `lsof` until both ports bind (exit as soon as bound — don't sleep the full window).
+6. If `tests/e2e/node_modules` is missing: `(cd tests/e2e && npm install)`.
 
-### Phase 2 — Run Tests
-
-- Driver pre-flight now logs the **resolved** `BASE_URL` and `FRONTEND_URL`; include that line when triaging reachability failures so backend/frontend target ambiguity is eliminated.
-
-
-Run the driver with Proton Pass injection:
+## Phase 2 — Run the driver
 
 ```bash
 pass-cli run --env-file ./secmanpp.env -- \
@@ -182,162 +122,74 @@ pass-cli run --env-file ./secmanpp.env -- \
     | tee .e2e-logs/e2e-vuln-exception-run-<N>.log
 ```
 
-Where `<N>` is the iteration number (starting at 1).
+Driver reads from `secmanpp.env`: `SECMAN_MCP_KEY`, `SECMAN_ADMIN_EMAIL`,
+`SECMAN_ADMIN_NAME`, `SECMAN_ADMIN_PASS`.
 
-The driver consumes from env (already in `secmanpp.env`):
-- `SECMAN_MCP_KEY`, `SECMAN_ADMIN_EMAIL` — MCP auth + delegation
-- `SECMAN_ADMIN_NAME`, `SECMAN_ADMIN_PASS` — JWT for view refresh + UI login
+Required tools: `curl`, `jq`, `mariadb`, `pass-cli`, `node`/`npx`.
 
-**Required tools on the system**: `curl`, `jq`, `mariadb`, `pass-cli`,
-`node`/`npx` (Playwright).
+For the full testbed layout (users, assets, vulnerabilities, AWS sharing IDs,
+phase-by-phase coverage), read `references/testbed.md` only if you need it.
 
-### Phase 2.5 — Error Classification
+## Phase 2.5 — Classify the failure
 
-The driver emits structured `[PASS]` / `[FAIL]` / `[WARN]` / `[INFO]` lines.
-Classify the most recent failure:
+Find the first `[FAIL]` in `.e2e-logs/e2e-vuln-exception-run-<N>.log`.
 
-| Pattern                                                   | Category     | Action                                                           |
-| --------------------------------------------------------- | ------------ | ---------------------------------------------------------------- |
-| `MCP tool '...' failed`                                   | **backend**  | Fix tool handler in `src/backendng/.../mcp/tools/<Tool>.kt`      |
-| `[FAIL] user1 visibility wrong` etc.                      | **backend**  | Asset filter / RBAC service logic                                |
-| `[FAIL] admin overdue list mismatch`                      | **backend**  | Materialized view refresh, `OutdatedAssetService`                |
-| `[FAIL] Expected APPROVED, got ...`                       | **backend**  | `VulnerabilityExceptionRequestService` state machine             |
-| `[FAIL] Expected user2 approve to fail`                   | **backend**  | Role check missing in `ApproveExceptionRequestTool`              |
-| `Failed to create test user`                              | **backend**  | `AddUserTool` / unique constraint / event listener crash         |
-| `[FAIL] Baseline: user1 should see testaws-a`             | **backend**  | `AssetFilterService` not honoring `UserMapping` AWS account path |
-| `[FAIL] user2 should see testaws-a via sharing`           | **backend**  | `AwsAccountSharingService.getSharedAwsAccountIdsByEmail` / `findSharedAwsAccountIdsByTargetUserId` query — empty selection should resolve to source's full mapping set, non-empty to listed IDs only |
-| `[FAIL] SCOPE LEAK: user2 saw testaws-c`                  | **backend**  | Per-account scoping is broken — `aws_account_sharing_account` join not applied or repository SQL treats non-empty selection as "all". See V207 + `AwsAccountSharingRepository.findSharedAwsAccountIdsByTargetUserId` |
-| `Failed to create user mapping`                           | **backend**  | `UserMappingController.createMapping` — admin role check, validation, or DB constraint |
-| `Sharing rule create failed`                              | **backend**  | `CreateAwsAccountSharingTool` / `AwsAccountSharingService.createSharingRule` — typically delegation/admin-role enforcement or duplicate-rule conflict |
-| `Cannot reach backend`                                    | **infra**    | Backend didn't start — read `.e2e-logs/backend.log`              |
-| `Frontend not reachable`                                  | **infra**    | Frontend didn't start — read `.e2e-logs/frontend.log`            |
-| Playwright `expect(body).toContain(CVE_*)` fails          | **frontend** | UI page didn't render — check page route, hydration, API call    |
-| Playwright login redirect timeout                         | **frontend** | Login form / auth handler regression                             |
-| Playwright `expected APPROVED|Approved`                   | **frontend** | `MyExceptionRequests.tsx` doesn't render status text             |
-| `10.6 round-trip count != 1` | **backend** | Service `importFromJson` or `exportAll` mismatch. Check `VulnerabilityExceptionImportExportService.kt`. |
-| `10.10 imported != 1` | **backend** | Asset resolution or fingerprint logic. Inspect `findListByName`, fingerprint match. |
-| `10.13 skippedDup != 1` | **backend** | `existingFingerprints` set logic in service. |
-| `10.14 ... returned 200, expected 403` | **backend** | Role check missing on `/export` endpoint. |
-| `10.15 non-admin was NOT denied` | **backend** | `DeleteAllVulnerabilityExceptionsTool` not enforcing `context.isAdmin`. |
-| `10.17 final count ... expected ...` | **backend** | Baseline restore import skipped rows it shouldn't. Check duplicate detection. |
-| Playwright `exceptions UI shows zero rows` | **frontend** | `VulnerabilityExceptionsTable` not refreshing after delete-all, or admin-only buttons leaking to non-admins. |
+Match it against `references/error-patterns.md` — that file maps every known
+`[FAIL]` line to **backend / frontend / infra** and points at the code to fix.
+Read it on demand, not preemptively.
 
-### Phase 3 — Fix Loop (Stop-Fix-Restart)
+## Phase 3 — Stop, Fix, Restart
 
-#### Step 3a: Stop Both Services
-
+### 3a. Stop both
 ```bash
 ./scripts/stopbackenddev.sh
 ./scripts/stopfrontenddev.sh
 ```
+Wait ~3 seconds. Never call `kill` directly.
 
-Wait 3 seconds for processes to terminate. Never call `kill` directly.
-
-#### Step 3b: Diagnose and Fix
-
+### 3b. Fix
 Fix priority: **backend first**, then frontend.
 
-**Key files for this test:**
+- Latest driver log: `.e2e-logs/e2e-vuln-exception-run-<N>.log`
+- Backend stack traces: `.e2e-logs/backend.log`
+- Playwright artifacts: `tests/e2e/test-results/`
 
-| Concern                                  | File                                                                                             |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| MCP tool registry                        | `src/backendng/src/main/kotlin/com/secman/mcp/McpToolRegistry.kt`                                |
-| Add user tool                            | `src/backendng/src/main/kotlin/com/secman/mcp/tools/AddUserTool.kt`                              |
-| Create asset tool                        | `src/backendng/src/main/kotlin/com/secman/mcp/tools/CreateAssetTool.kt`                          |
-| Add vulnerability tool                   | `src/backendng/src/main/kotlin/com/secman/mcp/tools/AddVulnerabilityTool.kt`                     |
-| Get vulnerabilities (RBAC filtering)     | `src/backendng/src/main/kotlin/com/secman/mcp/tools/GetVulnerabilitiesTool.kt`                   |
-| Get overdue assets                       | `src/backendng/src/main/kotlin/com/secman/mcp/tools/GetOverdueAssetsTool.kt`                     |
-| Get assets (RBAC + AWS sharing path)     | `src/backendng/src/main/kotlin/com/secman/mcp/tools/GetAssetsTool.kt`                            |
-| AWS sharing MCP tools                    | `src/backendng/src/main/kotlin/com/secman/mcp/tools/{Create,List,Delete}AwsAccountSharingTool.kt` |
-| AWS sharing service (scope resolution)   | `src/backendng/src/main/kotlin/com/secman/service/AwsAccountSharingService.kt`                   |
-| AWS sharing repository (scope SQL)       | `src/backendng/src/main/kotlin/com/secman/repository/AwsAccountSharingRepository.kt`             |
-| AWS sharing controller (UI REST)         | `src/backendng/src/main/kotlin/com/secman/controller/AwsAccountSharingController.kt`             |
-| AWS sharing scope migration              | `src/backendng/src/main/resources/db/migration/V207__aws_account_sharing_selected_accounts.sql`  |
-| User mapping controller (REST)           | `src/backendng/src/main/kotlin/com/secman/controller/UserMappingController.kt`                   |
-| Account-vulns service (own + shared)     | `src/backendng/src/main/kotlin/com/secman/service/AccountVulnsService.kt`                        |
-| AWS sharing UI                           | `src/frontend/src/components/AwsAccountSharingManager.tsx`, `src/frontend/src/pages/aws-account-sharing.astro` |
-| Account-vulns UI                         | `src/frontend/src/components/AccountVulnsView.tsx`, `src/frontend/src/pages/account-vulns.astro` |
-| Create / approve / reject / cancel       | `src/backendng/src/main/kotlin/com/secman/mcp/tools/{Create,Approve,Reject,Cancel}ExceptionRequestTool.kt` |
-| Exception request service                | `src/backendng/src/main/kotlin/com/secman/service/VulnerabilityExceptionRequestService.kt`       |
-| Vulnerability service (cli-add)          | `src/backendng/src/main/kotlin/com/secman/service/VulnerabilityService.kt`                       |
-| Asset access filter                      | `src/backendng/src/main/kotlin/com/secman/service/AssetFilterService.kt`                         |
-| Materialized view refresh                | `src/backendng/src/main/kotlin/com/secman/service/MaterializedViewRefreshService.kt`             |
-| Vulnerability config (overdue threshold) | `src/backendng/src/main/kotlin/com/secman/domain/VulnerabilityConfig.kt`                         |
-| Exception status enum                    | `src/backendng/src/main/kotlin/com/secman/domain/ExceptionRequestStatus.kt`                      |
-| My exception requests UI                 | `src/frontend/src/components/MyExceptionRequests.tsx`                                            |
-| Approval dashboard UI                    | `src/frontend/src/components/ExceptionApprovalDashboard.tsx`                                     |
-| Account vulnerabilities UI               | `src/frontend/src/pages/account-vulns.astro`                                                     |
-| Outdated assets UI                       | `src/frontend/src/pages/outdated-assets.astro`                                                   |
-| Driver script                            | `scripts/test/test-e2e-vuln-exception-full.sh`                                                  |
-| Playwright spec                          | `tests/e2e/vuln-exception-full.spec.ts`                                                          |
-| Import/export service                      | `src/backendng/src/main/kotlin/com/secman/service/VulnerabilityExceptionImportExportService.kt`                |
-| Import/export DTOs                         | `src/backendng/src/main/kotlin/com/secman/dto/VulnerabilityExceptionImportExportDtos.kt`                       |
-| Import/export REST endpoints               | `src/backendng/src/main/kotlin/com/secman/controller/VulnerabilityManagementController.kt` (`exportAllExceptions`, `importExceptions`, `deleteAllExceptions`) |
-| MCP delete-all-exceptions tool             | `src/backendng/src/main/kotlin/com/secman/mcp/tools/DeleteAllVulnerabilityExceptionsTool.kt`                   |
-| Frontend bulk admin buttons                | `src/frontend/src/components/VulnerabilityExceptionsTable.tsx`                                                 |
-| Frontend service-layer fns                 | `src/frontend/src/services/vulnerabilityManagementService.ts` (`exportAllExceptions`, `importExceptions`, `deleteAllExceptions`) |
+For the full file index (services, controllers, MCP tools, UI components,
+migrations) read `references/key-files.md`. It also lists common fix categories.
 
-**Diagnosis steps:**
-
-1. Read the latest log: `.e2e-logs/e2e-vuln-exception-run-<N>.log`. Find the
-   first `[FAIL]` and the surrounding `[INFO]` / `[DEBUG]` context.
-2. If backend-related, also read `.e2e-logs/backend.log` for stack traces near
-   the timestamp of the failure.
-3. Trace the MCP call: shell sends `tools/call` → `McpController` →
-   `McpToolService` → tool class → service → repository.
-4. For UI failures, the Playwright report is in `tests/e2e/playwright-report/`
-   (auto-opened only if you run with `--reporter=html`). Screenshots and
-   traces go to `tests/e2e/test-results/` (`screenshot: 'only-on-failure'`
-   and `trace: 'retain-on-failure'` per `playwright.config.ts`).
-5. Apply a **minimal** fix. Common categories:
-   - Missing tool registration in `McpToolRegistry`
-   - Null-pointer in service (missing `?.`/`?: default`)
-   - DTO/Serdeable shape mismatch in tool result vs assertion
-   - RBAC: delegation header not honored, role intersection wrong
-   - Materialized view refresh: trigger endpoint returning 5xx → wait fails
-     and overdue assertions break
-   - Frontend: API endpoint URL mismatch, missing `await fetch(...)`,
-     status text removed from rendering
+Apply a **minimal** fix. Don't refactor adjacent code.
 
 If the fix touched any file under `src/frontend/`, verify the build is clean
 before restarting: `cd src/frontend && npm ci && npm run build` must exit 0.
 This catches TypeScript errors, missing imports, and broken Astro/React
 components that Playwright alone won't surface.
 
-#### Step 3c: Restart Both
-
+### 3c. Restart both (outside the sandbox)
 ```bash
 nohup ./scripts/startbackenddev.sh > .e2e-logs/backend.log 2>&1 &
 nohup ./scripts/startfrontenddev.sh > .e2e-logs/frontend.log 2>&1 &
 ```
+Wait for ports to bind (same as Phase 1).
 
-Both restart commands must be executed outside the sandbox.
-
-Wait for ports `8080` and `4321` to be bound (same timeouts as Phase 1).
-
-#### Step 3d: Re-run
-
+### 3d. Re-run
 Increment `<N>`, return to Phase 2.
 
-#### Step 3e: Guard Rails
+### 3e. Guard rails
+- Same error twice → flag for the user and move on.
+- 5 iterations total → stop and present the summary.
+- Backend won't start (port never binds) → read `.e2e-logs/backend.log` and fix
+  compile/runtime errors before retrying.
 
-- Track which errors you've already attempted. If the **same error persists
-  after two attempts**, flag it for the user and move on (or stop).
-- After **5 total iterations**, stop and present a summary.
-- If the backend **fails to start** (port never binds), open `.e2e-logs/backend.log`
-  and fix compile/runtime errors before retrying. Don't loop on a broken backend.
+## Phase 4 — Teardown & Report
 
-### Phase 4 — Teardown & Report
-
-The driver's `trap EXIT` handler already removes test data even on failure.
-After the loop:
+The driver's `trap EXIT` removes test data even on failure. Then:
 
 ```bash
 ./scripts/stopbackenddev.sh
 ./scripts/stopfrontenddev.sh
 ```
 
-Print a summary table:
+Summary table:
 
 ```
 | Iter | MCP phase failed | UI phase failed | Fix applied                                       |
@@ -346,57 +198,29 @@ Print a summary table:
 | 2    | —                | —               | — (all green)                                     |
 ```
 
-If you stop short of green, list each remaining failure with:
-- The `[FAIL]` message
-- The file/line where you believe the root cause is
-- What you tried
+If you stop short of green, list each remaining failure with the `[FAIL]` line,
+suspected root-cause file, and what you tried.
 
-## Idempotency Verification
+## Idempotency check & important constraints
 
-Once green, **re-run the driver immediately** (same command) without doing any
-cleanup yourself. The trap and pre-run cleanup should mean the second pass is
-also green with zero fixes. If the second pass fails, treat it as a regression
-in the cleanup logic and fix `cleanup()` in
-`scripts/test/test-e2e-vuln-exception-full.sh`.
+Once green, re-run immediately to verify cleanup.
 
-## Important Notes
+**This re-run shares the same 5-iteration budget** (`../_shared/stack-lifecycle.md`
+§6) — it does not get its own. A cleanup regression found here is fixed with
+whatever iterations remain; if none remain, report the regression rather than
+continuing. Two independent budgets would multiply to 25 worst-case iterations,
+which is not what a maximum means.
 
-- **Never commit or push** — only edit files locally. The user drives commits.
-- **Secrets via Proton Pass** — both `scripts/startbackenddev.sh`,
-  `scripts/startfrontenddev.sh`, and the test driver use `pass-cli run`.
-  Never hardcode credentials.
-- **No `localhost` literals in tests** — strict policy: set backend/frontend URLs from pass-cli env (`BASE_URL` or `SECMAN_BACKEND_URL`, plus `FRONTEND_URL`) and fail fast when missing. Use `SECMAN_BASE_URL` for Playwright. Liveness checks use port binding, not HTTP probes.
-- **Logs**: backend → `.e2e-logs/backend.log`; frontend → `.e2e-logs/frontend.log`;
-  driver → `.e2e-logs/e2e-vuln-exception-run-<N>.log`. The directory is gitignored.
-- **MariaDB**: cleanup uses `mariadb -h 127.0.0.1 -u secman -pCHANGEME secman`.
-  MariaDB must be running.
-- **Roles**: `e2etestuser1`/`e2etestuser2` MUST stay non-admin and non-secchampion
-  so exception requests land as PENDING. If they ever get auto-approved, check
-  the `roles` argument in Phase 1 and the auto-approve logic in
-  `VulnerabilityExceptionRequestService`.
-- **Overdue threshold** is `VulnerabilityConfig.reminderOneDays` (default 30).
-  `vuln1` is 40d (overdue) and `vuln2` is 5d (not). If the threshold changes,
-  update both this skill and the driver constants.
-- **AWS sharing scope** — Phase 8 is the scope-leak guard. The sharing rule is
-  created with `selectedAwsAccountIds=[A]` *while* user1 still only owns
-  account A. After rule creation, account C is added to user1; the test
-  asserts user2 still only sees A and B, never C. If that assertion ever
-  flips, the scoping codepath in `AwsAccountSharingRepository`
-  (`findSharedAwsAccountIdsByTargetUserId`) is broken and ALL existing scoped
-  rules in production are silently leaking.
-- **AWS sharing cleanup** — `cleanup()` deletes from `aws_account_sharing`
-  (cascades to `aws_account_sharing_account` via V207's FK) and `user_mapping`
-  by both `user_id` and `email` so future-user/PENDING mapping rows are also
-  swept. Both run **before** the user delete because source/target user FKs
-  are NOT NULL with no cascade.
-- **Account IDs are 12 digits** — `UserMapping.awsAccountId` is validated by
-  `@Pattern(regexp = "^\\d{12}$")`. The hard-coded test IDs
-  (`123456789012` / `876543210987` / `555555555555`) satisfy that regex.
-  If the constants change, keep them 12-digit numeric.
-- **Phase 10 is destructive on real data**. Steps 10.2 and 10.7 issue
-  `delete_all_vulnerability_exceptions`, which wipes every row in the
-  DB — including any pre-existing real exceptions on the dev/test
-  machine. Step 10.16 re-imports the baseline file captured at 10.1 to
-  restore them. The trap cleanup then removes only test rows by
-  `reason LIKE 'E2E TEST %'`. Never weaken the cleanup to match by
-  `created_by` — that would nuke real admin-authored exceptions.
+If the second pass fails, the defect is in `cleanup()`, not in the feature under
+test — the first pass already proved the feature works. Fix cleanup, not the
+assertions.
+
+Details + the full list of non-negotiable constraints (no commits, Proton Pass
+only, no localhost literals, role pinning, Phase 10 destructive baseline, AWS
+scoping invariant) live in `references/notes.md`. **Read it before merging** any
+fix that touches cleanup, roles, or AWS sharing.
+
+**Triaging reachability failures:** the driver's pre-flight logs the *resolved*
+`BASE_URL` and `FRONTEND_URL`. Quote that line when reporting a connection
+failure — it removes all ambiguity about which backend and frontend the run
+actually targeted, which is otherwise the most common dead end.
