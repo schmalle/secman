@@ -25,9 +25,9 @@ Stack: Kotlin 2.4.10 / Java 25 · Micronaut 5.0 · Hibernate JPA · Astro 7.1 + 
 Layered:
 
 ```
-Controller (62)        @Controller, @Secured, validation
+Controller (80)        @Controller, @Secured, validation
    │
-Service (97)           @Singleton, @Transactional, business rules
+Service (146)          @Singleton, @Transactional, business rules
    │
 Repository             CrudRepository / custom JPQL
    │
@@ -48,13 +48,15 @@ Controller groups:
 
 ## Frontend (`src/frontend/`)
 
-Astro pages (69, 20 admin) with React islands; Axios services in `src/services/`.
+Astro pages (77, 23 admin) with React islands; Axios services in `src/services/`.
 
 Auth flow: the JWT lives in the HttpOnly `secman_auth` cookie (`AuthCookieService.AUTH_COOKIE_NAME`), never in JS-readable storage. Axios sends it via `withCredentials: true` (set globally in `utils/csrf.ts`); fetch calls use the `authenticated*` helpers in `utils/auth.ts` / `services/`. `sessionStorage["user"]` holds only the display/role payload — never a token. SSE endpoints take JWT in `?token=` query (EventSource has no header support).
 
 ## CLI (`src/cli/`)
 
-Picocli, 25 commands. Highlights: `query servers`, `send-notifications`, `send-admin-summary`, `manage-user-mappings` (incl. `list --send-email`, `import-s3`, `download-s3`, `print-s3`), `manage-workgroups`, `add-vulnerability`, `add-aws`, `add-domain`, `add-requirement`, `export-requirements`, `import`, `import-s3`, `delete-all-requirements`, `deduplicate-vulnerabilities`, `port-scan`, `send-notification-users`, `config`, `monitor`, `list`, `list-workgroups`, `remove`. Full reference: `docs/CLI.md`.
+Picocli. ~40 command classes under `commands/`, ~37 distinct command names. **`docs/CLI.md` is the reference** — do not maintain a command list here, it drifts.
+
+Dispatch is a mix, which surprises people: most commands are registered as Picocli `subcommands` on `SecmanCli`, but a few (notably `query servers`, the CrowdStrike ingestion path) are matched by hand in `SecmanCli.kt`'s arg-parsing block. Grep `SecmanCli.kt` for a command name before concluding it does not exist.
 
 ## Data model
 
@@ -102,28 +104,22 @@ aws_account_sharing, identity_providers, oauth_states, maintenance_banners, app_
 Roles: `USER`, `ADMIN`, `VULN`, `RELEASE_MANAGER`, `REQ`, `REQADMIN`, `RISK`, `SECCHAMPION`, `REPORT`.
 
 Asset access (any of):
-1. ADMIN role
+1. ADMIN **or SECCHAMPION** role (universal access)
 2. Asset in user's workgroup
 3. `manualCreator == user`
 4. `scanUploader == user`
 5. `cloudAccountId` ∈ user's AWS UserMapping
 6. `adDomain` ∈ user's domain UserMapping (case-insensitive)
-7. `cloudAccountId` ∈ AwsAccountSharing rule (directional; per-rule account selection — empty selection = share all of source's accounts)
-8. `owner == username`
+7. `owner == username`
+8. `cloudAccountId` ∈ AwsAccountSharing rule (directional, non-transitive; per-rule account selection — empty selection = share all of source's accounts)
 9. `cloudAccountId` ∈ workgroup's `WorkgroupAwsAccount` (direct membership only)
+10. `adDomain` ∈ workgroup's `WorkgroupAdDomain` (direct membership only)
 
-```kotlin
-fun canUserAccessAsset(user: User, asset: Asset): Boolean =
-    user.roles.contains("ADMIN") ||
-    assetInUserWorkgroups(asset, user) ||
-    asset.manualCreator?.id == user.id ||
-    asset.scanUploader?.id == user.id ||
-    awsAccountMatches(asset, user) ||
-    adDomainMatches(asset, user) ||
-    sharedAwsAccountMatches(asset, user)
-```
+Authoritative implementation: `AssetFilterService.getAccessibleAssets()` — the numbered list above is its contract, kept in sync with the Javadoc on that method. Do not re-derive the predicate elsewhere; SQL pre-filters in materialized views are performance hints, never the auth boundary.
 
-Authoritative implementation: `AssetFilterService.getAccessibleAssets()`.
+One asymmetry is deliberate and easy to miss: `getAccessibleAssets()` and `getAccessibleAssetIds()` short-circuit for **ADMIN or SECCHAMPION**, but `getScopedAccessibleAssetIds()` short-circuits for **ADMIN only** — a SECCHAMPION falls through to the scoped path there. Check which one you are calling before assuming a role sees everything.
+
+Feature 073: when `memoryConfig.lazyLoadingEnabled` is set, the scoped path runs as one unified query instead of the multi-query fallback. Both must implement the same ten rules.
 
 Authentication methods:
 | Method | Carrier | Use |

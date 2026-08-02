@@ -1,12 +1,14 @@
 # Testing
 
-Three tiers: unit (Mockk), integration (Testcontainers MariaDB 11.4), CLI (Picocli arg validation). Integration auto-skips when Docker is unavailable.
+Three tiers: unit (Mockk), integration (**external MariaDB**, no Docker/Testcontainers), CLI (Picocli arg validation).
+
+Integration tests run **unconditionally** — they *fail*, not skip, when no test database is reachable. There is no Docker gate and no `@EnabledIf`; Testcontainers was removed from the build.
 
 Stack:
 ```
-junit-jupiter 6.0.3, micronaut-test-junit5,
-mockk 1.14.9,
-testcontainers 2.0.4, testcontainers:mariadb 1.21.4, testcontainers:junit-jupiter 1.21.4,
+junit-jupiter 6.1.2, junit-platform-launcher 6.1.2,
+micronaut-test-junit5 5.1.0,
+mockk 1.14.11,
 assertj 3.27.7
 ```
 
@@ -16,7 +18,7 @@ assertj 3.27.7
 ./gradlew build                                              # everything
 ./gradlew :backendng:test                                    # backend
 ./gradlew :backendng:test --tests "*ServiceTest*"            # unit only
-./gradlew :backendng:test --tests "*IntegrationTest*"        # integration (Docker)
+./gradlew :backendng:test --tests "*IntegrationTest*"        # integration (needs TEST_DB_*)
 ./gradlew :backendng:test --tests "VulnerabilityServiceTest" # one class
 ./gradlew :backendng:test --tests "VulnerabilityServiceTest.addVulnerabilityFromCli_createsNewAsset"
 ./gradlew :cli:test
@@ -29,6 +31,31 @@ open src/cli/build/reports/tests/test/index.html
 
 > All HTTP traffic in tests goes through `SECMAN_HOST` (resolved via `pass-cli`). Never hardcode `http://localhost:8080` / `:4321`.
 
+## Test database
+
+Integration tests need a reachable MariaDB. The datasource is read by
+`src/test/resources/application-test.yml` from three env vars, supplied via `pass-cli`:
+
+| Var | Default |
+|---|---|
+| `TEST_DB_URL` | `jdbc:mariadb://localhost:3306/secman_test` |
+| `TEST_DB_USERNAME` | `secman_test` |
+| `TEST_DB_PASSWORD` | `secman_test` |
+
+> ⚠️ **The schema is created and dropped on every run** (Hibernate `hbm2ddl.auto=create-drop`;
+> Flyway is off in the `test` environment). Point `TEST_DB_*` **only** at a dedicated, disposable
+> database — never at `DB_CONNECT`, which would drop the dev or production tables.
+
+One-time local setup:
+```sql
+CREATE DATABASE IF NOT EXISTS secman_test;
+CREATE USER IF NOT EXISTS 'secman_test'@'localhost' IDENTIFIED BY 'secman_test';
+GRANT ALL PRIVILEGES ON secman_test.* TO 'secman_test'@'localhost';
+```
+
+Integration tests bind port **8080**, so stop any running dev backend first
+(`./scripts/stopbackenddev.sh`) or the suite hangs on a `BindException`.
+
 ## Layout
 
 ```
@@ -37,10 +64,9 @@ src/backendng/src/test/kotlin/com/secman/
   service/                 # *ServiceTest.kt — unit
   integration/             # *IntegrationTest.kt — full stack
   testutil/
-    BaseIntegrationTest.kt # Testcontainers setup, skip-if-no-docker
+    BaseIntegrationTest.kt # @MicronautTest(environments=["test"]) base class
     TestDataFactory.kt     # createAdminUser, createAsset, createVulnerability, ...
     TestAuthHelper.kt      # JWT login → bearer
-    DockerAvailable.kt     # @EnabledIf gate
 src/cli/src/test/kotlin/com/secman/cli/commands/  # *CommandTest.kt
 ```
 
@@ -75,9 +101,8 @@ class VulnerabilityServiceTest {
 }
 ```
 
-### Integration (Testcontainers via `BaseIntegrationTest`)
+### Integration (external MariaDB via `BaseIntegrationTest`)
 ```kotlin
-@EnabledIf("com.secman.testutil.DockerAvailable#isDockerAvailable")
 class VulnerabilityIntegrationTest : BaseIntegrationTest() {
     @Inject @field:Client("/") lateinit var client: HttpClient
     @Inject lateinit var userRepository: UserRepository
@@ -131,31 +156,21 @@ class AddVulnerabilityCommandTest {
 ## Helpers
 
 ### `BaseIntegrationTest`
-Singleton MariaDB via `withReuse(true)`; auto-injects datasource into Micronaut.
+Starts the Micronaut context against the external test database. It carries no
+datasource wiring of its own — that comes from `application-test.yml` and the
+`TEST_DB_*` env vars (see [Test database](#test-database)).
 ```kotlin
-abstract class BaseIntegrationTest : TestPropertyProvider {
-    companion object {
-        @JvmStatic val mariadb: MariaDBContainer<*> by lazy {
-            MariaDBContainer("mariadb:11.4")
-                .withDatabaseName("secman_test").withUsername("test").withPassword("test")
-                .withReuse(true).also { it.start() }
-        }
-    }
-    override fun getProperties() = mutableMapOf(
-        "datasources.default.url"      to mariadb.jdbcUrl,
-        "datasources.default.username" to mariadb.username,
-        "datasources.default.password" to mariadb.password)
-}
+@MicronautTest(environments = ["test"])
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
+abstract class BaseIntegrationTest
 ```
+Subclass it and inject what you need; there is nothing to gate or configure per test.
 
 ### `TestDataFactory`
 `createAdminUser`, `createVulnUser`, `createRegularUser`, `createAsset(name, type="SERVER")`, `createVulnerability(asset, cve, severity)`. `DEFAULT_PASSWORD = "testpass123"`.
 
 ### `TestAuthHelper`
 `getAuthToken(client, username)` POSTs to `/api/auth/login` and returns the JWT. `attemptLoginExpectingFailure(...)` for negative tests.
-
-### `DockerAvailable.isDockerAvailable()`
-Used as `@EnabledIf("com.secman.testutil.DockerAvailable#isDockerAvailable")` to gate integration suites.
 
 ## E2E
 
@@ -179,32 +194,21 @@ Liveness in the runner is **port-bind**, not HTTP probe: backend `:8080` (120s b
 
 ## CI
 
-```yaml
-unit-tests:
-  steps:
-    - uses: actions/setup-java@v4
-      with: { java-version: '21', distribution: 'corretto' }
-    - run: ./gradlew :backendng:test --tests "*ServiceTest*"
-    - if: failure()
-      uses: actions/upload-artifact@v4
-      with: { name: unit-test-report, path: src/backendng/build/reports/tests/ }
+**There is no CI pipeline in this repo** — no `.github/workflows/`. Verification is local and
+gated by CLAUDE.md's Hard Principles: `./gradlew build` clean, a clean
+`./scripts/startbackenddev.sh` startup, and the two mandatory E2E gates above.
 
-integration-tests:
-  services: { docker: { image: docker:dind } }
-  steps:
-    - uses: actions/setup-java@v4
-      with: { java-version: '21', distribution: 'corretto' }
-    - run: ./gradlew :backendng:test --tests "*IntegrationTest*"
-```
-
-Useful env: `TESTCONTAINERS_REUSE_ENABLE=true` (faster reruns), `SKIP_INTEGRATION_TESTS=true` (CI without Docker).
+A CI job would need a reachable MariaDB and the `TEST_DB_*` vars exported; there is no
+Docker service to provision and no skip flag to set, because integration tests no longer
+gate themselves.
 
 ## Troubleshooting
 
 | Symptom | Fix |
 |---|---|
-| Integration tests skipped | `docker info` (start Docker Desktop / `systemctl status docker`) |
-| First run very slow | `~/.testcontainers.properties`: `testcontainers.reuse.enable=true` |
-| Schema-mismatch failures | `docker rm -f $(docker ps -aq --filter "label=org.testcontainers")` |
+| Integration tests fail at startup with a connection error | `TEST_DB_*` unset or DB unreachable. They no longer skip — a missing DB is a failure. Check `mariadb -u secman_test -p secman_test` |
+| Integration tests hang, `BindException: 8080` | a dev backend is running — `./scripts/stopbackenddev.sh` |
+| Schema-mismatch failures | the run left a partial schema; drop and recreate `secman_test` (it is `create-drop`, nothing of value lives there) |
+| Gradle build dies mid-run on a dev machine | IntelliJ's daemon-stop can kill CLI Gradle builds — isolate with `-Dorg.gradle.daemon.registry.base` |
 | `verify` fails unexpectedly | check `MockKAnnotations.init(this, relaxed=true/false)` choice; missing `every {}` setup |
 | Tests pass alone, fail together | unique test data (`"host-${System.nanoTime()}"`); cleanup in `@AfterEach`; per-test transactions |

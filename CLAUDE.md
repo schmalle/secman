@@ -32,7 +32,7 @@ Security requirement, vulnerability and risk management platform.
 
 ## Unified Asset Access (any of)
 
-1. ADMIN role
+1. ADMIN **or SECCHAMPION** role (universal access)
 2. Asset in user's workgroup
 3. `manualCreator == user`
 4. `scanUploader == user`
@@ -43,7 +43,7 @@ Security requirement, vulnerability and risk management platform.
 9. `cloudAccountId` matches an account assigned to a workgroup the user belongs to (`WorkgroupAwsAccount`, direct membership only)
 10. `adDomain` matches a domain assigned to a workgroup the user belongs to (`WorkgroupAdDomain`, direct membership only)
 
-Authoritative filter: `AssetFilterService.getAccessibleAssets()`. SQL pre-filters in materialized views are perf hints only — never the auth boundary. Same enforcement applies to MCP `get_overdue_assets`.
+Authoritative filter: `AssetFilterService.getAccessibleAssets()`. SQL pre-filters in materialized views are perf hints only — never the auth boundary. Same enforcement applies to MCP `get_overdue_assets`. Note the deliberate asymmetry: `getAccessibleAssets()`/`getAccessibleAssetIds()` short-circuit for ADMIN **or** SECCHAMPION, but `getScopedAccessibleAssetIds()` short-circuits for ADMIN only.
 
 ## API Endpoints (concise)
 
