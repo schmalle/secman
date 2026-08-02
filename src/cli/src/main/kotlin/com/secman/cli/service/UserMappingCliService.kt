@@ -687,6 +687,9 @@ class UserMappingCliService(
                             riskAssessmentId = (it["riskAssessmentId"] as? Number)?.toLong(),
                             assessor = it["assessor"]?.toString(),
                             endDate = it["endDate"]?.toString(),
+                            useCase = it["useCase"]?.toString(),
+                            releaseVersion = it["releaseVersion"]?.toString(),
+                            requirementCount = (it["requirementCount"] as? Number)?.toInt(),
                             error = it["error"]?.toString()
                         )
                     } ?: emptyList()
@@ -1018,6 +1021,12 @@ data class CliAccountRiskAssessment(
     val riskAssessmentId: Long? = null,
     val assessor: String? = null,
     val endDate: String? = null,
+    /** Use case the assessment is scoped to. */
+    val useCase: String? = null,
+    /** Version of the ACTIVE requirements release the assessment is pinned to. */
+    val releaseVersion: String? = null,
+    /** Requirements that version contributes for [useCase]. */
+    val requirementCount: Int? = null,
     val error: String? = null
 )
 

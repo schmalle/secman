@@ -2,6 +2,7 @@ package com.secman.controller
 
 import com.secman.domain.*
 import com.secman.repository.*
+import com.secman.service.ReleaseRequirementScopeService
 import io.micronaut.core.annotation.Nullable
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.HttpStatus
@@ -13,7 +14,6 @@ import io.micronaut.security.rules.SecurityRule
 import io.micronaut.security.authentication.Authentication
 import io.micronaut.serde.annotation.Serdeable
 import io.micronaut.transaction.annotation.Transactional
-import jakarta.persistence.EntityManager
 import jakarta.validation.Valid
 import jakarta.validation.constraints.Email
 import jakarta.validation.constraints.NotNull
@@ -30,7 +30,7 @@ open class ResponseController(
     private val useCaseRepository: UseCaseRepository,
     private val riskRepository: RiskRepository,
     private val userRepository: UserRepository,
-    private val entityManager: EntityManager
+    private val releaseRequirementScopeService: ReleaseRequirementScopeService
 ) {
     
     private val log = LoggerFactory.getLogger(ResponseController::class.java)
@@ -588,43 +588,39 @@ open class ResponseController(
     }
 
     /**
-     * Get requirements for assessment following the same logic as Java backend:
-     * 1. Direct requirements from use cases
-     * 2. Fallback to requirements from standards via use cases
-     * 3. Fallback to all requirements
+     * Get the requirements that make up an assessment's questionnaire.
+     *
+     * 1. Release-pinned assessments (`lockedRelease` set — every assessment
+     *    auto-started for a new AWS account) are answered against the frozen
+     *    snapshots of that release, scoped by the assessment's use case tags. This
+     *    is what keeps the questionnaire stable while requirements are re-imported.
+     * 2. Unpinned assessments keep the previous behaviour: requirements tagged with
+     *    the assessment's use cases, else every requirement.
      */
     private fun getRequirementsForAssessment(assessment: RiskAssessment): List<Requirement> {
         return try {
-            if (assessment.useCases.isNotEmpty()) {
-                // Get requirements directly associated with use cases
-                val requirements = assessment.useCases.flatMap { useCase ->
-                    requirementRepository.findByUsecaseId(useCase.id!!)
-                }.distinct()
-                
+            val useCaseIds = assessment.useCases.mapNotNull { it.id }
+            val pinnedReleaseId = assessment.lockedRelease?.id
+
+            if (pinnedReleaseId != null && useCaseIds.isNotEmpty()) {
+                val pinned = releaseRequirementScopeService.requirementsForRelease(pinnedReleaseId, useCaseIds)
+                log.debug(
+                    "Assessment {} is pinned to release {}: {} requirement(s) for use cases {}",
+                    assessment.id, assessment.lockedRelease?.version, pinned.size, useCaseIds
+                )
+                return pinned
+            }
+
+            if (useCaseIds.isNotEmpty()) {
+                val requirements = useCaseIds
+                    .flatMap { requirementRepository.findByUsecaseId(it) }
+                    .distinct()
                 if (requirements.isNotEmpty()) {
                     log.debug("Found {} requirements from direct use case associations", requirements.size)
                     return requirements
                 }
-                
-                // Fallback: Get requirements from standards associated with these use cases
-                val standardRequirements = entityManager.createQuery(
-                    """
-                    SELECT DISTINCT r FROM Requirement r 
-                    JOIN r.useCases u 
-                    JOIN u.standards s 
-                    JOIN s.useCases uc 
-                    WHERE uc.id IN :useCaseIds
-                    """,
-                    Requirement::class.java
-                ).setParameter("useCaseIds", assessment.useCases.map { it.id }).resultList
-                
-                if (standardRequirements.isNotEmpty()) {
-                    log.debug("Found {} requirements from standards via use cases", standardRequirements.size)
-                    return standardRequirements
-                }
             }
-            
-            // Final fallback: All requirements
+
             val allRequirements = requirementRepository.findAll()
             log.debug("Using all {} requirements as fallback", allRequirements.size)
             allRequirements

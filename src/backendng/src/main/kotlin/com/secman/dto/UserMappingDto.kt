@@ -83,6 +83,12 @@ data class AccountRiskAssessmentInfo(
     val riskAssessmentId: Long? = null,
     val assessor: String? = null,
     val endDate: String? = null,
+    /** Use case the assessment is scoped to. */
+    val useCase: String? = null,
+    /** Version of the ACTIVE release the assessment is pinned to (the "standard"). */
+    val releaseVersion: String? = null,
+    /** Number of requirements the pinned release contributes for [useCase]. */
+    val requirementCount: Int? = null,
     val error: String? = null
 )
 

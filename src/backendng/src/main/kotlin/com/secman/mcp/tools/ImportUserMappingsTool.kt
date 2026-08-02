@@ -1,51 +1,48 @@
 package com.secman.mcp.tools
 
 import com.secman.domain.McpOperation
-import com.secman.domain.MappingStatus
-import com.secman.domain.UserMapping
+import com.secman.dto.BulkUserMappingEntry
+import com.secman.dto.BulkUserMappingRequest
 import com.secman.dto.mcp.McpExecutionContext
-import com.secman.repository.UserMappingRepository
-import com.secman.repository.UserRepository
+import com.secman.service.UserMappingBulkImportService
 import jakarta.inject.Inject
 import jakarta.inject.Singleton
 import org.slf4j.LoggerFactory
-import java.time.Instant
 
 /**
  * MCP tool for bulk importing user mappings.
  * Feature: 064-mcp-cli-user-mapping
  *
  * ADMIN role is required via User Delegation.
- * Accepts a list of mapping entries (email, awsAccountId, domain) and processes them in bulk.
- * Supports dry-run mode for validation without persistence.
+ *
+ * Delegates to [UserMappingBulkImportService] — the same code path as REST
+ * `POST /api/user-mappings/bulk` and CLI `manage-user-mappings import`. That is
+ * what gives this tool brand-new-AWS-account detection and the optional
+ * auto-started risk assessments; a hand-rolled per-row loop here would silently
+ * miss both.
  *
  * Input parameters:
- * - mappings (required): Array of mapping objects with email (required), awsAccountId (optional), domain (optional)
- * - dryRun (optional): If true, validates without creating mappings. Defaults to false.
+ * - mappings (required): Array of {email (required), awsAccountId, domain}
+ * - dryRun: validate without persisting. Default false.
+ * - startRiskAssessment: start a risk assessment for the owner of every brand-new
+ *   AWS account this import introduces. Requires riskAssessmentUseCase.
+ * - riskAssessmentUseCase: name of the use case the assessments are scoped to.
+ * - riskAssessmentDeadlineDays: days until the deadline. Default 7.
  *
- * Returns:
- * - totalProcessed: Total number of entries processed
- * - created: Number of active mappings created (user exists)
- * - createdPending: Number of pending mappings created (user doesn't exist yet)
- * - skipped: Number of duplicate mappings skipped
- * - errors: List of validation errors with index, email, and message
- * - dryRun: Whether this was a dry-run
+ * Returns totalProcessed, created, createdPending, skipped, errors[], dryRun,
+ * newAccounts[] and riskAssessments[].
  */
 @Singleton
 class ImportUserMappingsTool(
-    @Inject private val userMappingRepository: UserMappingRepository,
-    @Inject private val userRepository: UserRepository
+    @Inject private val bulkImportService: UserMappingBulkImportService
 ) : McpTool {
 
     private val log = LoggerFactory.getLogger(ImportUserMappingsTool::class.java)
 
-    // Validation regex patterns (matching UserMappingCliService)
-    private val emailRegex = Regex("^[^@]+@[^@]+\\.[^@]+$")
-    private val awsAccountIdRegex = Regex("^\\d{12}$")
-    private val domainRegex = Regex("^[a-zA-Z0-9][a-zA-Z0-9.-]*[a-zA-Z0-9]$|^[a-zA-Z0-9]$")
-
     override val name = "import_user_mappings"
-    override val description = "Bulk import user mappings (ADMIN only, requires User Delegation)"
+    override val description =
+        "Bulk import user mappings, optionally starting a risk assessment for the owner of every " +
+            "brand-new AWS account (ADMIN only, requires User Delegation)"
     override val operation = McpOperation.WRITE
 
     override val inputSchema = mapOf(
@@ -72,12 +69,29 @@ class ImportUserMappingsTool(
                     ),
                     "required" to listOf("email")
                 ),
-                "maxItems" to 1000
+                "maxItems" to MAX_MAPPINGS
             ),
             "dryRun" to mapOf(
                 "type" to "boolean",
                 "description" to "If true, validate without creating mappings",
                 "default" to false
+            ),
+            "startRiskAssessment" to mapOf(
+                "type" to "boolean",
+                "description" to "Start a risk assessment for the owner of every brand-new AWS account " +
+                    "introduced by this import. Requires riskAssessmentUseCase. " +
+                    "The assessment is pinned to the ACTIVE requirements release.",
+                "default" to false
+            ),
+            "riskAssessmentUseCase" to mapOf(
+                "type" to "string",
+                "description" to "Name of the use case the auto-started risk assessments are scoped to " +
+                    "(required when startRiskAssessment is true)"
+            ),
+            "riskAssessmentDeadlineDays" to mapOf(
+                "type" to "number",
+                "description" to "Days from today until the risk assessment deadline. Default: 7",
+                "minimum" to 1
             )
         ),
         "required" to listOf("mappings")
@@ -95,178 +109,87 @@ class ImportUserMappingsTool(
             )
         }
 
-        // Extract parameters
         @Suppress("UNCHECKED_CAST")
         val mappings = arguments["mappings"] as? List<Map<String, Any?>>
-        val dryRun = arguments["dryRun"] as? Boolean ?: false
 
-        if (mappings == null || mappings.isEmpty()) {
+        if (mappings.isNullOrEmpty()) {
             return McpToolResult.error(
                 "VALIDATION_ERROR",
                 "The 'mappings' parameter is required and must be a non-empty array"
             )
         }
 
-        if (mappings.size > 1000) {
+        if (mappings.size > MAX_MAPPINGS) {
             return McpToolResult.error(
                 "VALIDATION_ERROR",
-                "Maximum 1000 mappings allowed per request. Received: ${mappings.size}"
+                "Maximum $MAX_MAPPINGS mappings allowed per request. Received: ${mappings.size}"
             )
         }
 
-        // Process mappings
-        var created = 0
-        var createdPending = 0
-        var skipped = 0
-        val errors = mutableListOf<Map<String, Any>>()
-
-        mappings.forEachIndexed { index, mapping ->
-            val email = (mapping["email"] as? String)?.lowercase()?.trim()
-            val awsAccountId = (mapping["awsAccountId"] as? String)?.trim()
-            val domain = (mapping["domain"] as? String)?.lowercase()?.trim()
-
-            // Validate email
-            if (email.isNullOrBlank()) {
-                errors.add(mapOf(
-                    "index" to index,
-                    "email" to (email ?: ""),
-                    "message" to "Email is required"
-                ))
-                return@forEachIndexed
-            }
-
-            if (!emailRegex.matches(email)) {
-                errors.add(mapOf(
-                    "index" to index,
-                    "email" to email,
-                    "message" to "Invalid email format"
-                ))
-                return@forEachIndexed
-            }
-
-            if (email.length < 3 || email.length > 255) {
-                errors.add(mapOf(
-                    "index" to index,
-                    "email" to email,
-                    "message" to "Email must be between 3 and 255 characters"
-                ))
-                return@forEachIndexed
-            }
-
-            // Validate at least one of awsAccountId or domain is provided
-            if (awsAccountId.isNullOrBlank() && domain.isNullOrBlank()) {
-                errors.add(mapOf(
-                    "index" to index,
-                    "email" to email,
-                    "message" to "At least one of awsAccountId or domain must be provided"
-                ))
-                return@forEachIndexed
-            }
-
-            // Validate AWS account ID format if provided
-            if (!awsAccountId.isNullOrBlank() && !awsAccountIdRegex.matches(awsAccountId)) {
-                errors.add(mapOf(
-                    "index" to index,
-                    "email" to email,
-                    "message" to "Invalid AWS account ID format (must be exactly 12 digits)"
-                ))
-                return@forEachIndexed
-            }
-
-            // Validate domain format if provided
-            if (!domain.isNullOrBlank() && !domainRegex.matches(domain)) {
-                errors.add(mapOf(
-                    "index" to index,
-                    "email" to email,
-                    "message" to "Invalid domain format (alphanumeric with dots/hyphens, no leading/trailing special chars)"
-                ))
-                return@forEachIndexed
-            }
-
-            // Check for duplicate. Coerce "no value" sentinels in domain
-            // ("-none-", "none", "null", etc.) to NULL so the existsBy check
-            // and the @PrePersist callback agree on the canonical key.
-            val normalizedAwsAccountId = awsAccountId?.takeIf { it.isNotBlank() }
-            val normalizedDomain = UserMapping.normalizeNullSentinel(domain?.takeIf { it.isNotBlank() })
-
-            val exists = userMappingRepository.existsByEmailAndAwsAccountIdAndDomain(
-                email, normalizedAwsAccountId, normalizedDomain
-            )
-
-            if (exists) {
-                skipped++
-                return@forEachIndexed
-            }
-
-            // For dry-run, count as would-create
-            if (dryRun) {
-                val user = userRepository.findByEmailIgnoreCase(email).orElse(null)
-                if (user != null) {
-                    created++
-                } else {
-                    createdPending++
-                }
-                return@forEachIndexed
-            }
-
-            // Create the mapping
-            try {
-                val user = userRepository.findByEmailIgnoreCase(email).orElse(null)
-                val status = if (user != null) MappingStatus.ACTIVE else MappingStatus.PENDING
-
-                val userMapping = UserMapping(
-                    email = email,
-                    user = user,
-                    domain = normalizedDomain,
-                    awsAccountId = normalizedAwsAccountId,
-                    ipAddress = null,
-                    status = status
+        val request = BulkUserMappingRequest(
+            mappings = mappings.map { entry ->
+                BulkUserMappingEntry(
+                    email = (entry["email"] as? String)?.trim().orEmpty(),
+                    awsAccountId = (entry["awsAccountId"] as? String)?.trim()?.takeIf { it.isNotBlank() },
+                    domain = (entry["domain"] as? String)?.trim()?.takeIf { it.isNotBlank() }
                 )
+            },
+            dryRun = arguments["dryRun"] as? Boolean ?: false,
+            startRiskAssessment = arguments["startRiskAssessment"] as? Boolean ?: false,
+            riskAssessmentUseCase = (arguments["riskAssessmentUseCase"] as? String)?.trim()
+                ?.takeIf { it.isNotBlank() },
+            riskAssessmentDeadlineDays = (arguments["riskAssessmentDeadlineDays"] as? Number)?.toInt()
+        )
 
-                if (user != null) {
-                    userMapping.appliedAt = Instant.now()
-                }
-
-                userMappingRepository.save(userMapping)
-
-                if (status == MappingStatus.ACTIVE) {
-                    created++
-                } else {
-                    createdPending++
-                }
-
-                log.info(
-                    "AUDIT: operation=MCP_IMPORT_USER_MAPPING, actor={}, " +
-                    "email={}, awsAccountId={}, domain={}, status={}",
-                    context.delegatedUserEmail, email, normalizedAwsAccountId, normalizedDomain, status
-                )
-
-            } catch (e: Exception) {
-                log.error("Failed to create mapping for email={}", email, e)
-                errors.add(mapOf(
-                    "index" to index,
-                    "email" to email,
-                    "message" to "Failed to create mapping: ${e.message}"
-                ))
-            }
+        bulkImportService.validate(request)?.let { validationError ->
+            return McpToolResult.error("VALIDATION_ERROR", validationError)
         }
 
-        // Build result
-        val result = mapOf(
-            "totalProcessed" to mappings.size,
-            "created" to created,
-            "createdPending" to createdPending,
-            "skipped" to skipped,
-            "errors" to errors,
-            "dryRun" to dryRun
-        )
+        return try {
+            val result = bulkImportService.execute(request, context.delegatedUserId)
 
-        val modeLabel = if (dryRun) " (dry-run)" else ""
-        log.info(
-            "MCP import_user_mappings{}: total={}, created={}, pending={}, skipped={}, errors={}, actor={}",
-            modeLabel, mappings.size, created, createdPending, skipped, errors.size, context.delegatedUserEmail
-        )
+            log.info(
+                "AUDIT: operation=MCP_IMPORT_USER_MAPPINGS, actor={}, dryRun={}, " +
+                    "processed={}, created={}, pending={}, skipped={}, newAccounts={}, assessments={}",
+                context.delegatedUserEmail, request.dryRun, result.totalProcessed, result.created,
+                result.createdPending, result.skipped, result.newAccounts.size, result.riskAssessments.size
+            )
 
-        return McpToolResult.success(result)
+            McpToolResult.success(
+                mapOf(
+                    "totalProcessed" to result.totalProcessed,
+                    "created" to result.created,
+                    "createdPending" to result.createdPending,
+                    "skipped" to result.skipped,
+                    "errors" to result.errors,
+                    "dryRun" to request.dryRun,
+                    "newAccounts" to result.newAccounts.map { acct ->
+                        mapOf("awsAccountId" to acct.awsAccountId, "emails" to acct.emails)
+                    },
+                    "riskAssessments" to result.riskAssessments.map { ra ->
+                        mapOf(
+                            "awsAccountId" to ra.awsAccountId,
+                            "ownerEmail" to ra.ownerEmail,
+                            "riskAssessmentId" to ra.riskAssessmentId,
+                            "assessor" to ra.assessor,
+                            "endDate" to ra.endDate,
+                            "useCase" to ra.useCase,
+                            "releaseVersion" to ra.releaseVersion,
+                            "requirementCount" to ra.requirementCount,
+                            "error" to ra.error
+                        )
+                    }
+                )
+            )
+        } catch (e: IllegalArgumentException) {
+            McpToolResult.error("VALIDATION_ERROR", e.message ?: "Invalid request")
+        } catch (e: Exception) {
+            log.error("MCP import_user_mappings failed", e)
+            McpToolResult.error("EXECUTION_ERROR", "Failed to import user mappings: ${e.message}")
+        }
+    }
+
+    companion object {
+        private const val MAX_MAPPINGS = 1000
     }
 }

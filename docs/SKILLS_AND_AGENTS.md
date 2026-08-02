@@ -61,6 +61,16 @@ Both runs (admin + normal user) must report **0 JS errors** per `CLAUDE.md` prin
 
 Combines the MCP workflow above with Playwright-side UI verification: clean testbed → exception lifecycle (approve/reject/cancel) + auth negatives via MCP → same state through Astro/React UI. Cleanup before and after. Required to exit clean per `CLAUDE.md` principle 7.
 
+### `/aws-account-risk-assessment` — auto assessment for new AWS accounts (CLI + MCP)
+
+`.claude/skills/aws-account-risk-assessment/SKILL.md`
+
+Triggers: "aws account risk assessment", "run the new account risk assessment e2e", "test new aws account assessment".
+
+Driver: `scripts/test/test-e2e-aws-account-risk-assessment.sh`. Seeds a SECCHAMPION, an owner user, a use case, tagged requirements and an **ACTIVE** requirements release, then imports a brand-new 12-digit AWS account via the CLI and again via MCP (`POST /mcp`, streamable HTTP). Asserts the assessment is pinned to the ACTIVE release, that its questionnaire is exactly that release's use-case-tagged requirements and **does not drift** when more requirements are imported afterwards, that re-import is idempotent, and that a missing ACTIVE release is rejected before anything is imported. Cleanup before and after, scoped to the `e2e-awsra-` prefix and its two generated account IDs.
+
+Feature reference: `docs/AWS_ACCOUNT_RISK_ASSESSMENT.md`.
+
 ## SpecKit commands (`/speckit.*`)
 
 Specification-driven development pipeline, defined under `.claude/commands/`.

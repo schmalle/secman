@@ -3,6 +3,7 @@ package com.secman.service
 import com.secman.domain.Asset
 import com.secman.domain.AssessmentBasisType
 import com.secman.domain.AwsAccountRiskAssessment
+import com.secman.domain.Release
 import com.secman.domain.RiskAssessment
 import com.secman.domain.UseCase
 import com.secman.domain.User
@@ -30,6 +31,11 @@ import java.time.temporal.ChronoUnit
  * For every (new account, mapped owner email) pair:
  * - the assessment basis is an asset representing the AWS account
  *   (type `AWS_ACCOUNT`, `cloudAccountId` = account id) — found by name or created,
+ * - the *standard* it is measured against is the current version of the security
+ *   requirements, i.e. the single ACTIVE [Release]. The assessment is pinned to it
+ *   (`lockedRelease`), so its questionnaire is resolved from that release's frozen
+ *   snapshots scoped by the use case tag and cannot drift when requirements are
+ *   re-imported while the assessment is open,
  * - the assessor is a user with the SECCHAMPION role (round-robin over all
  *   SECCHAMPION users so the load spreads evenly),
  * - the owner is set as respondent (when a matching user account exists) and
@@ -48,6 +54,7 @@ open class AwsAccountRiskAssessmentService(
     private val riskAssessmentRepository: RiskAssessmentRepository,
     private val trackingRepository: AwsAccountRiskAssessmentRepository,
     private val emailService: EmailService,
+    private val releaseRequirementScopeService: ReleaseRequirementScopeService,
     // Self-reference so [createAssessment]'s `@Transactional(REQUIRES_NEW)` runs through the AOP
     // proxy (a same-class call would bypass it). Each per-(account, owner) persist thus commits
     // in its own short transaction, letting the caller send the owner email AFTER the connection
@@ -66,6 +73,10 @@ open class AwsAccountRiskAssessmentService(
     /**
      * Fail-fast validation of the risk-assessment parameters of a bulk import
      * request. Returns a human-readable error message, or null when valid.
+     *
+     * Runs before anything is imported, so an operator who has not yet activated a
+     * requirements release is told so instead of silently getting assessments with
+     * an empty questionnaire.
      */
     open fun validateStartRequest(useCaseName: String?, deadlineDays: Int?): String? {
         if (useCaseName.isNullOrBlank()) {
@@ -74,11 +85,21 @@ open class AwsAccountRiskAssessmentService(
         if (deadlineDays != null && deadlineDays < 1) {
             return "riskAssessmentDeadlineDays must be at least 1 (got $deadlineDays)"
         }
-        if (useCaseRepository.findByNameIgnoreCase(useCaseName.trim()).isEmpty) {
-            return "Use case '${useCaseName.trim()}' not found"
-        }
+        val useCase = useCaseRepository.findByNameIgnoreCase(useCaseName.trim()).orElse(null)
+            ?: return "Use case '${useCaseName.trim()}' not found"
         if (userRepository.findByRolesContaining(User.Role.SECCHAMPION).isEmpty()) {
             return "No user with SECCHAMPION role exists to act as assessor"
+        }
+        // The assessment is measured against the current version of the security
+        // requirements, which in secman is the single ACTIVE release.
+        val activeRelease = releaseRequirementScopeService.findActiveRelease()
+            ?: return "No ACTIVE release exists to base the risk assessment on - " +
+                "activate a requirements release first"
+        val useCaseId = useCase.id
+            ?: return "Use case '${useCase.name}' has no id"
+        if (releaseRequirementScopeService.requirementsForRelease(activeRelease.id!!, useCaseId).isEmpty()) {
+            return "ACTIVE release '${activeRelease.version}' contains no requirements " +
+                "tagged with use case '${useCase.name}'"
         }
         return null
     }
@@ -120,6 +141,23 @@ open class AwsAccountRiskAssessmentService(
             }
         }
 
+        // The "standard" the assessments are measured against: the current version of
+        // the security requirements, i.e. the single ACTIVE release. Resolved once so
+        // every account in one import pins to the same version even if a release is
+        // activated mid-run.
+        val activeRelease = releaseRequirementScopeService.findActiveRelease()
+            ?: return newAccounts.flatMap { acct ->
+                acct.emails.map { email ->
+                    AccountRiskAssessmentInfo(
+                        acct.awsAccountId, email,
+                        error = "No ACTIVE release exists to base the risk assessment on"
+                    )
+                }
+            }
+        val requirementCount = useCase.id
+            ?.let { releaseRequirementScopeService.requirementsForRelease(activeRelease.id!!, it).size }
+            ?: 0
+
         val requestorUser = requestorUserId?.let { userRepository.findById(it).orElse(null) }
 
         val results = mutableListOf<AccountRiskAssessmentInfo>()
@@ -138,7 +176,9 @@ open class AwsAccountRiskAssessmentService(
                         useCase = useCase,
                         endDate = endDate,
                         assessor = assessor,
-                        requestor = requestorUser ?: assessor
+                        requestor = requestorUser ?: assessor,
+                        activeRelease = activeRelease,
+                        requirementCount = requirementCount
                     )
                 } catch (e: Exception) {
                     log.error(
@@ -160,7 +200,9 @@ open class AwsAccountRiskAssessmentService(
                 // must not undo the committed assessment.
                 if (info.error == null && info.riskAssessmentId != null) {
                     try {
-                        sendStartNotification(ownerEmail, account.awsAccountId, useCase.name, endDate, assessor)
+                        sendStartNotification(
+                            ownerEmail, account.awsAccountId, useCase.name, endDate, assessor, activeRelease
+                        )
                     } catch (e: Exception) {
                         log.warn("Risk assessment {} created, but owner notification to {} failed: {}",
                             info.riskAssessmentId, ownerEmail, e.message)
@@ -183,7 +225,9 @@ open class AwsAccountRiskAssessmentService(
         useCase: UseCase,
         endDate: LocalDate,
         assessor: User,
-        requestor: User
+        requestor: User,
+        activeRelease: Release,
+        requirementCount: Int
     ): AccountRiskAssessmentInfo {
         val today = LocalDate.now()
 
@@ -222,8 +266,16 @@ open class AwsAccountRiskAssessmentService(
         )
         assessment.respondent = ownerUser
         assessment.useCases = mutableSetOf(useCase)
+        // Pin to the current version of the security requirements. The questionnaire is
+        // then resolved from that release's frozen snapshots (see
+        // ResponseController.getRequirementsForAssessment), so re-importing requirements
+        // while the assessment is open cannot change the questions already asked.
+        assessment.lockedRelease = activeRelease
+        assessment.isReleaseLocked = true
+        assessment.contentSnapshotTaken = true
         assessment.notes = "Automatically started by AWS account mapping import for account " +
-            "$awsAccountId (owner: $ownerEmail, use case: ${useCase.name})"
+            "$awsAccountId (owner: $ownerEmail, use case: ${useCase.name}, " +
+            "requirements version: ${activeRelease.version})"
 
         val saved = riskAssessmentRepository.save(assessment)
 
@@ -239,8 +291,10 @@ open class AwsAccountRiskAssessmentService(
         // Owner notification is sent by the caller AFTER this transaction commits, so the
         // blocking SMTP send never holds this pooled DB connection.
         log.info(
-            "Started risk assessment {} for new AWS account {} (owner={}, assessor={}, useCase={}, deadline={})",
-            saved.id, awsAccountId, ownerEmail, assessor.username, useCase.name, endDate
+            "Started risk assessment {} for new AWS account {} (owner={}, assessor={}, useCase={}, " +
+                "requirementsVersion={}, requirements={}, deadline={})",
+            saved.id, awsAccountId, ownerEmail, assessor.username, useCase.name,
+            activeRelease.version, requirementCount, endDate
         )
 
         return AccountRiskAssessmentInfo(
@@ -248,7 +302,10 @@ open class AwsAccountRiskAssessmentService(
             ownerEmail = ownerEmail,
             riskAssessmentId = saved.id,
             assessor = assessor.email.ifBlank { assessor.username },
-            endDate = endDate.format(DATE_FORMAT)
+            endDate = endDate.format(DATE_FORMAT),
+            useCase = useCase.name,
+            releaseVersion = activeRelease.version,
+            requirementCount = requirementCount
         )
     }
 
@@ -346,9 +403,12 @@ open class AwsAccountRiskAssessmentService(
         val dayWord = if (daysLeft == 1L) "1 day" else "$daysLeft days"
         val subject = "Reminder: risk assessment for AWS account ${tracking.awsAccountId} due in $dayWord"
         val deadline = endDate.format(DATE_FORMAT)
+        // Assessments started before release pinning was introduced have no locked release.
+        val versionSuffix = tracking.riskAssessment.lockedRelease
+            ?.let { ", requirements version: ${it.version}" } ?: ""
         val textBody = """
             |This is a reminder that the risk assessment for AWS account ${tracking.awsAccountId}
-            |(use case: ${tracking.useCaseName}) is due in $dayWord, on $deadline.
+            |(use case: ${tracking.useCaseName}$versionSuffix) is due in $dayWord, on $deadline.
             |
             |Please log in to SecMan and complete the assessment before the deadline.
             |
@@ -361,7 +421,7 @@ open class AwsAccountRiskAssessmentService(
               <h2 style="color:#2c3e50;">Risk assessment deadline reminder</h2>
               <p>The risk assessment for AWS account
                  <strong style="font-family:monospace;">${escapeHtml(tracking.awsAccountId)}</strong>
-                 (use case: ${escapeHtml(tracking.useCaseName)}) is due in <strong>$dayWord</strong>,
+                 (use case: ${escapeHtml(tracking.useCaseName)}${escapeHtml(versionSuffix)}) is due in <strong>$dayWord</strong>,
                  on <strong>$deadline</strong>.</p>
               <p>Please log in to SecMan and complete the assessment before the deadline.</p>
               <hr style="margin:30px 0;border:none;border-top:1px solid #dee2e6;">
@@ -383,18 +443,21 @@ open class AwsAccountRiskAssessmentService(
         awsAccountId: String,
         useCaseName: String,
         endDate: LocalDate,
-        assessor: User
+        assessor: User,
+        release: Release
     ) {
         val subject = "Risk assessment started for your AWS account $awsAccountId"
         val deadline = endDate.format(DATE_FORMAT)
         val assessorDisplay = assessor.email.ifBlank { assessor.username }
+        val requirementsVersion = "${release.version} (${release.name})"
         val textBody = """
             |A risk assessment has been started for AWS account $awsAccountId, which was
             |mapped to you in SecMan.
             |
-            |Use case:  $useCaseName
-            |Assessor:  $assessorDisplay
-            |Deadline:  $deadline
+            |Use case:              $useCaseName
+            |Requirements version:  $requirementsVersion
+            |Assessor:              $assessorDisplay
+            |Deadline:              $deadline
             |
             |Please log in to SecMan and complete the assessment before the deadline.
             |You will receive reminders 2 days and 1 day before the deadline.
@@ -411,6 +474,7 @@ open class AwsAccountRiskAssessmentService(
                  which was mapped to you in SecMan.</p>
               <table style="border-collapse:collapse;margin-top:8px;">
                 <tr><td style="padding:4px 8px;color:#495057;">Use case</td><td style="padding:4px 8px;">${escapeHtml(useCaseName)}</td></tr>
+                <tr><td style="padding:4px 8px;color:#495057;">Requirements version</td><td style="padding:4px 8px;">${escapeHtml(requirementsVersion)}</td></tr>
                 <tr><td style="padding:4px 8px;color:#495057;">Assessor</td><td style="padding:4px 8px;">${escapeHtml(assessorDisplay)}</td></tr>
                 <tr><td style="padding:4px 8px;color:#495057;">Deadline</td><td style="padding:4px 8px;"><strong>$deadline</strong></td></tr>
               </table>

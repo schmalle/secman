@@ -142,7 +142,10 @@ class ImportS3Command(
 
     @Option(
         names = ["--risk-usecase"],
-        description = ["Name of the use case the risk assessment is based on (required when --start-risk-assessment is set)"]
+        description = [
+            "Name of the use case the risk assessment is scoped to (required when --start-risk-assessment is set). "
+                + "The assessment is measured against the ACTIVE requirements release."
+        ]
     )
     var riskUseCase: String? = null
 
@@ -331,7 +334,9 @@ class ImportS3Command(
                         } else {
                             println("  OK      ${ra.awsAccountId}  ${ra.ownerEmail}  ->  assessment #${ra.riskAssessmentId}" +
                                 (ra.assessor?.let { ", assessor $it" } ?: "") +
-                                (ra.endDate?.let { ", due $it" } ?: ""))
+                                (ra.endDate?.let { ", due $it" } ?: "") +
+                                (ra.releaseVersion?.let { ", requirements $it" } ?: "") +
+                                (ra.requirementCount?.let { " ($it requirement(s))" } ?: ""))
                         }
                     }
                 } else {

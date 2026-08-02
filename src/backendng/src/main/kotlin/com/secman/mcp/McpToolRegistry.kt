@@ -95,6 +95,8 @@ class McpToolRegistry(
     @Inject private val refreshVulnerabilityHeatmapTool: RefreshVulnerabilityHeatmapTool,
     // Account finding-age report (ADMIN only)
     @Inject private val getTopAccountsByFindingAgeTool: GetTopAccountsByFindingAgeTool,
+    // Auto risk assessments for newly discovered AWS accounts (ADMIN only)
+    @Inject private val listAwsAccountRiskAssessmentsTool: ListAwsAccountRiskAssessmentsTool,
     // Feature: Workgroup AWS Account Assignment
     @Inject private val listWorkgroupAwsAccountsTool: ListWorkgroupAwsAccountsTool,
     @Inject private val addWorkgroupAwsAccountTool: AddWorkgroupAwsAccountTool,
@@ -213,6 +215,8 @@ class McpToolRegistry(
             refreshVulnerabilityHeatmapTool,
             // Account finding-age report (ADMIN only)
             getTopAccountsByFindingAgeTool,
+            // Auto risk assessments for newly discovered AWS accounts (ADMIN only)
+            listAwsAccountRiskAssessmentsTool,
             // Feature: Workgroup AWS Account Assignment
             listWorkgroupAwsAccountsTool,
             addWorkgroupAwsAccountTool,
@@ -459,6 +463,11 @@ class McpToolRegistry(
             }
             "list_user_mappings" -> {
                 permissions.contains(McpPermission.USER_ACTIVITY) // ADMIN role checked in tool execute()
+            }
+
+            // Auto risk assessments for newly discovered AWS accounts
+            "list_aws_account_risk_assessments" -> {
+                permissions.contains(McpPermission.ASSESSMENTS_READ) // ADMIN role checked in tool execute()
             }
 
             // Feature: MCP Release Management (ADMIN or RELEASE_MANAGER via User Delegation)

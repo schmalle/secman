@@ -495,22 +495,35 @@ Requires `ADMIN`.
 | Option | Default | Notes |
 |---|---|---|
 | `--start-risk-assessment` | false | opt-in; one assessment per (new account, mapped owner email) pair |
-| `--risk-usecase <name>` | — | **required when `--start-risk-assessment` is set**; name of an existing use case the assessment is based on (case-insensitive match) |
+| `--risk-usecase <name>` | — | **required when `--start-risk-assessment` is set**; name of an existing use case the assessment is scoped to (case-insensitive match) |
 | `--risk-deadline-days <n>` | 7 | days from today until the assessment deadline (`endDate`); must be ≥ 1 |
+
+**The standard the assessment is measured against** is the current version of the
+security requirements — the single **ACTIVE release**. Each assessment is pinned to
+it (`lockedRelease`), and its questionnaire is that release's frozen requirement
+snapshots tagged with `--risk-usecase`. Importing more requirements while the
+assessment is open therefore cannot change the questions already asked. No flag
+selects the version: it is always the ACTIVE release, resolved once per import so
+every account in one run is measured against the same version. Full semantics:
+`docs/AWS_ACCOUNT_RISK_ASSESSMENT.md`.
 
 **Behavior:**
 
 - Validation is fail-fast (HTTP 400 → exit 2 before anything is imported): the
-  use case must exist, the deadline must be ≥ 1 day, and at least one user with
+  use case must exist, the deadline must be ≥ 1 day, at least one user with
   the **SECCHAMPION** role must exist — the assessor is picked from the
   SECCHAMPION users (round-robin, so any SECCHAMPION can be the assessor and
-  load spreads evenly).
+  load spreads evenly) — **and an ACTIVE release must exist that contains at
+  least one requirement tagged with the use case**, so no owner is ever sent an
+  empty questionnaire.
 - The assessment basis is an asset representing the AWS account (name
   `AWS Account <id>`, type `AWS_ACCOUNT`, `cloudAccountId` = account ID, owner =
   the mapped email); it is reused when it already exists, created otherwise.
 - The owner is set as respondent (when a user account with that email exists)
   and is notified by email that the assessment was started, naming use case,
-  assessor and deadline.
+  requirements version, assessor and deadline.
+- Per-account output lines name the pinned version, e.g.
+  `✅ 111111111111  alice@corp.com  ->  assessment #1000, assessor champ@corp.com, due 2026-08-09, requirements 2.3.0 (12 requirement(s))`.
 - **Reminders:** the owner automatically receives reminder emails **2 days and
   1 day before the deadline** (daily backend job at 08:15; each reminder is
   sent exactly once, tracked in `aws_account_risk_assessment`; only open
@@ -520,7 +533,9 @@ Requires `ADMIN`.
   while starting an assessment never rolls back imported mappings; per-account
   failures are listed in the output and exit code 1 is returned.
 
-**Exit codes:** `0` OK / dry-run · `1` mappings saved but ≥ 1 assessment failed to start · `2` invalid arguments (missing/unknown `--risk-usecase`, deadline < 1, no SECCHAMPION user).
+**Exit codes:** `0` OK / dry-run · `1` mappings saved but ≥ 1 assessment failed to start · `2` invalid arguments (missing/unknown `--risk-usecase`, deadline < 1, no SECCHAMPION user, no ACTIVE release, or the ACTIVE release has no requirements for the use case).
+
+Inspect what an import produced with the MCP tool `list_aws_account_risk_assessments`.
 
 #### S3 subcommands
 

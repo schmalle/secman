@@ -23,6 +23,7 @@ import com.secman.service.InputValidationService
 import com.secman.service.RequirementService
 import com.secman.service.RequirementIdService
 import com.secman.service.RequirementExportTemplateValidationService
+import com.secman.service.ReleaseRequirementScopeService
 import io.micronaut.core.annotation.Nullable
 import io.micronaut.data.model.Pageable
 import io.micronaut.http.HttpResponse
@@ -71,7 +72,8 @@ open class RequirementController(
     private val requirementIdService: RequirementIdService,
     private val exportTemplateRepository: RequirementExportTemplateRepository,
     private val exportTemplateUsageRepository: RequirementExportTemplateUsageRepository,
-    private val exportTemplateValidationService: RequirementExportTemplateValidationService
+    private val exportTemplateValidationService: RequirementExportTemplateValidationService,
+    private val releaseRequirementScopeService: ReleaseRequirementScopeService
 ) {
 
     @Serdeable
@@ -1606,23 +1608,12 @@ open class RequirementController(
     }
 
     /**
-     * Helper method to convert RequirementSnapshot to Requirement for export
-     * Note: This creates a detached Requirement entity (not persisted)
-     * The internalId and versionNumber are set from the snapshot for correct ID.Revision display
-     */
-    /**
      * Get requirements for a use case, optionally from a release snapshot.
-     * When releaseId is provided, filters snapshots by usecaseIdsSnapshot JSON field.
+     * When releaseId is provided, the frozen snapshots of that release are used.
      */
     private fun getRequirementsByUseCase(usecaseId: Long, releaseId: Long?): List<Requirement> {
         return if (releaseId != null) {
-            val snapshots = snapshotRepository.findByReleaseId(releaseId)
-            snapshots.filter { snapshot ->
-                val usecaseIds = snapshot.usecaseIdsSnapshot
-                usecaseIds != null && usecaseIds.contains(usecaseId.toString())
-            }.map { snapshotToRequirement(it) }.sortedWith(
-                compareBy<Requirement> { it.chapter ?: "" }.thenBy { it.id ?: 0 }
-            )
+            releaseRequirementScopeService.requirementsForRelease(releaseId, usecaseId)
         } else {
             requirementRepository.findByUsecaseId(usecaseId).sortedWith(
                 compareBy<Requirement> { it.chapter ?: "" }.thenBy { it.id ?: 0 }
@@ -1630,23 +1621,11 @@ open class RequirementController(
         }
     }
 
+    /**
+     * Convert a RequirementSnapshot to a detached Requirement for export, so the
+     * frozen ID.Revision is rendered. See ReleaseRequirementScopeService.
+     */
     private fun snapshotToRequirement(snapshot: RequirementSnapshot): Requirement {
-        val requirement = Requirement(
-            id = snapshot.originalRequirementId,
-            internalId = snapshot.internalId,
-            shortreq = snapshot.shortreq,
-            details = snapshot.details,
-            language = snapshot.language,
-            example = snapshot.example,
-            motivation = snapshot.motivation,
-            usecase = snapshot.usecase,
-            norm = snapshot.norm,
-            chapter = snapshot.chapter,
-            usecases = mutableSetOf(),  // Snapshots store IDs as JSON, not objects
-            norms = mutableSetOf()       // For export purposes, empty sets are acceptable
-        )
-        // Set versionNumber from snapshot's revision for correct idRevision display
-        requirement.versionNumber = snapshot.revision
-        return requirement
+        return releaseRequirementScopeService.snapshotToRequirement(snapshot)
     }
 }
