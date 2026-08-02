@@ -48,7 +48,10 @@ open class WorkgroupAwsAccountController(
     }
 
     @Get(produces = [MediaType.APPLICATION_JSON])
-    open fun list(@PathVariable workgroupId: Long): HttpResponse<List<WorkgroupAwsAccountDto>> {
+    open fun list(@PathVariable workgroupId: Long, authentication: Authentication): HttpResponse<List<WorkgroupAwsAccountDto>> {
+        if (!isMemberOrAdmin(workgroupId, authentication)) {
+            return HttpResponse.status(io.micronaut.http.HttpStatus.FORBIDDEN)
+        }
         return try {
             val rows = service.list(workgroupId).map(WorkgroupAwsAccountDto::from)
             HttpResponse.ok(rows)
