@@ -18,7 +18,7 @@
         [CLI] ─── HTTPS ──► Backend REST API
 ```
 
-Stack: Kotlin 2.3.21 / Java 25 · Micronaut 4.10 · Hibernate JPA · Astro 6.3 + React 19 · Bootstrap 5.3 · MariaDB 11.4 · Gradle 9.5.0 · Picocli 4.7.7 · AWS SDK v2.
+Stack: Kotlin 2.4.10 / Java 25 · Micronaut 5.0 · Hibernate JPA · Astro 7.1 + React 19 · Bootstrap 5.3 · MariaDB 11.4 · Gradle 9.6.1 · Picocli 4.7.7 · AWS SDK v2.
 
 ## Backend (`src/backendng/`)
 
@@ -50,7 +50,7 @@ Controller groups:
 
 Astro pages (69, 20 admin) with React islands; Axios services in `src/services/`.
 
-Auth flow: JWT in `localStorage["authToken"]` → Axios interceptor adds `Authorization: Bearer …`. SSE endpoints take JWT in `?token=` query (EventSource has no header support).
+Auth flow: the JWT lives in the HttpOnly `secman_auth` cookie (`AuthCookieService.AUTH_COOKIE_NAME`), never in JS-readable storage. Axios sends it via `withCredentials: true` (set globally in `utils/csrf.ts`); fetch calls use the `authenticated*` helpers in `utils/auth.ts` / `services/`. `sessionStorage["user"]` holds only the display/role payload — never a token. SSE endpoints take JWT in `?token=` query (EventSource has no header support).
 
 ## CLI (`src/cli/`)
 
@@ -128,7 +128,7 @@ Authoritative implementation: `AssetFilterService.getAccessibleAssets()`.
 Authentication methods:
 | Method | Carrier | Use |
 |---|---|---|
-| JWT | `localStorage` + `Authorization` header | frontend API |
+| JWT | HttpOnly `secman_auth` cookie (`Authorization: Bearer …` for CLI/external clients) | frontend API |
 | OAuth2/OIDC | session + JWT | SSO (Azure AD, Google) |
 | Passkey | WebAuthn credential | passwordless |
 | MCP API key | `X-MCP-API-Key` header | AI assistants |
@@ -183,7 +183,7 @@ fun findOrCreateAsset(dto: AssetDto): Asset =
 Validate (≤10MB, MIME, ext) → parse (Apache POI / Commons CSV; UTF-8 BOM, ISO-8859-1 fallback) → header check (case-insensitive) → row parse (skip invalid, handle scientific notation) → dedupe (DB + file) → batch save → return `ImportResult{imported, skipped, errors[]}`.
 
 ### OAuth state retry
-Exponential backoff in `OAuthService.findStateByValueWithRetry` to tolerate Microsoft cached-SSO callbacks landing before the state-save commits. Tunable via `OAUTH_STATE_RETRY_*` env vars (`docs/ENVIRONMENT.md`).
+Exponential backoff in `OAuthService.findStateByValueWithRetry` to tolerate Microsoft cached-SSO callbacks landing before the state-save commits (they can arrive in 100–500ms). Configured by `oauthConfig.stateRetry` in `application.yml`, tunable via `OAUTH_STATE_RETRY_*` env vars (`docs/ENVIRONMENT.md`).
 
 ## File layout
 

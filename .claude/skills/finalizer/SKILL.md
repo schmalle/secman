@@ -275,16 +275,25 @@ bound and typically accounts for half the file. Almost none of it is needed to
 *operate* in the repo — it is history, and history belongs in a file you read
 on demand.
 
-- Keep the **three newest** entries in CLAUDE.md. The entries carry no dates,
-  so do not assume file order is chronological — confirm it with
-  `git log --follow -p -- CLAUDE.md | grep '^+- \*\*'` (which entry was added
-  last?) before you slice. Getting this backwards archives the three entries
-  that mattered most and keeps thirteen stale ones.
-- Move every older entry, **verbatim**, to `docs/CHANGELOG.md`, newest first.
-  Create that file if it does not exist, with a one-line header explaining it
-  holds entries archived from CLAUDE.md.
-- Never summarize on the way out. The point is that the detail survives
-  somewhere greppable; a lossy move is just deletion with extra steps.
+The contract is **archive first, summarize second**:
+
+- Every entry is written **verbatim** to `docs/CHANGELOG.md` (newest first) at
+  the time the change is made. That file is the complete, greppable history.
+  Create it if it does not exist, with a one-line header saying so.
+- CLAUDE.md's `## Recent Changes` carries a **2–3 line summary** of the **three
+  newest** entries and nothing more. A summary keeps only what a future session
+  needs to act on: the feature name, the entry points (endpoint / CLI command /
+  MCP tool), the key invariant, and the doc pointer.
+- When a fourth entry arrives, the oldest summary simply **drops off**. There is
+  nothing to move — its verbatim text is already archived. Verify that before
+  deleting: `grep -F "<distinctive phrase>" docs/CHANGELOG.md` must hit.
+- Never summarize on the way *into* `docs/CHANGELOG.md`. The point is that the
+  detail survives somewhere greppable; a lossy archive is just deletion with
+  extra steps.
+- The entries carry no dates, so do not assume file order is chronological —
+  confirm with `git log --follow -p -- CLAUDE.md | grep '^+- \*\*'` (which
+  entry was added last?) before you slice. Getting this backwards drops the
+  summary that mattered most and keeps two stale ones.
 
 ### 4b — Never touch these
 
