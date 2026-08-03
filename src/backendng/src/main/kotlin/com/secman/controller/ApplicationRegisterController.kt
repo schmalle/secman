@@ -115,11 +115,23 @@ open class ApplicationRegisterController(
             if (uri.scheme != "https" && uri.scheme != "http") {
                 return HttpResponse.ok(mapOf("reachable" to false, "reason" to "URL must use http or https"))
             }
+            // SECURITY: This endpoint is reachable by any authenticated user and was
+            // previously an open SSRF proxy — it would issue a server-side HTTP request
+            // to ANY attacker-supplied host (including cloud metadata endpoints like
+            // 169.254.169.254 and internal-only services), returning reachability/status
+            // as an oracle. Since this check exists only to validate GitHub repository
+            // URLs, restrict the target host to github.com.
+            val host = uri.host?.lowercase()
+            if (host != "github.com" && host != "www.github.com") {
+                return HttpResponse.ok(mapOf("reachable" to false, "reason" to "Only github.com URLs are supported"))
+            }
             val connection = uri.toURL().openConnection() as HttpURLConnection
             connection.requestMethod = "HEAD"
             connection.connectTimeout = 5000
             connection.readTimeout = 5000
-            connection.instanceFollowRedirects = true
+            // Do not follow redirects server-side: a redirect target is outside our
+            // host allowlist check and would reopen the SSRF this fix closes.
+            connection.instanceFollowRedirects = false
             connection.setRequestProperty("User-Agent", "SecMan/1.0")
             val status = connection.responseCode
             connection.disconnect()
