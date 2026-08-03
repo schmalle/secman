@@ -36,6 +36,12 @@ class AwsAccountRiskAssessmentServiceTest {
     private val emailService = mockk<EmailService>(relaxed = true)
     private val releaseRequirementScopeService = mockk<ReleaseRequirementScopeService>(relaxed = true)
 
+    // Real config, not a mock: it is a plain data class, and the assessment link the
+    // templates render is asserted below — a relaxed mock would yield "" and hide a break.
+    private val appConfig = com.secman.config.AppConfig(
+        backend = com.secman.config.BackendConfig(baseUrl = "https://secman.test")
+    )
+
     // Constructed in setup(); selfProvider returns this same instance (the AOP proxy is a
     // no-op under a plain unit test, so createAssessment runs directly with REQUIRES_NEW inert).
     private lateinit var service: AwsAccountRiskAssessmentService
@@ -62,6 +68,7 @@ class AwsAccountRiskAssessmentServiceTest {
             riskAssessmentRepository = riskAssessmentRepository,
             trackingRepository = trackingRepository,
             emailService = emailService,
+            appConfig = appConfig,
             releaseRequirementScopeService = releaseRequirementScopeService,
             selfProvider = Provider { service }
         )
@@ -77,7 +84,7 @@ class AwsAccountRiskAssessmentServiceTest {
         every { riskAssessmentRepository.save(any()) } answers { firstArg<RiskAssessment>().apply { id = nextId++ } }
         every { trackingRepository.save(any()) } answers { firstArg() }
         every { trackingRepository.update(any<AwsAccountRiskAssessment>()) } answers { firstArg() }
-        every { emailService.sendEmail(any(), any(), any(), any()) } returns CompletableFuture.completedFuture(true)
+        every { emailService.sendEmailWithInlineImages(any(), any(), any(), any(), any()) } returns CompletableFuture.completedFuture(true)
     }
 
     // --- validateStartRequest ------------------------------------------------
@@ -163,7 +170,7 @@ class AwsAccountRiskAssessmentServiceTest {
         assertThat(savedAssessments.map { it.assessor }).containsExactly(champion1, champion2)
 
         verify(exactly = 2) { trackingRepository.save(any()) }
-        verify(exactly = 2) { emailService.sendEmail(any(), any(), any(), any()) }
+        verify(exactly = 2) { emailService.sendEmailWithInlineImages(any(), any(), any(), any(), any()) }
     }
 
     @Test
@@ -218,13 +225,13 @@ class AwsAccountRiskAssessmentServiceTest {
         assertThat(results.single().error).contains("No ACTIVE release")
         assertThat(results.single().riskAssessmentId).isNull()
         verify(exactly = 0) { riskAssessmentRepository.save(any()) }
-        verify(exactly = 0) { emailService.sendEmail(any(), any(), any(), any()) }
+        verify(exactly = 0) { emailService.sendEmailWithInlineImages(any(), any(), any(), any(), any()) }
     }
 
     @Test
     fun `start notification names the requirements version`() {
         val body = slot<String>()
-        every { emailService.sendEmail(any(), any(), capture(body), any()) } returns
+        every { emailService.sendEmailWithInlineImages(any(), any(), capture(body), any(), any()) } returns
             CompletableFuture.completedFuture(true)
 
         service.startAssessmentsForNewAccounts(
@@ -234,6 +241,26 @@ class AwsAccountRiskAssessmentServiceTest {
 
         assertThat(body.captured).contains("2.3.0")
         assertThat(body.captured).contains("Q3 baseline")
+    }
+
+    @Test
+    fun `start notification deep-links to the assessment that was just created`() {
+        // The owner should land on their questionnaire, not the assessment list — the link
+        // must carry the id of the assessment this very mail is about. Pointing into the
+        // authenticated app (not /respond/{token}) is deliberate: the app forces a login,
+        // whereas a token link would let anyone holding the mail answer for the owner.
+        val body = slot<String>()
+        every { emailService.sendEmailWithInlineImages(any(), any(), capture(body), any(), any()) } returns
+            CompletableFuture.completedFuture(true)
+
+        val results = service.startAssessmentsForNewAccounts(
+            listOf(NewAccountImportInfo("111111111111", listOf("alice@corp.com"))),
+            "Cloud Onboarding", 7, 9L
+        )
+
+        val assessmentId = results.single().riskAssessmentId
+        assertThat(assessmentId).isNotNull()
+        assertThat(body.captured).contains("https://secman.test/risk-assessments?assessmentId=$assessmentId")
     }
 
     @Test
@@ -248,7 +275,7 @@ class AwsAccountRiskAssessmentServiceTest {
         io.mockk.verifyOrder {
             riskAssessmentRepository.save(any())
             trackingRepository.save(any())
-            emailService.sendEmail(any(), any(), any(), any())
+            emailService.sendEmailWithInlineImages(any(), any(), any(), any(), any())
         }
     }
 
@@ -282,7 +309,7 @@ class AwsAccountRiskAssessmentServiceTest {
         assertThat(results.single().riskAssessmentId).isEqualTo(77L)
         verify(exactly = 0) { riskAssessmentRepository.save(any()) }
         verify(exactly = 0) { trackingRepository.save(any()) }
-        verify(exactly = 0) { emailService.sendEmail(any(), any(), any(), any()) }
+        verify(exactly = 0) { emailService.sendEmailWithInlineImages(any(), any(), any(), any(), any()) }
     }
 
     @Test
@@ -335,7 +362,7 @@ class AwsAccountRiskAssessmentServiceTest {
 
     @Test
     fun `owner notification failure does not fail assessment creation`() {
-        every { emailService.sendEmail(any(), any(), any(), any()) } throws RuntimeException("SMTP down")
+        every { emailService.sendEmailWithInlineImages(any(), any(), any(), any(), any()) } throws RuntimeException("SMTP down")
 
         val results = service.startAssessmentsForNewAccounts(
             listOf(NewAccountImportInfo("111111111111", listOf("alice@corp.com"))),
@@ -397,7 +424,7 @@ class AwsAccountRiskAssessmentServiceTest {
 
         assertThat(sent).isEqualTo(1)
         verify { trackingRepository.claimTwoDayReminder(300L, any()) }
-        verify { emailService.sendEmail("alice@corp.com", match { it.contains("2 days") }, any(), any()) }
+        verify { emailService.sendEmailWithInlineImages("alice@corp.com", match { it.contains("2 days") }, any(), any(), any()) }
         verify(exactly = 0) { trackingRepository.claimOneDayReminder(any(), any()) }
     }
 
@@ -412,7 +439,7 @@ class AwsAccountRiskAssessmentServiceTest {
 
         assertThat(sent).isEqualTo(1)
         verify { trackingRepository.claimOneDayReminder(300L, any()) }
-        verify { emailService.sendEmail("alice@corp.com", match { it.contains("1 day") }, any(), any()) }
+        verify { emailService.sendEmailWithInlineImages("alice@corp.com", match { it.contains("1 day") }, any(), any(), any()) }
     }
 
     @Test
@@ -426,7 +453,7 @@ class AwsAccountRiskAssessmentServiceTest {
         val sent = service.processDeadlineReminders(today)
 
         assertThat(sent).isEqualTo(1)
-        verify(exactly = 1) { emailService.sendEmail(any(), any(), any(), any()) }
+        verify(exactly = 1) { emailService.sendEmailWithInlineImages(any(), any(), any(), any(), any()) }
         verify(exactly = 0) { trackingRepository.claimTwoDayReminder(any(), any()) }
     }
 
@@ -439,7 +466,7 @@ class AwsAccountRiskAssessmentServiceTest {
         val sent = service.processDeadlineReminders(today)
 
         assertThat(sent).isEqualTo(0)
-        verify(exactly = 0) { emailService.sendEmail(any(), any(), any(), any()) }
+        verify(exactly = 0) { emailService.sendEmailWithInlineImages(any(), any(), any(), any(), any()) }
     }
 
     @Test
@@ -453,7 +480,7 @@ class AwsAccountRiskAssessmentServiceTest {
         val sent = service.processDeadlineReminders(today)
 
         assertThat(sent).isEqualTo(0)
-        verify(exactly = 0) { emailService.sendEmail(any(), any(), any(), any()) }
+        verify(exactly = 0) { emailService.sendEmailWithInlineImages(any(), any(), any(), any(), any()) }
     }
 
     @Test
@@ -462,7 +489,7 @@ class AwsAccountRiskAssessmentServiceTest {
         val t = tracking(endDate = today.plusDays(2))
         every { trackingRepository.findPendingDeadlineReminders(today, today.plusDays(2)) } returns listOf(t)
         every { trackingRepository.claimTwoDayReminder(300L, any()) } returns 1
-        every { emailService.sendEmail(any(), any(), any(), any()) } returns CompletableFuture.completedFuture(false)
+        every { emailService.sendEmailWithInlineImages(any(), any(), any(), any(), any()) } returns CompletableFuture.completedFuture(false)
 
         val sent = service.processDeadlineReminders(today)
 

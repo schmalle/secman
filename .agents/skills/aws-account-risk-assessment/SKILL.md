@@ -36,8 +36,8 @@ You are an orchestration agent. Bring up the stack, run the CLI + MCP driver, an
 ```
 0. Kill any running backend/frontend via the stop scripts — always,
    even if ports look free (never `kill`).
-1. Start backend  (./scripts/startbackenddev.sh, escalated permissions)
-2. Start frontend (./scripts/startfrontenddev.sh, escalated permissions)
+1. Start backend  (./scripts/startbackenddev.sh outside the sandbox / with escalated permissions)
+2. Start frontend (./scripts/startfrontenddev.sh outside the sandbox / with escalated permissions)
 3. Wait for both ports to be BOUND (port binding, not HTTP)
 4. Run driver:
      pass-cli run --env-file ./secmanpp.env -- \
@@ -64,8 +64,7 @@ driver reads `BASE_URL` / `SECMAN_BACKEND_URL`.
 | Frontend port wait | `lsof -iTCP:4321 -sTCP:LISTEN -n -P`, 60s   |
 
 **Outside-sandbox requirement:** always start both dev scripts outside the
-sandbox / with escalated permissions — in Codex, run them with
-`sandbox_permissions: "require_escalated"`. Both source secrets via
+sandbox (`sandbox_permissions: "require_escalated"`). Both source secrets via
 `pass-cli`, which a sandboxed shell cannot reach.
 
 The driver builds the CLI jar itself if `src/cli/build/libs/cli-0.1.0-all.jar` is
@@ -112,8 +111,7 @@ logs) and look for stack traces inside the run window.
 1. `./scripts/stopbackenddev.sh` and `./scripts/stopfrontenddev.sh`.
 2. Fix in source. **Backend before frontend.** For a frontend edit, `cd
    src/frontend && npm ci && npm run build` must exit 0 before restarting.
-3. Restart both via the canonical start scripts, outside the sandbox
-   (`sandbox_permissions: "require_escalated"`).
+3. Restart both via the canonical start scripts, outside the sandbox / with escalated permissions.
 4. Re-run the driver, incrementing the log suffix.
 5. Guard rails: max **5** iterations; if the same assertion fails twice with the
    same message, stop and report rather than trying a third variation.

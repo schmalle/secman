@@ -71,6 +71,24 @@ Driver: `scripts/test/test-e2e-aws-account-risk-assessment.sh`. Seeds a SECCHAMP
 
 Feature reference: `docs/AWS_ACCOUNT_RISK_ASSESSMENT.md`.
 
+### `/aws-account-owner-email` — the owner actually receives the mail (CLI + MCP)
+
+`.claude/skills/aws-account-owner-email/SKILL.md`
+
+Triggers: "does the account owner get an email", "risk assessment email", "new account email test", "aws-account-owner-email".
+
+Driver: `scripts/test/test-e2e-aws-account-owner-email.sh`. Complements the skill above, which proves the assessment is created but asserts nothing about mail. Asks for a real mailbox, imports one brand-new account via the CLI and another via MCP mapped to that address, and asserts the `EmailService` INFO line `Successfully sent email to <addr> with subject: Risk assessment started for your AWS account <id>` inside a **per-import byte window** of `.e2e-logs/backend.log`, so a stale line cannot pass the test. Then pauses for a human to confirm delivery and body content — the log only proves SMTP accepted the message.
+
+Runs **inline rather than forked**, because it has to ask the user for the address and for the inbox verdict.
+
+Why the log and not the DB: the start notification calls `EmailService.sendEmail()`, not `sendNotificationEmail()`, so it writes **no** `email_notification_logs` row and `/api/notification-logs` cannot see it. Both `sendEmail` (returns `false` with no active SMTP config, without throwing) and `startAssessmentsForNewAccounts` (catches into `log.warn`) swallow failures, so a successful import proves nothing about delivery.
+
+Two hazards the driver refuses to walk into, both documented in the skill's Constraints: it **never creates or deletes a user for the recipient address** (usually a real account; none is needed, since the mail is sent regardless and only the respondent link depends on it), and it **never activates a release when one is already ACTIVE** (activation ARCHIVES the previous one and `ARCHIVED` is terminal). Cleanup before and after, scoped to the `e2e-awsmail-` prefix and the `884…`/`885…` account IDs it generates — deliberately clear of the `886…`/`887…` pair above.
+
+Preflight requires an active SMTP configuration; without one the run aborts before seeding anything, because a no-op send is indistinguishable from a regression.
+
+Feature reference: `docs/AWS_ACCOUNT_RISK_ASSESSMENT.md` §Emails.
+
 ## SpecKit commands (`/speckit.*`)
 
 Specification-driven development pipeline, defined under `.claude/commands/`.

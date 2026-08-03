@@ -1,6 +1,6 @@
 # Which secman skill to use when
 
-Eight skills live in `.claude/skills/` (mirrored to `.agents/skills/` for Codex).
+Ten skills live in `.claude/skills/` (mirrored to `.agents/skills/` for Codex).
 They overlap enough that picking the wrong one wastes a run — and in three cases
 the wrong pick **destroys data**. This is the routing guide.
 
@@ -22,6 +22,8 @@ skill's frontmatter decides whether it triggers.
 | Test the admin add-system → user-visibility flow | `/admin-asset-e2e` | Adds one asset |
 | Run and debug the CrowdStrike import | `/importtest` | **Imports live data** |
 | Compare SecMan against Falcon without changing anything | `/crowdstrike-vuln-match` | No |
+| Check a new AWS account starts a correctly scoped assessment | `/aws-account-risk-assessment` | Adds + removes a testbed |
+| Check the AWS account owner actually gets the email | `/aws-account-owner-email` | Adds + removes a testbed, **sends real mail** |
 | Get a fixture to click around in | `/createtestdata` | Adds a fixture |
 
 **The three destructive ones are not safe against a shared instance.** Check what
@@ -83,6 +85,29 @@ Both involve CrowdStrike. Only one writes.
 
 If the question is *"is our data right?"* use the matcher. If the question is
 *"why does importing fail?"* use importtest.
+
+### `/aws-account-risk-assessment` vs `/aws-account-owner-email`
+
+Both import a never-before-seen AWS account and watch what the system does next.
+They assert on opposite halves of it, and neither covers the other's half.
+
+| | `/aws-account-risk-assessment` | `/aws-account-owner-email` |
+|---|---|---|
+| Question | Is the assessment created and scoped right? | Did the owner actually get told? |
+| Asserts | Release pinning, questionnaire contents, no drift on later imports, idempotency, validation negatives | The `EmailService` INFO send line, per-import log window, recipient and account on the same line |
+| Asserts about mail | **Nothing** | Everything |
+| Asserts about the questionnaire | Everything | **Nothing** |
+| Sends real mail | To a synthetic `@e2e.local` address that goes nowhere | **Yes, to an address you supply and can read** |
+| Needs SMTP configured | No | Yes — aborts in preflight without it |
+| Needs a human | No | Yes, to confirm the inbox at the end |
+| Touches the ACTIVE release | **Activates its own, archiving yours irreversibly** | Reuses yours; seeds one only when none is ACTIVE |
+
+**If mail is the thing you changed, the assessment skill will pass regardless** —
+it never looks at the mail path, and that path swallows its own failures.
+
+Note the release asymmetry before running either against an environment whose
+requirements baseline you care about: `ARCHIVED` is terminal, so an archived
+release can never be made ACTIVE again.
 
 ### `/createtestdata` vs the E2E skills
 
@@ -174,6 +199,30 @@ severity drift.
 
 **Exit code 1 means mismatches were found — that is the deliverable, not a
 failure.** Only exit 2 is a real error.
+
+### `/aws-account-owner-email` — the owner notification actually lands
+⚠️ **Sends real email to an address you supply.** Every re-run of the fix loop
+sends again.
+
+Imports one new account via the CLI and another via MCP, both mapped to that
+address, then asserts the `EmailService` INFO line inside a **per-import byte
+window** of `.e2e-logs/backend.log` — so a leftover line from an earlier run
+cannot pass the test. Ends by asking you what actually arrived, because the log
+only proves SMTP accepted the message, not that it was delivered or that the body
+is right.
+
+Aborts in preflight when no SMTP config is active, before creating anything: a
+send that silently no-ops is indistinguishable from a regression, so a green run
+without SMTP would be a lie. It rejects reserved placeholder recipients
+(`example.com`, `*.test`, `*.invalid`, `*.local`) for the same reason — a relay
+accepts them, the log reads `Successfully sent`, and nobody can check an inbox.
+`ALLOW_PLACEHOLDER_RECIPIENT=true` overrides that for a local mail sink.
+
+Two things it deliberately will not do — **create or delete a user for the
+recipient address** (usually a real account; the mail is sent with or without
+one), and **activate a release when one is already ACTIVE** (that would archive
+yours, terminally). Cleanup is scoped to `e2e-awsmail-` and the `884…`/`885…`
+accounts it generates.
 
 ### `/createtestdata` — seed a fixture
 Additive only, nothing is deleted, fixtures accumulate without bound. Do not run

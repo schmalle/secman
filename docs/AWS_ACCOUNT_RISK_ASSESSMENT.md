@@ -119,6 +119,94 @@ For each `(account, owner)` pair:
 - **Reminders** — 2 days and 1 day before the deadline, daily job at 08:15
   (`AwsAccountRiskAssessmentReminderScheduler`). Only open (`STARTED`) assessments.
 
+Subject of the start mail, which is also its only stable identifier:
+
+```
+Risk assessment started for your AWS account <accountId>
+```
+
+### Rendering
+
+Both mails render from shared resources under `email-templates/`, not inline HTML,
+so they carry the SecMan logo and match every other notification:
+
+| Mail | Templates |
+|---|---|
+| Start | `aws-account-risk-assessment-started.{html,txt}` |
+| Reminder | `aws-account-risk-assessment-reminder.{html,txt}` |
+
+The logo is a CID inline image (`cid:secman-logo`), so both go out through
+`EmailService.sendEmailWithInlineImages`. **That changes the success log line** —
+it reads `Successfully sent email with inline images to …` rather than
+`Successfully sent email to …`. Anything grepping for the send must tolerate both.
+
+Values are HTML-escaped into the HTML part and left raw in the text part; the
+reminder's requirements-version row is a `{ifVersion}…{/ifVersion}` block, since
+assessments started before release pinning have no locked release.
+
+### The action link
+
+Both mails link to **the assessment itself**, not the list:
+
+```
+<SECMAN_BACKEND_URL>/risk-assessments?assessmentId=<id>
+```
+
+`RiskAssessmentManagement.tsx` consumes `assessmentId` once the list has loaded and
+opens that assessment in *perform* mode. The id is honoured only if it appears in
+the list the backend already access-filtered, so the link cannot expose someone
+else's assessment; an unknown id shows an explanatory message instead.
+
+**Why not `/respond/{token}`.** That route is token-authenticated and would let
+anyone holding the mail answer on the owner's behalf. Linking into the normal
+authenticated app forces a login: `Layout.astro` bounces an unauthenticated visitor
+to `/login?redirect=<path+query>` and `Login.tsx` returns them afterwards. That
+redirect value is attacker-controllable, so `safeRedirectTarget()` accepts only a
+same-origin relative path — rejecting absolute URLs, protocol-relative `//host`,
+and backslash normalisation tricks.
+
+The host comes from `appConfig.backend.baseUrl` (`SECMAN_BACKEND_URL`), matching
+`AwsAccountSharingNotificationService`: nginx fronts API and UI on one host, while
+`frontend.baseUrl` defaults to localhost and has no env override.
+
+### The send is best-effort, and silence is not success
+
+Two layers each swallow a failure, by design — a mail problem must never undo a
+committed assessment:
+
+| Layer | On failure |
+|---|---|
+| `startAssessmentsForNewAccounts` | catches anything `sendStartNotification` throws into a `log.warn` |
+| `EmailService.sendEmail` | returns `false` **without throwing** when no `EmailConfig` is active, logging `No active email configuration found` |
+
+So an import reports complete success whether or not mail was sent, and
+"the assessment exists" is no evidence of delivery.
+
+**There is no DB trail either.** The start notification calls `sendEmail()`, not
+`sendNotificationEmail()`, and only the latter writes `email_notification_logs`.
+`GET /api/notification-logs` therefore never shows these mails. The only
+machine-checkable evidence is the `EmailService` INFO line:
+
+```
+Successfully sent email to <to> with subject: <subject>
+```
+
+### Testing it
+
+`/aws-account-owner-email` (driver:
+`scripts/test/test-e2e-aws-account-owner-email.sh`) covers delivery specifically:
+it takes the mailbox to deliver to, imports a new account via the CLI and via MCP,
+asserts that INFO line inside a per-import byte window of the backend log, and
+then pauses for a human to confirm what actually arrived. It reuses the
+environment's ACTIVE release and never creates or deletes a user for the
+recipient address — see the skill for why both matter.
+
+`/aws-account-risk-assessment` covers the assessment path instead and asserts
+nothing about mail.
+
+Reminder mails have **no manual trigger** — only the 08:15 scheduler — so nothing
+tests them end to end today.
+
 Reminders are idempotent across restarts *and* concurrent runs: each slot is taken
 with an atomic guarded UPDATE (claim-before-send) committed per row, so overlapping
 scheduler runs cannot double-send. A missed 2-day reminder collapses into a single
@@ -169,6 +257,13 @@ measured against — plus assessor, respondent, dates, status and reminder stamp
   already requires `force`.
 - **No UI surface for the pinned version.** Auto-started assessments render
   normally in `RiskAssessmentManagement.tsx`; the release is not displayed.
+*(Resolved 2026-08-03: `DELETE /api/user-mappings/{id}` used to pass the **caller's**
+user id into the scoped `deleteMapping(userId, …)`, whose `mapping.email == user.email`
+check then failed for every mapping but the admin's own — surfacing as HTTP 500 because
+the controller catches only `NoSuchElementException`. The admin surface now calls
+`deleteMappingById(id)`, which performs no ownership comparison; the scoped endpoint
+`DELETE /api/users/{userId}/mappings/{mappingId}` keeps the check, since there `userId`
+names whose mapping is meant. Covered by `UserMappingServiceDeleteTest`.)*
 
 ## Key files
 
@@ -183,6 +278,7 @@ measured against — plus assessor, respondent, dates, status and reminder stamp
 | Reminder scheduler | `scheduler/AwsAccountRiskAssessmentReminderScheduler.kt` |
 | MCP | `mcp/tools/ImportUserMappingsTool.kt`, `mcp/tools/ListAwsAccountRiskAssessmentsTool.kt` |
 | CLI | `cli/commands/ImportCommand.kt`, `ImportS3Command.kt`, `cli/service/UserMappingCliService.kt` |
-| E2E | `scripts/test/test-e2e-aws-account-risk-assessment.sh`, skill `/aws-account-risk-assessment` |
+| E2E (assessment) | `scripts/test/test-e2e-aws-account-risk-assessment.sh`, skill `/aws-account-risk-assessment` |
+| E2E (owner email) | `scripts/test/test-e2e-aws-account-owner-email.sh`, skill `/aws-account-owner-email` |
 
 See also: `docs/CLI.md`, `docs/MCP.md`.

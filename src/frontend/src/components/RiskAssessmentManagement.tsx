@@ -387,6 +387,35 @@ const RiskAssessmentManagement: React.FC = () => {
     setShowAssessmentModal(true);
   };
 
+  // Deep link from the notification emails: /risk-assessments?assessmentId=42 opens that
+  // assessment straight away instead of leaving the recipient to find it in the list.
+  // Runs once the list has loaded, because the id is only honoured when it is actually
+  // among the assessments this user may see — the list is already access-filtered by the
+  // backend, so this cannot be used to peek at someone else's assessment.
+  const [deepLinkHandled, setDeepLinkHandled] = useState(false);
+  useEffect(() => {
+    if (deepLinkHandled || loading || typeof window === 'undefined') return;
+
+    const raw = new URLSearchParams(window.location.search).get('assessmentId');
+    if (!raw) return;
+    setDeepLinkHandled(true);
+
+    const id = Number(raw);
+    if (!Number.isInteger(id) || id <= 0) return;
+
+    // Strip the parameter once consumed so closing the modal and refreshing does not
+    // reopen it, and so the URL the user may bookmark is the plain page.
+    window.history.replaceState({}, '', window.location.pathname);
+
+    if (assessments.some(a => a.id === id)) {
+      setSelectedAssessmentId(id);
+      setAssessmentModalMode('perform');
+      setShowAssessmentModal(true);
+    } else {
+      setError(`Risk assessment #${id} is not available to you. It may have been completed, deleted, or assigned to someone else.`);
+    }
+  }, [assessments, loading, deepLinkHandled]);
+
   const handleAssessmentModalClose = () => {
     setShowAssessmentModal(false);
     setSelectedAssessmentId(null);

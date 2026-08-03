@@ -270,14 +270,17 @@ open class UserMappingController(
     @Delete("/{id}")
     @Secured("ADMIN")
     fun deleteMapping(
-        @PathVariable id: Long,
-        authentication: Authentication
+        @PathVariable id: Long
     ): HttpResponse<Void> {
         logger.info("Deleting user mapping: id=$id")
 
+        // Addressed by mapping id alone, so this deletes whoever's mapping it is — the
+        // authorization decision is @Secured("ADMIN") above. It must NOT go through
+        // deleteMapping(userId, …), which compares the mapping's email to the *caller's*:
+        // that let an admin delete only their own mappings and threw
+        // IllegalArgumentException — an unhandled 500 — for every other one.
         return try {
-            val userId = getUserIdFromAuthentication(authentication)
-            userMappingService.deleteMapping(userId, id)
+            userMappingService.deleteMappingById(id)
 
             HttpResponse.noContent()
         } catch (e: NoSuchElementException) {

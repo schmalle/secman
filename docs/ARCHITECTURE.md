@@ -145,6 +145,41 @@ Error shape:
 
 ## Patterns
 
+### Entity id generation — declare the strategy, never rely on `AUTO`
+
+```kotlin
+@Id
+@GeneratedValue(strategy = GenerationType.IDENTITY)   // column is AUTO_INCREMENT
+var id: Long? = null
+```
+
+A bare `@GeneratedValue` means `AUTO`, and on MariaDB Hibernate 6 resolves that to a
+**native sequence** (`<table>_seq`) — *not* the column's `AUTO_INCREMENT`. Where the
+table was created with `AUTO_INCREMENT`, the two number the same column independently:
+the sequence starts at 1, knows nothing about rows the database numbered, and inserts
+fail with
+
+```
+Duplicate entry '<n>' for key 'PRIMARY'
+```
+
+once it reaches an occupied id. Each failed attempt advances the sequence, so the
+symptom looks intermittent — a retry "fixes" it until the next collision. Bumping the
+sequence is not a fix; it drifts again on the next DB-side insert.
+
+**Rule:** an entity whose id column is `AUTO_INCREMENT` must declare
+`GenerationType.IDENTITY`. Check before adding an entity:
+
+```sql
+SELECT table_name, extra FROM information_schema.columns
+WHERE table_schema = DATABASE() AND column_name = 'id';
+```
+
+Eight entities are legitimately sequence-backed (`alignment_*`, `demand`,
+`demand_classification_*`, `passkey_credentials`, `requirement_review`) — their columns
+are plain `BIGINT`, so they keep the bare `@GeneratedValue` and are internally
+consistent. Everything else is `IDENTITY`.
+
 ### Event-driven
 ```kotlin
 @Serdeable data class UserCreatedEvent(val user: User, val source: String)

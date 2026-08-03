@@ -1,5 +1,6 @@
 package com.secman.service
 
+import com.secman.config.AppConfig
 import com.secman.domain.Asset
 import com.secman.domain.AssessmentBasisType
 import com.secman.domain.AwsAccountRiskAssessment
@@ -54,6 +55,7 @@ open class AwsAccountRiskAssessmentService(
     private val riskAssessmentRepository: RiskAssessmentRepository,
     private val trackingRepository: AwsAccountRiskAssessmentRepository,
     private val emailService: EmailService,
+    private val appConfig: AppConfig,
     private val releaseRequirementScopeService: ReleaseRequirementScopeService,
     // Self-reference so [createAssessment]'s `@Transactional(REQUIRES_NEW)` runs through the AOP
     // proxy (a same-class call would bypass it). Each per-(account, owner) persist thus commits
@@ -68,6 +70,16 @@ open class AwsAccountRiskAssessmentService(
         const val DEFAULT_DEADLINE_DAYS = 7
         const val ACCOUNT_ASSET_TYPE = "AWS_ACCOUNT"
         private val DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ISO_LOCAL_DATE
+
+        // Owner mails are rendered from the shared email-templates/ resources rather than
+        // inline HTML, so they carry the SecMan logo and the same layout as every other
+        // notification (see AwsAccountSharingNotificationService for the same pattern).
+        private const val STARTED_HTML_TEMPLATE = "/email-templates/aws-account-risk-assessment-started.html"
+        private const val STARTED_TEXT_TEMPLATE = "/email-templates/aws-account-risk-assessment-started.txt"
+        private const val REMINDER_HTML_TEMPLATE = "/email-templates/aws-account-risk-assessment-reminder.html"
+        private const val REMINDER_TEXT_TEMPLATE = "/email-templates/aws-account-risk-assessment-reminder.txt"
+        private const val LOGO_PATH = "/email-templates/SecManLogo.png"
+        private const val ASSESSMENTS_PATH = "/risk-assessments"
     }
 
     /**
@@ -201,7 +213,8 @@ open class AwsAccountRiskAssessmentService(
                 if (info.error == null && info.riskAssessmentId != null) {
                     try {
                         sendStartNotification(
-                            ownerEmail, account.awsAccountId, useCase.name, endDate, assessor, activeRelease
+                            ownerEmail, account.awsAccountId, useCase.name, endDate, assessor, activeRelease,
+                            info.riskAssessmentId
                         )
                     } catch (e: Exception) {
                         log.warn("Risk assessment {} created, but owner notification to {} failed: {}",
@@ -402,36 +415,28 @@ open class AwsAccountRiskAssessmentService(
     private fun sendReminder(tracking: AwsAccountRiskAssessment, daysLeft: Long, endDate: LocalDate): Boolean {
         val dayWord = if (daysLeft == 1L) "1 day" else "$daysLeft days"
         val subject = "Reminder: risk assessment for AWS account ${tracking.awsAccountId} due in $dayWord"
-        val deadline = endDate.format(DATE_FORMAT)
-        // Assessments started before release pinning was introduced have no locked release.
-        val versionSuffix = tracking.riskAssessment.lockedRelease
-            ?.let { ", requirements version: ${it.version}" } ?: ""
-        val textBody = """
-            |This is a reminder that the risk assessment for AWS account ${tracking.awsAccountId}
-            |(use case: ${tracking.useCaseName}$versionSuffix) is due in $dayWord, on $deadline.
-            |
-            |Please log in to SecMan and complete the assessment before the deadline.
-            |
-            |-- SecMan
-        """.trimMargin()
-        val htmlBody = """
-            <!DOCTYPE html>
-            <html>
-            <body style="font-family:Arial,sans-serif;color:#333;max-width:600px;margin:0 auto;padding:20px;">
-              <h2 style="color:#2c3e50;">Risk assessment deadline reminder</h2>
-              <p>The risk assessment for AWS account
-                 <strong style="font-family:monospace;">${escapeHtml(tracking.awsAccountId)}</strong>
-                 (use case: ${escapeHtml(tracking.useCaseName)}${escapeHtml(versionSuffix)}) is due in <strong>$dayWord</strong>,
-                 on <strong>$deadline</strong>.</p>
-              <p>Please log in to SecMan and complete the assessment before the deadline.</p>
-              <hr style="margin:30px 0;border:none;border-top:1px solid #dee2e6;">
-              <p style="font-size:0.85em;color:#6c757d;">This message was sent by SecMan.</p>
-            </body>
-            </html>
-        """.trimIndent()
+        // Assessments started before release pinning was introduced have no locked release,
+        // so the version row is rendered conditionally rather than shown empty.
+        val lockedVersion = tracking.riskAssessment.lockedRelease?.version
+        val values = mapOf(
+            "awsAccountId" to tracking.awsAccountId,
+            "useCaseName" to tracking.useCaseName,
+            "requirementsVersion" to (lockedVersion ?: ""),
+            "dayWord" to dayWord,
+            "deadline" to endDate.format(DATE_FORMAT),
+            "assessmentsUrl" to assessmentUrl(tracking.riskAssessment.id),
+        )
+        val htmlTemplate = renderConditionalBlock(readResource(REMINDER_HTML_TEMPLATE), "ifVersion", lockedVersion != null)
+        val textTemplate = renderConditionalBlock(readResource(REMINDER_TEXT_TEMPLATE), "ifVersion", lockedVersion != null)
 
         return try {
-            emailService.sendEmail(tracking.ownerEmail, subject, textBody, htmlBody).get()
+            emailService.sendEmailWithInlineImages(
+                to = tracking.ownerEmail,
+                subject = subject,
+                textContent = render(textTemplate, values, escape = false),
+                htmlContent = render(htmlTemplate, values, escape = true),
+                inlineImages = loadLogoInlineImage(),
+            ).get()
         } catch (e: Exception) {
             log.error("Reminder email to {} failed: {}", tracking.ownerEmail, e.message)
             false
@@ -444,50 +449,86 @@ open class AwsAccountRiskAssessmentService(
         useCaseName: String,
         endDate: LocalDate,
         assessor: User,
-        release: Release
+        release: Release,
+        assessmentId: Long?
     ) {
         val subject = "Risk assessment started for your AWS account $awsAccountId"
-        val deadline = endDate.format(DATE_FORMAT)
-        val assessorDisplay = assessor.email.ifBlank { assessor.username }
-        val requirementsVersion = "${release.version} (${release.name})"
-        val textBody = """
-            |A risk assessment has been started for AWS account $awsAccountId, which was
-            |mapped to you in SecMan.
-            |
-            |Use case:              $useCaseName
-            |Requirements version:  $requirementsVersion
-            |Assessor:              $assessorDisplay
-            |Deadline:              $deadline
-            |
-            |Please log in to SecMan and complete the assessment before the deadline.
-            |You will receive reminders 2 days and 1 day before the deadline.
-            |
-            |-- SecMan
-        """.trimMargin()
-        val htmlBody = """
-            <!DOCTYPE html>
-            <html>
-            <body style="font-family:Arial,sans-serif;color:#333;max-width:600px;margin:0 auto;padding:20px;">
-              <h2 style="color:#2c3e50;">Risk assessment started</h2>
-              <p>A risk assessment has been started for AWS account
-                 <strong style="font-family:monospace;">${escapeHtml(awsAccountId)}</strong>,
-                 which was mapped to you in SecMan.</p>
-              <table style="border-collapse:collapse;margin-top:8px;">
-                <tr><td style="padding:4px 8px;color:#495057;">Use case</td><td style="padding:4px 8px;">${escapeHtml(useCaseName)}</td></tr>
-                <tr><td style="padding:4px 8px;color:#495057;">Requirements version</td><td style="padding:4px 8px;">${escapeHtml(requirementsVersion)}</td></tr>
-                <tr><td style="padding:4px 8px;color:#495057;">Assessor</td><td style="padding:4px 8px;">${escapeHtml(assessorDisplay)}</td></tr>
-                <tr><td style="padding:4px 8px;color:#495057;">Deadline</td><td style="padding:4px 8px;"><strong>$deadline</strong></td></tr>
-              </table>
-              <p>Please log in to SecMan and complete the assessment before the deadline.
-                 You will receive reminders 2 days and 1 day before the deadline.</p>
-              <hr style="margin:30px 0;border:none;border-top:1px solid #dee2e6;">
-              <p style="font-size:0.85em;color:#6c757d;">This message was sent by SecMan.</p>
-            </body>
-            </html>
-        """.trimIndent()
+        val values = mapOf(
+            "awsAccountId" to awsAccountId,
+            "useCaseName" to useCaseName,
+            "requirementsVersion" to "${release.version} (${release.name})",
+            "assessor" to assessor.email.ifBlank { assessor.username },
+            "deadline" to endDate.format(DATE_FORMAT),
+            "assessmentsUrl" to assessmentUrl(assessmentId),
+        )
 
-        emailService.sendEmail(ownerEmail, subject, textBody, htmlBody).get()
+        emailService.sendEmailWithInlineImages(
+            to = ownerEmail,
+            subject = subject,
+            textContent = render(readResource(STARTED_TEXT_TEMPLATE), values, escape = false),
+            htmlContent = render(readResource(STARTED_HTML_TEMPLATE), values, escape = true),
+            inlineImages = loadLogoInlineImage(),
+        ).get()
     }
+
+    /**
+     * Deep link that opens *this* assessment, not just the list — the owner should land on
+     * the questionnaire they were mailed about rather than hunt for it.
+     *
+     * Deliberately NOT an `/respond/{token}` link: that route is token-authenticated and
+     * would let anyone holding the mail answer on the owner's behalf. This points into the
+     * normal authenticated app, so an unauthenticated visitor is bounced to `/login` and
+     * returned here afterwards (Layout.astro captures the target, Login.tsx restores it).
+     *
+     * Sourced from `backend.baseUrl` for the same reason [AwsAccountSharingNotificationService]
+     * does: in real deployments nginx fronts both API and UI on one host
+     * (`SECMAN_BACKEND_URL`), whereas `frontend.baseUrl` defaults to localhost and has no env
+     * override — so this keeps the link on the public host without a second config knob.
+     */
+    private fun assessmentUrl(assessmentId: Long?): String {
+        val base = appConfig.backend.baseUrl.trimEnd('/') + ASSESSMENTS_PATH
+        return if (assessmentId != null) "$base?assessmentId=$assessmentId" else base
+    }
+
+    /**
+     * Substitutes `{placeholder}` tokens. [escape] applies HTML escaping to the *values*
+     * (never the template), so a use case named `<b>x</b>` cannot inject markup into the
+     * HTML part; the plain-text part must stay unescaped or readers see `&amp;`.
+     */
+    private fun render(template: String, values: Map<String, String>, escape: Boolean): String =
+        values.entries.fold(template) { acc, (key, value) ->
+            acc.replace("{$key}", if (escape) escapeHtml(value) else value)
+        }
+
+    /**
+     * Renders or strips a `{name}…{/name}` block, consuming one trailing newline so a
+     * stripped block leaves no blank hole. Non-greedy, so repeated blocks render
+     * independently. Same mechanism as [AwsAccountSharingNotificationService].
+     */
+    private fun renderConditionalBlock(template: String, name: String, include: Boolean): String {
+        val pattern = Regex(
+            Regex.escape("{$name}") + "(.*?)" + Regex.escape("{/$name}") + "\\n?",
+            setOf(RegexOption.DOT_MATCHES_ALL)
+        )
+        return pattern.replace(template) { match -> if (include) match.groupValues[1] else "" }
+    }
+
+    private fun readResource(path: String): String {
+        val stream = javaClass.getResourceAsStream(path)
+            ?: throw IllegalStateException("Email template not found on classpath: $path")
+        return stream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+    }
+
+    private fun loadLogoInlineImage(): Map<String, Pair<ByteArray, String>> =
+        try {
+            javaClass.getResourceAsStream(LOGO_PATH)?.readAllBytes()
+                ?.let { mapOf("secman-logo" to (it to "image/png")) }
+                ?: emptyMap()
+        } catch (e: Exception) {
+            // A missing logo must not cost the recipient their notification.
+            log.warn("Failed to load SecManLogo.png: {}", e.message)
+            emptyMap()
+        }
 
     private fun escapeHtml(text: String): String =
         text.replace("&", "&amp;")

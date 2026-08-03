@@ -89,7 +89,11 @@ CrowdStrike monitoring: `src/clinotify/check_crowdstrike_checkin.py` polls `/api
 
 1. Security-first: file validation, input sanitization, RBAC. Security review before completion.
 2. RBAC enforced at controller (`@Secured`) AND in UI.
-3. Schema = Flyway migrations + Hibernate auto-update.
+3. Schema = Flyway migrations + Hibernate auto-update. **New entities must declare
+   `@GeneratedValue(strategy = GenerationType.IDENTITY)`** — a bare `@GeneratedValue`
+   resolves to a native `<table>_seq` that fights an `AUTO_INCREMENT` column and yields
+   intermittent `Duplicate entry '<n>' for key 'PRIMARY'`. See `docs/ARCHITECTURE.md`
+   §Entity id generation.
 4. Always write tests. Source of truth for credentials and URLs is `pass-cli`.
 5. **A change is complete only when** `./gradlew build` is clean **AND** `./scripts/startbackenddev.sh` starts cleanly. Compile-clean ≠ runtime-clean (Micronaut bean wiring, Flyway, SessionFactory only check at startup). Stop the backend after verifying.
 5a. **Frontend changes are complete only when** `cd src/frontend && npm ci && npm run build` exits 0. TypeScript errors, missing imports, and broken Astro/React components are caught here — do not skip this step for any frontend file edit.

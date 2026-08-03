@@ -9,6 +9,35 @@ interface ExternalProvider {
     buttonColor: string;
 }
 
+/**
+ * Where to land after a successful login.
+ *
+ * Layout.astro appends `?redirect=<path+query>` when it bounces an unauthenticated
+ * visitor, so an emailed deep link such as
+ * `/risk-assessments?assessmentId=42` survives the login round trip.
+ *
+ * SECURITY: the value is attacker-controllable — anyone can send a crafted
+ * `/login?redirect=…` link — so it is accepted only as a *same-origin relative path*.
+ * A bare `startsWith('/')` check is not enough: `//evil.com` is a protocol-relative
+ * URL the browser resolves off-site, and a backslash is normalised to `/` by some
+ * browsers. Anything else falls back to the dashboard.
+ */
+export const safeRedirectTarget = (
+    search: string = typeof window !== 'undefined' ? window.location.search : ''
+): string => {
+    const fallback = '/';
+    try {
+        const raw = new URLSearchParams(search).get('redirect');
+        if (!raw) return fallback;
+        if (!raw.startsWith('/')) return fallback;   // absolute URL or scheme-relative
+        if (raw.startsWith('//')) return fallback;   // protocol-relative -> off-site
+        if (raw.includes('\\')) return fallback;     // backslash normalisation tricks
+        return raw;
+    } catch {
+        return fallback;
+    }
+};
+
 const Login = () => {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
@@ -204,7 +233,7 @@ const Login = () => {
 
                 // Small delay to ensure localStorage is written before redirect
                 setTimeout(() => {
-                    window.location.href = '/'; // Or '/dashboard' if you have a dedicated page
+                    window.location.href = safeRedirectTarget();
                 }, 100);
             } else {
                 if (response.status === 403) {

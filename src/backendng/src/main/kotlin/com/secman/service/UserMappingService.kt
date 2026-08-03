@@ -182,6 +182,16 @@ open class UserMappingService(
         return updated.toResponse()
     }
 
+    /**
+     * Delete a mapping *scoped to a user*, as addressed by
+     * `DELETE /api/users/{userId}/mappings/{mappingId}`.
+     *
+     * The email check is a consistency guard, not an ownership one: `userId` comes from the
+     * path and names whose mapping is meant, so a mappingId belonging to somebody else must
+     * be rejected rather than silently deleted through the wrong user's URL. Callers that
+     * address a mapping by id alone want [deleteMappingById] instead — passing the caller's
+     * own id here compares two unrelated things and fails for every mapping but their own.
+     */
     @Transactional
     open fun deleteMapping(userId: Long, mappingId: Long): Boolean {
         val user = userRepository.findById(userId)
@@ -194,6 +204,27 @@ open class UserMappingService(
             throw IllegalArgumentException("Mapping does not belong to user")
         }
 
+        return deleteMappingRow(mapping)
+    }
+
+    /**
+     * Delete a mapping addressed by id alone — the admin surface behind
+     * `DELETE /api/user-mappings/{id}` (`@Secured("ADMIN")`).
+     *
+     * No email comparison: an admin manages everyone's mappings, and the authorization
+     * decision is the controller's `@Secured("ADMIN")`. Mappings also exist for addresses
+     * that have no user account at all (future/pending mappings created by an import), so
+     * there is not always an owner to compare against.
+     */
+    @Transactional
+    open fun deleteMappingById(mappingId: Long): Boolean {
+        val mapping = userMappingRepository.findById(mappingId)
+            .orElseThrow { NoSuchElementException("Mapping not found") }
+
+        return deleteMappingRow(mapping)
+    }
+
+    private fun deleteMappingRow(mapping: UserMapping): Boolean {
         userMappingRepository.delete(mapping)
         // Revoking a mapping must take effect immediately — leaving stale entries
         // in the per-user MCP access cache would let removed accounts/domains

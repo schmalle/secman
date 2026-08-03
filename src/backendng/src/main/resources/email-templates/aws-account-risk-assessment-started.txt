@@ -1,0 +1,19 @@
+Risk assessment started for your AWS account {awsAccountId}
+===========================================================
+
+A risk assessment has been started for AWS account {awsAccountId},
+which was mapped to you in SecMan.
+
+Use case:              {useCaseName}
+Requirements version:  {requirementsVersion}
+Assessor:              {assessor}
+Deadline:              {deadline}
+
+Please complete the assessment before the deadline. You will receive
+reminders 2 days and 1 day before it is due.
+
+Open the assessment in SecMan: {assessmentsUrl}
+
+---
+You are receiving this because your email address is mapped to this AWS
+account in SecMan. If that is not correct, contact your SecMan administrator.

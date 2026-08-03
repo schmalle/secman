@@ -117,6 +117,20 @@ const requiresRedirect = !user && !isPublicPage;
                 window.dispatchEvent(new CustomEvent('userLoaded'));
             }
 
+
+            // Bounce to login while remembering where the user was headed, so an emailed
+            // deep link (e.g. /risk-assessments?assessmentId=42) survives the login round
+            // trip instead of dumping the user on the dashboard. Only the path+query is
+            // carried — Login.tsx re-validates it as a same-origin relative path before
+            // using it, so this cannot become an open redirect.
+            function redirectToLogin() {
+                const target = window.location.pathname + window.location.search;
+                const suffix = (target && target !== '/')
+                    ? '?redirect=' + encodeURIComponent(target)
+                    : '';
+                window.location.href = '/login' + suffix;
+            }
+
             async function checkAuthAndRedirect() {
                 if (isPublicPage) {
                     // Public pages (e.g. /login) don't gate components on
@@ -133,7 +147,7 @@ const requiresRedirect = !user && !isPublicPage;
                     if (!userStr) {
                         // No user data, redirect to login
                         console.log('No user data found, redirecting to /login');
-                        window.location.href = '/login';
+                        redirectToLogin();
                         return;
                     }
 
@@ -148,7 +162,7 @@ const requiresRedirect = !user && !isPublicPage;
                         if (response.status === 401) {
                              console.log('Not authenticated, clearing user data and redirecting to /login');
                              sessionStorage.removeItem('user');
-                             window.location.href = '/login';
+                             redirectToLogin();
                              return;
                         }
                         // Other server errors: signal "no user" so islands stop
@@ -176,7 +190,7 @@ const requiresRedirect = !user && !isPublicPage;
                 let response = await originalFetch(...args);
                 if (response.status === 401 && !isPublicPage) {
                     console.log('Intercepted 401, redirecting to /login');
-                    window.location.href = '/login';
+                    redirectToLogin();
                     // Return a dummy response or throw an error to prevent further processing
                     return new Response(null, { status: 401, statusText: 'Unauthorized' });
                 }

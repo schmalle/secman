@@ -12,7 +12,11 @@ import java.time.LocalDateTime
 @Serdeable
 data class RequirementFile(
     @Id
-    @GeneratedValue
+    // IDENTITY, not the AUTO default: this table's id column is AUTO_INCREMENT, but on
+    // MariaDB Hibernate maps AUTO to a native sequence (<table>_seq) that starts at 1 and
+    // knows nothing about rows the database numbered. On any long-lived schema that hands
+    // out ids already taken -> "Duplicate entry 'n' for key 'PRIMARY'".
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     var id: Long? = null,
 
     @Column(name = "filename", nullable = false)
@@ -111,7 +115,11 @@ data class RequirementFileResponse(
 @Serdeable
 data class RiskAssessmentRequirementFile(
     @Id
-    @GeneratedValue
+    // IDENTITY, not the AUTO default: this table's id column is AUTO_INCREMENT, but on
+    // MariaDB Hibernate maps AUTO to a native sequence (<table>_seq) that starts at 1 and
+    // knows nothing about rows the database numbered. On any long-lived schema that hands
+    // out ids already taken -> "Duplicate entry 'n' for key 'PRIMARY'".
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     var id: Long? = null,
 
     @ManyToOne(fetch = FetchType.LAZY)
